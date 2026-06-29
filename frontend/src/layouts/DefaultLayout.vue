@@ -51,6 +51,10 @@
             <el-menu-item index="/outsource/tasks">外协任务</el-menu-item>
             <el-menu-item index="/outsource/payments">外协付款</el-menu-item>
           </el-sub-menu>
+          <el-menu-item index="/inventory">
+            <el-icon><Box /></el-icon>
+            <span>库存管理</span>
+          </el-menu-item>
           <el-sub-menu index="/tasks">
             <template #title>
               <el-icon><List /></el-icon>

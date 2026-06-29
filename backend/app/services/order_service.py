@@ -1,6 +1,10 @@
+from decimal import Decimal
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from app.repositories.order_repo import OrderRepository
+from app.models.outsource import OutsourceTask
+from app.models.inventory import StockRecord
 
 
 class OrderService:
@@ -28,6 +32,40 @@ class OrderService:
         await self.repo.create_status_log(order_id, from_status, to_status, reason, operated_by)
         return self._order_to_detail(order)
 
+    async def set_cost(self, order_id: UUID, cost_amount: float) -> dict:
+        """Set order cost and recalculate gross profit."""
+        order = await self.repo.get_by_id(order_id)
+        if not order:
+            raise ValueError("订单不存在")
+        cost = Decimal(str(cost_amount))
+        total = Decimal(str(order.total_amount))
+        gross_profit = total - cost
+        await self.repo.update(order, {
+            "cost_amount": float(cost),
+            "gross_profit": float(gross_profit),
+        })
+        return self._order_to_detail(order)
+
+    async def auto_calculate_cost(self, order_id: UUID) -> dict:
+        """Auto-calculate order cost from outsource tasks + material stock-out records."""
+        total_cost = Decimal("0")
+
+        # Outsource costs
+        result = await self.db.execute(
+            select(func.coalesce(func.sum(OutsourceTask.total_amount), 0))
+            .where(OutsourceTask.order_id == order_id, OutsourceTask.status == "settled")
+        )
+        total_cost += Decimal(str(result.scalar()))
+
+        # Material costs
+        result = await self.db.execute(
+            select(func.coalesce(func.sum(StockRecord.total_cost), 0))
+            .where(StockRecord.order_id == order_id, StockRecord.record_type == "out")
+        )
+        total_cost += Decimal(str(result.scalar()))
+
+        return await self.set_cost(order_id, float(total_cost))
+
     def _order_to_summary(self, o) -> dict:
         return {
             "id": str(o.id), "order_no": o.order_no,
@@ -36,6 +74,8 @@ class OrderService:
             "total_amount": float(o.total_amount),
             "paid_amount": float(o.paid_amount),
             "unpaid_amount": float(o.unpaid_amount),
+            "cost_amount": float(o.cost_amount),
+            "gross_profit": float(o.gross_profit),
             "created_at": o.created_at.isoformat() if o.created_at else None,
         }
 
@@ -49,6 +89,8 @@ class OrderService:
             "total_amount": float(o.total_amount),
             "paid_amount": float(o.paid_amount),
             "unpaid_amount": float(o.unpaid_amount),
+            "cost_amount": float(o.cost_amount),
+            "gross_profit": float(o.gross_profit),
             "delivery_deadline": o.delivery_deadline.isoformat() if o.delivery_deadline else None,
             "installation_address": o.installation_address,
             "remark": o.remark,

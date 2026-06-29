@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
-from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource
+from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory
 
 
 @asynccontextmanager
@@ -59,3 +59,4 @@ app.include_router(payments.stmt_router, prefix="/api/v1")
 app.include_router(payments.exp_router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(outsource.router, prefix="/api/v1")
+app.include_router(inventory.router, prefix="/api/v1")

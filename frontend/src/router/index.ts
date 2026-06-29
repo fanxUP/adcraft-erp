@@ -40,6 +40,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'outsource/vendors', name: 'OutsourceVendorList', component: () => import('@/views/outsource/OutsourceVendorList.vue') },
       { path: 'outsource/tasks', name: 'OutsourceTaskList', component: () => import('@/views/outsource/OutsourceTaskList.vue') },
       { path: 'outsource/payments', name: 'OutsourcePaymentList', component: () => import('@/views/outsource/OutsourcePaymentList.vue') },
+      { path: 'inventory', name: 'InventoryList', component: () => import('@/views/inventory/InventoryList.vue') },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },

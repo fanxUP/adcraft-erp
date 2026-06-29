@@ -1,16 +1,21 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.order import OrderStatusChange
-from app.schemas.common import success, success_paginated
+from app.schemas.common import success, success_paginated, error
 from app.services.order_service import OrderService
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
+
+
+class CostEntry(BaseModel):
+    cost_amount: float
 
 
 @router.get("/")
@@ -39,6 +44,35 @@ async def get_order(
     if not order:
         return {"code": 40401, "message": "订单不存在", "data": None}
     return success(order)
+
+
+@router.post("/{order_id}/set-cost")
+async def set_order_cost(
+    order_id: str,
+    data: CostEntry,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = OrderService(db)
+    try:
+        order = await service.set_cost(UUID(order_id), data.cost_amount)
+        return success(order)
+    except ValueError as e:
+        return error(40401, str(e))
+
+
+@router.post("/{order_id}/auto-cost")
+async def auto_calculate_cost(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = OrderService(db)
+    try:
+        order = await service.auto_calculate_cost(UUID(order_id))
+        return success(order)
+    except ValueError as e:
+        return error(40401, str(e))
 
 
 @router.post("/{order_id}/change-status")

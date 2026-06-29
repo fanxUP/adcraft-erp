@@ -14,6 +14,7 @@ from app.models.operation_log import OperationLog
 from app.models.task import DesignTask, ProductionTask, InstallationTask, Attachment
 from app.models.payment import Payment, CustomerStatement, Expense
 from app.models.outsource import OutsourceVendor, OutsourceTask, OutsourcePayment
+from app.models.inventory import InventoryItem, StockRecord
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
