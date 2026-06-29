@@ -130,6 +130,12 @@ PERM_OUTSOURCE_DELETE = "outsource:delete"
 # Report
 PERM_REPORT_READ = "report:read"
 
+# AI Features
+PERM_AI_QUOTE_READ = "ai_quote:read"
+PERM_AI_ANOMALY_READ = "ai_anomaly:read"
+PERM_AI_KNOWLEDGE_READ = "ai_knowledge:read"
+PERM_AI_REPORT_READ = "ai_report:read"
+
 
 # ── Role name constants ───────────────────────────────────────────────────
 

@@ -21,6 +21,15 @@ class Settings(BaseSettings):
 
     JWT_EXPIRE_MINUTES: int = 1440
 
+    # AI Feature Configuration (all optional, AI disabled by default)
+    AI_ENABLED: bool = False
+    AI_PROVIDER: str = "anthropic"  # "anthropic" | "openai"
+    AI_API_KEY: str = ""
+    AI_API_BASE_URL: str = ""
+    AI_MODEL: str = "claude-sonnet-4-20250514"
+    AI_MAX_TOKENS: int = 4096
+    AI_TEMPERATURE: float = 0.7
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

@@ -7,6 +7,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
 from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup
+# AI module routes
+from app.ai.api import ai_anomalies, ai_knowledge, ai_quote, ai_reports, ai_site_photo, ai_payment_ocr
 
 
 @asynccontextmanager
@@ -62,3 +64,9 @@ app.include_router(outsource.router, prefix="/api/v1")
 app.include_router(inventory.router, prefix="/api/v1")
 app.include_router(operation_logs.router, prefix="/api/v1")
 app.include_router(backup.router, prefix="/api/v1")
+app.include_router(ai_anomalies.router, prefix="/api/v1")
+app.include_router(ai_knowledge.router, prefix="/api/v1")
+app.include_router(ai_quote.router, prefix="/api/v1")
+app.include_router(ai_reports.router, prefix="/api/v1")
+app.include_router(ai_site_photo.router, prefix="/api/v1")
+app.include_router(ai_payment_ocr.router, prefix="/api/v1")

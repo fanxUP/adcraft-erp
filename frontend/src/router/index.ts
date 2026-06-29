@@ -43,6 +43,10 @@ const routes: RouteRecordRaw[] = [
       { path: 'inventory', name: 'InventoryList', component: () => import('@/views/inventory/InventoryList.vue') },
       { path: 'operation-logs', name: 'OperationLogList', component: () => import('@/views/system/OperationLogList.vue') },
       { path: 'backups', name: 'BackupManage', meta: { roles: ['admin'] }, component: () => import('@/views/system/BackupManage.vue') },
+      { path: 'ai/anomalies', name: 'AnomalyDashboard', component: () => import('@/views/ai/AnomalyDashboard.vue') },
+      { path: 'ai/quotes', name: 'AIQuoteAssistant', component: () => import('@/views/ai/AIQuoteAssistant.vue') },
+      { path: 'ai/knowledge', name: 'QuoteKnowledgeBase', component: () => import('@/views/ai/QuoteKnowledgeBase.vue') },
+      { path: 'ai/reports', name: 'BusinessNarrativeReport', component: () => import('@/views/ai/BusinessNarrativeReport.vue') },
     ],
   },
   {

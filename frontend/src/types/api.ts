@@ -574,3 +574,141 @@ export interface UploadResponse {
   message: string
   url: string
 }
+
+// ============================================================
+// AI Module Types (Phase 10)
+// ============================================================
+
+export interface DraftQuoteItem {
+  item_name: string
+  length?: number
+  width?: number
+  height?: number
+  quantity: number
+  unit: string
+  product_id?: string
+  material_id?: string
+  process_id?: string
+  unit_price?: number
+  design_fee: number
+  installation_fee: number
+  process_fee: number
+  transport_fee: number
+  other_fee: number
+  subtotal: number
+  remark: string
+}
+
+export interface SimilarQuoteItem {
+  quote_id: string
+  quote_no: string
+  project_name: string
+  total_area?: number
+  items_summary: string
+  total_amount: number
+  gross_profit?: number
+  profit_margin?: number
+  created_at?: string
+}
+
+export interface AIQuoteAssistResponse {
+  mode: string
+  project_name: string
+  items: DraftQuoteItem[]
+  total_estimate: number
+  confidence: string
+  similar_quotes_count: number
+  similar_quotes: SimilarQuoteItem[]
+  ai_analysis: string
+  risk_notes: string[]
+}
+
+export interface AnomalyAlert {
+  type: string
+  severity: string
+  object_type: string
+  object_id: string
+  title: string
+  detail: string
+  created_at: string
+}
+
+export interface AnomalySummary {
+  critical: number
+  warning: number
+  info: number
+}
+
+export interface AnomalyScanResponse {
+  mode: string
+  alerts: AnomalyAlert[]
+  summary: AnomalySummary
+}
+
+export interface SimilarQuoteResult {
+  quote_id: string
+  quote_no: string
+  project_name: string
+  total_area?: number
+  items_summary: string
+  total_amount: number
+  gross_profit?: number
+  profit_margin?: number
+  created_at?: string
+}
+
+export interface PricingSummary {
+  price_range: number[]
+  avg_price: number
+  avg_margin: number
+  recommended_price: number
+}
+
+export interface SimilarQuotesResponse {
+  mode: string
+  items: SimilarQuoteResult[]
+  pricing_summary: PricingSummary
+}
+
+export interface PhotoChecklist {
+  wall_condition: string
+  height_risk: string
+  scaffolding_needed: string
+  obstacles_found: string
+  cost_impact_estimated: boolean
+  notes: string
+}
+
+export interface SitePhotoAnalyzeResponse {
+  mode: string
+  photo_url: string
+  checklist: PhotoChecklist
+  ai_findings?: Record<string, unknown>
+}
+
+export interface OCRExtracted {
+  amount?: number
+  paid_at?: string
+  payer_name?: string
+  remark?: string
+  payment_method?: string
+}
+
+export interface OCRRecognizeResponse {
+  mode: string
+  image_url: string
+  extracted: OCRExtracted
+  confidence: string
+  order_context?: Record<string, unknown>
+}
+
+export interface BusinessNarrativeResponse {
+  mode: string
+  period: string
+  year: number
+  month?: number
+  week?: number
+  stats: Record<string, unknown>
+  narrative: string
+  suggestions: string[]
+}

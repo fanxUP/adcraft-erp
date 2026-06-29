@@ -91,6 +91,16 @@
             <el-menu-item index="/operation-logs">操作日志</el-menu-item>
             <el-menu-item index="/backups">备份管理</el-menu-item>
           </el-sub-menu>
+          <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'sales', 'finance'])" index="/ai">
+            <template #title>
+              <el-icon><MagicStick /></el-icon>
+              <span>智能助手</span>
+            </template>
+            <el-menu-item index="/ai/quotes">AI报价助手</el-menu-item>
+            <el-menu-item index="/ai/anomalies">智能异常提醒</el-menu-item>
+            <el-menu-item index="/ai/knowledge">报价知识库</el-menu-item>
+            <el-menu-item index="/ai/reports">智能经营报告</el-menu-item>
+          </el-sub-menu>
         </el-menu>
       </el-aside>
 
