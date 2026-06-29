@@ -1,0 +1,246 @@
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.models.user import User
+from app.schemas.product import (
+    ProductCategoryCreate, ProductCreate, ProductUpdate,
+    MaterialCreate, MaterialUpdate,
+    ProcessCreate, ProcessUpdate,
+)
+from app.schemas.common import success, success_paginated
+from app.services.product_service import ProductService
+
+router = APIRouter(prefix="/products", tags=["Products"])
+cat_router = APIRouter(prefix="/product-categories", tags=["Product Categories"])
+mat_router = APIRouter(prefix="/materials", tags=["Materials"])
+proc_router = APIRouter(prefix="/processes", tags=["Processes"])
+
+
+# Product Categories
+@cat_router.get("/")
+async def list_categories(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    cats = await service.list_categories()
+    return success(cats)
+
+
+@cat_router.post("/")
+async def create_category(
+    data: ProductCategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    cat = await service.create_category(data.model_dump(exclude_none=True))
+    return success(cat)
+
+
+@cat_router.delete("/{cat_id}")
+async def delete_category(
+    cat_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    ok = await service.delete_category(UUID(cat_id))
+    if not ok:
+        return {"code": 40401, "message": "分类不存在", "data": None}
+    return success(None)
+
+
+# Products
+@router.get("/")
+async def list_products(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = None,
+    category_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    cid = UUID(category_id) if category_id else None
+    products, total = await service.list_products(page, page_size, keyword, cid)
+    return success_paginated(products, total, page, page_size)
+
+
+@router.post("/")
+async def create_product(
+    data: ProductCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    product = await service.create_product(data.model_dump())
+    return success(product)
+
+
+@router.get("/{product_id}")
+async def get_product(
+    product_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    product = await service.get_product(UUID(product_id))
+    if not product:
+        return {"code": 40401, "message": "产品不存在", "data": None}
+    return success(product)
+
+
+@router.put("/{product_id}")
+async def update_product(
+    product_id: str,
+    data: ProductUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    product = await service.update_product(UUID(product_id), data.model_dump(exclude_none=True))
+    return success(product)
+
+
+@router.delete("/{product_id}")
+async def delete_product(
+    product_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    ok = await service.delete_product(UUID(product_id))
+    if not ok:
+        return {"code": 40401, "message": "产品不存在", "data": None}
+    return success(None)
+
+
+# Materials
+@mat_router.get("/")
+async def list_materials(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    materials, total = await service.list_materials(page, page_size, keyword)
+    return success_paginated(materials, total, page, page_size)
+
+
+@mat_router.post("/")
+async def create_material(
+    data: MaterialCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    material = await service.create_material(data.model_dump())
+    return success(material)
+
+
+@mat_router.get("/{material_id}")
+async def get_material(
+    material_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    material = await service.get_material(UUID(material_id))
+    if not material:
+        return {"code": 40401, "message": "材质不存在", "data": None}
+    return success(material)
+
+
+@mat_router.put("/{material_id}")
+async def update_material(
+    material_id: str,
+    data: MaterialUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    material = await service.update_material(UUID(material_id), data.model_dump(exclude_none=True))
+    return success(material)
+
+
+@mat_router.delete("/{material_id}")
+async def delete_material(
+    material_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    ok = await service.delete_material(UUID(material_id))
+    if not ok:
+        return {"code": 40401, "message": "材质不存在", "data": None}
+    return success(None)
+
+
+# Processes
+@proc_router.get("/")
+async def list_processes(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    processes, total = await service.list_processes(page, page_size, keyword)
+    return success_paginated(processes, total, page, page_size)
+
+
+@proc_router.post("/")
+async def create_process(
+    data: ProcessCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    process = await service.create_process(data.model_dump())
+    return success(process)
+
+
+@proc_router.get("/{process_id}")
+async def get_process(
+    process_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    process = await service.get_process(UUID(process_id))
+    if not process:
+        return {"code": 40401, "message": "工艺不存在", "data": None}
+    return success(process)
+
+
+@proc_router.put("/{process_id}")
+async def update_process(
+    process_id: str,
+    data: ProcessUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    process = await service.update_process(UUID(process_id), data.model_dump(exclude_none=True))
+    return success(process)
+
+
+@proc_router.delete("/{process_id}")
+async def delete_process(
+    process_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    ok = await service.delete_process(UUID(process_id))
+    if not ok:
+        return {"code": 40401, "message": "工艺不存在", "data": None}
+    return success(None)

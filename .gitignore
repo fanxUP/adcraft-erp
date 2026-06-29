@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.env
+*.log
+uploads/*
+!uploads/.gitkeep
+logs/*
+!logs/.gitkeep
+data/
+backups/*
+!backups/.gitkeep
+node_modules/
+.DS_Store
+*.local

@@ -1,0 +1,9 @@
+flowchart TD
+    A[客户机浏览器 PC/手机] --> B[Nginx 局域网入口]
+    B --> C[Vue 3 前端]
+    B --> D[FastAPI 后端 API]
+    D --> E[PostgreSQL 数据库]
+    D --> F[Redis 缓存/任务]
+    D --> G[MinIO/本地文件存储]
+    D --> H[备份服务]
+    H --> I[本地备份盘/NAS]

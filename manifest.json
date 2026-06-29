@@ -1,0 +1,41 @@
+{
+  "project_name": "AdCraft ERP 广告制作安装工程管理系统",
+  "generated_for": "vibe coding / codex development",
+  "recommended_stack": [
+    "Vue 3",
+    "FastAPI",
+    "PostgreSQL",
+    "Redis",
+    "MinIO",
+    "Nginx",
+    "Docker Compose"
+  ],
+  "first_version_core_flow": "客户建档 -> 报价 -> 报价转订单 -> 设计/制作/安装任务 -> 文件归档 -> 收款 -> 对账 -> 报表",
+  "files": [
+    "README.md",
+    "architecture/业务流程图.mmd",
+    "architecture/系统架构图.mmd",
+    "config/docker-compose.example.yml",
+    "config/env.example",
+    "docs/00_项目总览.md",
+    "docs/01_业务流程与角色权限.md",
+    "docs/02_功能模块PRD.md",
+    "docs/03_数据模型与数据库设计.md",
+    "docs/04_API接口设计.md",
+    "docs/05_前端页面与UI规范.md",
+    "docs/06_局域网部署_Docker方案.md",
+    "docs/07_开发阶段计划与验收标准.md",
+    "docs/08_Vibe_Coding总提示词.md",
+    "docs/09_测试验收清单.md",
+    "docs/10_后续AI智能化规划.md",
+    "prompts/01_基础闭环开发提示词.md",
+    "prompts/02_生产安装强化提示词.md",
+    "prompts/03_财务报表强化提示词.md",
+    "prompts/04_重构与代码规范提示词.md",
+    "schema/ad_erp_schema.sql",
+    "templates/安装派工单模板.md",
+    "templates/客户对账单模板.md",
+    "templates/报价单模板.md",
+    "templates/订单模板.md"
+  ]
+}
