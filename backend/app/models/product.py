@@ -2,7 +2,7 @@ import uuid
 
 from sqlalchemy import Boolean, Integer, Numeric, String, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from app.models.base import Base, TimestampMixin
 
@@ -67,5 +67,5 @@ class PriceRule(Base, TimestampMixin):
     pricing_method: Mapped[str] = mapped_column(String(64), nullable=False)
     unit_price: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     min_charge: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    formula: Mapped[dict | None] = mapped_column(nullable=True)
+    formula: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

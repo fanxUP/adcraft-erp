@@ -1,3 +1,4 @@
+import uuid as _uuid
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -29,9 +30,12 @@ class QuoteRepository:
 
     async def create(self, data: dict) -> Quote:
         items_data = data.pop("items", [])
+        # Pre-assign ID so it's available for item foreign keys
+        data.setdefault("id", _uuid.uuid4())
         quote = Quote(**data)
         self.db.add(quote)
         for idx, item_data in enumerate(items_data):
+            item_data.pop("sort_order", None)  # repo handles ordering
             item = QuoteItem(quote_id=quote.id, sort_order=idx, **item_data)
             self.db.add(item)
         await self.db.flush()

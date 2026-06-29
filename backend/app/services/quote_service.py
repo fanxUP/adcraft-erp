@@ -31,7 +31,8 @@ class QuoteService:
         data["total_amount"] = Decimal("0")
         data["status"] = "draft"
 
-        items_data = data.pop("items", [])
+        # Pass items through data so the repo can handle them
+        items_data = data.get("items", [])
         for item in items_data:
             for fee_key in ("unit_price", "process_fee", "installation_fee", "design_fee", "transport_fee", "other_fee"):
                 item[fee_key] = Decimal(str(item.get(fee_key, "0")))

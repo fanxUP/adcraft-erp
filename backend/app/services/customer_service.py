@@ -55,6 +55,7 @@ class CustomerService:
     async def create_customer(self, data: dict) -> dict:
         data["customer_no"] = await generate_customer_no(self.db)
         customer = await self.repo.create(data)
+        await self.db.refresh(customer, ["contacts"])
         return self._to_response(customer)
 
     async def update_customer(self, customer_id: UUID, data: dict) -> dict:
