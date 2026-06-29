@@ -20,7 +20,7 @@ INSERT INTO roles (id, name, description) VALUES
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO users (id, username, password_hash, real_name, is_active) VALUES
-  (gen_random_uuid(), 'admin', '\$2b\$12\$LJ3m4ys3Gy4e1JOqWIqOpeBFUKvC8GZrrPSkrGq9GIVJOLxbPNGXi', '系统管理员', TRUE)
+  (gen_random_uuid(), 'admin', '\$2b\$12\$CssbSpQCObmbmkgCzolCkuZbDBRHjoz9ykY/3V6A8EYND3hSaOZQ2', '系统管理员', TRUE)
 ON CONFLICT (username) DO NOTHING;
 
 INSERT INTO user_roles (user_id, role_id)

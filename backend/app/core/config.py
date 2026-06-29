@@ -6,10 +6,10 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     SECRET_KEY: str = "change_me"
 
-    DATABASE_URL: str = "postgresql+asyncpg://adcraft:adcraft_dev_password@postgres:5432/adcraft_erp"
-    DATABASE_URL_SYNC: str = "postgresql+psycopg2://adcraft:adcraft_dev_password@postgres:5432/adcraft_erp"
+    DATABASE_URL: str = "postgresql+asyncpg://adcraft:adcraft_dev_password@127.0.0.1:5432/adcraft_erp"
+    DATABASE_URL_SYNC: str = "postgresql+psycopg2://adcraft:adcraft_dev_password@127.0.0.1:5432/adcraft_erp"
 
-    REDIS_URL: str = "redis://redis:6379/0"
+    REDIS_URL: str = "redis://127.0.0.1:6379/0"
 
     UPLOAD_STORAGE: str = "local"
     LOCAL_UPLOAD_DIR: str = "/app/uploads"

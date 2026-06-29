@@ -49,7 +49,7 @@ class ProductionTask(Base, TimestampMixin):
     completed_at: Mapped[str | None] = mapped_column(DateTime, nullable=True)
 
     attachments: Mapped[list["Attachment"]] = relationship(
-        back_populates="production_task", lazy="selectin", cascade="all, delete-orphan",
+        back_populates="production_task", lazy="selectin", cascade="all, delete-orphan", overlaps="attachments",
         primaryjoin="and_(Attachment.related_type=='production_task', foreign(Attachment.related_id)==ProductionTask.id)",
     )
 
@@ -72,7 +72,7 @@ class InstallationTask(Base, TimestampMixin):
     completed_at: Mapped[str | None] = mapped_column(DateTime, nullable=True)
 
     attachments: Mapped[list["Attachment"]] = relationship(
-        back_populates="installation_task", lazy="selectin", cascade="all, delete-orphan",
+        back_populates="installation_task", lazy="selectin", cascade="all, delete-orphan", overlaps="attachments",
         primaryjoin="and_(Attachment.related_type=='installation_task', foreign(Attachment.related_id)==InstallationTask.id)",
     )
 
