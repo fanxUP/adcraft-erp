@@ -42,6 +42,15 @@
             <el-icon><Setting /></el-icon>
             <span>工艺管理</span>
           </el-menu-item>
+          <el-sub-menu index="/outsource">
+            <template #title>
+              <el-icon><Connection /></el-icon>
+              <span>外协管理</span>
+            </template>
+            <el-menu-item index="/outsource/vendors">外协商</el-menu-item>
+            <el-menu-item index="/outsource/tasks">外协任务</el-menu-item>
+            <el-menu-item index="/outsource/payments">外协付款</el-menu-item>
+          </el-sub-menu>
           <el-sub-menu index="/tasks">
             <template #title>
               <el-icon><List /></el-icon>
