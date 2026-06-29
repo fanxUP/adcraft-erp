@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
 
 
 async def _generate_no(db: AsyncSession, prefix: str) -> str:
-    today = datetime.utcnow().strftime("%Y%m%d")
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
     pattern = f"{prefix}{today}-%"
 
     if prefix == "Q":

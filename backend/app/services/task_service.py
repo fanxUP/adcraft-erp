@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -96,7 +96,7 @@ class DesignTaskService:
 
         task.status = to_status
         if to_status == "confirmed":
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
         await self.db.flush()
         return self._to_dict(task)
 
@@ -171,7 +171,7 @@ class ProductionTaskService:
 
         task.status = to_status
         if to_status == "completed":
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
         await self.db.flush()
         return self._to_dict(task)
 
@@ -242,7 +242,7 @@ class InstallationTaskService:
 
         task.status = to_status
         if to_status == "completed":
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
         await self.db.flush()
         return self._to_dict(task)
 

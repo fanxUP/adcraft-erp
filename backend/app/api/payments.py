@@ -4,6 +4,7 @@ from uuid import UUID
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import require_role
 from app.models.user import User
 from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate
 from app.schemas.common import success, success_paginated
@@ -89,13 +90,13 @@ async def upload_receipt(
     current_user: User = Depends(get_current_user),
 ):
     import os, uuid as _uuid
-    from datetime import datetime
+    from datetime import datetime, timezone
     from sqlalchemy import update
     from app.core.config import settings
     from app.models.payment import Payment as PaymentModel
 
     ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "bin"
-    month_dir = datetime.utcnow().strftime("%Y%m")
+    month_dir = datetime.now(timezone.utc).strftime("%Y%m")
     dest_dir = os.path.join(settings.LOCAL_UPLOAD_DIR, month_dir)
     os.makedirs(dest_dir, exist_ok=True)
     stored_name = f"{_uuid.uuid4()}.{ext}"
@@ -236,7 +237,7 @@ async def delete_expense(
     expense_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
     service = ExpenseService(db)
     eid = UUID(expense_id)

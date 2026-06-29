@@ -100,8 +100,21 @@ services:
     volumes:
       - ./backups:/backups
       - ./uploads:/uploads
-      - ./data/postgres:/postgres_data:ro
-    command: ["sh", "-c", "while true; do sleep 86400; done"]
+      - ./scripts:/scripts
+    environment:
+      PGHOST: postgres
+      PGPORT: '5432'
+      POSTGRES_DB: ${POSTGRES_DB:-adcraft_erp}
+      POSTGRES_USER: ${POSTGRES_USER:-adcraft}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adcraft_password}
+    command: >
+      sh -c "
+        apk add --no-cache postgresql-client >/dev/null 2>&1 &&
+        echo '0 2 * * * cd / && sh /scripts/backup.sh >> /var/log/backup.log 2>&1' | crontab - &&
+        echo 'Backup scheduler started — backups run daily at 2:00 AM' &&
+        crond -b -l 2 &&
+        while true; do sleep 3600; done
+      "
     restart: unless-stopped
     networks:
       - adcraft-net

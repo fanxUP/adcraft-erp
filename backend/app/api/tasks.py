@@ -1,6 +1,6 @@
 import os
 import uuid as _uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -247,7 +247,7 @@ async def upload_attachment(
     current_user: User = Depends(get_current_user),
 ):
     upload_dir = settings.LOCAL_UPLOAD_DIR
-    date_dir = datetime.utcnow().strftime("%Y%m")
+    date_dir = datetime.now(timezone.utc).strftime("%Y%m")
     dest_dir = os.path.join(upload_dir, date_dir)
     os.makedirs(dest_dir, exist_ok=True)
 

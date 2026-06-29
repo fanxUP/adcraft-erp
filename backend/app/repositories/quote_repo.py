@@ -61,8 +61,8 @@ class QuoteRepository:
         return quote
 
     async def soft_delete(self, quote: Quote) -> Quote:
-        from datetime import datetime
-        quote.deleted_at = datetime.utcnow()
+        from datetime import datetime, timezone
+        quote.deleted_at = datetime.now(timezone.utc)
         await self.db.flush()
         return quote
 

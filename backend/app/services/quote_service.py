@@ -126,7 +126,7 @@ class QuoteService:
 
         # Create order
         from app.models.order import Order, OrderItem, OrderStatusLog
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         order_no = await generate_order_no(self.db)
         order = Order(
@@ -166,7 +166,7 @@ class QuoteService:
             to_status="pending_confirm",
             reason="报价转订单",
             operated_by=created_by,
-            operated_at=datetime.utcnow(),
+            operated_at=datetime.now(timezone.utc),
         )
         self.db.add(status_log)
 

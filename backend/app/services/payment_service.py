@@ -1,5 +1,5 @@
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.payment import Payment, CustomerStatement, Expense
@@ -130,7 +130,7 @@ class StatementService:
         s = await self.repo.get_by_id(statement_id)
         if not s:
             raise ValueError("对账单不存在")
-        await self.repo.update(s, {"status": "confirmed", "confirmed_at": datetime.utcnow(), "confirmed_by": confirmed_by})
+        await self.repo.update(s, {"status": "confirmed", "confirmed_at": datetime.now(timezone.utc), "confirmed_by": confirmed_by})
         return await self._to_detail(s)
 
     def _to_summary(self, s: CustomerStatement) -> dict:

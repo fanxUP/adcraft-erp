@@ -1,6 +1,6 @@
 from uuid import UUID
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -59,7 +59,7 @@ class InventoryService:
             "total_cost": float(total_cost),
             "order_id": UUID(data["order_id"]) if data.get("order_id") else None,
             "remark": data.get("remark"),
-            "operated_at": datetime.utcnow(),
+            "operated_at": datetime.now(timezone.utc),
         }
         record = await self.repo.create_record(record_data)
 
@@ -94,7 +94,7 @@ class InventoryService:
             "total_cost": float(total_cost),
             "order_id": UUID(data["order_id"]) if data.get("order_id") else None,
             "remark": data.get("remark"),
-            "operated_at": datetime.utcnow(),
+            "operated_at": datetime.now(timezone.utc),
         }
         record = await self.repo.create_record(record_data)
 

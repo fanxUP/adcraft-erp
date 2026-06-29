@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import require_role
 from app.models.user import User
 from app.schemas.common import success, success_paginated, error
 from app.schemas.outsource import VendorCreate, VendorUpdate, OutsourceTaskCreate, OutsourceTaskUpdate, OutsourcePaymentCreate
@@ -85,7 +86,7 @@ async def delete_vendor(
     vendor_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
     service = OutsourceService(db)
     vid = UUID(vendor_id)

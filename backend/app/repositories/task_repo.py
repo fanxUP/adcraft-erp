@@ -19,7 +19,11 @@ class DesignTaskRepository:
                          order_id: str | None = None, assigned_to: str | None = None) -> tuple[list[DesignTask], int]:
         q = select(DesignTask)
         if status:
-            q = q.where(DesignTask.status == status)
+            status_list = [s.strip() for s in status.split(",") if s.strip()]
+            if len(status_list) == 1:
+                q = q.where(DesignTask.status == status_list[0])
+            else:
+                q = q.where(DesignTask.status.in_(status_list))
         if order_id:
             q = q.where(DesignTask.order_id == UUID(order_id))
         if assigned_to:
@@ -97,7 +101,11 @@ class InstallationTaskRepository:
                          order_id: str | None = None, assigned_to: str | None = None) -> tuple[list[InstallationTask], int]:
         q = select(InstallationTask)
         if status:
-            q = q.where(InstallationTask.status == status)
+            status_list = [s.strip() for s in status.split(",") if s.strip()]
+            if len(status_list) == 1:
+                q = q.where(InstallationTask.status == status_list[0])
+            else:
+                q = q.where(InstallationTask.status.in_(status_list))
         if order_id:
             q = q.where(InstallationTask.order_id == UUID(order_id))
         if assigned_to:

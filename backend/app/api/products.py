@@ -1,10 +1,11 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import require_role
 from app.models.user import User
 from app.schemas.product import (
     ProductCategoryCreate, ProductCreate, ProductUpdate,
@@ -13,6 +14,7 @@ from app.schemas.product import (
 )
 from app.schemas.common import success, success_paginated
 from app.services.product_service import ProductService
+from app.utils.excel_import import ExcelImportResult, parse_excel, format_value, parse_number
 
 router = APIRouter(prefix="/products", tags=["Products"])
 cat_router = APIRouter(prefix="/product-categories", tags=["Product Categories"])
@@ -46,7 +48,7 @@ async def create_category(
 async def delete_category(
     cat_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
     service = ProductService(db)
     ok = await service.delete_category(UUID(cat_id))
@@ -82,6 +84,68 @@ async def create_product(
     return success(product)
 
 
+PRODUCT_COLUMN_MAP = {
+    "产品名称": "name",
+    "单位": "unit",
+    "计价方式": "pricing_method",
+    "默认价格": "default_price",
+    "最低收费": "min_charge",
+    "备注": "remark",
+}
+PRODUCT_REQUIRED = ["产品名称"]
+
+
+@router.post("/import")
+async def import_products(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Batch import products from Excel file."""
+    if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
+        return {"code": 40001, "message": "请上传 .xlsx 或 .xls 格式的 Excel 文件", "data": None}
+
+    content = await file.read()
+    rows, header_errors = parse_excel(content, PRODUCT_REQUIRED, PRODUCT_COLUMN_MAP)
+    if header_errors:
+        return {"code": 40002, "message": "文件格式错误", "data": {"errors": header_errors}}
+
+    result = ExcelImportResult()
+    result.total_rows = len(rows)
+    service = ProductService(db)
+
+    for row in rows:
+        try:
+            name = format_value(row.get("name"))
+            if not name:
+                result.failed += 1
+                result.errors.append({"row": row["_excel_row"], "message": "产品名称不能为空"})
+                continue
+
+            unit = format_value(row.get("unit")) or "项"
+            pricing_method = format_value(row.get("pricing_method")) or "quantity"
+            if pricing_method not in ("area", "quantity", "length", "word_count"):
+                result.failed += 1
+                result.errors.append({"row": row["_excel_row"], "message": f"无效的计价方式: {pricing_method}（可选: area/quantity/length/word_count）"})
+                continue
+
+            data = {
+                "name": name,
+                "unit": unit,
+                "pricing_method": pricing_method,
+                "default_price": parse_number(row.get("default_price")),
+                "min_charge": parse_number(row.get("min_charge")),
+                "remark": format_value(row.get("remark")),
+            }
+            await service.create_product(data)
+            result.succeeded += 1
+        except Exception as e:
+            result.failed += 1
+            result.errors.append({"row": row.get("_excel_row", "?"), "message": str(e)})
+
+    return success(result.to_dict())
+
+
 @router.get("/{product_id}")
 async def get_product(
     product_id: str,
@@ -111,7 +175,7 @@ async def update_product(
 async def delete_product(
     product_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
     service = ProductService(db)
     ok = await service.delete_product(UUID(product_id))
@@ -145,6 +209,65 @@ async def create_material(
     return success(material)
 
 
+MATERIAL_COLUMN_MAP = {
+    "材质名称": "name",
+    "规格": "spec",
+    "单位": "unit",
+    "采购价": "purchase_price",
+    "销售价": "sale_price",
+    "损耗率": "loss_rate",
+    "安全库存": "safe_stock",
+    "备注": "remark",
+}
+MATERIAL_REQUIRED = ["材质名称"]
+
+
+@mat_router.post("/import")
+async def import_materials(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Batch import materials from Excel file."""
+    if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
+        return {"code": 40001, "message": "请上传 .xlsx 或 .xls 格式的 Excel 文件", "data": None}
+
+    content = await file.read()
+    rows, header_errors = parse_excel(content, MATERIAL_REQUIRED, MATERIAL_COLUMN_MAP)
+    if header_errors:
+        return {"code": 40002, "message": "文件格式错误", "data": {"errors": header_errors}}
+
+    result = ExcelImportResult()
+    result.total_rows = len(rows)
+    service = ProductService(db)
+
+    for row in rows:
+        try:
+            name = format_value(row.get("name"))
+            if not name:
+                result.failed += 1
+                result.errors.append({"row": row["_excel_row"], "message": "材质名称不能为空"})
+                continue
+
+            data = {
+                "name": name,
+                "spec": format_value(row.get("spec")),
+                "unit": format_value(row.get("unit")) or "张",
+                "purchase_price": parse_number(row.get("purchase_price")),
+                "sale_price": parse_number(row.get("sale_price")),
+                "loss_rate": parse_number(row.get("loss_rate")),
+                "safe_stock": parse_number(row.get("safe_stock")),
+                "remark": format_value(row.get("remark")),
+            }
+            await service.create_material(data)
+            result.succeeded += 1
+        except Exception as e:
+            result.failed += 1
+            result.errors.append({"row": row.get("_excel_row", "?"), "message": str(e)})
+
+    return success(result.to_dict())
+
+
 @mat_router.get("/{material_id}")
 async def get_material(
     material_id: str,
@@ -174,7 +297,7 @@ async def update_material(
 async def delete_material(
     material_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
     service = ProductService(db)
     ok = await service.delete_material(UUID(material_id))
@@ -237,7 +360,7 @@ async def update_process(
 async def delete_process(
     process_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
     service = ProductService(db)
     ok = await service.delete_process(UUID(process_id))

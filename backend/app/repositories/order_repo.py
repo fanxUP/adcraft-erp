@@ -46,14 +46,14 @@ class OrderRepository:
         return list(result.scalars().all())
 
     async def create_status_log(self, order_id: UUID, from_status: str | None, to_status: str, reason: str | None, operated_by: UUID | None) -> OrderStatusLog:
-        from datetime import datetime
+        from datetime import datetime, timezone
         log = OrderStatusLog(
             order_id=order_id,
             from_status=from_status,
             to_status=to_status,
             reason=reason,
             operated_by=operated_by,
-            operated_at=datetime.utcnow(),
+            operated_at=datetime.now(timezone.utc),
         )
         self.db.add(log)
         await self.db.flush()

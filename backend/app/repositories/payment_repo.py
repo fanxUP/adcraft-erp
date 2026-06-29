@@ -1,5 +1,5 @@
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 
@@ -38,7 +38,7 @@ class PaymentRepository:
     async def void(self, payment: Payment, reason: str) -> Payment:
         payment.is_voided = True
         payment.void_reason = reason
-        payment.voided_at = datetime.utcnow()
+        payment.voided_at = datetime.now(timezone.utc)
         await self.db.flush()
         return payment
 
@@ -157,6 +157,6 @@ class ExpenseRepository:
         return expense
 
     async def soft_delete(self, expense: Expense) -> Expense:
-        expense.deleted_at = datetime.utcnow()
+        expense.deleted_at = datetime.now(timezone.utc)
         await self.db.flush()
         return expense

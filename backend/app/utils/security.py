@@ -1,6 +1,6 @@
 import bcrypt
 from jose import JWTError, jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from app.core.config import settings
@@ -15,11 +15,11 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_access_token(user_id: UUID, username: str) -> str:
-    expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
     payload = {
         "sub": str(user_id),
         "username": username,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
         "exp": expire,
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
