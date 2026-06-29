@@ -30,9 +30,9 @@ const routes: RouteRecordRaw[] = [
       { path: 'production-tasks/:id', name: 'ProductionTaskDetail', component: () => import('@/views/tasks/ProductionTaskDetail.vue') },
       { path: 'installation-tasks', name: 'InstallationTaskList', component: () => import('@/views/tasks/InstallationTaskList.vue') },
       { path: 'installation-tasks/:id', name: 'InstallationTaskDetail', component: () => import('@/views/tasks/InstallationTaskDetail.vue') },
-      { path: 'mobile/installation', name: 'MobileInstallation', component: () => import('@/views/tasks/MobileInstallation.vue') },
       { path: 'payments', name: 'PaymentList', component: () => import('@/views/payments/PaymentList.vue') },
       { path: 'customer-debts', name: 'CustomerDebtList', component: () => import('@/views/payments/CustomerDebtList.vue') },
+      { path: 'expenses', name: 'ExpenseList', component: () => import('@/views/payments/ExpenseList.vue') },
       { path: 'statements', name: 'StatementList', component: () => import('@/views/payments/StatementList.vue') },
       { path: 'statements/:id', name: 'StatementDetail', component: () => import('@/views/payments/StatementDetail.vue') },
       { path: 'reports/daily', name: 'DailyReport', component: () => import('@/views/reports/DailyReport.vue') },
@@ -42,6 +42,15 @@ const routes: RouteRecordRaw[] = [
       { path: 'outsource/payments', name: 'OutsourcePaymentList', component: () => import('@/views/outsource/OutsourcePaymentList.vue') },
       { path: 'inventory', name: 'InventoryList', component: () => import('@/views/inventory/InventoryList.vue') },
       { path: 'operation-logs', name: 'OperationLogList', component: () => import('@/views/system/OperationLogList.vue') },
+      { path: 'backups', name: 'BackupManage', meta: { roles: ['admin'] }, component: () => import('@/views/system/BackupManage.vue') },
+    ],
+  },
+  {
+    path: '/mobile',
+    component: () => import('@/layouts/MobileLayout.vue'),
+    meta: { requiresAuth: true },
+    children: [
+      { path: 'installation', name: 'MobileInstallation', component: () => import('@/views/tasks/MobileInstallation.vue') },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
@@ -58,6 +67,15 @@ router.beforeEach((to, _from, next) => {
     next('/login')
   } else if (to.path === '/login' && authStore.isLoggedIn) {
     next('/')
+  } else if (to.meta.roles && authStore.user) {
+    const userRoles: string[] = authStore.user.roles || []
+    const required: string[] = to.meta.roles as string[]
+    const hasAccess = required.some(r => userRoles.includes(r))
+    if (!hasAccess) {
+      next('/')
+    } else {
+      next()
+    }
   } else {
     next()
   }

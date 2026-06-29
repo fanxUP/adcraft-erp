@@ -19,9 +19,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { getCustomerDebt } from '@/api/payments'
+import { CustomerDebtItem } from '@/types/api'
 
 const loading = ref(false)
-const list = ref<any[]>([])
+const list = ref<CustomerDebtItem[]>([])
 
 async function fetchData() {
   loading.value = true

@@ -43,9 +43,9 @@
         </el-table-column>
         <el-table-column label="操作" width="240">
           <template #default="{ row }">
-            <el-button text type="success" @click="handleStockIn(row)">入库</el-button>
-            <el-button text type="warning" @click="handleStockOut(row)">出库</el-button>
-            <el-button text type="primary" @click="handleEdit(row)">编辑</el-button>
+            <el-button text type="success" @click="handleStockIn(row as InventoryItemResponse)">入库</el-button>
+            <el-button text type="warning" @click="handleStockOut(row as InventoryItemResponse)">出库</el-button>
+            <el-button text type="primary" @click="handleEdit(row as InventoryItemResponse)">编辑</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -165,6 +165,7 @@ import {
   getInventoryItems, createInventoryItem, updateInventoryItem,
   getStockRecords, stockIn, stockOut,
 } from '@/api/inventory'
+import type { InventoryItemResponse, StockRecordResponse } from '@/types/api'
 import { ElMessage } from 'element-plus'
 
 const loading = ref(false)
@@ -172,7 +173,7 @@ const saving = ref(false)
 const showStockRecords = ref(false)
 
 // Items
-const items = ref<any[]>([])
+const items = ref<InventoryItemResponse[]>([])
 const itemTotal = ref(0)
 const itemPage = ref(1)
 const itemPageSize = ref(20)
@@ -187,7 +188,7 @@ const itemForm = reactive({
 const itemRules = { material_name: [{ required: true, message: '请输入物料名称', trigger: 'blur' }] }
 
 // Records
-const records = ref<any[]>([])
+const records = ref<StockRecordResponse[]>([])
 const recordTotal = ref(0)
 const recordPage = ref(1)
 const recordPageSize = ref(20)
@@ -195,8 +196,11 @@ const recordPageSize = ref(20)
 // Stock in/out
 const stockDialogVisible = ref(false)
 const stockType = ref<'in' | 'out'>('in')
-const selectedItem = ref<any>(null)
+const selectedItem = ref<InventoryItemResponse | null>(null)
 const stockForm = reactive({ quantity: 0, unit_cost: 0, remark: '' })
+const stockRules = {
+  quantity: [{ required: true, type: 'number', min: 0.01, message: '请输入数量', trigger: 'blur' }],
+}
 
 function categoryLabel(val: string | null) {
   const map: Record<string, string> = { raw_material: '原材料', semi_finished: '半成品', consumable: '耗材' }
@@ -235,7 +239,7 @@ function handleCreate() {
   itemDialogVisible.value = true
 }
 
-function handleEdit(row: any) {
+function handleEdit(row: InventoryItemResponse) {
   editingItemId.value = row.id
   Object.assign(itemForm, {
     material_name: row.material_name, category: row.category, spec: row.spec,
@@ -262,14 +266,14 @@ async function handleSaveItem() {
   }
 }
 
-function handleStockIn(row: any) {
+function handleStockIn(row: InventoryItemResponse) {
   stockType.value = 'in'
   selectedItem.value = row
   Object.assign(stockForm, { quantity: 0, unit_cost: row.unit_cost || 0, remark: '' })
   stockDialogVisible.value = true
 }
 
-function handleStockOut(row: any) {
+function handleStockOut(row: InventoryItemResponse) {
   stockType.value = 'out'
   selectedItem.value = row
   Object.assign(stockForm, { quantity: 0, unit_cost: 0, remark: '' })
@@ -277,6 +281,7 @@ function handleStockOut(row: any) {
 }
 
 async function handleStockSave() {
+  if (!selectedItem.value) return
   saving.value = true
   try {
     const payload = {

@@ -71,12 +71,13 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getCustomer, updateCustomer } from '@/api/customers'
+import type { CustomerResponse } from '@/types/api'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
 const loading = ref(false)
 const saving = ref(false)
-const customer = ref<any>(null)
+const customer = ref<CustomerResponse | null>(null)
 const dialogVisible = ref(false)
 const editForm = reactive({ name: '', customer_type: '', level: '', phone: '', address: '' })
 
@@ -90,6 +91,7 @@ async function fetchData() {
 }
 
 function handleEdit() {
+  if (!customer.value) return
   Object.assign(editForm, {
     name: customer.value.name,
     customer_type: customer.value.customer_type,

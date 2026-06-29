@@ -36,9 +36,9 @@
       </el-table-column>
       <el-table-column label="操作" width="180">
         <template #default="{ row }">
-          <el-button text type="primary" @click="handleEdit(row)">编辑</el-button>
-          <el-button v-if="row.status === 'pending'" text type="primary" @click="handleUpdateStatus(row, 'in_progress')">开始</el-button>
-          <el-button v-if="row.status === 'in_progress'" text type="success" @click="handleUpdateStatus(row, 'completed')">完成</el-button>
+          <el-button text type="primary" @click="handleEdit(row as OutsourceTaskResponse)">编辑</el-button>
+          <el-button v-if="row.status === 'pending'" text type="primary" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'in_progress')">开始</el-button>
+          <el-button v-if="row.status === 'in_progress'" text type="success" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'completed')">完成</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -95,17 +95,18 @@ import {
   getOutsourceVendors, getOutsourceTasks, createOutsourceTask, updateOutsourceTask,
 } from '@/api/outsource'
 import { ElMessage } from 'element-plus'
+import { OutsourceTaskResponse, VendorResponse } from '@/types/api'
 
 const loading = ref(false)
 const saving = ref(false)
-const list = ref<any[]>([])
+const list = ref<OutsourceTaskResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const statusFilter = ref('')
 const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
-const vendors = ref<any[]>([])
+const vendors = ref<VendorResponse[]>([])
 const form = reactive({
   vendor_id: '', task_type: 'production', description: '',
   quantity: 1, unit_price: 0, remark: '',
@@ -122,7 +123,7 @@ function taskTypeLabel(val: string) {
 
 function statusType(val: string) {
   const map: Record<string, string> = { pending: 'info', in_progress: 'warning', completed: 'success', settled: '' }
-  return map[val] || 'info'
+  return (map[val] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
 function statusLabel(val: string) {
@@ -157,7 +158,7 @@ function handleCreate() {
   dialogVisible.value = true
 }
 
-function handleEdit(row: any) {
+function handleEdit(row: OutsourceTaskResponse) {
   editingId.value = row.id
   Object.assign(form, {
     vendor_id: row.vendor_id, task_type: row.task_type, description: row.description,
@@ -183,7 +184,7 @@ async function handleSave() {
   }
 }
 
-async function handleUpdateStatus(row: any, status: string) {
+async function handleUpdateStatus(row: OutsourceTaskResponse, status: string) {
   await updateOutsourceTask(row.id, { status })
   ElMessage.success(`已更新为：${statusLabel(status)}`)
   await fetchData()

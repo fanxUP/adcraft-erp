@@ -84,6 +84,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { getDashboard } from '@/api/payments'
+import type { CustomerDebtItem } from '@/types/api'
 
 const loading = ref(false)
 const data = reactive({
@@ -92,7 +93,7 @@ const data = reactive({
   month_unpaid_amount: 0,
   pending_design_count: 0, pending_production_count: 0, pending_installation_count: 0,
   overdue_order_count: 0,
-  customer_debt_ranking: [] as any[],
+  customer_debt_ranking: [] as CustomerDebtItem[],
 })
 
 async function fetchData() {

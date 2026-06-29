@@ -38,55 +38,55 @@
 
       <el-table :data="items" stripe border>
         <el-table-column label="项目名称" min-width="160">
-          <template #default="{ row, $index }">
+          <template #default="{ row }">
             <el-input v-model="row.item_name" size="small" />
           </template>
         </el-table-column>
         <el-table-column label="长(m)" width="90">
-          <template #default="{ row, $index }">
-            <el-input-number v-model="row.length" :precision="3" :min="0" size="small" controls-position="right" @change="calcRow($index)" />
+          <template #default="{ row }">
+            <el-input-number v-model="row.length" :precision="3" :min="0" size="small" controls-position="right" />
           </template>
         </el-table-column>
         <el-table-column label="宽(m)" width="90">
-          <template #default="{ row, $index }">
-            <el-input-number v-model="row.width" :precision="3" :min="0" size="small" controls-position="right" @change="calcRow($index)" />
+          <template #default="{ row }">
+            <el-input-number v-model="row.width" :precision="3" :min="0" size="small" controls-position="right" />
           </template>
         </el-table-column>
         <el-table-column label="数量" width="90">
-          <template #default="{ row, $index }">
-            <el-input-number v-model="row.quantity" :precision="3" :min="0.001" size="small" controls-position="right" @change="calcRow($index)" />
+          <template #default="{ row }">
+            <el-input-number v-model="row.quantity" :precision="3" :min="0.001" size="small" controls-position="right" />
           </template>
         </el-table-column>
         <el-table-column label="面积" width="90">
-          <template #default="{ row }">{{ calcArea(row).toFixed(3) }}</template>
+          <template #default="{ row }">{{ calcArea(row as QuoteItemResponse).toFixed(3) }}</template>
         </el-table-column>
         <el-table-column label="单价" width="120">
-          <template #default="{ row, $index }">
-            <el-input-number v-model="row.unit_price" :precision="2" :min="0" size="small" controls-position="right" @change="calcRow($index)" />
+          <template #default="{ row }">
+            <el-input-number v-model="row.unit_price" :precision="2" :min="0" size="small" controls-position="right" />
           </template>
         </el-table-column>
         <el-table-column label="工艺费" width="110">
-          <template #default="{ row, $index }">
-            <el-input-number v-model="row.process_fee" :precision="2" :min="0" size="small" controls-position="right" @change="calcRow($index)" />
+          <template #default="{ row }">
+            <el-input-number v-model="row.process_fee" :precision="2" :min="0" size="small" controls-position="right" />
           </template>
         </el-table-column>
         <el-table-column label="安装费" width="110">
-          <template #default="{ row, $index }">
-            <el-input-number v-model="row.installation_fee" :precision="2" :min="0" size="small" controls-position="right" @change="calcRow($index)" />
+          <template #default="{ row }">
+            <el-input-number v-model="row.installation_fee" :precision="2" :min="0" size="small" controls-position="right" />
           </template>
         </el-table-column>
         <el-table-column label="设计费" width="110">
-          <template #default="{ row, $index }">
-            <el-input-number v-model="row.design_fee" :precision="2" :min="0" size="small" controls-position="right" @change="calcRow($index)" />
+          <template #default="{ row }">
+            <el-input-number v-model="row.design_fee" :precision="2" :min="0" size="small" controls-position="right" />
           </template>
         </el-table-column>
         <el-table-column label="运输费" width="110">
-          <template #default="{ row, $index }">
-            <el-input-number v-model="row.transport_fee" :precision="2" :min="0" size="small" controls-position="right" @change="calcRow($index)" />
+          <template #default="{ row }">
+            <el-input-number v-model="row.transport_fee" :precision="2" :min="0" size="small" controls-position="right" />
           </template>
         </el-table-column>
         <el-table-column label="小计" width="120">
-          <template #default="{ row }">¥ {{ calcSubtotal(row).toFixed(2) }}</template>
+          <template #default="{ row }">¥ {{ calcSubtotal(row as QuoteItemResponse).toFixed(2) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="60">
           <template #default="{ $index }">
@@ -126,6 +126,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { createQuote, getQuote, updateQuote, calculateQuote, confirmQuote, convertQuoteToOrder } from '@/api/quotes'
 import { getCustomers } from '@/api/customers'
 import { ElMessage } from 'element-plus'
+import type { QuoteItemResponse, QuoteDetailResponse, CustomerResponse } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -133,8 +134,8 @@ const isEdit = !!route.params.id
 const saving = ref(false)
 const calculating = ref(false)
 const converting = ref(false)
-const quote = ref<any>(null)
-const customerOptions = ref<any[]>([])
+const quote = ref<QuoteDetailResponse | null>(null)
+const customerOptions = ref<CustomerResponse[]>([])
 
 const form = reactive({
   customer_id: '',
@@ -145,11 +146,13 @@ const form = reactive({
   remark: '',
 })
 
-const newItem = () => ({
+const newItem = (): QuoteItemResponse => ({
+  id: '',
+  quote_id: '',
   item_name: '',
-  length: null as number | null,
-  width: null as number | null,
-  height: null as number | null,
+  length: undefined,
+  width: undefined,
+  height: undefined,
   quantity: 1,
   unit: '㎡',
   unit_price: 0,
@@ -158,13 +161,14 @@ const newItem = () => ({
   design_fee: 0,
   transport_fee: 0,
   other_fee: 0,
+  subtotal_amount: 0,
+  sort_order: 0,
 })
 
-const items = ref<any[]>([newItem()])
+const items = ref<QuoteItemResponse[]>([newItem()])
 
-function calcArea(item: any) { return (item.length || 0) * (item.width || 0) * (item.quantity || 0) }
-function calcSubtotal(item: any) { return calcArea(item) * (item.unit_price || 0) + (item.process_fee || 0) + (item.installation_fee || 0) + (item.design_fee || 0) + (item.transport_fee || 0) + (item.other_fee || 0) }
-function calcRow(_idx: number) {}
+function calcArea(item: QuoteItemResponse) { return (item.length || 0) * (item.width || 0) * (item.quantity || 0) }
+function calcSubtotal(item: QuoteItemResponse) { return calcArea(item) * (item.unit_price || 0) + (item.process_fee || 0) + (item.installation_fee || 0) + (item.design_fee || 0) + (item.transport_fee || 0) + (item.other_fee || 0) }
 function calcQuoteSubtotal() { return items.value.reduce((s, i) => s + calcSubtotal(i), 0) }
 function calcTax() { return (calcQuoteSubtotal() - (form.discount_amount || 0)) * (form.tax_rate || 0) }
 function calcTotal() { return calcQuoteSubtotal() - (form.discount_amount || 0) + calcTax() }
@@ -188,7 +192,7 @@ async function fetchQuote() {
     valid_until: quote.value.valid_until || '',
     remark: quote.value.remark || '',
   })
-  items.value = quote.value.items?.length ? quote.value.items.map((i: any) => ({ ...i })) : [newItem()]
+  items.value = quote.value.items?.length ? quote.value.items.map(i => ({ ...i })) : [newItem()]
 }
 
 async function handleSave() {
@@ -215,7 +219,7 @@ async function handleCalculate() {
       tax_rate: quote.value.tax_rate,
       discount_amount: quote.value.discount_amount,
     })
-    items.value = quote.value.items?.length ? quote.value.items.map((i: any) => ({ ...i })) : items.value
+    items.value = quote.value.items?.length ? quote.value.items.map(i => ({ ...i })) : items.value
     ElMessage.success('计算完成')
   } finally { calculating.value = false }
 }

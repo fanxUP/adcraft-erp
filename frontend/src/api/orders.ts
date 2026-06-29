@@ -1,21 +1,22 @@
-import apiClient from './index'
+import { get, post } from './index'
+import { PaginatedData, OrderListResponse, OrderDetailResponse } from '@/types/api'
 
 export function getOrders(params: { page?: number; page_size?: number; status?: string; customer_id?: string }) {
-  return apiClient.get('/orders/', { params })
+  return get<PaginatedData<OrderListResponse>>('/orders/', { params })
 }
 
 export function getOrder(id: string) {
-  return apiClient.get(`/orders/${id}`)
+  return get<OrderDetailResponse>(`/orders/${id}`)
 }
 
 export function changeOrderStatus(id: string, data: { to_status: string; reason?: string }) {
-  return apiClient.post(`/orders/${id}/change-status`, data)
+  return post<OrderDetailResponse>(`/orders/${id}/change-status`, data)
 }
 
 export function setOrderCost(id: string, cost_amount: number) {
-  return apiClient.post(`/orders/${id}/set-cost`, { cost_amount })
+  return post<OrderDetailResponse>(`/orders/${id}/set-cost`, { cost_amount })
 }
 
 export function autoCalculateCost(id: string) {
-  return apiClient.post(`/orders/${id}/auto-cost`)
+  return post<OrderDetailResponse>(`/orders/${id}/auto-cost`)
 }

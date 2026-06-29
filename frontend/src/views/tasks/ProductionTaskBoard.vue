@@ -32,12 +32,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { getProductionTasks, changeProductionTaskStatus } from '@/api/tasks'
-import { ElMessage } from 'element-plus'
+import { ref, onMounted } from 'vue'
+import { getProductionTasks } from '@/api/tasks'
+import type { ProductionTaskResponse } from '@/types/api'
 
 const loading = ref(false)
-const allTasks = ref<any[]>([])
+const allTasks = ref<ProductionTaskResponse[]>([])
 
 const columns = [
   { key: 'pending', label: '待制作' },
@@ -54,29 +54,10 @@ function prodStatusLabel(s: string) {
 }
 function prodStatusColor(s: string) {
   const map: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success' }
-  return map[s] || 'info'
+  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
 function colCards(key: string) { return allTasks.value.filter(t => t.status === key) }
-
-const canDrag = computed(() => allTasks.value.length > 0)
-
-function onDragStart(ev: DragEvent, card: any) {
-  if (ev.dataTransfer) ev.dataTransfer.setData('text/plain', card.id)
-}
-function onDragOver(ev: DragEvent) { ev.preventDefault() }
-async function onDrop(ev: DragEvent, toStatus: string) {
-  ev.preventDefault()
-  const taskId = ev.dataTransfer?.getData('text/plain')
-  if (!taskId) return
-  const card = allTasks.value.find(t => t.id === taskId)
-  if (!card || card.status === toStatus) return
-  try {
-    await changeProductionTaskStatus(taskId, { to_status: toStatus })
-    allTasks.value = allTasks.value.map(t => t.id === taskId ? { ...t, status: toStatus } : t)
-    ElMessage.success('状态已更新')
-  } catch { /* handled */ }
-}
 
 async function fetchData() {
   loading.value = true

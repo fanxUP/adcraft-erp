@@ -77,7 +77,7 @@
         <el-table-column prop="ip_address" label="IP" width="140" />
         <el-table-column label="操作" width="80" fixed="right">
           <template #default="{ row }">
-            <el-button text type="primary" size="small" @click="showDetail(row)">详情</el-button>
+            <el-button text type="primary" size="small" @click="showDetail(row as OperationLogResponse)">详情</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -126,14 +126,15 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { getOperationLogs } from '@/api/operation_logs'
+import type { OperationLogResponse } from '@/types/api'
 
 const loading = ref(false)
-const logs = ref<any[]>([])
+const logs = ref<OperationLogResponse[]>([])
 const page = ref(1)
 const pageSize = ref(50)
 const total = ref(0)
 const drawerVisible = ref(false)
-const currentLog = ref<any>(null)
+const currentLog = ref<OperationLogResponse | null>(null)
 
 const filters = reactive({
   object_type: '',
@@ -141,7 +142,7 @@ const filters = reactive({
 })
 const dateRange = ref<[string, string] | null>(null)
 
-function objectTypeLabel(t: string | null) {
+function objectTypeLabel(t: string | null | undefined) {
   const map: Record<string, string> = {
     customer: '客户', quote: '报价', order: '订单',
     payment: '收款', expense: '支出',
@@ -166,10 +167,10 @@ function actionTagType(a: string) {
     stock_in: '', stock_out: 'warning', void: 'danger',
     status_change: 'info',
   }
-  return map[a] || 'info'
+  return (map[a] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
-function showDetail(row: any) {
+function showDetail(row: OperationLogResponse) {
   currentLog.value = row
   drawerVisible.value = true
 }
@@ -177,12 +178,11 @@ function showDetail(row: any) {
 async function fetchLogs() {
   loading.value = true
   try {
-    const params: any = { page: page.value, page_size: pageSize.value }
-    if (filters.object_type) params.object_type = filters.object_type
-    if (filters.action) params.action = filters.action
-    if (dateRange.value) {
-      params.date_from = dateRange.value[0]
-      params.date_to = dateRange.value[1]
+    const params = {
+      page: page.value, page_size: pageSize.value,
+      ...(filters.object_type ? { object_type: filters.object_type } : {}),
+      ...(filters.action ? { action: filters.action } : {}),
+      ...(dateRange.value ? { date_from: dateRange.value[0], date_to: dateRange.value[1] } : {}),
     }
     const res = await getOperationLogs(params)
     logs.value = res.items

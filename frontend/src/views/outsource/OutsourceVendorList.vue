@@ -42,8 +42,8 @@
       </el-table-column>
       <el-table-column label="操作" width="180">
         <template #default="{ row }">
-          <el-button text type="primary" @click="handleEdit(row)">编辑</el-button>
-          <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-button text type="primary" @click="handleEdit(row as VendorResponse)">编辑</el-button>
+          <el-button text type="danger" @click="handleDelete(row as VendorResponse)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -105,10 +105,11 @@ import {
   getOutsourceVendors, createOutsourceVendor, updateOutsourceVendor, deleteOutsourceVendor,
 } from '@/api/outsource'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { VendorResponse } from '@/types/api'
 
 const loading = ref(false)
 const saving = ref(false)
-const list = ref<any[]>([])
+const list = ref<VendorResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
@@ -148,7 +149,7 @@ function handleCreate() {
   dialogVisible.value = true
 }
 
-function handleEdit(row: any) {
+function handleEdit(row: VendorResponse) {
   editingId.value = row.id
   Object.assign(form, {
     name: row.name, contact_person: row.contact_person, phone: row.phone, address: row.address,
@@ -174,7 +175,7 @@ async function handleSave() {
   }
 }
 
-async function handleDelete(row: any) {
+async function handleDelete(row: VendorResponse) {
   await ElMessageBox.confirm(`确认删除外协商 "${row.name}"？`, '确认', { type: 'warning' })
   await deleteOutsourceVendor(row.id)
   ElMessage.success('已删除')

@@ -69,16 +69,17 @@ import { ref, reactive, onMounted } from 'vue'
 import { getStatements, createStatement } from '@/api/payments'
 import { getCustomers } from '@/api/customers'
 import { ElMessage } from 'element-plus'
+import { StatementResponse, CustomerResponse } from '@/types/api'
 
 const loading = ref(false)
 const saving = ref(false)
-const list = ref<any[]>([])
+const list = ref<StatementResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const filterCustomerId = ref('')
 const showDialog = ref(false)
-const customerOptions = ref<any[]>([])
+const customerOptions = ref<CustomerResponse[]>([])
 const form = reactive({ customer_id: '', start_date: '', end_date: '' })
 
 async function fetchData() {

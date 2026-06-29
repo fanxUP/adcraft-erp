@@ -76,9 +76,10 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { getOrders } from '@/api/orders'
+import type { OrderListResponse } from '@/types/api'
 
 const loading = ref(false)
-const list = ref<any[]>([])
+const list = ref<OrderListResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
@@ -94,15 +95,17 @@ function statusLabel(s: string) {
 }
 function statusColor(s: string) {
   const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', in_progress: '', in_production: '', in_installation: '', completed: 'success', cancelled: 'danger' }
-  return map[s] || 'info'
+  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
 async function fetchData() {
   loading.value = true
   try {
-    const params: any = { page: page.value, page_size: pageSize.value }
-    if (filters.keyword) params.keyword = filters.keyword
-    if (filters.status) params.status = filters.status
+    const params = {
+      page: page.value, page_size: pageSize.value,
+      ...(filters.keyword ? { keyword: filters.keyword } : {}),
+      ...(filters.status ? { status: filters.status } : {}),
+    }
     const data = await getOrders(params)
     list.value = data.items
     total.value = data.total

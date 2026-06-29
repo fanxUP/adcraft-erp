@@ -35,4 +35,30 @@ apiClient.interceptors.response.use(
   },
 )
 
-export default apiClient
+/**
+ * Typed request helpers.
+ * The response interceptor unwraps `response.data.data` so the return type
+ * is the inner payload, not AxiosResponse.  These wrappers tell TypeScript
+ * that, eliminating "Property 'items' does not exist on type 'AxiosResponse'"
+ * errors in every view.
+ */
+import type { AxiosRequestConfig } from 'axios'
+
+export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  return apiClient.get(url, config) as unknown as Promise<T>
+}
+export async function post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  return apiClient.post(url, data, config) as unknown as Promise<T>
+}
+export async function put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  return apiClient.put(url, data, config) as unknown as Promise<T>
+}
+export async function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  return apiClient.delete(url, config) as unknown as Promise<T>
+}
+
+/**
+ * Raw axios client – only needed when the interceptor's unwrapping is
+ * undesirable (e.g. blob downloads, progress events).
+ */
+export { apiClient }

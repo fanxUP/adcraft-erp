@@ -1,4 +1,5 @@
-import apiClient from './index'
+import { get } from './index'
+import { PaginatedData, OperationLogResponse } from '@/types/api'
 
 export function getOperationLogs(params: {
   page?: number
@@ -9,9 +10,9 @@ export function getOperationLogs(params: {
   date_from?: string
   date_to?: string
 }) {
-  return apiClient.get('/logs/', { params })
+  return get<PaginatedData<OperationLogResponse>>('/logs/', { params })
 }
 
 export function getOperationLog(id: string) {
-  return apiClient.get(`/logs/${id}`)
+  return get<OperationLogResponse>(`/logs/${id}`)
 }

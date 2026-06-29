@@ -18,8 +18,8 @@
       </el-table-column>
       <el-table-column label="操作" width="160">
         <template #default="{ row }">
-          <el-button text type="primary" @click="handleEdit(row)">编辑</el-button>
-          <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-button text type="primary" @click="handleEdit(row as ProcessResponse)">编辑</el-button>
+          <el-button text type="danger" @click="handleDelete(row as ProcessResponse)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -60,11 +60,12 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { getProcesses, createProcess, updateProcess, deleteProcess } from '@/api/products'
+import type { ProcessResponse } from '@/types/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const loading = ref(false)
 const saving = ref(false)
-const list = ref<any[]>([])
+const list = ref<ProcessResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
@@ -88,7 +89,7 @@ function handleCreate() {
   dialogVisible.value = true
 }
 
-function handleEdit(row: any) {
+function handleEdit(row: ProcessResponse) {
   editingId.value = row.id
   Object.assign(form, { name: row.name, charge_method: row.charge_method, default_price: row.default_price })
   dialogVisible.value = true
@@ -109,7 +110,7 @@ async function handleSave() {
   } finally { saving.value = false }
 }
 
-async function handleDelete(row: any) {
+async function handleDelete(row: ProcessResponse) {
   await ElMessageBox.confirm(`确认删除工艺 "${row.name}"？`, '确认', { type: 'warning' })
   await deleteProcess(row.id)
   ElMessage.success('已删除')

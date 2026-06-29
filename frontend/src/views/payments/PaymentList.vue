@@ -32,7 +32,7 @@
       <el-table-column prop="remark" label="备注" min-width="180" />
       <el-table-column label="操作" width="160" fixed="right">
         <template #default="{ row }">
-          <el-button v-if="!row.is_voided" text type="danger" size="small" @click="handleVoid(row)">作废</el-button>
+          <el-button v-if="!row.is_voided" text type="danger" size="small" @click="handleVoid(row as PaymentResponse)">作废</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -79,18 +79,19 @@ import { getPayments, createPayment, voidPayment } from '@/api/payments'
 import { getOrders } from '@/api/orders'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { PaymentResponse, OrderListResponse, CustomerResponse } from '@/types/api'
 
 const loading = ref(false)
 const saving = ref(false)
-const list = ref<any[]>([])
+const list = ref<PaymentResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const filterOrderId = ref('')
 const filterCustomerId = ref('')
 const showDialog = ref(false)
-const orderOptions = ref<any[]>([])
-const customerOptions = ref<any[]>([])
+const orderOptions = ref<OrderListResponse[]>([])
+const customerOptions = ref<CustomerResponse[]>([])
 const form = reactive({ order_id: '', customer_id: '', amount: 0, payment_method: '', paid_at: '', remark: '' })
 
 async function fetchData() {
@@ -115,7 +116,7 @@ async function handleCreate() {
   saving.value = true
   try {
     const o = orderOptions.value.find(o => o.id === form.order_id)
-    await createPayment({ ...form, customer_id: form.customer_id || (o as any)?.customer_id })
+    await createPayment({ ...form, customer_id: form.customer_id || (o as OrderListResponse)?.customer_id })
     ElMessage.success('收款登记成功')
     showDialog.value = false
     Object.assign(form, { order_id: '', customer_id: '', amount: 0, payment_method: '', paid_at: '', remark: '' })
@@ -123,7 +124,7 @@ async function handleCreate() {
   } catch { } finally { saving.value = false }
 }
 
-async function handleVoid(row: any) {
+async function handleVoid(row: PaymentResponse) {
   try {
     const { value } = await ElMessageBox.prompt('请输入作废原因', '作废收款', { confirmButtonText: '确定', cancelButtonText: '取消' })
     if (value) {

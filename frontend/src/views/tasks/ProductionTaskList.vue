@@ -87,18 +87,19 @@ import { getProductionTasks, createProductionTask } from '@/api/tasks'
 import { getOrders } from '@/api/orders'
 import { getUsers } from '@/api/users'
 import { ElMessage } from 'element-plus'
+import { ProductionTaskResponse, OrderListResponse, UserResponse } from '@/types/api'
 
 const loading = ref(false)
 const saving = ref(false)
-const list = ref<any[]>([])
+const list = ref<ProductionTaskResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const filterStatus = ref('')
 const dialogVisible = ref(false)
-const orderOptions = ref<any[]>([])
-const userOptions = ref<any[]>([])
-const form = reactive({ order_id: '', customer_id: '', project_name: '', assigned_to: '', length: null as number | null, width: null as number | null, height: null as number | null, quantity: 1 })
+const orderOptions = ref<OrderListResponse[]>([])
+const userOptions = ref<UserResponse[]>([])
+const form = reactive({ order_id: '', customer_id: '', project_name: '', assigned_to: '', length: undefined as number | undefined, width: undefined as number | undefined, height: undefined as number | undefined, quantity: 1 })
 
 function prodStatusLabel(s: string) {
   const map: Record<string, string> = { pending: '待制作', queued: '排队中', in_progress: '制作中', qc_check: '待质检', rework: '返工', completed: '已完成' }
@@ -106,7 +107,7 @@ function prodStatusLabel(s: string) {
 }
 function prodStatusColor(s: string) {
   const map: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success' }
-  return map[s] || 'info'
+  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
 async function fetchData() {
@@ -131,7 +132,7 @@ async function handleCreate() {
     await createProductionTask({ ...form, customer_id: selOrder?.customer_id || '' })
     ElMessage.success('创建成功')
     dialogVisible.value = false
-    Object.assign(form, { order_id: '', customer_id: '', project_name: '', assigned_to: '', length: null, width: null, height: null, quantity: 1 })
+    Object.assign(form, { order_id: '', customer_id: '', project_name: '', assigned_to: '', length: undefined, width: undefined, height: undefined, quantity: 1 })
     fetchData()
   } catch { /* handled */ } finally { saving.value = false }
 }

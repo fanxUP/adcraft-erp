@@ -56,7 +56,7 @@
       <el-table-column label="操作" width="200">
         <template #default="{ row }">
           <el-button text type="primary" @click="$router.push(`/quotes/${row.id}/edit`)">编辑</el-button>
-          <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-button text type="danger" @click="handleDelete(row as QuoteListResponse)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -77,9 +77,10 @@
 import { ref, reactive, onMounted } from 'vue'
 import { getQuotes, deleteQuote } from '@/api/quotes'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { QuoteListResponse } from '@/types/api'
 
 const loading = ref(false)
-const list = ref<any[]>([])
+const list = ref<QuoteListResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
@@ -93,18 +94,17 @@ function statusLabel(s: string) {
 }
 function statusColor(s: string) {
   const map: Record<string, string> = { draft: 'info', confirmed: 'success', converted: '', cancelled: 'danger' }
-  return map[s] || 'info'
+  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
 async function fetchData() {
   loading.value = true
   try {
-    const params: any = { page: page.value, page_size: pageSize.value }
-    if (filters.keyword) params.keyword = filters.keyword
-    if (filters.status) params.status = filters.status
-    if (dateRange.value) {
-      params.date_from = dateRange.value[0]
-      params.date_to = dateRange.value[1]
+    const params = {
+      page: page.value, page_size: pageSize.value,
+      ...(filters.keyword ? { keyword: filters.keyword } : {}),
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(dateRange.value ? { date_from: dateRange.value[0], date_to: dateRange.value[1] } : {}),
     }
     const data = await getQuotes(params)
     list.value = data.items
@@ -125,7 +125,7 @@ function handleReset() {
   fetchData()
 }
 
-async function handleDelete(row: any) {
+async function handleDelete(row: QuoteListResponse) {
   await ElMessageBox.confirm(`确认删除报价 "${row.quote_no}"？`, '确认', { type: 'warning' })
   await deleteQuote(row.id)
   ElMessage.success('已删除')

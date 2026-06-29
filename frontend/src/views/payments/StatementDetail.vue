@@ -90,11 +90,12 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getStatement, confirmStatement } from '@/api/payments'
+import type { StatementDetailResponse } from '@/types/api'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
 const loading = ref(false)
-const stmt = ref<any>(null)
+const stmt = ref<StatementDetailResponse | null>(null)
 
 async function fetchData() {
   loading.value = true

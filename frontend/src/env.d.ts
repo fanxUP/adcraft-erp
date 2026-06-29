@@ -2,6 +2,12 @@
 
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
-  const component: DefineComponent<{}, {}, any>
+  const component: DefineComponent<object, object, unknown>
   export default component
+}
+
+declare module 'element-plus/dist/locale/zh-cn.mjs' {
+  import type { Language } from 'element-plus/es/locale'
+  const zhCn: Language
+  export default zhCn
 }

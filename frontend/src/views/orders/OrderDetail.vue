@@ -258,18 +258,19 @@ import { useRoute } from 'vue-router'
 import { getOrder, changeOrderStatus, setOrderCost, autoCalculateCost } from '@/api/orders'
 import { getDesignTasks, getProductionTasks, getInstallationTasks, createDesignTask, createProductionTask, createInstallationTask } from '@/api/tasks'
 import { ElMessage } from 'element-plus'
+import type { DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, OrderDetailResponse } from '@/types/api'
 
 const route = useRoute()
 const loading = ref(false)
 const changing = ref(false)
 const tasksLoading = ref(false)
-const order = ref<any>(null)
+const order = ref<OrderDetailResponse | null>(null)
 const activeTab = ref('info')
 const statusForm = reactive({ to_status: '', reason: '' })
 
-const designTasks = ref<any[]>([])
-const productionTasks = ref<any[]>([])
-const installationTasks = ref<any[]>([])
+const designTasks = ref<DesignTaskResponse[]>([])
+const productionTasks = ref<ProductionTaskResponse[]>([])
+const installationTasks = ref<InstallationTaskResponse[]>([])
 const showDesignDialog = ref(false)
 const showProdDialog = ref(false)
 const showInstDialog = ref(false)
@@ -288,15 +289,15 @@ function statusLabel(s: string) {
 }
 function statusColor(s: string) {
   const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', in_progress: '', in_production: '', in_installation: '', completed: 'success', cancelled: 'danger' }
-  return map[s] || 'info'
+  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
 function designStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已确认' }; return m[s] || s }
-function designStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success' }; return m[s] || 'info' }
+function designStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
 function prodStatusLabel(s: string) { const m: Record<string, string> = { pending: '待制作', queued: '排队中', in_progress: '制作中', qc_check: '待质检', rework: '返工', completed: '已完成' }; return m[s] || s }
-function prodStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success' }; return m[s] || 'info' }
+function prodStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
 function instStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成' }; return m[s] || s }
-function instStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', assigned: '', in_progress: 'warning', pending_acceptance: 'warning', completed: 'success' }; return m[s] || 'info' }
+function instStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', assigned: '', in_progress: 'warning', pending_acceptance: 'warning', completed: 'success' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
 
 async function fetchOrder() {
   loading.value = true
@@ -309,28 +310,31 @@ async function fetchTasks() {
   tasksLoading.value = true
   try {
     const [d, p, i] = await Promise.all([
-      getDesignTasks({ order_id: route.params.id, page_size: 100 }),
-      getProductionTasks({ order_id: route.params.id, page_size: 100 }),
-      getInstallationTasks({ order_id: route.params.id, page_size: 100 }),
+      getDesignTasks({ order_id: route.params.id as string, page_size: 100 }),
+      getProductionTasks({ order_id: route.params.id as string, page_size: 100 }),
+      getInstallationTasks({ order_id: route.params.id as string, page_size: 100 }),
     ])
     designTasks.value = d.items; productionTasks.value = p.items; installationTasks.value = i.items
   } finally { tasksLoading.value = false }
 }
 
 async function handleCreateDesign() {
-  await createDesignTask({ order_id: route.params.id, customer_id: order.value.customer_id, project_name: taskForm.project_name || order.value.project_name, assigned_to: taskForm.assigned_to || undefined, description: taskForm.description })
+  if (!order.value) return
+  await createDesignTask({ order_id: route.params.id as string, customer_id: order.value.customer_id, project_name: taskForm.project_name || order.value.project_name, assigned_to: taskForm.assigned_to || undefined, description: taskForm.description })
   ElMessage.success('已创建设计任务')
   showDesignDialog.value = false; taskForm.project_name = ''; taskForm.assigned_to = ''; taskForm.description = ''
   fetchTasks()
 }
 async function handleCreateProduction() {
-  await createProductionTask({ order_id: route.params.id, customer_id: order.value.customer_id, project_name: taskForm.project_name || order.value.project_name, assigned_to: taskForm.assigned_to || undefined, quantity: taskForm.quantity })
+  if (!order.value) return
+  await createProductionTask({ order_id: route.params.id as string, customer_id: order.value.customer_id, project_name: taskForm.project_name || order.value.project_name, assigned_to: taskForm.assigned_to || undefined, quantity: taskForm.quantity })
   ElMessage.success('已创建制作任务')
   showProdDialog.value = false; taskForm.project_name = ''; taskForm.assigned_to = ''; taskForm.quantity = 1
   fetchTasks()
 }
 async function handleCreateInstallation() {
-  await createInstallationTask({ order_id: route.params.id, customer_id: order.value.customer_id, project_name: taskForm.project_name || order.value.project_name, assigned_to: taskForm.assigned_to || undefined, address: order.value.installation_address || '' })
+  if (!order.value) return
+  await createInstallationTask({ order_id: route.params.id as string, customer_id: order.value.customer_id, project_name: taskForm.project_name || order.value.project_name, assigned_to: taskForm.assigned_to || undefined, address: order.value.installation_address || '' })
   ElMessage.success('已创建安装任务')
   showInstDialog.value = false; taskForm.project_name = ''; taskForm.assigned_to = ''
   fetchTasks()
@@ -343,6 +347,18 @@ async function handleSaveCost() {
     ElMessage.success('成本已保存')
     showCostDialog.value = false
   } finally { savingCost.value = false }
+}
+
+async function handleChangeStatus() {
+  changing.value = true
+  try {
+    order.value = await changeOrderStatus(route.params.id as string, {
+      to_status: statusForm.to_status,
+      reason: statusForm.reason || undefined,
+    })
+    ElMessage.success('状态已变更')
+    statusForm.to_status = ''; statusForm.reason = ''
+  } finally { changing.value = false }
 }
 
 async function handleAutoCost() {

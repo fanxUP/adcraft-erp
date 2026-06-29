@@ -97,12 +97,14 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getDesignTask, updateDesignTask, changeDesignTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { ElMessage } from 'element-plus'
+import type { UploadRequestOptions } from 'element-plus'
+import type { DesignTaskResponse } from '@/types/api'
 
 const route = useRoute()
 const loading = ref(false)
 const updating = ref(false)
 const changing = ref(false)
-const task = ref<any>(null)
+const task = ref<DesignTaskResponse | null>(null)
 const statusForm = reactive({ to_status: '', reason: '' })
 const editForm = reactive({ description: '', client_comments: '', design_file_url: '' })
 
@@ -112,7 +114,7 @@ function statusLabel(s: string) {
 }
 function statusColor(s: string) {
   const map: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success' }
-  return map[s] || 'info'
+  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
 async function fetchTask() {
@@ -141,7 +143,7 @@ async function handleChangeStatus() {
   } catch { /* handled */ } finally { changing.value = false }
 }
 
-async function handleUpload(req: any) {
+async function handleUpload(req: UploadRequestOptions) {
   try {
     await uploadAttachment('design_task', route.params.id as string, req.file, 'design')
     ElMessage.success('上传成功')

@@ -74,10 +74,11 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { getDailyReport } from '@/api/payments'
+import type { DailyReportOrder, DailyReportPayment } from '@/types/api'
 
 const loading = ref(false)
 const reportDate = ref('')
-const data = reactive({ date: '', order_count: 0, order_amount: 0, payment_count: 0, payment_amount: 0, new_customer_count: 0, orders: [] as any[], payments: [] as any[] })
+const data = reactive({ date: '', order_count: 0, order_amount: 0, payment_count: 0, payment_amount: 0, new_customer_count: 0, orders: [] as DailyReportOrder[], payments: [] as DailyReportPayment[] })
 
 function orderStatusLabel(s: string) {
   const map: Record<string, string> = { pending_confirm: '待确认', confirmed: '已确认', in_progress: '进行中', completed: '已完成', cancelled: '已取消' }
@@ -85,7 +86,7 @@ function orderStatusLabel(s: string) {
 }
 function orderStatusColor(s: string) {
   const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', in_progress: '', completed: 'success', cancelled: 'danger' }
-  return map[s] || 'info'
+  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
 async function fetchData() {

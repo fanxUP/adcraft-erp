@@ -18,31 +18,31 @@
             <el-icon><DataAnalysis /></el-icon>
             <span>首页驾驶舱</span>
           </el-menu-item>
-          <el-menu-item index="/customers">
+          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/customers">
             <el-icon><User /></el-icon>
             <span>客户管理</span>
           </el-menu-item>
-          <el-menu-item index="/quotes">
+          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/quotes">
             <el-icon><Document /></el-icon>
             <span>报价管理</span>
           </el-menu-item>
-          <el-menu-item index="/orders">
+          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/orders">
             <el-icon><Tickets /></el-icon>
             <span>订单管理</span>
           </el-menu-item>
-          <el-menu-item index="/products">
+          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/products">
             <el-icon><Goods /></el-icon>
             <span>产品管理</span>
           </el-menu-item>
-          <el-menu-item index="/materials">
+          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/materials">
             <el-icon><Box /></el-icon>
             <span>材质管理</span>
           </el-menu-item>
-          <el-menu-item index="/processes">
+          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/processes">
             <el-icon><Setting /></el-icon>
             <span>工艺管理</span>
           </el-menu-item>
-          <el-sub-menu index="/outsource">
+          <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'production'])" index="/outsource">
             <template #title>
               <el-icon><Connection /></el-icon>
               <span>外协管理</span>
@@ -51,30 +51,31 @@
             <el-menu-item index="/outsource/tasks">外协任务</el-menu-item>
             <el-menu-item index="/outsource/payments">外协付款</el-menu-item>
           </el-sub-menu>
-          <el-menu-item index="/inventory">
+          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production'])" index="/inventory">
             <el-icon><Box /></el-icon>
             <span>库存管理</span>
           </el-menu-item>
-          <el-sub-menu index="/tasks">
+          <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'designer', 'production', 'installer'])" index="/tasks">
             <template #title>
               <el-icon><List /></el-icon>
               <span>任务管理</span>
             </template>
-            <el-menu-item index="/design-tasks">设计任务</el-menu-item>
-            <el-menu-item index="/production-tasks">制作任务</el-menu-item>
-            <el-menu-item index="/production-tasks/board">制作看板</el-menu-item>
-            <el-menu-item index="/installation-tasks">安装任务</el-menu-item>
+            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'designer'])" index="/design-tasks">设计任务</el-menu-item>
+            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production'])" index="/production-tasks">制作任务</el-menu-item>
+            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production'])" index="/production-tasks/board">制作看板</el-menu-item>
+            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'installer'])" index="/installation-tasks">安装任务</el-menu-item>
           </el-sub-menu>
-          <el-sub-menu index="/finance">
+          <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'finance'])" index="/finance">
             <template #title>
               <el-icon><Money /></el-icon>
               <span>财务管理</span>
             </template>
             <el-menu-item index="/payments">收款记录</el-menu-item>
+            <el-menu-item index="/expenses">支出管理</el-menu-item>
             <el-menu-item index="/customer-debts">客户欠款</el-menu-item>
             <el-menu-item index="/statements">对账单</el-menu-item>
           </el-sub-menu>
-          <el-sub-menu index="/reports">
+          <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'sales', 'finance'])" index="/reports">
             <template #title>
               <el-icon><TrendCharts /></el-icon>
               <span>报表中心</span>
@@ -82,12 +83,13 @@
             <el-menu-item index="/reports/daily">销售日报</el-menu-item>
             <el-menu-item index="/reports/monthly">销售月报</el-menu-item>
           </el-sub-menu>
-          <el-sub-menu index="/system">
+          <el-sub-menu v-if="authStore.isAdmin" index="/system">
             <template #title>
               <el-icon><Tools /></el-icon>
               <span>系统管理</span>
             </template>
             <el-menu-item index="/operation-logs">操作日志</el-menu-item>
+            <el-menu-item index="/backups">备份管理</el-menu-item>
           </el-sub-menu>
         </el-menu>
       </el-aside>

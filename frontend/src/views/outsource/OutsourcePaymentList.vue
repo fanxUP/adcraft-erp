@@ -68,15 +68,16 @@ import {
   getOutsourceVendors, getOutsourcePayments, createOutsourcePayment,
 } from '@/api/outsource'
 import { ElMessage } from 'element-plus'
+import { OutsourcePaymentResponse, VendorResponse } from '@/types/api'
 
 const loading = ref(false)
 const saving = ref(false)
-const list = ref<any[]>([])
+const list = ref<OutsourcePaymentResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const dialogVisible = ref(false)
-const vendors = ref<any[]>([])
+const vendors = ref<VendorResponse[]>([])
 const form = reactive({
   vendor_id: '', amount: 0, payment_method: 'bank_transfer', paid_at: '', remark: '',
 })

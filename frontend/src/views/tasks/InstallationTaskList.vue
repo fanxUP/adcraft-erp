@@ -88,17 +88,18 @@ import { getInstallationTasks, createInstallationTask } from '@/api/tasks'
 import { getOrders } from '@/api/orders'
 import { getUsers } from '@/api/users'
 import { ElMessage } from 'element-plus'
+import { InstallationTaskResponse, OrderListResponse, UserResponse } from '@/types/api'
 
 const loading = ref(false)
 const saving = ref(false)
-const list = ref<any[]>([])
+const list = ref<InstallationTaskResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const filterStatus = ref('')
 const dialogVisible = ref(false)
-const orderOptions = ref<any[]>([])
-const userOptions = ref<any[]>([])
+const orderOptions = ref<OrderListResponse[]>([])
+const userOptions = ref<UserResponse[]>([])
 const form = reactive({ order_id: '', customer_id: '', project_name: '', assigned_to: '', address: '', contact_name: '', contact_phone: '', scheduled_at: '' })
 
 function instStatusLabel(s: string) {
@@ -107,7 +108,7 @@ function instStatusLabel(s: string) {
 }
 function instStatusColor(s: string) {
   const map: Record<string, string> = { pending: 'info', assigned: '', in_progress: 'warning', pending_acceptance: 'warning', completed: 'success' }
-  return map[s] || 'info'
+  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
 async function fetchData() {

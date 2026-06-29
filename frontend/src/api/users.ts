@@ -1,21 +1,22 @@
-import apiClient from './index'
+import { get, post, put, del } from './index'
+import { PaginatedData, UserResponse, SuccessResponse } from '@/types/api'
 
 export function getUsers(params: { page?: number; page_size?: number; keyword?: string }) {
-  return apiClient.get('/users/', { params })
+  return get<PaginatedData<UserResponse>>('/users/', { params })
 }
 
-export function createUser(data: any) {
-  return apiClient.post('/users/', data)
+export function createUser(data: Omit<Partial<UserResponse>, 'id' | 'created_at'>) {
+  return post<UserResponse>('/users/', data)
 }
 
 export function getUser(id: string) {
-  return apiClient.get(`/users/${id}`)
+  return get<UserResponse>(`/users/${id}`)
 }
 
-export function updateUser(id: string, data: any) {
-  return apiClient.put(`/users/${id}`, data)
+export function updateUser(id: string, data: Partial<Omit<UserResponse, 'id' | 'created_at'>>) {
+  return put<UserResponse>(`/users/${id}`, data)
 }
 
 export function deleteUser(id: string) {
-  return apiClient.delete(`/users/${id}`)
+  return del<SuccessResponse>(`/users/${id}`)
 }
