@@ -52,6 +52,21 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
         result = await db.execute(
             select(Expense.expense_no).where(Expense.expense_no.like(pattern)).order_by(Expense.expense_no.desc()).limit(1)
         )
+    elif prefix == "V":
+        from app.models.outsource import OutsourceVendor
+        result = await db.execute(
+            select(OutsourceVendor.vendor_no).where(OutsourceVendor.vendor_no.like(pattern)).order_by(OutsourceVendor.vendor_no.desc()).limit(1)
+        )
+    elif prefix == "OT":
+        from app.models.outsource import OutsourceTask
+        result = await db.execute(
+            select(OutsourceTask.task_no).where(OutsourceTask.task_no.like(pattern)).order_by(OutsourceTask.task_no.desc()).limit(1)
+        )
+    elif prefix == "OP":
+        from app.models.outsource import OutsourcePayment
+        result = await db.execute(
+            select(OutsourcePayment.payment_no).where(OutsourcePayment.payment_no.like(pattern)).order_by(OutsourcePayment.payment_no.desc()).limit(1)
+        )
     else:
         raise ValueError(f"Unknown prefix: {prefix}")
 
@@ -98,3 +113,15 @@ async def generate_statement_no(db: AsyncSession) -> str:
 
 async def generate_expense_no(db: AsyncSession) -> str:
     return await _generate_no(db, "EXP")
+
+
+async def generate_vendor_no(db: AsyncSession) -> str:
+    return await _generate_no(db, "V")
+
+
+async def generate_outsource_task_no(db: AsyncSession) -> str:
+    return await _generate_no(db, "OT")
+
+
+async def generate_outsource_payment_no(db: AsyncSession) -> str:
+    return await _generate_no(db, "OP")
