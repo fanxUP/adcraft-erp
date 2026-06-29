@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text, ForeignKey
+from sqlalchemy import DateTime, String, Text, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,4 +19,5 @@ class OperationLog(Base):
     before_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     after_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[str] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    user_name: Mapped[str | None] = mapped_column(String(64), nullable=True)

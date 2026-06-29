@@ -1,7 +1,8 @@
+from datetime import datetime, date
 import uuid as _uuid
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 
 from app.models.quote import Quote, QuoteItem, QuoteVersion
 
@@ -16,12 +17,23 @@ class QuoteRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_quotes(self, skip: int = 0, limit: int = 20, status: str | None = None, customer_id: UUID | None = None) -> tuple[list[Quote], int]:
+    async def list_quotes(self, skip: int = 0, limit: int = 20,
+                          status: str | None = None, customer_id: UUID | None = None,
+                          keyword: str | None = None,
+                          date_from: date | None = None, date_to: date | None = None) -> tuple[list[Quote], int]:
         q = select(Quote).where(Quote.deleted_at.is_(None))
         if status:
             q = q.where(Quote.status == status)
         if customer_id:
             q = q.where(Quote.customer_id == customer_id)
+        if keyword:
+            q = q.where(
+                Quote.quote_no.ilike(f"%{keyword}%") | Quote.project_name.ilike(f"%{keyword}%")
+            )
+        if date_from:
+            q = q.where(Quote.created_at >= datetime.combine(date_from, datetime.min.time()))
+        if date_to:
+            q = q.where(Quote.created_at <= datetime.combine(date_to, datetime.max.time()))
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
         q = q.order_by(Quote.created_at.desc()).offset(skip).limit(limit)

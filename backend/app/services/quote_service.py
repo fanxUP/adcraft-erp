@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,9 +12,11 @@ class QuoteService:
         self.db = db
         self.repo = QuoteRepository(db)
 
-    async def list_quotes(self, page: int, page_size: int, status: str | None = None, customer_id: UUID | None = None) -> tuple[list, int]:
+    async def list_quotes(self, page: int, page_size: int, status: str | None = None, customer_id: UUID | None = None,
+                          keyword: str | None = None, date_from: date | None = None, date_to: date | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        quotes, total = await self.repo.list_quotes(skip=skip, limit=page_size, status=status, customer_id=customer_id)
+        quotes, total = await self.repo.list_quotes(skip=skip, limit=page_size, status=status, customer_id=customer_id,
+                                                     keyword=keyword, date_from=date_from, date_to=date_to)
         return [self._quote_to_summary(q) for q in quotes], total
 
     async def get_quote(self, quote_id: UUID) -> dict | None:

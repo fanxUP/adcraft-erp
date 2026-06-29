@@ -44,7 +44,6 @@
               </el-descriptions-item>
             </el-descriptions>
           </el-card>
-          </el-card>
 
           <el-card shadow="never" class="info-card" style="margin-top: 16px">
             <template #header>

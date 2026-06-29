@@ -12,9 +12,11 @@ class OrderService:
         self.db = db
         self.repo = OrderRepository(db)
 
-    async def list_orders(self, page: int, page_size: int, status: str | None = None, customer_id: UUID | None = None) -> tuple[list, int]:
+    async def list_orders(self, page: int, page_size: int, status: str | None = None,
+                          customer_id: UUID | None = None, keyword: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        orders, total = await self.repo.list_orders(skip=skip, limit=page_size, status=status, customer_id=customer_id)
+        orders, total = await self.repo.list_orders(skip=skip, limit=page_size, status=status,
+                                                     customer_id=customer_id, keyword=keyword)
         return [self._order_to_summary(o) for o in orders], total
 
     async def get_order(self, order_id: UUID) -> dict | None:

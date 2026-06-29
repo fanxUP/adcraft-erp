@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, UploadFile, File
+from fastapi import APIRouter, Depends, Query, Request, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
@@ -8,6 +8,7 @@ from app.models.user import User
 from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate
 from app.schemas.common import success, success_paginated
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
+from app.services.operation_log_service import log_operation, OBJ_PAYMENT, OBJ_EXPENSE, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
 
 pay_router = APIRouter(prefix="/payments", tags=["Payments"])
 stmt_router = APIRouter(prefix="/statements", tags=["Statements"])
@@ -49,11 +50,16 @@ async def get_payment(
 @pay_router.post("/")
 async def create_payment(
     data: PaymentCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = PaymentService(db)
     payment = await service.create_payment(data.model_dump(), current_user.id)
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_PAYMENT, UUID(payment["id"]), ACTION_CREATE,
+                        ip_address=request.client.host if request.client else None,
+                        after_data={"payment_no": payment["payment_no"], "amount": payment["amount"]})
     return success(payment)
 
 
@@ -61,11 +67,17 @@ async def create_payment(
 async def void_payment(
     payment_id: str,
     data: PaymentVoid,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = PaymentService(db)
-    payment = await service.void_payment(UUID(payment_id), data.void_reason)
+    pid = UUID(payment_id)
+    payment = await service.void_payment(pid, data.void_reason)
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_PAYMENT, pid, "void",
+                        ip_address=request.client.host if request.client else None,
+                        after_data={"void_reason": data.void_reason})
     return success(payment)
 
 
@@ -189,11 +201,16 @@ async def get_expense(
 @exp_router.post("/")
 async def create_expense(
     data: ExpenseCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = ExpenseService(db)
     expense = await service.create_expense(data.model_dump(), current_user.id)
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_EXPENSE, UUID(expense["id"]), ACTION_CREATE,
+                        ip_address=request.client.host if request.client else None,
+                        after_data={"expense_no": expense["expense_no"], "amount": expense["amount"]})
     return success(expense)
 
 
@@ -201,20 +218,30 @@ async def create_expense(
 async def update_expense(
     expense_id: str,
     data: ExpenseUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = ExpenseService(db)
-    expense = await service.update_expense(UUID(expense_id), data.model_dump(exclude_none=True))
+    eid = UUID(expense_id)
+    expense = await service.update_expense(eid, data.model_dump(exclude_none=True))
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_EXPENSE, eid, ACTION_UPDATE,
+                        ip_address=request.client.host if request.client else None)
     return success(expense)
 
 
 @exp_router.delete("/{expense_id}")
 async def delete_expense(
     expense_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = ExpenseService(db)
-    await service.delete_expense(UUID(expense_id))
+    eid = UUID(expense_id)
+    await service.delete_expense(eid)
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_EXPENSE, eid, ACTION_DELETE,
+                        ip_address=request.client.host if request.client else None)
     return success(None)

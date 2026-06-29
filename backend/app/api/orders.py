@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +10,7 @@ from app.models.user import User
 from app.schemas.order import OrderStatusChange
 from app.schemas.common import success, success_paginated, error
 from app.services.order_service import OrderService
+from app.services.operation_log_service import log_operation, OBJ_ORDER, ACTION_STATUS_CHANGE
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -24,12 +25,13 @@ async def list_orders(
     page_size: int = Query(20, ge=1, le=100),
     status: str | None = None,
     customer_id: str | None = None,
+    keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = OrderService(db)
     cid = UUID(customer_id) if customer_id else None
-    orders, total = await service.list_orders(page, page_size, status, cid)
+    orders, total = await service.list_orders(page, page_size, status, cid, keyword=keyword)
     return success_paginated(orders, total, page, page_size)
 
 
@@ -79,9 +81,15 @@ async def auto_calculate_cost(
 async def change_order_status(
     order_id: str,
     data: OrderStatusChange,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = OrderService(db)
-    order = await service.change_status(UUID(order_id), data.to_status, data.reason, current_user.id)
+    oid = UUID(order_id)
+    order = await service.change_status(oid, data.to_status, data.reason, current_user.id)
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_ORDER, oid, ACTION_STATUS_CHANGE,
+                        ip_address=request.client.host if request.client else None,
+                        after_data={"status": data.to_status, "reason": data.reason})
     return success(order)

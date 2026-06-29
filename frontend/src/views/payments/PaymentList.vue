@@ -37,7 +37,7 @@
       </el-table-column>
     </el-table>
 
-    <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px; justify-content: flex-end" @change="fetchData" />
+    <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]" :total="total" layout="total, sizes, prev, pager, next" style="margin-top: 16px; justify-content: flex-end" @change="fetchData" />
 
     <el-dialog v-model="showDialog" title="登记收款" width="480px">
       <el-form :model="form" label-width="100px">

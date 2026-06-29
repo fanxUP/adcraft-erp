@@ -15,12 +15,17 @@ class OrderRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_orders(self, skip: int = 0, limit: int = 20, status: str | None = None, customer_id: UUID | None = None) -> tuple[list[Order], int]:
+    async def list_orders(self, skip: int = 0, limit: int = 20, status: str | None = None,
+                          customer_id: UUID | None = None, keyword: str | None = None) -> tuple[list[Order], int]:
         q = select(Order).where(Order.deleted_at.is_(None))
         if status:
             q = q.where(Order.status == status)
         if customer_id:
             q = q.where(Order.customer_id == customer_id)
+        if keyword:
+            q = q.where(
+                Order.order_no.ilike(f"%{keyword}%") | Order.project_name.ilike(f"%{keyword}%")
+            )
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
         q = q.order_by(Order.created_at.desc()).offset(skip).limit(limit)

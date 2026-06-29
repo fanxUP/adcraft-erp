@@ -82,6 +82,13 @@
             <el-menu-item index="/reports/daily">销售日报</el-menu-item>
             <el-menu-item index="/reports/monthly">销售月报</el-menu-item>
           </el-sub-menu>
+          <el-sub-menu index="/system">
+            <template #title>
+              <el-icon><Tools /></el-icon>
+              <span>系统管理</span>
+            </template>
+            <el-menu-item index="/operation-logs">操作日志</el-menu-item>
+          </el-sub-menu>
         </el-menu>
       </el-aside>
 

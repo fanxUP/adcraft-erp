@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -19,12 +20,15 @@ async def list_quotes(
     page_size: int = Query(20, ge=1, le=100),
     status: str | None = None,
     customer_id: str | None = None,
+    keyword: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = QuoteService(db)
     cid = UUID(customer_id) if customer_id else None
-    quotes, total = await service.list_quotes(page, page_size, status, cid)
+    quotes, total = await service.list_quotes(page, page_size, status, cid, keyword=keyword, date_from=date_from, date_to=date_to)
     return success_paginated(quotes, total, page, page_size)
 
 
