@@ -1,19 +1,28 @@
+import os
+import uuid as _uuid
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Query, Request, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
+from io import BytesIO
 from uuid import UUID
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.permissions import require_role
 from app.models.user import User
-from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate
+from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate, ProjectCostCreate, ProjectCostUpdate
 from app.schemas.common import success, success_paginated
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
-from app.services.operation_log_service import log_operation, OBJ_PAYMENT, OBJ_EXPENSE, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
+from app.services.project_cost_service import ProjectCostService
+from app.services.task_service import AttachmentService
+from app.services.operation_log_service import log_operation, OBJ_PAYMENT, OBJ_EXPENSE, OBJ_PROJECT_COST, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
 
 pay_router = APIRouter(prefix="/payments", tags=["Payments"])
 stmt_router = APIRouter(prefix="/statements", tags=["Statements"])
 exp_router = APIRouter(prefix="/expenses", tags=["Expenses"])
+cost_router = APIRouter(prefix="/project-costs", tags=["Project Costs"])
 
 
 # ── Payments ────────────────────────────────────────────────────────────────
@@ -245,4 +254,187 @@ async def delete_expense(
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_EXPENSE, eid, ACTION_DELETE,
                         ip_address=request.client.host if request.client else None)
+    return success(None)
+
+
+# ── Project Costs ────────────────────────────────────────────────────────────────
+
+@cost_router.get("/")
+async def list_project_costs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    order_id: str | None = None,
+    category: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProjectCostService(db)
+    oid = UUID(order_id) if order_id else None
+    costs, total = await service.list_costs(page, page_size, oid, category, date_from, date_to)
+    return success_paginated(costs, total, page, page_size)
+
+
+@cost_router.get("/summary")
+async def get_project_costs_summary(
+    order_ids: str = Query(..., description="Comma-separated order UUIDs"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProjectCostService(db)
+    ids = [UUID(oid.strip()) for oid in order_ids.split(",") if oid.strip()]
+    costs = await service.get_costs_summary(ids)
+    return success({"costs": costs})
+
+
+@cost_router.get("/{cost_id}")
+async def get_project_cost(
+    cost_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProjectCostService(db)
+    cost = await service.get_cost(UUID(cost_id))
+    if not cost:
+        return {"code": 40401, "message": "项目成本记录不存在", "data": None}
+    return success(cost)
+
+
+@cost_router.post("/")
+async def create_project_cost(
+    data: ProjectCostCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProjectCostService(db)
+    try:
+        cost = await service.create_cost(data.model_dump(), current_user.id)
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_PROJECT_COST, UUID(cost["id"]), ACTION_CREATE,
+                        ip_address=request.client.host if request.client else None,
+                        after_data={"cost_no": cost["cost_no"], "amount": cost["amount"], "category": cost["category"]})
+    return success(cost)
+
+
+@cost_router.put("/{cost_id}")
+async def update_project_cost(
+    cost_id: str,
+    data: ProjectCostUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProjectCostService(db)
+    cid = UUID(cost_id)
+    try:
+        cost = await service.update_cost(cid, data.model_dump(exclude_none=True))
+    except ValueError as e:
+        return {"code": 40401, "message": str(e), "data": None}
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_PROJECT_COST, cid, ACTION_UPDATE,
+                        ip_address=request.client.host if request.client else None)
+    return success(cost)
+
+
+@cost_router.delete("/{cost_id}")
+async def delete_project_cost(
+    cost_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    service = ProjectCostService(db)
+    cid = UUID(cost_id)
+    try:
+        await service.delete_cost(cid)
+    except ValueError as e:
+        return {"code": 40401, "message": str(e), "data": None}
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_PROJECT_COST, cid, ACTION_DELETE,
+                        ip_address=request.client.host if request.client else None)
+    return success(None)
+
+
+@cost_router.post("/import")
+async def import_project_costs(
+    file: UploadFile = File(...),
+    order_id: str | None = None,
+    request: Request = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
+        return {"code": 40001, "message": "请上传Excel文件（.xlsx 或 .xls）", "data": None}
+    content = await file.read()
+    service = ProjectCostService(db)
+    try:
+        result = await service.import_from_excel(BytesIO(content), current_user.id, order_id=UUID(order_id) if order_id else None)
+    except Exception as e:
+        return {"code": 40001, "message": f"导入失败: {str(e)}", "data": None}
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_PROJECT_COST, None, "import",
+                        ip_address=request.client.host if request.client else None,
+                        after_data={"created": result["created"], "errors": len(result["errors"])})
+    return success(result)
+
+
+# -- Project Cost Attachments (凭证上传) --
+
+@cost_router.get("/{cost_id}/attachments")
+async def list_project_cost_attachments(
+    cost_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = AttachmentService(db)
+    atts = await service.list_attachments("project_cost", UUID(cost_id))
+    return success(atts)
+
+
+@cost_router.post("/{cost_id}/upload")
+async def upload_project_cost_attachment(
+    cost_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "bin"
+    date_dir = datetime.now(timezone.utc).strftime("%Y%m")
+    dest_dir = os.path.join(settings.LOCAL_UPLOAD_DIR, date_dir)
+    os.makedirs(dest_dir, exist_ok=True)
+    stored_name = f"{_uuid.uuid4().hex}.{ext}"
+    file_path = os.path.join(dest_dir, stored_name)
+    contents = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    service = AttachmentService(db)
+    att = await service.add_attachment(
+        related_type="project_cost",
+        related_id=UUID(cost_id),
+        data={
+            "filename": file.filename or stored_name,
+            "file_path": f"{date_dir}/{stored_name}",
+            "file_size": len(contents),
+            "file_type": file.content_type,
+        },
+        uploaded_by=current_user.id,
+    )
+    return success(att)
+
+
+@cost_router.delete("/attachments/{attachment_id}")
+async def delete_project_cost_attachment(
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = AttachmentService(db)
+    ok = await service.delete_attachment(UUID(attachment_id))
+    if not ok:
+        return {"code": 40401, "message": "附件不存在", "data": None}
     return success(None)

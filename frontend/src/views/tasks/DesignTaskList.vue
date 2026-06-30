@@ -110,7 +110,7 @@ async function fetchData() {
 }
 
 async function loadOptions() {
-  const [ordersRes, usersRes] = await Promise.all([getOrders({ page_size: 200 }), getUsers({ page_size: 200 })])
+  const [ordersRes, usersRes] = await Promise.all([getOrders({ page_size: 100 }), getUsers({ page_size: 100 })])
   orderOptions.value = ordersRes.items
   userOptions.value = usersRes.items
 }

@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <h2>订单管理</h2>
+      <h2>项目成本</h2>
     </div>
 
     <el-card shadow="never" class="filter-card">
@@ -29,35 +29,35 @@
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
       <el-table-column prop="order_no" label="订单编号" width="180" />
-      <el-table-column prop="customer_name" label="客户名称" width="160" />
-      <el-table-column prop="project_name" label="项目名称" min-width="200" />
-      <el-table-column label="状态" width="120">
+      <el-table-column prop="project_name" label="项目名称" min-width="180" show-overflow-tooltip />
+      <el-table-column label="客户" min-width="140" show-overflow-tooltip>
+        <template #default="{ row }">
+          {{ row.customer_name || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column label="状态" width="110">
         <template #default="{ row }">
           <el-tag :type="statusColor(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="总金额" width="120">
+      <el-table-column label="订单金额" width="120" align="right">
         <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column label="已收" width="110">
-        <template #default="{ row }">¥ {{ row.paid_amount?.toFixed(2) }}</template>
-      </el-table-column>
-      <el-table-column label="未收" width="110">
-        <template #default="{ row }">¥ {{ row.unpaid_amount?.toFixed(2) }}</template>
-      </el-table-column>
-      <el-table-column label="毛利" width="100">
+      <el-table-column label="项目成本" width="120" align="right">
         <template #default="{ row }">
-          <span :style="{ color: (row.gross_profit || 0) >= 0 ? '#67c23a' : '#f56c6c' }">
-            ¥ {{ row.gross_profit?.toFixed(2) }}
+          <span :style="{ color: (costMap[row.id] || 0) > 0 ? '#e6a23c' : '' }">
+            ¥ {{ (costMap[row.id] || 0).toFixed(2) }}
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="创建时间" width="120">
+      <el-table-column label="创建时间" width="110">
         <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="140">
+      <el-table-column label="操作" width="140" fixed="right">
         <template #default="{ row }">
-          <el-button text type="primary" @click="$router.push(`/orders/${row.id}`)">详情</el-button>
+          <el-button type="danger" size="small" @click="$router.push(`/project-costs/${row.id}`)">
+            登记成本
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -77,6 +77,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { getOrders } from '@/api/orders'
+import { getProjectCostSummary } from '@/api/payments'
 import type { OrderListResponse } from '@/types/api'
 
 const loading = ref(false)
@@ -84,6 +85,7 @@ const list = ref<OrderListResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const costMap = ref<Record<string, number>>({})
 
 const filters = reactive({ keyword: '', status: '' })
 
@@ -102,14 +104,22 @@ function statusColor(s: string) {
 async function fetchData() {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       page: page.value, page_size: pageSize.value,
-      ...(filters.keyword ? { keyword: filters.keyword } : {}),
-      ...(filters.status ? { status: filters.status } : {}),
     }
+    if (filters.keyword) params.keyword = filters.keyword
+    if (filters.status) params.status = filters.status
     const data = await getOrders(params)
     list.value = data.items
     total.value = data.total
+    // Fetch cost summaries for visible orders
+    if (data.items.length > 0) {
+      const ids = data.items.map((o: OrderListResponse) => o.id)
+      try {
+        const summary = await getProjectCostSummary(ids)
+        costMap.value = summary.costs
+      } catch { /* ignore */ }
+    }
   } finally { loading.value = false }
 }
 

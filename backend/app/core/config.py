@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://127.0.0.1:6379/0"
 
     UPLOAD_STORAGE: str = "local"
-    LOCAL_UPLOAD_DIR: str = "/app/uploads"
+    LOCAL_UPLOAD_DIR: str = "./uploads"
 
     MINIO_ENDPOINT: str = "minio:9000"
     MINIO_ROOT_USER: str = "admin"

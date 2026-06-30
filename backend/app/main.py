@@ -1,13 +1,18 @@
 import logging
+import os
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
-from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup
+from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup, admin
 # AI module routes
 from app.ai.api import ai_anomalies, ai_knowledge, ai_quote, ai_reports, ai_site_photo, ai_payment_ocr
 
@@ -67,14 +72,44 @@ app.include_router(tasks.att_router, prefix="/api/v1")
 app.include_router(payments.pay_router, prefix="/api/v1")
 app.include_router(payments.stmt_router, prefix="/api/v1")
 app.include_router(payments.exp_router, prefix="/api/v1")
+app.include_router(payments.cost_router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(outsource.router, prefix="/api/v1")
 app.include_router(inventory.router, prefix="/api/v1")
 app.include_router(operation_logs.router, prefix="/api/v1")
 app.include_router(backup.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
 app.include_router(ai_anomalies.router, prefix="/api/v1")
 app.include_router(ai_knowledge.router, prefix="/api/v1")
 app.include_router(ai_quote.router, prefix="/api/v1")
 app.include_router(ai_reports.router, prefix="/api/v1")
 app.include_router(ai_site_photo.router, prefix="/api/v1")
 app.include_router(ai_payment_ocr.router, prefix="/api/v1")
+
+# ---------------------------------------------------------------------------
+# Static file serving (frontend SPA + uploads)
+# When running under PyInstaller, paths are resolved relative to the executable.
+# ---------------------------------------------------------------------------
+
+# Determine the base directory
+if getattr(sys, "frozen", False):
+    # PyInstaller --onedir: sys._MEIPASS points to the _internal directory
+    _EXE_DIR = Path(sys.executable).parent if hasattr(sys, "executable") else Path.cwd()
+else:
+    _EXE_DIR = Path(__file__).resolve().parent.parent.parent
+
+FRONTEND_DIR = os.environ.get("FRONTEND_DIR", str(_EXE_DIR / "frontend"))
+UPLOAD_DIR = os.environ.get("LOCAL_UPLOAD_DIR", str(_EXE_DIR / "uploads"))
+
+# Ensure upload directory exists
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# GZip compression for text-based responses
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Mount uploads BEFORE frontend — more specific paths must come first
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+# Mount the Vue SPA frontend as catch-all (html=True enables SPA fallback)
+if os.path.isdir(FRONTEND_DIR):
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

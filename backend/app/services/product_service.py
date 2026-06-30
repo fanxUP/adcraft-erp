@@ -45,7 +45,8 @@ class ProductService:
         p = await self.repo.get_product_by_id(product_id)
         if not p:
             return False
-        await self.repo.delete_product(p)
+        p.is_active = False
+        await self.db.flush()
         return True
 
     def _product_to_dict(self, p) -> dict:
@@ -82,7 +83,8 @@ class ProductService:
         m = await self.repo.get_material_by_id(material_id)
         if not m:
             return False
-        await self.repo.delete_material(m)
+        m.is_active = False
+        await self.db.flush()
         return True
 
     def _material_to_dict(self, m) -> dict:
@@ -119,7 +121,8 @@ class ProductService:
         pr = await self.repo.get_process_by_id(process_id)
         if not pr:
             return False
-        await self.repo.delete_process(pr)
+        pr.is_active = False
+        await self.db.flush()
         return True
 
     def _process_to_dict(self, pr) -> dict:

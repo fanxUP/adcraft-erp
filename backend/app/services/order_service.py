@@ -5,6 +5,7 @@ from sqlalchemy import select, func
 from app.repositories.order_repo import OrderRepository
 from app.models.outsource import OutsourceTask
 from app.models.inventory import StockRecord
+from app.models.project_cost import ProjectCost
 
 
 class OrderService:
@@ -49,7 +50,7 @@ class OrderService:
         return self._order_to_detail(order)
 
     async def auto_calculate_cost(self, order_id: UUID) -> dict:
-        """Auto-calculate order cost from outsource tasks + material stock-out records."""
+        """Auto-calculate order cost from outsource tasks + material stock-out records + manual project costs."""
         total_cost = Decimal("0")
 
         # Outsource costs
@@ -66,12 +67,21 @@ class OrderService:
         )
         total_cost += Decimal(str(result.scalar()))
 
+        # Manual project costs
+        result = await self.db.execute(
+            select(func.coalesce(func.sum(ProjectCost.amount), 0))
+            .where(ProjectCost.order_id == order_id, ProjectCost.deleted_at.is_(None))
+        )
+        total_cost += Decimal(str(result.scalar()))
+
         return await self.set_cost(order_id, float(total_cost))
 
     def _order_to_summary(self, o) -> dict:
         return {
             "id": str(o.id), "order_no": o.order_no,
-            "customer_id": str(o.customer_id), "project_name": o.project_name,
+            "customer_id": str(o.customer_id),
+            "customer_name": o.customer.name if o.customer else None,
+            "project_name": o.project_name,
             "status": o.status,
             "total_amount": float(o.total_amount),
             "paid_amount": float(o.paid_amount),
@@ -85,7 +95,9 @@ class OrderService:
         return {
             "id": str(o.id), "order_no": o.order_no,
             "quote_id": str(o.quote_id) if o.quote_id else None,
-            "customer_id": str(o.customer_id), "project_name": o.project_name,
+            "customer_id": str(o.customer_id),
+            "customer_name": o.customer.name if o.customer else None,
+            "project_name": o.project_name,
             "sales_user_id": str(o.sales_user_id) if o.sales_user_id else None,
             "status": o.status,
             "total_amount": float(o.total_amount),

@@ -10,9 +10,6 @@
           :default-active="route.path"
           router
           :collapse="sidebarCollapsed"
-          background-color="#1a1a2e"
-          text-color="#a0a0b0"
-          active-text-color="#e63946"
         >
           <el-menu-item index="/">
             <el-icon><DataAnalysis /></el-icon>
@@ -72,6 +69,7 @@
             </template>
             <el-menu-item index="/payments">收款记录</el-menu-item>
             <el-menu-item index="/expenses">支出管理</el-menu-item>
+            <el-menu-item index="/project-costs">项目成本</el-menu-item>
             <el-menu-item index="/customer-debts">客户欠款</el-menu-item>
             <el-menu-item index="/statements">对账单</el-menu-item>
           </el-sub-menu>
@@ -83,11 +81,14 @@
             <el-menu-item index="/reports/daily">销售日报</el-menu-item>
             <el-menu-item index="/reports/monthly">销售月报</el-menu-item>
           </el-sub-menu>
-          <el-sub-menu v-if="authStore.isAdmin" index="/system">
+          <el-sub-menu v-if="authStore.isAdmin" index="/admin">
             <template #title>
               <el-icon><Tools /></el-icon>
-              <span>系统管理</span>
+              <span>后台管理</span>
             </template>
+            <el-menu-item index="/admin/users">用户管理</el-menu-item>
+            <el-menu-item index="/admin/roles">角色权限</el-menu-item>
+            <el-menu-item index="/admin/settings">系统设置</el-menu-item>
             <el-menu-item index="/operation-logs">操作日志</el-menu-item>
             <el-menu-item index="/backups">备份管理</el-menu-item>
           </el-sub-menu>
@@ -148,6 +149,7 @@ const appStore = useAppStore()
 
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 
+
 function handleLogout() {
   authStore.logout()
 }
@@ -160,9 +162,23 @@ function handleLogout() {
 }
 
 .sidebar {
-  background-color: #1a1a2e;
+  background-color: var(--ad-darker);
   transition: width 0.3s;
   overflow: hidden;
+
+  :deep(.el-menu) {
+    --el-menu-bg-color: var(--ad-darker);
+    --el-menu-text-color: var(--ad-text-secondary);
+    --el-menu-active-color: var(--ad-red);
+    --el-menu-hover-bg-color: var(--ad-card);
+    border-right: none;
+
+    .el-menu-item,
+    .el-sub-menu__title {
+      font-size: 15px;
+      font-weight: 700;
+    }
+  }
 }
 
 .logo {
@@ -170,7 +186,7 @@ function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #e63946;
+  color: var(--ad-red);
   font-size: 20px;
   font-weight: bold;
   border-bottom: 1px solid var(--ad-border);
@@ -181,7 +197,7 @@ function handleLogout() {
 }
 
 .header {
-  background: #1a1a2e;
+  background: var(--ad-darker);
   border-bottom: 1px solid var(--ad-border);
   display: flex;
   align-items: center;
@@ -206,5 +222,15 @@ function handleLogout() {
 .main-content {
   padding: 20px;
   min-height: calc(100vh - 60px);
+}
+</style>
+
+<!-- 非 scoped：子菜单弹出层在 body 上，需要全局覆盖 -->
+<style>
+.el-menu--popup {
+  --el-menu-bg-color: var(--ad-card) !important;
+  --el-menu-text-color: var(--ad-text-secondary) !important;
+  --el-menu-hover-bg-color: var(--ad-darker) !important;
+  --el-menu-active-color: var(--ad-red) !important;
 }
 </style>

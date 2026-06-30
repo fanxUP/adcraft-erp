@@ -34,6 +34,12 @@ class QuoteService:
         data["total_amount"] = Decimal("0")
         data["status"] = "draft"
 
+        # Convert customer_id from string to UUID if provided
+        if data.get("customer_id"):
+            data["customer_id"] = UUID(data["customer_id"])
+        else:
+            data.pop("customer_id", None)  # Remove None so model default (None) is used
+
         # Pass items through data so the repo can handle them
         items_data = data.get("items", [])
         for item in items_data:
@@ -119,6 +125,13 @@ class QuoteService:
         if quote.status != "confirmed":
             raise ValueError("只有已确认的报价单可以转订单")
 
+        # Auto-create customer if quote has customer_name but no customer_id
+        if not quote.customer_id and quote.customer_name:
+            from app.services.customer_service import CustomerService
+            customer_svc = CustomerService(self.db)
+            new_customer = await customer_svc.create_customer({"name": quote.customer_name})
+            quote.customer_id = UUID(new_customer["id"])
+
         # Save version snapshot
         version_no = await self.repo.get_next_version_no(quote_id)
         snapshot = self._quote_to_detail(quote)
@@ -126,7 +139,7 @@ class QuoteService:
 
         # Create order
         from app.models.order import Order, OrderItem, OrderStatusLog
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         order_no = await generate_order_no(self.db)
         order = Order(
@@ -166,7 +179,7 @@ class QuoteService:
             to_status="pending_confirm",
             reason="报价转订单",
             operated_by=created_by,
-            operated_at=datetime.now(timezone.utc),
+            operated_at=datetime.now(),
         )
         self.db.add(status_log)
 
@@ -185,7 +198,9 @@ class QuoteService:
     def _quote_to_summary(self, q) -> dict:
         return {
             "id": str(q.id), "quote_no": q.quote_no,
-            "customer_id": str(q.customer_id), "project_name": q.project_name,
+            "customer_id": str(q.customer_id) if q.customer_id else None,
+            "customer_name": q.customer_name,
+            "project_name": q.project_name,
             "status": q.status, "total_amount": float(q.total_amount),
             "valid_until": q.valid_until.isoformat() if q.valid_until else None,
             "created_at": q.created_at.isoformat() if q.created_at else None,
@@ -194,7 +209,9 @@ class QuoteService:
     def _quote_to_detail(self, q) -> dict:
         return {
             "id": str(q.id), "quote_no": q.quote_no,
-            "customer_id": str(q.customer_id), "project_name": q.project_name,
+            "customer_id": str(q.customer_id) if q.customer_id else None,
+            "customer_name": q.customer_name,
+            "project_name": q.project_name,
             "sales_user_id": str(q.sales_user_id) if q.sales_user_id else None,
             "status": q.status,
             "subtotal_amount": float(q.subtotal_amount),

@@ -17,6 +17,9 @@
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
       <el-table-column prop="payment_no" label="收款编号" width="180" />
+      <el-table-column prop="order_no" label="订单编号" width="160" />
+      <el-table-column prop="customer_name" label="客户名称" width="140" />
+      <el-table-column prop="project_name" label="项目名称" min-width="180" />
       <el-table-column label="金额" width="120">
         <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
       </el-table-column>
@@ -103,7 +106,7 @@ async function fetchData() {
 }
 
 async function loadOptions() {
-  const [oRes, cRes] = await Promise.all([getOrders({ page_size: 200 }), getCustomers({ page_size: 200 })])
+  const [oRes, cRes] = await Promise.all([getOrders({ page_size: 100 }), getCustomers({ page_size: 100 })])
   orderOptions.value = oRes.items; customerOptions.value = cRes.items
 }
 

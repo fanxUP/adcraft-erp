@@ -16,7 +16,9 @@
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
       <el-table-column prop="name" label="产品名称" min-width="180" />
       <el-table-column prop="unit" label="单位" width="80" />
-      <el-table-column prop="pricing_method" label="计价方式" width="100" />
+      <el-table-column label="计价方式" width="100">
+        <template #default="{ row }">{{ pricingLabel(row.pricing_method) }}</template>
+      </el-table-column>
       <el-table-column label="默认单价" width="120">
         <template #default="{ row }">¥ {{ row.default_price?.toFixed(2) }}</template>
       </el-table-column>
@@ -150,6 +152,11 @@ const templateColumns = [
   { name: '备注', desc: '备注信息', required: false },
 ]
 const sampleData = [{ col1: '灯箱制作', col2: '㎡', col3: 'area', col4: '350.00' }]
+
+function pricingLabel(m: string) {
+  const map: Record<string, string> = { area: '按面积', quantity: '按数量', length: '按长度', word_count: '按字数' }
+  return map[m] || m
+}
 
 async function fetchData() {
   loading.value = true

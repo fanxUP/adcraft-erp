@@ -35,14 +35,19 @@ const routes: RouteRecordRaw[] = [
       { path: 'expenses', name: 'ExpenseList', component: () => import('@/views/payments/ExpenseList.vue') },
       { path: 'statements', name: 'StatementList', component: () => import('@/views/payments/StatementList.vue') },
       { path: 'statements/:id', name: 'StatementDetail', component: () => import('@/views/payments/StatementDetail.vue') },
+      { path: 'project-costs', name: 'ProjectCostList', component: () => import('@/views/payments/ProjectCostList.vue') },
+      { path: 'project-costs/:orderId', name: 'ProjectCostDetail', component: () => import('@/views/payments/ProjectCostDetail.vue') },
       { path: 'reports/daily', name: 'DailyReport', component: () => import('@/views/reports/DailyReport.vue') },
       { path: 'reports/monthly', name: 'MonthlyReport', component: () => import('@/views/reports/MonthlyReport.vue') },
       { path: 'outsource/vendors', name: 'OutsourceVendorList', component: () => import('@/views/outsource/OutsourceVendorList.vue') },
       { path: 'outsource/tasks', name: 'OutsourceTaskList', component: () => import('@/views/outsource/OutsourceTaskList.vue') },
       { path: 'outsource/payments', name: 'OutsourcePaymentList', component: () => import('@/views/outsource/OutsourcePaymentList.vue') },
       { path: 'inventory', name: 'InventoryList', component: () => import('@/views/inventory/InventoryList.vue') },
-      { path: 'operation-logs', name: 'OperationLogList', component: () => import('@/views/system/OperationLogList.vue') },
+      { path: 'operation-logs', name: 'OperationLogList', meta: { roles: ['admin'] }, component: () => import('@/views/system/OperationLogList.vue') },
       { path: 'backups', name: 'BackupManage', meta: { roles: ['admin'] }, component: () => import('@/views/system/BackupManage.vue') },
+      { path: 'admin/users', name: 'AdminUserManage', meta: { roles: ['admin'] }, component: () => import('@/views/admin/UserManage.vue') },
+      { path: 'admin/roles', name: 'AdminRoleManage', meta: { roles: ['admin'] }, component: () => import('@/views/admin/RoleManage.vue') },
+      { path: 'admin/settings', name: 'AdminSettings', meta: { roles: ['admin'] }, component: () => import('@/views/admin/SystemSettings.vue') },
       { path: 'ai/anomalies', name: 'AnomalyDashboard', component: () => import('@/views/ai/AnomalyDashboard.vue') },
       { path: 'ai/quotes', name: 'AIQuoteAssistant', component: () => import('@/views/ai/AIQuoteAssistant.vue') },
       { path: 'ai/knowledge', name: 'QuoteKnowledgeBase', component: () => import('@/views/ai/QuoteKnowledgeBase.vue') },
@@ -67,8 +72,14 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
+
+  // Restore user profile if token exists but user not loaded (page refresh)
+  if (authStore.isLoggedIn && !authStore.user) {
+    await authStore.fetchProfile(true)
+  }
+
   if (to.meta.requiresAuth && !authStore.isLoggedIn) {
     next('/login')
   } else if (to.path === '/login' && authStore.isLoggedIn) {

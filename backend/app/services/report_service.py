@@ -1,4 +1,4 @@
-from datetime import datetime, date, timezone
+from datetime import datetime, date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 
@@ -13,9 +13,9 @@ class ReportService:
         self.db = db
 
     async def get_dashboard(self) -> dict:
-        today = date.today()
+        now = datetime.now()
+        today = now.date()
         month_start = today.replace(day=1)
-        now = datetime.now(timezone.utc)
 
         today_start = datetime(today.year, today.month, today.day)
         today_end = datetime(today.year, today.month, today.day, 23, 59, 59)
@@ -54,7 +54,7 @@ class ReportService:
         if report_date:
             d = datetime.fromisoformat(report_date)
         else:
-            d = datetime.now(timezone.utc)
+            d = datetime.now()
         day_start = datetime(d.year, d.month, d.day)
         day_end = datetime(d.year, d.month, d.day, 23, 59, 59)
 
@@ -82,7 +82,7 @@ class ReportService:
         }
 
     async def get_monthly_report(self, year: int | None = None, month: int | None = None) -> dict:
-        now = datetime.now(timezone.utc)
+        now = datetime.now()
         y = year or now.year
         m = month or now.month
         month_start = datetime(y, m, 1)
@@ -166,7 +166,7 @@ class ReportService:
         return result.scalar() or 0
 
     async def _count_overdue_orders(self) -> int:
-        now = datetime.now(timezone.utc)
+        now = datetime.now()
         result = await self.db.execute(
             select(func.count()).select_from(Order).where(
                 and_(

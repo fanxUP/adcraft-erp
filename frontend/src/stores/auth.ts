@@ -30,11 +30,13 @@ export const useAuthStore = defineStore('auth', () => {
     await fetchProfile()
   }
 
-  async function fetchProfile() {
+  async function fetchProfile(quiet = false) {
     try {
       user.value = await getProfile()
     } catch {
-      ElMessage.error('登录已过期，请重新登录')
+      if (!quiet) {
+        ElMessage.error('登录已过期，请重新登录')
+      }
       logout()
     }
   }

@@ -1,0 +1,226 @@
+<template>
+  <div class="page">
+    <div class="page-header">
+      <h2>系统设置</h2>
+    </div>
+
+    <!-- Theme Selector -->
+    <el-card shadow="never" style="margin-bottom: 16px">
+      <template #header>
+        <span>界面风格</span>
+      </template>
+      <div class="theme-grid">
+        <div
+          v-for="t in themes"
+          :key="t.name"
+          class="theme-card"
+          :class="{ active: appStore.theme === t.name }"
+          @click="appStore.setTheme(t.name)"
+        >
+          <div class="theme-preview">
+            <div class="preview-bg" :style="{ background: t.colors[1] }">
+              <div class="preview-card" :style="{ background: t.colors[2], borderColor: t.colors[2] === '#ffffff' ? '#e0e0e0' : 'transparent' }">
+                <div class="preview-accent" :style="{ background: t.colors[0] }"></div>
+                <div class="preview-line" :style="{ background: t.colors[0], opacity: 0.3 }"></div>
+                <div class="preview-line short" :style="{ background: t.colors[0], opacity: 0.15 }"></div>
+              </div>
+            </div>
+          </div>
+          <div class="theme-info">
+            <div class="theme-name">{{ t.label }}</div>
+            <div class="theme-desc">{{ t.desc }}</div>
+          </div>
+        </div>
+      </div>
+    </el-card>
+
+    <el-card v-loading="loading" shadow="never">
+      <el-form :model="form" label-width="140px" style="max-width: 600px">
+        <el-divider content-position="left">基本设置</el-divider>
+        <el-form-item label="系统名称">
+          <el-input v-model="form.APP_NAME" />
+        </el-form-item>
+        <el-form-item label="JWT过期时间(分钟)">
+          <el-input-number v-model="form.JWT_EXPIRE_MINUTES" :min="60" :max="10080" style="width: 100%" />
+        </el-form-item>
+
+        <el-divider content-position="left">AI 功能</el-divider>
+        <el-form-item label="启用AI功能">
+          <el-switch v-model="form.AI_ENABLED" />
+        </el-form-item>
+        <template v-if="form.AI_ENABLED">
+          <el-form-item label="AI供应商">
+            <el-select v-model="form.AI_PROVIDER" style="width: 100%">
+              <el-option label="Anthropic" value="anthropic" />
+              <el-option label="OpenAI" value="openai" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="AI模型">
+            <el-input v-model="form.AI_MODEL" placeholder="如 claude-sonnet-4-20250514" />
+          </el-form-item>
+          <el-form-item label="API Key">
+            <el-input v-model="form.AI_API_KEY" type="password" show-password placeholder="输入新Key覆盖" />
+            <div style="font-size: 12px; color: #909399; margin-top: 4px">当前: {{ settings?.AI_API_KEY || '未配置' }}</div>
+          </el-form-item>
+          <el-form-item label="API Base URL">
+            <el-input v-model="form.AI_API_BASE_URL" placeholder="留空使用默认" />
+          </el-form-item>
+        </template>
+
+        <el-divider content-position="left">存储</el-divider>
+        <el-form-item label="上传方式">
+          <el-tag>{{ form.UPLOAD_STORAGE }}</el-tag>
+        </el-form-item>
+        <el-form-item label="上传目录">
+          <el-tag>{{ form.LOCAL_UPLOAD_DIR }}</el-tag>
+        </el-form-item>
+
+        <el-form-item>
+          <el-button type="danger" :loading="saving" @click="handleSave">保存设置</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { getSystemSettings, updateSystemSettings, type SystemSettings } from '@/api/admin'
+import { useAppStore, THEME_LIST } from '@/stores/app'
+import { ElMessage } from 'element-plus'
+
+const appStore = useAppStore()
+const themes = THEME_LIST
+
+const loading = ref(false)
+const saving = ref(false)
+const settings = ref<SystemSettings | null>(null)
+
+const form = reactive({
+  APP_NAME: '',
+  JWT_EXPIRE_MINUTES: 1440,
+  UPLOAD_STORAGE: '',
+  LOCAL_UPLOAD_DIR: '',
+  AI_ENABLED: false,
+  AI_PROVIDER: 'anthropic',
+  AI_MODEL: '',
+  AI_API_KEY: '',
+  AI_API_BASE_URL: '',
+})
+
+async function fetchSettings() {
+  loading.value = true
+  try {
+    const data = await getSystemSettings()
+    settings.value = data
+    Object.assign(form, {
+      APP_NAME: data.APP_NAME,
+      JWT_EXPIRE_MINUTES: data.JWT_EXPIRE_MINUTES,
+      UPLOAD_STORAGE: data.UPLOAD_STORAGE,
+      LOCAL_UPLOAD_DIR: data.LOCAL_UPLOAD_DIR,
+      AI_ENABLED: data.AI_ENABLED,
+      AI_PROVIDER: data.AI_PROVIDER,
+      AI_MODEL: data.AI_MODEL,
+      AI_API_KEY: '',
+      AI_API_BASE_URL: data.AI_API_BASE_URL,
+    })
+  } finally { loading.value = false }
+}
+
+async function handleSave() {
+  saving.value = true
+  try {
+    const payload: Record<string, unknown> = {
+      APP_NAME: form.APP_NAME,
+      JWT_EXPIRE_MINUTES: form.JWT_EXPIRE_MINUTES,
+      AI_ENABLED: form.AI_ENABLED,
+      AI_PROVIDER: form.AI_PROVIDER,
+      AI_MODEL: form.AI_MODEL,
+      AI_API_BASE_URL: form.AI_API_BASE_URL,
+    }
+    // Only send API key if user typed a new one
+    if (form.AI_API_KEY) {
+      payload.AI_API_KEY = form.AI_API_KEY
+    }
+    const result = await updateSystemSettings(payload)
+    ElMessage.success(result.message || '设置已保存')
+    fetchSettings()
+  } catch { /* handled */ } finally { saving.value = false }
+}
+
+onMounted(fetchSettings)
+</script>
+
+<style scoped>
+.page { padding: 0; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.page-header h2 { margin: 0; color: var(--ad-text); }
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+.theme-card {
+  border: 2px solid var(--ad-border);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.theme-card:hover {
+  border-color: var(--ad-text-secondary);
+  transform: translateY(-2px);
+}
+.theme-card.active {
+  border-color: var(--ad-red);
+  box-shadow: 0 0 12px var(--ad-accent-glow, rgba(230, 57, 70, 0.2));
+}
+.theme-preview {
+  height: 72px;
+  padding: 8px;
+}
+.preview-bg {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  padding: 6px;
+  display: flex;
+  align-items: stretch;
+}
+.preview-card {
+  flex: 1;
+  border-radius: 3px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid transparent;
+}
+.preview-accent {
+  width: 24px;
+  height: 4px;
+  border-radius: 2px;
+}
+.preview-line {
+  height: 3px;
+  border-radius: 1px;
+  width: 80%;
+}
+.preview-line.short {
+  width: 50%;
+}
+.theme-info {
+  padding: 8px 10px;
+  background: var(--ad-card);
+}
+.theme-name {
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--ad-text);
+}
+.theme-desc {
+  font-size: 11px;
+  color: var(--ad-text-secondary);
+  margin-top: 2px;
+}
+</style>
