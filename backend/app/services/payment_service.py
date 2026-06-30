@@ -1,5 +1,5 @@
 from uuid import UUID
-from datetime import datetime, timezone
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.payment import Payment, CustomerStatement, Expense
@@ -72,7 +72,10 @@ class PaymentService:
             "id": str(p.id),
             "payment_no": p.payment_no,
             "order_id": str(p.order_id),
+            "order_no": p.order.order_no if p.order else None,
             "customer_id": str(p.customer_id),
+            "customer_name": p.order.customer.name if p.order and p.order.customer else None,
+            "project_name": p.order.project_name if p.order else None,
             "amount": float(p.amount),
             "payment_method": p.payment_method,
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
@@ -130,7 +133,7 @@ class StatementService:
         s = await self.repo.get_by_id(statement_id)
         if not s:
             raise ValueError("对账单不存在")
-        await self.repo.update(s, {"status": "confirmed", "confirmed_at": datetime.now(timezone.utc), "confirmed_by": confirmed_by})
+        await self.repo.update(s, {"status": "confirmed", "confirmed_at": datetime.now(), "confirmed_by": confirmed_by})
         return await self._to_detail(s)
 
     def _to_summary(self, s: CustomerStatement) -> dict:

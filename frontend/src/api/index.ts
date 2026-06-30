@@ -30,6 +30,9 @@ apiClient.interceptors.response.use(
       ElMessage.error('登录已过期，请重新登录')
       useAuthStore().logout()
       router.push('/login')
+    } else if (error.response?.status === 422 && Array.isArray(error.response?.data?.detail)) {
+      const messages = error.response.data.detail.map((d: unknown) => d.msg).join('; ')
+      ElMessage.error(messages || '请求参数错误')
     } else {
       ElMessage.error(error.response?.data?.message || '网络错误')
     }

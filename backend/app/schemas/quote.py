@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from datetime import datetime, date
 
 
@@ -69,13 +69,20 @@ class QuoteItemResponse(BaseModel):
 
 
 class QuoteCreate(BaseModel):
-    customer_id: str
+    customer_id: str | None = None
+    customer_name: str | None = None
     project_name: str
     sales_user_id: str | None = None
     tax_rate: float = 0
     valid_until: date | None = None
     remark: str | None = None
     items: list[QuoteItemCreate] = []
+
+    @model_validator(mode='after')
+    def check_customer(self):
+        if not self.customer_id and not self.customer_name:
+            raise ValueError("请选择已有客户或输入新客户名称")
+        return self
 
 
 class QuoteUpdate(BaseModel):
@@ -90,7 +97,8 @@ class QuoteUpdate(BaseModel):
 class QuoteListResponse(BaseModel):
     id: str
     quote_no: str
-    customer_id: str
+    customer_id: str | None = None
+    customer_name: str | None = None
     project_name: str
     status: str
     total_amount: float
@@ -103,7 +111,8 @@ class QuoteListResponse(BaseModel):
 class QuoteDetailResponse(BaseModel):
     id: str
     quote_no: str
-    customer_id: str
+    customer_id: str | None = None
+    customer_name: str | None = None
     project_name: str
     sales_user_id: str | None = None
     status: str

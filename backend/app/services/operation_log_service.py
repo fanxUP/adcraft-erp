@@ -18,6 +18,7 @@ OBJ_INVENTORY = "inventory"
 OBJ_PRODUCTION_TASK = "production_task"
 OBJ_DESIGN_TASK = "design_task"
 OBJ_INSTALLATION_TASK = "installation_task"
+OBJ_PROJECT_COST = "project_cost"
 
 # Actions
 ACTION_CREATE = "create"

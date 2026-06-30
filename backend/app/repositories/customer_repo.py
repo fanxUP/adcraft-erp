@@ -1,5 +1,5 @@
 from uuid import UUID
-from datetime import datetime, timezone
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
@@ -48,6 +48,6 @@ class CustomerRepository:
         return customer
 
     async def soft_delete(self, customer: Customer) -> Customer:
-        customer.deleted_at = datetime.now(timezone.utc)
+        customer.deleted_at = datetime.now()
         await self.db.flush()
         return customer

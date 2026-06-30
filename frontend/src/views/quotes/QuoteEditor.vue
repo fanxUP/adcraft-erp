@@ -9,7 +9,7 @@
     <el-card shadow="never" class="section-card">
       <el-form :model="form" label-width="100px" inline>
         <el-form-item label="客户" required>
-          <el-select v-model="form.customer_id" placeholder="选择客户" filterable remote :remote-method="searchCustomers" style="width: 260px">
+          <el-select ref="customerSelectRef" v-model="form.customer_id" placeholder="选择或输入客户名称" filterable allow-create default-first-option @visible-change="onCustomerVisible" @blur="onCustomerBlur" style="width: 260px">
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
@@ -134,6 +134,7 @@ const isEdit = !!route.params.id
 const saving = ref(false)
 const calculating = ref(false)
 const converting = ref(false)
+const customerSelectRef = ref()
 const quote = ref<QuoteDetailResponse | null>(null)
 const customerOptions = ref<CustomerResponse[]>([])
 
@@ -175,17 +176,30 @@ function calcTotal() { return calcQuoteSubtotal() - (form.discount_amount || 0) 
 
 function addItem() { items.value.push(newItem()) }
 
-async function searchCustomers(query: string) {
-  if (query) {
-    const data = await getCustomers({ keyword: query, page_size: 50 })
-    customerOptions.value = data.items
+async function loadCustomers() {
+  const data = await getCustomers({ page_size: 100 })
+  customerOptions.value = data.items
+}
+
+function onCustomerVisible(visible: boolean) {
+  if (visible) loadCustomers()
+}
+
+function onCustomerBlur() {
+  // Element Plus clears allow-create value on blur if not explicitly selected.
+  // Read the input text directly from the DOM to recover it — must be synchronous
+  // so the value is restored before save/click handlers fire.
+  if (!form.customer_id) {
+    const input = customerSelectRef.value?.$el?.querySelector('input') as HTMLInputElement | null
+    const typed = input?.value?.trim()
+    if (typed) form.customer_id = typed
   }
 }
 
 async function fetchQuote() {
   quote.value = await getQuote(route.params.id as string)
   Object.assign(form, {
-    customer_id: quote.value.customer_id,
+    customer_id: quote.value.customer_id || quote.value.customer_name || '',
     project_name: quote.value.project_name,
     tax_rate: quote.value.tax_rate,
     discount_amount: quote.value.discount_amount,
@@ -195,14 +209,32 @@ async function fetchQuote() {
   items.value = quote.value.items?.length ? quote.value.items.map(i => ({ ...i })) : [newItem()]
 }
 
+function isExistingCustomer(value: string): boolean {
+  return customerOptions.value.some(c => c.id === value)
+}
+
 async function handleSave() {
   saving.value = true
   try {
-    const payload = { ...form, items: items.value }
     if (isEdit) {
       await updateQuote(route.params.id as string, { project_name: form.project_name, tax_rate: form.tax_rate, discount_amount: form.discount_amount, valid_until: form.valid_until || undefined, remark: form.remark })
       ElMessage.success('保存成功')
     } else {
+      const payload: Record<string, unknown> = { ...form, items: items.value }
+      // Clean empty optional fields that Pydantic would reject
+      if (!payload.valid_until) delete payload.valid_until
+      if (!payload.remark) delete payload.remark
+      // discount_amount is not a field on QuoteCreate — remove it
+      delete payload.discount_amount
+      if (form.customer_id && !isExistingCustomer(form.customer_id)) {
+        // Typed a new customer name — send as customer_name
+        payload.customer_name = form.customer_id
+        delete payload.customer_id
+      } else if (!form.customer_id) {
+        // No customer selected — remove empty field
+        delete payload.customer_id
+      }
+      // else: existing customer UUID stays as customer_id
       const result = await createQuote(payload)
       ElMessage.success('创建成功')
       router.push(`/quotes/${result.id}/edit`)
@@ -240,6 +272,7 @@ async function handleConvert() {
 }
 
 onMounted(async () => {
+  await loadCustomers()
   if (isEdit) await fetchQuote()
 })
 </script>

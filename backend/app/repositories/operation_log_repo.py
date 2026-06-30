@@ -48,6 +48,7 @@ class OperationLogRepository:
         return list(result.scalars().all()), total
 
     async def create(self, data: dict) -> OperationLog:
+        data.setdefault("created_at", datetime.now())
         log = OperationLog(**data)
         self.db.add(log)
         await self.db.flush()

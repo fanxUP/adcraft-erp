@@ -3,6 +3,7 @@ import uuid as _uuid
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
+from sqlalchemy.orm import selectinload
 
 from app.models.quote import Quote, QuoteItem, QuoteVersion
 
@@ -13,7 +14,9 @@ class QuoteRepository:
 
     async def get_by_id(self, quote_id: UUID) -> Quote | None:
         result = await self.db.execute(
-            select(Quote).where(Quote.id == quote_id, Quote.deleted_at.is_(None))
+            select(Quote)
+            .options(selectinload(Quote.items))
+            .where(Quote.id == quote_id, Quote.deleted_at.is_(None))
         )
         return result.scalar_one_or_none()
 
@@ -50,7 +53,9 @@ class QuoteRepository:
             item_data.pop("sort_order", None)  # repo handles ordering
             item = QuoteItem(quote_id=quote.id, sort_order=idx, **item_data)
             self.db.add(item)
+            quote.items.append(item)  # populate relationship to avoid lazy load
         await self.db.flush()
+        await self.db.refresh(quote, ["items"])
         return quote
 
     async def update(self, quote: Quote, data: dict) -> Quote:
@@ -61,8 +66,8 @@ class QuoteRepository:
         return quote
 
     async def soft_delete(self, quote: Quote) -> Quote:
-        from datetime import datetime, timezone
-        quote.deleted_at = datetime.now(timezone.utc)
+        from datetime import datetime
+        quote.deleted_at = datetime.now()
         await self.db.flush()
         return quote
 

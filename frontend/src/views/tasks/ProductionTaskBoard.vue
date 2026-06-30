@@ -62,7 +62,7 @@ function colCards(key: string) { return allTasks.value.filter(t => t.status === 
 async function fetchData() {
   loading.value = true
   try {
-    const data = await getProductionTasks({ page_size: 200 })
+    const data = await getProductionTasks({ page_size: 100 })
     allTasks.value = data.items
   } finally { loading.value = false }
 }

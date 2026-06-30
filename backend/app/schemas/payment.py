@@ -125,3 +125,57 @@ class ExpenseResponse(BaseModel):
     created_at: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+# ── Project Cost ──
+
+class ProjectCostCreate(BaseModel):
+    order_id: str
+    category: str
+    amount: float
+    description: str | None = None
+    cost_date: str | None = None
+    receipt_url: str | None = None
+    remark: str | None = None
+
+    @field_validator("amount")
+    @classmethod
+    def amount_positive(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("成本金额必须大于0")
+        return v
+
+    @field_validator("order_id")
+    @classmethod
+    def order_id_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("订单ID不能为空")
+        return v.strip()
+
+
+class ProjectCostUpdate(BaseModel):
+    category: str | None = None
+    amount: float | None = None
+    description: str | None = None
+    cost_date: str | None = None
+    receipt_url: str | None = None
+    remark: str | None = None
+
+
+class ProjectCostResponse(BaseModel):
+    id: str
+    cost_no: str
+    order_id: str
+    customer_id: str | None = None
+    customer_name: str | None = None
+    project_name: str | None = None
+    category: str
+    amount: float
+    description: str | None = None
+    cost_date: str | None = None
+    receipt_url: str | None = None
+    remark: str | None = None
+    created_by: str | None = None
+    created_at: str | None = None
+
+    model_config = {"from_attributes": True}

@@ -91,7 +91,7 @@ async function fetchData() {
 }
 
 async function loadOptions() {
-  const cRes = await getCustomers({ page_size: 200 })
+  const cRes = await getCustomers({ page_size: 100 })
   customerOptions.value = cRes.items
 }
 

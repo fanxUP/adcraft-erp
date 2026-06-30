@@ -9,6 +9,7 @@ import App from './App.vue'
 import router from './router'
 import { createPinia } from 'pinia'
 import './styles/global.scss'
+import './styles/themes.scss'
 
 const app = createApp(App)
 

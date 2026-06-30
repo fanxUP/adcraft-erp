@@ -93,7 +93,7 @@ function paymentMethodLabel(val: string | null) {
 
 async function loadVendors() {
   try {
-    const data = await getOutsourceVendors({ page: 1, page_size: 200 })
+    const data = await getOutsourceVendors({ page: 1, page_size: 100 })
     vendors.value = data.items
   } catch { /* ignore */ }
 }

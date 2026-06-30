@@ -44,8 +44,8 @@ class OutsourceVendorRepository:
         return vendor
 
     async def soft_delete(self, vendor: OutsourceVendor) -> None:
-        from datetime import datetime, timezone
-        vendor.deleted_at = datetime.now(timezone.utc)
+        from datetime import datetime
+        vendor.deleted_at = datetime.now()
         await self.db.flush()
 
 

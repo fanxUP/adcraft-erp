@@ -42,8 +42,8 @@ class UserRepository:
         return user
 
     async def soft_delete(self, user: User) -> User:
-        from datetime import datetime, timezone
-        user.deleted_at = datetime.now(timezone.utc)
+        from datetime import datetime
+        user.deleted_at = datetime.now()
         await self.db.flush()
         return user
 

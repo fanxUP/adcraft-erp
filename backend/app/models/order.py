@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, SoftDeleteMixin
+from app.models.customer import Customer
 from app.models.task import DesignTask, ProductionTask, InstallationTask
 
 
@@ -27,6 +28,7 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     installation_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    customer: Mapped["Customer"] = relationship(lazy="selectin")
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order", lazy="selectin", cascade="all, delete-orphan")
     status_logs: Mapped[list["OrderStatusLog"]] = relationship(back_populates="order", lazy="selectin", cascade="all, delete-orphan")
     design_tasks: Mapped[list["DesignTask"]] = relationship(lazy="selectin", cascade="all, delete-orphan")

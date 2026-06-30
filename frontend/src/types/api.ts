@@ -80,6 +80,7 @@ export interface OrderListResponse {
   id: string
   order_no: string
   customer_id: string
+  customer_name?: string
   project_name: string
   status: string
   total_amount: number
@@ -119,6 +120,7 @@ export interface OrderDetailResponse {
   order_no: string
   quote_id?: string
   customer_id: string
+  customer_name?: string
   project_name: string
   sales_user_id?: string
   status: string
@@ -261,7 +263,10 @@ export interface PaymentResponse {
   id: string
   payment_no: string
   order_id: string
+  order_no?: string
   customer_id: string
+  customer_name?: string
+  project_name?: string
   amount: number
   payment_method?: string
   paid_at?: string
@@ -323,6 +328,34 @@ export interface ExpenseResponse {
   receipt_url?: string
   created_by?: string
   created_at?: string
+}
+
+export interface ProjectCostResponse {
+  id: string
+  cost_no: string
+  order_id: string
+  customer_id?: string
+  customer_name?: string
+  project_name?: string
+  category: string
+  amount: number
+  description?: string
+  cost_date?: string
+  receipt_url?: string
+  remark?: string
+  created_by?: string
+  created_at?: string
+  attachment_count?: number
+  attachments?: AttachmentResponse[]
+}
+
+export interface ProjectCostImportResponse {
+  created: number
+  errors: Array<{ row: number; error: string }>
+}
+
+export interface ProjectCostSummaryResponse {
+  costs: Record<string, number>
 }
 
 // ---- Inventory ----
@@ -446,7 +479,8 @@ export interface QuoteItemResponse {
 export interface QuoteListResponse {
   id: string
   quote_no: string
-  customer_id: string
+  customer_id?: string
+  customer_name?: string
   project_name: string
   status: string
   total_amount: number
@@ -457,7 +491,8 @@ export interface QuoteListResponse {
 export interface QuoteDetailResponse {
   id: string
   quote_no: string
-  customer_id: string
+  customer_id?: string
+  customer_name?: string
   project_name: string
   sales_user_id?: string
   status: string
