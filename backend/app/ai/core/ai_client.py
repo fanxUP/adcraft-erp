@@ -6,6 +6,7 @@ Supports Anthropic Messages API and OpenAI Chat Completions API.
 
 from __future__ import annotations
 
+import base64
 import json
 from typing import Any
 
@@ -121,8 +122,6 @@ class AIClient:
             return data["content"][0]["text"]
 
     async def _anthropic_vision(self, image_bytes: bytes, prompt: str) -> str:
-        import base64
-
         media_type = self._guess_image_type(image_bytes)
         headers = {
             "x-api-key": self._api_key,
@@ -194,8 +193,6 @@ class AIClient:
             return data["choices"][0]["message"]["content"]
 
     async def _openai_vision(self, image_bytes: bytes, prompt: str) -> str:
-        import base64
-
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",

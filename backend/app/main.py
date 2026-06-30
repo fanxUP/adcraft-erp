@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -10,9 +11,16 @@ from app.api import auth, users, customers, products, quotes, orders, tasks, pay
 # AI module routes
 from app.ai.api import ai_anomalies, ai_knowledge, ai_quote, ai_reports, ai_site_photo, ai_payment_ocr
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not settings.SECRET_KEY or settings.SECRET_KEY in ("change_me", "change_me_to_a_random_32_byte_hex_string"):
+        logger.warning(
+            "SECURITY WARNING: SECRET_KEY is weak or unset. "
+            "Generate a strong key with: openssl rand -hex 32"
+        )
     yield
 
 

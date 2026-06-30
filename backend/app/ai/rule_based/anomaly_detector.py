@@ -6,18 +6,18 @@ Works without any AI API key.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.order import Order, OrderItem
-from app.models.quote import Quote, QuoteItem
+from app.models.order import Order
+from app.models.quote import Quote
 from app.models.customer import Customer
 from app.models.task import InstallationTask
 from app.models.outsource import OutsourceTask
 from app.models.inventory import InventoryItem
-from app.models.product import Product, Material
 
 # Terminal states — orders in these states are considered "closed"
 ORDER_TERMINAL_STATES = {"completed", "delivered", "cancelled", "returned"}
@@ -293,5 +293,4 @@ class AnomalyDetector:
 
 async def asyncio_gather_fallback(*coros):
     """Gather coroutines — works with any asyncio version."""
-    import asyncio
     return await asyncio.gather(*coros)

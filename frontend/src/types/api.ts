@@ -702,13 +702,24 @@ export interface OCRRecognizeResponse {
   order_context?: Record<string, unknown>
 }
 
+export interface BusinessNarrativeStats {
+  order_count: number
+  order_amount: number
+  payment_count: number
+  payment_amount: number
+  unpaid_amount?: number
+  overdue_count: number
+  collection_rate?: number
+  status_breakdown?: Record<string, number>
+}
+
 export interface BusinessNarrativeResponse {
   mode: string
   period: string
   year: number
   month?: number
   week?: number
-  stats: Record<string, unknown>
+  stats: BusinessNarrativeStats
   narrative: string
   suggestions: string[]
 }

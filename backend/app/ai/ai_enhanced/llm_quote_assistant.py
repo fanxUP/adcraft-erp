@@ -106,7 +106,7 @@ class LLMQuoteAssistant:
 
         except (AIClientError, AIAPIError):
             # Fall back to rule-based
-            return await self._rule_based.compose_quote_draft(description, customer_id)
+            return await self._rule_based.compose_draft_quote(description, customer_id)
 
     async def _build_catalog_context(self) -> str:
         """Build a concise catalog summary for the LLM prompt."""

@@ -18,7 +18,7 @@ async def get_current_user(
     try:
         payload = decode_access_token(credentials.credentials)
         user_id = UUID(payload["sub"])
-    except (ValueError, KeyError):
+    except (ValueError, KeyError, TypeError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的认证凭据")
 
     result = await db.execute(select(User).where(User.id == user_id))

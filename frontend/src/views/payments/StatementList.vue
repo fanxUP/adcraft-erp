@@ -104,7 +104,9 @@ async function handleCreate() {
     showDialog.value = false
     Object.assign(form, { customer_id: '', start_date: '', end_date: '' })
     fetchData()
-  } catch { } finally { saving.value = false }
+  } catch {
+    // API error handled by interceptor
+  } finally { saving.value = false }
 }
 
 onMounted(() => { fetchData(); loadOptions() })

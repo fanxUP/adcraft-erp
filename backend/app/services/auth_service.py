@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
-from app.models.user import User, Role
+from app.models.user import User
 from app.schemas.auth import LoginRequest
 from app.utils.security import hash_password, verify_password, create_access_token
 

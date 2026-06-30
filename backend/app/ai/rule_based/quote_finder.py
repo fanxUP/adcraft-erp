@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.quote import Quote, QuoteItem
@@ -192,6 +192,12 @@ class QuoteFinder:
         return keywords[:10]
 
     # ── Draft quote composition ──────────────────────────────────────────
+
+    async def generate_quote_draft(
+        self, description: str, customer_id: str | None = None
+    ) -> dict:
+        """Alias for compose_draft_quote — matches the LLMQuoteAssistant interface."""
+        return await self.compose_draft_quote(description, customer_id)
 
     async def compose_draft_quote(
         self, description: str, customer_id: str | None = None

@@ -22,7 +22,7 @@
         <el-button type="primary" @click="fetchItems" style="margin-left: 12px">搜索</el-button>
       </div>
 
-      <el-table :data="items" v-loading="loading" stripe style="margin-top: 16px">
+      <el-table :data="items" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无库存物料">
         <el-table-column prop="material_name" label="物料名称" min-width="160" />
         <el-table-column label="分类" width="80">
           <template #default="{ row }">{{ categoryLabel(row.category) }}</template>
@@ -62,7 +62,7 @@
 
     <!-- Stock Records -->
     <template v-else>
-      <el-table :data="records" v-loading="loading" stripe style="margin-top: 16px">
+      <el-table :data="records" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无出入库记录">
         <el-table-column prop="item_name" label="物料" min-width="160" />
         <el-table-column label="类型" width="80">
           <template #default="{ row }">

@@ -160,8 +160,9 @@ async function handleSave() {
     showDialog.value = false
     resetForm()
     fetchData()
-  } catch { /* handled by interceptor */ }
-  finally { saving.value = false }
+  } catch {
+    // API error handled by interceptor, cancel does nothing
+  } finally { saving.value = false }
 }
 
 async function handleDelete(row: ExpenseResponse) {
@@ -172,7 +173,9 @@ async function handleDelete(row: ExpenseResponse) {
     await deleteExpense(row.id)
     ElMessage.success('已删除')
     fetchData()
-  } catch { /* cancelled or error */ }
+  } catch {
+    // User cancelled or API error (handled by interceptor)
+  }
 }
 
 onMounted(fetchData)

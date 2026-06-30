@@ -1,10 +1,12 @@
 """AI Site Photo API — analyze installation site photos for risks."""
 
 import os
-from uuid import uuid4
+from uuid import uuid4, UUID
 from datetime import datetime
+import logging
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -13,6 +15,8 @@ from app.core.config import settings
 from app.schemas.common import success
 from app.models.user import User
 from app.ai.core.resolver import FeatureResolver
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai/site-photos", tags=["AI Site Photos"])
 
@@ -68,10 +72,9 @@ async def analyze_site_photo(
 
             task_context = None
             if installation_task_id:
-                from uuid import UUID
                 from app.models.task import InstallationTask
                 result = await db.execute(
-                    __import__("sqlalchemy").select(InstallationTask).where(
+                    select(InstallationTask).where(
                         InstallationTask.id == UUID(installation_task_id)
                     )
                 )
@@ -97,7 +100,7 @@ async def analyze_site_photo(
                     "notes": ai_findings.get("notes", "") or checklist["notes"],
                 })
         except Exception:
-            pass  # Graceful fallback to rule-based
+            logger.exception("AI image analysis failed, falling back to rule-based")
 
     return success({
         "mode": mode,

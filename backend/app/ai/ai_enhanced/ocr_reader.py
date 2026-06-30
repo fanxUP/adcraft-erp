@@ -6,6 +6,8 @@ Uses vision model to OCR WeChat/Alipay/bank transfer screenshots.
 
 from __future__ import annotations
 
+import json
+
 from app.ai.core.ai_client import AIClient
 
 SYSTEM_PROMPT = """你是一个财务收款凭证的OCR识别助手。请从提供的收款截图/照片中提取以下信息。
@@ -60,7 +62,6 @@ class OCRReader:
             )
 
         text = await self.ai_client.analyze_image(image_bytes, prompt)
-        import json
         try:
             cleaned = text.strip()
             if cleaned.startswith("```"):

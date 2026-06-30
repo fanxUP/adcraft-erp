@@ -4,10 +4,13 @@ Provides endpoints to create, list, and restore backups.
 Designed for admin users only.
 """
 
+import logging
 import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Body, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,6 +97,7 @@ async def create_backup(
     except subprocess.TimeoutExpired:
         return error(50003, "备份超时（超过5分钟）")
     except Exception as e:
+        logger.exception("Backup creation failed: %s", e)
         return error(50004, f"备份过程出错: {str(e)}")
 
 
@@ -151,6 +155,7 @@ async def restore_backup(
     except subprocess.TimeoutExpired:
         return error(50003, "恢复超时（超过10分钟）")
     except Exception as e:
+        logger.exception("Backup restore failed: %s", e)
         return error(50004, f"恢复过程出错: {str(e)}")
 
 
@@ -169,4 +174,5 @@ async def delete_backup(
         backup_path.unlink()
         return success({"message": f"已删除备份: {filename}"})
     except Exception as e:
+        logger.exception("Backup deletion failed: %s", e)
         return error(50004, f"删除失败: {str(e)}")

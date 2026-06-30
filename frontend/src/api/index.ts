@@ -27,10 +27,12 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401) {
+      ElMessage.error('登录已过期，请重新登录')
       useAuthStore().logout()
       router.push('/login')
+    } else {
+      ElMessage.error(error.response?.data?.message || '网络错误')
     }
-    ElMessage.error(error.response?.data?.message || '网络错误')
     return Promise.reject(error)
   },
 )

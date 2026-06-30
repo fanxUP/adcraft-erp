@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import { login as loginApi, getProfile } from '@/api/auth'
 import type { UserResponse } from '@/types/api'
 import router from '@/router'
@@ -33,6 +34,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       user.value = await getProfile()
     } catch {
+      ElMessage.error('登录已过期，请重新登录')
       logout()
     }
   }

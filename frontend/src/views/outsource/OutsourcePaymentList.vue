@@ -5,7 +5,7 @@
       <el-button type="danger" @click="handleCreate">新建付款</el-button>
     </div>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协付款记录">
       <el-table-column prop="payment_no" label="付款编号" width="160" />
       <el-table-column prop="vendor_name" label="外协商" width="150" />
       <el-table-column prop="amount" label="金额" width="140" align="right">

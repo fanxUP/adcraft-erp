@@ -100,6 +100,8 @@
             <el-menu-item index="/ai/anomalies">智能异常提醒</el-menu-item>
             <el-menu-item index="/ai/knowledge">报价知识库</el-menu-item>
             <el-menu-item index="/ai/reports">智能经营报告</el-menu-item>
+            <el-menu-item index="/ai/site-photos">现场照片识别</el-menu-item>
+            <el-menu-item index="/ai/payment-ocr">收款截图识别</el-menu-item>
           </el-sub-menu>
         </el-menu>
       </el-aside>

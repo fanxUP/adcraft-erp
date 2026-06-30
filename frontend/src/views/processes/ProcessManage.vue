@@ -111,10 +111,14 @@ async function handleSave() {
 }
 
 async function handleDelete(row: ProcessResponse) {
-  await ElMessageBox.confirm(`确认删除工艺 "${row.name}"？`, '确认', { type: 'warning' })
-  await deleteProcess(row.id)
-  ElMessage.success('已删除')
-  fetchData()
+  try {
+    await ElMessageBox.confirm(`确认删除工艺 "${row.name}"？`, '确认', { type: 'warning' })
+    await deleteProcess(row.id)
+    ElMessage.success('已删除')
+    fetchData()
+  } catch {
+    // User cancelled or API error (handled by interceptor)
+  }
 }
 
 onMounted(fetchData)

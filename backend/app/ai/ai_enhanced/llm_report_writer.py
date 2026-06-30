@@ -5,6 +5,8 @@ Requires AI_ENABLED=true and AI_API_KEY.
 
 from __future__ import annotations
 
+import json
+
 from app.ai.core.ai_client import AIClient, AIClientError, AIAPIError
 
 SYSTEM_PROMPT = """你是一个广告制作安装行业的经营分析师。根据提供的经营数据，生成一份专业的经营分析报告。
@@ -68,7 +70,6 @@ def _parse_json(text: str) -> dict:
     if text.startswith("```"):
         lines = text.split("\n")
         text = "\n".join(lines[1:-1])
-    import json
     try:
         return json.loads(text)
     except json.JSONDecodeError:
@@ -76,5 +77,4 @@ def _parse_json(text: str) -> dict:
 
 
 def _format_json(obj: object, indent: int = 2) -> str:
-    import json
     return json.dumps(obj, ensure_ascii=False, indent=indent, default=str)

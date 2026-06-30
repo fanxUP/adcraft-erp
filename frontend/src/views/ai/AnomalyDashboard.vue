@@ -76,8 +76,8 @@
         <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
         <el-table-column prop="detail" label="详情" min-width="300" show-overflow-tooltip />
         <el-table-column label="操作" width="100" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" @click="goToSource(row)">查看</el-button>
+          <template #default="{ $index }">
+            <el-button size="small" @click="goToSource($index)">查看</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -111,8 +111,8 @@ const filteredAlerts = computed(() => {
   return list
 })
 
-function severityTag(s: string) {
-  const map: Record<string, string> = { critical: 'danger', warning: 'warning', info: 'info' }
+function severityTag(s: string): 'danger' | 'warning' | 'info' {
+  const map: Record<string, 'danger' | 'warning' | 'info'> = { critical: 'danger', warning: 'warning', info: 'info' }
   return map[s] || 'info'
 }
 
@@ -133,7 +133,9 @@ function typeText(t: string) {
   return map[t] || t
 }
 
-function goToSource(row: AnomalyAlert) {
+function goToSource(index: number) {
+  const row = alerts.value[index]
+  if (!row) return
   const routes: Record<string, string> = {
     quote: `/quotes/${row.object_id}/edit`,
     order: `/orders/${row.object_id}`,

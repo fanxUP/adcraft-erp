@@ -101,6 +101,8 @@ async function fetchData() {
   loading.value = true
   try {
     stmt.value = await getStatement(route.params.id as string)
+  } catch {
+    // API error handled by interceptor
   } finally { loading.value = false }
 }
 
@@ -109,7 +111,9 @@ async function handleConfirm() {
     await confirmStatement(route.params.id as string)
     ElMessage.success('对账单已确认')
     fetchData()
-  } catch { }
+  } catch {
+    // User cancelled or API error (handled by interceptor)
+  }
 }
 
 onMounted(fetchData)

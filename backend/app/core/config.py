@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     APP_NAME: str = "AdCraft ERP"
     APP_ENV: str = "development"
-    SECRET_KEY: str = "change_me"
+    SECRET_KEY: str = ""  # MUST be set via .env for production — generate with: openssl rand -hex 32
 
     DATABASE_URL: str = "postgresql+asyncpg://adcraft:adcraft_dev_password@127.0.0.1:5432/adcraft_erp"
     DATABASE_URL_SYNC: str = "postgresql+psycopg2://adcraft:adcraft_dev_password@127.0.0.1:5432/adcraft_erp"

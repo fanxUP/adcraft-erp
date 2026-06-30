@@ -1,5 +1,7 @@
 """AI Business Reports API — smart narrative reports with optional AI enhancement."""
 
+import logging
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +11,8 @@ from app.schemas.common import success
 from app.models.user import User
 from app.ai.rule_based.report_composer import ReportComposer
 from app.ai.core.resolver import FeatureResolver
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai/reports", tags=["AI Reports"])
 
@@ -58,7 +62,7 @@ async def get_business_narrative(
                 report["suggestions"] = suggestions
             mode = "ai_enhanced"
         except Exception:
-            pass  # Fall back to rule-based on any error
+            logger.exception("AI report enhancement failed, falling back to rule-based")
 
     report["mode"] = mode
     return success(report)

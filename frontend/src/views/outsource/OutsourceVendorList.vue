@@ -16,7 +16,7 @@
       <el-button type="primary" @click="fetchData" style="margin-left: 12px">搜索</el-button>
     </div>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协商">
       <el-table-column prop="vendor_no" label="编号" width="150" />
       <el-table-column prop="name" label="名称" min-width="160" />
       <el-table-column prop="contact_person" label="联系人" width="120" />
@@ -176,10 +176,14 @@ async function handleSave() {
 }
 
 async function handleDelete(row: VendorResponse) {
-  await ElMessageBox.confirm(`确认删除外协商 "${row.name}"？`, '确认', { type: 'warning' })
-  await deleteOutsourceVendor(row.id)
-  ElMessage.success('已删除')
-  await fetchData()
+  try {
+    await ElMessageBox.confirm(`确认删除外协商 "${row.name}"？`, '确认', { type: 'warning' })
+    await deleteOutsourceVendor(row.id)
+    ElMessage.success('已删除')
+    await fetchData()
+  } catch {
+    // User cancelled or API error (handled by interceptor)
+  }
 }
 
 onMounted(fetchData)

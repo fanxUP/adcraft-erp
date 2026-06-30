@@ -120,8 +120,8 @@ const renderedNarrative = computed(() => {
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
 })
 
-function formatMoney(val: number | undefined): string {
-  if (val === undefined || val === null) return '0'
+function formatMoney(val: number | undefined | null): string {
+  if (val == null) return '0'
   return val.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 

@@ -1,7 +1,10 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -140,6 +143,7 @@ async def import_products(
             await service.create_product(data)
             result.succeeded += 1
         except Exception as e:
+            logger.exception("Product import failed for row %s: %s", row.get("_excel_row", "?"), e)
             result.failed += 1
             result.errors.append({"row": row.get("_excel_row", "?"), "message": str(e)})
 
@@ -262,6 +266,7 @@ async def import_materials(
             await service.create_material(data)
             result.succeeded += 1
         except Exception as e:
+            logger.exception("Material import failed for row %s: %s", row.get("_excel_row", "?"), e)
             result.failed += 1
             result.errors.append({"row": row.get("_excel_row", "?"), "message": str(e)})
 

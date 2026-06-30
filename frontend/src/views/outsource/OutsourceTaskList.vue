@@ -15,7 +15,7 @@
       <el-button type="primary" @click="fetchData" style="margin-left: 12px">搜索</el-button>
     </div>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协任务">
       <el-table-column prop="task_no" label="任务编号" width="160" />
       <el-table-column prop="vendor_name" label="外协商" width="150" />
       <el-table-column label="任务类型" width="100">
@@ -185,9 +185,13 @@ async function handleSave() {
 }
 
 async function handleUpdateStatus(row: OutsourceTaskResponse, status: string) {
-  await updateOutsourceTask(row.id, { status })
-  ElMessage.success(`已更新为：${statusLabel(status)}`)
-  await fetchData()
+  try {
+    await updateOutsourceTask(row.id, { status })
+    ElMessage.success(`已更新为：${statusLabel(status)}`)
+    await fetchData()
+  } catch {
+    // API error handled by interceptor
+  }
 }
 
 onMounted(() => { fetchData(); loadVendors() })

@@ -3,6 +3,7 @@
 import os
 from uuid import uuid4, UUID
 from datetime import datetime
+import logging
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy import select
@@ -16,6 +17,8 @@ from app.models.user import User
 from app.models.order import Order
 from app.models.customer import Customer
 from app.ai.core.resolver import FeatureResolver
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai/payment-ocr", tags=["AI Payment OCR"])
 
@@ -104,7 +107,7 @@ async def recognize_payment_screenshot(
                 else:
                     confidence = "low"
         except Exception:
-            pass  # Graceful fallback
+            logger.exception("AI OCR enhancement failed, falling back to rule-based")
 
     return success({
         "mode": mode,

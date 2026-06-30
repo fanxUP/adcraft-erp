@@ -1,7 +1,10 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -117,6 +120,7 @@ async def import_customers(
                                 after_data={"name": customer["name"], "customer_no": customer["customer_no"]})
             result.succeeded += 1
         except Exception as e:
+            logger.exception("Customer import failed for row %s: %s", row.get("_excel_row", "?"), e)
             result.failed += 1
             result.errors.append({"row": row.get("_excel_row", "?"), "message": str(e)})
 

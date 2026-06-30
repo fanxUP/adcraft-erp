@@ -47,6 +47,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'ai/quotes', name: 'AIQuoteAssistant', component: () => import('@/views/ai/AIQuoteAssistant.vue') },
       { path: 'ai/knowledge', name: 'QuoteKnowledgeBase', component: () => import('@/views/ai/QuoteKnowledgeBase.vue') },
       { path: 'ai/reports', name: 'BusinessNarrativeReport', component: () => import('@/views/ai/BusinessNarrativeReport.vue') },
+      { path: 'ai/site-photos', name: 'SitePhotoRecognition', component: () => import('@/views/ai/SitePhotoRecognition.vue') },
+      { path: 'ai/payment-ocr', name: 'PaymentOCR', component: () => import('@/views/ai/PaymentOCR.vue') },
     ],
   },
   {

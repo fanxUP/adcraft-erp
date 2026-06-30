@@ -1,5 +1,5 @@
 from uuid import UUID
-from datetime import date, datetime
+from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.operation_log_repo import OperationLogRepository

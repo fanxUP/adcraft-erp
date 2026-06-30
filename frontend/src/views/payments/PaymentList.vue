@@ -121,7 +121,9 @@ async function handleCreate() {
     showDialog.value = false
     Object.assign(form, { order_id: '', customer_id: '', amount: 0, payment_method: '', paid_at: '', remark: '' })
     fetchData()
-  } catch { } finally { saving.value = false }
+  } catch {
+    // API error handled by interceptor
+  } finally { saving.value = false }
 }
 
 async function handleVoid(row: PaymentResponse) {
@@ -132,7 +134,9 @@ async function handleVoid(row: PaymentResponse) {
       ElMessage.success('已作废')
       fetchData()
     }
-  } catch { }
+  } catch {
+    // User cancelled or API error (handled by interceptor)
+  }
 }
 
 onMounted(() => { fetchData(); loadOptions() })

@@ -47,7 +47,7 @@
     </el-card>
 
     <el-card shadow="never" class="table-card" style="margin-top: 16px">
-      <el-table :data="logs" stripe size="small" v-loading="loading">
+      <el-table :data="logs" stripe size="small" v-loading="loading" empty-text="暂无操作日志">
         <el-table-column label="时间" width="170">
           <template #default="{ row }">{{ row.created_at?.slice(0, 19).replace('T', ' ') }}</template>
         </el-table-column>
@@ -187,6 +187,8 @@ async function fetchLogs() {
     const res = await getOperationLogs(params)
     logs.value = res.items
     total.value = res.total
+  } catch {
+    // API error handled by interceptor
   } finally {
     loading.value = false
   }

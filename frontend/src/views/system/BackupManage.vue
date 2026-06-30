@@ -34,7 +34,7 @@
 
     <!-- Table -->
     <el-card shadow="never">
-      <el-table :data="backups" v-loading="loading" stripe style="width: 100%">
+      <el-table :data="backups" v-loading="loading" stripe style="width: 100%" empty-text="暂无备份文件">
         <el-table-column prop="filename" label="文件名" min-width="280" />
         <el-table-column prop="size_display" label="大小" width="100" align="center" />
         <el-table-column label="创建时间" width="180" align="center">

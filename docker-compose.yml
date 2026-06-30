@@ -1,6 +1,6 @@
 services:
   nginx:
-    image: nginx:latest
+    image: nginx:1.27-alpine
     container_name: adcraft_nginx
     ports:
       - "80:80"
@@ -30,6 +30,11 @@ services:
     container_name: adcraft_backend
     env_file:
       - .env
+    environment:
+      # Override localhost URLs with Docker service names
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-adcraft}:${POSTGRES_PASSWORD:-adcraft_password}@postgres:5432/${POSTGRES_DB:-adcraft_erp}
+      DATABASE_URL_SYNC: postgresql+psycopg2://${POSTGRES_USER:-adcraft}:${POSTGRES_PASSWORD:-adcraft_password}@postgres:5432/${POSTGRES_DB:-adcraft_erp}
+      REDIS_URL: redis://redis:6379/0
     volumes:
       - ./uploads:/app/uploads
       - ./logs:/app/logs
@@ -48,7 +53,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-adcraft_erp}
       POSTGRES_USER: ${POSTGRES_USER:-adcraft}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adcraft_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     ports:
@@ -95,7 +100,7 @@ services:
       - adcraft-net
 
   backup:
-    image: alpine:latest
+    image: alpine:3.21
     container_name: adcraft_backup
     volumes:
       - ./backups:/backups
@@ -106,7 +111,7 @@ services:
       PGPORT: '5432'
       POSTGRES_DB: ${POSTGRES_DB:-adcraft_erp}
       POSTGRES_USER: ${POSTGRES_USER:-adcraft}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adcraft_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
     command: >
       sh -c "
         apk add --no-cache postgresql-client >/dev/null 2>&1 &&

@@ -6,6 +6,8 @@ Analyzes installation site photos for risks and conditions.
 
 from __future__ import annotations
 
+import json
+
 from app.ai.core.ai_client import AIClient
 
 SYSTEM_PROMPT = """你是一个广告安装工程的现场勘查专家。请分析提供的现场照片，识别以下内容：
@@ -64,7 +66,6 @@ class ImageAnalyzer:
 
 
 def _parse_json(text: str) -> dict | None:
-    import json
     text = text.strip()
     if text.startswith("```"):
         lines = text.split("\n")

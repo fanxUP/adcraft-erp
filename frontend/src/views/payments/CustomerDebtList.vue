@@ -5,7 +5,7 @@
       <el-button type="primary" @click="fetchData">刷新</el-button>
     </div>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无欠款客户">
       <el-table-column prop="customer_name" label="客户名称" min-width="200" />
       <el-table-column label="欠款金额" width="180">
         <template #default="{ row }">
@@ -28,6 +28,8 @@ async function fetchData() {
   loading.value = true
   try {
     list.value = await getCustomerDebt()
+  } catch {
+    // API error handled by interceptor
   } finally { loading.value = false }
 }
 
