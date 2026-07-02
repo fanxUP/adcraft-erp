@@ -19,6 +19,24 @@ class ResetPasswordRequest(BaseModel):
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
+@router.get("/all")
+async def get_all_users(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取所有活跃用户（会话列表用）"""
+    from app.repositories.user_repo import UserRepository
+    repo = UserRepository(db)
+    users = await repo.get_all_active_users(exclude_user_id=current_user.id)
+    return success([{
+        "id": str(u.id),
+        "username": u.username,
+        "real_name": u.real_name,
+        "avatar": getattr(u, "avatar", None),
+        "role": u.roles[0].name if u.roles else "",
+    } for u in users])
+
+
 @router.get("/")
 async def list_users(
     page: int = Query(1, ge=1),

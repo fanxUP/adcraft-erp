@@ -200,7 +200,7 @@ import {
   deleteAttachment,
 } from '@/api/tasks'
 import { useAuthStore } from '@/stores/auth'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { InstallationTaskResponse } from '@/types/api'
 import { getErrorMessage } from '@/utils/error'
 
@@ -393,6 +393,9 @@ async function onFileChange(ev: Event) {
 
 async function deletePhoto(attId: string) {
   if (!currentTask.value) return
+  await ElMessageBox.confirm('确定删除此照片？删除后无法恢复。', '删除照片', {
+    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
+  })
   try {
     await deleteAttachment(attId)
     ElMessage.success('已删除')
@@ -405,6 +408,9 @@ async function deletePhoto(attId: string) {
 // --- Status change ---
 async function changeStatus(toStatus: string) {
   if (!currentTask.value) return
+  await ElMessageBox.confirm(`确定将安装状态变更为「${toStatus}」？`, '变更状态', {
+    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
+  })
   try {
     await changeInstallationTaskStatus(currentTask.value.id, {
       to_status: toStatus,

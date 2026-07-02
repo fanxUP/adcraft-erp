@@ -32,3 +32,7 @@ export function confirmQuote(id: string) {
 export function convertQuoteToOrder(id: string) {
   return post<OrderDetailResponse>(`/quotes/${id}/convert-to-order`)
 }
+
+export function revertQuoteToDraft(id: string) {
+  return post<QuoteDetailResponse>(`/quotes/${id}/revert-to-draft`)
+}

@@ -87,7 +87,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getInstallationTask, updateInstallationTask, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import type { InstallationTaskResponse } from '@/types/api'
 
@@ -124,6 +124,9 @@ async function handleUpdate() {
 
 async function handleChangeStatus() {
   if (!statusForm.to_status) { ElMessage.warning('请选择目标状态'); return }
+  await ElMessageBox.confirm(`确定将安装任务状态变更为「${statusForm.to_status}」？`, '变更状态', {
+    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
+  })
   changing.value = true
   try {
     await changeInstallationTaskStatus(route.params.id as string, statusForm)
@@ -144,6 +147,9 @@ async function handleUpload(req: UploadRequestOptions) {
 }
 
 async function handleDeleteAttachment(id: string) {
+  await ElMessageBox.confirm('确定删除此照片？删除后无法恢复。', '删除照片', {
+    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
+  })
   await deleteAttachment(id)
   ElMessage.success('已删除')
   fetchTask()

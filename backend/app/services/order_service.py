@@ -95,6 +95,26 @@ class OrderService:
 
         return await self.set_cost(order_id, float(total_cost))
 
+    async def delete_order(self, order_id: UUID) -> None:
+        order = await self.repo.get_by_id(order_id)
+        if not order:
+            raise ValueError("订单不存在")
+        if order.status != "cancelled":
+            raise ValueError("只有已取消的订单可以删除")
+        await self.repo.soft_delete(order)
+
+    async def list_deleted(self, page: int, page_size: int, keyword: str | None = None) -> tuple[list, int]:
+        skip = (page - 1) * page_size
+        orders, total = await self.repo.list_deleted_orders(skip=skip, limit=page_size, keyword=keyword)
+        return [self._order_to_summary(o) for o in orders], total
+
+    async def restore_order(self, order_id: UUID) -> dict:
+        order = await self.repo.get_deleted_by_id(order_id)
+        if not order:
+            raise ValueError("回收站中未找到该订单")
+        await self.repo.restore(order)
+        return self._order_to_detail(order)
+
     def _order_to_summary(self, o) -> dict:
         return {
             "id": str(o.id), "order_no": o.order_no,

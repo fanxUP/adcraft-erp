@@ -57,3 +57,12 @@ class UserRepository:
         user.roles = roles
         await self.db.flush()
         return user
+
+    async def get_all_active_users(self, exclude_user_id: UUID | None = None) -> list[User]:
+        """获取所有活跃用户（会话列表用）"""
+        q = select(User).where(User.deleted_at.is_(None))
+        if exclude_user_id:
+            q = q.where(User.id != exclude_user_id)
+        q = q.order_by(User.username)
+        result = await self.db.execute(q)
+        return list(result.scalars().all())
