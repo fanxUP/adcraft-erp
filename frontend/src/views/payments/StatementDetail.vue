@@ -91,7 +91,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getStatement, confirmStatement } from '@/api/payments'
 import type { StatementDetailResponse } from '@/types/api'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
 const loading = ref(false)
@@ -107,6 +107,9 @@ async function fetchData() {
 }
 
 async function handleConfirm() {
+  await ElMessageBox.confirm('确认后对账单将锁定不可修改，确定确认？', '确认对账单', {
+    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
+  })
   try {
     await confirmStatement(route.params.id as string)
     ElMessage.success('对账单已确认')

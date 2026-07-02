@@ -1,27 +1,18 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <h2>订单管理</h2>
-      <el-button v-if="authStore.isAdmin" type="warning" @click="$router.push('/orders/recycle')">
-        <el-icon><Delete /></el-icon> 回收站
-      </el-button>
+      <h2>
+        <el-button text @click="$router.push('/orders')">
+          <el-icon><ArrowLeft /></el-icon> 返回订单
+        </el-button>
+        订单回收站
+      </h2>
     </div>
 
     <el-card shadow="never" class="filter-card">
       <el-form :model="filters" inline>
         <el-form-item label="关键词">
           <el-input v-model="filters.keyword" placeholder="订单编号/项目名称" clearable style="width: 220px" @keyup.enter="handleSearch" />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="filters.status" clearable placeholder="全部" style="width: 120px">
-            <el-option label="待确认" value="pending_confirm" />
-            <el-option label="已确认" value="confirmed" />
-            <el-option label="进行中" value="in_progress" />
-            <el-option label="生产中" value="in_production" />
-            <el-option label="安装中" value="in_installation" />
-            <el-option label="已完成" value="completed" />
-            <el-option label="已取消" value="cancelled" />
-          </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>
@@ -34,7 +25,7 @@
       <el-table-column prop="order_no" label="订单编号" width="180" />
       <el-table-column prop="customer_name" label="客户名称" width="160" />
       <el-table-column prop="project_name" label="项目名称" min-width="200" />
-      <el-table-column label="状态" width="120">
+      <el-table-column label="原状态" width="120">
         <template #default="{ row }">
           <el-tag :type="statusColor(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
@@ -42,26 +33,12 @@
       <el-table-column label="总金额" width="120">
         <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column label="已收" width="110">
-        <template #default="{ row }">¥ {{ row.paid_amount?.toFixed(2) }}</template>
+      <el-table-column label="删除时间" width="170">
+        <template #default="{ row }">{{ row.deleted_at?.replace('T', ' ').slice(0, 19) }}</template>
       </el-table-column>
-      <el-table-column label="未收" width="110">
-        <template #default="{ row }">¥ {{ row.unpaid_amount?.toFixed(2) }}</template>
-      </el-table-column>
-      <el-table-column label="毛利" width="100">
+      <el-table-column label="操作" width="120">
         <template #default="{ row }">
-          <span :style="{ color: (row.gross_profit || 0) >= 0 ? '#67c23a' : '#f56c6c' }">
-            ¥ {{ row.gross_profit?.toFixed(2) }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="创建时间" width="120">
-        <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="180">
-        <template #default="{ row }">
-          <el-button text type="primary" @click="$router.push(`/orders/${row.id}`)">详情</el-button>
-          <el-button v-if="authStore.isAdmin && row.status === 'cancelled'" text type="danger" @click="handleDelete(row as OrderListResponse)">删除</el-button>
+          <el-button text type="success" @click="handleRestore(row as OrderListResponse)">恢复</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -80,12 +57,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { getOrders, deleteOrder } from '@/api/orders'
-import { useAuthStore } from '@/stores/auth'
+import { getDeletedOrders, restoreOrder } from '@/api/orders'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { OrderListResponse } from '@/types/api'
-
-const authStore = useAuthStore()
 
 const loading = ref(false)
 const list = ref<OrderListResponse[]>([])
@@ -93,7 +67,7 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 
-const filters = reactive({ keyword: '', status: '' })
+const filters = reactive({ keyword: '' })
 
 function statusLabel(s: string) {
   const map: Record<string, string> = {
@@ -113,9 +87,8 @@ async function fetchData() {
     const params = {
       page: page.value, page_size: pageSize.value,
       ...(filters.keyword ? { keyword: filters.keyword } : {}),
-      ...(filters.status ? { status: filters.status } : {}),
     }
-    const data = await getOrders(params)
+    const data = await getDeletedOrders(params)
     list.value = data.items
     total.value = data.total
   } finally { loading.value = false }
@@ -128,19 +101,18 @@ function handleSearch() {
 
 function handleReset() {
   filters.keyword = ''
-  filters.status = ''
   page.value = 1
   fetchData()
 }
 
-async function handleDelete(row: OrderListResponse) {
-  await ElMessageBox.confirm(`确定将订单「${row.order_no}」移入回收站？`, '删除订单', {
+async function handleRestore(row: OrderListResponse) {
+  await ElMessageBox.confirm(`确定恢复订单「${row.order_no}」？恢复后状态为已取消。`, '恢复订单', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
   })
-  await deleteOrder(row.id)
-  ElMessage.success('订单已移入回收站')
+  await restoreOrder(row.id)
+  ElMessage.success('订单已恢复')
   fetchData()
 }
 
@@ -150,6 +122,6 @@ onMounted(fetchData)
 <style scoped>
 .page { padding: 0; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
+.page-header h2 { margin: 0; color: var(--ad-text); display: flex; align-items: center; gap: 8px; }
 .filter-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); margin-bottom: 16px; }
 </style>

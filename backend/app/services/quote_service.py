@@ -118,6 +118,16 @@ class QuoteService:
         await self.db.flush()
         return self._quote_to_detail(quote)
 
+    async def revert_to_draft(self, quote_id: UUID) -> dict:
+        quote = await self.repo.get_by_id(quote_id)
+        if not quote:
+            raise ValueError("报价单不存在")
+        if quote.status != "confirmed":
+            raise ValueError("只有已确认的报价单可以撤回")
+        quote.status = "draft"
+        await self.db.flush()
+        return self._quote_to_detail(quote)
+
     async def convert_to_order(self, quote_id: UUID, created_by: UUID) -> dict:
         quote = await self.repo.get_by_id(quote_id)
         if not quote:

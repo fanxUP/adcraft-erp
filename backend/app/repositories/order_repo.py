@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
@@ -46,7 +47,6 @@ class OrderRepository:
         return list(result.scalars().all())
 
     async def create_status_log(self, order_id: UUID, from_status: str | None, to_status: str, reason: str | None, operated_by: UUID | None) -> OrderStatusLog:
-        from datetime import datetime
         log = OrderStatusLog(
             order_id=order_id,
             from_status=from_status,
@@ -58,3 +58,31 @@ class OrderRepository:
         self.db.add(log)
         await self.db.flush()
         return log
+
+    async def soft_delete(self, order: Order) -> None:
+        order.deleted_at = datetime.now()
+        await self.db.flush()
+
+    async def restore(self, order: Order) -> None:
+        order.deleted_at = None
+        order.status = "cancelled"
+        await self.db.flush()
+
+    async def list_deleted_orders(self, skip: int = 0, limit: int = 20,
+                                  keyword: str | None = None) -> tuple[list[Order], int]:
+        q = select(Order).where(Order.deleted_at.isnot(None))
+        if keyword:
+            q = q.where(
+                Order.order_no.ilike(f"%{keyword}%") | Order.project_name.ilike(f"%{keyword}%")
+            )
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self.db.execute(count_q)).scalar()
+        q = q.order_by(Order.deleted_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all()), total
+
+    async def get_deleted_by_id(self, order_id: UUID) -> Order | None:
+        result = await self.db.execute(
+            select(Order).where(Order.id == order_id, Order.deleted_at.isnot(None))
+        )
+        return result.scalar_one_or_none()

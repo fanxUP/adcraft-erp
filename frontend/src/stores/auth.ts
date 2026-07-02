@@ -5,6 +5,7 @@ import { login as loginApi, getProfile } from '@/api/auth'
 import type { UserResponse } from '@/types/api'
 import router from '@/router'
 import { useNotificationStore } from '@/stores/notification'
+import { useChatStore } from '@/stores/chat'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
@@ -33,6 +34,10 @@ export const useAuthStore = defineStore('auth', () => {
     const notificationStore = useNotificationStore()
     notificationStore.connectWebSocket(data.token)
     notificationStore.fetchUnreadCount()
+    // Connect WebSocket for chat
+    const chatStore = useChatStore()
+    chatStore.connectWebSocket(data.token)
+    chatStore.fetchConversations()
   }
 
   async function fetchProfile(quiet = false) {
@@ -43,6 +48,10 @@ export const useAuthStore = defineStore('auth', () => {
         const notificationStore = useNotificationStore()
         notificationStore.connectWebSocket(token.value)
         notificationStore.fetchUnreadCount()
+        // Connect WebSocket for chat
+        const chatStore = useChatStore()
+        chatStore.connectWebSocket(token.value)
+        chatStore.fetchConversations()
       }
     } catch {
       if (!quiet) {
@@ -56,6 +65,9 @@ export const useAuthStore = defineStore('auth', () => {
     // Disconnect notification WebSocket
     const notificationStore = useNotificationStore()
     notificationStore.disconnectWebSocket()
+    // Disconnect chat WebSocket
+    const chatStore = useChatStore()
+    chatStore.disconnectWebSocket()
 
     token.value = ''
     user.value = null

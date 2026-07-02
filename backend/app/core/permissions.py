@@ -136,6 +136,13 @@ PERM_AI_ANOMALY_READ = "ai_anomaly:read"
 PERM_AI_KNOWLEDGE_READ = "ai_knowledge:read"
 PERM_AI_REPORT_READ = "ai_report:read"
 
+# Chat / Messaging
+PERM_CHAT_READ = "chat:read"
+PERM_CHAT_CREATE = "chat:create"
+PERM_CHAT_DELETE = "chat:delete"
+PERM_CHAT_GROUP_CREATE = "chat:group:create"
+PERM_CHAT_GROUP_MANAGE = "chat:group:manage"
+
 
 # ── Role name constants ───────────────────────────────────────────────────
 

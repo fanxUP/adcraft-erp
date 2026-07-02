@@ -1,4 +1,4 @@
-import { get, post } from './index'
+import { get, post, del } from './index'
 import { PaginatedData, OrderListResponse, OrderDetailResponse } from '@/types/api'
 
 export function getOrders(params: { page?: number; page_size?: number; status?: string; customer_id?: string }) {
@@ -19,4 +19,16 @@ export function setOrderCost(id: string, cost_amount: number) {
 
 export function autoCalculateCost(id: string) {
   return post<OrderDetailResponse>(`/orders/${id}/auto-cost`)
+}
+
+export function deleteOrder(id: string) {
+  return del(`/orders/${id}`)
+}
+
+export function getDeletedOrders(params: { page?: number; page_size?: number; keyword?: string }) {
+  return get<PaginatedData<OrderListResponse>>('/orders/recycle/list', { params })
+}
+
+export function restoreOrder(id: string) {
+  return post<OrderDetailResponse>(`/orders/${id}/restore`)
 }

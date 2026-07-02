@@ -19,6 +19,10 @@
             <el-icon><Bell /></el-icon>
             <span>消息中心</span>
           </el-menu-item>
+          <el-menu-item index="/chat">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>即时通讯</span>
+          </el-menu-item>
           <el-menu-item v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/customers">
             <el-icon><User /></el-icon>
             <span>客户管理</span>
@@ -30,6 +34,10 @@
           <el-menu-item v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/orders">
             <el-icon><Tickets /></el-icon>
             <span>订单管理</span>
+          </el-menu-item>
+          <el-menu-item v-if="authStore.isAdmin" index="/orders/recycle">
+            <el-icon><Delete /></el-icon>
+            <span>订单回收站</span>
           </el-menu-item>
           <el-menu-item v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/products">
             <el-icon><Goods /></el-icon>
@@ -119,6 +127,11 @@
             </el-button>
           </div>
           <div class="header-right">
+            <el-badge :value="chatStore.totalUnreadCount" :hidden="chatStore.totalUnreadCount === 0" :max="99">
+              <el-button text @click="router.push('/chat')">
+                <el-icon :size="20"><ChatDotRound /></el-icon>
+              </el-button>
+            </el-badge>
             <NotificationBell />
             <el-dropdown>
               <span class="user-info">
@@ -143,22 +156,37 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
+import { useChatStore } from '@/stores/chat'
 import NotificationBell from '@/components/NotificationBell.vue'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const appStore = useAppStore()
+const chatStore = useChatStore()
 
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 
-
 function handleLogout() {
+  chatStore.disconnectWebSocket()
   authStore.logout()
 }
+
+onMounted(() => {
+  // 连接聊天 WebSocket
+  if (authStore.token) {
+    chatStore.connectWebSocket(authStore.token)
+    chatStore.fetchConversations()
+  }
+})
+
+onUnmounted(() => {
+  chatStore.disconnectWebSocket()
+})
 </script>
 
 <style scoped>

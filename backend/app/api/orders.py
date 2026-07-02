@@ -11,7 +11,7 @@ from app.models.user import User
 from app.schemas.order import OrderStatusChange
 from app.schemas.common import success, success_paginated, error
 from app.services.order_service import OrderService
-from app.services.operation_log_service import log_operation, OBJ_ORDER, ACTION_STATUS_CHANGE
+from app.services.operation_log_service import log_operation, OBJ_ORDER, ACTION_STATUS_CHANGE, ACTION_DELETE
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -33,6 +33,19 @@ async def list_orders(
     service = OrderService(db)
     cid = UUID(customer_id) if customer_id else None
     orders, total = await service.list_orders(page, page_size, status, cid, keyword=keyword)
+    return success_paginated(orders, total, page, page_size)
+
+
+@router.get("/recycle/list")
+async def list_deleted_orders(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    service = OrderService(db)
+    orders, total = await service.list_deleted(page, page_size, keyword=keyword)
     return success_paginated(orders, total, page, page_size)
 
 
@@ -94,3 +107,42 @@ async def change_order_status(
                         ip_address=request.client.host if request.client else None,
                         after_data={"status": data.to_status, "reason": data.reason})
     return success(order)
+
+
+@router.delete("/{order_id}")
+async def delete_order(
+    order_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    service = OrderService(db)
+    oid = UUID(order_id)
+    try:
+        await service.delete_order(oid)
+        await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                            OBJ_ORDER, oid, ACTION_DELETE,
+                            ip_address=request.client.host if request.client else None)
+        return success({"message": "订单已移入回收站"})
+    except ValueError as e:
+        return error(40001, str(e))
+
+
+@router.post("/{order_id}/restore")
+async def restore_order(
+    order_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    service = OrderService(db)
+    oid = UUID(order_id)
+    try:
+        order = await service.restore_order(oid)
+        await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                            OBJ_ORDER, oid, "restore",
+                            ip_address=request.client.host if request.client else None,
+                            after_data={"status": "cancelled"})
+        return success(order)
+    except ValueError as e:
+        return error(40401, str(e))

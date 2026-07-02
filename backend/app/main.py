@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
-from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup, admin, notifications
+from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup, admin, notifications, conversations
 # AI module routes
 from app.ai.api import ai_anomalies, ai_knowledge, ai_quote, ai_reports, ai_site_photo, ai_payment_ocr
 
@@ -80,9 +80,11 @@ app.include_router(operation_logs.router, prefix="/api/v1")
 app.include_router(backup.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")
+app.include_router(conversations.router, prefix="/api/v1")
 
-# WebSocket endpoint
+# WebSocket endpoints
 app.add_api_websocket_route("/ws/notifications", notifications.websocket_notifications)
+app.add_api_websocket_route("/ws/chat", conversations.websocket_chat)
 app.include_router(ai_anomalies.router, prefix="/api/v1")
 app.include_router(ai_knowledge.router, prefix="/api/v1")
 app.include_router(ai_quote.router, prefix="/api/v1")

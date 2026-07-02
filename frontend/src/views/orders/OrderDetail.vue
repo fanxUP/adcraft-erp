@@ -257,7 +257,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getOrder, changeOrderStatus, setOrderCost, autoCalculateCost } from '@/api/orders'
 import { getDesignTasks, getProductionTasks, getInstallationTasks, createDesignTask, createProductionTask, createInstallationTask } from '@/api/tasks'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, OrderDetailResponse } from '@/types/api'
 
 const route = useRoute()
@@ -350,6 +350,11 @@ async function handleSaveCost() {
 }
 
 async function handleChangeStatus() {
+  await ElMessageBox.confirm(`确定将订单状态变更为「${statusForm.to_status}」？`, '变更状态', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
   changing.value = true
   try {
     order.value = await changeOrderStatus(route.params.id as string, {
@@ -362,6 +367,11 @@ async function handleChangeStatus() {
 }
 
 async function handleAutoCost() {
+  await ElMessageBox.confirm('将覆盖现有成本数据，确定继续？', '自动核算', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
   autoCostLoading.value = true
   try {
     order.value = await autoCalculateCost(route.params.id as string)
