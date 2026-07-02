@@ -18,6 +18,10 @@ apiClient.interceptors.request.use((config) => {
 
 apiClient.interceptors.response.use(
   (response) => {
+    // Pass through non-JSON responses (e.g. blob downloads)
+    if (response.data instanceof Blob) {
+      return response
+    }
     const data = response.data
     if (data.code !== 0) {
       ElMessage.error(data.message || '请求失败')

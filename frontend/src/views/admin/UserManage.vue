@@ -76,7 +76,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { getUsers, createUser, updateUser, deleteUser } from '@/api/users'
+import { getUsers, createUser, updateUser, deleteUser, resetPassword } from '@/api/users'
 import { getRoles, type RoleItem } from '@/api/admin'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UserResponse } from '@/types/api'
@@ -176,7 +176,7 @@ async function handleResetPwd(row: UserResponse) {
       confirmButtonText: '确定', cancelButtonText: '取消', inputPattern: /.{6,}/, inputErrorMessage: '密码至少6位',
     })
     if (value) {
-      await updateUser(row.id, { password: value } as unknown)
+      await resetPassword(row.id, value)
       ElMessage.success('密码已重置')
     }
   } catch { /* cancelled */ }

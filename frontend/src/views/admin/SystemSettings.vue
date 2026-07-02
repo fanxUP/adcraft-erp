@@ -34,6 +34,40 @@
       </div>
     </el-card>
 
+    <!-- Typography Settings -->
+    <el-card shadow="never" style="margin-bottom: 16px">
+      <template #header>
+        <span>文字设置</span>
+      </template>
+      <el-form label-width="100px" style="max-width: 500px">
+        <el-form-item label="文字大小">
+          <div style="width: 100%">
+            <el-slider
+              v-model="fontSizeLocal"
+              :min="12" :max="20" :step="1"
+              show-stops
+            />
+            <div style="text-align: center; margin-top: 4px; color: var(--ad-text-secondary); font-size: 12px">
+              当前: {{ appStore.fontSize }}px
+            </div>
+          </div>
+        </el-form-item>
+        <el-form-item label="文字粗细">
+          <el-select
+            v-model="fontWeightLocal"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="opt in fontWeightOptions"
+              :key="opt.value"
+              :label="`${opt.label} (${opt.value})`"
+              :value="opt.value"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
     <el-card v-loading="loading" shadow="never">
       <el-form :model="form" label-width="140px" style="max-width: 600px">
         <el-divider content-position="left">基本设置</el-divider>
@@ -84,13 +118,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getSystemSettings, updateSystemSettings, type SystemSettings } from '@/api/admin'
-import { useAppStore, THEME_LIST } from '@/stores/app'
+import { useAppStore, THEME_LIST, FONT_WEIGHT_OPTIONS } from '@/stores/app'
 import { ElMessage } from 'element-plus'
 
 const appStore = useAppStore()
 const themes = THEME_LIST
+const fontWeightOptions = FONT_WEIGHT_OPTIONS
+
+const fontSizeLocal = computed({
+  get: () => appStore.fontSize,
+  set: (v) => appStore.setFontSize(v),
+})
+const fontWeightLocal = computed({
+  get: () => appStore.fontWeight,
+  set: (v) => appStore.setFontWeight(v),
+})
 
 const loading = ref(false)
 const saving = ref(false)

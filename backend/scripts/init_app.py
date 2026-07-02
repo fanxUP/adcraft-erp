@@ -82,12 +82,23 @@ async def init_app():
 
         # 3. Assign admin role to admin user
         admin_role = roles_by_name.get("admin")
-        if admin_role and admin_role not in admin_user.roles:
-            admin_user.roles.append(admin_role)
-            await session.flush()
-            print("  + Admin role assigned to admin user")
-        else:
-            print("  ✓ Admin already has admin role")
+        if admin_role:
+            # Check via explicit query to avoid lazy-load in async context
+            result = await session.execute(
+                select(user_roles).where(
+                    user_roles.c.user_id == admin_user.id,
+                    user_roles.c.role_id == admin_role.id,
+                )
+            )
+            already_assigned = result.first() is not None
+            if not already_assigned:
+                await session.execute(
+                    user_roles.insert().values(user_id=admin_user.id, role_id=admin_role.id)
+                )
+                await session.flush()
+                print("  + Admin role assigned to admin user")
+            else:
+                print("  ✓ Admin already has admin role")
 
         # 4. Seed permissions (import the logic from seed_permissions.py)
         from scripts.seed_permissions import ALL_PERMISSIONS, ROLE_PERMISSION_MAP

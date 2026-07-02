@@ -24,9 +24,19 @@ export const THEME_LIST: ThemeInfo[] = [
   { name: 'cyber',        label: '赛博朋克', desc: '霓虹科技感',             colors: ['#00ffcc', '#0a0a1a', '#12122a'] },
 ]
 
+export const FONT_SIZE_OPTIONS = [12, 13, 14, 15, 16, 18, 20] as const
+export const FONT_WEIGHT_OPTIONS = [
+  { value: 300, label: '细体' },
+  { value: 400, label: '正常' },
+  { value: 500, label: '中等' },
+  { value: 700, label: '粗体' },
+] as const
+
 export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(false)
   const theme = ref<ThemeName>((localStorage.getItem('adcraft-theme') as ThemeName) || 'light-blue')
+  const fontSize = ref(Number(localStorage.getItem('adcraft-font-size')) || 14)
+  const fontWeight = ref(Number(localStorage.getItem('adcraft-font-weight')) || 400)
 
   function toggleSidebar() {
     sidebarCollapsed.value = !sidebarCollapsed.value
@@ -38,9 +48,23 @@ export const useAppStore = defineStore('app', () => {
     localStorage.setItem('adcraft-theme', name)
   }
 
-  function initTheme() {
-    document.documentElement.dataset.theme = theme.value
+  function setFontSize(px: number) {
+    fontSize.value = px
+    document.documentElement.style.setProperty('--ad-font-size-base', `${px}px`)
+    localStorage.setItem('adcraft-font-size', String(px))
   }
 
-  return { sidebarCollapsed, theme, toggleSidebar, setTheme, initTheme }
+  function setFontWeight(weight: number) {
+    fontWeight.value = weight
+    document.documentElement.style.setProperty('--ad-font-weight-base', String(weight))
+    localStorage.setItem('adcraft-font-weight', String(weight))
+  }
+
+  function initTheme() {
+    document.documentElement.dataset.theme = theme.value
+    document.documentElement.style.setProperty('--ad-font-size-base', `${fontSize.value}px`)
+    document.documentElement.style.setProperty('--ad-font-weight-base', String(fontWeight.value))
+  }
+
+  return { sidebarCollapsed, theme, fontSize, fontWeight, toggleSidebar, setTheme, setFontSize, setFontWeight, initTheme }
 })

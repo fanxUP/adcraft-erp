@@ -69,13 +69,37 @@ class DesignTaskService:
         data["design_no"] = await generate_design_no(self.db)
         data["status"] = "pending"
         task = await self.repo.create(data)
+        # Notify assigned user
+        if task.assigned_to:
+            from app.services.notification_service import NotificationService
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_system_notification(
+                user_id=task.assigned_to,
+                type_="task_assigned",
+                title=f"新设计任务: {task.design_no}",
+                content=f"您被分配了设计任务 {task.project_name}",
+                link=f"/design-tasks/{task.id}",
+            )
         return self._to_dict(task)
 
     async def update_task(self, task_id: UUID, data: dict) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("设计任务不存在")
+        old_assigned = task.assigned_to
         task = await self.repo.update(task, data)
+        # Notify newly assigned user
+        new_assigned = data.get("assigned_to")
+        if new_assigned and new_assigned != old_assigned:
+            from app.services.notification_service import NotificationService
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_system_notification(
+                user_id=new_assigned,
+                type_="task_assigned",
+                title=f"设计任务分配: {task.design_no}",
+                content=f"您被分配了设计任务 {task.project_name}",
+                link=f"/design-tasks/{task.id}",
+            )
         return self._to_dict(task)
 
     async def change_status(self, task_id: UUID, to_status: str, operated_by: UUID | None = None) -> dict:
@@ -143,13 +167,37 @@ class ProductionTaskService:
         data["production_no"] = await generate_production_no(self.db)
         data["status"] = "pending"
         task = await self.repo.create(data)
+        # Notify assigned user
+        if task.assigned_to:
+            from app.services.notification_service import NotificationService
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_system_notification(
+                user_id=task.assigned_to,
+                type_="task_assigned",
+                title=f"新制作任务: {task.production_no}",
+                content=f"您被分配了制作任务 {task.project_name}",
+                link=f"/production-tasks/{task.id}",
+            )
         return self._to_dict(task)
 
     async def update_task(self, task_id: UUID, data: dict) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("制作任务不存在")
+        old_assigned = task.assigned_to
         task = await self.repo.update(task, data)
+        # Notify newly assigned user
+        new_assigned = data.get("assigned_to")
+        if new_assigned and new_assigned != old_assigned:
+            from app.services.notification_service import NotificationService
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_system_notification(
+                user_id=new_assigned,
+                type_="task_assigned",
+                title=f"制作任务分配: {task.production_no}",
+                content=f"您被分配了制作任务 {task.project_name}",
+                link=f"/production-tasks/{task.id}",
+            )
         return self._to_dict(task)
 
     async def change_status(self, task_id: UUID, to_status: str, operated_by: UUID | None = None) -> dict:
@@ -215,13 +263,37 @@ class InstallationTaskService:
         data["installation_no"] = await generate_installation_no(self.db)
         data["status"] = "pending"
         task = await self.repo.create(data)
+        # Notify assigned user
+        if task.assigned_to:
+            from app.services.notification_service import NotificationService
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_system_notification(
+                user_id=task.assigned_to,
+                type_="task_assigned",
+                title=f"新安装任务: {task.installation_no}",
+                content=f"您被分配了安装任务 {task.project_name}",
+                link=f"/installation-tasks/{task.id}",
+            )
         return self._to_dict(task)
 
     async def update_task(self, task_id: UUID, data: dict) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("安装任务不存在")
+        old_assigned = task.assigned_to
         task = await self.repo.update(task, data)
+        # Notify newly assigned user
+        new_assigned = data.get("assigned_to")
+        if new_assigned and new_assigned != old_assigned:
+            from app.services.notification_service import NotificationService
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_system_notification(
+                user_id=new_assigned,
+                type_="task_assigned",
+                title=f"安装任务分配: {task.installation_no}",
+                content=f"您被分配了安装任务 {task.project_name}",
+                link=f"/installation-tasks/{task.id}",
+            )
         return self._to_dict(task)
 
     async def change_status(self, task_id: UUID, to_status: str, operated_by: UUID | None = None) -> dict:

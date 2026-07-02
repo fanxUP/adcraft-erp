@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -10,6 +11,10 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
 from app.schemas.common import success, success_paginated
 from app.services.user_service import UserService
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -71,6 +76,20 @@ async def delete_user(
 ):
     service = UserService(db)
     ok = await service.delete_user(UUID(user_id))
+    if not ok:
+        return {"code": 40401, "message": "用户不存在", "data": None}
+    return success(None)
+
+
+@router.post("/{user_id}/reset-password")
+async def reset_password(
+    user_id: str,
+    data: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_USER_UPDATE)),
+):
+    service = UserService(db)
+    ok = await service.reset_password(UUID(user_id), data.new_password)
     if not ok:
         return {"code": 40401, "message": "用户不存在", "data": None}
     return success(None)

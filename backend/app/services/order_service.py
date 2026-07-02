@@ -33,6 +33,25 @@ class OrderService:
         from_status = order.status
         await self.repo.update(order, {"status": to_status})
         await self.repo.create_status_log(order_id, from_status, to_status, reason, operated_by)
+
+        # Send notification to sales user
+        if order.sales_user_id and order.sales_user_id != operated_by:
+            from app.services.notification_service import NotificationService
+            notif_svc = NotificationService(self.db)
+            status_labels = {
+                "draft": "草稿", "confirmed": "已确认", "designing": "设计中",
+                "producing": "制作中", "installing": "安装中", "completed": "已完成", "cancelled": "已取消",
+            }
+            from_label = status_labels.get(from_status, from_status)
+            to_label = status_labels.get(to_status, to_status)
+            await notif_svc.create_system_notification(
+                user_id=order.sales_user_id,
+                type_="order_status",
+                title=f"订单状态变更: {order.order_no}",
+                content=f"订单 {order.project_name} 状态从 {from_label} 变更为 {to_label}",
+                link=f"/orders/{order_id}",
+            )
+
         return self._order_to_detail(order)
 
     async def set_cost(self, order_id: UUID, cost_amount: float) -> dict:

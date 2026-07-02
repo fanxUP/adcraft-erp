@@ -45,6 +45,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'inventory', name: 'InventoryList', component: () => import('@/views/inventory/InventoryList.vue') },
       { path: 'operation-logs', name: 'OperationLogList', meta: { roles: ['admin'] }, component: () => import('@/views/system/OperationLogList.vue') },
       { path: 'backups', name: 'BackupManage', meta: { roles: ['admin'] }, component: () => import('@/views/system/BackupManage.vue') },
+      { path: 'notifications', name: 'NotificationList', component: () => import('@/views/system/NotificationList.vue') },
       { path: 'admin/users', name: 'AdminUserManage', meta: { roles: ['admin'] }, component: () => import('@/views/admin/UserManage.vue') },
       { path: 'admin/roles', name: 'AdminRoleManage', meta: { roles: ['admin'] }, component: () => import('@/views/admin/RoleManage.vue') },
       { path: 'admin/settings', name: 'AdminSettings', meta: { roles: ['admin'] }, component: () => import('@/views/admin/SystemSettings.vue') },

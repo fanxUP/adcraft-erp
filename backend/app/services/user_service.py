@@ -81,3 +81,11 @@ class UserService:
             return False
         await self.repo.soft_delete(user)
         return True
+
+    async def reset_password(self, user_id: UUID, new_password: str) -> bool:
+        user = await self.repo.get_by_id(user_id)
+        if not user:
+            return False
+        user.password_hash = hash_password(new_password)
+        await self.repo.update(user, {})
+        return True
