@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { login as loginApi, getProfile } from '@/api/auth'
 import type { UserResponse } from '@/types/api'
 import router from '@/router'
+import { useNotificationStore } from '@/stores/notification'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
@@ -28,11 +29,21 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = data.token
     localStorage.setItem('token', data.token)
     await fetchProfile()
+    // Connect WebSocket for notifications
+    const notificationStore = useNotificationStore()
+    notificationStore.connectWebSocket(data.token)
+    notificationStore.fetchUnreadCount()
   }
 
   async function fetchProfile(quiet = false) {
     try {
       user.value = await getProfile()
+      // Connect WebSocket for notifications after profile is loaded
+      if (token.value) {
+        const notificationStore = useNotificationStore()
+        notificationStore.connectWebSocket(token.value)
+        notificationStore.fetchUnreadCount()
+      }
     } catch {
       if (!quiet) {
         ElMessage.error('登录已过期，请重新登录')
@@ -42,6 +53,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout() {
+    // Disconnect notification WebSocket
+    const notificationStore = useNotificationStore()
+    notificationStore.disconnectWebSocket()
+
     token.value = ''
     user.value = null
     localStorage.removeItem('token')

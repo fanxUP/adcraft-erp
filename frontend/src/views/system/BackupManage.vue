@@ -29,6 +29,10 @@
       <el-button type="danger" @click="handleCreate" :loading="creating" :disabled="creating">
         <el-icon><Plus /></el-icon> 创建备份
       </el-button>
+      <el-button @click="triggerImport" :loading="importing">
+        <el-icon><Upload /></el-icon> 导入备份
+      </el-button>
+      <input ref="fileInputRef" type="file" accept=".tar.gz" style="display: none" @change="handleFileChange" />
       <el-button @click="fetchList" :loading="loading">刷新</el-button>
     </div>
 
@@ -42,8 +46,16 @@
             {{ formatTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" align="center" fixed="right">
+        <el-table-column label="操作" width="220" align="center" fixed="right">
           <template #default="{ row }">
+            <el-button
+              type="primary"
+              size="small"
+              @click="handleExport(row as BackupItem)"
+              :disabled="exporting === row.filename"
+            >
+              导出
+            </el-button>
             <el-button
               type="warning"
               size="small"
@@ -96,6 +108,24 @@
       </template>
     </el-dialog>
 
+    <!-- Restore result dialog -->
+    <el-dialog v-model="restoreResultVisible" :title="restoreSuccess ? '恢复成功' : '恢复失败'" width="420px">
+      <div style="text-align: center; padding: 10px 0">
+        <div v-if="restoreSuccess" style="font-size: 48px; margin-bottom: 16px">✅</div>
+        <div v-else style="font-size: 48px; margin-bottom: 16px">❌</div>
+        <p style="font-size: 15px; color: var(--ad-text); margin-bottom: 12px">{{ restoreMessage }}</p>
+        <p v-if="restoreSuccess" style="color: #e6a23c; font-size: 13px">
+          点击"重新登录"将跳转到登录页面
+        </p>
+      </div>
+      <template #footer>
+        <el-button v-if="!restoreSuccess" @click="restoreResultVisible = false">关闭</el-button>
+        <el-button v-if="restoreSuccess" type="primary" @click="handleRelogin">
+          重新登录
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- Delete confirm dialog -->
     <el-dialog v-model="deleteConfirmVisible" title="确认删除" width="400px">
       <p style="color: var(--ad-text)">确定删除备份文件 <strong>{{ toDelete?.filename }}</strong> 吗？</p>
@@ -112,15 +142,21 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { createBackup, listBackups, restoreBackup, deleteBackup } from '@/api/backup'
+import { createBackup, listBackups, restoreBackup, deleteBackup, exportBackup, importBackup } from '@/api/backup'
 import type { BackupItem, CreateBackupResponse } from '@/types/api'
 import { ElMessage } from 'element-plus'
 import { getErrorMessage } from '@/utils/error'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const creating = ref(false)
 const restoring = ref('')
 const deleting = ref('')
+const exporting = ref('')
+const importing = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 const backups = ref<BackupItem[]>([])
 
 const stats = reactive({
@@ -134,6 +170,10 @@ const result = ref<CreateBackupResponse | null>(null)
 
 const restoreConfirmVisible = ref(false)
 const toRestore = ref<BackupItem | null>(null)
+
+const restoreResultVisible = ref(false)
+const restoreSuccess = ref(false)
+const restoreMessage = ref('')
 
 const deleteConfirmVisible = ref(false)
 const toDelete = ref<BackupItem | null>(null)
@@ -185,14 +225,24 @@ async function confirmRestore() {
   restoring.value = filename
   try {
     await restoreBackup(filename)
-    ElMessage.success('恢复完成')
+    restoreSuccess.value = true
+    restoreMessage.value = '数据恢复成功！由于数据库已被替换，您需要重新登录。'
     restoreConfirmVisible.value = false
+    restoreResultVisible.value = true
   } catch (e: unknown) {
-    ElMessage.error(getErrorMessage(e, '恢复失败'))
+    restoreSuccess.value = false
+    restoreMessage.value = getErrorMessage(e, '恢复失败')
+    restoreConfirmVisible.value = false
+    restoreResultVisible.value = true
   } finally {
     restoring.value = ''
     toRestore.value = null
   }
+}
+
+function handleRelogin() {
+  restoreResultVisible.value = false
+  authStore.logout()
 }
 
 function handleDelete(row: BackupItem) {
@@ -214,6 +264,41 @@ async function confirmDelete() {
   } finally {
     deleting.value = ''
     toDelete.value = null
+  }
+}
+
+async function handleExport(row: BackupItem) {
+  exporting.value = row.filename
+  try {
+    await exportBackup(row.filename)
+    ElMessage.success('导出成功')
+  } catch (e: unknown) {
+    ElMessage.error(getErrorMessage(e, '导出失败'))
+  } finally {
+    exporting.value = ''
+  }
+}
+
+function triggerImport() {
+  fileInputRef.value?.click()
+}
+
+async function handleFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  // Reset input so the same file can be selected again
+  input.value = ''
+
+  importing.value = true
+  try {
+    const data = await importBackup(file)
+    ElMessage.success(data.message || '导入成功')
+    await fetchList()
+  } catch (e: unknown) {
+    ElMessage.error(getErrorMessage(e, '导入失败'))
+  } finally {
+    importing.value = false
   }
 }
 

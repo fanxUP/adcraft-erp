@@ -1,20 +1,31 @@
 """后台管理 API — 仅 admin 角色可访问。"""
 
+import logging
 import os
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.permissions import require_role
-from app.models.user import User, Role, Permission
-from app.schemas.common import success
-from app.repositories.user_repo import UserRepository
+from app.models.user import User
+from app.schemas.admin import RoleCreate, RoleUpdate, RolePermissionUpdate, SettingsUpdate
+from app.schemas.common import success, error
+from app.services.role_service import RoleService
+from app.services.operation_log_service import (
+    log_operation,
+    ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+OBJ_ROLE = "role"
+OBJ_PERMISSION = "permission"
+OBJ_SETTINGS = "settings"
 
 
 # ── Roles ──────────────────────────────────────────────────────────────────
@@ -24,89 +35,109 @@ async def list_roles(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    result = await db.execute(select(Role).order_by(Role.name))
-    roles = result.scalars().all()
-    data = []
-    for r in roles:
-        data.append({
-            "id": str(r.id),
-            "name": r.name,
-            "description": r.description,
-            "permissions": [{"id": str(p.id), "code": p.code, "name": p.name} for p in r.permissions],
-        })
-    return success(data)
+    service = RoleService(db)
+    return success(await service.list_roles())
 
 
 @router.post("/roles")
 async def create_role(
-    data: dict,
+    data: RoleCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    name = data.get("name", "").strip()
-    if not name:
-        return {"code": 40001, "message": "角色名称不能为空", "data": None}
-    existing = (await db.execute(select(Role).where(Role.name == name))).scalar_one_or_none()
-    if existing:
-        return {"code": 40001, "message": "角色名称已存在", "data": None}
-    role = Role(name=name, description=data.get("description"))
-    db.add(role)
-    await db.flush()
-    return success({"id": str(role.id), "name": role.name, "description": role.description, "permissions": []})
+    service = RoleService(db)
+    try:
+        role = await service.create_role(data.name, data.description)
+    except ValueError as e:
+        return error(40001, str(e))
+    try:
+        await log_operation(
+            db, current_user.id, current_user.real_name or current_user.username,
+            OBJ_ROLE, None, ACTION_CREATE,
+            ip_address=request.client.host if request.client else None,
+            after_data=role,
+        )
+    except Exception:
+        logger.warning("Failed to log create_role operation", exc_info=True)
+    return success(role)
 
 
 @router.put("/roles/{role_id}")
 async def update_role(
     role_id: str,
-    data: dict,
+    data: RoleUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    role = (await db.execute(select(Role).where(Role.id == UUID(role_id)))).scalar_one_or_none()
-    if not role:
-        return {"code": 40401, "message": "角色不存在", "data": None}
-    if "name" in data and data["name"]:
-        role.name = data["name"].strip()
-    if "description" in data:
-        role.description = data["description"]
-    await db.flush()
-    return success({"id": str(role.id), "name": role.name, "description": role.description})
+    service = RoleService(db)
+    try:
+        role = await service.update_role(UUID(role_id), data.model_dump(exclude_none=True))
+    except ValueError as e:
+        return error(40401, str(e))
+    try:
+        await log_operation(
+            db, current_user.id, current_user.real_name or current_user.username,
+            OBJ_ROLE, UUID(role_id), ACTION_UPDATE,
+            ip_address=request.client.host if request.client else None,
+            after_data=role,
+        )
+    except Exception:
+        logger.warning("Failed to log update_role operation", exc_info=True)
+    return success(role)
 
 
 @router.delete("/roles/{role_id}")
 async def delete_role(
     role_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    role = (await db.execute(select(Role).where(Role.id == UUID(role_id)))).scalar_one_or_none()
-    if not role:
-        return {"code": 40401, "message": "角色不存在", "data": None}
-    if role.name == "admin":
-        return {"code": 40001, "message": "不能删除 admin 角色", "data": None}
-    await db.delete(role)
-    await db.flush()
+    service = RoleService(db)
+    try:
+        await service.delete_role(UUID(role_id))
+    except ValueError as e:
+        return error(40001, str(e))
+    try:
+        await log_operation(
+            db, current_user.id, current_user.real_name or current_user.username,
+            OBJ_ROLE, UUID(role_id), ACTION_DELETE,
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception:
+        logger.warning("Failed to log delete_role operation", exc_info=True)
     return success(None)
 
 
 @router.put("/roles/{role_id}/permissions")
 async def set_role_permissions(
     role_id: str,
-    data: dict,
+    data: RolePermissionUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    role = (await db.execute(select(Role).where(Role.id == UUID(role_id)))).scalar_one_or_none()
-    if not role:
-        return {"code": 40401, "message": "角色不存在", "data": None}
-    perm_ids = data.get("permission_ids", [])
-    if perm_ids:
-        perms = (await db.execute(select(Permission).where(Permission.id.in_([UUID(pid) for pid in perm_ids])))).scalars().all()
-    else:
-        perms = []
-    role.permissions = list(perms)
-    await db.flush()
-    return success({"id": str(role.id), "name": role.name, "permissions": [{"id": str(p.id), "code": p.code, "name": p.name} for p in role.permissions]})
+    service = RoleService(db)
+    try:
+        result = await service.set_role_permissions(UUID(role_id), data.permission_ids)
+    except ValueError as e:
+        msg = str(e)
+        # Distinguish "role not found" from invalid UUID input
+        if "不存在" in msg:
+            return error(40401, msg)
+        return error(40001, msg)
+    try:
+        await log_operation(
+            db, current_user.id, current_user.real_name or current_user.username,
+            OBJ_PERMISSION, UUID(role_id), ACTION_UPDATE,
+            ip_address=request.client.host if request.client else None,
+            after_data={"permission_count": len(result.get("permissions", []))},
+        )
+    except Exception:
+        logger.warning("Failed to log set_role_permissions operation", exc_info=True)
+    return success(result)
 
 
 # ── Permissions ────────────────────────────────────────────────────────────
@@ -116,10 +147,8 @@ async def list_permissions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    result = await db.execute(select(Permission).order_by(Permission.code))
-    perms = result.scalars().all()
-    data = [{"id": str(p.id), "code": p.code, "name": p.name, "description": p.description} for p in perms]
-    return success(data)
+    service = RoleService(db)
+    return success(await service.list_permissions())
 
 
 # ── System Settings ────────────────────────────────────────────────────────
@@ -145,12 +174,15 @@ async def get_settings(
 
 @router.put("/settings")
 async def update_settings(
-    data: dict,
+    data: SettingsUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env")
+    # admin.py is at backend/app/api/admin.py — go up 4 levels to project root
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), ".env")
     if not os.path.exists(env_path):
-        return {"code": 40001, "message": ".env 文件不存在", "data": None}
+        return error(40001, ".env 文件不存在")
 
     allowed_keys = {"APP_NAME", "JWT_EXPIRE_MINUTES", "AI_ENABLED", "AI_PROVIDER", "AI_MODEL", "AI_API_KEY", "AI_API_BASE_URL"}
     updated = {}
@@ -167,15 +199,26 @@ async def update_settings(
             key = stripped.split("=", 1)[0]
             env_lines[key] = line
 
-    for key, value in data.items():
+    for key, value in data.model_dump(exclude_none=True).items():
         if key not in allowed_keys:
             continue
         str_val = str(value)
-        if key in env_lines:
-            env_lines[key] = f"{key}={str_val}\n"
-        else:
-            env_lines[key] = f"{key}={str_val}\n"
+        env_lines[key] = f'{key}="{str_val}"\n' if " " in str_val else f"{key}={str_val}\n"
         updated[key] = str_val
+
+    if not updated:
+        return error(40001, "没有有效的配置项可更新")
+
+    # Log first — if this fails, don't write the file
+    try:
+        await log_operation(
+            db, current_user.id, current_user.real_name or current_user.username,
+            OBJ_SETTINGS, None, ACTION_UPDATE,
+            ip_address=request.client.host if request.client else None,
+            after_data=updated,
+        )
+    except Exception:
+        logger.warning("Failed to log update_settings operation", exc_info=True)
 
     # Rewrite .env preserving comments and order
     with open(env_path, "w") as f:

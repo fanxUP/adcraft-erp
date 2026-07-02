@@ -110,6 +110,11 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "outsource:delete", "name": "删除外协", "description": "删除外协记录"},
     # Report
     {"code": "report:read", "name": "查看报表", "description": "查看销售报表"},
+    # AI Features
+    {"code": "ai_quote:read", "name": "AI报价助手", "description": "使用AI智能报价功能"},
+    {"code": "ai_anomaly:read", "name": "智能异常提醒", "description": "查看AI异常检测结果"},
+    {"code": "ai_knowledge:read", "name": "报价知识库", "description": "使用AI报价知识库"},
+    {"code": "ai_report:read", "name": "智能经营报告", "description": "查看AI生成的经营报告"},
 ]
 
 # ── Role-to-permission mapping ─────────────────────────────────────────────
@@ -129,6 +134,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "payment:read", "payment:create",
         "expense:read",
         "report:read",
+        "ai_quote:read", "ai_anomaly:read", "ai_knowledge:read", "ai_report:read",
     ],
     "designer": [
         "customer:read",
@@ -158,6 +164,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "statement:read", "statement:create", "statement:confirm",
         "expense:read", "expense:create", "expense:update", "expense:delete",
         "report:read",
+        "ai_quote:read", "ai_anomaly:read", "ai_knowledge:read", "ai_report:read",
     ],
 }
 

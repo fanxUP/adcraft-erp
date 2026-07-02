@@ -15,6 +15,10 @@
             <el-icon><DataAnalysis /></el-icon>
             <span>首页驾驶舱</span>
           </el-menu-item>
+          <el-menu-item index="/notifications">
+            <el-icon><Bell /></el-icon>
+            <span>消息中心</span>
+          </el-menu-item>
           <el-menu-item v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/customers">
             <el-icon><User /></el-icon>
             <span>客户管理</span>
@@ -115,6 +119,7 @@
             </el-button>
           </div>
           <div class="header-right">
+            <NotificationBell />
             <el-dropdown>
               <span class="user-info">
                 {{ authStore.user?.real_name || authStore.user?.username }}
@@ -142,6 +147,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
+import NotificationBell from '@/components/NotificationBell.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -175,8 +181,8 @@ function handleLogout() {
 
     .el-menu-item,
     .el-sub-menu__title {
-      font-size: 15px;
-      font-weight: 700;
+      font-size: calc(var(--ad-font-size-base) + 1px);
+      font-weight: 600;
     }
   }
 }
@@ -187,13 +193,13 @@ function handleLogout() {
   align-items: center;
   justify-content: center;
   color: var(--ad-red);
-  font-size: 20px;
-  font-weight: bold;
+  font-size: calc(var(--ad-font-size-base) + 6px);
+  font-weight: 700;
   border-bottom: 1px solid var(--ad-border);
 }
 
 .logo-short {
-  font-size: 24px;
+  font-size: calc(var(--ad-font-size-base) + 10px);
 }
 
 .header {

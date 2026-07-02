@@ -6,11 +6,15 @@
   --ad-text: #e0e0e0;
   --ad-text-secondary: #a0a0b0;
   --ad-border: #2a2a3e;
+  --ad-font-size-base: 14px;
+  --ad-font-weight-base: 400;
 }
 
 body {
   margin: 0;
   font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: var(--ad-font-size-base);
+  font-weight: var(--ad-font-weight-base);
   background-color: var(--ad-dark);
   color: var(--ad-text);
 }

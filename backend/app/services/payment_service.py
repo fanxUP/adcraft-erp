@@ -42,6 +42,19 @@ class PaymentService:
         )
         await self.repo.create(payment)
 
+        # Notify admin/finance about payment
+        from app.services.notification_service import NotificationService
+        notif_svc = NotificationService(self.db)
+        # Notify all admin users (simplified - in production, query users with finance/admin roles)
+        if order.sales_user_id:
+            await notif_svc.create_system_notification(
+                user_id=order.sales_user_id,
+                type_="payment_received",
+                title=f"收款到账: {payment.payment_no}",
+                content=f"订单 {order.order_no} 收到 {data['amount']} 元",
+                link=f"/payments",
+            )
+
         paid = await self.repo.get_order_paid_sum(data["order_id"])
         unpaid = max(0, float(order.total_amount) - paid)
         await order_repo.update(order, {"paid_amount": paid, "unpaid_amount": unpaid})

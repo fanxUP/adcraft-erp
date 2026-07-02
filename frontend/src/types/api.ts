@@ -527,6 +527,11 @@ export interface CreateBackupResponse {
   output?: string
 }
 
+export interface ImportBackupResponse {
+  message: string
+  backup: BackupItem
+}
+
 // ---- Reports ----
 
 export interface CustomerDebtItem {
@@ -757,4 +762,24 @@ export interface BusinessNarrativeResponse {
   stats: BusinessNarrativeStats
   narrative: string
   suggestions: string[]
+}
+
+// ---- Notification ----
+
+export interface NotificationResponse {
+  id: string
+  user_id: string
+  sender_id?: string
+  sender_name?: string
+  type: string
+  title: string
+  content: string
+  link?: string
+  is_read: boolean
+  read_at?: string
+  created_at: string
+}
+
+export interface UnreadCountResponse {
+  count: number
 }

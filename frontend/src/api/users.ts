@@ -20,3 +20,7 @@ export function updateUser(id: string, data: Partial<Omit<UserResponse, 'id' | '
 export function deleteUser(id: string) {
   return del<SuccessResponse>(`/users/${id}`)
 }
+
+export function resetPassword(id: string, new_password: string) {
+  return post<SuccessResponse>(`/users/${id}/reset-password`, { new_password })
+}
