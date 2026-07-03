@@ -54,13 +54,16 @@
       <el-table-column label="创建时间" width="180">
         <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="200">
+      <el-table-column label="操作" width="240">
         <template #default="{ row }">
           <el-button text type="primary" @click="$router.push(`/quotes/${row.id}/edit`)">编辑</el-button>
+          <el-button text type="success" @click="handlePreview(row)">预览</el-button>
           <el-button text type="danger" @click="handleDelete(row as QuoteListResponse)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
+
+    <QuotePreview :visible="previewVisible" :quote-id="previewQuoteId" @close="previewVisible = false" />
 
     <el-pagination
       v-model:current-page="page"
@@ -79,6 +82,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { getQuotes, deleteQuote } from '@/api/quotes'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { QuoteListResponse } from '@/types/api'
+import QuotePreview from './QuotePreview.vue'
 
 const loading = ref(false)
 const list = ref<QuoteListResponse[]>([])
@@ -88,6 +92,14 @@ const pageSize = ref(20)
 
 const filters = reactive({ keyword: '', status: '' })
 const dateRange = ref<[string, string] | null>(null)
+
+const previewVisible = ref(false)
+const previewQuoteId = ref<string | null>(null)
+
+function handlePreview(row: QuoteListResponse) {
+  previewQuoteId.value = row.id
+  previewVisible.value = true
+}
 
 function statusLabel(s: string) {
   const map: Record<string, string> = { draft: '草稿', confirmed: '已确认', converted: '已转订单', cancelled: '已作废' }

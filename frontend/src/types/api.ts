@@ -460,10 +460,15 @@ export interface QuoteItemResponse {
   process_id?: string
   item_name: string
   length?: number
+  length_unit?: string
   width?: number
+  width_unit?: string
   height?: number
+  height_unit?: string
   quantity: number
   unit?: string
+  use_area?: boolean
+  quantity_mode?: 'piece' | 'area'
   area?: number
   unit_price: number
   process_fee: number
@@ -474,6 +479,8 @@ export interface QuoteItemResponse {
   subtotal_amount: number
   remark?: string
   sort_order: number
+  group_name?: string
+  material_process?: string
 }
 
 export interface QuoteListResponse {
@@ -782,4 +789,50 @@ export interface NotificationResponse {
 
 export interface UnreadCountResponse {
   count: number
+}
+
+// ---- Acceptance ----
+
+export interface AcceptanceItemResponse {
+  id: string
+  acceptance_id: string
+  order_item_id?: string
+  item_name: string
+  specification?: string
+  quantity?: number
+  unit?: string
+  item_status: string
+  remark?: string
+}
+
+export interface AcceptanceAttachmentResponse {
+  id: string
+  acceptance_id: string
+  filename: string
+  filepath: string
+  filesize?: number
+  upload_by?: string
+}
+
+export interface AcceptanceListResponse {
+  id: string
+  acceptance_no: string
+  order_id: string
+  order_no?: string
+  customer_name?: string
+  project_name?: string
+  status: string
+  accepted_at?: string
+  accepted_by?: string
+  created_at: string
+}
+
+export interface AcceptanceDetailResponse extends AcceptanceListResponse {
+  our_acceptor_id?: string
+  our_acceptor_name?: string
+  remark?: string
+  reject_reason?: string
+  updated_at: string
+  items: AcceptanceItemResponse[]
+  attachments: AcceptanceAttachmentResponse[]
 }

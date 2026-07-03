@@ -1,7 +1,7 @@
 import { get, post, del } from './index'
-import { PaginatedData, OrderListResponse, OrderDetailResponse } from '@/types/api'
+import { PaginatedData, OrderListResponse, OrderDetailResponse, QuoteDetailResponse } from '@/types/api'
 
-export function getOrders(params: { page?: number; page_size?: number; status?: string; customer_id?: string }) {
+export function getOrders(params: { page?: number; page_size?: number; status?: string; customer_id?: string; keyword?: string }) {
   return get<PaginatedData<OrderListResponse>>('/orders/', { params })
 }
 
@@ -31,4 +31,8 @@ export function getDeletedOrders(params: { page?: number; page_size?: number; ke
 
 export function restoreOrder(id: string) {
   return post<OrderDetailResponse>(`/orders/${id}/restore`)
+}
+
+export function convertOrderToQuote(id: string) {
+  return post<QuoteDetailResponse>(`/orders/${id}/convert-to-quote`)
 }

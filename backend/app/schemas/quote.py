@@ -3,15 +3,21 @@ from datetime import datetime, date
 
 
 class QuoteItemCreate(BaseModel):
+    id: str | None = None
     product_id: str | None = None
     material_id: str | None = None
     process_id: str | None = None
     item_name: str
     length: float | None = None
+    length_unit: str | None = "m"
     width: float | None = None
+    width_unit: str | None = "m"
     height: float | None = None
+    height_unit: str | None = "m"
     quantity: float = 1
     unit: str | None = None
+    use_area: bool = False
+    quantity_mode: str = "piece"
     unit_price: float = 0
     process_fee: float = 0
     installation_fee: float = 0
@@ -20,6 +26,8 @@ class QuoteItemCreate(BaseModel):
     other_fee: float = 0
     remark: str | None = None
     sort_order: int = 0
+    group_name: str | None = None
+    material_process: str | None = None
 
 
 class QuoteItemUpdate(BaseModel):
@@ -28,10 +36,15 @@ class QuoteItemUpdate(BaseModel):
     process_id: str | None = None
     item_name: str | None = None
     length: float | None = None
+    length_unit: str | None = None
     width: float | None = None
+    width_unit: str | None = None
     height: float | None = None
+    height_unit: str | None = None
     quantity: float | None = None
     unit: str | None = None
+    use_area: bool | None = None
+    quantity_mode: str | None = None
     unit_price: float | None = None
     process_fee: float | None = None
     installation_fee: float | None = None
@@ -40,6 +53,8 @@ class QuoteItemUpdate(BaseModel):
     other_fee: float | None = None
     remark: str | None = None
     sort_order: int | None = None
+    group_name: str | None = None
+    material_process: str | None = None
 
 
 class QuoteItemResponse(BaseModel):
@@ -50,10 +65,15 @@ class QuoteItemResponse(BaseModel):
     process_id: str | None = None
     item_name: str
     length: float | None = None
+    length_unit: str | None = "m"
     width: float | None = None
+    width_unit: str | None = "m"
     height: float | None = None
+    height_unit: str | None = "m"
     quantity: float
     unit: str | None = None
+    use_area: bool = False
+    quantity_mode: str = "piece"
     area: float | None = None
     unit_price: float
     process_fee: float
@@ -64,6 +84,8 @@ class QuoteItemResponse(BaseModel):
     subtotal_amount: float
     remark: str | None = None
     sort_order: int = 0
+    group_name: str | None = None
+    material_process: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -92,6 +114,7 @@ class QuoteUpdate(BaseModel):
     tax_rate: float | None = None
     valid_until: date | None = None
     remark: str | None = None
+    items: list[QuoteItemCreate] | None = None
 
 
 class QuoteListResponse(BaseModel):

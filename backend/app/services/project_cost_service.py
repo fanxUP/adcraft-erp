@@ -18,6 +18,22 @@ class ProjectCostService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = ProjectCostRepository(db)
+
+    async def _sync_order_cost(self, order_id: UUID) -> None:
+        """Sum all project costs for the order and update cost_amount + gross_profit."""
+        from sqlalchemy import func
+        result = await self.db.execute(
+            select(func.coalesce(func.sum(ProjectCost.amount), 0))
+            .where(ProjectCost.order_id == order_id, ProjectCost.deleted_at.is_(None))
+        )
+        cost_amount = float(result.scalar())
+        order = await self.db.get(Order, order_id)
+        if order:
+            from decimal import Decimal
+            gross_profit = float(Decimal(str(order.total_amount)) - Decimal(str(cost_amount)))
+            order.cost_amount = cost_amount
+            order.gross_profit = gross_profit
+            await self.db.flush()
         self.attachment_repo = AttachmentRepository(db)
 
     async def list_costs(
@@ -87,6 +103,7 @@ class ProjectCostService:
             created_by=created_by,
         )
         await self.repo.create(cost)
+        await self._sync_order_cost(order_id)
         return {
             "id": str(cost.id),
             "cost_no": cost.cost_no,
@@ -111,6 +128,7 @@ class ProjectCostService:
         if "cost_date" in data and data["cost_date"] is not None:
             data = {**data, "cost_date": datetime.fromisoformat(data["cost_date"])}
         await self.repo.update(c, data)
+        await self._sync_order_cost(c.order_id)
         # Re-fetch with relationships loaded for response
         c = await self.repo.get_by_id(cost_id)
         return self._to_dict(c)
@@ -119,7 +137,9 @@ class ProjectCostService:
         c = await self.repo.get_by_id(cost_id)
         if not c:
             raise ValueError("项目成本记录不存在")
+        order_id = c.order_id
         await self.repo.soft_delete(c)
+        await self._sync_order_cost(order_id)
 
     async def get_costs_summary(self, order_ids: list[UUID]) -> dict[str, float]:
         """Return {order_id: total_cost} for a batch of orders."""

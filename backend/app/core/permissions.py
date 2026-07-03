@@ -143,6 +143,13 @@ PERM_CHAT_DELETE = "chat:delete"
 PERM_CHAT_GROUP_CREATE = "chat:group:create"
 PERM_CHAT_GROUP_MANAGE = "chat:group:manage"
 
+# Acceptance
+PERM_ACCEPTANCE_READ = "acceptance:read"
+PERM_ACCEPTANCE_CREATE = "acceptance:create"
+PERM_ACCEPTANCE_UPDATE = "acceptance:update"
+PERM_ACCEPTANCE_DELETE = "acceptance:delete"
+PERM_ACCEPTANCE_CHANGE_STATUS = "acceptance:change_status"
+
 
 # ── Role name constants ───────────────────────────────────────────────────
 
@@ -190,6 +197,21 @@ def require_role(role_name: str):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"权限不足: 需要「{role_name}」角色",
+        )
+
+    return dependency
+
+
+def require_any_role(*role_names: str):
+    """FastAPI dependency: require the current user to have at least one of the specified roles."""
+
+    async def dependency(current_user: User = Depends(get_current_user)) -> User:
+        for role in current_user.roles:
+            if role.name in role_names:
+                return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"权限不足: 需要{'/'.join(role_names)}角色",
         )
 
     return dependency

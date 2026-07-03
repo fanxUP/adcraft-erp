@@ -13,7 +13,7 @@ export function createQuote(data: Omit<Partial<QuoteDetailResponse>, 'id' | 'quo
   return post<QuoteDetailResponse>('/quotes/', data)
 }
 
-export function updateQuote(id: string, data: Partial<Omit<QuoteDetailResponse, 'id' | 'quote_no' | 'created_at' | 'items'>>) {
+export function updateQuote(id: string, data: Partial<Omit<QuoteDetailResponse, 'id' | 'quote_no' | 'created_at'>> & { items?: Partial<QuoteDetailResponse['items'][0]>[] }) {
   return put<QuoteDetailResponse>(`/quotes/${id}`, data)
 }
 
