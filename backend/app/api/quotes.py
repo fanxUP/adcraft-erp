@@ -65,7 +65,7 @@ async def update_quote(
     current_user: User = Depends(get_current_user),
 ):
     service = QuoteService(db)
-    quote = await service.update_quote(UUID(quote_id), data.model_dump(exclude_none=True))
+    quote = await service.update_quote(UUID(quote_id), data.model_dump(exclude_unset=True))
     return success(quote)
 
 

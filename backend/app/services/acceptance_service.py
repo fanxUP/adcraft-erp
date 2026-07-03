@@ -1,0 +1,173 @@
+from datetime import datetime
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.acceptance import AcceptanceForm
+from app.repositories.acceptance_repo import AcceptanceRepository
+from app.services.number_generator import generate_acceptance_no
+
+
+class AcceptanceService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+        self.repo = AcceptanceRepository(db)
+
+    # ── 列表 ──────────────────────────────────────────────
+    async def list_acceptances(self, page: int, page_size: int, **filters):
+        items, total = await self.repo.list_all(page, page_size, **filters)
+        return [self._to_list_dict(i) for i in items], total
+
+    # ── 详情 ──────────────────────────────────────────────
+    async def get_detail(self, acceptance_id: UUID):
+        form = await self.repo.get_by_id(acceptance_id)
+        if not form:
+            raise ValueError("验收单不存在")
+        return self._to_detail_dict(form)
+
+    # ── 创建 ──────────────────────────────────────────────
+    async def create_acceptance(self, data: dict):
+        order_id = UUID(data["order_id"])
+        data["order_id"] = order_id
+        data["acceptance_no"] = await generate_acceptance_no(self.db)
+        data["status"] = "draft"
+
+        items_data = data.pop("items", [])
+        if data.get("our_acceptor_id"):
+            data["our_acceptor_id"] = UUID(data["our_acceptor_id"])
+
+        form = await self.repo.create({**data, "items": items_data})
+        return self._to_detail_dict(form)
+
+    # ── 更新 ──────────────────────────────────────────────
+    async def update_acceptance(self, acceptance_id: UUID, data: dict):
+        form = await self.repo.get_by_id(acceptance_id)
+        if not form:
+            raise ValueError("验收单不存在")
+        if form.status not in ("draft", "rejected"):
+            raise ValueError("仅草稿和已驳回状态可编辑")
+
+        if data.get("our_acceptor_id"):
+            data["our_acceptor_id"] = UUID(data["our_acceptor_id"])
+        if data.get("accepted_by") is not None:
+            data["accepted_by"] = data["accepted_by"]
+        if data.get("remark") is not None:
+            data["remark"] = data["remark"]
+
+        items_data = data.pop("items", None)
+        update_dict = {k: v for k, v in data.items() if k not in ("id", "acceptance_no", "order_id", "status")}
+        if items_data is not None:
+            update_dict["items"] = items_data
+
+        form = await self.repo.update(form, update_dict)
+        return self._to_detail_dict(form)
+
+    # ── 删除 ──────────────────────────────────────────────
+    async def delete_acceptance(self, acceptance_id: UUID):
+        form = await self.repo.get_by_id(acceptance_id)
+        if not form:
+            raise ValueError("验收单不存在")
+        if form.status != "draft":
+            raise ValueError("仅草稿状态可删除")
+        await self.repo.soft_delete(form)
+
+    # ── 状态变更 ──────────────────────────────────────────
+    VALID_TRANSITIONS = {
+        "draft": ["pending"],
+        "pending": ["accepted", "rejected"],
+        "rejected": ["draft"],
+    }
+
+    async def change_status(self, acceptance_id: UUID, to_status: str, **kwargs):
+        form = await self.repo.get_by_id(acceptance_id)
+        if not form:
+            raise ValueError("验收单不存在")
+
+        allowed = self.VALID_TRANSITIONS.get(form.status, [])
+        if to_status not in allowed:
+            raise ValueError(f"不允许从 {form.status} 变更为 {to_status}")
+
+        if to_status == "pending":
+            if not form.items:
+                raise ValueError("请先添加验收明细再提交")
+            form.status = "pending"
+
+        elif to_status == "accepted":
+            form.status = "accepted"
+            form.accepted_at = datetime.now()
+            if kwargs.get("accepted_by"):
+                form.accepted_by = kwargs["accepted_by"]
+
+        elif to_status == "rejected":
+            reason = kwargs.get("reason", "")
+            if not reason:
+                raise ValueError("驳回时请填写驳回原因")
+            form.status = "rejected"
+            form.reject_reason = reason
+
+        elif to_status == "draft":
+            form.status = "draft"
+            form.reject_reason = None
+
+        await self.db.flush()
+        form = await self.repo.get_by_id(acceptance_id)
+        return self._to_detail_dict(form)
+
+    # ── 序列化 ──────────────────────────────────────────────
+    def _to_list_dict(self, form: AcceptanceForm) -> dict:
+        return {
+            "id": str(form.id),
+            "acceptance_no": form.acceptance_no,
+            "order_id": str(form.order_id),
+            "order_no": form.order.order_no if form.order else None,
+            "customer_name": form.order.customer.name if form.order and form.order.customer else None,
+            "project_name": form.order.project_name if form.order else None,
+            "status": form.status,
+            "accepted_at": form.accepted_at.isoformat() if form.accepted_at else None,
+            "accepted_by": form.accepted_by,
+            "created_at": form.created_at.isoformat() if form.created_at else None,
+        }
+
+    def _to_detail_dict(self, form: AcceptanceForm) -> dict:
+        return {
+            "id": str(form.id),
+            "acceptance_no": form.acceptance_no,
+            "order_id": str(form.order_id),
+            "order_no": form.order.order_no if form.order else None,
+            "customer_name": form.order.customer.name if form.order and form.order.customer else None,
+            "project_name": form.order.project_name if form.order else None,
+            "status": form.status,
+            "accepted_at": form.accepted_at.isoformat() if form.accepted_at else None,
+            "accepted_by": form.accepted_by,
+            "our_acceptor_id": str(form.our_acceptor_id) if form.our_acceptor_id else None,
+            "our_acceptor_name": form.our_acceptor.name if form.our_acceptor else None,
+            "remark": form.remark,
+            "reject_reason": form.reject_reason,
+            "created_at": form.created_at.isoformat() if form.created_at else None,
+            "updated_at": form.updated_at.isoformat() if form.updated_at else None,
+            "items": [
+                {
+                    "id": str(item.id),
+                    "acceptance_id": str(item.acceptance_id),
+                    "order_item_id": str(item.order_item_id) if item.order_item_id else None,
+                    "item_name": item.item_name,
+                    "specification": item.specification,
+                    "quantity": float(item.quantity) if item.quantity is not None else None,
+                    "unit": item.unit,
+                    "item_status": item.item_status,
+                    "remark": item.remark,
+                }
+                for item in (form.items or [])
+            ],
+            "attachments": [
+                {
+                    "id": str(att.id),
+                    "acceptance_id": str(att.acceptance_id),
+                    "filename": att.filename,
+                    "filepath": att.filepath,
+                    "filesize": att.filesize,
+                    "upload_by": str(att.upload_by) if att.upload_by else None,
+                }
+                for att in (form.attachments or [])
+            ],
+        }

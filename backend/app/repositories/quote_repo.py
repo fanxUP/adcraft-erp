@@ -89,8 +89,7 @@ class QuoteRepository:
 
     async def update_item(self, item: QuoteItem, data: dict) -> QuoteItem:
         for k, v in data.items():
-            if v is not None:
-                setattr(item, k, v)
+            setattr(item, k, v)
         await self.db.flush()
         return item
 

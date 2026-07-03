@@ -30,7 +30,7 @@
                 <span>成本与利润</span>
                 <div>
                   <el-button size="small" @click="handleAutoCost" :loading="autoCostLoading">自动核算</el-button>
-                  <el-button size="small" type="danger" @click="showCostDialog = true">录入成本</el-button>
+                  <el-button size="small" type="danger" @click="$router.push(`/project-costs/${order.id}`)">登记成本</el-button>
                 </div>
               </div>
             </template>
@@ -235,27 +235,13 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showCostDialog" title="录入成本" width="400px">
-      <el-form label-width="80px">
-        <el-form-item label="订单金额">
-          <span>¥ {{ order?.total_amount?.toFixed(2) }}</span>
-        </el-form-item>
-        <el-form-item label="成本金额">
-          <el-input-number v-model="costAmount" :min="0" :precision="2" style="width: 100%" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCostDialog = false">取消</el-button>
-        <el-button type="danger" :loading="savingCost" @click="handleSaveCost">保存</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { getOrder, changeOrderStatus, setOrderCost, autoCalculateCost } from '@/api/orders'
+import { getOrder, changeOrderStatus, autoCalculateCost } from '@/api/orders'
 import { getDesignTasks, getProductionTasks, getInstallationTasks, createDesignTask, createProductionTask, createInstallationTask } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, OrderDetailResponse } from '@/types/api'
@@ -274,9 +260,6 @@ const installationTasks = ref<InstallationTaskResponse[]>([])
 const showDesignDialog = ref(false)
 const showProdDialog = ref(false)
 const showInstDialog = ref(false)
-const showCostDialog = ref(false)
-const costAmount = ref(0)
-const savingCost = ref(false)
 const autoCostLoading = ref(false)
 const taskForm = reactive({ project_name: '', assigned_to: '' as string | null, description: '', quantity: 1 })
 
@@ -338,15 +321,6 @@ async function handleCreateInstallation() {
   ElMessage.success('已创建安装任务')
   showInstDialog.value = false; taskForm.project_name = ''; taskForm.assigned_to = ''
   fetchTasks()
-}
-
-async function handleSaveCost() {
-  savingCost.value = true
-  try {
-    order.value = await setOrderCost(route.params.id as string, costAmount.value)
-    ElMessage.success('成本已保存')
-    showCostDialog.value = false
-  } finally { savingCost.value = false }
 }
 
 async function handleChangeStatus() {

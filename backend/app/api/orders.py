@@ -146,3 +146,23 @@ async def restore_order(
         return success(order)
     except ValueError as e:
         return error(40401, str(e))
+
+
+@router.post("/{order_id}/convert-to-quote")
+async def convert_order_to_quote(
+    order_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    service = OrderService(db)
+    oid = UUID(order_id)
+    try:
+        quote = await service.convert_to_quote(oid, current_user.id)
+        await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                            OBJ_ORDER, oid, "convert_to_quote",
+                            ip_address=request.client.host if request.client else None,
+                            after_data={"quote_id": quote["id"]})
+        return success(quote)
+    except ValueError as e:
+        return error(40001, str(e))

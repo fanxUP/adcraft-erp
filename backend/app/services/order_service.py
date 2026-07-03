@@ -103,6 +103,54 @@ class OrderService:
             raise ValueError("只有已取消的订单可以删除")
         await self.repo.soft_delete(order)
 
+    async def convert_to_quote(self, order_id: UUID, created_by: UUID) -> dict:
+        """已取消订单转报价单，并删除原订单"""
+        order = await self.repo.get_by_id(order_id)
+        if not order:
+            raise ValueError("订单不存在")
+        if order.status != "cancelled":
+            raise ValueError("只有已取消的订单可以转报价")
+
+        # 创建报价单
+        from app.services.quote_service import QuoteService
+        from app.services.number_generator import generate_quote_no
+
+        quote_svc = QuoteService(self.db)
+        quote_no = await generate_quote_no(self.db)
+
+        quote_data = {
+            "quote_no": quote_no,
+            "customer_id": str(order.customer_id) if order.customer_id else None,
+            "customer_name": order.customer.name if order.customer else None,
+            "project_name": order.project_name,
+            "sales_user_id": str(order.sales_user_id) if order.sales_user_id else None,
+            "status": "draft",
+            "remark": f"由订单 {order.order_no} 转换",
+            "items": []
+        }
+
+        # 复制订单明细
+        for item in (order.items or []):
+            quote_data["items"].append({
+                "item_name": item.item_name,
+                "product_id": str(item.product_id) if item.product_id else None,
+                "material_id": str(item.material_id) if item.material_id else None,
+                "process_id": str(item.process_id) if item.process_id else None,
+                "length": float(item.length) if item.length else None,
+                "width": float(item.width) if item.width else None,
+                "height": float(item.height) if item.height else None,
+                "quantity": float(item.quantity),
+                "unit": item.unit,
+                "unit_price": float(item.unit_price),
+            })
+
+        quote = await quote_svc.create_quote(quote_data)
+
+        # 删除原订单（软删除）
+        await self.repo.soft_delete(order)
+
+        return quote
+
     async def list_deleted(self, page: int, page_size: int, keyword: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
         orders, total = await self.repo.list_deleted_orders(skip=skip, limit=page_size, keyword=keyword)

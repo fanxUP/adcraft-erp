@@ -57,11 +57,55 @@ class QuoteService:
         quote = await self.repo.get_by_id(quote_id)
         if not quote:
             raise ValueError("报价单不存在")
+
+        # Extract items before updating quote fields
+        items_data = data.pop("items", None)
+
         if "discount_amount" in data and data["discount_amount"] is not None:
             data["discount_amount"] = Decimal(str(data["discount_amount"]))
         if "tax_rate" in data and data["tax_rate"] is not None:
             data["tax_rate"] = Decimal(str(data["tax_rate"]))
         quote = await self.repo.update(quote, data)
+
+        # Handle items if provided
+        if items_data is not None:
+            existing_items = await self.repo.get_items(quote_id)
+            existing_map = {str(item.id): item for item in existing_items}
+            incoming_ids = set()
+
+            # All nullable fields that must be explicitly set (even when None)
+            nullable_fields = ("product_id", "material_id", "process_id",
+                               "length", "length_unit", "width", "width_unit",
+                               "height", "height_unit", "unit", "remark", "group_name", "material_process")
+
+            for idx, item_data in enumerate(items_data):
+                item_data["sort_order"] = idx
+                # Ensure nullable fields are present so old values get cleared
+                for field in nullable_fields:
+                    item_data.setdefault(field, None)
+                # Convert fee fields to Decimal
+                for fee_key in ("unit_price", "process_fee", "installation_fee", "design_fee", "transport_fee", "other_fee"):
+                    if fee_key in item_data:
+                        item_data[fee_key] = Decimal(str(item_data[fee_key]))
+
+                item_id = item_data.get("id")
+                if item_id and item_id in existing_map:
+                    # Update existing item
+                    incoming_ids.add(item_id)
+                    item_data.pop("id", None)
+                    await self.repo.update_item(existing_map[item_id], item_data)
+                else:
+                    # Create new item
+                    item_data.pop("id", None)
+                    await self.repo.create_item(quote_id, item_data)
+
+            # Delete items not in the incoming list
+            for item_id, item in existing_map.items():
+                if item_id not in incoming_ids:
+                    await self.repo.delete_item(item)
+
+            await self.calculate_quote(quote_id)
+
         return self._quote_to_detail(quote)
 
     async def delete_quote(self, quote_id: UUID) -> bool:
@@ -78,6 +122,15 @@ class QuoteService:
 
         items = await self.repo.get_items(quote_id)
         subtotal = Decimal("0")
+
+        def convert_to_meters(value: Decimal, unit: str) -> Decimal:
+            """将长度值转换为米"""
+            if unit == "cm":
+                return value / 100
+            elif unit == "mm":
+                return value / 1000
+            return value  # 默认为米
+
         for item in items:
             length = Decimal(str(item.length or 0))
             width = Decimal(str(item.width or 0))
@@ -89,9 +142,18 @@ class QuoteService:
             transport_fee = Decimal(str(item.transport_fee))
             other_fee = Decimal(str(item.other_fee))
 
-            area = length * width * quantity
+            # 计算面积（考虑单位转换）
+            length_in_m = convert_to_meters(length, item.length_unit or "m")
+            width_in_m = convert_to_meters(width, item.width_unit or "m")
+            area = length_in_m * width_in_m * quantity
             item.area = float(area)
-            item_subtotal = area * unit_price + process_fee + installation_fee + design_fee + transport_fee + other_fee
+
+            # 根据 use_area 决定计算方式
+            if item.use_area:
+                item_subtotal = area * unit_price + process_fee + installation_fee + design_fee + transport_fee + other_fee
+            else:
+                item_subtotal = quantity * unit_price + process_fee + installation_fee + design_fee + transport_fee + other_fee
+
             item.subtotal_amount = float(item_subtotal)
             subtotal += item_subtotal
 
@@ -240,10 +302,15 @@ class QuoteService:
                     "process_id": str(item.process_id) if item.process_id else None,
                     "item_name": item.item_name,
                     "length": float(item.length) if item.length else None,
+                    "length_unit": item.length_unit,
                     "width": float(item.width) if item.width else None,
+                    "width_unit": item.width_unit,
                     "height": float(item.height) if item.height else None,
+                    "height_unit": item.height_unit,
                     "quantity": float(item.quantity),
                     "unit": item.unit,
+                    "use_area": item.use_area,
+                    "quantity_mode": item.quantity_mode,
                     "area": float(item.area) if item.area else None,
                     "unit_price": float(item.unit_price),
                     "process_fee": float(item.process_fee),
@@ -254,6 +321,8 @@ class QuoteService:
                     "subtotal_amount": float(item.subtotal_amount),
                     "remark": item.remark,
                     "sort_order": item.sort_order,
+                    "group_name": item.group_name,
+                    "material_process": item.material_process,
                 }
                 for item in (q.items or [])
             ],

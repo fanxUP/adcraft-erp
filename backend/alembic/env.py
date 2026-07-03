@@ -15,6 +15,7 @@ from app.models.task import DesignTask, ProductionTask, InstallationTask, Attach
 from app.models.payment import Payment, CustomerStatement, Expense
 from app.models.outsource import OutsourceVendor, OutsourceTask, OutsourcePayment
 from app.models.inventory import InventoryItem, StockRecord
+from app.models.acceptance import AcceptanceForm, AcceptanceItem, AcceptanceAttachment
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)

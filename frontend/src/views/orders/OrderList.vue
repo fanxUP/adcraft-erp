@@ -58,10 +58,13 @@
       <el-table-column label="创建时间" width="120">
         <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="180">
+      <el-table-column label="操作" width="220">
         <template #default="{ row }">
-          <el-button text type="primary" @click="$router.push(`/orders/${row.id}`)">详情</el-button>
-          <el-button v-if="authStore.isAdmin && row.status === 'cancelled'" text type="danger" @click="handleDelete(row as OrderListResponse)">删除</el-button>
+          <div style="display: flex; gap: 8px; justify-content: center;">
+            <el-button text type="primary" @click="$router.push(`/orders/${row.id}`)">详情</el-button>
+            <el-button v-if="authStore.isAdmin && row.status === 'cancelled'" text type="warning" @click="handleConvertToQuote(row as OrderListResponse)">转报价</el-button>
+            <el-button v-if="authStore.isAdmin && row.status === 'cancelled'" text type="danger" @click="handleDelete(row as OrderListResponse)">删除</el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -80,11 +83,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { getOrders, deleteOrder } from '@/api/orders'
+import { useRouter } from 'vue-router'
+import { getOrders, deleteOrder, convertOrderToQuote } from '@/api/orders'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { OrderListResponse } from '@/types/api'
 
+const router = useRouter()
 const authStore = useAuthStore()
 
 const loading = ref(false)
@@ -131,6 +136,17 @@ function handleReset() {
   filters.status = ''
   page.value = 1
   fetchData()
+}
+
+async function handleConvertToQuote(row: OrderListResponse) {
+  await ElMessageBox.confirm(`确定将订单「${row.order_no}」转为报价单？`, '转报价', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
+  await convertOrderToQuote(row.id)
+  ElMessage.success('订单已转为报价单')
+  router.push('/quotes')
 }
 
 async function handleDelete(row: OrderListResponse) {

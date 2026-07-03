@@ -39,6 +39,10 @@
             <el-icon><Delete /></el-icon>
             <span>订单回收站</span>
           </el-menu-item>
+          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/acceptances">
+            <el-icon><Stamp /></el-icon>
+            <span>验收管理</span>
+          </el-menu-item>
           <el-menu-item v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/products">
             <el-icon><Goods /></el-icon>
             <span>产品管理</span>
