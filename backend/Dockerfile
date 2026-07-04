@@ -3,7 +3,15 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# 清华 APT 镜像源 + 编译依赖
+# 接收 docker-compose.yml 传入的代理设置（用于国内加速构建）
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=${HTTP_PROXY} \
+    HTTPS_PROXY=${HTTPS_PROXY} \
+    NO_PROXY=${NO_PROXY}
+
+# 清华 APT 镜像源 + 编译依赖（代理优先，镜像源兜底）
 RUN sed -i 's|http://deb.debian.org/debian|https://mirrors.tuna.tsinghua.edu.cn/debian|g' /etc/apt/sources.list.d/debian.sources && \
     apt-get update && apt-get install -y --no-install-recommends libpq-dev gcc && \
     rm -rf /var/lib/apt/lists/*
