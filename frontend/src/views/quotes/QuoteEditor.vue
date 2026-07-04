@@ -190,6 +190,20 @@
             <template v-else-if="row.type === 'group-total'"><strong>¥ {{ row.total.toFixed(2) }}</strong></template>
           </template>
         </el-table-column>
+        <el-table-column label="样图" width="90">
+          <template #default="{ row }">
+            <template v-if="row.type === 'item'">
+              <div v-if="row.item.image_url" style="display: flex; align-items: center; gap: 4px;">
+                <el-image :src="row.item.image_url" :preview-src-list="[row.item.image_url]" fit="cover" style="width: 32px; height: 32px; border-radius: 4px; cursor: pointer;" />
+                <el-button v-if="!isReadonly" text type="danger" size="small" @click="row.item.image_url = ''" style="padding: 0;">×</el-button>
+              </div>
+              <el-upload v-else-if="!isReadonly" :show-file-list="false" :http-request="(opt: any) => handleImageUpload(opt, row.item)" accept="image/*" style="display: inline;">
+                <el-button text type="primary" size="small" style="padding: 0;">上传</el-button>
+              </el-upload>
+              <span v-else style="color: #999;">-</span>
+            </template>
+          </template>
+        </el-table-column>
         <el-table-column label="备注" min-width="120">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
@@ -224,6 +238,9 @@
           </div>
           <div class="summary-item"><span>税额：</span><strong>¥ {{ calcTax().toFixed(2) }}</strong></div>
           <div class="summary-item total"><span>总计：</span><strong>¥ {{ calcTotal().toFixed(2) }}</strong></div>
+          <div style="text-align: right; font-size: 13px; color: var(--ad-text-secondary); margin-top: 4px;">
+            大写金额：{{ toChineseAmount(calcTotal()) }}
+          </div>
         </el-col>
       </el-row>
     </el-card>
@@ -253,6 +270,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { createQuote, getQuote, updateQuote, calculateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft } from '@/api/quotes'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { uploadAttachment } from '@/api/tasks'
 import type { QuoteItemResponse, QuoteDetailResponse, CustomerResponse } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
 
@@ -298,6 +316,8 @@ const newItem = (groupName?: string): QuoteItemResponse => ({
   transport_fee: 0,
   other_fee: 0,
   subtotal_amount: 0,
+  remark: '',
+  image_url: '',
   sort_order: 0,
   group_name: groupName || undefined,
   material_process: '',
@@ -364,6 +384,47 @@ function calcItemSubtotal(item: QuoteItemResponse) {
 function calcQuoteSubtotal() { return items.value.reduce((s, i) => s + calcSubtotal(i), 0) }
 function calcTax() { return (calcQuoteSubtotal() - (form.discount_amount || 0)) * (form.tax_rate || 0) }
 function calcTotal() { return calcQuoteSubtotal() - (form.discount_amount || 0) + calcTax() }
+
+function toChineseAmount(n: number): string {
+  const digits = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖']
+  const units = ['', '拾', '佰', '仟']
+  const bigUnits = ['', '万', '亿']
+  if (n === 0) return '零元整'
+  const negative = n < 0
+  n = Math.abs(n)
+  const intPart = Math.floor(n)
+  const decPart = Math.round((n - intPart) * 100)
+  const jiao = Math.floor(decPart / 10)
+  const fen = decPart % 10
+  let result = ''
+  if (intPart > 0) {
+    const str = String(intPart)
+    const len = str.length
+    let zeroFlag = false
+    for (let i = 0; i < len; i++) {
+      const d = parseInt(str[i])
+      const pos = len - 1 - i
+      const unitIdx = pos % 4
+      const bigIdx = Math.floor(pos / 4)
+      if (d === 0) {
+        zeroFlag = true
+        if (unitIdx === 0 && bigUnits[bigIdx]) { result += bigUnits[bigIdx]; zeroFlag = false }
+      } else {
+        if (zeroFlag) { result += '零'; zeroFlag = false }
+        result += digits[d] + units[unitIdx]
+        if (unitIdx === 0 && bigUnits[bigIdx]) result += bigUnits[bigIdx]
+      }
+    }
+    result += '元'
+  }
+  if (jiao === 0 && fen === 0) { result += '整' }
+  else {
+    if (jiao > 0) result += digits[jiao] + '角'
+    else if (intPart > 0) result += '零'
+    if (fen > 0) result += digits[fen] + '分'
+  }
+  return (negative ? '负' : '') + result
+}
 
 function addItem(groupName?: string) { items.value.push(newItem(groupName)) }
 
@@ -483,6 +544,16 @@ function isExistingCustomer(value: string): boolean {
   return customerOptions.value.some(c => c.id === value)
 }
 
+async function handleImageUpload(opt: { file: File }, item: QuoteItemResponse) {
+  try {
+    const res = await uploadAttachment('quote_item', item.id || route.params.id as string, opt.file, 'image')
+    item.image_url = `/uploads/${res.file_path}`
+    ElMessage.success('上传成功')
+  } catch {
+    ElMessage.error('上传失败')
+  }
+}
+
 async function handleSave() {
   saving.value = true
   try {
@@ -513,6 +584,7 @@ async function handleSave() {
         transport_fee: item.transport_fee || 0,
         other_fee: item.other_fee || 0,
         remark: item.remark || undefined,
+        image_url: item.image_url || undefined,
         sort_order: idx,
         group_name: item.group_name || null,
         material_process: item.material_process || undefined,

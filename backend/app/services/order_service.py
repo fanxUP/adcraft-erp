@@ -32,7 +32,12 @@ class OrderService:
             raise ValueError("订单不存在")
         from_status = order.status
         await self.repo.update(order, {"status": to_status})
+        await self.db.flush()
         await self.repo.create_status_log(order_id, from_status, to_status, reason, operated_by)
+
+        # 订单完成时自动创建验收单
+        if to_status == "completed":
+            await self._auto_create_acceptance(order)
 
         # Send notification to sales user
         if order.sales_user_id and order.sales_user_id != operated_by:
@@ -53,6 +58,59 @@ class OrderService:
             )
 
         return self._order_to_detail(order)
+
+    async def _auto_create_acceptance(self, order) -> None:
+        """订单完成时自动创建验收单（如该订单尚无验收单）"""
+        from app.models.acceptance import AcceptanceForm, AcceptanceItem
+        from app.services.number_generator import generate_acceptance_no
+
+        existing = await self.db.execute(
+            select(AcceptanceForm).where(
+                AcceptanceForm.order_id == order.id,
+                AcceptanceForm.deleted_at.is_(None),
+            )
+        )
+        if existing.scalar_one_or_none():
+            return
+
+        acceptance_no = await generate_acceptance_no(self.db)
+        form = AcceptanceForm(
+            acceptance_no=acceptance_no,
+            order_id=order.id,
+            status="draft",
+        )
+        self.db.add(form)
+        await self.db.flush()
+
+        for oi in order.items or []:
+            spec_parts = []
+            if oi.length:
+                spec_parts.append(str(oi.length))
+            if oi.width:
+                spec_parts.append(str(oi.width))
+            if oi.height:
+                spec_parts.append(str(oi.height))
+            spec = "×".join(spec_parts) if spec_parts else None
+
+            item = AcceptanceItem(
+                acceptance_id=form.id,
+                order_item_id=oi.id,
+                item_name=oi.item_name,
+                material_process=oi.material_process,
+                specification=spec,
+                quantity=float(oi.quantity) if oi.quantity else None,
+                unit=oi.unit,
+                area=float(oi.area) if oi.area else None,
+                unit_price=float(oi.unit_price) if oi.unit_price else None,
+                subtotal=float(oi.subtotal_amount) if oi.subtotal_amount else None,
+                item_status="pending",
+                group_name=oi.group_name,
+                remark=oi.remark,
+                image_url=oi.image_url,
+            )
+            self.db.add(item)
+
+        await self.db.flush()
 
     async def set_cost(self, order_id: UUID, cost_amount: float) -> dict:
         """Set order cost and recalculate gross profit."""
@@ -137,11 +195,26 @@ class OrderService:
                 "material_id": str(item.material_id) if item.material_id else None,
                 "process_id": str(item.process_id) if item.process_id else None,
                 "length": float(item.length) if item.length else None,
+                "length_unit": item.length_unit,
                 "width": float(item.width) if item.width else None,
+                "width_unit": item.width_unit,
                 "height": float(item.height) if item.height else None,
+                "height_unit": item.height_unit,
                 "quantity": float(item.quantity),
                 "unit": item.unit,
+                "use_area": item.use_area,
+                "quantity_mode": item.quantity_mode,
                 "unit_price": float(item.unit_price),
+                "process_fee": float(item.process_fee),
+                "installation_fee": float(item.installation_fee),
+                "design_fee": float(item.design_fee),
+                "transport_fee": float(item.transport_fee),
+                "other_fee": float(item.other_fee),
+                "remark": item.remark,
+                "image_url": item.image_url,
+                "sort_order": item.sort_order,
+                "group_name": item.group_name,
+                "material_process": item.material_process,
             })
 
         quote = await quote_svc.create_quote(quote_data)
@@ -203,13 +276,27 @@ class OrderService:
                     "material_id": str(item.material_id) if item.material_id else None,
                     "process_id": str(item.process_id) if item.process_id else None,
                     "length": float(item.length) if item.length else None,
+                    "length_unit": item.length_unit,
                     "width": float(item.width) if item.width else None,
+                    "width_unit": item.width_unit,
                     "height": float(item.height) if item.height else None,
+                    "height_unit": item.height_unit,
                     "quantity": float(item.quantity),
                     "unit": item.unit,
+                    "use_area": item.use_area,
+                    "quantity_mode": item.quantity_mode,
+                    "area": float(item.area) if item.area else None,
                     "unit_price": float(item.unit_price),
+                    "process_fee": float(item.process_fee),
+                    "installation_fee": float(item.installation_fee),
+                    "design_fee": float(item.design_fee),
+                    "transport_fee": float(item.transport_fee),
+                    "other_fee": float(item.other_fee),
                     "subtotal_amount": float(item.subtotal_amount),
                     "remark": item.remark,
+                    "sort_order": item.sort_order,
+                    "group_name": item.group_name,
+                    "material_process": item.material_process,
                 }
                 for item in (o.items or [])
             ],

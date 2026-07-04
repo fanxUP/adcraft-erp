@@ -72,24 +72,110 @@
 
         <el-tab-pane label="订单明细" name="items">
           <el-card shadow="never" class="info-card">
-            <el-table :data="order.items" stripe size="small">
-              <el-table-column prop="item_name" label="项目" min-width="180" />
-              <el-table-column label="长(m)" width="90">
-                <template #default="{ row }">{{ row.length ?? '-' }}</template>
+            <el-table :data="displayRows" stripe border size="small" :row-class-name="rowClassName">
+              <el-table-column label="序号" width="55">
+                <template #default="{ row, $index }">
+                  <template v-if="row.type === 'item'">{{ itemIndex(row, $index) }}</template>
+                </template>
               </el-table-column>
-              <el-table-column label="宽(m)" width="90">
-                <template #default="{ row }">{{ row.width ?? '-' }}</template>
+              <el-table-column label="项目内容" min-width="150">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'group-header'">
+                    <span style="font-weight: 600;">分项：{{ row.groupName }}</span>
+                  </template>
+                  <template v-else-if="row.type === 'group-total'">
+                    <span style="font-weight: 600; float: right;">分项合计</span>
+                  </template>
+                  <template v-else>{{ row.item.item_name }}</template>
+                </template>
               </el-table-column>
-              <el-table-column label="数量" width="80">
-                <template #default="{ row }">{{ row.quantity }}</template>
+              <el-table-column label="材质工艺" min-width="120">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">{{ row.item.material_process || '-' }}</template>
+                </template>
               </el-table-column>
-              <el-table-column label="单价" width="120">
-                <template #default="{ row }">¥ {{ row.unit_price?.toFixed(2) }}</template>
+              <el-table-column label="规格" min-width="140">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">
+                    <template v-if="row.item.length || row.item.width || row.item.height">
+                      {{ row.item.length ?? '' }}{{ row.item.length_unit || 'm' }}
+                      <template v-if="row.item.width"> × {{ row.item.width }}{{ row.item.width_unit || 'm' }}</template>
+                      <template v-if="row.item.height"> × {{ row.item.height }}{{ row.item.height_unit || 'm' }}</template>
+                    </template>
+                    <span v-else>-</span>
+                  </template>
+                </template>
               </el-table-column>
-              <el-table-column label="小计" width="120">
-                <template #default="{ row }">¥ {{ row.subtotal_amount?.toFixed(2) }}</template>
+              <el-table-column label="面积" width="80">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">{{ row.item.area != null ? row.item.area.toFixed(2) : '-' }}</template>
+                </template>
+              </el-table-column>
+              <el-table-column label="数量" width="70">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">{{ row.item.quantity }}</template>
+                </template>
+              </el-table-column>
+              <el-table-column label="单位" width="60">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">{{ row.item.unit || '-' }}</template>
+                </template>
+              </el-table-column>
+              <el-table-column label="单价" width="90">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">¥ {{ row.item.unit_price?.toFixed(2) }}</template>
+                </template>
+              </el-table-column>
+              <el-table-column label="工艺费" width="90">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">{{ row.item.process_fee ? '¥ ' + row.item.process_fee.toFixed(2) : '-' }}</template>
+                </template>
+              </el-table-column>
+              <el-table-column label="安装费" width="90">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">{{ row.item.installation_fee ? '¥ ' + row.item.installation_fee.toFixed(2) : '-' }}</template>
+                </template>
+              </el-table-column>
+              <el-table-column label="设计费" width="90">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">{{ row.item.design_fee ? '¥ ' + row.item.design_fee.toFixed(2) : '-' }}</template>
+                </template>
+              </el-table-column>
+              <el-table-column label="运输费" width="90">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">{{ row.item.transport_fee ? '¥ ' + row.item.transport_fee.toFixed(2) : '-' }}</template>
+                </template>
+              </el-table-column>
+              <el-table-column label="小计" width="110">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">¥ {{ row.item.subtotal_amount?.toFixed(2) }}</template>
+                  <template v-else-if="row.type === 'group-total'"><strong>¥ {{ row.total.toFixed(2) }}</strong></template>
+                </template>
+              </el-table-column>
+              <el-table-column label="样图" width="80">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">
+                    <el-image v-if="row.item.image_url" :src="row.item.image_url" :preview-src-list="[row.item.image_url]" fit="cover" style="width: 32px; height: 32px; border-radius: 4px; cursor: pointer;" />
+                    <span v-else style="color: #999;">-</span>
+                  </template>
+                </template>
+              </el-table-column>
+              <el-table-column label="备注" min-width="120">
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">{{ row.item.remark || '-' }}</template>
+                </template>
               </el-table-column>
             </el-table>
+
+            <!-- 明细合计 -->
+            <div v-if="order.items?.length" style="margin-top: 12px; padding-top: 12px; border-top: 2px solid var(--ad-primary, #409eff); text-align: right;">
+              <div style="font-size: 16px; font-weight: 600; color: var(--ad-text); margin-bottom: 6px;">
+                明细合计：¥ {{ itemsTotal.toFixed(2) }}
+              </div>
+              <div style="font-size: 13px; color: var(--ad-text-secondary);">
+                大写金额：{{ toChineseAmount(itemsTotal) }}
+              </div>
+            </div>
           </el-card>
         </el-tab-pane>
 
@@ -239,12 +325,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getOrder, changeOrderStatus, autoCalculateCost } from '@/api/orders'
 import { getDesignTasks, getProductionTasks, getInstallationTasks, createDesignTask, createProductionTask, createInstallationTask } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, OrderDetailResponse } from '@/types/api'
+import type { DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, OrderDetailResponse, OrderItemResponse } from '@/types/api'
 
 const route = useRoute()
 const loading = ref(false)
@@ -262,6 +348,104 @@ const showProdDialog = ref(false)
 const showInstDialog = ref(false)
 const autoCostLoading = ref(false)
 const taskForm = reactive({ project_name: '', assigned_to: '' as string | null, description: '', quantity: 1 })
+
+const itemsTotal = computed(() => (order.value?.items || []).reduce((s, i) => s + (i.subtotal_amount || 0), 0))
+
+function toChineseAmount(n: number): string {
+  const digits = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖']
+  const units = ['', '拾', '佰', '仟']
+  const bigUnits = ['', '万', '亿']
+
+  if (n === 0) return '零元整'
+  const negative = n < 0
+  n = Math.abs(n)
+
+  const intPart = Math.floor(n)
+  const decPart = Math.round((n - intPart) * 100)
+  const jiao = Math.floor(decPart / 10)
+  const fen = decPart % 10
+
+  let result = ''
+
+  if (intPart > 0) {
+    const str = String(intPart)
+    const len = str.length
+    let zeroFlag = false
+    for (let i = 0; i < len; i++) {
+      const d = parseInt(str[i])
+      const pos = len - 1 - i
+      const unitIdx = pos % 4
+      const bigIdx = Math.floor(pos / 4)
+
+      if (d === 0) {
+        zeroFlag = true
+        if (unitIdx === 0 && bigUnits[bigIdx]) {
+          result += bigUnits[bigIdx]
+          zeroFlag = false
+        }
+      } else {
+        if (zeroFlag) { result += '零'; zeroFlag = false }
+        result += digits[d] + units[unitIdx]
+        if (unitIdx === 0 && bigUnits[bigIdx]) result += bigUnits[bigIdx]
+      }
+    }
+    result += '元'
+  }
+
+  if (jiao === 0 && fen === 0) {
+    result += '整'
+  } else {
+    if (jiao > 0) result += digits[jiao] + '角'
+    else if (intPart > 0) result += '零'
+    if (fen > 0) result += digits[fen] + '分'
+  }
+
+  return (negative ? '负' : '') + result
+}
+
+type DisplayRow =
+  | { type: 'group-header'; groupName: string }
+  | { type: 'item'; item: OrderItemResponse; groupName: string }
+  | { type: 'group-total'; groupName: string; total: number }
+
+const displayRows = computed<DisplayRow[]>(() => {
+  const items = order.value?.items || []
+  const grouped = new Map<string, OrderItemResponse[]>()
+  const ungrouped: OrderItemResponse[] = []
+
+  for (const item of items) {
+    if (item.group_name) {
+      if (!grouped.has(item.group_name)) grouped.set(item.group_name, [])
+      grouped.get(item.group_name)!.push(item)
+    } else {
+      ungrouped.push(item)
+    }
+  }
+
+  const rows: DisplayRow[] = []
+  for (const [groupName, groupItems] of grouped) {
+    rows.push({ type: 'group-header', groupName })
+    for (const item of groupItems) rows.push({ type: 'item', item, groupName })
+    const total = groupItems.reduce((s, i) => s + (i.subtotal_amount || 0), 0)
+    rows.push({ type: 'group-total', groupName, total })
+  }
+  for (const item of ungrouped) rows.push({ type: 'item', item, groupName: '' })
+  return rows
+})
+
+function rowClassName({ row }: { row: DisplayRow }) {
+  if (row.type === 'group-header') return 'group-header-row'
+  if (row.type === 'group-total') return 'group-total-row'
+  return ''
+}
+
+function itemIndex(row: DisplayRow, displayIdx: number): number {
+  let count = 0
+  for (let i = 0; i <= displayIdx; i++) {
+    if (displayRows.value[i].type === 'item') count++
+  }
+  return count
+}
 
 function statusLabel(s: string) {
   const map: Record<string, string> = {
@@ -360,4 +544,8 @@ onMounted(() => { fetchOrder(); fetchTasks() })
 .page { padding: 0; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+:deep(.group-header-row) { background: var(--ad-bg-secondary, #f5f7fa) !important; }
+:deep(.group-header-row td) { border-bottom: 2px solid var(--ad-primary, #409eff) !important; }
+:deep(.group-total-row) { background: var(--ad-bg-secondary, #fafafa) !important; }
+:deep(.group-total-row td) { border-top: 1px solid var(--ad-border, #dcdfe6) !important; font-weight: 600; }
 </style>

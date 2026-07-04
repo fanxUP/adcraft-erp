@@ -2,8 +2,8 @@
   <div class="page">
     <div class="page-header">
       <el-button text @click="$router.push('/acceptances')" style="font-size: 16px;">← 返回</el-button>
-      <h2>{{ isCreate ? '新建验收单' : form.acceptance_no }}</h2>
-      <div class="header-actions" v-if="!isCreate">
+      <h2>{{ form.acceptance_no }}</h2>
+      <div class="header-actions">
         <el-button
           v-if="form.status === 'draft'"
           type="primary" @click="handleSubmit"
@@ -33,67 +33,47 @@
       <!-- 基本信息 -->
       <el-tab-pane label="基本信息" name="info">
         <el-card>
-          <el-form :model="form" label-width="100px" :disabled="!canEdit">
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="关联订单" required>
-                  <el-select
-                    v-model="form.order_id"
-                    filterable
-                    remote
-                    :remote-method="searchOrders"
-                    :loading="orderSearching"
-                    placeholder="搜索订单"
-                    :disabled="!isCreate"
-                  >
-                    <el-option
-                      v-for="o in orderOptions"
-                      :key="o.id"
-                      :label="`${o.order_no} - ${o.customer_name || ''}`"
-                      :value="o.id"
-                    />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="客户签收人">
-                  <el-input v-model="form.accepted_by" placeholder="客户方签收人姓名" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="我方负责人">
-                  <el-select v-model="form.our_acceptor_id" placeholder="选择负责人" clearable filterable>
-                    <el-option
-                      v-for="u in userOptions"
-                      :key="u.id"
-                      :label="u.real_name || u.username"
-                      :value="u.id"
-                    />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="24">
-                <el-form-item label="备注">
-                  <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="备注信息" />
-                </el-form-item>
-              </el-col>
-            </el-row>
+          <el-form :model="form" label-width="140px" :disabled="!canEdit">
+            <el-form-item label="验收人/联系电话：">
+              <el-input v-model="form.accepted_by" placeholder="验收人姓名/联系电话" />
+            </el-form-item>
+            <el-form-item label="负责人/联系电话：">
+              <el-select v-model="form.our_acceptor_id" placeholder="选择负责人" clearable filterable>
+                <el-option
+                  v-for="u in userOptions"
+                  :key="u.id"
+                  :label="u.real_name || u.username"
+                  :value="u.id"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="备注：">
+              <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="备注" />
+            </el-form-item>
+            <el-form-item label="优惠金额：">
+              <el-input-number v-model="form.discount_amount" :min="0" :precision="2" :controls="false" style="width: 200px" />
+            </el-form-item>
+            <el-form-item label="预付金额：">
+              <el-input-number v-model="form.advance_amount" :min="0" :precision="2" :controls="false" style="width: 200px" />
+            </el-form-item>
           </el-form>
 
           <!-- 只读详情 -->
-          <el-descriptions v-if="!isCreate && !canEdit" :column="2" border style="margin-top: 16px;">
-            <el-descriptions-item label="状态">
+          <el-descriptions v-if="!canEdit" :column="1" border style="margin-top: 16px;">
+            <el-descriptions-item label="状态：">
               <el-tag :type="statusColor(form.status)">{{ statusLabel(form.status) }}</el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="验收日期">{{ form.accepted_at?.slice(0, 10) || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="客户签收人">{{ form.accepted_by || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="我方负责人">{{ form.our_acceptor_name || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="驳回原因" :span="2" v-if="form.reject_reason">
+            <el-descriptions-item label="验收日期：">{{ form.accepted_at?.slice(0, 10) || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="验收人/联系电话：">{{ form.accepted_by || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="负责人/联系电话：">{{ form.our_acceptor_name || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="驳回原因：" v-if="form.reject_reason">
               <span style="color: var(--el-color-danger);">{{ form.reject_reason }}</span>
             </el-descriptions-item>
-            <el-descriptions-item label="备注" :span="2">{{ form.remark || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ form.created_at?.slice(0, 16) }}</el-descriptions-item>
-            <el-descriptions-item label="更新时间">{{ form.updated_at?.slice(0, 16) }}</el-descriptions-item>
+            <el-descriptions-item label="备注：">{{ form.remark || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="优惠金额：">¥ {{ form.discount_amount?.toFixed(2) || '0.00' }}</el-descriptions-item>
+            <el-descriptions-item label="预付金额：">¥ {{ form.advance_amount?.toFixed(2) || '0.00' }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间：">{{ form.created_at?.slice(0, 16) }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间：">{{ form.updated_at?.slice(0, 16) }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
       </el-tab-pane>
@@ -103,69 +83,135 @@
         <el-card>
           <template #header>
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span>验收明细（已选 {{ selectedCount }}/{{ form.items.length }} 项）</span>
-              <div v-if="canEdit" style="display: flex; gap: 8px;">
-                <el-button size="small" @click="toggleSelectAll">{{ selectedCount === form.items.length ? '取消全选' : '全选' }}</el-button>
-                <el-button type="primary" size="small" @click="addItem">手动添加</el-button>
-              </div>
+              <span>验收明细（{{ form.items.length }} 项）</span>
+              <el-button v-if="form.items.length" type="success" size="small" @click="acceptAll">一键验收</el-button>
             </div>
           </template>
 
-          <el-table ref="itemsTableRef" :data="form.items" border @selection-change="handleSelectionChange">
-            <el-table-column v-if="canEdit" type="selection" width="45" :selectable="() => true" />
-            <el-table-column v-else type="index" label="#" width="50" />
-            <el-table-column label="项目名称" min-width="160">
-              <template #default="{ row }">
-                <el-input v-if="canEdit" v-model="row.item_name" placeholder="项目名称" />
-                <span v-else>{{ row.item_name }}</span>
+          <el-table :data="displayRows" border :row-class-name="rowClassName">
+            <el-table-column label="序号" width="55">
+              <template #default="{ row, $index }">
+                <template v-if="row.type === 'item'">{{ itemIndex(row, $index) }}</template>
               </template>
             </el-table-column>
-            <el-table-column label="规格说明" min-width="140">
+            <el-table-column label="项目内容" min-width="140">
               <template #default="{ row }">
-                <el-input v-if="canEdit" v-model="row.specification" placeholder="规格" />
-                <span v-else>{{ row.specification || '-' }}</span>
+                <template v-if="row.type === 'group-header'">
+                  <span style="font-weight: 600;">分项：{{ row.groupName }}</span>
+                </template>
+                <template v-else-if="row.type === 'group-total'">
+                  <span style="font-weight: 600; float: right;">分项合计</span>
+                </template>
+                <template v-else>
+                  <el-input v-if="canEdit" v-model="row.item.item_name" placeholder="项目内容" />
+                  <span v-else>{{ row.item.item_name }}</span>
+                </template>
               </template>
             </el-table-column>
-            <el-table-column label="数量" width="100">
+            <el-table-column label="材质工艺" min-width="120">
               <template #default="{ row }">
-                <el-input-number v-if="canEdit" v-model="row.quantity" :min="0" :precision="2" size="small" controls-position="right" />
-                <span v-else>{{ row.quantity ?? '-' }}</span>
+                <template v-if="row.type === 'item'">
+                  <el-input v-if="canEdit" v-model="row.item.material_process" placeholder="材质工艺" />
+                  <span v-else>{{ row.item.material_process || '-' }}</span>
+                </template>
               </template>
             </el-table-column>
-            <el-table-column label="单位" width="80">
+            <el-table-column label="规格" min-width="120">
               <template #default="{ row }">
-                <el-input v-if="canEdit" v-model="row.unit" placeholder="单位" />
-                <span v-else>{{ row.unit || '-' }}</span>
+                <template v-if="row.type === 'item'">
+                  <el-input v-if="canEdit" v-model="row.item.specification" placeholder="规格" />
+                  <span v-else>{{ row.item.specification || '-' }}</span>
+                </template>
               </template>
             </el-table-column>
-            <el-table-column label="验收结果" width="120">
+            <el-table-column label="面积" width="80">
               <template #default="{ row }">
-                <el-select v-if="!isCreate" v-model="row.item_status" size="small">
-                  <el-option label="待验收" value="pending" />
-                  <el-option label="通过" value="accepted" />
-                  <el-option label="不通过" value="rejected" />
-                  <el-option label="有条件通过" value="conditional" />
-                </el-select>
-                <span v-else>{{ itemStatusLabel(row.item_status) }}</span>
+                <template v-if="row.type === 'item'">{{ row.item.area != null ? row.item.area.toFixed(2) : '-' }}</template>
               </template>
             </el-table-column>
-            <el-table-column label="备注" min-width="120">
+            <el-table-column label="数量" width="80">
               <template #default="{ row }">
-                <el-input v-if="canEdit || !isCreate" v-model="row.remark" placeholder="备注" />
-                <span v-else>{{ row.remark || '-' }}</span>
+                <template v-if="row.type === 'item'">
+                  <el-input-number v-if="canEdit" v-model="row.item.quantity" :min="0" :precision="2" size="small" controls-position="right" />
+                  <span v-else>{{ row.item.quantity ?? '-' }}</span>
+                </template>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="60" v-if="canEdit">
-              <template #default="{ $index }">
-                <el-button text type="danger" size="small" @click="removeItem($index)">删除</el-button>
+            <el-table-column label="单位" width="70">
+              <template #default="{ row }">
+                <template v-if="row.type === 'item'">
+                  <el-input v-if="canEdit" v-model="row.item.unit" placeholder="单位" />
+                  <span v-else>{{ row.item.unit || '-' }}</span>
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column label="单价" width="90">
+              <template #default="{ row }">
+                <template v-if="row.type === 'item'">
+                  <el-input-number v-if="canEdit" v-model="row.item.unit_price" :min="0" :precision="2" size="small" controls-position="right" />
+                  <span v-else>{{ row.item.unit_price != null ? row.item.unit_price.toFixed(2) : '-' }}</span>
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column label="小计" width="100">
+              <template #default="{ row }">
+                <template v-if="row.type === 'item'">
+                  <el-input-number v-if="canEdit" v-model="row.item.subtotal" :min="0" :precision="2" size="small" controls-position="right" />
+                  <span v-else>{{ row.item.subtotal != null ? row.item.subtotal.toFixed(2) : '-' }}</span>
+                </template>
+                <template v-else-if="row.type === 'group-total'"><strong>¥ {{ row.total.toFixed(2) }}</strong></template>
+              </template>
+            </el-table-column>
+            <el-table-column label="样图" width="90">
+              <template #default="{ row }">
+                <template v-if="row.type === 'item'">
+                  <div v-if="row.item.image_url" style="display: flex; align-items: center; gap: 4px;">
+                    <el-image :src="row.item.image_url" :preview-src-list="[row.item.image_url]" fit="cover" style="width: 32px; height: 32px; border-radius: 4px; cursor: pointer;" />
+                    <el-button v-if="canEdit" text type="danger" size="small" @click="row.item.image_url = ''" style="padding: 0;">×</el-button>
+                  </div>
+                  <el-upload v-else-if="canEdit" :show-file-list="false" :http-request="(opt: any) => handleImageUpload(opt, row.item)" accept="image/*" style="display: inline;">
+                    <el-button text type="primary" size="small" style="padding: 0;">上传</el-button>
+                  </el-upload>
+                  <span v-else style="color: #999">-</span>
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column label="备注" min-width="100">
+              <template #default="{ row }">
+                <template v-if="row.type === 'item'">
+                  <el-input v-if="canEdit" v-model="row.item.remark" placeholder="备注" />
+                  <span v-else>{{ row.item.remark || '-' }}</span>
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column label="验收结果" width="100">
+              <template #default="{ row }">
+                <template v-if="row.type === 'item'">
+                  <el-select v-model="row.item.item_status" size="small">
+                    <el-option label="待验收" value="pending" />
+                    <el-option label="通过" value="accepted" />
+                    <el-option label="不通过" value="rejected" />
+                    <el-option label="有条件通过" value="conditional" />
+                  </el-select>
+                </template>
               </template>
             </el-table-column>
           </el-table>
+
+          <!-- 明细合计 -->
+          <div v-if="form.items?.length" style="margin-top: 16px; padding-top: 12px; border-top: 2px solid var(--ad-primary, #409eff); text-align: right;">
+            <div style="font-size: 16px; font-weight: 600; color: var(--ad-text); margin-bottom: 6px;">
+              明细合计：¥ {{ itemsTotal.toFixed(2) }}
+            </div>
+            <div style="font-size: 13px; color: var(--ad-text-secondary);">
+              大写金额：{{ toChineseAmount(itemsTotal) }}
+            </div>
+          </div>
         </el-card>
       </el-tab-pane>
 
       <!-- 附件 -->
-      <el-tab-pane label="附件" name="attachments" v-if="!isCreate">
+      <el-tab-pane label="附件" name="attachments">
         <el-card>
           <template #header>
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -218,7 +264,6 @@
     </el-dialog>
 
     <AcceptancePrint
-      v-if="!isCreate"
       :visible="showPrint"
       :acceptance-id="String(route.params.id)"
       @close="showPrint = false"
@@ -227,25 +272,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Printer } from '@element-plus/icons-vue'
 import {
-  getAcceptance, createAcceptance, updateAcceptance,
+  getAcceptance, updateAcceptance,
   changeAcceptanceStatus, uploadAcceptanceAttachment, deleteAcceptanceAttachment
 } from '@/api/acceptances'
-import { getOrders, getOrder } from '@/api/orders'
+import { uploadAttachment } from '@/api/tasks'
 import { getUsers } from '@/api/users'
 import type {
-  AcceptanceDetailResponse, AcceptanceItemResponse, AcceptanceAttachmentResponse,
-  OrderListResponse, UserResponse
+  AcceptanceDetailResponse, AcceptanceAttachmentResponse,
+  AcceptanceItemResponse, UserResponse
 } from '@/types/api'
-import type { ElTable } from 'element-plus'
 import AcceptancePrint from './AcceptancePrint.vue'
 
 const route = useRoute()
-const router = useRouter()
 const activeTab = ref('info')
 const saving = ref(false)
 const statusChanging = ref(false)
@@ -253,8 +296,106 @@ const showPrint = ref(false)
 const rejectDialogVisible = ref(false)
 const rejectReason = ref('')
 
-const isCreate = computed(() => route.name === 'AcceptanceCreate')
-const canEdit = computed(() => isCreate.value || form.status === 'draft' || form.status === 'rejected' || route.query.edit === '1')
+const canEdit = computed(() => form.status === 'draft' || form.status === 'rejected' || route.query.edit === '1')
+
+const itemsTotal = computed(() => form.items.reduce((s, i) => s + (i.subtotal || 0), 0))
+
+type DisplayRow =
+  | { type: 'group-header'; groupName: string }
+  | { type: 'item'; item: AcceptanceItemResponse; groupName: string }
+  | { type: 'group-total'; groupName: string; total: number }
+
+const displayRows = computed<DisplayRow[]>(() => {
+  const grouped = new Map<string, AcceptanceItemResponse[]>()
+  const ungrouped: AcceptanceItemResponse[] = []
+  for (const item of form.items) {
+    if (item.group_name) {
+      if (!grouped.has(item.group_name)) grouped.set(item.group_name, [])
+      grouped.get(item.group_name)!.push(item)
+    } else {
+      ungrouped.push(item)
+    }
+  }
+  const rows: DisplayRow[] = []
+  for (const [groupName, groupItems] of grouped) {
+    rows.push({ type: 'group-header', groupName })
+    for (const item of groupItems) rows.push({ type: 'item', item, groupName })
+    const total = groupItems.reduce((s, i) => s + (i.subtotal || 0), 0)
+    rows.push({ type: 'group-total', groupName, total })
+  }
+  for (const item of ungrouped) rows.push({ type: 'item', item, groupName: '' })
+  return rows
+})
+
+function rowClassName({ row }: { row: DisplayRow }) {
+  if (row.type === 'group-header') return 'group-header-row'
+  if (row.type === 'group-total') return 'group-total-row'
+  return ''
+}
+
+function acceptAll() {
+  form.items.forEach(item => { item.item_status = 'accepted' })
+  ElMessage.success('已全部设为通过')
+}
+
+async function handleImageUpload(opt: { file: File }, item: AcceptanceItemResponse) {
+  try {
+    const res = await uploadAttachment('acceptance_item', item.id || form.id, opt.file, 'image')
+    item.image_url = `/uploads/${res.file_path}`
+    ElMessage.success('上传成功')
+  } catch {
+    ElMessage.error('上传失败')
+  }
+}
+
+function itemIndex(row: DisplayRow, displayIdx: number): number {
+  let count = 0
+  for (let i = 0; i <= displayIdx; i++) {
+    if (displayRows.value[i].type === 'item') count++
+  }
+  return count
+}
+
+function toChineseAmount(n: number): string {
+  const digits = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖']
+  const units = ['', '拾', '佰', '仟']
+  const bigUnits = ['', '万', '亿']
+  if (n === 0) return '零元整'
+  const negative = n < 0
+  n = Math.abs(n)
+  const intPart = Math.floor(n)
+  const decPart = Math.round((n - intPart) * 100)
+  const jiao = Math.floor(decPart / 10)
+  const fen = decPart % 10
+  let result = ''
+  if (intPart > 0) {
+    const str = String(intPart)
+    const len = str.length
+    let zeroFlag = false
+    for (let i = 0; i < len; i++) {
+      const d = parseInt(str[i])
+      const pos = len - 1 - i
+      const unitIdx = pos % 4
+      const bigIdx = Math.floor(pos / 4)
+      if (d === 0) {
+        zeroFlag = true
+        if (unitIdx === 0 && bigUnits[bigIdx]) { result += bigUnits[bigIdx]; zeroFlag = false }
+      } else {
+        if (zeroFlag) { result += '零'; zeroFlag = false }
+        result += digits[d] + units[unitIdx]
+        if (unitIdx === 0 && bigUnits[bigIdx]) result += bigUnits[bigIdx]
+      }
+    }
+    result += '元'
+  }
+  if (jiao === 0 && fen === 0) { result += '整' }
+  else {
+    if (jiao > 0) result += digits[jiao] + '角'
+    else if (intPart > 0) result += '零'
+    if (fen > 0) result += digits[fen] + '分'
+  }
+  return (negative ? '负' : '') + result
+}
 
 const form = reactive<AcceptanceDetailResponse>({
   id: '',
@@ -270,71 +411,15 @@ const form = reactive<AcceptanceDetailResponse>({
   our_acceptor_name: '',
   remark: '',
   reject_reason: '',
+  discount_amount: 0,
+  advance_amount: 0,
   created_at: '',
   updated_at: '',
   items: [],
   attachments: [],
 })
 
-const orderOptions = ref<OrderListResponse[]>([])
-const orderSearching = ref(false)
 const userOptions = ref<UserResponse[]>([])
-const selectedItems = ref<AcceptanceItemResponse[]>([])
-const itemsTableRef = ref<InstanceType<typeof ElTable> | null>(null)
-
-const selectedCount = computed(() => selectedItems.value.length)
-
-function handleSelectionChange(rows: AcceptanceItemResponse[]) {
-  selectedItems.value = rows
-}
-
-function toggleSelectAll() {
-  if (!itemsTableRef.value) return
-  if (selectedCount.value === form.items.length) {
-    itemsTableRef.value.clearSelection()
-  } else {
-    itemsTableRef.value.clearSelection()
-    form.items.forEach((row) => {
-      itemsTableRef.value!.toggleRowSelection(row, true)
-    })
-  }
-}
-
-async function searchOrders(query: string) {
-  if (!query) return
-  orderSearching.value = true
-  try {
-    const data = await getOrders({ page: 1, page_size: 20, keyword: query })
-    orderOptions.value = data.items
-  } finally {
-    orderSearching.value = false
-  }
-}
-
-async function loadOrderItems(orderId: string) {
-  try {
-    const detail = await getOrder(orderId)
-    form.customer_name = detail.customer_name || ''
-    if (detail.items && detail.items.length > 0) {
-      form.items = detail.items.map((item) => ({
-        item_name: item.item_name || '',
-        specification: [item.length, item.width, item.height].filter(Boolean).join('×') || '',
-        quantity: item.quantity || null,
-        unit: item.unit || '',
-        order_item_id: item.id,
-        item_status: 'pending',
-        remark: '',
-      }))
-      // 默认全选
-      await nextTick()
-      if (itemsTableRef.value) {
-        form.items.forEach((row) => {
-          itemsTableRef.value!.toggleRowSelection(row, true)
-        })
-      }
-    }
-  } catch { /* ignore */ }
-}
 
 async function loadUsers() {
   try {
@@ -343,56 +428,34 @@ async function loadUsers() {
   } catch { /* ignore */ }
 }
 
-function addItem() {
-  form.items.push({
-    item_name: '',
-    specification: '',
-    quantity: null,
-    unit: '',
-    item_status: 'pending',
-    remark: '',
-  })
-}
-
-function removeItem(index: number) {
-  form.items.splice(index, 1)
-}
-
 async function handleSave() {
-  if (!form.order_id) {
-    ElMessage.warning('请选择关联订单')
-    return
-  }
-  const itemsToSave = isCreate.value ? selectedItems.value : form.items
-  if (isCreate.value && itemsToSave.length === 0) {
-    ElMessage.warning('请至少勾选一项验收明细')
-    return
-  }
   saving.value = true
   try {
     const payload = {
-      order_id: form.order_id,
       accepted_by: form.accepted_by || undefined,
       our_acceptor_id: form.our_acceptor_id || undefined,
       remark: form.remark || undefined,
-      items: itemsToSave.map((item) => ({
+      discount_amount: form.discount_amount || 0,
+      advance_amount: form.advance_amount || 0,
+      items: form.items.map((item) => ({
         item_name: item.item_name,
+        material_process: item.material_process || undefined,
         specification: item.specification || undefined,
+        area: item.area ?? undefined,
         quantity: item.quantity || undefined,
         unit: item.unit || undefined,
+        unit_price: item.unit_price ?? undefined,
+        subtotal: item.subtotal ?? undefined,
+        image_url: item.image_url || undefined,
         order_item_id: item.order_item_id || undefined,
+        remark: item.remark || undefined,
+        item_status: item.item_status,
+        group_name: item.group_name || undefined,
       })),
     }
-
-    if (isCreate.value) {
-      const res = await createAcceptance(payload)
-      ElMessage.success('创建成功')
-      router.replace(`/acceptances/${res.id}`)
-    } else {
-      await updateAcceptance(form.id, payload)
-      ElMessage.success('保存成功')
-      loadDetail(form.id)
-    }
+    await updateAcceptance(form.id, payload)
+    ElMessage.success('保存成功')
+    loadDetail(form.id)
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : '保存失败')
   } finally {
@@ -481,33 +544,15 @@ const statusColor = (s: string): '' | 'success' | 'warning' | 'info' | 'danger' 
   const map: Record<string, '' | 'success' | 'warning' | 'info' | 'danger'> = { draft: 'info', pending: 'warning', accepted: 'success', rejected: 'danger' }
   return map[s] || ''
 }
-const itemStatusLabel = (s: string) => {
-  const map: Record<string, string> = { pending: '待验收', accepted: '通过', rejected: '不通过', conditional: '有条件通过' }
-  return map[s] || s
-}
 
 onMounted(async () => {
   await loadUsers()
-  if (!isCreate.value) {
-    await loadDetail(route.params.id as string)
-    if (form.order_no) {
-      orderOptions.value = [{ id: form.order_id, order_no: form.order_no, customer_name: form.customer_name }]
-    }
-  }
+  await loadDetail(route.params.id as string)
 })
 
 watch(() => route.params.id, async (newId) => {
   if (newId && route.name === 'AcceptanceDetail') {
     await loadDetail(newId as string)
-    if (form.order_no) {
-      orderOptions.value = [{ id: form.order_id, order_no: form.order_no, customer_name: form.customer_name }]
-    }
-  }
-})
-
-watch(() => form.order_id, async (newOrderId) => {
-  if (newOrderId && isCreate.value) {
-    await loadOrderItems(newOrderId)
   }
 })
 </script>
@@ -518,4 +563,8 @@ watch(() => form.order_id, async (newOrderId) => {
 .page-header h2 { margin: 0; color: var(--ad-text); flex: 1; }
 .header-actions { display: flex; gap: 8px; }
 .save-bar { margin-top: 20px; display: flex; gap: 12px; }
+:deep(.group-header-row) { background: var(--ad-bg-secondary, #f5f7fa) !important; }
+:deep(.group-header-row td) { border-bottom: 2px solid var(--ad-primary, #409eff) !important; }
+:deep(.group-total-row) { background: var(--ad-bg-secondary, #fafafa) !important; }
+:deep(.group-total-row td) { border-top: 1px solid var(--ad-border, #dcdfe6) !important; font-weight: 600; }
 </style>

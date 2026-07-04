@@ -56,6 +56,7 @@ class QuoteItem(Base, TimestampMixin):
     other_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     subtotal_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     group_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     material_process: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)

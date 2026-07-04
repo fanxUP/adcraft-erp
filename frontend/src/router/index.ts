@@ -25,7 +25,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'orders/recycle', name: 'OrderRecycle', meta: { roles: ['admin'] }, component: () => import('@/views/orders/OrderRecycle.vue') },
       { path: 'orders/:id', name: 'OrderDetail', component: () => import('@/views/orders/OrderDetail.vue') },
       { path: 'acceptances', name: 'AcceptanceList', component: () => import('@/views/acceptances/AcceptanceList.vue') },
-      { path: 'acceptances/new', name: 'AcceptanceCreate', component: () => import('@/views/acceptances/AcceptanceDetail.vue') },
       { path: 'acceptances/:id', name: 'AcceptanceDetail', component: () => import('@/views/acceptances/AcceptanceDetail.vue') },
       { path: 'design-tasks', name: 'DesignTaskList', component: () => import('@/views/tasks/DesignTaskList.vue') },
       { path: 'design-tasks/:id', name: 'DesignTaskDetail', component: () => import('@/views/tasks/DesignTaskDetail.vue') },
