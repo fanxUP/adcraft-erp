@@ -62,6 +62,7 @@ class CustomerService:
         if not customer:
             raise ValueError("客户不存在")
         customer = await self.repo.update(customer, data)
+        await self.db.refresh(customer, ["contacts"])
         return self._to_response(customer)
 
     async def delete_customer(self, customer_id: UUID) -> bool:

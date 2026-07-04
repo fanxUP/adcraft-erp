@@ -148,8 +148,8 @@ class QuoteService:
             area = length_in_m * width_in_m * quantity
             item.area = float(area)
 
-            # 根据 use_area 决定计算方式
-            if item.use_area:
+            # 根据 use_area 或 quantity_mode 决定计算方式
+            if item.use_area or item.quantity_mode == "area":
                 item_subtotal = area * unit_price + process_fee + installation_fee + design_fee + transport_fee + other_fee
             else:
                 item_subtotal = quantity * unit_price + process_fee + installation_fee + design_fee + transport_fee + other_fee
@@ -201,7 +201,10 @@ class QuoteService:
         if not quote.customer_id and quote.customer_name:
             from app.services.customer_service import CustomerService
             customer_svc = CustomerService(self.db)
-            new_customer = await customer_svc.create_customer({"name": quote.customer_name})
+            new_customer = await customer_svc.create_customer({
+                "name": quote.customer_name,
+                "remark": f"由报价 {quote.quote_no} 转订单时自动创建",
+            })
             quote.customer_id = UUID(new_customer["id"])
 
         # Save version snapshot
