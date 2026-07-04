@@ -39,6 +39,7 @@ class CustomerUpdate(BaseModel):
     default_payment_days: int | None = None
     default_discount: float | None = None
     remark: str | None = None
+    contacts: list[ContactCreate] | None = None
 
 
 class ContactResponse(BaseModel):

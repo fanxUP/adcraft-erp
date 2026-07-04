@@ -21,10 +21,6 @@ export function deleteQuote(id: string) {
   return del<SuccessResponse>(`/quotes/${id}`)
 }
 
-export function calculateQuote(id: string) {
-  return post<QuoteDetailResponse>(`/quotes/${id}/calculate`)
-}
-
 export function confirmQuote(id: string) {
   return post<QuoteDetailResponse>(`/quotes/${id}/confirm`)
 }

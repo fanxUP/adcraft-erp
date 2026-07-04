@@ -248,7 +248,6 @@
     <div style="margin-top: 24px; display: flex; gap: 12px; align-items: center">
       <el-button v-if="!isReadonly && quote?.status !== 'confirmed'" type="primary" :loading="saving" @click="handleSave">保存草稿</el-button>
       <el-button v-if="!isReadonly && quote?.status === 'confirmed'" type="warning" :loading="reverting" @click="handleRevertToDraft">转草稿</el-button>
-      <el-button v-if="!isReadonly" type="warning" :loading="calculating" @click="handleCalculate">服务端计算</el-button>
       <el-button v-if="isEdit && quote?.status === 'draft'" type="success" @click="handleConfirm">确认报价</el-button>
       <el-button v-if="isEdit && quote?.status === 'confirmed'" type="danger" :loading="converting" @click="handleConvert">转订单</el-button>
       <el-button v-if="isEdit" type="success" @click="previewVisible = true">预览</el-button>
@@ -267,7 +266,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createQuote, getQuote, updateQuote, calculateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft } from '@/api/quotes'
+import { createQuote, getQuote, updateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft } from '@/api/quotes'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { uploadAttachment } from '@/api/tasks'
@@ -278,7 +277,6 @@ const route = useRoute()
 const router = useRouter()
 const isEdit = !!route.params.id
 const saving = ref(false)
-const calculating = ref(false)
 const converting = ref(false)
 const reverting = ref(false)
 const customerSelectRef = ref()
@@ -619,20 +617,6 @@ async function handleSave() {
       router.push(`/quotes/${result.id}/edit`)
     }
   } finally { saving.value = false }
-}
-
-async function handleCalculate() {
-  if (!isEdit) { ElMessage.warning('请先保存草稿'); return }
-  calculating.value = true
-  try {
-    quote.value = await calculateQuote(route.params.id as string)
-    Object.assign(form, {
-      tax_rate: quote.value.tax_rate,
-      discount_amount: quote.value.discount_amount,
-    })
-    items.value = quote.value.items?.length ? quote.value.items.map(i => ({ ...i })) : items.value
-    ElMessage.success('计算完成')
-  } finally { calculating.value = false }
 }
 
 async function handleConfirm() {

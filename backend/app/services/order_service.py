@@ -26,11 +26,24 @@ class OrderService:
             return None
         return self._order_to_detail(order)
 
+    ORDER_TRANSITIONS = {
+        "pending_confirm": ["confirmed", "cancelled"],
+        "confirmed": ["in_progress", "cancelled"],
+        "in_progress": ["in_production", "in_installation", "completed", "cancelled"],
+        "in_production": ["in_installation", "completed", "cancelled"],
+        "in_installation": ["completed", "cancelled"],
+        "completed": ["cancelled"],
+        "cancelled": [],
+    }
+
     async def change_status(self, order_id: UUID, to_status: str, reason: str | None, operated_by: UUID) -> dict:
         order = await self.repo.get_by_id(order_id)
         if not order:
             raise ValueError("订单不存在")
         from_status = order.status
+        allowed = self.ORDER_TRANSITIONS.get(from_status, [])
+        if to_status not in allowed:
+            raise ValueError(f"不允许从 {from_status} 流转到 {to_status}")
         await self.repo.update(order, {"status": to_status})
         await self.db.flush()
         await self.repo.create_status_log(order_id, from_status, to_status, reason, operated_by)
@@ -44,8 +57,8 @@ class OrderService:
             from app.services.notification_service import NotificationService
             notif_svc = NotificationService(self.db)
             status_labels = {
-                "draft": "草稿", "confirmed": "已确认", "designing": "设计中",
-                "producing": "制作中", "installing": "安装中", "completed": "已完成", "cancelled": "已取消",
+                "pending_confirm": "待确认", "confirmed": "已确认", "in_progress": "进行中",
+                "in_production": "生产中", "in_installation": "安装中", "completed": "已完成", "cancelled": "已取消",
             }
             from_label = status_labels.get(from_status, from_status)
             to_label = status_labels.get(to_status, to_status)
@@ -130,10 +143,10 @@ class OrderService:
         """Auto-calculate order cost from outsource tasks + material stock-out records + manual project costs."""
         total_cost = Decimal("0")
 
-        # Outsource costs
+        # Outsource costs (settled + completed)
         result = await self.db.execute(
             select(func.coalesce(func.sum(OutsourceTask.total_amount), 0))
-            .where(OutsourceTask.order_id == order_id, OutsourceTask.status == "settled")
+            .where(OutsourceTask.order_id == order_id, OutsourceTask.status.in_(["completed", "settled"]))
         )
         total_cost += Decimal(str(result.scalar()))
 

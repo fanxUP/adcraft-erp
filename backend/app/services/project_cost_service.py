@@ -8,7 +8,6 @@ from sqlalchemy import select
 
 from app.models.project_cost import ProjectCost
 from app.models.task import Attachment
-from app.models.order import Order
 from app.repositories.project_cost_repo import ProjectCostRepository
 from app.repositories.task_repo import AttachmentRepository
 from app.services.number_generator import generate_project_cost_no
@@ -18,23 +17,13 @@ class ProjectCostService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = ProjectCostRepository(db)
+        self.attachment_repo = AttachmentRepository(db)
 
     async def _sync_order_cost(self, order_id: UUID) -> None:
-        """Sum all project costs for the order and update cost_amount + gross_profit."""
-        from sqlalchemy import func
-        result = await self.db.execute(
-            select(func.coalesce(func.sum(ProjectCost.amount), 0))
-            .where(ProjectCost.order_id == order_id, ProjectCost.deleted_at.is_(None))
-        )
-        cost_amount = float(result.scalar())
-        order = await self.db.get(Order, order_id)
-        if order:
-            from decimal import Decimal
-            gross_profit = float(Decimal(str(order.total_amount)) - Decimal(str(cost_amount)))
-            order.cost_amount = cost_amount
-            order.gross_profit = gross_profit
-            await self.db.flush()
-        self.attachment_repo = AttachmentRepository(db)
+        """Re-calculate order cost from all sources (outsource + material stock + project costs)."""
+        from app.services.order_service import OrderService
+        order_svc = OrderService(self.db)
+        await order_svc.auto_calculate_cost(order_id)
 
     async def list_costs(
         self,

@@ -75,10 +75,53 @@
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" />
         </el-form-item>
+        <el-divider />
+        <div style="margin-bottom: 8px; font-weight: 600; font-size: 14px">联系人</div>
+        <el-table :data="form.contacts" stripe size="small" empty-text="暂无联系人" style="margin-bottom: 8px">
+          <el-table-column prop="name" label="姓名" />
+          <el-table-column prop="phone" label="电话" />
+          <el-table-column prop="position" label="职位" />
+          <el-table-column prop="is_primary" label="首要" width="60">
+            <template #default="{ row }">
+              <el-tag v-if="row.is_primary" type="danger" size="small">是</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120">
+            <template #default="{ row, $index }">
+              <el-button text type="primary" size="small" @click="handleEditContact(row, $index)">编辑</el-button>
+              <el-button text type="danger" size="small" @click="form.contacts.splice($index, 1)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-button size="small" @click="handleAddContact">+ 添加联系人</el-button>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="contactDialogVisible" :title="contactEditingIndex >= 0 ? '编辑联系人' : '添加联系人'" width="420px">
+      <el-form :model="contactForm" label-width="90px">
+        <el-form-item label="姓名">
+          <el-input v-model="contactForm.name" />
+        </el-form-item>
+        <el-form-item label="电话">
+          <el-input v-model="contactForm.phone" />
+        </el-form-item>
+        <el-form-item label="微信">
+          <el-input v-model="contactForm.wechat" />
+        </el-form-item>
+        <el-form-item label="职位">
+          <el-input v-model="contactForm.position" />
+        </el-form-item>
+        <el-form-item label="首要联系人">
+          <el-switch v-model="contactForm.is_primary" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="contactDialogVisible = false">取消</el-button>
+        <el-button type="danger" @click="handleConfirmContact">保存</el-button>
       </template>
     </el-dialog>
 
@@ -155,7 +198,12 @@ const keyword = ref('')
 const customerType = ref('')
 const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
-const form = reactive({ name: '', customer_type: '', level: '', phone: '', address: '', remark: '' })
+const form = reactive({ name: '', customer_type: '', level: '', phone: '', address: '', remark: '', contacts: [] as { name: string; phone: string | null; wechat: string | null; position: string | null; is_primary: boolean }[] })
+
+// Contact dialog
+const contactDialogVisible = ref(false)
+const contactEditingIndex = ref(-1)
+const contactForm = reactive({ name: '', phone: '', wechat: '', position: '', is_primary: false })
 
 // Import
 const importDialogVisible = ref(false)
@@ -191,18 +239,19 @@ async function fetchData() {
 
 function handleCreate() {
   editingId.value = null
-  Object.assign(form, { name: '', customer_type: '', level: '', phone: '', address: '', remark: '' })
+  Object.assign(form, { name: '', customer_type: '', level: '', phone: '', address: '', remark: '', contacts: [] })
   dialogVisible.value = true
 }
 
 async function handleSave() {
   saving.value = true
   try {
+    const payload = { ...form, contacts: form.contacts.map(c => ({ name: c.name, phone: c.phone || null, wechat: c.wechat || null, position: c.position || null, is_primary: c.is_primary })) }
     if (editingId.value) {
-      await updateCustomer(editingId.value, form)
+      await updateCustomer(editingId.value, payload)
       ElMessage.success('更新成功')
     } else {
-      await createCustomer(form)
+      await createCustomer(payload)
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false
@@ -210,6 +259,38 @@ async function handleSave() {
   } finally {
     saving.value = false
   }
+}
+
+function handleAddContact() {
+  contactEditingIndex.value = -1
+  Object.assign(contactForm, { name: '', phone: '', wechat: '', position: '', is_primary: false })
+  contactDialogVisible.value = true
+}
+
+function handleEditContact(row: { name: string; phone: string | null; wechat: string | null; position: string | null; is_primary: boolean }, index: number) {
+  contactEditingIndex.value = index
+  Object.assign(contactForm, {
+    name: row.name,
+    phone: row.phone || '',
+    wechat: row.wechat || '',
+    position: row.position || '',
+    is_primary: row.is_primary,
+  })
+  contactDialogVisible.value = true
+}
+
+function handleConfirmContact() {
+  if (!contactForm.name) {
+    ElMessage.warning('请输入联系人姓名')
+    return
+  }
+  const data = { name: contactForm.name, phone: contactForm.phone || null, wechat: contactForm.wechat || null, position: contactForm.position || null, is_primary: contactForm.is_primary }
+  if (contactEditingIndex.value >= 0) {
+    form.contacts[contactEditingIndex.value] = data
+  } else {
+    form.contacts.push(data)
+  }
+  contactDialogVisible.value = false
 }
 
 async function handleDelete(row: CustomerResponse) {

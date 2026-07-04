@@ -41,45 +41,50 @@
       </div>
 
       <table class="preview-table">
+        <colgroup>
+          <col style="width: 5%" />
+          <col style="width: 14%" />
+          <col style="width: 13%" />
+          <col style="width: 13%" />
+          <col style="width: 6%" />
+          <col style="width: 6%" />
+          <col style="width: 9%" />
+          <col style="width: 10%" />
+          <col style="width: 9%" />
+        </colgroup>
         <thead>
           <tr>
-            <th style="width: 50px">序号</th>
-            <th><div class="wrap-text">项目内容</div></th>
-            <th><div class="wrap-text">材质工艺</div></th>
+            <th>序号</th>
+            <th>项目内容</th>
+            <th>材质工艺</th>
             <th>规格</th>
             <th>数量</th>
             <th>单位</th>
             <th>单价</th>
             <th>小计</th>
-            <th>样图</th>
-            <th><div class="wrap-text">备注</div></th>
+            <th>备注</th>
           </tr>
         </thead>
         <tbody>
           <template v-for="row in previewDisplayRows" :key="row.key">
             <tr v-if="row.type === 'group-header'" class="group-header">
-              <td colspan="10" style="font-weight: 600; background: #f5f7fa;">{{ row.groupName }}</td>
+              <td colspan="9">分项：{{ row.groupName }}</td>
             </tr>
             <tr v-else-if="row.type === 'group-total'" class="group-total">
-              <td colspan="8" style="text-align: right; font-weight: 600; background: #fafafa;">分项合计</td>
-              <td style="text-align: right; font-weight: 600; background: #fafafa;">{{ row.total.toFixed(2) }}</td>
-              <td style="background: #fafafa;"></td>
-              <td style="background: #fafafa;"></td>
+              <td colspan="7" style="text-align: right;">分项合计</td>
+              <td>{{ row.total.toFixed(2) }}</td>
+              <td></td>
             </tr>
             <tr v-else>
               <td style="text-align: center">{{ row.idx }}</td>
-              <td><div class="wrap-text">{{ row.item.item_name }}</div></td>
-              <td><div class="wrap-text">{{ row.item.material_process || '-' }}</div></td>
+              <td>{{ row.item.item_name }}</td>
+              <td>{{ row.item.material_process || '-' }}</td>
               <td>{{ formatSpec(row.item) }}</td>
               <td style="text-align: right">{{ row.item.quantity }}</td>
               <td style="text-align: center">{{ row.item.use_area ? '㎡' : (row.item.unit || '-') }}</td>
               <td style="text-align: right">{{ row.item.unit_price?.toFixed(2) }}</td>
               <td style="text-align: right">{{ row.item.subtotal_amount?.toFixed(2) }}</td>
-              <td style="text-align: center; padding: 4px;">
-                <img v-if="row.item.image_url" :src="row.item.image_url" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;" />
-                <span v-else style="color: #999;">-</span>
-              </td>
-              <td><div class="wrap-text">{{ row.item.remark || '' }}</div></td>
+              <td>{{ row.item.remark || '' }}</td>
             </tr>
           </template>
         </tbody>
@@ -260,34 +265,31 @@ function handlePrint() {
   width: 100%;
   border-collapse: collapse;
   margin: 16px 0;
-  font-size: 13px;
-  table-layout: auto;
+  font-size: 12px;
+  table-layout: fixed;
 }
 .preview-table th,
 .preview-table td {
   border: 1px solid #333;
-  padding: 8px 10px;
-  white-space: nowrap;
+  padding: 6px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-all;
 }
 .preview-table th {
   background: #f5f5f5;
   font-weight: bold;
   text-align: center;
 }
-/* 项目内容、材质工艺、备注：≤8字按内容撑宽，>8字超出换行 */
-.preview-table .wrap-text {
-  white-space: normal;
-  word-break: break-all;
-  max-width: 8em;
-  min-width: 2em;
-}
 .preview-table .group-header td {
-  background: #f5f7fa;
+  background: #e8edf2;
   border-bottom: 2px solid #409eff;
+  font-weight: 600;
+  padding: 6px 12px;
 }
 .preview-table .group-total td {
-  background: #fafafa;
-  border-top: 1px solid #dcdfe6;
+  background: #f5f5f5;
+  font-weight: 600;
 }
 .preview-summary {
   margin: 16px 0;

@@ -106,7 +106,8 @@ else:
     _EXE_DIR = Path(__file__).resolve().parent.parent.parent
 
 FRONTEND_DIR = os.environ.get("FRONTEND_DIR", str(_EXE_DIR / "frontend"))
-UPLOAD_DIR = os.environ.get("LOCAL_UPLOAD_DIR", str(_EXE_DIR / "uploads"))
+# Use the same LOCAL_UPLOAD_DIR that upload APIs (tasks.py, etc.) use via settings
+UPLOAD_DIR = os.environ.get("LOCAL_UPLOAD_DIR") or os.path.abspath(settings.LOCAL_UPLOAD_DIR)
 
 # Ensure upload directory exists
 os.makedirs(UPLOAD_DIR, exist_ok=True)

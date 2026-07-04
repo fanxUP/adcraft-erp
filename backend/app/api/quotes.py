@@ -127,18 +127,6 @@ async def delete_quote_item(
     await service.calculate_quote(UUID(quote_id))
     return success(service._quote_to_detail(await service.repo.get_by_id(UUID(quote_id))))
 
-
-@router.post("/{quote_id}/calculate")
-async def calculate_quote(
-    quote_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    service = QuoteService(db)
-    quote = await service.calculate_quote(UUID(quote_id))
-    return success(quote)
-
-
 @router.post("/{quote_id}/confirm")
 async def confirm_quote(
     quote_id: str,

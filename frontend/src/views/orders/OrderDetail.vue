@@ -56,6 +56,8 @@
                 <el-select v-model="statusForm.to_status" style="width: 160px">
                   <el-option label="已确认" value="confirmed" />
                   <el-option label="进行中" value="in_progress" />
+                  <el-option label="生产中" value="in_production" />
+                  <el-option label="安装中" value="in_installation" />
                   <el-option label="已完成" value="completed" />
                   <el-option label="已取消" value="cancelled" />
                 </el-select>
