@@ -2,7 +2,6 @@
   <div class="page">
     <div class="page-header">
       <h2>验收管理</h2>
-      <el-button type="primary" @click="handleCreate">新建验收单</el-button>
     </div>
 
     <el-card class="filter-card">
@@ -36,7 +35,7 @@
             <el-tag :type="statusColor(row.status)">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="accepted_by" label="签收人" width="100" />
+        <el-table-column prop="accepted_by" label="验收人" width="100" />
         <el-table-column label="验收日期" width="120">
           <template #default="{ row }">{{ row.accepted_at?.slice(0, 10) || '-' }}</template>
         </el-table-column>
@@ -74,12 +73,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAcceptances, deleteAcceptance } from '@/api/acceptances'
 import type { AcceptanceListResponse } from '@/types/api'
 
-const router = useRouter()
 const loading = ref(false)
 const list = ref<AcceptanceListResponse[]>([])
 const total = ref(0)
@@ -122,10 +119,6 @@ function handleReset() {
   filters.status = ''
   page.value = 1
   fetchData()
-}
-
-function handleCreate() {
-  router.push('/acceptances/new')
 }
 
 async function handleDelete(row: AcceptanceListResponse) {

@@ -96,13 +96,28 @@ export interface OrderItemResponse {
   material_id?: string
   process_id?: string
   length?: number
+  length_unit?: string
   width?: number
+  width_unit?: string
   height?: number
+  height_unit?: string
   quantity: number
   unit?: string
+  use_area?: boolean
+  quantity_mode?: 'piece' | 'area'
+  area?: number
   unit_price: number
+  process_fee: number
+  installation_fee: number
+  design_fee: number
+  transport_fee: number
+  other_fee: number
   subtotal_amount: number
   remark?: string
+  image_url?: string
+  sort_order: number
+  group_name?: string
+  material_process?: string
 }
 
 export interface OrderStatusLogResponse {
@@ -478,6 +493,7 @@ export interface QuoteItemResponse {
   other_fee: number
   subtotal_amount: number
   remark?: string
+  image_url?: string
   sort_order: number
   group_name?: string
   material_process?: string
@@ -798,11 +814,17 @@ export interface AcceptanceItemResponse {
   acceptance_id: string
   order_item_id?: string
   item_name: string
+  material_process?: string
   specification?: string
   quantity?: number
   unit?: string
+  area?: number
+  unit_price?: number
+  subtotal?: number
+  image_url?: string
   item_status: string
   remark?: string
+  group_name?: string
 }
 
 export interface AcceptanceAttachmentResponse {
@@ -828,10 +850,16 @@ export interface AcceptanceListResponse {
 }
 
 export interface AcceptanceDetailResponse extends AcceptanceListResponse {
+  customer_phone?: string
+  customer_address?: string
+  contact_person?: string
+  order_date?: string
   our_acceptor_id?: string
   our_acceptor_name?: string
   remark?: string
   reject_reason?: string
+  discount_amount: number
+  advance_amount: number
   updated_at: string
   items: AcceptanceItemResponse[]
   attachments: AcceptanceAttachmentResponse[]

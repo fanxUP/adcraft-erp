@@ -25,6 +25,7 @@ class QuoteItemCreate(BaseModel):
     transport_fee: float = 0
     other_fee: float = 0
     remark: str | None = None
+    image_url: str | None = None
     sort_order: int = 0
     group_name: str | None = None
     material_process: str | None = None
@@ -52,6 +53,7 @@ class QuoteItemUpdate(BaseModel):
     transport_fee: float | None = None
     other_fee: float | None = None
     remark: str | None = None
+    image_url: str | None = None
     sort_order: int | None = None
     group_name: str | None = None
     material_process: str | None = None
@@ -83,6 +85,7 @@ class QuoteItemResponse(BaseModel):
     other_fee: float
     subtotal_amount: float
     remark: str | None = None
+    image_url: str | None = None
     sort_order: int = 0
     group_name: str | None = None
     material_process: str | None = None

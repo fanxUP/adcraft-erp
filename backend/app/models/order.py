@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import DateTime, Integer, Numeric, String, Text, ForeignKey
+from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,13 +47,28 @@ class OrderItem(Base, TimestampMixin):
     material_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("materials.id"), nullable=True)
     process_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("processes.id"), nullable=True)
     length: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    length_unit: Mapped[str | None] = mapped_column(String(16), nullable=True, default="m")
     width: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    width_unit: Mapped[str | None] = mapped_column(String(16), nullable=True, default="m")
     height: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    height_unit: Mapped[str | None] = mapped_column(String(16), nullable=True, default="m")
     quantity: Mapped[float] = mapped_column(Numeric(14, 3), default=1)
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    use_area: Mapped[bool] = mapped_column(default=False)
+    quantity_mode: Mapped[str] = mapped_column(String(16), default="piece")
+    area: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
     unit_price: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    process_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    installation_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    design_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    transport_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    other_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     subtotal_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    group_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    material_process: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
 
     order: Mapped["Order"] = relationship(back_populates="items")
 

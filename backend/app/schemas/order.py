@@ -23,13 +23,28 @@ class OrderItemResponse(BaseModel):
     material_id: str | None = None
     process_id: str | None = None
     length: float | None = None
+    length_unit: str | None = "m"
     width: float | None = None
+    width_unit: str | None = "m"
     height: float | None = None
+    height_unit: str | None = "m"
     quantity: float
     unit: str | None = None
+    use_area: bool = False
+    quantity_mode: str = "piece"
+    area: float | None = None
     unit_price: float
+    process_fee: float = 0
+    installation_fee: float = 0
+    design_fee: float = 0
+    transport_fee: float = 0
+    other_fee: float = 0
     subtotal_amount: float
     remark: str | None = None
+    image_url: str | None = None
+    sort_order: int = 0
+    group_name: str | None = None
+    material_process: str | None = None
 
     model_config = {"from_attributes": True}
 

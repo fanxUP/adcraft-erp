@@ -51,17 +51,19 @@
             <th>单位</th>
             <th>单价</th>
             <th>小计</th>
+            <th>样图</th>
             <th><div class="wrap-text">备注</div></th>
           </tr>
         </thead>
         <tbody>
           <template v-for="row in previewDisplayRows" :key="row.key">
             <tr v-if="row.type === 'group-header'" class="group-header">
-              <td colspan="9" style="font-weight: 600; background: #f5f7fa;">{{ row.groupName }}</td>
+              <td colspan="10" style="font-weight: 600; background: #f5f7fa;">{{ row.groupName }}</td>
             </tr>
             <tr v-else-if="row.type === 'group-total'" class="group-total">
-              <td colspan="7" style="text-align: right; font-weight: 600; background: #fafafa;">分项合计</td>
+              <td colspan="8" style="text-align: right; font-weight: 600; background: #fafafa;">分项合计</td>
               <td style="text-align: right; font-weight: 600; background: #fafafa;">{{ row.total.toFixed(2) }}</td>
+              <td style="background: #fafafa;"></td>
               <td style="background: #fafafa;"></td>
             </tr>
             <tr v-else>
@@ -73,6 +75,10 @@
               <td style="text-align: center">{{ row.item.use_area ? '㎡' : (row.item.unit || '-') }}</td>
               <td style="text-align: right">{{ row.item.unit_price?.toFixed(2) }}</td>
               <td style="text-align: right">{{ row.item.subtotal_amount?.toFixed(2) }}</td>
+              <td style="text-align: center; padding: 4px;">
+                <img v-if="row.item.image_url" :src="row.item.image_url" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;" />
+                <span v-else style="color: #999;">-</span>
+              </td>
               <td><div class="wrap-text">{{ row.item.remark || '' }}</div></td>
             </tr>
           </template>
