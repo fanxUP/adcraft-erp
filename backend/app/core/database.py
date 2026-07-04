@@ -8,6 +8,7 @@ engine = create_async_engine(
     max_overflow=10,
     pool_pre_ping=True,          # 每次使用前检测连接是否有效
     pool_recycle=3600,           # 每小时回收连接，防止 PostgreSQL 断开
+    pool_reset_on_return='rollback',  # 归还连接时回滚未完成的事务
 )
 async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
