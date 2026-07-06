@@ -323,9 +323,6 @@ class OrderService:
 
         # 转报价后删除原订单（硬删除，不进回收站）
         from app.models.acceptance import AcceptanceForm
-        await self.db.execute(
-            select(AcceptanceForm).where(AcceptanceForm.order_id == order_id)
-        ).scalars().all()  # 确保数据已加载
         for af in (await self.db.execute(
             select(AcceptanceForm).where(AcceptanceForm.order_id == order_id)
         )).scalars().all():
