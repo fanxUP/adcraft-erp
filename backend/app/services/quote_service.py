@@ -149,11 +149,8 @@ class QuoteService:
             area = length_in_m * width_in_m * pieces
             item.area = float(area)
 
-            # 根据 use_area 或 quantity_mode 决定计算方式
-            if item.use_area or item.quantity_mode == "area":
-                item_subtotal = area * unit_price + process_fee + installation_fee + design_fee + transport_fee + other_fee
-            else:
-                item_subtotal = quantity * unit_price + process_fee + installation_fee + design_fee + transport_fee + other_fee
+            # 小计统一用 quantity（前端已保证 quantity = 面积 × 件数）
+            item_subtotal = quantity * unit_price + process_fee + installation_fee + design_fee + transport_fee + other_fee
 
             item.subtotal_amount = float(item_subtotal)
             subtotal += item_subtotal
