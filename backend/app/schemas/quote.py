@@ -18,6 +18,7 @@ class QuoteItemCreate(BaseModel):
     unit: str | None = None
     use_area: bool = False
     quantity_mode: str = "piece"
+    pieces: float | None = 1
     unit_price: float = 0
     process_fee: float = 0
     installation_fee: float = 0
@@ -46,6 +47,7 @@ class QuoteItemUpdate(BaseModel):
     unit: str | None = None
     use_area: bool | None = None
     quantity_mode: str | None = None
+    pieces: float | None = None
     unit_price: float | None = None
     process_fee: float | None = None
     installation_fee: float | None = None
@@ -76,6 +78,7 @@ class QuoteItemResponse(BaseModel):
     unit: str | None = None
     use_area: bool = False
     quantity_mode: str = "piece"
+    pieces: float | None = None
     area: float | None = None
     unit_price: float
     process_fee: float

@@ -76,7 +76,7 @@ class QuoteService:
             # All nullable fields that must be explicitly set (even when None)
             nullable_fields = ("product_id", "material_id", "process_id",
                                "length", "length_unit", "width", "width_unit",
-                               "height", "height_unit", "unit", "remark", "group_name", "material_process")
+                               "height", "height_unit", "pieces", "unit", "remark", "group_name", "material_process")
 
             for idx, item_data in enumerate(items_data):
                 item_data["sort_order"] = idx
@@ -142,10 +142,11 @@ class QuoteService:
             transport_fee = Decimal(str(item.transport_fee))
             other_fee = Decimal(str(item.other_fee))
 
-            # 计算面积（考虑单位转换）
+            # 计算面积（考虑单位转换和件数）
             length_in_m = convert_to_meters(length, item.length_unit or "m")
             width_in_m = convert_to_meters(width, item.width_unit or "m")
-            area = length_in_m * width_in_m * quantity
+            pieces = Decimal(str(item.pieces or 1))
+            area = length_in_m * width_in_m * pieces
             item.area = float(area)
 
             # 根据 use_area 或 quantity_mode 决定计算方式
@@ -247,6 +248,7 @@ class QuoteService:
                 unit=item.unit,
                 use_area=item.use_area,
                 quantity_mode=item.quantity_mode,
+                pieces=item.pieces,
                 area=item.area,
                 unit_price=item.unit_price,
                 process_fee=item.process_fee,
@@ -331,6 +333,7 @@ class QuoteService:
                     "unit": item.unit,
                     "use_area": item.use_area,
                     "quantity_mode": item.quantity_mode,
+                    "pieces": float(item.pieces) if item.pieces else None,
                     "area": float(item.area) if item.area else None,
                     "unit_price": float(item.unit_price),
                     "process_fee": float(item.process_fee),

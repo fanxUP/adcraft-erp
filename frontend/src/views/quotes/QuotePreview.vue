@@ -212,6 +212,7 @@ function formatSpec(item: QuoteItemResponse) {
   if (item.length) parts.push(`${item.length}${item.length_unit || 'm'}`)
   if (item.width) parts.push(`${item.width}${item.width_unit || 'm'}`)
   if (item.height) parts.push(`${item.height}${item.height_unit || 'm'}`)
+  if (item.pieces && item.pieces > 1) parts.push(`${item.pieces}`)
   return parts.length ? parts.join(' × ') : '-'
 }
 

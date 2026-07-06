@@ -33,6 +33,7 @@ class OrderItemResponse(BaseModel):
     use_area: bool = False
     quantity_mode: str = "piece"
     area: float | None = None
+    pieces: float | None = None
     unit_price: float
     process_fee: float = 0
     installation_fee: float = 0
