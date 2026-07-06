@@ -48,6 +48,7 @@ class QuoteItem(Base, TimestampMixin):
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
     use_area: Mapped[bool] = mapped_column(default=False)
     quantity_mode: Mapped[str] = mapped_column(String(16), default="piece")
+    pieces: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, default=1, comment="件数")
     area: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
     unit_price: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     process_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)

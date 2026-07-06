@@ -8,6 +8,26 @@ from app.models.inventory import StockRecord
 from app.models.project_cost import ProjectCost
 
 
+def _build_spec(item) -> str | None:
+    """Build specification string from order/quote item dimensions + pieces."""
+    parts = []
+    if item.length:
+        v = float(item.length)
+        num = str(int(v)) if v == int(v) else str(v)
+        parts.append(f"{num}{item.length_unit or 'm'}")
+    if item.width:
+        v = float(item.width)
+        num = str(int(v)) if v == int(v) else str(v)
+        parts.append(f"{num}{item.width_unit or 'm'}")
+    if item.height:
+        v = float(item.height)
+        num = str(int(v)) if v == int(v) else str(v)
+        parts.append(f"{num}{item.height_unit or 'm'}")
+    if item.pieces and item.pieces > 1:
+        parts.append(str(int(item.pieces)))
+    return " × ".join(parts) if parts else None
+
+
 class OrderService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -96,14 +116,7 @@ class OrderService:
         await self.db.flush()
 
         for oi in order.items or []:
-            spec_parts = []
-            if oi.length:
-                spec_parts.append(str(oi.length))
-            if oi.width:
-                spec_parts.append(str(oi.width))
-            if oi.height:
-                spec_parts.append(str(oi.height))
-            spec = "×".join(spec_parts) if spec_parts else None
+            spec = _build_spec(oi)
 
             item = AcceptanceItem(
                 acceptance_id=form.id,
@@ -217,6 +230,8 @@ class OrderService:
                 "unit": item.unit,
                 "use_area": item.use_area,
                 "quantity_mode": item.quantity_mode,
+                "pieces": float(item.pieces) if item.pieces else None,
+                "area": float(item.area) if item.area else None,
                 "unit_price": float(item.unit_price),
                 "process_fee": float(item.process_fee),
                 "installation_fee": float(item.installation_fee),
@@ -298,6 +313,8 @@ class OrderService:
                     "unit": item.unit,
                     "use_area": item.use_area,
                     "quantity_mode": item.quantity_mode,
+                    "pieces": float(item.pieces) if item.pieces else None,
+                    "specification": _build_spec(item),
                     "area": float(item.area) if item.area else None,
                     "unit_price": float(item.unit_price),
                     "process_fee": float(item.process_fee),

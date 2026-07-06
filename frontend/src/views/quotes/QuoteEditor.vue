@@ -112,6 +112,13 @@
             </template>
           </template>
         </el-table-column>
+        <el-table-column label="件数" width="70">
+          <template #default="{ row }">
+            <template v-if="row.type === 'item'">
+              <el-input-number v-model="row.item.pieces" :precision="0" :min="1" :disabled="isReadonly" size="small" :controls="false" @change="syncAreaQuantity(row.item)" />
+            </template>
+          </template>
+        </el-table-column>
         <el-table-column label="面积" width="130">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
@@ -311,6 +318,7 @@ const newItem = (groupName?: string): QuoteItemResponse => ({
   quantity: 1,
   unit: '',
   use_area: false,
+  pieces: 1,
   unit_price: 0,
   process_fee: 0,
   installation_fee: 0,
@@ -343,7 +351,7 @@ function convertToMeters(value: number, unit: string): number {
 function calcArea(item: QuoteItemResponse) {
   const length = convertToMeters(item.length || 0, item.length_unit || 'm')
   const width = convertToMeters(item.width || 0, item.width_unit || 'm')
-  return length * width
+  return length * width * (item.pieces || 1)
 }
 
 function onAreaToggle(row: QuoteItemResponse, val: boolean) {
@@ -580,6 +588,7 @@ async function handleSave() {
         quantity: item.quantity,
         unit: item.unit || null,
         use_area: item.use_area || false,
+        pieces: item.pieces || 1,
         unit_price: item.unit_price || 0,
         process_fee: item.process_fee || 0,
         installation_fee: item.installation_fee || 0,
@@ -618,6 +627,7 @@ async function handleSave() {
         quantity: item.quantity,
         unit: item.unit || null,
         use_area: item.use_area || false,
+        pieces: item.pieces || 1,
         unit_price: item.unit_price || 0,
         process_fee: item.process_fee || 0,
         installation_fee: item.installation_fee || 0,

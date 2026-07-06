@@ -99,10 +99,13 @@
               <el-table-column label="规格" min-width="140">
                 <template #default="{ row }">
                   <template v-if="row.type === 'item'">
-                    <template v-if="row.item.length || row.item.width || row.item.height">
+                    <template v-if="row.item.specification">
+                      {{ row.item.specification }}
+                    </template>
+                    <template v-else-if="row.item.length || row.item.width || row.item.height">
                       {{ row.item.length ?? '' }}{{ row.item.length_unit || 'm' }}
-                      <template v-if="row.item.width"> × {{ row.item.width }}{{ row.item.width_unit || 'm' }}</template>
-                      <template v-if="row.item.height"> × {{ row.item.height }}{{ row.item.height_unit || 'm' }}</template>
+                      <template v-if="row.item.width"> x {{ row.item.width }}{{ row.item.width_unit || 'm' }}</template>
+                      <template v-if="row.item.height"> x {{ row.item.height }}{{ row.item.height_unit || 'm' }}</template>
                     </template>
                     <span v-else>-</span>
                   </template>

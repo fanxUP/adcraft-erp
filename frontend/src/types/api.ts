@@ -485,6 +485,7 @@ export interface QuoteItemResponse {
   use_area?: boolean
   quantity_mode?: 'piece' | 'area'
   area?: number
+  pieces?: number
   unit_price: number
   process_fee: number
   installation_fee: number
@@ -497,6 +498,8 @@ export interface QuoteItemResponse {
   sort_order: number
   group_name?: string
   material_process?: string
+  pieces?: number
+  specification?: string
 }
 
 export interface QuoteListResponse {
