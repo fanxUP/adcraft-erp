@@ -101,6 +101,7 @@ class QuoteCreate(BaseModel):
     tax_rate: float = 0
     valid_until: date | None = None
     remark: str | None = None
+    department: str | None = None
     items: list[QuoteItemCreate] = []
 
     @model_validator(mode='after')
@@ -117,6 +118,7 @@ class QuoteUpdate(BaseModel):
     tax_rate: float | None = None
     valid_until: date | None = None
     remark: str | None = None
+    department: str | None = None
     items: list[QuoteItemCreate] | None = None
 
 
@@ -130,6 +132,7 @@ class QuoteListResponse(BaseModel):
     total_amount: float
     valid_until: str | None = None
     created_at: datetime | None = None
+    department: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -149,6 +152,7 @@ class QuoteDetailResponse(BaseModel):
     total_amount: float
     valid_until: str | None = None
     remark: str | None = None
+    department: str | None = None
     created_at: datetime | None = None
     items: list[QuoteItemResponse] = []
 

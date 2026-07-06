@@ -16,6 +16,9 @@
         <el-form-item label="项目名称" required>
           <el-input v-model="form.project_name" :disabled="isReadonly" style="width: 260px" />
         </el-form-item>
+        <el-form-item label="部门/科室">
+          <el-input v-model="form.department" :disabled="isReadonly" placeholder="如：宣传部、办公室" style="width: 260px" />
+        </el-form-item>
         <el-form-item label="税率">
           <el-input-number v-model="form.tax_rate" :precision="4" :min="0" :step="0.01" :disabled="isReadonly" style="width: 160px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
         </el-form-item>
@@ -137,7 +140,7 @@
                 placeholder="选择/输入"
                 style="width: 100%"
                 :trigger-on-focus="true"
-                @select="(opt: { value: string; disabled?: boolean }) => { if (!opt.disabled) row.item.unit = opt.value }"
+                @select="(opt) => { if (!opt.disabled) row.item.unit = opt.value }"
                 @blur="addRecentUnit(row.item.unit)"
               >
                 <template #default="{ item }">
@@ -292,6 +295,7 @@ const form = reactive({
   discount_amount: 0,
   valid_until: '',
   remark: '',
+  department: '',
 })
 
 const newItem = (groupName?: string): QuoteItemResponse => ({
@@ -534,6 +538,7 @@ async function fetchQuote() {
     discount_amount: quote.value.discount_amount,
     valid_until: quote.value.valid_until || '',
     remark: quote.value.remark || '',
+    department: quote.value.department || '',
   })
   items.value = quote.value.items?.length ? quote.value.items.map(i => ({ ...i })) : [newItem()]
 }
@@ -593,6 +598,7 @@ async function handleSave() {
         discount_amount: form.discount_amount,
         valid_until: form.valid_until || undefined,
         remark: form.remark,
+        department: form.department || undefined,
         items: cleanItems,
       })
       ElMessage.success('保存成功')

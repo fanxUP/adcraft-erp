@@ -294,6 +294,7 @@ class QuoteService:
             "status": q.status, "total_amount": float(q.total_amount),
             "valid_until": q.valid_until.isoformat() if q.valid_until else None,
             "created_at": q.created_at.isoformat() if q.created_at else None,
+            "department": q.department,
         }
 
     def _quote_to_detail(self, q) -> dict:
@@ -311,6 +312,7 @@ class QuoteService:
             "total_amount": float(q.total_amount),
             "valid_until": q.valid_until.isoformat() if q.valid_until else None,
             "remark": q.remark,
+            "department": q.department,
             "created_at": q.created_at.isoformat() if q.created_at else None,
             "items": [
                 {

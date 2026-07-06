@@ -24,6 +24,7 @@ class Quote(Base, TimestampMixin, SoftDeleteMixin):
     total_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     valid_until: Mapped[str | None] = mapped_column(Date, nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    department: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="部门/科室")
 
     items: Mapped[list["QuoteItem"]] = relationship(back_populates="quote", lazy="selectin", cascade="all, delete-orphan")
 
