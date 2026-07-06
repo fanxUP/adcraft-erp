@@ -263,7 +263,7 @@ class OrderService:
         if order.quote_id:
             orig_quote = await self.db.get(Quote, order.quote_id)
             if orig_quote:
-                # 恢复原报价：更新基本信息，替换明细，重置状态
+                # 恢复原报价：更新基本信息、明细，重置状态
                 orig_quote.deleted_at = None
                 orig_quote.customer_id = order.customer_id
                 orig_quote.customer_name = order.customer.name if order.customer else None
@@ -271,45 +271,47 @@ class OrderService:
                 orig_quote.sales_user_id = order.sales_user_id
                 orig_quote.status = "draft"
                 orig_quote.remark = f"由订单 {order.order_no} 恢复"
-                # 删除原明细
-                old_items = await self.db.execute(
-                    select(QuoteItem).where(QuoteItem.quote_id == order.quote_id)
-                )
-                for oi in old_items.scalars().all():
-                    await self.db.delete(oi)
-                # 从订单明细重建
-                for item in (order.items or []):
-                    q_item = QuoteItem(quote_id=order.quote_id, **{
-                        "item_name": item.item_name,
-                        "product_id": item.product_id,
-                        "material_id": item.material_id,
-                        "process_id": item.process_id,
-                        "length": float(item.length) if item.length else None,
-                        "length_unit": item.length_unit,
-                        "width": float(item.width) if item.width else None,
-                        "width_unit": item.width_unit,
-                        "height": float(item.height) if item.height else None,
-                        "height_unit": item.height_unit,
-                        "quantity": float(item.quantity),
-                        "unit": item.unit,
-                        "use_area": item.use_area,
-                        "quantity_mode": item.quantity_mode,
-                        "pieces": float(item.pieces) if item.pieces else None,
-                        "area": float(item.area) if item.area else None,
-                        "unit_price": float(item.unit_price),
-                        "process_fee": float(item.process_fee),
-                        "installation_fee": float(item.installation_fee),
-                        "design_fee": float(item.design_fee),
-                        "transport_fee": float(item.transport_fee),
-                        "other_fee": float(item.other_fee),
-                        "remark": item.remark,
-                        "image_url": item.image_url,
-                        "sort_order": item.sort_order,
-                        "group_name": item.group_name,
-                        "material_process": item.material_process,
-                        "subtotal_amount": float(item.subtotal_amount),
-                    })
-                    self.db.add(q_item)
+                # 更新现有明细（不删除：被 order_items 外键引用）
+                order_items_list = order.items or []
+                old_items = (await self.db.execute(
+                    select(QuoteItem).where(QuoteItem.quote_id == order.quote_id).order_by(QuoteItem.sort_order)
+                )).scalars().all()
+                for idx, item in enumerate(order_items_list):
+                    fields = dict(
+                        item_name=item.item_name,
+                        product_id=item.product_id,
+                        material_id=item.material_id,
+                        process_id=item.process_id,
+                        length=float(item.length) if item.length else None,
+                        length_unit=item.length_unit,
+                        width=float(item.width) if item.width else None,
+                        width_unit=item.width_unit,
+                        height=float(item.height) if item.height else None,
+                        height_unit=item.height_unit,
+                        quantity=float(item.quantity),
+                        unit=item.unit,
+                        use_area=item.use_area,
+                        quantity_mode=item.quantity_mode,
+                        pieces=float(item.pieces) if item.pieces else None,
+                        area=float(item.area) if item.area else None,
+                        unit_price=float(item.unit_price),
+                        process_fee=float(item.process_fee),
+                        installation_fee=float(item.installation_fee),
+                        design_fee=float(item.design_fee),
+                        transport_fee=float(item.transport_fee),
+                        other_fee=float(item.other_fee),
+                        remark=item.remark,
+                        image_url=item.image_url,
+                        sort_order=idx,
+                        group_name=item.group_name,
+                        material_process=item.material_process,
+                        subtotal_amount=float(item.subtotal_amount),
+                    )
+                    if idx < len(old_items):
+                        for k, v in fields.items():
+                            setattr(old_items[idx], k, v)
+                    else:
+                        self.db.add(QuoteItem(quote_id=order.quote_id, **fields))
                 await self.db.flush()
                 await quote_svc.calculate_quote(order.quote_id)
                 quote = quote_svc._quote_to_detail(orig_quote)
