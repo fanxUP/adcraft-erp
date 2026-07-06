@@ -603,7 +603,34 @@ async function handleSave() {
       })
       ElMessage.success('保存成功')
     } else {
-      const payload: Record<string, unknown> = { ...form, items: items.value }
+      const cleanItems = items.value.map((item, idx) => ({
+        ...(item.id ? { id: item.id } : {}),
+        item_name: item.item_name,
+        product_id: item.product_id || undefined,
+        material_id: item.material_id || undefined,
+        process_id: item.process_id || undefined,
+        length: item.length || undefined,
+        length_unit: item.length_unit || undefined,
+        width: item.width || undefined,
+        width_unit: item.width_unit || undefined,
+        height: item.height || undefined,
+        height_unit: item.height_unit || undefined,
+        quantity: item.quantity,
+        unit: item.unit || null,
+        use_area: item.use_area || false,
+        unit_price: item.unit_price || 0,
+        process_fee: item.process_fee || 0,
+        installation_fee: item.installation_fee || 0,
+        design_fee: item.design_fee || 0,
+        transport_fee: item.transport_fee || 0,
+        other_fee: item.other_fee || 0,
+        remark: item.remark || undefined,
+        image_url: item.image_url || undefined,
+        sort_order: idx,
+        group_name: item.group_name || null,
+        material_process: item.material_process || undefined,
+      }))
+      const payload: Record<string, unknown> = { ...form, items: cleanItems }
       // Clean empty optional fields that Pydantic would reject
       if (!payload.valid_until) delete payload.valid_until
       if (!payload.remark) delete payload.remark
