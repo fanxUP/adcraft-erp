@@ -72,18 +72,18 @@ class OrderService:
         if to_status == "completed":
             await self._auto_create_acceptance(order)
 
-        # 订单取消时同步取消相关验收单
+        # 订单取消时同步删除关联验收单
         if to_status == "cancelled":
             from app.models.acceptance import AcceptanceForm
+            from datetime import datetime
             result = await self.db.execute(
                 select(AcceptanceForm).where(
                     AcceptanceForm.order_id == order_id,
                     AcceptanceForm.deleted_at.is_(None),
-                    AcceptanceForm.status != "cancelled",
                 )
             )
             for af in result.scalars().all():
-                af.status = "cancelled"
+                af.deleted_at = datetime.now()
 
         # Send notification to sales user
         if order.sales_user_id and order.sales_user_id != operated_by:
