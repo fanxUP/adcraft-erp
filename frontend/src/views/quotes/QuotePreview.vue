@@ -38,6 +38,10 @@
           <span>项目名称: {{ quote.project_name || '-' }}</span>
           <span>业 务 员: {{ salesName }}</span>
         </div>
+        <div v-if="quote.department" class="party-row">
+          <span>部门/科室: {{ quote.department }}</span>
+          <span></span>
+        </div>
       </div>
 
       <table class="preview-table">

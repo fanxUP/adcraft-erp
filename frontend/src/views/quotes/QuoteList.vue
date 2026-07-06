@@ -39,6 +39,7 @@
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
       <el-table-column prop="quote_no" label="报价编号" width="180" />
       <el-table-column prop="customer_name" label="客户名称" width="160" />
+      <el-table-column prop="department" label="部门/科室" width="120" />
       <el-table-column prop="project_name" label="项目名称" min-width="200" />
       <el-table-column label="状态" width="100">
         <template #default="{ row }">

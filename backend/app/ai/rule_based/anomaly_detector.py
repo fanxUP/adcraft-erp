@@ -6,8 +6,7 @@ Works without any AI API key.
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,16 +41,22 @@ class AnomalyDetector:
         self.db = db
 
     async def scan_all(self) -> dict:
-        """Run all 6 scans and return aggregated results."""
-        now = datetime.now(timezone.utc)
-        results = await asyncio_gather_fallback(
-            self._scan_underpriced_quotes(),
-            self._scan_overdue_orders(now),
-            self._scan_unpaid_installations(),
-            self._scan_credit_exceeded(now),
-            self._scan_outsource_delays(now),
-            self._scan_inventory_shortages(),
-        )
+        """Run all 6 scans and return aggregated results.
+
+        Note: runs sequentially (not via asyncio.gather) because all
+        methods share the same AsyncSession, which is not safe for
+        concurrent access.  Using a timezone-naive datetime to match
+        PostgreSQL TIMESTAMP (without time zone) columns.
+        """
+        now = datetime.now()
+        results = [
+            await self._scan_underpriced_quotes(),
+            await self._scan_overdue_orders(now),
+            await self._scan_unpaid_installations(),
+            await self._scan_credit_exceeded(now),
+            await self._scan_outsource_delays(now),
+            await self._scan_inventory_shortages(),
+        ]
 
         alerts: list[dict] = []
         for group in results:
@@ -89,8 +94,8 @@ class AnomalyDetector:
                 continue
             estimated_cost = 0.0
             for item in quote.items:
-                area = (item.length or 0) * (item.width or 0) * (item.quantity or 1)
-                estimated_cost += area * (item.unit_price or 0)
+                area = (float(item.length or 0)) * (float(item.width or 0)) * (float(item.quantity or 1))
+                estimated_cost += area * float(item.unit_price or 0)
 
             if estimated_cost > 0 and float(quote.total_amount) < estimated_cost:
                 gap = estimated_cost - float(quote.total_amount)
@@ -287,10 +292,3 @@ class AnomalyDetector:
             })
 
         return alerts
-
-
-# ── Helper: async gather fallback for Python 3.12+ ─────────────────────
-
-async def asyncio_gather_fallback(*coros):
-    """Gather coroutines — works with any asyncio version."""
-    return await asyncio.gather(*coros)

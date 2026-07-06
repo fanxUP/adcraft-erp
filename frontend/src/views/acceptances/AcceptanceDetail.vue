@@ -20,12 +20,6 @@
           v-if="form.status === 'rejected'"
           type="warning" @click="handleBackToDraft"
         >退回草稿</el-button>
-        <el-button
-          v-if="form.status === 'accepted' || form.status === 'rejected'"
-          @click="showPrint = true"
-        >
-          <el-icon><Printer /></el-icon> 打印
-        </el-button>
       </div>
     </div>
 
@@ -262,6 +256,12 @@
         <el-button type="danger" @click="confirmReject" :loading="statusChanging">确认驳回</el-button>
       </template>
     </el-dialog>
+
+    <div v-if="form.status === 'accepted' || form.status === 'rejected'" style="text-align: left; margin-top: 24px;">
+      <el-button type="primary" @click="showPrint = true">
+        <el-icon><Printer /></el-icon> 打印预览
+      </el-button>
+    </div>
 
     <AcceptancePrint
       :visible="showPrint"

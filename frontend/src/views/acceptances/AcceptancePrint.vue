@@ -16,11 +16,12 @@
         <div class="info-row">
           <span>订单编号: {{ form.order_no || '-' }}</span>
           <span>客户名称: {{ form.customer_name || '-' }}</span>
-          <span>联系电话: {{ form.customer_phone || '-' }}</span>
+          <span>客户地址: {{ form.customer_address || '-' }}</span>
         </div>
         <div class="info-row">
+          <span>部门/科室: {{ form.department || '-' }}</span>
           <span>联 系 人: {{ form.contact_person || '-' }}</span>
-          <span>客户地址: {{ form.customer_address || '-' }}</span>
+          <span>联系电话: {{ form.customer_phone || '-' }}</span>
           <span>下单日期: {{ form.order_date?.slice(0, 10) || '-' }}</span>
         </div>
       </div>
@@ -53,7 +54,7 @@
             <!-- 分组合计行 -->
             <tr v-else-if="row.type === 'group-total'" class="group-total-row">
               <td colspan="8" style="text-align: right; font-weight: 600; background: #fafafa; border-top: 1px solid #dcdfe6; padding: 6px 8px;">分项合计</td>
-              <td style="text-align: right; font-weight: 600; background: #fafafa; border-top: 1px solid #dcdfe6; padding: 6px 8px;">¥ {{ row.total.toFixed(2) }}</td>
+              <td style="text-align: right; font-weight: 600; background: #fafafa; border-top: 1px solid #dcdfe6; padding: 6px 8px; white-space: nowrap;">¥ {{ row.total.toFixed(2) }}</td>
               <td style="background: #fafafa; border-top: 1px solid #dcdfe6;"></td>
               <td style="background: #fafafa; border-top: 1px solid #dcdfe6;"></td>
             </tr>
@@ -82,15 +83,15 @@
           <!-- 金额汇总 -->
           <tr>
             <td colspan="8" style="text-align: right; font-weight: 600;">本页合计：</td>
-            <td style="text-align: right; font-weight: 600;">¥ {{ itemsTotal.toFixed(2) }}</td>
+            <td style="text-align: right; font-weight: 600; white-space: nowrap;">¥ {{ itemsTotal.toFixed(2) }}</td>
             <td></td>
             <td></td>
           </tr>
           <tr>
-            <td colspan="2" style="text-align: right;">金额（大写）：</td>
-            <td colspan="5">{{ toChineseAmount(itemsTotal) }}</td>
-            <td style="text-align: right;">金额（小写）：</td>
-            <td style="text-align: right;">¥ {{ itemsTotal.toFixed(2) }}</td>
+            <td colspan="2" style="text-align: right; border-right: none;">金额（大写）：</td>
+            <td colspan="5" style="border-left: none; border-right: none;">{{ toChineseAmount(itemsTotal) }}</td>
+            <td style="text-align: right; border-left: none; border-right: none;">金额（小写）：</td>
+            <td style="text-align: right; white-space: nowrap; border-left: none;">¥ {{ itemsTotal.toFixed(2) }}</td>
             <td></td>
             <td></td>
           </tr>
@@ -105,8 +106,7 @@
             </td>
           </tr>
         <tr>
-          <td style="text-align: right; vertical-align: top; padding-top: 14px;">备注说明：</td>
-          <td colspan="10" style="height: 60px; vertical-align: top; padding-top: 14px;">{{ form.remark || '' }}</td>
+          <td colspan="11" style="height: 60px; vertical-align: top; padding-top: 14px;"><strong>备注说明：</strong>{{ form.remark || '' }}</td>
         </tr>
         </tbody>
       </table>
@@ -126,6 +126,8 @@
 
     <template #footer>
       <el-button @click="$emit('close')">关闭</el-button>
+      <el-button @click="handleExportImage">导出图片</el-button>
+      <el-button @click="handleExportPDF">导出 PDF</el-button>
       <el-button type="primary" @click="handlePrint">打印</el-button>
     </template>
   </el-dialog>
@@ -133,7 +135,10 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
 import { getAcceptance } from '@/api/acceptances'
+import { downloadBlob } from '@/utils/download'
 
 interface AcceptancePrintItem {
   id?: string
@@ -167,6 +172,7 @@ interface AcceptancePrintData {
   contact_person?: string
   order_date?: string
   project_name?: string
+  department?: string
   discount_amount?: number
   advance_amount?: number
   items: AcceptancePrintItem[]
@@ -278,6 +284,7 @@ watch(() => props.visible, async (val) => {
       contact_person: data.contact_person,
       order_date: data.order_date,
       project_name: data.project_name,
+      department: data.department,
       discount_amount: data.discount_amount,
       advance_amount: data.advance_amount,
       items: (data.items || []).map(item => ({
@@ -301,10 +308,64 @@ watch(() => props.visible, async (val) => {
   }
 })
 
+async function getCanvas(): Promise<HTMLCanvasElement | null> {
+  const el = document.querySelector('.print-area') as HTMLElement | null
+  if (!el) return null
+  return html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+}
 
+async function handleExportImage() {
+  const canvas = await getCanvas()
+  if (!canvas) return
+  canvas.toBlob(blob => {
+    if (!blob) return
+    downloadBlob(blob, `验收单_${form.value?.acceptance_no || 'export'}.png`)
+  }, 'image/png')
+}
+
+async function handleExportPDF() {
+  const canvas = await getCanvas()
+  if (!canvas) return
+
+  const imgData = canvas.toDataURL('image/png')
+
+  // A4 尺寸 (mm)，8mm 边距
+  const pdfWidth = 210
+  const margin = 8
+  const maxWidth = pdfWidth - margin * 2
+
+  // canvas 是 scale:2 渲染的，实际像素 /2 后换算为 mm（96dpi: 1px = 25.4/96 mm）
+  const pxToMm = 25.4 / 96
+  const imgWmm = (canvas.width / 2) * pxToMm
+  const imgHmm = (canvas.height / 2) * pxToMm
+
+  // 按 A4 内容宽度等比缩放
+  const ratio = maxWidth / imgWmm
+  const finalW = maxWidth
+  const finalH = imgHmm * ratio
+
+  const pdf = new jsPDF('portrait', 'mm', 'a4')
+  pdf.addImage(imgData, 'PNG', margin, margin, finalW, finalH)
+  pdf.save(`验收单_${form.value?.acceptance_no || 'export'}.pdf`)
+}
 
 function handlePrint() {
+  const printArea = document.querySelector('.print-area')
+  if (!printArea) return
+
+  // 创建独立的打印容器（不受 Element Plus teleport 结构影响）
+  const container = document.createElement('div')
+  container.id = '__print_container__'
+  container.innerHTML = printArea.outerHTML
+  document.body.appendChild(container)
+
   window.print()
+
+  // 打印对话框关闭后清理
+  setTimeout(() => {
+    const el = document.getElementById('__print_container__')
+    if (el) el.remove()
+  }, 500)
 }
 </script>
 
@@ -415,17 +476,73 @@ function handlePrint() {
 }
 
 @media print {
-  :deep(.el-dialog__header),
-  :deep(.el-dialog__footer),
-  :deep(.el-overlay) {
-    display: none !important;
+  @page { size: A4; margin: 8mm; }
+
+  html, body { background: white !important; }
+
+  body > * { display: none !important; }
+
+  #__print_container__ {
+    display: block !important;
+    position: static !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    max-width: 185mm;
   }
-  .print-area {
-    padding: 0;
-    margin: 0;
+
+  #__print_container__ .preview-table {
+    table-layout: fixed;
+    width: auto;
   }
-  .preview-signatures {
+
+  #__print_container__ .preview-table thead th:nth-child(1) { width: 22px; }
+  #__print_container__ .preview-table thead th:nth-child(2) { width: 82px; }
+  #__print_container__ .preview-table thead th:nth-child(3) { width: 82px; }
+  #__print_container__ .preview-table thead th:nth-child(4) { width: 70px; }
+  #__print_container__ .preview-table thead th:nth-child(5) { width: 38px; }
+  #__print_container__ .preview-table thead th:nth-child(6) { width: 30px; }
+  #__print_container__ .preview-table thead th:nth-child(7) { width: 26px; }
+  #__print_container__ .preview-table thead th:nth-child(8) { width: 56px; }
+  #__print_container__ .preview-table thead th:nth-child(9) { width: 62px; }
+  #__print_container__ .preview-table thead th:nth-child(10) { width: 38px; }
+  #__print_container__ .preview-table thead th:nth-child(11) { width: 82px; }
+
+  #__print_container__ .preview-table th,
+  #__print_container__ .preview-table td {
+    font-size: 9px;
+    padding: 2px 3px;
+    box-sizing: border-box;
+  }
+
+  #__print_container__ .preview-table td:nth-child(1),
+  #__print_container__ .preview-table td:nth-child(5),
+  #__print_container__ .preview-table td:nth-child(6),
+  #__print_container__ .preview-table td:nth-child(7),
+  #__print_container__ .preview-table td:nth-child(8),
+  #__print_container__ .preview-table td:nth-child(9),
+  #__print_container__ .preview-table td:nth-child(10) {
+    white-space: nowrap;
+  }
+
+  /* 内容列允许折行 */
+  #__print_container__ .preview-table td:nth-child(2),
+  #__print_container__ .preview-table td:nth-child(3),
+  #__print_container__ .preview-table td:nth-child(4),
+  #__print_container__ .preview-table td:nth-child(11) {
+    word-break: break-all;
+  }
+
+  #__print_container__ .preview-table td:nth-child(2) .wrap-text,
+  #__print_container__ .preview-table td:nth-child(3) .wrap-text,
+  #__print_container__ .preview-table td:nth-child(4) .wrap-text,
+  #__print_container__ .preview-table td:nth-child(11) .wrap-text {
+    max-width: none;
+  }
+
+  #__print_container__ .preview-signatures {
     page-break-inside: avoid;
+    margin-top: 20px;
   }
 }
 </style>
