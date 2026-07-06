@@ -226,6 +226,7 @@ class QuoteService:
             sales_user_id=quote.sales_user_id,
             status="pending_confirm",
             total_amount=quote.total_amount,
+            department=quote.department,
         )
         self.db.add(order)
 
