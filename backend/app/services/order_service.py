@@ -246,7 +246,7 @@ class OrderService:
         await self.repo.soft_delete(order)
 
     async def convert_to_quote(self, order_id: UUID, created_by: UUID) -> dict:
-        """已取消订单转报价单，并删除原订单"""
+        """已取消订单转报价单"""
         order = await self.repo.get_by_id(order_id)
         if not order:
             raise ValueError("订单不存在")
@@ -321,8 +321,7 @@ class OrderService:
         else:
             quote = await quote_svc.create_quote(self._order_to_quote_data(order, await generate_quote_no(self.db)))
 
-        # 删除原订单（软删除）
-        await self.repo.soft_delete(order)
+        # 订单转报价后保持可见（不删除、不进回收站）
 
         return quote
 
