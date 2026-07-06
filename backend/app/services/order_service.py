@@ -164,7 +164,7 @@ class OrderService:
         if existing.scalar_one_or_none():
             return
 
-        acceptance_no = await generate_acceptance_no(self.db)
+        acceptance_no = "A" + order.order_no[1:] if order.order_no and order.order_no.startswith("O") else await generate_acceptance_no(self.db)
         form = AcceptanceForm(
             acceptance_no=acceptance_no,
             order_id=order.id,

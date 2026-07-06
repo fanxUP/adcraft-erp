@@ -214,7 +214,7 @@ class QuoteService:
         from app.models.order import Order, OrderItem, OrderStatusLog
         from datetime import datetime
 
-        order_no = await generate_order_no(self.db)
+        order_no = "O" + quote.quote_no[1:] if quote.quote_no and quote.quote_no.startswith("Q") else await generate_order_no(self.db)
         order = Order(
             order_no=order_no,
             quote_id=quote.id,
