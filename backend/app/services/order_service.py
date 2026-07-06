@@ -321,7 +321,17 @@ class OrderService:
         else:
             quote = await quote_svc.create_quote(self._order_to_quote_data(order, await generate_quote_no(self.db)))
 
-        # 订单转报价后保持可见（不删除、不进回收站）
+        # 转报价后删除原订单（硬删除，不进回收站）
+        from app.models.acceptance import AcceptanceForm
+        await self.db.execute(
+            select(AcceptanceForm).where(AcceptanceForm.order_id == order_id)
+        ).scalars().all()  # 确保数据已加载
+        for af in (await self.db.execute(
+            select(AcceptanceForm).where(AcceptanceForm.order_id == order_id)
+        )).scalars().all():
+            await self.db.delete(af)
+        await self.db.flush()
+        await self.db.delete(order)
 
         return quote
 
