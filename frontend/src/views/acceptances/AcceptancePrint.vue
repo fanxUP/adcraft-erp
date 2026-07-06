@@ -108,6 +108,9 @@
         <tr>
           <td colspan="11" style="height: 60px; vertical-align: top; padding-top: 14px;"><strong>备注说明：</strong>{{ form.remark || '' }}</td>
         </tr>
+        <tr>
+          <td colspan="11" style="padding: 8px 12px;">负责人/联系电话：{{ form.contact_person || '' }} / {{ form.customer_phone || '' }}</td>
+        </tr>
         </tbody>
       </table>
 
