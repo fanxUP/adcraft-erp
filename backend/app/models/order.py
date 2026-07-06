@@ -27,6 +27,7 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     delivery_deadline: Mapped[str | None] = mapped_column(DateTime, nullable=True)
     installation_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    department: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="部门/科室")
 
     customer: Mapped["Customer"] = relationship(lazy="selectin")
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order", lazy="selectin", cascade="all, delete-orphan")

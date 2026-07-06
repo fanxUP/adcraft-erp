@@ -86,6 +86,7 @@ export interface OrderListResponse {
   total_amount: number
   paid_amount: number
   unpaid_amount: number
+  department?: string
   created_at?: string
 }
 
@@ -145,6 +146,7 @@ export interface OrderDetailResponse {
   delivery_deadline?: string
   installation_address?: string
   remark?: string
+  department?: string
   created_at?: string
   items: OrderItemResponse[]
   status_logs: OrderStatusLogResponse[]
@@ -846,6 +848,7 @@ export interface AcceptanceListResponse {
   order_no?: string
   customer_name?: string
   project_name?: string
+  department?: string
   status: string
   accepted_at?: string
   accepted_by?: string

@@ -41,6 +41,7 @@ class AcceptanceListResponse(BaseModel):
     status: str
     accepted_at: Optional[str] = None
     accepted_by: Optional[str] = None
+    department: str | None = None
     created_at: str
 
 
@@ -56,6 +57,7 @@ class AcceptanceDetailResponse(BaseModel):
     contact_person: Optional[str] = None
     order_date: Optional[str] = None
     project_name: Optional[str] = None
+    department: Optional[str] = None
     status: str
     accepted_at: Optional[str] = None
     accepted_by: Optional[str] = None

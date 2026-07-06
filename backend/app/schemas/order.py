@@ -11,6 +11,7 @@ class OrderListResponse(BaseModel):
     total_amount: float
     paid_amount: float
     unpaid_amount: float
+    department: str | None = None
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
@@ -75,6 +76,7 @@ class OrderDetailResponse(BaseModel):
     delivery_deadline: str | None = None
     installation_address: str | None = None
     remark: str | None = None
+    department: str | None = None
     created_at: datetime | None = None
     items: list[OrderItemResponse] = []
     status_logs: list[OrderStatusLogResponse] = []
