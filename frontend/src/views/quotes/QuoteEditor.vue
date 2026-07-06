@@ -260,7 +260,7 @@
       <el-button v-if="!isReadonly && quote?.status === 'confirmed'" type="warning" :loading="reverting" @click="handleRevertToDraft">转草稿</el-button>
       <el-button v-if="isEdit && quote?.status === 'draft'" type="success" @click="handleConfirm">确认报价</el-button>
       <el-button v-if="isEdit && quote?.status === 'confirmed'" type="danger" :loading="converting" @click="handleConvert">转订单</el-button>
-      <el-button v-if="isEdit" type="success" @click="previewVisible = true">预览</el-button>
+      <el-button type="success" @click="previewVisible = true">预览</el-button>
       <el-tag v-if="isReadonly" size="large" :type="quote?.status === 'converted' ? 'success' : 'danger'" style="font-size: 15px; padding: 8px 16px">
         {{ quote?.status === 'converted' ? '已转订单，不可编辑' : '已作废，不可编辑' }}
       </el-tag>
@@ -658,6 +658,9 @@ async function handleSave() {
       // else: existing customer UUID stays as customer_id
       const result = await createQuote(payload)
       ElMessage.success('创建成功')
+      // 跳转到编辑模式
+      await router.push(`/quotes/${result.data?.id || result.id}/edit`)
+      return
       router.push(`/quotes/${result.id}/edit`)
     }
   } finally { saving.value = false }

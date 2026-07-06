@@ -182,21 +182,31 @@ const previewDisplayRows = computed<PreviewRow[]>(() => {
 })
 
 watch(() => props.visible, async (val) => {
-  if (!val || !props.quoteId) return
+  if (!val) return
   loading.value = true
   try {
-    quote.value = await getQuote(props.quoteId)
-    // 如果传入了当前编辑的items，使用它们覆盖API返回的items
-    if (props.currentItems) {
-      quote.value.items = props.currentItems
+    if (props.quoteId) {
+      quote.value = await getQuote(props.quoteId)
+      if (props.currentItems) {
+        quote.value.items = props.currentItems
+      }
+      if (quote.value.customer_id) {
+        try {
+          const customer = await getCustomer(quote.value.customer_id)
+          customerPhone.value = customer.phone || '-'
+        } catch { customerPhone.value = '-' }
+      }
+      salesName.value = '-'
+    } else if (props.currentItems) {
+      // 新建报价预览（无 quoteId）
+      quote.value = {
+        id: '', quote_no: '（新建）', customer_name: '', project_name: '',
+        status: 'draft', subtotal_amount: 0, discount_amount: 0,
+        tax_rate: 0, tax_amount: 0, total_amount: 0,
+        items: props.currentItems, created_at: undefined,
+        department: undefined, sales_user_id: undefined, remark: undefined,
+      }
     }
-    if (quote.value.customer_id) {
-      try {
-        const customer = await getCustomer(quote.value.customer_id)
-        customerPhone.value = customer.phone || '-'
-      } catch { customerPhone.value = '-' }
-    }
-    salesName.value = '-'
   } finally {
     loading.value = false
   }
