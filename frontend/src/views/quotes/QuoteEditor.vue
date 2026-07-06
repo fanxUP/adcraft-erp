@@ -351,7 +351,8 @@ function convertToMeters(value: number, unit: string): number {
 function calcArea(item: QuoteItemResponse) {
   const length = convertToMeters(item.length || 0, item.length_unit || 'm')
   const width = convertToMeters(item.width || 0, item.width_unit || 'm')
-  return length * width * (item.pieces || 1)
+  const raw = length * width * (item.pieces || 1)
+  return Math.round(raw * 1000) / 1000
 }
 
 function onAreaToggle(row: QuoteItemResponse, val: boolean) {
