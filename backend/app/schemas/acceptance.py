@@ -55,6 +55,7 @@ class AcceptanceDetailResponse(BaseModel):
     customer_phone: Optional[str] = None
     customer_address: Optional[str] = None
     contact_person: Optional[str] = None
+    contact_phone: Optional[str] = None
     order_date: Optional[str] = None
     project_name: Optional[str] = None
     department: Optional[str] = None

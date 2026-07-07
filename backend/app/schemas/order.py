@@ -12,6 +12,8 @@ class OrderListResponse(BaseModel):
     paid_amount: float
     unpaid_amount: float
     department: str | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
@@ -77,6 +79,8 @@ class OrderDetailResponse(BaseModel):
     installation_address: str | None = None
     remark: str | None = None
     department: str | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
     created_at: datetime | None = None
     items: list[OrderItemResponse] = []
     status_logs: list[OrderStatusLogResponse] = []

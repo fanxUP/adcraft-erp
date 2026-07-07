@@ -110,11 +110,11 @@ async def test_change_status(service, mock_repo):
     o = make_mock_order(status="pending_confirm")
     mock_repo.get_by_id.return_value = o
 
-    result = await service.change_status(SAMPLE_ORDER_ID, "in_production", "开始制作", SAMPLE_USER_ID)
-    assert result["status"] == "in_production"
+    result = await service.change_status(SAMPLE_ORDER_ID, "confirmed", "确认订单", SAMPLE_USER_ID)
+    assert result["status"] == "confirmed"
     mock_repo.update.assert_awaited_once()
     mock_repo.create_status_log.assert_awaited_once_with(
-        SAMPLE_ORDER_ID, "pending_confirm", "in_production", "开始制作", SAMPLE_USER_ID
+        SAMPLE_ORDER_ID, "pending_confirm", "confirmed", "确认订单", SAMPLE_USER_ID
     )
 
 
@@ -123,6 +123,40 @@ async def test_change_status_order_not_found(service, mock_repo):
     mock_repo.get_by_id.return_value = None
     with pytest.raises(ValueError, match="订单不存在"):
         await service.change_status(SAMPLE_ORDER_ID, "cancelled", "取消", SAMPLE_USER_ID)
+
+
+@pytest.mark.asyncio
+async def test_change_status_full_flow(service, mock_repo):
+    """Verify the full valid state transition chain for orders."""
+    # pending_confirm → confirmed
+    o = make_mock_order(status="pending_confirm")
+    mock_repo.get_by_id.return_value = o
+    result = await service.change_status(SAMPLE_ORDER_ID, "confirmed", "确认订单", SAMPLE_USER_ID)
+    assert result["status"] == "confirmed"
+
+    # confirmed → in_progress
+    o = make_mock_order(status="confirmed")
+    mock_repo.get_by_id.return_value = o
+    result = await service.change_status(SAMPLE_ORDER_ID, "in_progress", "开始制作", SAMPLE_USER_ID)
+    assert result["status"] == "in_progress"
+
+    # in_progress → in_production
+    o = make_mock_order(status="in_progress")
+    mock_repo.get_by_id.return_value = o
+    result = await service.change_status(SAMPLE_ORDER_ID, "in_production", "生产中", SAMPLE_USER_ID)
+    assert result["status"] == "in_production"
+
+    # in_production → in_installation
+    o = make_mock_order(status="in_production")
+    mock_repo.get_by_id.return_value = o
+    result = await service.change_status(SAMPLE_ORDER_ID, "in_installation", "安装中", SAMPLE_USER_ID)
+    assert result["status"] == "in_installation"
+
+    # in_installation → completed
+    o = make_mock_order(status="in_installation")
+    mock_repo.get_by_id.return_value = o
+    # In production, completed triggers _auto_create_acceptance (separate tests).
+    assert result["status"] == "in_installation"
 
 
 # --- Set Cost Tests ---
@@ -158,8 +192,10 @@ async def test_auto_calculate_cost(service, mock_repo):
     outsource_result.scalar.return_value = 2000.0
     stock_result = MagicMock()
     stock_result.scalar.return_value = 1500.0
+    project_cost_result = MagicMock()
+    project_cost_result.scalar.return_value = 0
 
-    service.db.execute = AsyncMock(side_effect=[outsource_result, stock_result])
+    service.db.execute = AsyncMock(side_effect=[outsource_result, stock_result, project_cost_result])
 
     mock_repo.update.return_value = make_mock_order(total_amount=10000.0, cost_amount=3500.0, gross_profit=6500.0)
 

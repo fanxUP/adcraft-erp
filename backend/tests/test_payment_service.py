@@ -8,6 +8,8 @@ import pytest
 # Pre-import models to satisfy SQLAlchemy mapper dependencies
 import app.models.customer  # noqa: F401
 import app.models.order  # noqa: F401
+import app.models.user  # noqa: F401
+import app.models.notification  # noqa: F401
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
 from tests.conftest import SAMPLE_USER_ID, SAMPLE_ORDER_ID, SAMPLE_CUSTOMER_ID
 
@@ -139,6 +141,9 @@ async def test_create_payment(payment_service):
     svc, mock_order_repo = payment_service
     order = MagicMock()
     order.total_amount = 5000.0
+    order.sales_user_id = None
+    order.order_no = "O20260629-0001"
+    order.project_name = "测试项目"
     mock_order_repo.get_by_id.return_value = order
 
     p = make_mock_payment()

@@ -224,6 +224,8 @@ class QuoteService:
             status="pending_confirm",
             total_amount=quote.total_amount,
             department=quote.department,
+            contact_person=quote.contact_person,
+            contact_phone=quote.contact_phone,
         )
         self.db.add(order)
 
@@ -295,6 +297,8 @@ class QuoteService:
             "valid_until": q.valid_until.isoformat() if q.valid_until else None,
             "created_at": q.created_at.isoformat() if q.created_at else None,
             "department": q.department,
+            "contact_person": q.contact_person,
+            "contact_phone": q.contact_phone,
         }
 
     def _quote_to_detail(self, q) -> dict:
@@ -313,6 +317,8 @@ class QuoteService:
             "valid_until": q.valid_until.isoformat() if q.valid_until else None,
             "remark": q.remark,
             "department": q.department,
+            "contact_person": q.contact_person,
+            "contact_phone": q.contact_phone,
             "created_at": q.created_at.isoformat() if q.created_at else None,
             "items": [
                 {

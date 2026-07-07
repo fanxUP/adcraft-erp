@@ -57,6 +57,8 @@
             <el-descriptions-item label="状态：">
               <el-tag :type="statusColor(form.status)">{{ statusLabel(form.status) }}</el-tag>
             </el-descriptions-item>
+            <el-descriptions-item label="联系人：">{{ form.contact_person || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="联系电话：">{{ form.contact_phone || '-' }}</el-descriptions-item>
             <el-descriptions-item label="验收日期：">{{ form.accepted_at?.slice(0, 10) || '-' }}</el-descriptions-item>
             <el-descriptions-item label="验收人/联系电话：">{{ form.accepted_by || '-' }}</el-descriptions-item>
             <el-descriptions-item label="负责人/联系电话：">{{ form.our_acceptor_name || '-' }}</el-descriptions-item>
@@ -404,6 +406,8 @@ const form = reactive<AcceptanceDetailResponse>({
   order_no: '',
   customer_name: '',
   project_name: '',
+  contact_person: '',
+  contact_phone: '',
   status: 'draft',
   accepted_at: undefined,
   accepted_by: '',
