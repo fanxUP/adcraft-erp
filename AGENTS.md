@@ -126,3 +126,50 @@ frontend/src/
 - PostgreSQL 16，UUID 主键，`TimestampMixin` + `SoftDeleteMixin`
 - 迁移：`alembic upgrade head`
 - 种子：`python scripts/init_app.py`（幂等，可重复运行）
+
+---
+
+## ⚠️ 部署 & 迁移安全须知
+
+> **禁止直接运行** `docker compose run --rm backend <命令>`
+>
+> 这会触发 `depends_on` 链，**自动重建所有依赖容器（包括 PostgreSQL）**，
+> 如果数据卷配置不当会导致**数据全部丢失**。
+
+**安全做法：**
+
+```bash
+# ✅ 应用数据库迁移（在已有容器内安全执行）
+docker compose exec -T backend sh -c 'cd /app && alembic upgrade head'
+
+# ✅ 构建镜像（不触动数据库）
+docker compose build backend
+
+# ✅ 重启服务
+docker compose up -d
+```
+
+### 持久卷配置（跨平台）
+
+`docker-compose.override.yml` 中的 volumes **禁止使用硬编码绝对路径**
+（如 `/Users/xxx/.adcraft-data/`），应使用 **Docker 命名卷**：
+
+```yaml
+services:
+  postgres:
+    volumes:
+      - adcraft_data_postgres:/var/lib/postgresql/data
+
+volumes:
+  adcraft_data_postgres:
+```
+
+命名卷由 Docker 统一管理存储位置，跨 macOS / Linux / Windows 兼容。
+
+### 数据备份
+
+系统每日凌晨 02:00 自动备份到 `backups/` 目录。手动恢复方式：
+
+```bash
+docker exec -i adcraft_postgres psql -U adcraft -d adcraft_erp < backups/backup_xxx.sql
+```
