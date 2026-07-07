@@ -1,5 +1,6 @@
 import logging
 from datetime import date
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
@@ -118,10 +119,11 @@ async def download_quote_template():
     wb.save(buf)
     buf.seek(0)
 
+    filename = "报价导入模版.xlsx"
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=报价导入模版.xlsx"},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
     )
 
 
