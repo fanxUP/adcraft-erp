@@ -1,5 +1,5 @@
-import { get, post, put, del } from './index'
-import { PaginatedData, QuoteListResponse, QuoteDetailResponse, SuccessResponse, OrderDetailResponse } from '@/types/api'
+import { get, post, put, del, apiClient } from './index'
+import { PaginatedData, QuoteListResponse, QuoteDetailResponse, SuccessResponse, OrderDetailResponse, ImportResponse } from '@/types/api'
 
 export function getQuotes(params: { page?: number; page_size?: number; status?: string; customer_id?: string }) {
   return get<PaginatedData<QuoteListResponse>>('/quotes/', { params })
@@ -31,4 +31,25 @@ export function convertQuoteToOrder(id: string) {
 
 export function revertQuoteToDraft(id: string) {
   return post<QuoteDetailResponse>(`/quotes/${id}/revert-to-draft`)
+}
+
+export function importQuotes(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return post<ImportResponse>('/quotes/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export async function downloadQuoteTemplate() {
+  const response = await apiClient.get('/quotes/template', { responseType: 'blob' })
+  const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = '报价导入模版.xlsx'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
