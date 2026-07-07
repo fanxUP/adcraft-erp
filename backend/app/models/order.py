@@ -28,6 +28,8 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     installation_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     department: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="部门/科室")
+    contact_person: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="联系人")
+    contact_phone: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="联系电话")
 
     customer: Mapped["Customer"] = relationship(lazy="selectin")
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order", lazy="selectin", cascade="all, delete-orphan")

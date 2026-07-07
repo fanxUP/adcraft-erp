@@ -19,6 +19,12 @@
         <el-form-item label="部门/科室">
           <el-input v-model="form.department" :disabled="isReadonly" placeholder="如：宣传部、办公室" style="width: 260px" />
         </el-form-item>
+        <el-form-item label="联系人">
+          <el-input v-model="form.contact_person" :disabled="isReadonly" placeholder="联系人姓名" style="width: 160px" />
+        </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="form.contact_phone" :disabled="isReadonly" placeholder="手机/电话" style="width: 160px" />
+        </el-form-item>
         <el-form-item label="税率">
           <el-input-number v-model="form.tax_rate" :precision="4" :min="0" :step="0.01" :disabled="isReadonly" style="width: 160px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
         </el-form-item>
@@ -303,6 +309,8 @@ const form = reactive({
   valid_until: '',
   remark: '',
   department: '',
+  contact_person: '',
+  contact_phone: '',
 })
 
 const newItem = (groupName?: string): QuoteItemResponse => ({
@@ -548,6 +556,8 @@ async function fetchQuote() {
     valid_until: quote.value.valid_until || '',
     remark: quote.value.remark || '',
     department: quote.value.department || '',
+    contact_person: quote.value.contact_person || '',
+    contact_phone: quote.value.contact_phone || '',
   })
   items.value = quote.value.items?.length ? quote.value.items.map(i => ({ ...i })) : [newItem()]
 }
@@ -609,6 +619,8 @@ async function handleSave() {
         valid_until: form.valid_until || undefined,
         remark: form.remark,
         department: form.department || undefined,
+        contact_person: form.contact_person || undefined,
+        contact_phone: form.contact_phone || undefined,
         items: cleanItems,
       })
       ElMessage.success('保存成功')
@@ -645,6 +657,8 @@ async function handleSave() {
       // Clean empty optional fields that Pydantic would reject
       if (!payload.valid_until) delete payload.valid_until
       if (!payload.remark) delete payload.remark
+      if (!payload.contact_person) delete payload.contact_person
+      if (!payload.contact_phone) delete payload.contact_phone
       // discount_amount is not a field on QuoteCreate — remove it
       delete payload.discount_amount
       if (form.customer_id && !isExistingCustomer(form.customer_id)) {

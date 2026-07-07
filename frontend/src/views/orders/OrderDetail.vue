@@ -13,9 +13,11 @@
             <el-descriptions :column="2">
               <el-descriptions-item label="订单编号">{{ order.order_no }}</el-descriptions-item>
               <el-descriptions-item label="项目名称">{{ order.project_name }}</el-descriptions-item>
-              <el-descriptions-item label="状态">
+             <el-descriptions-item label="状态">
                 <el-tag :type="statusColor(order.status)">{{ statusLabel(order.status) }}</el-tag>
               </el-descriptions-item>
+              <el-descriptions-item label="联系人">{{ order.contact_person || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="联系电话">{{ order.contact_phone || '-' }}</el-descriptions-item>
               <el-descriptions-item label="总金额">¥ {{ order.total_amount?.toFixed(2) }}</el-descriptions-item>
               <el-descriptions-item label="已收金额">¥ {{ order.paid_amount?.toFixed(2) }}</el-descriptions-item>
               <el-descriptions-item label="未收金额">¥ {{ order.unpaid_amount?.toFixed(2) }}</el-descriptions-item>

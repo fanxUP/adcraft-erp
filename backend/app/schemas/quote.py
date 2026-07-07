@@ -105,6 +105,8 @@ class QuoteCreate(BaseModel):
     valid_until: date | None = None
     remark: str | None = None
     department: str | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
     items: list[QuoteItemCreate] = []
 
     @model_validator(mode='after')
@@ -122,6 +124,8 @@ class QuoteUpdate(BaseModel):
     valid_until: date | None = None
     remark: str | None = None
     department: str | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
     items: list[QuoteItemCreate] | None = None
 
 
@@ -136,6 +140,8 @@ class QuoteListResponse(BaseModel):
     valid_until: str | None = None
     created_at: datetime | None = None
     department: str | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -156,6 +162,8 @@ class QuoteDetailResponse(BaseModel):
     valid_until: str | None = None
     remark: str | None = None
     department: str | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
     created_at: datetime | None = None
     items: list[QuoteItemResponse] = []
 

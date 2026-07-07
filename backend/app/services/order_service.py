@@ -38,6 +38,8 @@ def _order_to_quote_data(order, quote_no: str) -> dict:
         "sales_user_id": str(order.sales_user_id) if order.sales_user_id else None,
         "status": "draft",
         "remark": f"由订单 {order.order_no} 恢复",
+        "contact_person": order.contact_person,
+        "contact_phone": order.contact_phone,
         "items": [
             {
                 "item_name": i.item_name,
@@ -271,6 +273,8 @@ class OrderService:
                 orig_quote.sales_user_id = order.sales_user_id
                 orig_quote.status = "draft"
                 orig_quote.remark = f"由订单 {order.order_no} 恢复"
+                orig_quote.contact_person = order.contact_person
+                orig_quote.contact_phone = order.contact_phone
                 # 更新现有明细（不删除：被 order_items 外键引用）
                 order_items_list = order.items or []
                 old_items = (await self.db.execute(
@@ -351,6 +355,8 @@ class OrderService:
             "customer_name": o.customer.name if o.customer else None,
             "project_name": o.project_name,
             "department": o.department,
+            "contact_person": o.contact_person,
+            "contact_phone": o.contact_phone,
             "status": o.status,
             "total_amount": float(o.total_amount),
             "paid_amount": float(o.paid_amount),
@@ -368,6 +374,8 @@ class OrderService:
             "customer_name": o.customer.name if o.customer else None,
             "project_name": o.project_name,
             "department": o.department,
+            "contact_person": o.contact_person,
+            "contact_phone": o.contact_phone,
             "sales_user_id": str(o.sales_user_id) if o.sales_user_id else None,
             "status": o.status,
             "total_amount": float(o.total_amount),

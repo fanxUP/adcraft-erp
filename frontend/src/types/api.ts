@@ -147,6 +147,8 @@ export interface OrderDetailResponse {
   installation_address?: string
   remark?: string
   department?: string
+  contact_person?: string
+  contact_phone?: string
   created_at?: string
   items: OrderItemResponse[]
   status_logs: OrderStatusLogResponse[]
@@ -514,6 +516,9 @@ export interface QuoteListResponse {
   total_amount: number
   valid_until?: string
   created_at?: string
+  department?: string
+  contact_person?: string
+  contact_phone?: string
 }
 
 export interface QuoteDetailResponse {
@@ -531,6 +536,9 @@ export interface QuoteDetailResponse {
   total_amount: number
   valid_until?: string
   remark?: string
+  department?: string
+  contact_person?: string
+  contact_phone?: string
   created_at?: string
   items: QuoteItemResponse[]
 }
@@ -859,6 +867,7 @@ export interface AcceptanceDetailResponse extends AcceptanceListResponse {
   customer_phone?: string
   customer_address?: string
   contact_person?: string
+  contact_phone?: string
   order_date?: string
   our_acceptor_id?: string
   our_acceptor_name?: string
