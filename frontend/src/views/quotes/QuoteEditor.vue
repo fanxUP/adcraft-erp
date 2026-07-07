@@ -280,7 +280,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createQuote, getQuote, updateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft } from '@/api/quotes'
 import { getCustomers } from '@/api/customers'
@@ -291,7 +291,7 @@ import QuotePreview from './QuotePreview.vue'
 
 const route = useRoute()
 const router = useRouter()
-const isEdit = !!route.params.id
+const isEdit = computed(() => !!route.params.id)
 const saving = ref(false)
 const converting = ref(false)
 const reverting = ref(false)
@@ -344,7 +344,7 @@ const newItem = (groupName?: string): QuoteItemResponse => ({
 const items = ref<QuoteItemResponse[]>([newItem()])
 
 const isReadonly = computed(() => {
-  if (!isEdit || !quote.value) return false
+  if (!isEdit.value || !quote.value) return false
   return quote.value.status === 'converted' || quote.value.status === 'cancelled'
 })
 
@@ -582,7 +582,7 @@ async function handleSave() {
     // 更新所有 items 的小计
     items.value.forEach(item => calcItemSubtotal(item))
 
-    if (isEdit) {
+    if (isEdit.value) {
       // Prepare items for update - only send editable fields
       const cleanItems = items.value.map((item, idx) => ({
         ...(item.id ? { id: item.id } : {}),
@@ -672,10 +672,8 @@ async function handleSave() {
       // else: existing customer UUID stays as customer_id
       const result = await createQuote(payload)
       ElMessage.success('创建成功')
-      // 跳转到编辑模式
-      await router.push(`/quotes/${result.data?.id || result.id}/edit`)
-      return
-      router.push(`/quotes/${result.id}/edit`)
+      const quoteId = result.id
+      await router.replace(`/quotes/${quoteId}/edit`)
     }
   } finally { saving.value = false }
 }
@@ -720,7 +718,13 @@ async function handleRevertToDraft() {
 
 onMounted(async () => {
   await loadCustomers()
-  if (isEdit) await fetchQuote()
+  if (route.params.id) await fetchQuote()
+})
+
+watch(() => route.params.id, async (newId) => {
+  if (newId) {
+    await fetchQuote()
+  }
 })
 </script>
 
