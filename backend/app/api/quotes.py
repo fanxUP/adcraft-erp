@@ -80,6 +80,7 @@ QUOTE_COLUMN_MAP = {
     "设计费": "design_fee",
     "运输费": "transport_fee",
     "其他费用": "other_fee",
+    "面积开关": "use_area",
     "明细备注": "item_remark",
 }
 QUOTE_REQUIRED = ["客户名称", "项目名称", "项目名称(明细)", "数量"]
@@ -95,19 +96,19 @@ async def download_quote_template():
 
     ws.append(HEADER_LABELS)
 
-    # Sample row 1 — item in 分项1 with full specs
+    # Sample row 1 — item in 分项1 with full specs (面积开关=是)
     ws.append([
         "示例公司", "XX广告牌制作", "宣传部", "2026-12-31", "0.13", "",
         "", "分项1", "不锈钢烤漆字", "1.2mm不锈钢+烤漆",
         "2", "个", "350", "0.5", "m", "0.5", "m", "", "m", "1",
-        "0", "50", "80", "0", "0", "红色",
+        "0", "50", "80", "0", "0", "是", "红色",
     ])
-    # Sample row 2 — another item in same quote, different group
+    # Sample row 2 — another item in same quote, different group (不计面积)
     ws.append([
         "示例公司", "XX广告牌制作", "", "", "", "",
         "", "分项2", "安装人工费", "",
         "1", "项", "2000", "", "", "", "", "", "", "1",
-        "0", "0", "0", "0", "0", "",
+        "0", "0", "0", "0", "0", "", "",
     ])
 
     # Auto-width
@@ -217,8 +218,11 @@ async def import_quotes(
                     "remark": format_value(item_row.get("item_remark")),
                 }
 
-                # If length+width provided, enable area mode
-                if item_data["length"] and item_data["width"]:
+                # 面积开关：如果填了值，手动控制；否则根据长宽自动判断
+                area_raw = format_value(item_row.get("use_area"))
+                if area_raw:
+                    item_data["use_area"] = area_raw.lower() in ("是", "1", "y", "yes", "true")
+                elif item_data["length"] and item_data["width"]:
                     item_data["use_area"] = True
                 else:
                     item_data["use_area"] = False

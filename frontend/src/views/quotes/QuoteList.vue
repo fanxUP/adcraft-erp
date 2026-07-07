@@ -204,6 +204,7 @@ const templateColumns = [
   { name: '设计费', desc: '设计费用', required: false },
   { name: '运输费', desc: '运输费用', required: false },
   { name: '其他费用', desc: '其他费用', required: false },
+  { name: '面积开关', desc: '是/1/Y 按面积算数量；留空根据长宽自动判断', required: false },
   { name: '明细备注', desc: '明细行备注', required: false },
 ]
 
