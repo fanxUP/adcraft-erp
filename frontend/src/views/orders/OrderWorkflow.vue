@@ -113,7 +113,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Check, Close, CircleCheckFilled } from '@element-plus/icons-vue'
+import { Check, Close } from '@element-plus/icons-vue'
 
 const props = defineProps<{
   currentStatus: string
@@ -134,7 +134,7 @@ const currentIdx = computed(() => {
 const reachableTargets = computed(() => {
   const cur = props.currentStatus
   const idx = currentIdx.value
-  if (idx < 0 || cur === 'cancelled' || cur === 'completed') return []
+  if (idx < 0 || cur === 'cancelled') return []
   return allStatuses.slice(idx + 1)
 })
 
