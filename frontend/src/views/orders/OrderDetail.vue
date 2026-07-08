@@ -4,8 +4,13 @@
       <el-icon><ArrowLeft /></el-icon> 返回
     </el-button>
 
-    <div v-if="order" v-loading="loading">
-      <h2 style="margin: 16px 0; color: var(--ad-text)">订单 {{ order.order_no }}</h2>
+    <div v-if="order" v-loading="loading" ref="printOrderSection">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin: 16px 0">
+      <h2 style="margin: 0; color: var(--ad-text)">订单 {{ order.order_no }}</h2>
+      <el-button @click="handlePrintOrder">
+        <el-icon><Printer /></el-icon> 打印
+      </el-button>
+    </div>
 
       <el-tabs v-model="activeTab">
         <el-tab-pane label="基本信息" name="info">
@@ -314,6 +319,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { Printer } from '@element-plus/icons-vue'
 import OrderWorkflow from './OrderWorkflow.vue'
 import { useRoute } from 'vue-router'
 import { getOrder, changeOrderStatus, autoCalculateCost } from '@/api/orders'
@@ -529,6 +535,58 @@ async function handleAutoCost() {
     order.value = await autoCalculateCost(route.params.id as string)
     ElMessage.success('自动核算完成')
   } finally { autoCostLoading.value = false }
+}
+
+const printOrderSection = ref(null)
+
+function handlePrintOrder() {
+  // Build print-friendly HTML from order data
+  const o = order.value
+  if (!o) return
+  const wrapper = document.createElement('div')
+  wrapper.id = '__print_a4_wrapper__'
+  wrapper.className = 'print-a4-wrapper'
+  
+  let html = '<div class="print-title">订单 ' + o.order_no + '</div>'
+  html += '<div class="print-info">'
+  html += '<div class="print-info-row"><span><strong>订单编号:</strong> ' + (o.order_no || '-') + '</span><span><strong>项目名称:</strong> ' + (o.project_name || '-') + '</span></div>'
+  html += '<div class="print-info-row"><span><strong>联系人:</strong> ' + (o.contact_person || '-') + '</span><span><strong>联系电话:</strong> ' + (o.contact_phone || '-') + '</span></div>'
+  html += '<div class="print-info-row"><span><strong>安装地址:</strong> ' + (o.installation_address || '-') + '</span><span><strong>总金额:</strong> ¥' + (o.total_amount || 0).toFixed(2) + '</span></div>'
+  html += '<div class="print-info-row"><span><strong>已收金额:</strong> ¥' + (o.paid_amount || 0).toFixed(2) + '</span><span><strong>未收金额:</strong> ¥' + (o.unpaid_amount || 0).toFixed(2) + '</span></div>'
+  if (o.remark) html += '<div class="print-info-row"><span><strong>备注:</strong> ' + o.remark + '</span></div>'
+  html += '</div>'
+  
+  // Items table
+  html += '<table class="print-table"><thead><tr><th class="center">序号</th><th>项目内容</th><th>材质工艺</th><th>规格</th><th class="numeric">数量</th><th class="center">单位</th><th class="numeric">单价</th><th class="numeric">小计</th><th>备注</th></tr></thead><tbody>'
+  const items = o.items || []
+  if (items.length === 0) {
+    html += '<tr><td colspan="9" class="print-empty">暂无明细</td></tr>'
+  } else {
+    items.forEach((item, i) => {
+      html += '<tr>'
+      html += '<td class="center">' + (i + 1) + '</td>'
+      html += '<td>' + (item.item_name || '') + '</td>'
+      html += '<td>' + (item.material_process || '-') + '</td>'
+      html += '<td>' + (item.specification || '-') + '</td>'
+      html += '<td class="numeric">' + (item.quantity != null ? item.quantity : '') + '</td>'
+      html += '<td class="center">' + (item.unit || '-') + '</td>'
+      html += '<td class="numeric">' + (item.unit_price != null ? item.unit_price.toFixed(2) : '-') + '</td>'
+      html += '<td class="numeric">' + (item.subtotal_amount != null ? item.subtotal_amount.toFixed(2) : '-') + '</td>'
+      html += '<td>' + (item.remark || '') + '</td>'
+      html += '</tr>'
+    })
+  }
+  html += '</tbody></table>'
+  
+  // Summary
+  html += '<div class="print-summary">'
+  html += '<div class="print-summary-row"><span><strong>合计金额:</strong> ¥' + (o.total_amount || 0).toFixed(2) + '</span></div>'
+  html += '</div>'
+  
+  wrapper.innerHTML = html
+  document.body.appendChild(wrapper)
+  window.print()
+  setTimeout(() => { const el = document.getElementById('__print_a4_wrapper__'); if (el) el.remove() }, 300)
 }
 
 onMounted(() => { fetchOrder(); fetchTasks() })

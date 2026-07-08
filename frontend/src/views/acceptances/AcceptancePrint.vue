@@ -8,121 +8,131 @@
   >
     <div v-if="loading" v-loading="true" style="height: 200px" />
     <div v-else-if="form" class="print-area">
-      <!-- 标题 -->
-      <h2 class="preview-title">{{ form.project_name || '' }} 验收单</h2>
+      <!-- A4 打印内容 — 使用全局 print.scss 样式 -->
+      <div class="print-a4-wrapper" style="padding: 0;">
+        <!-- 标题 -->
+        <div class="print-title">{{ form.project_name || '' }} 验收单</div>
 
-      <!-- 基本信息 -->
-      <div class="preview-info">
-        <div class="info-row">
-          <span>订单编号: {{ form.order_no || '-' }}</span>
-          <span>客户名称: {{ form.customer_name || '-' }}</span>
-          <span>客户地址: {{ form.customer_address || '-' }}</span>
+        <!-- 基本信息 -->
+        <div class="print-info">
+          <div class="print-info-row">
+            <span><strong>订单编号:</strong> {{ form.order_no || '-' }}</span>
+            <span><strong>客户名称:</strong> {{ form.customer_name || '-' }}</span>
+            <span><strong>客户地址:</strong> {{ form.customer_address || '-' }}</span>
+          </div>
+          <div class="print-info-row">
+            <span><strong>部门/科室:</strong> {{ form.department || '-' }}</span>
+            <span><strong>联 系 人:</strong> {{ form.contact_person || '-' }}</span>
+            <span><strong>联系电话:</strong> {{ form.customer_phone || '-' }}</span>
+            <span><strong>下单日期:</strong> {{ form.order_date?.slice(0, 10) || '-' }}</span>
+          </div>
         </div>
-        <div class="info-row">
-          <span>部门/科室: {{ form.department || '-' }}</span>
-          <span>联 系 人: {{ form.contact_person || '-' }}</span>
-          <span>联系电话: {{ form.customer_phone || '-' }}</span>
-          <span>下单日期: {{ form.order_date?.slice(0, 10) || '-' }}</span>
+
+        <!-- 验收明细表格 -->
+        <table class="print-table">
+          <colgroup>
+            <col style="width: 4%" />
+            <col style="width: 14%" />
+            <col style="width: 12%" />
+            <col style="width: 10%" />
+            <col style="width: 6%" />
+            <col style="width: 5%" />
+            <col style="width: 5%" />
+            <col style="width: 8%" />
+            <col style="width: 9%" />
+            <col style="width: 7%" />
+            <col style="width: 12%" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="center">序号</th>
+              <th>项目内容</th>
+              <th>材质工艺</th>
+              <th>规格</th>
+              <th class="numeric">面积</th>
+              <th class="numeric">数量</th>
+              <th class="center">单位</th>
+              <th class="numeric">单价</th>
+              <th class="numeric">小计</th>
+              <th class="center">样图</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="(row, idx) in displayRows" :key="idx">
+              <!-- 分组标题行 -->
+              <tr v-if="row.type === 'group-header'" class="print-group-header">
+                <td colspan="11"><strong>分项：</strong>{{ row.groupName }}</td>
+              </tr>
+              <!-- 分组合计行 -->
+              <tr v-else-if="row.type === 'group-total'" class="print-group-total">
+                <td colspan="8" style="text-align: right;">分项合计</td>
+                <td class="numeric">¥ {{ row.total.toFixed(2) }}</td>
+                <td></td>
+                <td></td>
+              </tr>
+              <!-- 明细行 -->
+              <tr v-else>
+                <td class="center">{{ row.idx }}</td>
+                <td>{{ row.item.item_name }}</td>
+                <td>{{ row.item.material_process || '-' }}</td>
+                <td>{{ row.item.specification || '-' }}</td>
+                <td class="numeric">{{ row.item.area != null ? row.item.area.toFixed(2) : '-' }}</td>
+                <td class="numeric">{{ row.item.quantity }}</td>
+                <td class="center">{{ row.item.unit || '-' }}</td>
+                <td class="numeric">{{ row.item.unit_price != null ? row.item.unit_price.toFixed(2) : '-' }}</td>
+                <td class="numeric">{{ row.item.subtotal != null ? row.item.subtotal.toFixed(2) : '-' }}</td>
+                <td class="print-img-cell">
+                  <img v-if="row.item.image_url" :src="row.item.image_url" style="width: 30px; height: 30px; object-fit: cover;" />
+                  <span v-else style="color: #999;">-</span>
+                </td>
+                <td>{{ row.item.remark || '' }}</td>
+              </tr>
+            </template>
+            <tr v-if="!form.items || form.items.length === 0">
+              <td colspan="11" class="print-empty">暂无验收明细</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- 金额汇总 -->
+        <div class="print-summary">
+          <div class="print-summary-row">
+            <span><strong>本页合计：</strong>¥ {{ itemsTotal.toFixed(2) }}</span>
+          </div>
+          <div class="print-amount-chinese">
+            金额（大写）：{{ toChineseAmount(itemsTotal) }}
+            &nbsp;&nbsp;&nbsp;金额（小写）：¥ {{ itemsTotal.toFixed(2) }}
+          </div>
+          <div class="print-summary-row print-no-break">
+            <span>总金额：<strong>¥ {{ itemsTotal.toFixed(2) }}</strong></span>
+            <span>优惠金额：<strong>¥ {{ (form.discount_amount || 0).toFixed(2) }}</strong></span>
+            <span>预付金额：<strong>¥ {{ (form.advance_amount || 0).toFixed(2) }}</strong></span>
+            <span>应付金额：<strong style="font-size: 12pt;">¥ {{ payableAmount.toFixed(2) }}</strong></span>
+          </div>
         </div>
-      </div>
 
-      <!-- 验收明细表格 -->
-      <table class="preview-table">
-        <thead>
-          <tr>
-            <th style="width: 40px">序号</th>
-            <th><div class="wrap-text">项目内容</div></th>
-            <th><div class="wrap-text">材质工艺</div></th>
-            <th><div class="wrap-text">规格</div></th>
-            <th>面积</th>
-            <th>数量</th>
-            <th>单位</th>
-            <th>单价</th>
-            <th>小计</th>
-            <th>样图</th>
-            <th><div class="wrap-text">备注</div></th>
-          </tr>
-        </thead>
-        <tbody>
-          <template v-for="(row, idx) in displayRows" :key="idx">
-            <!-- 分组标题行 -->
-            <tr v-if="row.type === 'group-header'" class="group-header-row">
-              <td colspan="11" style="font-weight: 600; background: #f5f7fa; border-bottom: 2px solid #409eff; padding: 6px 8px;">
-                分项：{{ row.groupName }}
-              </td>
-            </tr>
-            <!-- 分组合计行 -->
-            <tr v-else-if="row.type === 'group-total'" class="group-total-row">
-              <td colspan="8" style="text-align: right; font-weight: 600; background: #fafafa; border-top: 1px solid #dcdfe6; padding: 6px 8px;">分项合计</td>
-              <td style="text-align: right; font-weight: 600; background: #fafafa; border-top: 1px solid #dcdfe6; padding: 6px 8px; white-space: nowrap;">¥ {{ row.total.toFixed(2) }}</td>
-              <td style="background: #fafafa; border-top: 1px solid #dcdfe6;"></td>
-              <td style="background: #fafafa; border-top: 1px solid #dcdfe6;"></td>
-            </tr>
-            <!-- 明细行 -->
-            <tr v-else>
-              <td style="text-align: center">{{ row.idx }}</td>
-              <td><div class="wrap-text">{{ row.item.item_name }}</div></td>
-              <td><div class="wrap-text">{{ row.item.material_process || '-' }}</div></td>
-              <td><div class="wrap-text">{{ row.item.specification || '-' }}</div></td>
-              <td style="text-align: right">{{ row.item.area != null ? row.item.area.toFixed(2) : '-' }}</td>
-              <td style="text-align: right">{{ row.item.quantity }}</td>
-              <td style="text-align: center">{{ row.item.unit || '-' }}</td>
-              <td style="text-align: right">{{ row.item.unit_price != null ? row.item.unit_price.toFixed(2) : '-' }}</td>
-              <td style="text-align: right">{{ row.item.subtotal != null ? row.item.subtotal.toFixed(2) : '-' }}</td>
-              <td style="text-align: center; padding: 4px;">
-                <img v-if="row.item.image_url" :src="row.item.image_url" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;" />
-                <span v-else style="color: #999;">-</span>
-              </td>
-              <td><div class="wrap-text">{{ row.item.remark || '' }}</div></td>
-            </tr>
-          </template>
-          <tr v-if="!form.items || form.items.length === 0">
-            <td colspan="11" style="text-align: center; color: #999;">暂无验收明细</td>
-          </tr>
-
-          <!-- 金额汇总 -->
-          <tr>
-            <td colspan="8" style="text-align: right; font-weight: 600;">本页合计：</td>
-            <td style="text-align: right; font-weight: 600; white-space: nowrap;">¥ {{ itemsTotal.toFixed(2) }}</td>
-            <td></td>
-            <td></td>
-          </tr>
-          <tr>
-            <td colspan="2" style="text-align: right; border-right: none;">金额（大写）：</td>
-            <td colspan="5" style="border-left: none; border-right: none;">{{ toChineseAmount(itemsTotal) }}</td>
-            <td style="text-align: right; border-left: none; border-right: none;">金额（小写）：</td>
-            <td style="text-align: right; white-space: nowrap; border-left: none;">¥ {{ itemsTotal.toFixed(2) }}</td>
-            <td></td>
-            <td></td>
-          </tr>
-          <tr>
-            <td colspan="11" style="padding: 8px 12px;">
-              <div style="display: flex; justify-content: space-between;">
-                <span>总金额：<strong>¥ {{ itemsTotal.toFixed(2) }}</strong></span>
-                <span>优惠金额：<strong>¥ {{ (form.discount_amount || 0).toFixed(2) }}</strong></span>
-                <span>预付金额：<strong>¥ {{ (form.advance_amount || 0).toFixed(2) }}</strong></span>
-                <span>应付金额：<strong style="font-size: 14px;">¥ {{ payableAmount.toFixed(2) }}</strong></span>
-              </div>
-            </td>
-          </tr>
-        <tr>
-          <td colspan="11" style="height: 60px; vertical-align: top; padding-top: 14px;"><strong>备注说明：</strong>{{ form.remark || '' }}</td>
-        </tr>
-        <tr>
-          <td colspan="11" style="padding: 8px 12px;">负责人/联系电话：{{ form.contact_person || '' }} / {{ form.customer_phone || '' }}</td>
-        </tr>
-        </tbody>
-      </table>
-
-      <!-- 签字栏 -->
-      <div class="preview-signatures">
-        <div class="signature-block">
-          <div class="signature-label">客户验收签字（盖章）：</div>
-          <div style="height: 50px;"></div>
-          <div class="signature-date">日期：________年____月____日</div>
+        <!-- 备注 -->
+        <div class="print-remark">
+          <div class="print-remark-label">备注说明：</div>
+          <div class="print-remark-content">{{ form.remark || '' }}</div>
         </div>
-        <div class="signature-block">
-          <div class="signature-label">验收人电话：</div>
+
+        <div class="print-remark">
+          负责人/联系电话：{{ form.contact_person || '' }} / {{ form.customer_phone || '' }}
+        </div>
+
+        <!-- 签字栏 -->
+        <div class="print-signatures">
+          <div class="print-signature-block">
+            <div class="print-signature-label">客户验收签字（盖章）：</div>
+            <div class="print-signature-line"></div>
+            <div class="print-signature-date">日期：________年____月____日</div>
+          </div>
+          <div class="print-signature-block">
+            <div class="print-signature-label">验收人电话：</div>
+            <div class="print-signature-line"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -142,6 +152,17 @@ import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import { getAcceptance } from '@/api/acceptances'
 import { downloadBlob } from '@/utils/download'
+import { usePrint } from '@/composables/usePrint'
+
+const props = defineProps<{
+  visible: boolean
+  acceptanceId: string | null
+}>()
+
+const { handlePrintBySelector } = usePrint()
+
+const loading = ref(false)
+const form = ref<AcceptancePrintData | null>(null)
 
 interface AcceptancePrintItem {
   id?: string
@@ -180,18 +201,6 @@ interface AcceptancePrintData {
   advance_amount?: number
   items: AcceptancePrintItem[]
 }
-
-const props = defineProps<{
-  visible: boolean
-  acceptanceId: string | null
-}>()
-
-defineEmits<{
-  close: []
-}>()
-
-const loading = ref(false)
-const form = ref<AcceptancePrintData | null>(null)
 
 type PrintDisplayRow =
   | { type: 'group-header'; groupName: string }
@@ -332,48 +341,44 @@ async function handleExportPDF() {
 
   const imgData = canvas.toDataURL('image/png')
 
-  // A4 尺寸 (mm)，8mm 边距
   const pdfWidth = 210
   const margin = 8
   const maxWidth = pdfWidth - margin * 2
 
-  // canvas 是 scale:2 渲染的，实际像素 /2 后换算为 mm（96dpi: 1px = 25.4/96 mm）
   const pxToMm = 25.4 / 96
   const imgWmm = (canvas.width / 2) * pxToMm
   const imgHmm = (canvas.height / 2) * pxToMm
 
-  // 按 A4 内容宽度等比缩放
   const ratio = maxWidth / imgWmm
   const finalW = maxWidth
   const finalH = imgHmm * ratio
 
-  const pdf = new jsPDF('portrait', 'mm', 'a4')
-  pdf.addImage(imgData, 'PNG', margin, margin, finalW, finalH)
+  const pdf = new jsPDF('p', 'mm', 'a4')
+  // 多页（A4 内容区高度约 280mm 含边距）
+  let remainingH = finalH
+  const yOffset = margin
+  let page = 0
+  const pageContentHeight = 280
+
+  while (remainingH > 0) {
+    if (page > 0) pdf.addPage()
+    const clipH = Math.min(remainingH, pageContentHeight)
+    pdf.addImage(imgData, 'PNG', margin, yOffset, finalW, finalH, undefined, 'FAST')
+    remainingH -= clipH
+    page++
+  }
+
   pdf.save(`验收单_${form.value?.acceptance_no || 'export'}.pdf`)
 }
 
+/** 使用全局 usePrint composable 进行 A4 打印 */
 function handlePrint() {
-  const printArea = document.querySelector('.print-area')
-  if (!printArea) return
-
-  // 创建独立的打印容器（不受 Element Plus teleport 结构影响）
-  const container = document.createElement('div')
-  container.id = '__print_container__'
-  container.innerHTML = printArea.outerHTML
-  document.body.appendChild(container)
-
-  window.print()
-
-  // 打印对话框关闭后清理
-  setTimeout(() => {
-    const el = document.getElementById('__print_container__')
-    if (el) el.remove()
-  }, 500)
+  handlePrintBySelector('.print-area')
 }
 </script>
 
 <style>
-/* 不用 scoped，因为 el-dialog teleport 到 body，scoped 样式无法穿透 */
+/* 屏幕预览样式 */
 .preview-title {
   text-align: center;
   font-size: 22px;
@@ -478,74 +483,5 @@ function handlePrint() {
   font-weight: 600;
 }
 
-@media print {
-  @page { size: A4; margin: 8mm; }
-
-  html, body { background: white !important; }
-
-  body > * { display: none !important; }
-
-  #__print_container__ {
-    display: block !important;
-    position: static !important;
-    background: white !important;
-    padding: 0 !important;
-    margin: 0 auto !important;
-    max-width: 185mm;
-  }
-
-  #__print_container__ .preview-table {
-    table-layout: fixed;
-    width: auto;
-  }
-
-  #__print_container__ .preview-table thead th:nth-child(1) { width: 22px; }
-  #__print_container__ .preview-table thead th:nth-child(2) { width: 82px; }
-  #__print_container__ .preview-table thead th:nth-child(3) { width: 82px; }
-  #__print_container__ .preview-table thead th:nth-child(4) { width: 70px; }
-  #__print_container__ .preview-table thead th:nth-child(5) { width: 38px; }
-  #__print_container__ .preview-table thead th:nth-child(6) { width: 30px; }
-  #__print_container__ .preview-table thead th:nth-child(7) { width: 26px; }
-  #__print_container__ .preview-table thead th:nth-child(8) { width: 56px; }
-  #__print_container__ .preview-table thead th:nth-child(9) { width: 62px; }
-  #__print_container__ .preview-table thead th:nth-child(10) { width: 38px; }
-  #__print_container__ .preview-table thead th:nth-child(11) { width: 82px; }
-
-  #__print_container__ .preview-table th,
-  #__print_container__ .preview-table td {
-    font-size: 9px;
-    padding: 2px 3px;
-    box-sizing: border-box;
-  }
-
-  #__print_container__ .preview-table td:nth-child(1),
-  #__print_container__ .preview-table td:nth-child(5),
-  #__print_container__ .preview-table td:nth-child(6),
-  #__print_container__ .preview-table td:nth-child(7),
-  #__print_container__ .preview-table td:nth-child(8),
-  #__print_container__ .preview-table td:nth-child(9),
-  #__print_container__ .preview-table td:nth-child(10) {
-    white-space: nowrap;
-  }
-
-  /* 内容列允许折行 */
-  #__print_container__ .preview-table td:nth-child(2),
-  #__print_container__ .preview-table td:nth-child(3),
-  #__print_container__ .preview-table td:nth-child(4),
-  #__print_container__ .preview-table td:nth-child(11) {
-    word-break: break-all;
-  }
-
-  #__print_container__ .preview-table td:nth-child(2) .wrap-text,
-  #__print_container__ .preview-table td:nth-child(3) .wrap-text,
-  #__print_container__ .preview-table td:nth-child(4) .wrap-text,
-  #__print_container__ .preview-table td:nth-child(11) .wrap-text {
-    max-width: none;
-  }
-
-  #__print_container__ .preview-signatures {
-    page-break-inside: avoid;
-    margin-top: 20px;
-  }
-}
+/* 打印样式由全局 print.scss 统一控制 */
 </style>

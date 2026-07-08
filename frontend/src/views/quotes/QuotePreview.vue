@@ -8,122 +8,131 @@
   >
     <div v-if="loading" v-loading="true" style="height: 200px" />
     <div v-else-if="quote" class="print-area">
-      <div class="preview-header">
-        <div class="company-logo">LOGO</div>
-        <div class="company-info">
-          <div class="company-name">广告制作公司</div>
-          <div class="company-detail">地址: __________  电话: __________</div>
+      <!-- A4 打印内容容器 — 屏幕预览样式与打印一致 -->
+      <div class="print-a4-wrapper" style="padding: 0;">
+        <!-- 表头 -->
+        <div class="print-header">
+          <div class="print-logo">LOGO</div>
+          <div class="print-company">
+            <div class="print-company-name">广告制作公司</div>
+            <div class="print-company-detail">地址: __________  电话: __________</div>
+          </div>
         </div>
-      </div>
 
-      <h2 class="preview-title">报 价 单</h2>
+        <div class="print-title">报 价 单</div>
 
-      <div class="preview-meta">
-        <div class="meta-row">
-          <span>报价单号: {{ quote.quote_no }}</span>
-          <span>日　　期: {{ quote.created_at?.slice(0, 10) }}</span>
+        <!-- 基本信息 -->
+        <div class="print-info">
+          <div class="print-info-row">
+            <span><strong>报价单号:</strong> {{ quote.quote_no }}</span>
+            <span><strong>日　　期:</strong> {{ quote.created_at?.slice(0, 10) }}</span>
+          </div>
+          <div class="print-info-row">
+            <span><strong>有效期至:</strong> {{ quote.valid_until || '-' }}</span>
+            <span><strong>状　　态:</strong> {{ statusLabel(quote.status) }}</span>
+          </div>
         </div>
-        <div class="meta-row">
-          <span>有效期至: {{ quote.valid_until || '-' }}</span>
-          <span>状　　态: {{ statusLabel(quote.status) }}</span>
-        </div>
-      </div>
 
-      <div class="preview-parties">
-        <div class="party-row">
-          <span>客户名称: {{ quote.customer_name || '-' }}</span>
-          <span>联系电话: {{ customerPhone }}</span>
+        <div class="print-info">
+          <div class="print-info-row">
+            <span><strong>客户名称:</strong> {{ quote.customer_name || '-' }}</span>
+            <span><strong>联系电话:</strong> {{ customerPhone }}</span>
+          </div>
+          <div class="print-info-row">
+            <span><strong>项目名称:</strong> {{ quote.project_name || '-' }}</span>
+            <span><strong>业 务 员:</strong> {{ salesName }}</span>
+          </div>
+          <div v-if="quote.department" class="print-info-row">
+            <span><strong>部门/科室:</strong> {{ quote.department }}</span>
+            <span></span>
+          </div>
         </div>
-        <div class="party-row">
-          <span>项目名称: {{ quote.project_name || '-' }}</span>
-          <span>业 务 员: {{ salesName }}</span>
-        </div>
-        <div v-if="quote.department" class="party-row">
-          <span>部门/科室: {{ quote.department }}</span>
-          <span></span>
-        </div>
-      </div>
 
-      <table class="preview-table">
-        <colgroup>
-          <col style="width: 5%" />
-          <col style="width: 14%" />
-          <col style="width: 13%" />
-          <col style="width: 13%" />
-          <col style="width: 6%" />
-          <col style="width: 6%" />
-          <col style="width: 9%" />
-          <col style="width: 10%" />
-          <col style="width: 9%" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>序号</th>
-            <th>项目内容</th>
-            <th>材质工艺</th>
-            <th>规格</th>
-            <th>数量</th>
-            <th>单位</th>
-            <th>单价</th>
-            <th>小计</th>
-            <th>备注</th>
-          </tr>
-        </thead>
-        <tbody>
-          <template v-for="row in previewDisplayRows" :key="row.key">
-            <tr v-if="row.type === 'group-header'" class="group-header">
-              <td colspan="9">分项：{{ row.groupName }}</td>
+        <!-- 明细表格 -->
+        <table class="print-table">
+          <colgroup>
+            <col style="width: 5%" />
+            <col style="width: 16%" />
+            <col style="width: 14%" />
+            <col style="width: 14%" />
+            <col style="width: 7%" />
+            <col style="width: 6%" />
+            <col style="width: 10%" />
+            <col style="width: 11%" />
+            <col style="width: 10%" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="center">序号</th>
+              <th>项目内容</th>
+              <th>材质工艺</th>
+              <th>规格</th>
+              <th class="numeric">数量</th>
+              <th class="center">单位</th>
+              <th class="numeric">单价</th>
+              <th class="numeric">小计</th>
+              <th>备注</th>
             </tr>
-            <tr v-else-if="row.type === 'group-total'" class="group-total">
-              <td colspan="7" style="text-align: right;">分项合计</td>
-              <td>{{ row.total.toFixed(2) }}</td>
-              <td></td>
-            </tr>
-            <tr v-else>
-              <td style="text-align: center">{{ row.idx }}</td>
-              <td>{{ row.item.item_name }}</td>
-              <td>{{ row.item.material_process || '-' }}</td>
-              <td>{{ formatSpec(row.item) }}</td>
-              <td style="text-align: right">{{ row.item.quantity }}</td>
-              <td style="text-align: center">{{ row.item.use_area ? '㎡' : (row.item.unit || '-') }}</td>
-              <td style="text-align: right">{{ row.item.unit_price?.toFixed(2) }}</td>
-              <td style="text-align: right">{{ row.item.subtotal_amount?.toFixed(2) }}</td>
-              <td>{{ row.item.remark || '' }}</td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <template v-for="row in previewDisplayRows" :key="row.key">
+              <tr v-if="row.type === 'group-header'" class="print-group-header">
+                <td colspan="9"><strong>分项：</strong>{{ row.groupName }}</td>
+              </tr>
+              <tr v-else-if="row.type === 'group-total'" class="print-group-total">
+                <td colspan="7" style="text-align: right;">分项合计</td>
+                <td class="numeric">{{ row.total.toFixed(2) }}</td>
+                <td></td>
+              </tr>
+              <tr v-else>
+                <td class="center">{{ row.idx }}</td>
+                <td>{{ row.item.item_name }}</td>
+                <td>{{ row.item.material_process || '-' }}</td>
+                <td>{{ formatSpec(row.item) }}</td>
+                <td class="numeric">{{ row.item.quantity }}</td>
+                <td class="center">{{ row.item.use_area ? '㎡' : (row.item.unit || '-') }}</td>
+                <td class="numeric">{{ row.item.unit_price?.toFixed(2) }}</td>
+                <td class="numeric">{{ row.item.subtotal_amount?.toFixed(2) }}</td>
+                <td>{{ row.item.remark || '' }}</td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
 
-      <div class="preview-summary">
-        <div class="summary-row">
-          <span>小　　计: ¥{{ quote.subtotal_amount?.toFixed(2) }}</span>
-          <span>优　　惠: ¥{{ quote.discount_amount?.toFixed(2) }}</span>
-          <span>税　　率: {{ quote.tax_rate }}%</span>
+        <!-- 汇总 -->
+        <div class="print-summary">
+          <div class="print-summary-row">
+            <span>小　　计: ¥{{ quote.subtotal_amount?.toFixed(2) }}</span>
+            <span>优　　惠: ¥{{ quote.discount_amount?.toFixed(2) }}</span>
+            <span>税　　率: {{ quote.tax_rate }}%</span>
+          </div>
+          <div class="print-summary-row">
+            <span>税　　额: ¥{{ quote.tax_amount?.toFixed(2) }}</span>
+            <span class="print-summary-total">合　　计: ¥{{ quote.total_amount?.toFixed(2) }}</span>
+          </div>
         </div>
-        <div class="summary-row">
-          <span>税　　额: ¥{{ quote.tax_amount?.toFixed(2) }}</span>
-          <span class="total">合　　计: ¥{{ quote.total_amount?.toFixed(2) }}</span>
+
+        <!-- 备注 -->
+        <div v-if="quote.remark" class="print-remark">
+          <div class="print-remark-label">备注:</div>
+          <div class="print-remark-content">{{ quote.remark }}</div>
         </div>
-      </div>
 
-      <div v-if="quote.remark" class="preview-remark">
-        <div class="remark-label">备注:</div>
-        <div class="remark-content">{{ quote.remark }}</div>
-      </div>
-
-      <div class="preview-terms">
-        <div class="terms-label">条款说明:</div>
-        <ol>
-          <li>本报价有效期见上方日期</li>
-          <li>付款方式: 预付50%，完工付余款</li>
-          <li>本报价不含税，如需发票另加税点</li>
-        </ol>
+        <!-- 条款 -->
+        <div class="print-terms">
+          <div class="print-terms-label">条款说明:</div>
+          <ol>
+            <li>本报价有效期见上方日期</li>
+            <li>付款方式: 预付50%，完工付余款</li>
+            <li>本报价不含税，如需发票另加税点</li>
+          </ol>
+        </div>
       </div>
     </div>
 
     <template #footer>
       <el-button @click="$emit('close')">关闭</el-button>
-      <el-button type="primary" @click="handlePrint">打印</el-button>
+      <el-button type="primary" @click="handlePrintBySelector('.print-area')">打印</el-button>
     </template>
   </el-dialog>
 </template>
@@ -132,27 +141,30 @@
 import { ref, computed, watch } from 'vue'
 import { getQuote } from '@/api/quotes'
 import { getCustomer } from '@/api/customers'
+import { usePrint } from '@/composables/usePrint'
 import { QuoteDetailResponse, QuoteItemResponse } from '@/types/api'
 
 const props = defineProps<{
   visible: boolean
-  quoteId: string | null
+  quoteId?: string
   currentItems?: QuoteItemResponse[]
 }>()
 
-defineEmits<{
-  close: []
-}>()
+const { handlePrintBySelector } = usePrint()
 
 const loading = ref(false)
 const quote = ref<QuoteDetailResponse | null>(null)
 const customerPhone = ref('-')
 const salesName = ref('-')
 
-type PreviewRow =
-  | { type: 'group-header'; groupName: string; key: string }
-  | { type: 'item'; item: QuoteItemResponse; idx: number; key: string }
-  | { type: 'group-total'; groupName: string; total: number; key: string }
+interface PreviewRow {
+  type: 'group-header' | 'group-total' | 'item'
+  groupName?: string
+  item?: QuoteItemResponse
+  idx?: number
+  total?: number
+  key: string
+}
 
 const previewDisplayRows = computed<PreviewRow[]>(() => {
   if (!quote.value) return []
@@ -198,7 +210,6 @@ watch(() => props.visible, async (val) => {
       }
       salesName.value = '-'
     } else if (props.currentItems) {
-      // 新建报价预览（无 quoteId）
       quote.value = {
         id: '', quote_no: '（新建）', customer_name: '', project_name: '',
         status: 'draft', subtotal_amount: 0, discount_amount: 0,
@@ -225,14 +236,10 @@ function formatSpec(item: QuoteItemResponse) {
   if (item.pieces && item.pieces > 1) parts.push(`${item.pieces}`)
   return parts.length ? parts.join(' × ') : '-'
 }
-
-function handlePrint() {
-  window.print()
-}
 </script>
 
 <style>
-/* 不用 scoped，因为 el-dialog teleport 到 body，scoped 样式无法穿透 */
+/* 屏幕预览样式 — 保持与打印一致 */
 .preview-header {
   display: flex;
   align-items: center;
@@ -276,94 +283,7 @@ function handlePrint() {
   padding: 4px 0;
   font-size: 14px;
 }
-.preview-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 16px 0;
-  font-size: 12px;
-  table-layout: fixed;
-}
-.preview-table th,
-.preview-table td {
-  border: 1px solid #333;
-  padding: 6px 8px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  word-break: break-all;
-}
-.preview-table th {
-  background: #f5f5f5;
-  font-weight: bold;
-  text-align: center;
-}
-.preview-table .group-header td {
-  background: #e8edf2;
-  border-bottom: 2px solid #409eff;
-  font-weight: 600;
-  padding: 6px 12px;
-}
-.preview-table .group-total td {
-  background: #f5f5f5;
-  font-weight: 600;
-}
-.preview-summary {
-  margin: 16px 0;
-  padding: 12px;
-  border: 1px solid #ddd;
-  background: #fafafa;
-}
-.summary-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 0;
-  font-size: 14px;
-}
-.summary-row .total {
-  font-weight: bold;
-  font-size: 16px;
-  color: #e6a23c;
-}
-.preview-remark {
-  margin: 12px 0;
-  font-size: 13px;
-}
-.remark-label {
-  font-weight: bold;
-  margin-bottom: 4px;
-}
-.remark-content {
-  color: #666;
-  white-space: pre-wrap;
-}
-.preview-terms {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px dashed #ccc;
-  font-size: 12px;
-  color: #666;
-}
-.terms-label {
-  font-weight: bold;
-  margin-bottom: 6px;
-  color: #333;
-}
-.preview-terms ol {
-  margin: 0;
-  padding-left: 20px;
-}
-.preview-terms li {
-  margin-bottom: 4px;
-}
 
-@media print {
-  :deep(.el-dialog__header),
-  :deep(.el-dialog__footer),
-  :deep(.el-overlay) {
-    display: none !important;
-  }
-  .print-area {
-    padding: 0;
-    margin: 0;
-  }
-}
+/* 打印样式由全局 print.scss 统一控制，
+   此文件仅保留屏幕预览所需的最小样式 */
 </style>
