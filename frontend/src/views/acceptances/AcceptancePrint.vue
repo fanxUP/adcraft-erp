@@ -89,9 +89,9 @@
           </tr>
           <tr>
             <td colspan="2" style="text-align: right; border-right: none;">金额（大写）：</td>
-            <td colspan="5" style="border-left: none; border-right: none;">{{ toChineseAmount(itemsTotal) }}</td>
-            <td style="text-align: right; border-left: none; border-right: none;">金额（小写）：</td>
-            <td style="text-align: right; white-space: nowrap; border-left: none;">¥ {{ itemsTotal.toFixed(2) }}</td>
+            <td colspan="5" style="border-left: none; border-right: none; font-weight: bold;">{{ toChineseAmount(itemsTotal) }}</td>
+            <td style="text-align: right; border-left: none; border-right: none; font-weight: bold;">金额（小写）：</td>
+            <td style="text-align: right; white-space: nowrap; border-left: none; font-weight: bold;">¥ {{ itemsTotal.toFixed(2) }}</td>
             <td></td>
             <td></td>
           </tr>
