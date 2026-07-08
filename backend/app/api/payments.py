@@ -313,8 +313,8 @@ async def download_project_cost_template(
             top=Side(style="thin"), bottom=Side(style="thin"),
         )
 
-        headers = ["成本类别", "金额", "付款方式", "收款公司", "分项", "欠款金额", "描述", "成本日期", "备注"]
-        col_widths = [18, 14, 16, 22, 20, 14, 30, 18, 30]
+        headers = ["分项", "成本类别", "付款方式", "收款公司", "金额", "欠款金额", "成本日期", "说明", "备注"]
+        col_widths = [20, 18, 16, 22, 14, 14, 18, 30, 30]
 
         for col_idx, (header, width) in enumerate(zip(headers, col_widths), 1):
             cell = ws.cell(row=1, column=col_idx, value=header)
@@ -324,7 +324,7 @@ async def download_project_cost_template(
             cell.border = thin_border
             ws.column_dimensions[chr(64 + col_idx)].width = width
 
-        example_data = ["人工/工时费", 500.00, "转账支付", "XX广告制作公司", "灯箱制作", 0, "安装工人加班", "2026-07-08", "示例数据，可删除"]
+        example_data = ["灯箱制作", "人工/工时费", "转账支付", "XX广告制作公司", 500.00, 0, "2026-07-08", "安装工人加班费", "示例数据，可删除"]
         for col_idx, val in enumerate(example_data, 1):
             cell = ws.cell(row=2, column=col_idx, value=val)
             cell.alignment = Alignment(horizontal="center", vertical="center")
