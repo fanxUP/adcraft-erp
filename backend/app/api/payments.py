@@ -298,56 +298,59 @@ async def download_project_cost_template(
     """Download an Excel template for importing project costs."""
     import openpyxl
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from fastapi.responses import Response
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "成本导入模板"
+    try:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "成本导入模板"
 
-    # Header row style
-    header_font = Font(name="微软雅黑", bold=True, size=11, color="FFFFFF")
-    header_fill = PatternFill(start_color="409EFF", end_color="409EFF", fill_type="solid")
-    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    thin_border = Border(
-        left=Side(style="thin"), right=Side(style="thin"),
-        top=Side(style="thin"), bottom=Side(style="thin"),
-    )
+        header_font = Font(name="微软雅黑", bold=True, size=11, color="FFFFFF")
+        header_fill = PatternFill(start_color="409EFF", end_color="409EFF", fill_type="solid")
+        header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin_border = Border(
+            left=Side(style="thin"), right=Side(style="thin"),
+            top=Side(style="thin"), bottom=Side(style="thin"),
+        )
 
-    # Column headers
-    headers = ["成本类别", "金额", "描述", "成本日期", "备注"]
-    col_widths = [18, 14, 30, 18, 30]
+        headers = ["成本类别", "金额", "描述", "成本日期", "备注"]
+        col_widths = [18, 14, 30, 18, 30]
 
-    for col_idx, (header, width) in enumerate(zip(headers, col_widths), 1):
-        cell = ws.cell(row=1, column=col_idx, value=header)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = header_align
-        cell.border = thin_border
-        ws.column_dimensions[chr(64 + col_idx)].width = width
+        for col_idx, (header, width) in enumerate(zip(headers, col_widths), 1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_align
+            cell.border = thin_border
+            ws.column_dimensions[chr(64 + col_idx)].width = width
 
-    # Example row
-    example_data = ["人工/工时费", 500.00, "安装工人加班", "2026-07-08", "示例数据，可删除"]
-    for col_idx, val in enumerate(example_data, 1):
-        cell = ws.cell(row=2, column=col_idx, value=val)
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-        cell.border = thin_border
+        example_data = ["人工/工时费", 500.00, "安装工人加班", "2026-07-08", "示例数据，可删除"]
+        for col_idx, val in enumerate(example_data, 1):
+            cell = ws.cell(row=2, column=col_idx, value=val)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = thin_border
 
-    # Notes row
-    ws.merge_cells("A4:E4")
-    note_cell = ws.cell(row=4, column=1, 
-        value="说明：成本类别可选值 — 人工/工时费、运输/物流费、安装杂费、其他")
-    note_cell.font = Font(name="微软雅黑", size=9, color="999999", italic=True)
+        ws.merge_cells("A4:E4")
+        note_cell = ws.cell(row=4, column=1,
+            value="说明：成本类别可选值 — 人工/工时费、运输/物流费、安装杂费、其他")
+        note_cell.font = Font(name="微软雅黑", size=9, color="999999", italic=True)
 
-    # Save to BytesIO
-    buf = BytesIO()
-    wb.save(buf)
-    buf.seek(0)
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        data = buf.getvalue()
 
-    from fastapi.responses import StreamingResponse
-    return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=项目成本导入模板.xlsx"},
-    )
+        return Response(
+            content=data,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": "attachment; filename=%E9%A1%B9%E7%9B%AE%E6%88%90%E6%9C%AC%E5%AF%BC%E5%85%A5%E6%A8%A1%E6%9D%BF.xlsx",
+                "Content-Length": str(len(data)),
+            },
+        )
+    except Exception as e:
+        import traceback
+        return {"code": 50001, "message": f"生成模板失败: {str(e)}", "detail": traceback.format_exc()}
 
 
 @cost_router.get("/quotes")
