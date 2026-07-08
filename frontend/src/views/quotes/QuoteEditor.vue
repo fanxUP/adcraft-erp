@@ -308,6 +308,48 @@ const customerOptions = ref<CustomerResponse[]>([])
 const previewVisible = ref(false)
 const quoteId = computed(() => route.params.id as string)
 
+const form = reactive({
+  customer_id: '',
+  project_name: '',
+  tax_rate: 0,
+  discount_amount: 0,
+  valid_until: '',
+  remark: '',
+  department: '',
+  contact_person: '',
+  contact_phone: '',
+})
+
+const newItem = (groupName?: string): QuoteItemResponse => ({
+  id: '',
+  quote_id: '',
+  item_name: '',
+  length: undefined,
+  length_unit: '',
+  width: undefined,
+  width_unit: '',
+  height: undefined,
+  height_unit: '',
+  quantity: 1,
+  unit: '',
+  use_area: false,
+  pieces: 1,
+  unit_price: 0,
+  process_fee: 0,
+  installation_fee: 0,
+  design_fee: 0,
+  transport_fee: 0,
+  other_fee: 0,
+  subtotal_amount: 0,
+  remark: '',
+  image_url: '',
+  sort_order: 0,
+  group_name: groupName || undefined,
+  material_process: '',
+})
+
+const items = ref<QuoteItemResponse[]>([newItem()])
+
 // ===== 未保存修改检测 =====
 const dirty = ref(false)
 const isLoaded = ref(false)
@@ -364,48 +406,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
 })
-
-const form = reactive({
-  customer_id: '',
-  project_name: '',
-  tax_rate: 0,
-  discount_amount: 0,
-  valid_until: '',
-  remark: '',
-  department: '',
-  contact_person: '',
-  contact_phone: '',
-})
-
-const newItem = (groupName?: string): QuoteItemResponse => ({
-  id: '',
-  quote_id: '',
-  item_name: '',
-  length: undefined,
-  length_unit: '',
-  width: undefined,
-  width_unit: '',
-  height: undefined,
-  height_unit: '',
-  quantity: 1,
-  unit: '',
-  use_area: false,
-  pieces: 1,
-  unit_price: 0,
-  process_fee: 0,
-  installation_fee: 0,
-  design_fee: 0,
-  transport_fee: 0,
-  other_fee: 0,
-  subtotal_amount: 0,
-  remark: '',
-  image_url: '',
-  sort_order: 0,
-  group_name: groupName || undefined,
-  material_process: '',
-})
-
-const items = ref<QuoteItemResponse[]>([newItem()])
 
 const isReadonly = computed(() => {
   if (!isEdit.value || !quote.value) return false
@@ -788,7 +788,12 @@ async function handleRevertToDraft() {
 
 onMounted(async () => {
   await loadCustomers()
-  if (route.params.id) await fetchQuote()
+  if (route.params.id) {
+    await fetchQuote()
+  } else {
+    // 新建报价：初始空白状态作为干净快照
+    captureCleanSnapshot()
+  }
 })
 
 watch(() => route.params.id, async (newId) => {
