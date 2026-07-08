@@ -132,6 +132,19 @@
         <el-form-item :label="isQuote ? '报价单' : '订单'">
           <el-input :value="(isQuote ? (order?.quote_no || '') : (order?.order_no || '')) + ' ' + (order?.project_name || '')" disabled />
         </el-form-item>
+        <el-form-item label="分项">
+          <el-select v-model="form.order_item_id" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
+            <el-option
+              v-for="item in orderItems"
+              :key="item.id"
+              :label="item.item_name"
+              :value="item.id"
+            >
+              <span>{{ item.item_name }}</span>
+              <span v-if="item.group_name" style="float: right; color: #909399; font-size: 12px">{{ item.group_name }}</span>
+            </el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item label="成本类别" required>
           <el-select
             v-model="form.category"
@@ -152,19 +165,6 @@
         <el-form-item label="收款公司">
           <el-input v-model="form.payee_company_name" placeholder="输入对方收款公司名称" clearable />
           <div style="font-size: 12px; color: #909399; margin-top: 2px">对方收款公司名称（可选）</div>
-        </el-form-item>
-        <el-form-item label="分项">
-          <el-select v-model="form.order_item_id" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
-            <el-option
-              v-for="item in orderItems"
-              :key="item.id"
-              :label="item.item_name"
-              :value="item.id"
-            >
-              <span>{{ item.item_name }}</span>
-              <span v-if="item.group_name" style="float: right; color: #909399; font-size: 12px">{{ item.group_name }}</span>
-            </el-option>
-          </el-select>
         </el-form-item>
         <el-form-item label="金额" required>
           <el-input-number v-model="form.amount" :min="0.01" :precision="2" style="width: 100%" />
