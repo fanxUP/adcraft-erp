@@ -313,7 +313,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import OrderWorkflow from './OrderWorkflow.vue'
 import { useRoute } from 'vue-router'
 import { getOrder, changeOrderStatus, autoCalculateCost } from '@/api/orders'
