@@ -3,7 +3,7 @@
     <div class="qw-flow">
       <!-- 列1: 草稿 -->
       <div class="qw-col">
-        <div class="qw-card" :class="cardClass('draft')" @click="tryChange('draft')">
+        <div class="qw-card" :class="cardClass('draft')" @click="handleCardClick('draft')">
           <div class="qw-icon" :class="iconClass('draft')">
             <el-icon v-if="isPast('draft')" :size="16"><Check /></el-icon>
             <span v-else>1</span>
@@ -12,43 +12,20 @@
             <div class="qw-label">草稿</div>
             <div v-if="'draft' === currentStatus" class="qw-tag cur-tag">当前</div>
             <div v-else-if="isPast('draft')" class="qw-tag done-tag">已完成</div>
+            <div v-else class="qw-tag future-tag">待开始</div>
           </div>
         </div>
-        <!-- 草稿状态下的保存按钮 -->
-        <button v-if="currentStatus === 'draft'" class="qw-action primary" :disabled="saving" @click="$emit('save')">
-          <el-icon :size="14"><Edit /></el-icon>
-          <span>{{ saving ? '保存中…' : '保存草稿' }}</span>
-        </button>
       </div>
 
       <!-- 箭头1 -->
       <div class="qw-conn" :class="{ 'conn-done': isPast('confirmed') }">
         <div class="qw-line"></div>
         <div class="qw-point">▶</div>
-        <!-- 确认报价按钮，在草稿状态显示在箭头上 -->
-        <button
-          v-if="currentStatus === 'draft' && isExisting"
-          class="qw-btn-on-arrow success"
-          @click="$emit('confirm')"
-        >
-          <el-icon :size="13"><CircleCheck /></el-icon>
-          <span>确认报价</span>
-        </button>
-        <!-- 撤回草稿按钮，在已确认状态显示在箭头上 -->
-        <button
-          v-if="currentStatus === 'confirmed'"
-          class="qw-btn-on-arrow warning"
-          :disabled="reverting"
-          @click="$emit('revert')"
-        >
-          <el-icon :size="13"><Back /></el-icon>
-          <span>{{ reverting ? '撤回中…' : '撤回草稿' }}</span>
-        </button>
       </div>
 
       <!-- 列2: 已确认 -->
       <div class="qw-col">
-        <div class="qw-card" :class="cardClass('confirmed')" @click="tryChange('confirmed')">
+        <div class="qw-card" :class="cardClass('confirmed')" @click="handleCardClick('confirmed')">
           <div class="qw-icon" :class="iconClass('confirmed')">
             <el-icon v-if="isPast('confirmed')" :size="16"><Check /></el-icon>
             <span v-else>2</span>
@@ -57,6 +34,7 @@
             <div class="qw-label">已确认</div>
             <div v-if="'confirmed' === currentStatus" class="qw-tag cur-tag">当前</div>
             <div v-else-if="isPast('confirmed')" class="qw-tag done-tag">已完成</div>
+            <div v-else class="qw-tag future-tag">待开始</div>
           </div>
         </div>
       </div>
@@ -65,21 +43,11 @@
       <div class="qw-conn" :class="{ 'conn-done': isPast('converted') }">
         <div class="qw-line"></div>
         <div class="qw-point">▶</div>
-        <!-- 转订单按钮，在已确认状态显示在箭头上 -->
-        <button
-          v-if="currentStatus === 'confirmed'"
-          class="qw-btn-on-arrow danger"
-          :disabled="converting"
-          @click="$emit('convert')"
-        >
-          <el-icon :size="13"><Right /></el-icon>
-          <span>{{ converting ? '转换中…' : '转订单' }}</span>
-        </button>
       </div>
 
       <!-- 列3: 已转订单 -->
       <div class="qw-col">
-        <div class="qw-card" :class="cardClass('converted')" @click="tryChange('converted')">
+        <div class="qw-card" :class="cardClass('converted')" @click="handleCardClick('converted')">
           <div class="qw-icon" :class="iconClass('converted')">
             <el-icon v-if="isPast('converted')" :size="16"><Check /></el-icon>
             <span v-else>3</span>
@@ -88,24 +56,40 @@
             <div class="qw-label">已转订单</div>
             <div v-if="'converted' === currentStatus" class="qw-tag cur-tag">当前</div>
             <div v-else-if="isPast('converted')" class="qw-tag done-tag">已完成</div>
+            <div v-else class="qw-tag future-tag">待开始</div>
           </div>
         </div>
       </div>
 
       <!-- 预览按钮 -->
       <div class="qw-preview">
-        <button class="qw-action outline" @click="$emit('preview')">
-          <el-icon :size="14"><View /></el-icon>
-          <span>预览</span>
+        <button class="qw-preview-btn" @click="$emit('preview')" title="预览">
+          <el-icon :size="18"><View /></el-icon>
         </button>
       </div>
+    </div>
+
+    <!-- 提示文字 -->
+    <div class="qw-hint">
+      <template v-if="currentStatus === 'draft' && isExisting">
+        点击「草稿」保存，点击「已确认」确认报价
+      </template>
+      <template v-else-if="currentStatus === 'draft' && !isExisting">
+        点击「草稿」保存草稿
+      </template>
+      <template v-else-if="currentStatus === 'confirmed'">
+        点击「已确认」撤回草稿，点击「已转订单」转订单
+      </template>
+      <template v-else-if="currentStatus === 'converted'">
+        该报价已转为订单，不可再修改
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Check, Edit, CircleCheck, Back, Right, View } from '@element-plus/icons-vue'
+import { Check, View } from '@element-plus/icons-vue'
 
 const props = defineProps<{
   currentStatus: string
@@ -146,15 +130,32 @@ function isReachable(status: string): boolean {
   return reachableTargets.value.includes(status)
 }
 
-function tryChange(status: string) {
-  if (!isReachable(status) || props.saving || props.converting) return
+function handleCardClick(status: string) {
+  if (props.saving || props.converting) return
 
-  // 从草稿 → 已确认
-  if (status === 'confirmed' && props.currentStatus === 'draft') {
-    emit('confirm')
+  // 草稿卡片点击 → 保存草稿（仅在草稿状态）
+  if (status === 'draft' && props.currentStatus === 'draft') {
+    emit('save')
     return
   }
-  // 从已确认 → 已转订单
+
+  // 已确认卡片点击
+  if (status === 'confirmed') {
+    // 草稿 → 已确认：确认报价
+    if (props.currentStatus === 'draft') {
+      if (!props.isExisting) return
+      emit('confirm')
+      return
+    }
+    // 已确认 → 草稿：撤回
+    if (props.currentStatus === 'confirmed') {
+      emit('revert')
+      return
+    }
+    return
+  }
+
+  // 已转订单卡片点击：从已确认转订单
   if (status === 'converted' && props.currentStatus === 'confirmed') {
     emit('convert')
     return
@@ -181,7 +182,7 @@ function iconClass(status: string) {
 .qw-bar {
   border: 1px solid var(--ad-border);
   border-radius: 12px;
-  padding: 24px;
+  padding: 24px 24px 16px;
   margin: 16px 0;
   background: var(--ad-card);
 }
@@ -196,7 +197,6 @@ function iconClass(status: string) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
   flex-shrink: 0;
 }
 
@@ -249,6 +249,7 @@ function iconClass(status: string) {
 }
 .cur-tag { color: #409eff; }
 .done-tag { color: #52c41a; }
+.future-tag { color: #d9d9d9; }
 
 /* ===== 连接箭头 ===== */
 .qw-conn {
@@ -257,7 +258,6 @@ function iconClass(status: string) {
   padding: 0 4px;
   flex-shrink: 0;
   margin-top: 24px;
-  position: relative;
 }
 
 .qw-line {
@@ -291,6 +291,11 @@ function iconClass(status: string) {
   border-color: #409eff;
   background: linear-gradient(135deg, rgba(64,158,255,0.07), rgba(64,158,255,0.03));
   box-shadow: 0 0 0 4px rgba(64,158,255,0.08);
+  cursor: pointer;
+}
+.card-current:hover {
+  background: linear-gradient(135deg, rgba(64,158,255,0.12), rgba(64,158,255,0.06));
+  box-shadow: 0 2px 12px rgba(64,158,255,0.15);
 }
 .card-current .qw-label { color: #409eff; }
 
@@ -346,117 +351,40 @@ function iconClass(status: string) {
   border: 2px solid #e8e8e8;
 }
 
-/* ===== 操作按钮 ===== */
-.qw-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 12px;
-  border: none;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  line-height: 1;
-  outline: none;
-}
-
-.qw-action:hover {
-  transform: translateY(-1px);
-}
-
-.qw-action:active {
-  transform: translateY(0);
-}
-
-.qw-action:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none !important;
-}
-
-.qw-action.primary {
-  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
-  color: #fff;
-  box-shadow: 0 2px 6px rgba(64,158,255,0.25);
-}
-
-.qw-action.primary:hover:not(:disabled) {
-  box-shadow: 0 4px 12px rgba(64,158,255,0.35);
-}
-
-.qw-action.outline {
-  background: var(--ad-card);
-  color: var(--ad-text);
-  border: 1.5px solid var(--ad-border);
-}
-
-.qw-action.outline:hover {
-  border-color: #409eff;
-  color: #409eff;
-  box-shadow: 0 2px 6px rgba(64,158,255,0.1);
-}
-
-/* ===== 箭头上按钮 ===== */
-.qw-btn-on-arrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border: none;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  line-height: 1;
-  outline: none;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 2;
-  color: #fff;
-}
-
-.qw-btn-on-arrow:hover {
-  transform: translate(-50%, -55%);
-}
-
-.qw-btn-on-arrow:active {
-  transform: translate(-50%, -50%);
-}
-
-.qw-btn-on-arrow:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: translate(-50%, -50%) !important;
-}
-
-.qw-btn-on-arrow.success {
-  background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%);
-  box-shadow: 0 2px 6px rgba(82,196,26,0.25);
-}
-
-.qw-btn-on-arrow.warning {
-  background: linear-gradient(135deg, #faad14 0%, #ffc53d 100%);
-  box-shadow: 0 2px 6px rgba(250,173,20,0.25);
-}
-
-.qw-btn-on-arrow.danger {
-  background: linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%);
-  box-shadow: 0 2px 6px rgba(255,77,79,0.25);
-}
-
-/* ===== 预览按钮容器 ===== */
+/* ===== 预览按钮 ===== */
 .qw-preview {
   margin-left: 20px;
   padding-left: 20px;
   border-left: 1.5px solid var(--ad-border);
   padding-top: 10px;
+}
+
+.qw-preview-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ad-border);
+  background: var(--ad-card);
+  color: var(--ad-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.qw-preview-btn:hover {
+  border-color: #409eff;
+  color: #409eff;
+  box-shadow: 0 2px 8px rgba(64,158,255,0.12);
+}
+
+/* ===== 提示文字 ===== */
+.qw-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--ad-text-secondary);
+  text-align: center;
 }
 
 /* ===== 暗色主题 ===== */
@@ -473,6 +401,7 @@ function iconClass(status: string) {
   border-color: #262626; background: #1a1a1a;
 }
 :root[data-theme="dark"] .card-disabled .qw-label { color: #434343; }
+:root[data-theme="dark"] .card-disabled .future-tag { color: #434343; }
 :root[data-theme="dark"] .card-current {
   background: rgba(64,158,255,0.1);
   box-shadow: 0 0 0 4px rgba(64,158,255,0.12);
@@ -485,10 +414,10 @@ function iconClass(status: string) {
 }
 :root[data-theme="dark"] .qw-line { background: #434343; }
 :root[data-theme="dark"] .qw-point { color: #595959; }
-:root[data-theme="dark"] .qw-action.outline {
+:root[data-theme="dark"] .qw-preview-btn {
   border-color: #434343;
 }
-:root[data-theme="dark"] .qw-action.outline:hover {
+:root[data-theme="dark"] .qw-preview-btn:hover {
   border-color: #409eff;
 }
 
@@ -499,7 +428,6 @@ function iconClass(status: string) {
   .qw-line { width: 20px; }
   .qw-conn { padding: 0 2px; }
   .qw-tag { display: none; }
-  .qw-btn-on-arrow { display: none; }
   .qw-preview { margin-left: 0; padding-left: 0; border-left: none; }
 }
 </style>
