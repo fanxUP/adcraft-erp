@@ -298,9 +298,13 @@ class ProjectCostService:
                     # Import within order context — order_id pre-set
                     category = str(row[0]).strip() if row[0] else ""
                     amount = float(row[1]) if row[1] else 0
-                    description = str(row[2]).strip() if len(row) > 2 and row[2] else None
-                    cost_date_str = str(row[3]).strip() if len(row) > 3 and row[3] else None
-                    remark = str(row[4]).strip() if len(row) > 4 and row[4] else None
+                    payment_method = str(row[2]).strip() if len(row) > 2 and row[2] else None
+                    payee_company_name = str(row[3]).strip() if len(row) > 3 and row[3] else None
+                    order_item_name = str(row[4]).strip() if len(row) > 4 and row[4] else None
+                    debt_amount = float(row[5]) if len(row) > 5 and row[5] else 0
+                    description = str(row[6]).strip() if len(row) > 6 and row[6] else None
+                    cost_date_str = str(row[7]).strip() if len(row) > 7 and row[7] else None
+                    remark = str(row[8]).strip() if len(row) > 8 and row[8] else None
 
                     if not category or amount <= 0:
                         errors.append({"row": i, "error": "成本类别和金额(>0)为必填项"})
@@ -319,6 +323,9 @@ class ProjectCostService:
                         "quote_id": str(quote_id) if quote_id else None,
                         "category": category,
                         "amount": amount,
+                        "payment_method": payment_method,
+                        "payee_company_name": payee_company_name,
+                        "debt_amount": debt_amount,
                         "description": description,
                         "cost_date": cost_date.isoformat() if cost_date else None,
                         "remark": remark,
@@ -330,9 +337,13 @@ class ProjectCostService:
                     order_no = str(row[0]).strip()
                     category = str(row[1]).strip() if row[1] else ""
                     amount = float(row[2]) if row[2] else 0
-                    description = str(row[3]).strip() if len(row) > 3 and row[3] else None
-                    cost_date_str = str(row[4]).strip() if len(row) > 4 and row[4] else None
-                    remark = str(row[5]).strip() if len(row) > 5 and row[5] else None
+                    payment_method = str(row[3]).strip() if len(row) > 3 and row[3] else None
+                    payee_company_name = str(row[4]).strip() if len(row) > 4 and row[4] else None
+                    order_item_name = str(row[5]).strip() if len(row) > 5 and row[5] else None
+                    debt_amount = float(row[6]) if len(row) > 6 and row[6] else 0
+                    description = str(row[7]).strip() if len(row) > 7 and row[7] else None
+                    cost_date_str = str(row[8]).strip() if len(row) > 8 and row[8] else None
+                    remark = str(row[9]).strip() if len(row) > 9 and row[9] else None
 
                     if not order_no or not category or amount <= 0:
                         errors.append({"row": i, "error": "订单编号、成本类别和金额(>0)为必填项"})

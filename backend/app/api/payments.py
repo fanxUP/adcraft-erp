@@ -313,8 +313,8 @@ async def download_project_cost_template(
             top=Side(style="thin"), bottom=Side(style="thin"),
         )
 
-        headers = ["成本类别", "金额", "描述", "成本日期", "备注"]
-        col_widths = [18, 14, 30, 18, 30]
+        headers = ["成本类别", "金额", "付款方式", "收款公司", "分项", "欠款金额", "描述", "成本日期", "备注"]
+        col_widths = [18, 14, 16, 22, 20, 14, 30, 18, 30]
 
         for col_idx, (header, width) in enumerate(zip(headers, col_widths), 1):
             cell = ws.cell(row=1, column=col_idx, value=header)
@@ -324,15 +324,15 @@ async def download_project_cost_template(
             cell.border = thin_border
             ws.column_dimensions[chr(64 + col_idx)].width = width
 
-        example_data = ["人工/工时费", 500.00, "安装工人加班", "2026-07-08", "示例数据，可删除"]
+        example_data = ["人工/工时费", 500.00, "转账支付", "XX广告制作公司", "灯箱制作", 0, "安装工人加班", "2026-07-08", "示例数据，可删除"]
         for col_idx, val in enumerate(example_data, 1):
             cell = ws.cell(row=2, column=col_idx, value=val)
             cell.alignment = Alignment(horizontal="center", vertical="center")
             cell.border = thin_border
 
-        ws.merge_cells("A4:E4")
+        ws.merge_cells("A4:I4")
         note_cell = ws.cell(row=4, column=1,
-            value="说明：成本类别可选值 — 人工/工时费、运输/物流费、安装杂费、其他")
+            value="说明：成本类别可选值 — 人工/工时费、运输/物流费、安装杂费、其他；付款方式可选值 — 现金支付、微信支付、转账支付、对公支付、其它支付")
         note_cell.font = Font(name="微软雅黑", size=9, color="999999", italic=True)
 
         buf = BytesIO()
