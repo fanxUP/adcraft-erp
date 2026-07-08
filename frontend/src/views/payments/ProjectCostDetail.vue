@@ -149,6 +149,9 @@
             <el-option v-for="pm in PAYMENT_METHODS" :key="pm" :label="pm" :value="pm" />
           </el-select>
         </el-form-item>
+        <el-form-item label="收款公司">
+          <el-input v-model="form.payee_company_name" placeholder="对方收款公司名称（可选）" clearable />
+        </el-form-item>
         <el-form-item label="分项">
           <el-select v-model="form.order_item_id" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
             <el-option
@@ -337,6 +340,7 @@ const form = reactive({
   category: '',
   amount: 0,
   payment_method: '',
+  payee_company_name: '',
   debt_amount: 0,
   cost_date: '',
   description: '',
@@ -357,7 +361,7 @@ function statusColor(s: string) {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, payment_method: '', debt_amount: 0, cost_date: '', description: '', remark: '', order_item_id: '' })
+  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', remark: '', order_item_id: '' })
   isEditing.value = false
   editingId.value = ''
   dialogAttachments.value = []
@@ -374,6 +378,7 @@ function openEdit(row: ProjectCostResponse) {
   form.category = row.category
   form.amount = row.amount
   form.payment_method = row.payment_method || ''
+  form.payee_company_name = row.payee_company_name || ''
   form.debt_amount = row.debt_amount || 0
   form.cost_date = row.cost_date?.slice(0, 10) || ''
   form.description = row.description || ''
@@ -452,6 +457,7 @@ async function handleSave() {
       if (form.category) payload.category = form.category
       if (form.amount > 0) payload.amount = form.amount
       if (form.payment_method) payload.payment_method = form.payment_method
+      if (form.payee_company_name) payload.payee_company_name = form.payee_company_name
       if (form.debt_amount > 0) payload.debt_amount = form.debt_amount
       else payload.debt_amount = 0
       if (form.cost_date) payload.cost_date = form.cost_date
@@ -470,6 +476,7 @@ async function handleSave() {
         remark: form.remark || undefined,
         order_item_id: form.order_item_id || undefined,
         payment_method: form.payment_method || undefined,
+        payee_company_name: form.payee_company_name || undefined,
         debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,
       })
       ElMessage.success('成本登记成功')

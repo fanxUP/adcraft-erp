@@ -361,6 +361,7 @@ export interface ProjectCostResponse {
   category: string
   amount: number
   payment_method?: string
+  payee_company_name?: string
   debt_amount?: number
   is_debt: boolean
   is_settled: boolean
@@ -386,6 +387,7 @@ export interface DebtResponse {
   category: string
   amount: number
   payment_method?: string
+  payee_company_name?: string
   debt_amount: number
   is_settled: boolean
   settled_at?: string
