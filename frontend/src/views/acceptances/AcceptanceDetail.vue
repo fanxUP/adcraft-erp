@@ -247,7 +247,7 @@
     </div>
 
     <!-- 驳回原因弹框 -->
-    <el-dialog v-model="rejectDialogVisible" title="驳回验收" width="400px">
+    <el-dialog v-model="rejectDialogVisible" title="驳回验收" width="400px" :close-on-click-modal="false">
       <el-form>
         <el-form-item label="驳回原因" required>
           <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请填写驳回原因" />

@@ -42,7 +42,7 @@
 
     <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px; justify-content: flex-end" @change="fetchData" />
 
-    <el-dialog v-model="showDialog" title="生成对账单" width="480px">
+    <el-dialog v-model="showDialog" title="生成对账单" width="480px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-form-item label="客户">
           <el-select v-model="form.customer_id" placeholder="选择客户" filterable style="width: 100%">
