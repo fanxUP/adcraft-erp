@@ -173,3 +173,56 @@ volumes:
 ```bash
 docker exec -i adcraft_postgres psql -U adcraft -d adcraft_erp < backups/backup_xxx.sql
 ```
+
+## ⚠️ 数据安全 — 常见事故与预防
+
+### 事故案例：容器重建导致数据丢失
+
+**根因：** 以下命令会触发 PostgreSQL 容器重建，若 volume 配置不当，数据将永久丢失：
+
+```bash
+# ❌ 危险！会重建 postgres 容器，可能导致数据丢失
+docker compose -p adcraft run --rm backend <command>
+docker compose -p adcraft up -d          # 当容器名冲突时重建
+docker compose -p adcraft up -d --force-recreate
+```
+
+**预防措施：**
+
+| 措施 | 说明 |
+|---|---|
+| **使用命名卷** | 禁止 `./data/postgres:/var/lib/postgresql/data` 这种 bind mount，改用 `adcraft_data_postgres:/var/lib/postgresql/data` |
+| **单独部署服务** | 更新单服务用 `docker compose build <service> && docker rm -f <container> && docker compose up -d <service>` |
+| **先备份再操作** | 任何涉及 postgres 重建的操作前，先 `pg_dump` 备份 |
+| **容器名冲突处理** | `docker rm -f <旧容器> && docker compose up -d <服务>`，不要用 `up -d` 全覆盖重建 |
+| **区分项目名** | 始终使用相同的 `-p` 参数或默认项目名，避免网络隔离、数据卷孤立 |
+
+### 命名卷 vs 宿主机目录
+
+| 存储方式 | 优缺点 |
+|---|---|
+| **Docker 命名卷**（推荐） | 由 Docker 管理存储位置，跨平台兼容，容器删除不丢失数据 |
+| **宿主机 bind mount**（不推荐） | 路径硬编码不可移植，iCloud 等云盘可能自动清除文件 |
+
+### 日常健康检查
+
+```bash
+# 检查数据库是否有数据
+docker exec adcraft_postgres psql -U adcraft -d adcraft_erp -c "SELECT count(*) FROM quotes;"
+
+# 查看备份文件
+ls -la backups/
+
+# 检查所有容器状态
+docker ps --format "table {{.Names}}\t{{.Status}}"
+```
+
+### 紧急恢复数据
+
+```bash
+# 从自动备份恢复
+docker exec -i adcraft_postgres psql -U adcraft -d adcraft_erp < backups/backup_YYYYMMDD_020000.tar.gz
+
+# 从手动备份恢复
+docker exec -i adcraft_postgres psql -U adcraft -d adcraft_erp < backups/manual_backup_YYYYMMDD_HHMMSS.tar.gz
+```
