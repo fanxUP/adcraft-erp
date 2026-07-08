@@ -326,7 +326,7 @@ function actionLabel(status: string): string {
   align-items: center;
   position: relative;
   min-width: 44px;
-  height: 54px;
+  height: 100px;
   flex-shrink: 0;
 }
 
@@ -369,13 +369,16 @@ function actionLabel(status: string): string {
 /* 分支按钮组 */
 .branch-group {
   display: flex;
-  gap: 4px;
-  white-space: nowrap;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
 }
 
 .branch-btn {
   font-size: 11px !important;
-  padding: 3px 8px !important;
+  padding: 4px 14px !important;
+  min-width: 64px;
+  justify-content: center;
 }
 
 /* ===== 自定义按钮 ===== */
