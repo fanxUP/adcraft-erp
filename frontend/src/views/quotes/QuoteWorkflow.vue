@@ -1,100 +1,124 @@
 <template>
-  <div class="quote-workflow">
-    <!-- 流程图主体 -->
-    <div class="workflow-canvas">
-      <div
-        v-for="(step, index) in steps"
-        :key="step.status"
-        class="workflow-node-wrapper"
-      >
-        <!-- 连接箭头（在节点之前） -->
-        <div v-if="index > 0" class="flow-arrow">
-          <div class="arrow-line" :class="{ 'arrow-active': isCompleted(step.status) }"></div>
-          <div class="arrow-head" :class="{ 'arrow-active': isCompleted(step.status) }">▶</div>
-          <!-- 允许的回退箭头 -->
-          <div
-            v-if="index === 1 && currentStatus === 'confirmed'"
-            class="back-arrow-indicator"
-          >可撤回</div>
+  <div class="quote-workflow-bar">
+    <!-- 流程图操作栏 -->
+    <div class="flow-bar">
+      <!-- 步骤1: 草稿 -->
+      <div class="flow-step" :class="stepClass('draft')">
+        <div class="step-badge" :class="badgeClass('draft')">
+          <el-icon v-if="isPast('draft')"><Check /></el-icon>
+          <span v-else>1</span>
         </div>
-
-        <!-- 节点 -->
-        <div class="flow-node" :class="nodeClass(step.status)">
-          <div class="node-icon-wrapper">
-            <div class="node-icon">
-              <el-icon v-if="isCompleted(step.status) && step.status !== currentStatus" :size="24">
-                <Check />
-              </el-icon>
-              <span v-else class="step-num">{{ index + 1 }}</span>
-            </div>
-            <div v-if="step.status === currentStatus" class="node-pulse"></div>
+        <div class="step-body">
+          <div class="step-title">草稿</div>
+          <div class="step-action">
+            <!-- 草稿下可点击的操作 -->
+            <template v-if="currentStatus === 'draft'">
+              <el-button
+                type="primary"
+                size="small"
+                :loading="saving"
+                @click="$emit('save')"
+                class="flow-btn"
+              >
+                <el-icon><Edit /></el-icon>
+                保存草稿
+              </el-button>
+            </template>
+            <span v-else-if="isPast('draft')" class="step-done">已完成</span>
           </div>
-          <div class="node-label">{{ step.label }}</div>
-          <div class="node-desc">{{ step.desc }}</div>
-          <!-- 当前状态标签 -->
-          <div v-if="step.status === currentStatus" class="current-badge">当前</div>
+        </div>
+      </div>
+
+      <!-- 连接箭头1 -->
+      <div class="flow-connector" :class="{ 'connector-active': isPast('confirmed') }">
+        <div class="connector-line"></div>
+        <div class="connector-arrow">▶</div>
+        <!-- 草稿→确认 动作: 确认报价 -->
+        <div v-if="currentStatus === 'draft' && isExisting" class="connector-action">
+          <el-button
+            type="success"
+            size="small"
+            @click="$emit('confirm')"
+            class="flow-btn connector-btn"
+          >
+            <el-icon><CircleCheck /></el-icon>
+            确认报价
+          </el-button>
+        </div>
+        <!-- 已确认→草稿 回退 -->
+        <div v-if="currentStatus === 'confirmed'" class="connector-action back-action">
+          <el-button
+            type="warning"
+            size="small"
+            :loading="reverting"
+            @click="$emit('revert')"
+            class="flow-btn connector-btn"
+          >
+            <el-icon><Refresh /></el-icon>
+            撤回草稿
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 步骤2: 已确认 -->
+      <div class="flow-step" :class="stepClass('confirmed')">
+        <div class="step-badge" :class="badgeClass('confirmed')">
+          <el-icon v-if="isPast('confirmed')"><Check /></el-icon>
+          <span v-else>2</span>
+        </div>
+        <div class="step-body">
+          <div class="step-title">已确认</div>
+          <div class="step-action">
+            <span v-if="isPast('confirmed') && currentStatus !== 'confirmed'" class="step-done">已完成</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 连接箭头2 -->
+      <div class="flow-connector" :class="{ 'connector-active': isPast('converted') }">
+        <div class="connector-line"></div>
+        <div class="connector-arrow">▶</div>
+        <!-- 已确认→转订单 动作 -->
+        <div v-if="currentStatus === 'confirmed'" class="connector-action">
+          <el-button
+            type="danger"
+            size="small"
+            :loading="converting"
+            @click="$emit('convert')"
+            class="flow-btn connector-btn"
+          >
+            <el-icon><Right /></el-icon>
+            转订单
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 步骤3: 已转订单 -->
+      <div class="flow-step" :class="stepClass('converted')">
+        <div class="step-badge" :class="badgeClass('converted')">
+          <el-icon v-if="isPast('converted')"><Check /></el-icon>
+          <span v-else>3</span>
+        </div>
+        <div class="step-body">
+          <div class="step-title">已转订单</div>
+          <div class="step-action">
+            <span v-if="currentStatus === 'converted'" class="step-done step-final">流程结束</span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 操作区 -->
-    <div class="workflow-actions">
-      <div class="actions-divider"></div>
-      <div class="actions-content">
-        <div class="actions-title">可用操作：</div>
-        <div class="actions-buttons">
-          <!-- 草稿状态 -->
-          <template v-if="currentStatus === 'draft'">
-            <el-button type="primary" :loading="saving" @click="$emit('save')">
-              <el-icon style="margin-right: 4px"><Edit /></el-icon>
-              保存草稿
-            </el-button>
-            <el-button
-              v-if="isExisting"
-              type="success"
-              @click="$emit('confirm')"
-            >
-              <el-icon style="margin-right: 4px"><CircleCheck /></el-icon>
-              确认报价
-            </el-button>
-          </template>
-
-          <!-- 已确认状态 -->
-          <template v-else-if="currentStatus === 'confirmed'">
-            <el-button type="warning" :loading="reverting" @click="$emit('revert')">
-              <el-icon style="margin-right: 4px"><Refresh /></el-icon>
-              撤回草稿
-            </el-button>
-            <el-button type="danger" :loading="converting" @click="$emit('convert')">
-              <el-icon style="margin-right: 4px"><Right /></el-icon>
-              转订单
-            </el-button>
-          </template>
-
-          <!-- 已转订单 -->
-          <template v-else-if="currentStatus === 'converted'">
-            <el-tag type="success" size="large" style="font-size: 15px; padding: 8px 20px">
-              <el-icon style="margin-right: 6px"><SuccessFilled /></el-icon>
-              已转订单，此报价为只读状态
-            </el-tag>
-          </template>
-
-          <!-- 已作废 -->
-          <template v-else-if="currentStatus === 'cancelled'">
-            <el-tag type="danger" size="large" style="font-size: 15px; padding: 8px 20px">
-              <el-icon style="margin-right: 6px"><WarningFilled /></el-icon>
-              已作废，不可编辑
-            </el-tag>
-          </template>
-        </div>
-      </div>
+    <!-- 预览按钮独立放在右侧 -->
+    <div class="flow-extra">
+      <el-button type="success" size="small" @click="$emit('preview')" class="flow-btn">
+        <el-icon><View /></el-icon>
+        预览
+      </el-button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-
 const props = defineProps<{
   currentStatus: string
   isExisting: boolean
@@ -108,354 +132,264 @@ defineEmits<{
   confirm: []
   convert: []
   revert: []
+  preview: []
 }>()
 
-interface WorkflowStep {
-  status: string
-  label: string
-  desc: string
-}
+const statusOrder = ['draft', 'confirmed', 'converted']
 
-const steps: WorkflowStep[] = [
-  { status: 'draft', label: '草稿', desc: '新建报价，可编辑修改' },
-  { status: 'confirmed', label: '已确认', desc: '报价已锁定，等待转订单' },
-  { status: 'converted', label: '已转订单', desc: '已生成订单，流程结束' },
-]
-
-const statusOrder = computed(() => {
-  const order: Record<string, number> = {}
-  steps.forEach((s, i) => { order[s.status] = i })
-  return order
-})
-
-function isCompleted(status: string): boolean {
-  const currentIdx = statusOrder.value[props.currentStatus] ?? -1
-  const stepIdx = statusOrder.value[status] ?? -1
+function isPast(status: string): boolean {
+  const currentIdx = statusOrder.indexOf(props.currentStatus)
+  const stepIdx = statusOrder.indexOf(status)
   return currentIdx > stepIdx
 }
 
-function nodeClass(status: string) {
-  if (status === props.currentStatus) return 'node-current'
-  if (isCompleted(status)) return 'node-completed'
-  return 'node-pending'
+function stepClass(status: string) {
+  if (status === props.currentStatus) return 'step-current'
+  if (isPast(status)) return 'step-done-box'
+  return 'step-future'
+}
+
+function badgeClass(status: string) {
+  if (status === props.currentStatus) return 'badge-current'
+  if (isPast(status)) return 'badge-done'
+  return 'badge-future'
 }
 </script>
 
 <style scoped>
-.quote-workflow {
+.quote-workflow-bar {
   background: var(--ad-card);
   border: 1px solid var(--ad-border);
-  border-radius: 8px;
-  padding: 24px 20px;
+  border-radius: 10px;
+  padding: 20px 24px;
   margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
-/* 流程图画布 */
-.workflow-canvas {
+.flow-bar {
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  align-items: center;
+  flex: 1;
   gap: 0;
-  position: relative;
 }
 
-.workflow-node-wrapper {
+/* 每个步骤 */
+.flow-step {
   display: flex;
   align-items: center;
-  flex: 1;
-  max-width: 340px;
-}
-
-.workflow-node-wrapper:first-child {
-  justify-content: flex-start;
-}
-
-.workflow-node-wrapper:last-child {
-  justify-content: flex-end;
-}
-
-.workflow-node-wrapper:nth-child(2) {
-  justify-content: center;
-}
-
-/* 箭头连接 */
-.flow-arrow {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  position: relative;
-  width: 80px;
-}
-
-.arrow-line {
-  flex: 1;
-  height: 3px;
-  background: #dcdfe6;
-  border-radius: 2px;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 2px solid transparent;
   transition: all 0.3s ease;
+  min-width: 110px;
 }
 
-.arrow-line.arrow-active {
-  background: linear-gradient(to right, #67c23a, #85ce61);
-  height: 3px;
-  box-shadow: 0 0 6px rgba(103, 194, 58, 0.3);
+/* 当前步骤 */
+.step-current {
+  border-color: #409eff;
+  background: rgba(64, 158, 255, 0.06);
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.1);
 }
 
-.arrow-head {
-  position: absolute;
-  right: -2px;
-  font-size: 10px;
-  color: #dcdfe6;
-  transition: all 0.3s ease;
-  line-height: 1;
+/* 已完成步骤 */
+.step-done-box {
+  border-color: #67c23a;
+  background: rgba(103, 194, 58, 0.05);
 }
 
-.arrow-head.arrow-active {
-  color: #67c23a;
+/* 未来步骤 */
+.step-future {
+  border-color: #e4e7ed;
+  background: #fafafa;
+  opacity: 0.6;
 }
 
-/* 回退指示 */
-.back-arrow-indicator {
-  position: absolute;
-  top: -20px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 10px;
-  color: #e6a23c;
-  white-space: nowrap;
-  background: var(--ad-card);
-  padding: 0 4px;
-}
-
-/* 节点 */
-.flow-node {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  position: relative;
-  padding: 12px 16px;
-  min-width: 100px;
-  transition: all 0.3s ease;
-  cursor: default;
-}
-
-.node-icon-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.node-icon {
-  width: 48px;
-  height: 48px;
+/* 徽章 */
+.step-badge {
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 700;
+  flex-shrink: 0;
   transition: all 0.3s ease;
-  z-index: 1;
 }
 
-.step-num {
-  font-size: 18px;
-  font-weight: 700;
+.badge-current {
+  background: linear-gradient(135deg, #409eff, #66b1ff);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.35);
 }
 
-.node-label {
-  font-size: 14px;
+.badge-done {
+  background: linear-gradient(135deg, #67c23a, #85ce61);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(103, 194, 58, 0.3);
+}
+
+.badge-future {
+  background: #f0f2f5;
+  color: #c0c4cc;
+  border: 2px solid #e4e7ed;
+}
+
+/* 步骤标题 */
+.step-title {
+  font-size: 13px;
   font-weight: 600;
   color: var(--ad-text);
   white-space: nowrap;
-  transition: all 0.3s ease;
 }
 
-.node-desc {
+.step-done {
   font-size: 11px;
-  color: var(--ad-text-secondary, #909399);
-  text-align: center;
-  line-height: 1.3;
-  max-width: 140px;
+  color: #67c23a;
+  white-space: nowrap;
+}
+
+.step-final {
+  color: #67c23a;
+  font-weight: 600;
+}
+
+/* 连接器 */
+.flow-connector {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 80px;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+
+.connector-line {
+  flex: 1;
+  height: 2px;
+  background: #dcdfe6;
   transition: all 0.3s ease;
 }
 
-.current-badge {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  font-size: 10px;
-  padding: 1px 8px;
-  border-radius: 10px;
-  font-weight: 600;
-  white-space: nowrap;
+.connector-active .connector-line {
+  background: linear-gradient(to right, #67c23a, #85ce61);
+  height: 3px;
 }
 
-/* 待处理状态 */
-.node-pending .node-icon {
-  background: #f0f2f5;
-  color: #c0c4cc;
-  border: 2px solid #dcdfe6;
-}
-
-.node-pending .node-label {
-  color: #c0c4cc;
-}
-
-.node-pending .node-desc {
+.connector-arrow {
+  font-size: 8px;
   color: #dcdfe6;
+  margin-left: 2px;
+  transition: all 0.3s ease;
 }
 
-/* 已完成状态 */
-.node-completed .node-icon {
-  background: linear-gradient(135deg, #67c23a, #85ce61);
-  color: #fff;
-  border: 2px solid #67c23a;
-  box-shadow: 0 2px 8px rgba(103, 194, 58, 0.35);
-}
-
-.node-completed .node-label {
+.connector-active .connector-arrow {
   color: #67c23a;
+  font-size: 10px;
 }
 
-/* 当前状态 */
-.node-current .node-icon {
-  background: linear-gradient(135deg, #409eff, #66b1ff);
-  color: #fff;
-  border: 2px solid #409eff;
-  box-shadow: 0 2px 12px rgba(64, 158, 255, 0.4);
-  transform: scale(1.1);
-}
-
-.node-current .node-label {
-  color: #409eff;
-  font-size: 15px;
-}
-
-.node-current .current-badge {
-  background: #409eff;
-  color: #fff;
-}
-
-/* 脉冲动画 */
-.node-pulse {
+/* 连接器上的动作按钮 */
+.connector-action {
   position: absolute;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 2px solid #409eff;
-  animation: pulse 2s ease-in-out infinite;
-  opacity: 0.5;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
 }
 
-@keyframes pulse {
-  0% { transform: scale(1); opacity: 0.5; }
-  50% { transform: scale(1.2); opacity: 0.1; }
-  100% { transform: scale(1); opacity: 0.5; }
+.back-action {
+  transform: translate(-50%, -50%);
 }
 
-/* 操作区 */
-.workflow-actions {
-  margin-top: 20px;
-}
-
-.actions-divider {
-  height: 1px;
-  background: linear-gradient(to right, transparent, var(--ad-border), transparent);
-  margin-bottom: 16px;
-}
-
-.actions-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.actions-title {
-  font-size: 13px;
-  color: var(--ad-text-secondary, #909399);
+.connector-btn {
   white-space: nowrap;
+  padding: 2px 8px !important;
+  font-size: 11px !important;
+  height: 26px !important;
 }
 
-.actions-buttons {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
+/* 通用按钮 */
+.flow-btn {
+  transition: all 0.2s ease;
 }
 
-/* 暗色主题适配 */
-:root[data-theme="dark"] .node-pending .node-icon {
+.flow-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+/* 右侧预览 */
+.flow-extra {
+  flex-shrink: 0;
+  border-left: 1px solid var(--ad-border);
+  padding-left: 16px;
+}
+
+/* 暗色主题 */
+:root[data-theme="dark"] .step-future {
+  border-color: #333;
+  background: #1a1a1a;
+}
+
+:root[data-theme="dark"] .badge-future {
   background: #2c2c2c;
   color: #555;
   border-color: #444;
 }
 
-:root[data-theme="dark"] .node-pending .node-label {
-  color: #666;
+:root[data-theme="dark"] .step-current {
+  background: rgba(64, 158, 255, 0.1);
 }
 
-:root[data-theme="dark"] .node-pending .node-desc {
-  color: #555;
+:root[data-theme="dark"] .step-done-box {
+  background: rgba(103, 194, 58, 0.08);
 }
 
-:root[data-theme="dark"] .arrow-line {
+:root[data-theme="dark"] .connector-line {
   background: #444;
 }
 
-:root[data-theme="dark"] .arrow-head {
+:root[data-theme="dark"] .connector-arrow {
   color: #444;
 }
 
-:root[data-theme="dark"] .arrow-line.arrow-active {
-  background: linear-gradient(to right, #67c23a, #85ce61);
-}
-
-:root[data-theme="dark"] .back-arrow-indicator {
-  background: var(--ad-card);
-}
-
 /* 小屏适配 */
-@media (max-width: 720px) {
-  .workflow-canvas {
+@media (max-width: 800px) {
+  .quote-workflow-bar {
     flex-direction: column;
-    align-items: center;
     gap: 12px;
   }
 
-  .workflow-node-wrapper {
-    flex-direction: column;
-    max-width: 100%;
-    width: 100%;
+  .flow-bar {
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
-  .flow-arrow {
-    width: auto;
-    height: 32px;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    transform: rotate(90deg);
+  .flow-step {
+    min-width: 80px;
+    padding: 8px 10px;
   }
 
-  .back-arrow-indicator {
+  .flow-connector {
+    width: 40px;
+  }
+
+  .connector-action {
     display: none;
   }
 
-  .flow-node {
-    flex-direction: row;
-    gap: 12px;
-    padding: 8px 12px;
+  .flow-extra {
+    border-left: none;
+    border-top: 1px solid var(--ad-border);
+    padding-left: 0;
+    padding-top: 12px;
     width: 100%;
-    max-width: 300px;
+    display: flex;
+    justify-content: center;
   }
-
-  .node-label { white-space: normal; }
-  .node-desc { display: none; }
-  .current-badge { position: static; }
 }
 </style>
