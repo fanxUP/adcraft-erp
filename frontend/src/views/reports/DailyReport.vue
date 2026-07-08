@@ -3,6 +3,7 @@
     <div class="page-header">
       <h2>销售日报</h2>
       <div style="display: flex; gap: 12px; align-items: center">
+        <el-button @click="handlePrintView"><el-icon><Printer /></el-icon> 打印</el-button>
         <el-date-picker v-model="reportDate" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" @change="fetchData" />
         <el-button type="primary" @click="fetchData">查询</el-button>
       </div>
@@ -72,6 +73,8 @@
 </template>
 
 <script setup lang="ts">
+import { Printer } from '@element-plus/icons-vue'
+import { usePrint } from '@/composables/usePrint'
 import { ref, reactive, onMounted } from 'vue'
 import { getDailyReport } from '@/api/payments'
 import type { DailyReportOrder, DailyReportPayment } from '@/types/api'
@@ -97,6 +100,11 @@ async function fetchData() {
   } finally { loading.value = false }
 }
 
+
+const { handlePrintBySelector } = usePrint()
+function handlePrintView() {
+  handlePrintBySelector('.page')
+}
 onMounted(fetchData)
 </script>
 

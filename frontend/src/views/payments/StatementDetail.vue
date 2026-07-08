@@ -6,7 +6,7 @@
 
     <div v-if="stmt" v-loading="loading">
       <div style="display: flex; justify-content: space-between; align-items: center; margin: 16px 0">
-        <h2 style="margin: 0; color: var(--ad-text)">对账单 {{ stmt.statement_no }}</h2>
+        <div style="display: flex; gap: 8px;"><el-button @click="handlePrintView"><el-icon><Printer /></el-icon> 打印</el-button><h2 style="margin: 0; color: var(--ad-text)">对账单 {{ stmt.statement_no }}</h2></div>
         <el-button v-if="stmt.status === 'draft'" type="success" @click="handleConfirm">确认对账单</el-button>
       </div>
 
@@ -87,6 +87,8 @@
 </template>
 
 <script setup lang="ts">
+import { Printer } from '@element-plus/icons-vue'
+import { usePrint } from '@/composables/usePrint'
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getStatement, confirmStatement } from '@/api/payments'
@@ -119,6 +121,11 @@ async function handleConfirm() {
   }
 }
 
+
+const { handlePrintBySelector } = usePrint()
+function handlePrintView() {
+  handlePrintBySelector('.page')
+}
 onMounted(fetchData)
 </script>
 
