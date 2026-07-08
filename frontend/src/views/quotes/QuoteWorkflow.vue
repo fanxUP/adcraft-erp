@@ -9,7 +9,7 @@
             <span v-else>1</span>
           </div>
           <div class="qw-text">
-            <div class="qw-label">草稿</div>
+            <div class="qw-label">保存草稿</div>
             <div v-if="'draft' === currentStatus" class="qw-tag cur-tag">当前</div>
             <div v-else-if="isPast('draft')" class="qw-tag done-tag">已完成</div>
             <div v-else class="qw-tag future-tag">待开始</div>
@@ -31,7 +31,7 @@
             <span v-else>2</span>
           </div>
           <div class="qw-text">
-            <div class="qw-label">已确认</div>
+            <div class="qw-label">确认报价</div>
             <div v-if="'confirmed' === currentStatus" class="qw-tag cur-tag">当前</div>
             <div v-else-if="isPast('confirmed')" class="qw-tag done-tag">已完成</div>
             <div v-else class="qw-tag future-tag">待开始</div>
@@ -53,7 +53,7 @@
             <span v-else>3</span>
           </div>
           <div class="qw-text">
-            <div class="qw-label">已转订单</div>
+            <div class="qw-label">转为订单</div>
             <div v-if="'converted' === currentStatus" class="qw-tag cur-tag">当前</div>
             <div v-else-if="isPast('converted')" class="qw-tag done-tag">已完成</div>
             <div v-else class="qw-tag future-tag">待开始</div>
@@ -72,13 +72,13 @@
     <!-- 提示文字 -->
     <div class="qw-hint">
       <template v-if="currentStatus === 'draft' && isExisting">
-        点击「草稿」保存，点击「已确认」确认报价
+        点击「保存草稿」保存，点击「确认报价」确认报价
       </template>
       <template v-else-if="currentStatus === 'draft' && !isExisting">
-        点击「草稿」保存草稿
+        点击「保存草稿」保存草稿
       </template>
       <template v-else-if="currentStatus === 'confirmed'">
-        点击「已确认」撤回草稿，点击「已转订单」转订单
+        点击「确认报价」撤回草稿，点击「转为订单」转订单
       </template>
       <template v-else-if="currentStatus === 'converted'">
         该报价已转为订单，不可再修改
@@ -133,21 +133,21 @@ function isReachable(status: string): boolean {
 function handleCardClick(status: string) {
   if (props.saving || props.converting) return
 
-  // 草稿卡片点击 → 保存草稿（仅在草稿状态）
+  // 保存草稿卡片点击 → 保存草稿（仅在草稿状态）
   if (status === 'draft' && props.currentStatus === 'draft') {
     emit('save')
     return
   }
 
-  // 已确认卡片点击
+  // 确认报价卡片点击
   if (status === 'confirmed') {
-    // 草稿 → 已确认：确认报价
+    // 保存草稿 → 确认报价：确认报价
     if (props.currentStatus === 'draft') {
       if (!props.isExisting) return
       emit('confirm')
       return
     }
-    // 已确认 → 草稿：撤回
+    // 确认报价 → 保存草稿：撤回
     if (props.currentStatus === 'confirmed') {
       emit('revert')
       return
@@ -155,7 +155,7 @@ function handleCardClick(status: string) {
     return
   }
 
-  // 已转订单卡片点击：从已确认转订单
+  // 转为订单卡片点击：从确认报价转订单
   if (status === 'converted' && props.currentStatus === 'confirmed') {
     emit('convert')
     return
