@@ -47,7 +47,7 @@
       @change="fetchData"
     />
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑客户' : '新建客户'" width="600px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑客户' : '新建客户'" width="600px" :close-on-click-modal="false">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="客户名称" prop="name">
           <el-input v-model="form.name" />
@@ -101,7 +101,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="contactDialogVisible" :title="contactEditingIndex >= 0 ? '编辑联系人' : '添加联系人'" width="420px">
+    <el-dialog v-model="contactDialogVisible" :title="contactEditingIndex >= 0 ? '编辑联系人' : '添加联系人'" width="420px" :close-on-click-modal="false">
       <el-form :model="contactForm" label-width="90px">
         <el-form-item label="姓名">
           <el-input v-model="contactForm.name" />
@@ -125,7 +125,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="importDialogVisible" title="导入客户" width="520px">
+    <el-dialog v-model="importDialogVisible" title="导入客户" width="520px" :close-on-click-modal="false">
       <div style="margin-bottom: 16px; font-size: 13px; color: var(--ad-text-secondary)">
         <p>支持 .xlsx / .xls 格式，请确保 Excel 包含以下列（<span style="color: #f56c6c">*</span>为必填）：</p>
         <el-table :data="templateColumns" border size="small" style="margin: 12px 0">

@@ -48,7 +48,7 @@
       @change="fetchData"
     />
 
-    <el-dialog v-model="dialogVisible" title="创建制作任务" width="500px">
+    <el-dialog v-model="dialogVisible" title="创建制作任务" width="500px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-form-item label="订单">
           <el-select v-model="form.order_id" placeholder="选择订单" filterable style="width: 100%">

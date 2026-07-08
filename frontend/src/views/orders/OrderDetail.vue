@@ -263,7 +263,7 @@
       </el-tabs>
     </div>
 
-    <el-dialog v-model="showDesignDialog" title="创建设计任务" width="450px">
+    <el-dialog v-model="showDesignDialog" title="创建设计任务" width="450px" :close-on-click-modal="false">
       <el-form :model="taskForm" label-width="100px">
         <el-form-item label="项目名称">
           <el-input v-model="taskForm.project_name" :placeholder="order?.project_name" />
@@ -281,7 +281,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showProdDialog" title="创建制作任务" width="450px">
+    <el-dialog v-model="showProdDialog" title="创建制作任务" width="450px" :close-on-click-modal="false">
       <el-form :model="taskForm" label-width="100px">
         <el-form-item label="项目名称">
           <el-input v-model="taskForm.project_name" :placeholder="order?.project_name" />
@@ -299,7 +299,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showInstDialog" title="创建安装任务" width="450px">
+    <el-dialog v-model="showInstDialog" title="创建安装任务" width="450px" :close-on-click-modal="false">
       <el-form :model="taskForm" label-width="100px">
         <el-form-item label="项目名称">
           <el-input v-model="taskForm.project_name" :placeholder="order?.project_name" />

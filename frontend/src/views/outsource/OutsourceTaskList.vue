@@ -53,7 +53,7 @@
       @change="fetchData"
     />
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑外协任务' : '新建外协任务'" width="550px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑外协任务' : '新建外协任务'" width="550px" :close-on-click-modal="false">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="外协商" prop="vendor_id">
           <el-select v-model="form.vendor_id" filterable clearable style="width: 100%">

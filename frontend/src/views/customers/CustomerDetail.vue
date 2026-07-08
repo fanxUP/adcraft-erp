@@ -48,7 +48,7 @@
         </el-table>
       </el-card>
 
-      <el-dialog v-model="contactDialogVisible" :title="contactEditingIndex >= 0 ? '编辑联系人' : '添加联系人'" width="420px">
+      <el-dialog v-model="contactDialogVisible" :title="contactEditingIndex >= 0 ? '编辑联系人' : '添加联系人'" width="420px" :close-on-click-modal="false">
         <el-form :model="contactForm" label-width="90px">
           <el-form-item label="姓名">
             <el-input v-model="contactForm.name" />
@@ -73,7 +73,7 @@
       </el-dialog>
     </div>
 
-    <el-dialog v-model="dialogVisible" title="编辑客户" width="600px">
+    <el-dialog v-model="dialogVisible" title="编辑客户" width="600px" :close-on-click-modal="false">
       <el-form :model="editForm" label-width="100px">
         <el-form-item label="客户名称">
           <el-input v-model="editForm.name" />

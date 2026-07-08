@@ -29,7 +29,7 @@
       @change="fetchData"
     />
 
-    <el-dialog v-model="dialogVisible" title="新建外协付款" width="500px">
+    <el-dialog v-model="dialogVisible" title="新建外协付款" width="500px" :close-on-click-modal="false">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="外协商" prop="vendor_id">
           <el-select v-model="form.vendor_id" filterable clearable style="width: 100%">
