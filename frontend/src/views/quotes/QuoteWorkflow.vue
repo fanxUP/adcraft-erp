@@ -1,119 +1,108 @@
 <template>
-  <div class="quote-workflow-bar">
-    <!-- 流程图操作栏 -->
-    <div class="flow-bar">
-      <!-- 步骤1: 草稿 -->
-      <div class="flow-step" :class="stepClass('draft')">
-        <div class="step-badge" :class="badgeClass('draft')">
-          <el-icon v-if="isPast('draft')"><Check /></el-icon>
-          <span v-else>1</span>
-        </div>
-        <div class="step-body">
-          <div class="step-title">草稿</div>
-          <div class="step-action">
-            <!-- 草稿下可点击的操作 -->
-            <template v-if="currentStatus === 'draft'">
-              <el-button
-                type="primary"
-                size="small"
-                :loading="saving"
-                @click="$emit('save')"
-                class="flow-btn"
-              >
-                <el-icon><Edit /></el-icon>
-                保存草稿
-              </el-button>
-            </template>
-            <span v-else-if="isPast('draft')" class="step-done">已完成</span>
+  <div class="wf-bar">
+    <div class="wf-steps">
+      <!-- ====== 步骤1: 草稿 ====== -->
+      <div class="wf-node" :class="nodeClass('draft')">
+        <div class="wf-node-inner">
+          <div class="wf-badge" :class="badgeClass('draft')">
+            <el-icon v-if="isPast('draft')" :size="18"><Check /></el-icon>
+            <span v-else>1</span>
           </div>
+          <div class="wf-label">草稿</div>
+          <div class="wf-status-text">{{ statusText('draft') }}</div>
+        </div>
+        <!-- 草稿阶段的操作按钮 -->
+        <div v-if="currentStatus === 'draft'" class="wf-actions">
+          <button class="wf-action-btn primary" :disabled="saving" @click="$emit('save')">
+            <el-icon :size="15"><Edit /></el-icon>
+            <span>保存草稿</span>
+            <span v-if="saving" class="wf-spinner"></span>
+          </button>
         </div>
       </div>
 
-      <!-- 连接箭头1 -->
-      <div class="flow-connector" :class="{ 'connector-active': isPast('confirmed') }">
-        <div class="connector-line"></div>
-        <div class="connector-arrow">▶</div>
-        <!-- 草稿→确认 动作: 确认报价 -->
-        <div v-if="currentStatus === 'draft' && isExisting" class="connector-action">
-          <el-button
-            type="success"
-            size="small"
+      <!-- 箭头1: 草稿 → 已确认 -->
+      <div class="wf-arrow" :class="{ 'arrow-done': isPast('confirmed') }">
+        <div class="wf-arrow-body">
+          <div class="wf-arrow-line"></div>
+          <div class="wf-arrow-head">›</div>
+        </div>
+        <!-- 确认报价按钮（仅在草稿状态显示） -->
+        <Transition name="fade">
+          <button
+            v-if="currentStatus === 'draft' && isExisting"
+            class="wf-action-btn success arrow-btn"
             @click="$emit('confirm')"
-            class="flow-btn connector-btn"
           >
-            <el-icon><CircleCheck /></el-icon>
-            确认报价
-          </el-button>
-        </div>
-        <!-- 已确认→草稿 回退 -->
-        <div v-if="currentStatus === 'confirmed'" class="connector-action back-action">
-          <el-button
-            type="warning"
-            size="small"
-            :loading="reverting"
+            <el-icon :size="15"><CircleCheck /></el-icon>
+            <span>确认报价</span>
+          </button>
+        </Transition>
+        <!-- 撤回草稿按钮（仅在已确认状态显示） -->
+        <Transition name="fade">
+          <button
+            v-if="currentStatus === 'confirmed'"
+            class="wf-action-btn warning arrow-btn"
+            :disabled="reverting"
             @click="$emit('revert')"
-            class="flow-btn connector-btn"
           >
-            <el-icon><Refresh /></el-icon>
-            撤回草稿
-          </el-button>
-        </div>
+            <el-icon :size="15"><Back /></el-icon>
+            <span>{{ reverting ? '撤回中…' : '撤回草稿' }}</span>
+          </button>
+        </Transition>
       </div>
 
-      <!-- 步骤2: 已确认 -->
-      <div class="flow-step" :class="stepClass('confirmed')">
-        <div class="step-badge" :class="badgeClass('confirmed')">
-          <el-icon v-if="isPast('confirmed')"><Check /></el-icon>
-          <span v-else>2</span>
-        </div>
-        <div class="step-body">
-          <div class="step-title">已确认</div>
-          <div class="step-action">
-            <span v-if="isPast('confirmed') && currentStatus !== 'confirmed'" class="step-done">已完成</span>
+      <!-- ====== 步骤2: 已确认 ====== -->
+      <div class="wf-node" :class="nodeClass('confirmed')">
+        <div class="wf-node-inner">
+          <div class="wf-badge" :class="badgeClass('confirmed')">
+            <el-icon v-if="isPast('confirmed')" :size="18"><Check /></el-icon>
+            <span v-else>2</span>
           </div>
+          <div class="wf-label">已确认</div>
+          <div class="wf-status-text">{{ statusText('confirmed') }}</div>
         </div>
       </div>
 
-      <!-- 连接箭头2 -->
-      <div class="flow-connector" :class="{ 'connector-active': isPast('converted') }">
-        <div class="connector-line"></div>
-        <div class="connector-arrow">▶</div>
-        <!-- 已确认→转订单 动作 -->
-        <div v-if="currentStatus === 'confirmed'" class="connector-action">
-          <el-button
-            type="danger"
-            size="small"
-            :loading="converting"
+      <!-- 箭头2: 已确认 → 已转订单 -->
+      <div class="wf-arrow" :class="{ 'arrow-done': isPast('converted') }">
+        <div class="wf-arrow-body">
+          <div class="wf-arrow-line"></div>
+          <div class="wf-arrow-head">›</div>
+        </div>
+        <!-- 转订单按钮（仅在已确认状态显示） -->
+        <Transition name="fade">
+          <button
+            v-if="currentStatus === 'confirmed'"
+            class="wf-action-btn danger arrow-btn"
+            :disabled="converting"
             @click="$emit('convert')"
-            class="flow-btn connector-btn"
           >
-            <el-icon><Right /></el-icon>
-            转订单
-          </el-button>
-        </div>
+            <el-icon :size="15"><Right /></el-icon>
+            <span>{{ converting ? '转换中…' : '转订单' }}</span>
+          </button>
+        </Transition>
       </div>
 
-      <!-- 步骤3: 已转订单 -->
-      <div class="flow-step" :class="stepClass('converted')">
-        <div class="step-badge" :class="badgeClass('converted')">
-          <el-icon v-if="isPast('converted')"><Check /></el-icon>
-          <span v-else>3</span>
-        </div>
-        <div class="step-body">
-          <div class="step-title">已转订单</div>
-          <div class="step-action">
-            <span v-if="currentStatus === 'converted'" class="step-done step-final">流程结束</span>
+      <!-- ====== 步骤3: 已转订单 ====== -->
+      <div class="wf-node" :class="nodeClass('converted')">
+        <div class="wf-node-inner">
+          <div class="wf-badge" :class="badgeClass('converted')">
+            <el-icon v-if="isPast('converted')" :size="18"><Check /></el-icon>
+            <span v-else>3</span>
           </div>
+          <div class="wf-label">已转订单</div>
+          <div class="wf-status-text">{{ statusText('converted') }}</div>
         </div>
       </div>
-    </div>
 
-    <!-- 预览按钮独立放在右侧 -->
-    <div class="flow-extra">
-      <el-button type="success" size="small" @click="$emit('preview')" class="flow-btn">
-        <el-icon><View /></el-icon>
-        预览
-      </el-button>
+      <!-- 预览按钮 -->
+      <div class="wf-preview">
+        <button class="wf-action-btn outline" @click="$emit('preview')">
+          <el-icon :size="15"><View /></el-icon>
+          <span>预览</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -138,15 +127,13 @@ defineEmits<{
 const statusOrder = ['draft', 'confirmed', 'converted']
 
 function isPast(status: string): boolean {
-  const currentIdx = statusOrder.indexOf(props.currentStatus)
-  const stepIdx = statusOrder.indexOf(status)
-  return currentIdx > stepIdx
+  return statusOrder.indexOf(props.currentStatus) > statusOrder.indexOf(status)
 }
 
-function stepClass(status: string) {
-  if (status === props.currentStatus) return 'step-current'
-  if (isPast(status)) return 'step-done-box'
-  return 'step-future'
+function nodeClass(status: string) {
+  if (status === props.currentStatus) return 'node-current'
+  if (isPast(status)) return 'node-done'
+  return 'node-future'
 }
 
 function badgeClass(status: string) {
@@ -154,242 +141,397 @@ function badgeClass(status: string) {
   if (isPast(status)) return 'badge-done'
   return 'badge-future'
 }
+
+function statusText(status: string): string {
+  if (isPast(status) && status !== props.currentStatus) return '已完成'
+  if (status === props.currentStatus) {
+    const map: Record<string, string> = {
+      draft: '进行中',
+      confirmed: '等待转订单',
+      converted: '流程结束',
+    }
+    return map[status] || ''
+  }
+  return ''
+}
 </script>
 
 <style scoped>
-.quote-workflow-bar {
+/* ===== 容器 ===== */
+.wf-bar {
   background: var(--ad-card);
   border: 1px solid var(--ad-border);
-  border-radius: 10px;
-  padding: 20px 24px;
+  border-radius: 12px;
+  padding: 18px 24px;
   margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
 }
 
-.flow-bar {
+.wf-steps {
   display: flex;
   align-items: center;
-  flex: 1;
   gap: 0;
 }
 
-/* 每个步骤 */
-.flow-step {
+/* ===== 节点 ===== */
+.wf-node {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.wf-node-inner {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
-  border-radius: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
   border: 2px solid transparent;
-  transition: all 0.3s ease;
-  min-width: 110px;
+  transition: all 0.35s ease;
+  position: relative;
 }
 
-/* 当前步骤 */
-.step-current {
+/* 当前节点 */
+.node-current .wf-node-inner {
   border-color: #409eff;
-  background: rgba(64, 158, 255, 0.06);
-  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.1);
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.07), rgba(64, 158, 255, 0.03));
+  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.08), 0 2px 6px rgba(64, 158, 255, 0.06);
 }
 
-/* 已完成步骤 */
-.step-done-box {
-  border-color: #67c23a;
-  background: rgba(103, 194, 58, 0.05);
+/* 已完成节点 */
+.node-done .wf-node-inner {
+  border-color: transparent;
+  background: transparent;
 }
 
-/* 未来步骤 */
-.step-future {
-  border-color: #e4e7ed;
-  background: #fafafa;
-  opacity: 0.6;
+/* 未来节点 */
+.node-future .wf-node-inner {
+  opacity: 0.5;
 }
 
-/* 徽章 */
-.step-badge {
-  width: 32px;
-  height: 32px;
+/* ===== 徽章 ===== */
+.wf-badge {
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   flex-shrink: 0;
-  transition: all 0.3s ease;
+  transition: all 0.35s ease;
 }
 
 .badge-current {
-  background: linear-gradient(135deg, #409eff, #66b1ff);
+  background: linear-gradient(135deg, #409eff 0%, #2979ff 100%);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.35);
+  box-shadow: 0 3px 10px rgba(64, 158, 255, 0.35);
 }
 
 .badge-done {
-  background: linear-gradient(135deg, #67c23a, #85ce61);
+  background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%);
   color: #fff;
-  box-shadow: 0 2px 6px rgba(103, 194, 58, 0.3);
+  box-shadow: 0 3px 8px rgba(82, 196, 26, 0.3);
 }
 
 .badge-future {
-  background: #f0f2f5;
-  color: #c0c4cc;
-  border: 2px solid #e4e7ed;
+  background: #f5f5f5;
+  color: #bfbfbf;
+  border: 2px solid #e8e8e8;
 }
 
-/* 步骤标题 */
-.step-title {
-  font-size: 13px;
+/* ===== 标签文字 ===== */
+.wf-label {
+  font-size: 14px;
   font-weight: 600;
   color: var(--ad-text);
   white-space: nowrap;
+  letter-spacing: 0.5px;
 }
 
-.step-done {
+.node-future .wf-label {
+  color: #bfbfbf;
+}
+
+.wf-status-text {
   font-size: 11px;
-  color: #67c23a;
+  color: var(--ad-text-secondary, #8c8c8c);
   white-space: nowrap;
 }
 
-.step-final {
-  color: #67c23a;
-  font-weight: 600;
+.node-current .wf-status-text {
+  color: #409eff;
+  font-weight: 500;
 }
 
-/* 连接器 */
-.flow-connector {
+.node-done .wf-status-text {
+  color: #52c41a;
+  font-weight: 500;
+}
+
+/* ===== 节点内的操作按钮 ===== */
+.wf-actions {
+  margin-left: 4px;
+}
+
+/* ===== 自定义按钮 ===== */
+.wf-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  line-height: 1;
+  outline: none;
+  position: relative;
+}
+
+.wf-action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.wf-action-btn:active {
+  transform: translateY(0);
+}
+
+.wf-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* 按钮颜色变体 */
+.wf-action-btn.primary {
+  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(64, 158, 255, 0.25);
+}
+
+.wf-action-btn.primary:hover:not(:disabled) {
+  box-shadow: 0 5px 14px rgba(64, 158, 255, 0.35);
+}
+
+.wf-action-btn.success {
+  background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%);
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(82, 196, 26, 0.25);
+}
+
+.wf-action-btn.success:hover:not(:disabled) {
+  box-shadow: 0 5px 14px rgba(82, 196, 26, 0.35);
+}
+
+.wf-action-btn.warning {
+  background: linear-gradient(135deg, #faad14 0%, #ffc53d 100%);
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(250, 173, 20, 0.25);
+}
+
+.wf-action-btn.warning:hover:not(:disabled) {
+  box-shadow: 0 5px 14px rgba(250, 173, 20, 0.35);
+}
+
+.wf-action-btn.danger {
+  background: linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%);
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(255, 77, 79, 0.25);
+}
+
+.wf-action-btn.danger:hover:not(:disabled) {
+  box-shadow: 0 5px 14px rgba(255, 77, 79, 0.35);
+}
+
+.wf-action-btn.outline {
+  background: var(--ad-card);
+  color: var(--ad-text);
+  border: 1.5px solid var(--ad-border);
+}
+
+.wf-action-btn.outline:hover {
+  border-color: #409eff;
+  color: #409eff;
+  box-shadow: 0 3px 8px rgba(64, 158, 255, 0.1);
+}
+
+/* 箭头上的按钮更紧凑 */
+.arrow-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: 7px;
+}
+
+/* ===== Spinner ===== */
+.wf-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  position: absolute;
+  right: 8px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== 箭头 ===== */
+.wf-arrow {
   display: flex;
   align-items: center;
+  flex: 1;
+  min-width: 60px;
+  max-width: 120px;
   position: relative;
-  width: 80px;
-  flex-shrink: 0;
+  height: 60px;
+}
+
+.wf-arrow-body {
+  display: flex;
+  align-items: center;
+  width: 100%;
   padding: 0 4px;
 }
 
-.connector-line {
+.wf-arrow-line {
   flex: 1;
   height: 2px;
-  background: #dcdfe6;
+  background: #e8e8e8;
+  border-radius: 2px;
   transition: all 0.3s ease;
 }
 
-.connector-active .connector-line {
-  background: linear-gradient(to right, #67c23a, #85ce61);
+.arrow-done .wf-arrow-line {
+  background: linear-gradient(to right, #52c41a, #73d13d);
   height: 3px;
 }
 
-.connector-arrow {
-  font-size: 8px;
-  color: #dcdfe6;
-  margin-left: 2px;
+.wf-arrow-head {
+  font-size: 20px;
+  color: #d9d9d9;
+  margin-left: -2px;
+  line-height: 1;
+  font-weight: 300;
   transition: all 0.3s ease;
 }
 
-.connector-active .connector-arrow {
-  color: #67c23a;
-  font-size: 10px;
+.arrow-done .wf-arrow-head {
+  color: #73d13d;
+  font-size: 22px;
 }
 
-/* 连接器上的动作按钮 */
-.connector-action {
+/* 按钮在箭头上的定位 */
+.wf-arrow .wf-action-btn {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 2;
+  white-space: nowrap;
 }
 
-.back-action {
+.wf-arrow .wf-action-btn:hover {
+  transform: translate(-50%, -55%);
+}
+
+.wf-arrow .wf-action-btn:active {
   transform: translate(-50%, -50%);
 }
 
-.connector-btn {
-  white-space: nowrap;
-  padding: 2px 8px !important;
-  font-size: 11px !important;
-  height: 26px !important;
+/* ===== 预览按钮 ===== */
+.wf-preview {
+  margin-left: 20px;
+  padding-left: 20px;
+  border-left: 1.5px solid var(--ad-border);
 }
 
-/* 通用按钮 */
-.flow-btn {
-  transition: all 0.2s ease;
+/* ===== 过渡动画 ===== */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
-.flow-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.85);
 }
 
-/* 右侧预览 */
-.flow-extra {
-  flex-shrink: 0;
-  border-left: 1px solid var(--ad-border);
-  padding-left: 16px;
-}
-
-/* 暗色主题 */
-:root[data-theme="dark"] .step-future {
-  border-color: #333;
-  background: #1a1a1a;
-}
-
+/* ===== 暗色主题 ===== */
 :root[data-theme="dark"] .badge-future {
-  background: #2c2c2c;
-  color: #555;
-  border-color: #444;
+  background: #262626;
+  color: #595959;
+  border-color: #434343;
 }
 
-:root[data-theme="dark"] .step-current {
-  background: rgba(64, 158, 255, 0.1);
+:root[data-theme="dark"] .node-future {
+  opacity: 0.45;
 }
 
-:root[data-theme="dark"] .step-done-box {
-  background: rgba(103, 194, 58, 0.08);
+:root[data-theme="dark"] .node-future .wf-label {
+  color: #595959;
 }
 
-:root[data-theme="dark"] .connector-line {
-  background: #444;
+:root[data-theme="dark"] .node-current .wf-node-inner {
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.12), rgba(64, 158, 255, 0.05));
+  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.12), 0 2px 6px rgba(64, 158, 255, 0.08);
 }
 
-:root[data-theme="dark"] .connector-arrow {
-  color: #444;
+:root[data-theme="dark"] .wf-arrow-line {
+  background: #434343;
 }
 
-/* 小屏适配 */
-@media (max-width: 800px) {
-  .quote-workflow-bar {
-    flex-direction: column;
-    gap: 12px;
+:root[data-theme="dark"] .wf-arrow-head {
+  color: #595959;
+}
+
+:root[data-theme="dark"] .wf-action-btn.outline {
+  border-color: #434343;
+}
+
+:root[data-theme="dark"] .wf-action-btn.outline:hover {
+  border-color: #409eff;
+}
+
+/* ===== 小屏 ===== */
+@media (max-width: 860px) {
+  .wf-bar {
+    padding: 14px 16px;
   }
 
-  .flow-bar {
+  .wf-steps {
     flex-wrap: wrap;
     gap: 8px;
   }
 
-  .flow-step {
-    min-width: 80px;
-    padding: 8px 10px;
+  .wf-node-inner {
+    padding: 8px 12px;
   }
 
-  .flow-connector {
-    width: 40px;
+  .wf-arrow {
+    min-width: 30px;
+    max-width: 50px;
+    height: 50px;
   }
 
-  .connector-action {
+  .wf-arrow .wf-action-btn {
     display: none;
   }
 
-  .flow-extra {
-    border-left: none;
-    border-top: 1px solid var(--ad-border);
+  .wf-preview {
+    margin-left: 0;
     padding-left: 0;
-    padding-top: 12px;
+    border-left: none;
     width: 100%;
     display: flex;
     justify-content: center;
+    padding-top: 8px;
+    border-top: 1px solid var(--ad-border);
   }
 }
 </style>
