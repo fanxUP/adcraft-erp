@@ -4,7 +4,8 @@ from io import BytesIO
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 
 from app.models.project_cost import ProjectCost
 from app.models.task import Attachment
@@ -79,6 +80,12 @@ class ProjectCostService:
 
         order_id_val, customer_id_val, project_name_val = order_row
 
+        debt_amount = data.get("debt_amount")
+        if debt_amount is not None:
+            debt_amount = float(debt_amount)
+        else:
+            debt_amount = 0
+
         cost = ProjectCost(
             cost_no=await generate_project_cost_no(self.db),
             order_id=order_id_val,
@@ -90,6 +97,10 @@ class ProjectCostService:
             receipt_url=data.get("receipt_url"),
             remark=data.get("remark"),
             order_item_id=UUID(data["order_item_id"]) if data.get("order_item_id") else None,
+            payment_method=data.get("payment_method"),
+            debt_amount=debt_amount,
+            is_debt=debt_amount > 0,
+            is_settled=False,
             created_by=created_by,
         )
         await self.repo.create(cost)
@@ -105,6 +116,11 @@ class ProjectCostService:
             "project_name": project_name_val,
             "category": cost.category,
             "amount": float(cost.amount),
+            "payment_method": cost.payment_method,
+            "debt_amount": float(cost.debt_amount) if cost.debt_amount else None,
+            "is_debt": cost.is_debt,
+            "is_settled": cost.is_settled,
+            "settled_at": cost.settled_at.isoformat() if cost.settled_at else None,
             "description": cost.description,
             "cost_date": cost.cost_date.isoformat() if cost.cost_date else None,
             "receipt_url": cost.receipt_url,
@@ -136,6 +152,95 @@ class ProjectCostService:
     async def get_costs_summary(self, order_ids: list[UUID]) -> dict[str, float]:
         """Return {order_id: total_cost} for a batch of orders."""
         return await self.repo.get_costs_summary(order_ids)
+
+    async def list_debts(
+        self,
+        page: int,
+        page_size: int,
+        keyword: str | None = None,
+        is_settled: bool | None = None,
+    ) -> tuple[list, int]:
+        """List all cost debts."""
+        from sqlalchemy import or_
+        from app.models.order import Order as OrderModel
+        from app.models.customer import Customer as CustomerModel
+
+        skip = (page - 1) * page_size
+        q = select(ProjectCost).options(
+            selectinload(ProjectCost.order),
+            selectinload(ProjectCost.customer),
+        ).where(
+            ProjectCost.deleted_at.is_(None),
+            ProjectCost.is_debt == True,
+        )
+        if is_settled is not None:
+            q = q.where(ProjectCost.is_settled == is_settled)
+        if keyword:
+            fuzzy = f"%{keyword}%"
+            q = q.join(ProjectCost.order).join(ProjectCost.customer, isouter=True).where(
+                or_(
+                    OrderModel.order_no.ilike(fuzzy),
+                    OrderModel.project_name.ilike(fuzzy),
+                    CustomerModel.name.ilike(fuzzy),
+                )
+            )
+
+        # Count
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self.db.execute(count_q)).scalar()
+
+        q = q.order_by(ProjectCost.created_at.desc()).offset(skip).limit(page_size)
+        result = await self.db.execute(q)
+        costs = list(result.scalars().all())
+
+        result_list = []
+        for c in costs:
+            d = self._to_dict(c)
+            d["order_no"] = c.order.order_no if c.order else None
+            d["customer_name"] = c.customer.name if c.customer else None
+            result_list.append(d)
+        return result_list, total
+
+    async def settle_debt(self, cost_id: UUID, settle_data: dict) -> dict:
+        """Settle a cost debt (write-off)."""
+        from datetime import datetime, timezone
+
+        c = await self.repo.get_by_id(cost_id)
+        if not c:
+            raise ValueError("成本记录不存在")
+        if not c.is_debt:
+            raise ValueError("该记录不是欠款记录")
+        if c.is_settled:
+            raise ValueError("该欠款已结清")
+
+        c.is_settled = True
+        c.settled_at = datetime.now(timezone.utc)
+        c.payment_method = settle_data.get("payment_method", c.payment_method or "转账支付")
+        if settle_data.get("remark"):
+            c.remark = (c.remark or "") + f" [结清: {settle_data['remark']}]"
+        await self.db.flush()
+
+        # Also create a formal cost entry for the settled debt amount
+        from app.services.number_generator import generate_project_cost_no
+        settle_cost = ProjectCost(
+            cost_no=await generate_project_cost_no(self.db),
+            order_id=c.order_id,
+            customer_id=c.customer_id,
+            category=c.category,
+            amount=settle_data.get("settle_amount", float(c.debt_amount or 0)),
+            payment_method=settle_data.get("payment_method", "转账支付"),
+            debt_amount=0,
+            is_debt=False,
+            is_settled=False,
+            description=f"欠款冲红 - 原成本编号 {c.cost_no}",
+            cost_date=datetime.now(timezone.utc),
+            remark=settle_data.get("remark"),
+            created_by=c.created_by,
+        )
+        await self.repo.create(settle_cost)
+        await self._sync_order_cost(c.order_id)
+
+        return self._to_dict(c)
 
     async def import_from_excel(self, file: BytesIO, created_by: UUID, order_id: UUID | None = None) -> dict:
         """Parse Excel file and create ProjectCost records.
@@ -253,6 +358,11 @@ class ProjectCostService:
             "project_name": c.order.project_name if c.order else None,
             "category": c.category,
             "amount": float(c.amount),
+            "payment_method": c.payment_method,
+            "debt_amount": float(c.debt_amount) if c.debt_amount else None,
+            "is_debt": c.is_debt,
+            "is_settled": c.is_settled,
+            "settled_at": c.settled_at.isoformat() if c.settled_at else None,
             "description": c.description,
             "cost_date": c.cost_date.isoformat() if c.cost_date else None,
             "receipt_url": c.receipt_url,

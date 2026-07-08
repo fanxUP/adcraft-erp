@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator
 from datetime import datetime
 from uuid import UUID
+from decimal import Decimal
 
 
 class PaymentCreate(BaseModel):
@@ -138,6 +139,8 @@ class ProjectCostCreate(BaseModel):
     receipt_url: str | None = None
     remark: str | None = None
     order_item_id: str | None = None
+    payment_method: str | None = None
+    debt_amount: float | None = None
 
     @field_validator("amount")
     @classmethod
@@ -162,6 +165,8 @@ class ProjectCostUpdate(BaseModel):
     receipt_url: str | None = None
     remark: str | None = None
     order_item_id: str | None = None
+    payment_method: str | None = None
+    debt_amount: float | None = None
 
 
 class ProjectCostResponse(BaseModel):
@@ -175,9 +180,45 @@ class ProjectCostResponse(BaseModel):
     project_name: str | None = None
     category: str
     amount: float
+    payment_method: str | None = None
+    debt_amount: float | None = None
+    is_debt: bool = False
+    is_settled: bool = False
+    settled_at: str | None = None
     description: str | None = None
     cost_date: str | None = None
     receipt_url: str | None = None
+    remark: str | None = None
+    created_by: str | None = None
+    created_at: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class DebtSettleCreate(BaseModel):
+    """结算欠款"""
+    settle_amount: float
+    payment_method: str = "转账支付"
+    remark: str | None = None
+
+
+class DebtResponse(BaseModel):
+    """欠款清单响应"""
+    id: str
+    cost_no: str
+    order_id: str
+    order_no: str | None = None
+    project_name: str | None = None
+    customer_id: str | None = None
+    customer_name: str | None = None
+    category: str
+    amount: float
+    payment_method: str | None = None
+    debt_amount: float
+    is_settled: bool = False
+    settled_at: str | None = None
+    cost_date: str | None = None
+    description: str | None = None
     remark: str | None = None
     created_by: str | None = None
     created_at: str | None = None

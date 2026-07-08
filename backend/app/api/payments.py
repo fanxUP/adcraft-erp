@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.permissions import require_role
 from app.models.user import User
-from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate, ProjectCostCreate, ProjectCostUpdate
+from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate, ProjectCostCreate, ProjectCostUpdate, DebtSettleCreate
 from app.schemas.common import success, success_paginated
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
 from app.services.project_cost_service import ProjectCostService
@@ -345,6 +345,42 @@ async def download_project_cost_template(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename=项目成本导入模板.xlsx"},
     )
+
+
+@cost_router.get("/debts/list")
+async def list_cost_debts(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = None,
+    is_settled: bool | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取成本欠款清单"""
+    service = ProjectCostService(db)
+    debts, total = await service.list_debts(page, page_size, keyword, is_settled)
+    return success_paginated(debts, total, page, page_size)
+
+
+@cost_router.post("/{cost_id}/settle-debt")
+async def settle_cost_debt(
+    cost_id: str,
+    data: DebtSettleCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """冲红：结算成本欠款"""
+    service = ProjectCostService(db)
+    try:
+        cost = await service.settle_debt(UUID(cost_id), data.model_dump())
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_PROJECT_COST, UUID(cost_id), "settle_debt",
+                        ip_address=request.client.host if request.client else None,
+                        after_data={"settle_amount": data.settle_amount, "payment_method": data.payment_method})
+    return success(cost)
 
 
 @cost_router.get("/{cost_id}")

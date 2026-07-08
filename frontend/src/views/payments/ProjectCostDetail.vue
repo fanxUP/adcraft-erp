@@ -80,6 +80,13 @@
       <el-table-column label="金额" width="140" align="right">
         <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
       </el-table-column>
+      <el-table-column label="欠款" width="90" align="center">
+        <template #default="{ row }">
+          <el-tag v-if="row.is_debt && !row.is_settled" type="danger" size="small">欠款</el-tag>
+          <el-tag v-else-if="row.is_debt && row.is_settled" type="success" size="small">已结清</el-tag>
+          <span v-else style="color: #c0c4cc">-</span>
+        </template>
+      </el-table-column>
       <el-table-column label="日期" width="120">
         <template #default="{ row }">
           {{ row.cost_date?.slice(0, 10) || '-' }}
@@ -137,6 +144,11 @@
             <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
           </el-select>
         </el-form-item>
+        <el-form-item label="付款方式">
+          <el-select v-model="form.payment_method" placeholder="选择付款方式" clearable style="width: 100%">
+            <el-option v-for="pm in PAYMENT_METHODS" :key="pm" :label="pm" :value="pm" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="分项">
           <el-select v-model="form.order_item_id" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
             <el-option
@@ -152,6 +164,10 @@
         </el-form-item>
         <el-form-item label="金额" required>
           <el-input-number v-model="form.amount" :min="0.01" :precision="2" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="欠款金额">
+          <el-input-number v-model="form.debt_amount" :min="0" :precision="2" style="width: 100%" placeholder="0 表示无欠款" />
+          <div style="font-size: 12px; color: #909399; margin-top: 4px">大于0时自动记为欠款</div>
         </el-form-item>
         <el-form-item label="日期">
           <el-date-picker
@@ -286,6 +302,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const CATEGORIES = ['人工/工时费', '运输/物流费', '安装杂费', '其他']
+const PAYMENT_METHODS = ['现金支付', '微信支付', '转账支付', '对公支付', '其它支付']
 
 const loading = ref(false)
 const saving = ref(false)
@@ -319,6 +336,8 @@ const orderItems = computed(() => order.value?.items || [])
 const form = reactive({
   category: '',
   amount: 0,
+  payment_method: '',
+  debt_amount: 0,
   cost_date: '',
   description: '',
   remark: '',
@@ -338,7 +357,7 @@ function statusColor(s: string) {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, cost_date: '', description: '', remark: '', order_item_id: '' })
+  Object.assign(form, { category: '', amount: 0, payment_method: '', debt_amount: 0, cost_date: '', description: '', remark: '', order_item_id: '' })
   isEditing.value = false
   editingId.value = ''
   dialogAttachments.value = []
@@ -354,6 +373,8 @@ function openEdit(row: ProjectCostResponse) {
   editingId.value = row.id
   form.category = row.category
   form.amount = row.amount
+  form.payment_method = row.payment_method || ''
+  form.debt_amount = row.debt_amount || 0
   form.cost_date = row.cost_date?.slice(0, 10) || ''
   form.description = row.description || ''
   form.remark = row.remark || ''
@@ -430,6 +451,9 @@ async function handleSave() {
       const payload: Record<string, unknown> = {}
       if (form.category) payload.category = form.category
       if (form.amount > 0) payload.amount = form.amount
+      if (form.payment_method) payload.payment_method = form.payment_method
+      if (form.debt_amount > 0) payload.debt_amount = form.debt_amount
+      else payload.debt_amount = 0
       if (form.cost_date) payload.cost_date = form.cost_date
       if (form.description) payload.description = form.description
       if (form.remark) payload.remark = form.remark
@@ -445,6 +469,8 @@ async function handleSave() {
         description: form.description || undefined,
         remark: form.remark || undefined,
         order_item_id: form.order_item_id || undefined,
+        payment_method: form.payment_method || undefined,
+        debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,
       })
       ElMessage.success('成本登记成功')
     }
