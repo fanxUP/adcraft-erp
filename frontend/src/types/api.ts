@@ -353,6 +353,8 @@ export interface ProjectCostResponse {
   id: string
   cost_no: string
   order_id: string
+  order_item_id?: string
+  order_item_name?: string
   customer_id?: string
   customer_name?: string
   project_name?: string

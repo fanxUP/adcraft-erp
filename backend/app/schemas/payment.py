@@ -137,6 +137,7 @@ class ProjectCostCreate(BaseModel):
     cost_date: str | None = None
     receipt_url: str | None = None
     remark: str | None = None
+    order_item_id: str | None = None
 
     @field_validator("amount")
     @classmethod
@@ -160,12 +161,15 @@ class ProjectCostUpdate(BaseModel):
     cost_date: str | None = None
     receipt_url: str | None = None
     remark: str | None = None
+    order_item_id: str | None = None
 
 
 class ProjectCostResponse(BaseModel):
     id: str
     cost_no: str
     order_id: str
+    order_item_id: str | None = None
+    order_item_name: str | None = None
     customer_id: str | None = None
     customer_name: str | None = None
     project_name: str | None = None
