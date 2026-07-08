@@ -150,7 +150,8 @@
           </el-select>
         </el-form-item>
         <el-form-item label="收款公司">
-          <el-input v-model="form.payee_company_name" placeholder="对方收款公司名称（可选）" clearable />
+          <el-input v-model="form.payee_company_name" placeholder="输入对方收款公司名称" clearable />
+          <div style="font-size: 12px; color: #909399; margin-top: 2px">对方收款公司名称（可选）</div>
         </el-form-item>
         <el-form-item label="分项">
           <el-select v-model="form.order_item_id" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
