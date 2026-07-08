@@ -360,7 +360,6 @@ async def list_quotes_for_cost(
 ):
     """获取可登记成本的报价单列表"""
     from app.models.quote import Quote as QuoteModel
-    from app.models.customer import Customer as CustomerModel
     from app.repositories.project_cost_repo import ProjectCostRepository
 
     from sqlalchemy import or_, select, func
@@ -368,11 +367,11 @@ async def list_quotes_for_cost(
     q = select(QuoteModel).where(QuoteModel.deleted_at.is_(None))
     if keyword:
         fuzzy = f"%{keyword}%"
-        q = q.outerjoin(CustomerModel, QuoteModel.customer_id == CustomerModel.id).where(
+        q = q.where(
             or_(
                 QuoteModel.quote_no.ilike(fuzzy),
                 QuoteModel.project_name.ilike(fuzzy),
-                CustomerModel.name.ilike(fuzzy),
+                QuoteModel.customer_name.ilike(fuzzy),
             )
         )
     count_q = select(func.count()).select_from(q.subquery())
@@ -394,7 +393,7 @@ async def list_quotes_for_cost(
             "id": str(q.id),
             "quote_no": q.quote_no,
             "project_name": q.project_name,
-            "customer_name": q.customer_name or (q.customer.name if q.customer else None),
+            "customer_name": q.customer_name,
             "status": q.status,
             "total_amount": float(q.total_amount),
             "cost_amount": float(cost_map.get(str(q.id), 0)),
