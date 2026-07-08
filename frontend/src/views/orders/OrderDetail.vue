@@ -47,31 +47,12 @@
             </el-descriptions>
           </el-card>
 
-          <el-card shadow="never" class="info-card" style="margin-top: 16px">
-            <template #header>
-              <div class="card-header">
-                <span>变更状态</span>
-              </div>
-            </template>
-            <el-form :model="statusForm" inline>
-              <el-form-item label="目标状态">
-                <el-select v-model="statusForm.to_status" style="width: 160px">
-                  <el-option label="已确认" value="confirmed" />
-                  <el-option label="进行中" value="in_progress" />
-                  <el-option label="生产中" value="in_production" />
-                  <el-option label="安装中" value="in_installation" />
-                  <el-option label="已完成" value="completed" />
-                  <el-option label="已取消" value="cancelled" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="原因">
-                <el-input v-model="statusForm.reason" style="width: 200px" />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" :loading="changing" @click="handleChangeStatus">变更</el-button>
-              </el-form-item>
-            </el-form>
-          </el-card>
+          <!-- 订单状态流程图按钮 -->
+          <OrderWorkflow
+            :current-status="order.status"
+            :changing="changing"
+            @change="handleChangeStatus"
+          />
         </el-tab-pane>
 
         <el-tab-pane label="订单明细" name="items">
@@ -332,7 +313,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import OrderWorkflow from './OrderWorkflow.vue'
 import { useRoute } from 'vue-router'
 import { getOrder, changeOrderStatus, autoCalculateCost } from '@/api/orders'
 import { getDesignTasks, getProductionTasks, getInstallationTasks, createDesignTask, createProductionTask, createInstallationTask } from '@/api/tasks'
@@ -345,7 +327,7 @@ const changing = ref(false)
 const tasksLoading = ref(false)
 const order = ref<OrderDetailResponse | null>(null)
 const activeTab = ref('info')
-const statusForm = reactive({ to_status: '', reason: '' })
+// 状态管理由 OrderWorkflow 组件接管
 
 const designTasks = ref<DesignTaskResponse[]>([])
 const productionTasks = ref<ProductionTaskResponse[]>([])
@@ -514,20 +496,25 @@ async function handleCreateInstallation() {
   fetchTasks()
 }
 
-async function handleChangeStatus() {
-  await ElMessageBox.confirm(`确定将订单状态变更为「${statusForm.to_status}」？`, '变更状态', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning',
+async function handleChangeStatus(to_status: string) {
+  const labels: Record<string, string> = {
+    pending_confirm: '待确认', confirmed: '已确认', in_progress: '进行中',
+    in_production: '生产中', in_installation: '安装中', completed: '已完成', cancelled: '已取消',
+  }
+  const label = labels[to_status] || to_status
+  const msg = to_status === 'cancelled'
+    ? '确定取消此订单？此操作不可撤销。'
+    : `确定将订单状态变更为「${label}」？`
+  await ElMessageBox.confirm(msg, '变更状态', {
+    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
   })
   changing.value = true
   try {
     order.value = await changeOrderStatus(route.params.id as string, {
-      to_status: statusForm.to_status,
-      reason: statusForm.reason || undefined,
+      to_status,
+      reason: undefined,
     })
-    ElMessage.success('状态已变更')
-    statusForm.to_status = ''; statusForm.reason = ''
+    ElMessage.success(`状态已变更为「${label}」`)
   } finally { changing.value = false }
 }
 
