@@ -360,6 +360,11 @@ export interface ProjectCostResponse {
   project_name?: string
   category: string
   amount: number
+  payment_method?: string
+  debt_amount?: number
+  is_debt: boolean
+  is_settled: boolean
+  settled_at?: string
   description?: string
   cost_date?: string
   receipt_url?: string
@@ -368,6 +373,27 @@ export interface ProjectCostResponse {
   created_at?: string
   attachment_count?: number
   attachments?: AttachmentResponse[]
+}
+
+export interface DebtResponse {
+  id: string
+  cost_no: string
+  order_id: string
+  order_no?: string
+  project_name?: string
+  customer_id?: string
+  customer_name?: string
+  category: string
+  amount: number
+  payment_method?: string
+  debt_amount: number
+  is_settled: boolean
+  settled_at?: string
+  cost_date?: string
+  description?: string
+  remark?: string
+  created_by?: string
+  created_at?: string
 }
 
 export interface ProjectCostImportResponse {

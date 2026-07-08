@@ -40,6 +40,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'statements/:id', name: 'StatementDetail', component: () => import('@/views/payments/StatementDetail.vue') },
       { path: 'project-costs', name: 'ProjectCostList', component: () => import('@/views/payments/ProjectCostList.vue') },
       { path: 'project-costs/:orderId', name: 'ProjectCostDetail', component: () => import('@/views/payments/ProjectCostDetail.vue') },
+      { path: 'cost-debts', name: 'CostDebtList', component: () => import('@/views/payments/CostDebtList.vue') },
       { path: 'reports/daily', name: 'DailyReport', component: () => import('@/views/reports/DailyReport.vue') },
       { path: 'reports/monthly', name: 'MonthlyReport', component: () => import('@/views/reports/MonthlyReport.vue') },
       { path: 'outsource/vendors', name: 'OutsourceVendorList', component: () => import('@/views/outsource/OutsourceVendorList.vue') },

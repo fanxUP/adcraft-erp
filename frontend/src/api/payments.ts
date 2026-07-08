@@ -1,5 +1,5 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, AttachmentResponse } from '@/types/api'
+import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, AttachmentResponse, DebtResponse } from '@/types/api'
 
 export function getPayments(params?: { page?: number; page_size?: number; order_id?: string; customer_id?: string; status?: string }) { return get<PaginatedData<PaymentResponse>>('/payments/', { params }) }
 export function getPayment(id: string) { return get<PaymentResponse>(`/payments/${id}`) }
@@ -70,4 +70,14 @@ export function uploadProjectCostAttachment(costId: string, file: File) {
 
 export function deleteProjectCostAttachment(attachmentId: string) {
   return del<SuccessResponse>(`/project-costs/attachments/${attachmentId}`)
+}
+
+// ── Cost Debts ──
+
+export function getCostDebts(params?: { page?: number; page_size?: number; keyword?: string; is_settled?: boolean }) {
+  return get<PaginatedData<DebtResponse>>('/project-costs/debts/list', { params })
+}
+
+export function settleCostDebt(costId: string, data: { settle_amount: number; payment_method: string; remark?: string }) {
+  return post<ProjectCostResponse>(`/project-costs/${costId}/settle-debt`, data)
 }
