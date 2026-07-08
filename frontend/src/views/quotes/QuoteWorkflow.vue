@@ -1,105 +1,101 @@
 <template>
-  <div class="wf-bar">
-    <div class="wf-steps">
-      <!-- ====== 步骤1: 草稿 ====== -->
-      <div class="wf-node" :class="nodeClass('draft')">
-        <div class="wf-node-inner">
-          <div class="wf-badge" :class="badgeClass('draft')">
-            <el-icon v-if="isPast('draft')" :size="18"><Check /></el-icon>
+  <div class="qw-bar">
+    <div class="qw-flow">
+      <!-- 列1: 草稿 -->
+      <div class="qw-col">
+        <div class="qw-card" :class="cardClass('draft')" @click="tryChange('draft')">
+          <div class="qw-icon" :class="iconClass('draft')">
+            <el-icon v-if="isPast('draft')" :size="16"><Check /></el-icon>
             <span v-else>1</span>
           </div>
-          <div class="wf-label">草稿</div>
-          <div class="wf-status-text">{{ statusText('draft') }}</div>
+          <div class="qw-text">
+            <div class="qw-label">草稿</div>
+            <div v-if="'draft' === currentStatus" class="qw-tag cur-tag">当前</div>
+            <div v-else-if="isPast('draft')" class="qw-tag done-tag">已完成</div>
+          </div>
         </div>
-        <!-- 草稿阶段的操作按钮 -->
-        <div v-if="currentStatus === 'draft'" class="wf-actions">
-          <button class="wf-action-btn primary" :disabled="saving" @click="$emit('save')">
-            <el-icon :size="15"><Edit /></el-icon>
-            <span>保存草稿</span>
-            <span v-if="saving" class="wf-spinner"></span>
-          </button>
-        </div>
+        <!-- 草稿状态下的保存按钮 -->
+        <button v-if="currentStatus === 'draft'" class="qw-action primary" :disabled="saving" @click="$emit('save')">
+          <el-icon :size="14"><Edit /></el-icon>
+          <span>{{ saving ? '保存中…' : '保存草稿' }}</span>
+        </button>
       </div>
 
-      <!-- 箭头1: 草稿 → 已确认 -->
-      <div class="wf-arrow" :class="{ 'arrow-done': isPast('confirmed') }">
-        <div class="wf-arrow-body">
-          <div class="wf-arrow-line"></div>
-          <div class="wf-arrow-head">›</div>
-        </div>
-        <!-- 确认报价按钮（仅在草稿状态显示） -->
-        <Transition name="fade">
-          <button
-            v-if="currentStatus === 'draft' && isExisting"
-            class="wf-action-btn success arrow-btn"
-            @click="$emit('confirm')"
-          >
-            <el-icon :size="15"><CircleCheck /></el-icon>
-            <span>确认报价</span>
-          </button>
-        </Transition>
-        <!-- 撤回草稿按钮（仅在已确认状态显示） -->
-        <Transition name="fade">
-          <button
-            v-if="currentStatus === 'confirmed'"
-            class="wf-action-btn warning arrow-btn"
-            :disabled="reverting"
-            @click="$emit('revert')"
-          >
-            <el-icon :size="15"><Back /></el-icon>
-            <span>{{ reverting ? '撤回中…' : '撤回草稿' }}</span>
-          </button>
-        </Transition>
+      <!-- 箭头1 -->
+      <div class="qw-conn" :class="{ 'conn-done': isPast('confirmed') }">
+        <div class="qw-line"></div>
+        <div class="qw-point">▶</div>
+        <!-- 确认报价按钮，在草稿状态显示在箭头上 -->
+        <button
+          v-if="currentStatus === 'draft' && isExisting"
+          class="qw-btn-on-arrow success"
+          @click="$emit('confirm')"
+        >
+          <el-icon :size="13"><CircleCheck /></el-icon>
+          <span>确认报价</span>
+        </button>
+        <!-- 撤回草稿按钮，在已确认状态显示在箭头上 -->
+        <button
+          v-if="currentStatus === 'confirmed'"
+          class="qw-btn-on-arrow warning"
+          :disabled="reverting"
+          @click="$emit('revert')"
+        >
+          <el-icon :size="13"><Back /></el-icon>
+          <span>{{ reverting ? '撤回中…' : '撤回草稿' }}</span>
+        </button>
       </div>
 
-      <!-- ====== 步骤2: 已确认 ====== -->
-      <div class="wf-node" :class="nodeClass('confirmed')">
-        <div class="wf-node-inner">
-          <div class="wf-badge" :class="badgeClass('confirmed')">
-            <el-icon v-if="isPast('confirmed')" :size="18"><Check /></el-icon>
+      <!-- 列2: 已确认 -->
+      <div class="qw-col">
+        <div class="qw-card" :class="cardClass('confirmed')" @click="tryChange('confirmed')">
+          <div class="qw-icon" :class="iconClass('confirmed')">
+            <el-icon v-if="isPast('confirmed')" :size="16"><Check /></el-icon>
             <span v-else>2</span>
           </div>
-          <div class="wf-label">已确认</div>
-          <div class="wf-status-text">{{ statusText('confirmed') }}</div>
+          <div class="qw-text">
+            <div class="qw-label">已确认</div>
+            <div v-if="'confirmed' === currentStatus" class="qw-tag cur-tag">当前</div>
+            <div v-else-if="isPast('confirmed')" class="qw-tag done-tag">已完成</div>
+          </div>
         </div>
       </div>
 
-      <!-- 箭头2: 已确认 → 已转订单 -->
-      <div class="wf-arrow" :class="{ 'arrow-done': isPast('converted') }">
-        <div class="wf-arrow-body">
-          <div class="wf-arrow-line"></div>
-          <div class="wf-arrow-head">›</div>
-        </div>
-        <!-- 转订单按钮（仅在已确认状态显示） -->
-        <Transition name="fade">
-          <button
-            v-if="currentStatus === 'confirmed'"
-            class="wf-action-btn danger arrow-btn"
-            :disabled="converting"
-            @click="$emit('convert')"
-          >
-            <el-icon :size="15"><Right /></el-icon>
-            <span>{{ converting ? '转换中…' : '转订单' }}</span>
-          </button>
-        </Transition>
+      <!-- 箭头2 -->
+      <div class="qw-conn" :class="{ 'conn-done': isPast('converted') }">
+        <div class="qw-line"></div>
+        <div class="qw-point">▶</div>
+        <!-- 转订单按钮，在已确认状态显示在箭头上 -->
+        <button
+          v-if="currentStatus === 'confirmed'"
+          class="qw-btn-on-arrow danger"
+          :disabled="converting"
+          @click="$emit('convert')"
+        >
+          <el-icon :size="13"><Right /></el-icon>
+          <span>{{ converting ? '转换中…' : '转订单' }}</span>
+        </button>
       </div>
 
-      <!-- ====== 步骤3: 已转订单 ====== -->
-      <div class="wf-node" :class="nodeClass('converted')">
-        <div class="wf-node-inner">
-          <div class="wf-badge" :class="badgeClass('converted')">
-            <el-icon v-if="isPast('converted')" :size="18"><Check /></el-icon>
+      <!-- 列3: 已转订单 -->
+      <div class="qw-col">
+        <div class="qw-card" :class="cardClass('converted')" @click="tryChange('converted')">
+          <div class="qw-icon" :class="iconClass('converted')">
+            <el-icon v-if="isPast('converted')" :size="16"><Check /></el-icon>
             <span v-else>3</span>
           </div>
-          <div class="wf-label">已转订单</div>
-          <div class="wf-status-text">{{ statusText('converted') }}</div>
+          <div class="qw-text">
+            <div class="qw-label">已转订单</div>
+            <div v-if="'converted' === currentStatus" class="qw-tag cur-tag">当前</div>
+            <div v-else-if="isPast('converted')" class="qw-tag done-tag">已完成</div>
+          </div>
         </div>
       </div>
 
       <!-- 预览按钮 -->
-      <div class="wf-preview">
-        <button class="wf-action-btn outline" @click="$emit('preview')">
-          <el-icon :size="15"><View /></el-icon>
+      <div class="qw-preview">
+        <button class="qw-action outline" @click="$emit('preview')">
+          <el-icon :size="14"><View /></el-icon>
           <span>预览</span>
         </button>
       </div>
@@ -108,6 +104,9 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { Check, Edit, CircleCheck, Back, Right, View } from '@element-plus/icons-vue'
+
 const props = defineProps<{
   currentStatus: string
   isExisting: boolean
@@ -116,7 +115,7 @@ const props = defineProps<{
   reverting: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   save: []
   confirm: []
   convert: []
@@ -126,124 +125,116 @@ defineEmits<{
 
 const statusOrder = ['draft', 'confirmed', 'converted']
 
+const currentIdx = computed(() => {
+  const idx = statusOrder.indexOf(props.currentStatus)
+  return idx >= 0 ? idx : -1
+})
+
+const reachableTargets = computed(() => {
+  const cur = props.currentStatus
+  const idx = currentIdx.value
+  if (idx < 0 || cur === 'converted') return []
+  return statusOrder.slice(idx + 1)
+})
+
 function isPast(status: string): boolean {
-  return statusOrder.indexOf(props.currentStatus) > statusOrder.indexOf(status)
+  const idx = statusOrder.indexOf(status)
+  return idx >= 0 && idx < currentIdx.value
 }
 
-function nodeClass(status: string) {
-  if (status === props.currentStatus) return 'node-current'
-  if (isPast(status)) return 'node-done'
-  return 'node-future'
+function isReachable(status: string): boolean {
+  return reachableTargets.value.includes(status)
 }
 
-function badgeClass(status: string) {
-  if (status === props.currentStatus) return 'badge-current'
-  if (isPast(status)) return 'badge-done'
-  return 'badge-future'
-}
+function tryChange(status: string) {
+  if (!isReachable(status) || props.saving || props.converting) return
 
-function statusText(status: string): string {
-  if (isPast(status) && status !== props.currentStatus) return '已完成'
-  if (status === props.currentStatus) {
-    const map: Record<string, string> = {
-      draft: '进行中',
-      confirmed: '等待转订单',
-      converted: '流程结束',
-    }
-    return map[status] || ''
+  // 从草稿 → 已确认
+  if (status === 'confirmed' && props.currentStatus === 'draft') {
+    emit('confirm')
+    return
   }
-  return ''
+  // 从已确认 → 已转订单
+  if (status === 'converted' && props.currentStatus === 'confirmed') {
+    emit('convert')
+    return
+  }
+}
+
+function cardClass(status: string) {
+  if (status === props.currentStatus) return 'card-current'
+  if (isPast(status)) return 'card-done'
+  if (isReachable(status)) return 'card-ready'
+  return 'card-disabled'
+}
+
+function iconClass(status: string) {
+  if (status === props.currentStatus) return 'icon-current'
+  if (isPast(status)) return 'icon-done'
+  if (isReachable(status)) return 'icon-ready'
+  return 'icon-disabled'
 }
 </script>
 
 <style scoped>
 /* ===== 容器 ===== */
-.wf-bar {
-  background: var(--ad-card);
+.qw-bar {
   border: 1px solid var(--ad-border);
   border-radius: 12px;
-  padding: 18px 24px;
-  margin-bottom: 20px;
+  padding: 24px;
+  margin: 16px 0;
+  background: var(--ad-card);
 }
 
-.wf-steps {
+.qw-flow {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0;
 }
 
-/* ===== 节点 ===== */
-.wf-node {
+.qw-col {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-shrink: 0;
-  transition: all 0.3s ease;
 }
 
-.wf-node-inner {
+/* ===== 卡片 ===== */
+.qw-card {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 18px;
+  padding: 12px 20px;
   border-radius: 10px;
   border: 2px solid transparent;
-  transition: all 0.35s ease;
-  position: relative;
+  transition: all 0.25s ease;
+  cursor: default;
+  min-width: 100px;
+  min-height: 48px;
+  box-sizing: border-box;
 }
 
-/* 当前节点 */
-.node-current .wf-node-inner {
-  border-color: #409eff;
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.07), rgba(64, 158, 255, 0.03));
-  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.08), 0 2px 6px rgba(64, 158, 255, 0.06);
-}
-
-/* 已完成节点 */
-.node-done .wf-node-inner {
-  border-color: transparent;
-  background: transparent;
-}
-
-/* 未来节点 */
-.node-future .wf-node-inner {
-  opacity: 0.5;
-}
-
-/* ===== 徽章 ===== */
-.wf-badge {
-  width: 36px;
-  height: 36px;
+.qw-icon {
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   flex-shrink: 0;
-  transition: all 0.35s ease;
+  transition: all 0.25s ease;
 }
 
-.badge-current {
-  background: linear-gradient(135deg, #409eff 0%, #2979ff 100%);
-  color: #fff;
-  box-shadow: 0 3px 10px rgba(64, 158, 255, 0.35);
+.qw-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.badge-done {
-  background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%);
-  color: #fff;
-  box-shadow: 0 3px 8px rgba(82, 196, 26, 0.3);
-}
-
-.badge-future {
-  background: #f5f5f5;
-  color: #bfbfbf;
-  border: 2px solid #e8e8e8;
-}
-
-/* ===== 标签文字 ===== */
-.wf-label {
+.qw-label {
   font-size: 14px;
   font-weight: 600;
   color: var(--ad-text);
@@ -251,287 +242,264 @@ function statusText(status: string): string {
   letter-spacing: 0.5px;
 }
 
-.node-future .wf-label {
-  color: #bfbfbf;
-}
-
-.wf-status-text {
-  font-size: 11px;
-  color: var(--ad-text-secondary, #8c8c8c);
+.qw-tag {
+  font-size: 10px;
+  font-weight: 500;
   white-space: nowrap;
 }
+.cur-tag { color: #409eff; }
+.done-tag { color: #52c41a; }
 
-.node-current .wf-status-text {
-  color: #409eff;
-  font-weight: 500;
-}
-
-.node-done .wf-status-text {
-  color: #52c41a;
-  font-weight: 500;
-}
-
-/* ===== 节点内的操作按钮 ===== */
-.wf-actions {
-  margin-left: 4px;
-}
-
-/* ===== 自定义按钮 ===== */
-.wf-action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 14px;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  line-height: 1;
-  outline: none;
-  position: relative;
-}
-
-.wf-action-btn:hover {
-  transform: translateY(-1px);
-}
-
-.wf-action-btn:active {
-  transform: translateY(0);
-}
-
-.wf-action-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none !important;
-}
-
-/* 按钮颜色变体 */
-.wf-action-btn.primary {
-  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
-  color: #fff;
-  box-shadow: 0 3px 8px rgba(64, 158, 255, 0.25);
-}
-
-.wf-action-btn.primary:hover:not(:disabled) {
-  box-shadow: 0 5px 14px rgba(64, 158, 255, 0.35);
-}
-
-.wf-action-btn.success {
-  background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%);
-  color: #fff;
-  box-shadow: 0 3px 8px rgba(82, 196, 26, 0.25);
-}
-
-.wf-action-btn.success:hover:not(:disabled) {
-  box-shadow: 0 5px 14px rgba(82, 196, 26, 0.35);
-}
-
-.wf-action-btn.warning {
-  background: linear-gradient(135deg, #faad14 0%, #ffc53d 100%);
-  color: #fff;
-  box-shadow: 0 3px 8px rgba(250, 173, 20, 0.25);
-}
-
-.wf-action-btn.warning:hover:not(:disabled) {
-  box-shadow: 0 5px 14px rgba(250, 173, 20, 0.35);
-}
-
-.wf-action-btn.danger {
-  background: linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%);
-  color: #fff;
-  box-shadow: 0 3px 8px rgba(255, 77, 79, 0.25);
-}
-
-.wf-action-btn.danger:hover:not(:disabled) {
-  box-shadow: 0 5px 14px rgba(255, 77, 79, 0.35);
-}
-
-.wf-action-btn.outline {
-  background: var(--ad-card);
-  color: var(--ad-text);
-  border: 1.5px solid var(--ad-border);
-}
-
-.wf-action-btn.outline:hover {
-  border-color: #409eff;
-  color: #409eff;
-  box-shadow: 0 3px 8px rgba(64, 158, 255, 0.1);
-}
-
-/* 箭头上的按钮更紧凑 */
-.arrow-btn {
-  padding: 5px 12px;
-  font-size: 12px;
-  border-radius: 7px;
-}
-
-/* ===== Spinner ===== */
-.wf-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-  position: absolute;
-  right: 8px;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ===== 箭头 ===== */
-.wf-arrow {
+/* ===== 连接箭头 ===== */
+.qw-conn {
   display: flex;
   align-items: center;
-  flex: 1;
-  min-width: 60px;
-  max-width: 120px;
-  position: relative;
-  height: 60px;
-}
-
-.wf-arrow-body {
-  display: flex;
-  align-items: center;
-  width: 100%;
   padding: 0 4px;
+  flex-shrink: 0;
+  margin-top: 24px;
+  position: relative;
 }
 
-.wf-arrow-line {
-  flex: 1;
+.qw-line {
+  width: 48px;
   height: 2px;
   background: #e8e8e8;
   border-radius: 2px;
   transition: all 0.3s ease;
 }
 
-.arrow-done .wf-arrow-line {
+.conn-done .qw-line {
   background: linear-gradient(to right, #52c41a, #73d13d);
   height: 3px;
 }
 
-.wf-arrow-head {
-  font-size: 20px;
+.qw-point {
+  font-size: 12px;
   color: #d9d9d9;
   margin-left: -2px;
-  line-height: 1;
-  font-weight: 300;
   transition: all 0.3s ease;
 }
 
-.arrow-done .wf-arrow-head {
+.conn-done .qw-point {
   color: #73d13d;
-  font-size: 22px;
 }
 
-/* 按钮在箭头上的定位 */
-.wf-arrow .wf-action-btn {
+/* ===== 卡片状态 ===== */
+
+/* 当前 */
+.card-current {
+  border-color: #409eff;
+  background: linear-gradient(135deg, rgba(64,158,255,0.07), rgba(64,158,255,0.03));
+  box-shadow: 0 0 0 4px rgba(64,158,255,0.08);
+}
+.card-current .qw-label { color: #409eff; }
+
+.icon-current {
+  background: linear-gradient(135deg, #409eff, #66b1ff);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(64,158,255,0.35);
+}
+
+/* 已完成 */
+.card-done { border-color: transparent; }
+.card-done .qw-label { color: #52c41a; }
+
+.icon-done {
+  background: linear-gradient(135deg, #52c41a, #73d13d);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(82,196,26,0.3);
+}
+
+/* 可点击 */
+.card-ready {
+  border-color: #409eff;
+  border-style: dashed;
+  background: rgba(64,158,255,0.03);
+  cursor: pointer;
+}
+.card-ready:hover {
+  background: rgba(64,158,255,0.08);
+  box-shadow: 0 2px 10px rgba(64,158,255,0.1);
+  transform: translateX(3px);
+}
+.card-ready:active { transform: translateX(0); }
+.card-ready .qw-label { color: #409eff; }
+
+.icon-ready {
+  background: #f0f5ff;
+  color: #409eff;
+  border: 2px solid #409eff;
+  cursor: pointer;
+}
+.icon-ready:hover {
+  background: #e6f0ff;
+  box-shadow: 0 0 0 4px rgba(64,158,255,0.15);
+}
+
+/* 不可达 */
+.card-disabled { border-color: #f0f0f0; background: #fafafa; }
+.card-disabled .qw-label { color: #d9d9d9; }
+
+.icon-disabled {
+  background: #f5f5f5;
+  color: #d9d9d9;
+  border: 2px solid #e8e8e8;
+}
+
+/* ===== 操作按钮 ===== */
+.qw-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  line-height: 1;
+  outline: none;
+}
+
+.qw-action:hover {
+  transform: translateY(-1px);
+}
+
+.qw-action:active {
+  transform: translateY(0);
+}
+
+.qw-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.qw-action.primary {
+  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(64,158,255,0.25);
+}
+
+.qw-action.primary:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(64,158,255,0.35);
+}
+
+.qw-action.outline {
+  background: var(--ad-card);
+  color: var(--ad-text);
+  border: 1.5px solid var(--ad-border);
+}
+
+.qw-action.outline:hover {
+  border-color: #409eff;
+  color: #409eff;
+  box-shadow: 0 2px 6px rgba(64,158,255,0.1);
+}
+
+/* ===== 箭头上按钮 ===== */
+.qw-btn-on-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  line-height: 1;
+  outline: none;
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 2;
-  white-space: nowrap;
+  color: #fff;
 }
 
-.wf-arrow .wf-action-btn:hover {
+.qw-btn-on-arrow:hover {
   transform: translate(-50%, -55%);
 }
 
-.wf-arrow .wf-action-btn:active {
+.qw-btn-on-arrow:active {
   transform: translate(-50%, -50%);
 }
 
-/* ===== 预览按钮 ===== */
-.wf-preview {
+.qw-btn-on-arrow:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: translate(-50%, -50%) !important;
+}
+
+.qw-btn-on-arrow.success {
+  background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%);
+  box-shadow: 0 2px 6px rgba(82,196,26,0.25);
+}
+
+.qw-btn-on-arrow.warning {
+  background: linear-gradient(135deg, #faad14 0%, #ffc53d 100%);
+  box-shadow: 0 2px 6px rgba(250,173,20,0.25);
+}
+
+.qw-btn-on-arrow.danger {
+  background: linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%);
+  box-shadow: 0 2px 6px rgba(255,77,79,0.25);
+}
+
+/* ===== 预览按钮容器 ===== */
+.qw-preview {
   margin-left: 20px;
   padding-left: 20px;
   border-left: 1.5px solid var(--ad-border);
-}
-
-/* ===== 过渡动画 ===== */
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.fade-enter-from, .fade-leave-to {
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.85);
+  padding-top: 10px;
 }
 
 /* ===== 暗色主题 ===== */
-:root[data-theme="dark"] .badge-future {
-  background: #262626;
-  color: #595959;
+:root[data-theme="dark"] .icon-disabled {
+  background: #262626; color: #434343; border-color: #434343;
+}
+:root[data-theme="dark"] .icon-ready {
+  background: rgba(64,158,255,0.12);
+}
+:root[data-theme="dark"] .icon-ready:hover {
+  background: rgba(64,158,255,0.2);
+}
+:root[data-theme="dark"] .card-disabled {
+  border-color: #262626; background: #1a1a1a;
+}
+:root[data-theme="dark"] .card-disabled .qw-label { color: #434343; }
+:root[data-theme="dark"] .card-current {
+  background: rgba(64,158,255,0.1);
+  box-shadow: 0 0 0 4px rgba(64,158,255,0.12);
+}
+:root[data-theme="dark"] .card-ready {
+  background: rgba(64,158,255,0.06);
+}
+:root[data-theme="dark"] .card-ready:hover {
+  background: rgba(64,158,255,0.15);
+}
+:root[data-theme="dark"] .qw-line { background: #434343; }
+:root[data-theme="dark"] .qw-point { color: #595959; }
+:root[data-theme="dark"] .qw-action.outline {
   border-color: #434343;
 }
-
-:root[data-theme="dark"] .node-future {
-  opacity: 0.45;
-}
-
-:root[data-theme="dark"] .node-future .wf-label {
-  color: #595959;
-}
-
-:root[data-theme="dark"] .node-current .wf-node-inner {
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.12), rgba(64, 158, 255, 0.05));
-  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.12), 0 2px 6px rgba(64, 158, 255, 0.08);
-}
-
-:root[data-theme="dark"] .wf-arrow-line {
-  background: #434343;
-}
-
-:root[data-theme="dark"] .wf-arrow-head {
-  color: #595959;
-}
-
-:root[data-theme="dark"] .wf-action-btn.outline {
-  border-color: #434343;
-}
-
-:root[data-theme="dark"] .wf-action-btn.outline:hover {
+:root[data-theme="dark"] .qw-action.outline:hover {
   border-color: #409eff;
 }
 
 /* ===== 小屏 ===== */
-@media (max-width: 860px) {
-  .wf-bar {
-    padding: 14px 16px;
-  }
-
-  .wf-steps {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .wf-node-inner {
-    padding: 8px 12px;
-  }
-
-  .wf-arrow {
-    min-width: 30px;
-    max-width: 50px;
-    height: 50px;
-  }
-
-  .wf-arrow .wf-action-btn {
-    display: none;
-  }
-
-  .wf-preview {
-    margin-left: 0;
-    padding-left: 0;
-    border-left: none;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    padding-top: 8px;
-    border-top: 1px solid var(--ad-border);
-  }
+@media (max-width: 800px) {
+  .qw-bar { padding: 14px; }
+  .qw-card { padding: 8px 12px; min-width: 60px; min-height: 40px; gap: 8px; }
+  .qw-line { width: 20px; }
+  .qw-conn { padding: 0 2px; }
+  .qw-tag { display: none; }
+  .qw-btn-on-arrow { display: none; }
+  .qw-preview { margin-left: 0; padding-left: 0; border-left: none; }
 }
 </style>

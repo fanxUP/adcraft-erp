@@ -6,20 +6,6 @@
 
     <h2 style="margin: 16px 0; color: var(--ad-text)">{{ isEdit ? '编辑报价' : '新建报价' }}</h2>
 
-    <!-- 报价工作流流程图按钮 -->
-    <QuoteWorkflow
-      :current-status="quote?.status || 'draft'"
-      :is-existing="isEdit"
-      :saving="saving"
-      :converting="converting"
-      :reverting="reverting"
-      @save="handleSave"
-      @confirm="handleConfirm"
-      @convert="handleConvert"
-      @revert="handleRevertToDraft"
-      @preview="previewVisible = true"
-    />
-
     <el-card shadow="never" class="section-card">
       <el-form :model="form" label-width="100px" inline>
         <el-form-item label="客户" required>
@@ -274,6 +260,20 @@
         </el-col>
       </el-row>
     </el-card>
+
+    <!-- 报价状态流程图 -->
+    <QuoteWorkflow
+      :current-status="quote?.status || 'draft'"
+      :is-existing="isEdit"
+      :saving="saving"
+      :converting="converting"
+      :reverting="reverting"
+      @save="handleSave"
+      @confirm="handleConfirm"
+      @convert="handleConvert"
+      @revert="handleRevertToDraft"
+      @preview="previewVisible = true"
+    />
 
     <!-- 预览弹窗 -->
     <QuotePreview :visible="previewVisible" :quote-id="quoteId" :current-items="items" @close="previewVisible = false" />
