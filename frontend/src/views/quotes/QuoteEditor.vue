@@ -6,11 +6,10 @@
 
     <h2 style="margin: 16px 0; color: var(--ad-text)">{{ isEdit ? '编辑报价' : '新建报价' }}</h2>
 
-    <!-- 报价工作流流程图 -->
+    <!-- 报价工作流流程图按钮 -->
     <QuoteWorkflow
-      v-if="isEdit"
       :current-status="quote?.status || 'draft'"
-      :is-existing="true"
+      :is-existing="isEdit"
       :saving="saving"
       :converting="converting"
       :reverting="reverting"
@@ -18,6 +17,7 @@
       @confirm="handleConfirm"
       @convert="handleConvert"
       @revert="handleRevertToDraft"
+      @preview="previewVisible = true"
     />
 
     <el-card shadow="never" class="section-card">
@@ -275,14 +275,9 @@
       </el-row>
     </el-card>
 
-    <div style="margin-top: 24px; display: flex; gap: 12px; align-items: center">
-      <el-button type="success" @click="previewVisible = true">
-        <el-icon style="margin-right: 4px"><View /></el-icon>
-        预览
-      </el-button>
-    </div>
-
+    <!-- 预览弹窗 -->
     <QuotePreview :visible="previewVisible" :quote-id="quoteId" :current-items="items" @close="previewVisible = false" />
+
     <div v-if="quote?.status === 'confirmed'" style="margin-top: 8px; color: var(--ad-text-secondary); font-size: 13px">
       如需修改报价，请先将报价转成草稿
     </div>
