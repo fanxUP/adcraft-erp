@@ -124,7 +124,7 @@ const emit = defineEmits<{
   change: [status: string]
 }>()
 
-const allStatuses = ['confirmed', 'in_progress', 'in_production', 'in_installation', 'completed', 'cancelled']
+const allStatuses = ['pending_confirm', 'confirmed', 'in_progress', 'in_production', 'in_installation', 'completed', 'cancelled']
 
 const currentIdx = computed(() => {
   const idx = allStatuses.indexOf(props.currentStatus)
