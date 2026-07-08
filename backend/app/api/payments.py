@@ -288,6 +288,65 @@ async def get_project_costs_summary(
     return success({"costs": costs})
 
 
+@cost_router.get("/template")
+async def download_project_cost_template(
+    current_user: User = Depends(get_current_user),
+):
+    """Download an Excel template for importing project costs."""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "成本导入模板"
+
+    # Header row style
+    header_font = Font(name="微软雅黑", bold=True, size=11, color="FFFFFF")
+    header_fill = PatternFill(start_color="409EFF", end_color="409EFF", fill_type="solid")
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
+    )
+
+    # Column headers
+    headers = ["成本类别", "金额", "描述", "成本日期", "备注"]
+    col_widths = [18, 14, 30, 18, 30]
+
+    for col_idx, (header, width) in enumerate(zip(headers, col_widths), 1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+        ws.column_dimensions[chr(64 + col_idx)].width = width
+
+    # Example row
+    example_data = ["人工/工时费", 500.00, "安装工人加班", "2026-07-08", "示例数据，可删除"]
+    for col_idx, val in enumerate(example_data, 1):
+        cell = ws.cell(row=2, column=col_idx, value=val)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    # Notes row
+    ws.merge_cells("A4:E4")
+    note_cell = ws.cell(row=4, column=1, 
+        value="说明：成本类别可选值 — 人工/工时费、运输/物流费、安装杂费、其他")
+    note_cell.font = Font(name="微软雅黑", size=9, color="999999", italic=True)
+
+    # Save to BytesIO
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=项目成本导入模板.xlsx"},
+    )
+
+
 @cost_router.get("/{cost_id}")
 async def get_project_cost(
     cost_id: str,

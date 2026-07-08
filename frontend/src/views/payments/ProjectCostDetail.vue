@@ -207,6 +207,11 @@
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 13px">
         导入的成本将自动关联到订单 <b>{{ order?.order_no }}</b>
       </p>
+      <div style="margin-bottom: 12px;">
+        <el-button size="small" @click="downloadTemplate">
+          <el-icon><Download /></el-icon> 下载导入模板
+        </el-button>
+      </div>
       <el-upload
         ref="uploadRef"
         :auto-upload="false"
@@ -255,7 +260,7 @@ import {
 import { getOrder } from '@/api/orders'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Plus, Delete } from '@element-plus/icons-vue'
+import { ArrowLeft, Plus, Delete, Download } from '@element-plus/icons-vue'
 import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, AttachmentResponse } from '@/types/api'
 
 const route = useRoute()
@@ -343,6 +348,29 @@ function openImport() {
 
 function onFileChange(file: unknown) {
   selectedFile.value = file.raw
+}
+
+function downloadTemplate() {
+  const token = localStorage.getItem('token')
+  const url = '/api/v1/project-costs/template'
+  fetch(url, { headers: { Authorization: 'Bearer ' + token } })
+    .then(function(res) {
+      if (!res.ok) throw new Error('Download failed')
+      return res.blob()
+    })
+    .then(function(blob) {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = '项目成本导入模板.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    })
+    .catch(function() {
+      ElMessage.error('下载模板失败')
+    })
 }
 
 async function fetchOrder() {
