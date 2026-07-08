@@ -491,25 +491,28 @@ function handlePrint() {
     background: white !important;
     padding: 0 !important;
     margin: 0 auto !important;
+    width: 185mm;
     max-width: 185mm;
+    box-sizing: border-box;
   }
 
   #__print_container__ .preview-table {
     table-layout: fixed;
-    width: auto;
+    width: 100%;
   }
 
-  #__print_container__ .preview-table thead th:nth-child(1) { width: 22px; }
-  #__print_container__ .preview-table thead th:nth-child(2) { width: 82px; }
-  #__print_container__ .preview-table thead th:nth-child(3) { width: 82px; }
-  #__print_container__ .preview-table thead th:nth-child(4) { width: 70px; }
-  #__print_container__ .preview-table thead th:nth-child(5) { width: 38px; }
-  #__print_container__ .preview-table thead th:nth-child(6) { width: 30px; }
-  #__print_container__ .preview-table thead th:nth-child(7) { width: 26px; }
-  #__print_container__ .preview-table thead th:nth-child(8) { width: 56px; }
-  #__print_container__ .preview-table thead th:nth-child(9) { width: 62px; }
-  #__print_container__ .preview-table thead th:nth-child(10) { width: 38px; }
-  #__print_container__ .preview-table thead th:nth-child(11) { width: 82px; }
+  /* 列宽按比例分配（总宽100%，基于原始px比例换算）*/
+  #__print_container__ .preview-table thead th:nth-child(1) { width: 3.7%; }
+  #__print_container__ .preview-table thead th:nth-child(2) { width: 14%; }
+  #__print_container__ .preview-table thead th:nth-child(3) { width: 14%; }
+  #__print_container__ .preview-table thead th:nth-child(4) { width: 12%; }
+  #__print_container__ .preview-table thead th:nth-child(5) { width: 6.5%; }
+  #__print_container__ .preview-table thead th:nth-child(6) { width: 5%; }
+  #__print_container__ .preview-table thead th:nth-child(7) { width: 4.5%; }
+  #__print_container__ .preview-table thead th:nth-child(8) { width: 9.5%; }
+  #__print_container__ .preview-table thead th:nth-child(9) { width: 10.5%; }
+  #__print_container__ .preview-table thead th:nth-child(10) { width: 6.5%; }
+  #__print_container__ .preview-table thead th:nth-child(11) { width: 14%; }
 
   #__print_container__ .preview-table th,
   #__print_container__ .preview-table td {
@@ -541,6 +544,12 @@ function handlePrint() {
   #__print_container__ .preview-table td:nth-child(4) .wrap-text,
   #__print_container__ .preview-table td:nth-child(11) .wrap-text {
     max-width: none;
+  }
+
+    /* 信息行与表格等宽 */
+  #__print_container__ .preview-info {
+    width: 100%;
+    box-sizing: border-box;
   }
 
   #__print_container__ .preview-signatures {
