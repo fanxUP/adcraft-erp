@@ -1,5 +1,5 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, AttachmentResponse, DebtResponse } from '@/types/api'
+import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse } from '@/types/api'
 
 export function getPayments(params?: { page?: number; page_size?: number; order_id?: string; customer_id?: string; status?: string }) { return get<PaginatedData<PaymentResponse>>('/payments/', { params }) }
 export function getPayment(id: string) { return get<PaymentResponse>(`/payments/${id}`) }
@@ -73,6 +73,10 @@ export function deleteProjectCostAttachment(attachmentId: string) {
 }
 
 // ── Cost Debts ──
+
+export function getQuotesForCost(params?: { page?: number; page_size?: number; keyword?: string }) {
+  return get<PaginatedData<QuoteCostResponse>>('/project-costs/quotes', { params })
+}
 
 export function getCostDebts(params?: { page?: number; page_size?: number; keyword?: string; is_settled?: boolean }) {
   return get<PaginatedData<DebtResponse>>('/project-costs/debts/list', { params })

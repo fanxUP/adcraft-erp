@@ -264,6 +264,8 @@ async def list_project_costs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     order_id: str | None = None,
+    quote_id: str | None = None,
+    source_type: str | None = None,
     category: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -272,7 +274,8 @@ async def list_project_costs(
 ):
     service = ProjectCostService(db)
     oid = UUID(order_id) if order_id else None
-    costs, total = await service.list_costs(page, page_size, oid, category, date_from, date_to)
+    qid = UUID(quote_id) if quote_id else None
+    costs, total = await service.list_costs(page, page_size, oid, qid, source_type, category, date_from, date_to)
     return success_paginated(costs, total, page, page_size)
 
 
@@ -347,6 +350,58 @@ async def download_project_cost_template(
     )
 
 
+@cost_router.get("/quotes")
+async def list_quotes_for_cost(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取可登记成本的报价单列表"""
+    from app.models.quote import Quote as QuoteModel
+    from app.models.customer import Customer as CustomerModel
+    from app.repositories.project_cost_repo import ProjectCostRepository
+
+    from sqlalchemy import or_, select, func
+
+    q = select(QuoteModel).where(QuoteModel.deleted_at.is_(None))
+    if keyword:
+        fuzzy = f"%{keyword}%"
+        q = q.outerjoin(CustomerModel, QuoteModel.customer_id == CustomerModel.id).where(
+            or_(
+                QuoteModel.quote_no.ilike(fuzzy),
+                QuoteModel.project_name.ilike(fuzzy),
+                CustomerModel.name.ilike(fuzzy),
+            )
+        )
+    count_q = select(func.count()).select_from(q.subquery())
+    total = (await db.execute(count_q)).scalar()
+    q = q.order_by(QuoteModel.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(q)
+    quotes = result.scalars().all()
+
+    # Get cost summaries for these quotes
+    repo = ProjectCostRepository(db)
+    quote_ids = [q.id for q in quotes]
+    cost_map = {}
+    if quote_ids:
+        cost_map = await repo.get_quote_costs_summary(quote_ids)
+
+    items = []
+    for q in quotes:
+        items.append({
+            "id": str(q.id),
+            "quote_no": q.quote_no,
+            "project_name": q.project_name,
+            "customer_name": q.customer_name or (q.customer.name if q.customer else None),
+            "status": q.status,
+            "total_amount": float(q.total_amount),
+            "cost_amount": float(cost_map.get(str(q.id), 0)),
+        })
+    return success_paginated(items, total, page, page_size)
+
+
 @cost_router.get("/debts/list")
 async def list_cost_debts(
     page: int = Query(1, ge=1),
@@ -404,8 +459,15 @@ async def create_project_cost(
     current_user: User = Depends(get_current_user),
 ):
     service = ProjectCostService(db)
+    payload = data.model_dump()
+    # Validate source_id presence
+    source_type = payload.get("source_type", "order")
+    if source_type == "quote" and not payload.get("quote_id"):
+        return {"code": 40001, "message": "报价单ID不能为空", "data": None}
+    if source_type == "order" and not payload.get("order_id"):
+        return {"code": 40001, "message": "订单ID不能为空", "data": None}
     try:
-        cost = await service.create_cost(data.model_dump(), current_user.id)
+        cost = await service.create_cost(payload, current_user.id)
     except ValueError as e:
         return {"code": 40001, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
@@ -458,6 +520,8 @@ async def delete_project_cost(
 async def import_project_costs(
     file: UploadFile = File(...),
     order_id: str | None = None,
+    quote_id: str | None = None,
+    source_type: str = "order",
     request: Request = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -467,7 +531,12 @@ async def import_project_costs(
     content = await file.read()
     service = ProjectCostService(db)
     try:
-        result = await service.import_from_excel(BytesIO(content), current_user.id, order_id=UUID(order_id) if order_id else None)
+        result = await service.import_from_excel(
+            BytesIO(content), current_user.id,
+            order_id=UUID(order_id) if order_id else None,
+            quote_id=UUID(quote_id) if quote_id else None,
+            source_type=source_type,
+        )
     except Exception as e:
         return {"code": 40001, "message": f"导入失败: {str(e)}", "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,

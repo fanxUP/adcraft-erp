@@ -8,6 +8,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from app.models.project_cost import ProjectCost
+from app.models.quote import Quote
 from app.models.task import Attachment
 from app.repositories.project_cost_repo import ProjectCostRepository
 from app.repositories.task_repo import AttachmentRepository
@@ -31,12 +32,14 @@ class ProjectCostService:
         page: int,
         page_size: int,
         order_id: UUID | None = None,
+        quote_id: UUID | None = None,
+        source_type: str | None = None,
         category: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
     ) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        costs, total = await self.repo.list_costs(skip, page_size, order_id, category, date_from, date_to)
+        costs, total = await self.repo.list_costs(skip, page_size, order_id, quote_id, source_type, category, date_from, date_to)
         result = [self._to_dict(c) for c in costs]
         # Populate attachment counts
         if result:
@@ -69,16 +72,34 @@ class ProjectCostService:
         return d
 
     async def create_cost(self, data: dict, created_by: UUID) -> dict:
-        order_id = UUID(data["order_id"])
-        # Look up order to get customer_id and project_name
-        result = await self.db.execute(
-            select(Order.id, Order.customer_id, Order.project_name).where(Order.id == order_id)
-        )
-        order_row = result.one_or_none()
-        if not order_row:
-            raise ValueError("订单不存在")
+        source_type = data.get("source_type", "order")
+        customer_id_val = None
+        project_name_val = None
+        order_id_val = None
+        quote_id_val = None
 
-        order_id_val, customer_id_val, project_name_val = order_row
+        if source_type == "quote":
+            quote_id = UUID(data["quote_id"])
+            result = await self.db.execute(
+                select(Quote.id, Quote.customer_id, Quote.project_name).where(Quote.id == quote_id)
+            )
+            quote_row = result.one_or_none()
+            if not quote_row:
+                raise ValueError("报价单不存在")
+            quote_id_val = quote_row[0]
+            customer_id_val = quote_row[1]
+            project_name_val = quote_row[2]
+        else:
+            order_id = UUID(data["order_id"])
+            result = await self.db.execute(
+                select(Order.id, Order.customer_id, Order.project_name).where(Order.id == order_id)
+            )
+            order_row = result.one_or_none()
+            if not order_row:
+                raise ValueError("订单不存在")
+            order_id_val = order_row[0]
+            customer_id_val = order_row[1]
+            project_name_val = order_row[2]
 
         debt_amount = data.get("debt_amount")
         if debt_amount is not None:
@@ -88,8 +109,10 @@ class ProjectCostService:
 
         cost = ProjectCost(
             cost_no=await generate_project_cost_no(self.db),
+            source_type=source_type,
             order_id=order_id_val,
-            customer_id=customer_id_val,
+            quote_id=quote_id_val,
+            customer_id=UUID(customer_id_val) if customer_id_val else None,
             category=data["category"],
             amount=data["amount"],
             description=data.get("description"),
@@ -109,7 +132,10 @@ class ProjectCostService:
         return {
             "id": str(cost.id),
             "cost_no": cost.cost_no,
-            "order_id": str(cost.order_id),
+            "source_type": cost.source_type,
+            "order_id": str(cost.order_id) if cost.order_id else None,
+            "quote_id": str(cost.quote_id) if cost.quote_id else None,
+            "quote_no": cost.quote.quote_no if cost.quote else None,
             "order_item_id": str(cost.order_item_id) if cost.order_item_id else None,
             "order_item_name": cost.order_item.item_name if cost.order_item else None,
             "customer_id": str(cost.customer_id) if cost.customer_id else None,
@@ -198,7 +224,12 @@ class ProjectCostService:
         result_list = []
         for c in costs:
             d = self._to_dict(c)
-            d["order_no"] = c.order.order_no if c.order else None
+            if c.source_type == "quote" and c.quote:
+                d["quote_no"] = c.quote.quote_no
+                d["order_no"] = None
+            elif c.order:
+                d["order_no"] = c.order.order_no
+                d["quote_no"] = None
             d["customer_name"] = c.customer.name if c.customer else None
             result_list.append(d)
         return result_list, total
@@ -244,11 +275,11 @@ class ProjectCostService:
 
         return self._to_dict(c)
 
-    async def import_from_excel(self, file: BytesIO, created_by: UUID, order_id: UUID | None = None) -> dict:
+    async def import_from_excel(self, file: BytesIO, created_by: UUID, order_id: UUID | None = None, quote_id: UUID | None = None, source_type: str = "order") -> dict:
         """Parse Excel file and create ProjectCost records.
-        When order_id is provided, all rows are assigned to that order and the
+        When order_id or quote_id is provided, all rows are assigned to that entity and the
         Excel only needs columns: 成本类别, 金额, 描述(可选), 成本日期(可选), 备注(可选).
-        When order_id is None, the Excel must include column: 订单编号, 成本类别, 金额, ...
+        When neither is provided, the Excel must include column: 订单编号/报价单编号, 成本类别, 金额, ...
         """
         import openpyxl
 
@@ -283,7 +314,9 @@ class ProjectCostService:
                             cost_date = datetime.strptime(cost_date_str, "%Y-%m-%d")
 
                     await self.create_cost({
-                        "order_id": str(order_id),
+                        "source_type": source_type,
+                        "order_id": str(order_id) if order_id else None,
+                        "quote_id": str(quote_id) if quote_id else None,
                         "category": category,
                         "amount": amount,
                         "description": description,
@@ -320,7 +353,8 @@ class ProjectCostService:
                             cost_date = datetime.strptime(cost_date_str, "%Y-%m-%d")
 
                     await self.create_cost({
-                        "order_id": str(order.id),
+                        "source_type": source_type,
+                        "order_id": str(order.id) if order_id else None,
                         "category": category,
                         "amount": amount,
                         "description": description,
@@ -349,15 +383,23 @@ class ProjectCostService:
         return {str(row[0]): row[1] for row in result.all()}
 
     def _to_dict(self, c: ProjectCost) -> dict:
+        project_name = None
+        if c.source_type == "quote" and c.quote:
+            project_name = c.quote.project_name
+        elif c.order:
+            project_name = c.order.project_name
         return {
             "id": str(c.id),
             "cost_no": c.cost_no,
-            "order_id": str(c.order_id),
+            "source_type": c.source_type,
+            "order_id": str(c.order_id) if c.order_id else None,
+            "quote_id": str(c.quote_id) if c.quote_id else None,
+            "quote_no": c.quote.quote_no if c.quote else None,
             "order_item_id": str(c.order_item_id) if c.order_item_id else None,
             "order_item_name": c.order_item.item_name if c.order_item else None,
             "customer_id": str(c.customer_id) if c.customer_id else None,
             "customer_name": c.customer.name if c.customer else None,
-            "project_name": c.order.project_name if c.order else None,
+            "project_name": project_name,
             "category": c.category,
             "amount": float(c.amount),
             "payment_method": c.payment_method,

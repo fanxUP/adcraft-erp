@@ -352,7 +352,10 @@ export interface ExpenseResponse {
 export interface ProjectCostResponse {
   id: string
   cost_no: string
-  order_id: string
+  source_type: string
+  order_id?: string
+  quote_id?: string
+  quote_no?: string
   order_item_id?: string
   order_item_name?: string
   customer_id?: string
@@ -379,8 +382,11 @@ export interface ProjectCostResponse {
 export interface DebtResponse {
   id: string
   cost_no: string
-  order_id: string
+  source_type: string
+  order_id?: string
+  quote_id?: string
   order_no?: string
+  quote_no?: string
   project_name?: string
   customer_id?: string
   customer_name?: string
@@ -396,6 +402,16 @@ export interface DebtResponse {
   remark?: string
   created_by?: string
   created_at?: string
+}
+
+export interface QuoteCostResponse {
+  id: string
+  quote_no: string
+  project_name: string
+  customer_name?: string
+  status: string
+  total_amount: number
+  cost_amount: number
 }
 
 export interface ProjectCostImportResponse {

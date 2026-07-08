@@ -2,8 +2,8 @@
   <div class="page">
     <!-- Order info header -->
     <div class="order-header">
-      <el-button text @click="$router.push('/project-costs')">
-        <el-icon><ArrowLeft /></el-icon> 返回订单列表
+      <el-button text @click="goBack">
+        <el-icon><ArrowLeft /></el-icon> 返回列表
       </el-button>
       <el-card v-if="order" shadow="never" class="order-card" style="margin-top: 12px">
         <div class="order-info-row">
@@ -129,8 +129,8 @@
     <!-- Create/Edit Dialog -->
     <el-dialog v-model="showDialog" :title="isEditing ? '编辑成本' : '登记成本'" width="520px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
-        <el-form-item label="订单">
-          <el-input :value="order?.order_no + ' ' + order?.project_name" disabled />
+        <el-form-item :label="isQuote ? '报价单' : '订单'">
+          <el-input :value="(isQuote ? (order?.quote_no || '') : (order?.order_no || '')) + ' ' + (order?.project_name || '')" disabled />
         </el-form-item>
         <el-form-item label="成本类别" required>
           <el-select
@@ -243,7 +243,7 @@
         <b>成本类别、金额、描述(可选)、成本日期(可选)、备注(可选)</b>
       </p>
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 13px">
-        导入的成本将自动关联到订单 <b>{{ order?.order_no }}</b>
+        导入的成本将自动关联到 <b>{{ isQuote ? (order?.quote_no || '报价单') : (order?.order_no || '订单') }}</b>
       </p>
       <div style="margin-bottom: 12px;">
         <el-button size="small" @click="downloadTemplate">
@@ -290,7 +290,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   getProjectCosts, createProjectCost, updateProjectCost, deleteProjectCost, importProjectCosts,
   getProjectCostAttachments, uploadProjectCostAttachment, deleteProjectCostAttachment,
@@ -302,6 +302,7 @@ import { ArrowLeft, Plus, Delete, Download } from '@element-plus/icons-vue'
 import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, AttachmentResponse } from '@/types/api'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 
 const CATEGORIES = ['人工/工时费', '运输/物流费', '安装杂费', '其他']
@@ -328,7 +329,12 @@ const uploadingAtt = ref(false)
 const previewVisible = ref(false)
 const previewUrl = ref('')
 
-const orderId = route.params.orderId as string
+// Detect source type: order or quote
+const isQuote = computed(() => route.path.includes('/quote-costs/'))
+const sourceId = computed(() => {
+  if (isQuote.value) return route.params.quoteId as string
+  return route.params.orderId as string
+})
 
 const totalCost = computed(() => {
   return list.value.reduce((sum, c) => sum + (c.amount || 0), 0)
@@ -424,7 +430,12 @@ function downloadTemplate() {
 
 async function fetchOrder() {
   try {
-    order.value = await getOrder(orderId)
+    if (isQuote.value) {
+      const { getQuote } = await import('@/api/quotes')
+      order.value = await getQuote(sourceId.value)
+    } else {
+      order.value = await getOrder(sourceId.value)
+    }
   } catch { /* ignore */ }
 }
 
@@ -434,7 +445,12 @@ async function fetchData() {
     const params: Record<string, unknown> = {
       page: page.value,
       page_size: pageSize.value,
-      order_id: orderId,
+    }
+    if (isQuote.value) {
+      params.quote_id = sourceId.value
+      params.source_type = 'quote'
+    } else {
+      params.order_id = sourceId.value
     }
     if (filterCategory.value) params.category = filterCategory.value
     if (dateRange.value) {
@@ -467,18 +483,35 @@ async function handleSave() {
       await updateProjectCost(editingId.value, payload)
       ElMessage.success('成本已更新')
     } else {
-      await createProjectCost({
-        order_id: orderId,
-        category: form.category,
-        amount: form.amount,
-        cost_date: form.cost_date || undefined,
-        description: form.description || undefined,
-        remark: form.remark || undefined,
-        order_item_id: form.order_item_id || undefined,
-        payment_method: form.payment_method || undefined,
-        payee_company_name: form.payee_company_name || undefined,
-        debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,
-      })
+      if (isQuote.value) {
+        await createProjectCost({
+          source_type: 'quote',
+          quote_id: sourceId.value,
+          category: form.category,
+          amount: form.amount,
+          cost_date: form.cost_date || undefined,
+          description: form.description || undefined,
+          remark: form.remark || undefined,
+          order_item_id: form.order_item_id || undefined,
+          payment_method: form.payment_method || undefined,
+          payee_company_name: form.payee_company_name || undefined,
+          debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,
+        })
+      } else {
+        await createProjectCost({
+          source_type: 'order',
+          order_id: sourceId.value,
+          category: form.category,
+          amount: form.amount,
+          cost_date: form.cost_date || undefined,
+          description: form.description || undefined,
+          remark: form.remark || undefined,
+          order_item_id: form.order_item_id || undefined,
+          payment_method: form.payment_method || undefined,
+          payee_company_name: form.payee_company_name || undefined,
+          debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,
+        })
+      }
       ElMessage.success('成本登记成功')
     }
     showDialog.value = false
@@ -506,6 +539,14 @@ async function handleDelete(row: ProjectCostResponse) {
   }
 }
 
+function goBack() {
+  if (isQuote.value && window.history.length > 1) {
+    history.back()
+  } else {
+    router.push('/project-costs')
+  }
+}
+
 async function handleImport() {
   if (!selectedFile.value) {
     ElMessage.warning('请选择Excel文件')
@@ -513,7 +554,7 @@ async function handleImport() {
   }
   importing.value = true
   try {
-    const result = await importProjectCosts(selectedFile.value, orderId)
+    const result = await importProjectCosts(selectedFile.value, isQuote.value ? undefined : sourceId.value, isQuote.value ? sourceId.value : undefined, isQuote.value ? 'quote' : 'order')
     importResult.value = result
     if (result.created > 0) {
       fetchData()
