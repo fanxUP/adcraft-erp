@@ -114,7 +114,7 @@
     />
 
     <!-- Create/Edit Dialog -->
-    <el-dialog v-model="showDialog" :title="isEditing ? '编辑成本' : '登记成本'" width="520px">
+    <el-dialog v-model="showDialog" :title="isEditing ? '编辑成本' : '登记成本'" width="520px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-form-item label="订单">
           <el-input :value="order?.order_no + ' ' + order?.project_name" disabled />
@@ -199,7 +199,7 @@
     </el-dialog>
 
     <!-- Import Dialog -->
-    <el-dialog v-model="showImport" title="导入Excel" width="480px">
+    <el-dialog v-model="showImport" title="导入Excel" width="480px" :close-on-click-modal="false">
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary)">
         Excel 需包含以下列：<br />
         <b>成本类别、金额、描述(可选)、成本日期(可选)、备注(可选)</b>
