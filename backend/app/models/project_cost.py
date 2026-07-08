@@ -19,6 +19,7 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
     category: Mapped[str] = mapped_column(String(64), nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="付款方式：现金支付/微信支付/转账支付/对公支付/其它支付")
+    payee_company_name: Mapped[str | None] = mapped_column(String(200), nullable=True, comment="对方收款公司名称")
     debt_amount: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True, default=0, comment="欠款金额")
     is_debt: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否为欠款")
     is_settled: Mapped[bool] = mapped_column(Boolean, default=False, comment="欠款是否已结清")
