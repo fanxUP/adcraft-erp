@@ -89,6 +89,7 @@ class ProjectCostService:
             cost_date=datetime.fromisoformat(data["cost_date"]) if data.get("cost_date") else None,
             receipt_url=data.get("receipt_url"),
             remark=data.get("remark"),
+            order_item_id=UUID(data["order_item_id"]) if data.get("order_item_id") else None,
             created_by=created_by,
         )
         await self.repo.create(cost)
@@ -97,6 +98,8 @@ class ProjectCostService:
             "id": str(cost.id),
             "cost_no": cost.cost_no,
             "order_id": str(cost.order_id),
+            "order_item_id": str(cost.order_item_id) if cost.order_item_id else None,
+            "order_item_name": cost.order_item.item_name if cost.order_item else None,
             "customer_id": str(cost.customer_id) if cost.customer_id else None,
             "customer_name": None,  # populated by list query via relationship
             "project_name": project_name_val,
@@ -243,6 +246,8 @@ class ProjectCostService:
             "id": str(c.id),
             "cost_no": c.cost_no,
             "order_id": str(c.order_id),
+            "order_item_id": str(c.order_item_id) if c.order_item_id else None,
+            "order_item_name": c.order_item.item_name if c.order_item else None,
             "customer_id": str(c.customer_id) if c.customer_id else None,
             "customer_name": c.customer.name if c.customer else None,
             "project_name": c.order.project_name if c.order else None,

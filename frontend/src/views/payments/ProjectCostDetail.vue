@@ -71,6 +71,12 @@
           <el-tag size="small">{{ row.category }}</el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="分项" min-width="140" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span v-if="row.order_item_name">{{ row.order_item_name }}</span>
+          <span v-else style="color: #c0c4cc">-</span>
+        </template>
+      </el-table-column>
       <el-table-column label="金额" width="140" align="right">
         <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
       </el-table-column>
@@ -129,6 +135,19 @@
             style="width: 100%"
           >
             <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="分项">
+          <el-select v-model="form.order_item_id" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
+            <el-option
+              v-for="item in orderItems"
+              :key="item.id"
+              :label="item.item_name"
+              :value="item.id"
+            >
+              <span>{{ item.item_name }}</span>
+              <span v-if="item.group_name" style="float: right; color: #909399; font-size: 12px">{{ item.group_name }}</span>
+            </el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="金额" required>
@@ -295,12 +314,15 @@ const totalCost = computed(() => {
   return list.value.reduce((sum, c) => sum + (c.amount || 0), 0)
 })
 
+const orderItems = computed(() => order.value?.items || [])
+
 const form = reactive({
   category: '',
   amount: 0,
   cost_date: '',
   description: '',
   remark: '',
+  order_item_id: '',
 })
 
 function statusLabel(s: string) {
@@ -316,7 +338,7 @@ function statusColor(s: string) {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, cost_date: '', description: '', remark: '' })
+  Object.assign(form, { category: '', amount: 0, cost_date: '', description: '', remark: '', order_item_id: '' })
   isEditing.value = false
   editingId.value = ''
   dialogAttachments.value = []
@@ -335,6 +357,7 @@ function openEdit(row: ProjectCostResponse) {
   form.cost_date = row.cost_date?.slice(0, 10) || ''
   form.description = row.description || ''
   form.remark = row.remark || ''
+  form.order_item_id = row.order_item_id || ''
   dialogAttachments.value = []
   showDialog.value = true
   loadAttachments(row.id)
@@ -410,6 +433,7 @@ async function handleSave() {
       if (form.cost_date) payload.cost_date = form.cost_date
       if (form.description) payload.description = form.description
       if (form.remark) payload.remark = form.remark
+      if (form.order_item_id) payload.order_item_id = form.order_item_id
       await updateProjectCost(editingId.value, payload)
       ElMessage.success('成本已更新')
     } else {
@@ -420,6 +444,7 @@ async function handleSave() {
         cost_date: form.cost_date || undefined,
         description: form.description || undefined,
         remark: form.remark || undefined,
+        order_item_id: form.order_item_id || undefined,
       })
       ElMessage.success('成本登记成功')
     }
