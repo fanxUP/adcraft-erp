@@ -6,6 +6,20 @@
 
     <h2 style="margin: 16px 0; color: var(--ad-text)">{{ isEdit ? '编辑报价' : '新建报价' }}</h2>
 
+    <!-- 报价工作流流程图 -->
+    <QuoteWorkflow
+      v-if="isEdit"
+      :current-status="quote?.status || 'draft'"
+      :is-existing="true"
+      :saving="saving"
+      :converting="converting"
+      :reverting="reverting"
+      @save="handleSave"
+      @confirm="handleConfirm"
+      @convert="handleConvert"
+      @revert="handleRevertToDraft"
+    />
+
     <el-card shadow="never" class="section-card">
       <el-form :model="form" label-width="100px" inline>
         <el-form-item label="客户" required>
@@ -262,14 +276,10 @@
     </el-card>
 
     <div style="margin-top: 24px; display: flex; gap: 12px; align-items: center">
-      <el-button v-if="!isReadonly && quote?.status !== 'confirmed'" type="primary" :loading="saving" @click="handleSave">保存草稿</el-button>
-      <el-button v-if="!isReadonly && quote?.status === 'confirmed'" type="warning" :loading="reverting" @click="handleRevertToDraft">转草稿</el-button>
-      <el-button v-if="isEdit && quote?.status === 'draft'" type="success" @click="handleConfirm">确认报价</el-button>
-      <el-button v-if="isEdit && quote?.status === 'confirmed'" type="danger" :loading="converting" @click="handleConvert">转订单</el-button>
-      <el-button type="success" @click="previewVisible = true">预览</el-button>
-      <el-tag v-if="isReadonly" size="large" :type="quote?.status === 'converted' ? 'success' : 'danger'" style="font-size: 15px; padding: 8px 16px">
-        {{ quote?.status === 'converted' ? '已转订单，不可编辑' : '已作废，不可编辑' }}
-      </el-tag>
+      <el-button type="success" @click="previewVisible = true">
+        <el-icon style="margin-right: 4px"><View /></el-icon>
+        预览
+      </el-button>
     </div>
 
     <QuotePreview :visible="previewVisible" :quote-id="quoteId" :current-items="items" @close="previewVisible = false" />
@@ -281,6 +291,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import QuoteWorkflow from './QuoteWorkflow.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createQuote, getQuote, updateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft } from '@/api/quotes'
 import { getCustomers } from '@/api/customers'
