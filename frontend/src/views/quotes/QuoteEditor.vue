@@ -285,9 +285,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import QuoteWorkflow from './QuoteWorkflow.vue'
 import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave } from 'vue-router'
 import { createQuote, getQuote, updateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft } from '@/api/quotes'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -306,6 +307,63 @@ const quote = ref<QuoteDetailResponse | null>(null)
 const customerOptions = ref<CustomerResponse[]>([])
 const previewVisible = ref(false)
 const quoteId = computed(() => route.params.id as string)
+
+// ===== 未保存修改检测 =====
+const dirty = ref(false)
+const isLoaded = ref(false)
+let cleanSnapshot: string = ''
+
+function captureCleanSnapshot() {
+  cleanSnapshot = JSON.stringify({
+    form: { ...form },
+    items: items.value.map(i => ({ ...i, subtotal_amount: calcSubtotal(i) })),
+  })
+  isLoaded.value = true
+  dirty.value = false
+}
+
+function hasUnsavedChanges(): boolean {
+  if (!isLoaded.value) return false
+  const current = JSON.stringify({
+    form: { ...form },
+    items: items.value.map(i => ({ ...i, subtotal_amount: calcSubtotal(i) })),
+  })
+  return current !== cleanSnapshot
+}
+
+// 监听表单和明细变化
+watch(
+  [form, items],
+  () => {
+    dirty.value = hasUnsavedChanges()
+  },
+  { deep: true }
+)
+
+// 路由离开守卫
+onBeforeRouteLeave((to, from, next) => {
+  if (!dirty.value) return next()
+  ElMessageBox.confirm(
+    '您有未保存的修改，确定要离开吗？离开后修改将丢失。',
+    '未保存的修改',
+    { confirmButtonText: '离开', cancelButtonText: '取消', type: 'warning' }
+  ).then(() => next()).catch(() => next(false))
+})
+
+// 浏览器刷新/关闭
+function handleBeforeUnload(e: BeforeUnloadEvent) {
+  if (dirty.value) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
 
 const form = reactive({
   customer_id: '',
@@ -566,6 +624,7 @@ async function fetchQuote() {
     contact_phone: quote.value.contact_phone || '',
   })
   items.value = quote.value.items?.length ? quote.value.items.map(i => ({ ...i })) : [newItem()]
+  captureCleanSnapshot()
 }
 
 function isExistingCustomer(value: string): boolean {
@@ -630,6 +689,8 @@ async function handleSave() {
         items: cleanItems,
       })
       ElMessage.success('保存成功')
+      dirty.value = false
+      captureCleanSnapshot()
     } else {
       const cleanItems = items.value.map((item, idx) => ({
         ...(item.id ? { id: item.id } : {}),
@@ -678,6 +739,8 @@ async function handleSave() {
       // else: existing customer UUID stays as customer_id
       const result = await createQuote(payload)
       ElMessage.success('创建成功')
+      dirty.value = false
+      captureCleanSnapshot()
       const quoteId = result.id
       await router.replace(`/quotes/${quoteId}/edit`)
     }
@@ -692,6 +755,7 @@ async function handleConfirm() {
   })
   await confirmQuote(route.params.id as string)
   ElMessage.success('报价已确认')
+  dirty.value = false
   fetchQuote()
 }
 
