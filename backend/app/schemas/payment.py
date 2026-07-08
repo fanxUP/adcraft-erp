@@ -131,7 +131,9 @@ class ExpenseResponse(BaseModel):
 # ── Project Cost ──
 
 class ProjectCostCreate(BaseModel):
-    order_id: str
+    source_type: str = "order"
+    order_id: str | None = None
+    quote_id: str | None = None
     category: str
     amount: float
     description: str | None = None
@@ -150,12 +152,14 @@ class ProjectCostCreate(BaseModel):
             raise ValueError("成本金额必须大于0")
         return v
 
-    @field_validator("order_id")
+    @field_validator("order_id", "quote_id")
     @classmethod
-    def order_id_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
+    def source_id_check(cls, v: str | None, info) -> str | None:
+        if info.field_name == "order_id" and v is not None and not v.strip():
             raise ValueError("订单ID不能为空")
-        return v.strip()
+        if info.field_name == "quote_id" and v is not None and not v.strip():
+            raise ValueError("报价单ID不能为空")
+        return v.strip() if v else None
 
 
 class ProjectCostUpdate(BaseModel):
@@ -168,13 +172,18 @@ class ProjectCostUpdate(BaseModel):
     order_item_id: str | None = None
     payment_method: str | None = None
     payee_company_name: str | None = None
+    source_type: str | None = None
+    quote_id: str | None = None
     debt_amount: float | None = None
 
 
 class ProjectCostResponse(BaseModel):
     id: str
     cost_no: str
-    order_id: str
+    source_type: str = "order"
+    order_id: str | None = None
+    quote_id: str | None = None
+    quote_no: str | None = None
     order_item_id: str | None = None
     order_item_name: str | None = None
     customer_id: str | None = None
@@ -209,8 +218,11 @@ class DebtResponse(BaseModel):
     """欠款清单响应"""
     id: str
     cost_no: str
-    order_id: str
+    source_type: str = "order"
+    order_id: str | None = None
+    quote_id: str | None = None
     order_no: str | None = None
+    quote_no: str | None = None
     project_name: str | None = None
     customer_id: str | None = None
     customer_name: str | None = None
