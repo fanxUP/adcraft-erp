@@ -1,7 +1,7 @@
 """add deleted_at to outsource_tasks
 
 Revision ID: 20260709161647
-Revises: f8a9b0c1d2e3
+Revises: ad64d94c02a5
 Create Date: 2026-07-09 16:16:47.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "20260709161647"
-down_revision: Union[str, None] = "f8a9b0c1d2e3"
+down_revision: Union[str, None] = "ad64d94c02a5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
