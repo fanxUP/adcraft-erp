@@ -64,7 +64,7 @@
             <el-option v-for="v in vendors" :key="v.id" :label="v.name" :value="v.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="关联任务">
+        <el-form-item label="关联任务" prop="related_doc_id">
           <el-select v-model="form.related_doc_id" filterable clearable placeholder="请选择关联的报价单或订单" style="width: 100%" @change="onRelatedDocChange">
             <el-option-group label="报价单">
               <el-option v-for="q in quotes" :key="'q_' + q.id" :label="q.label" :value="q.id" />
