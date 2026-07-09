@@ -86,9 +86,10 @@ class OutsourceService:
         task = await self.task_repo.get_by_id(task_id)
         if not task:
             raise ValueError("外协任务不存在")
-        # 已取消的任务不能通过编辑改变状态
-        if task.status == "cancelled" and "status" in data:
-            data.pop("status")
+        # 编辑已取消的任务时自动恢复为待处理（重新激活）
+        if task.status == "cancelled":
+            data["status"] = "pending"
+            data["completed_at"] = None
         # Recalculate total if price or quantity changed
         if "unit_price" in data:
             price = Decimal(str(data["unit_price"]))
