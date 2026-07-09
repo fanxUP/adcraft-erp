@@ -124,6 +124,7 @@ const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
 
 
+const vendors = ref<{id: string; name: string}[]>([])
 const quotes = ref<{id: string; label: string}[]>([])
 const orders = ref<{id: string; label: string}[]>([])
 const form = reactive({
