@@ -133,6 +133,7 @@
         <el-table-column label="付款方式" width="120">
           <template #default="{ row }">{{ paymentMethodLabel(row.payment_method) }}</template>
         </el-table-column>
+        <el-table-column prop="payee_company_name" label="收款公司" min-width="150" show-overflow-tooltip />
         <el-table-column prop="paid_at" label="付款日期" width="120" />
         <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
       </el-table>
@@ -165,13 +166,13 @@ const vendors = ref<{id: string; name: string}[]>([])
 const payDialogVisible = ref(false)
 const paySaving = ref(false)
 const payTask = ref<OutsourceTaskResponse | null>(null)
-const payForm = ref({ amount: 0, payment_method: 'bank_transfer', paid_at: '', remark: '' })
+const payForm = ref({ amount: 0, payment_method: 'bank_transfer', payee_company_name: '', paid_at: '', remark: '' })
 const payRules = { amount: [{ required: true, message: '请输入付款金额', trigger: 'blur' }] }
 
 // 付款记录对话框
 const recordDialogVisible = ref(false)
 const recordTask = ref<OutsourceTaskResponse | null>(null)
-const paymentRecords = ref<{payment_no: string; amount: number; payment_method: string; paid_at: string; remark: string}[]>([])
+const paymentRecords = ref<{payment_no: string; amount: number; payment_method: string; payee_company_name?: string; paid_at: string; remark: string}[]>([])
 
 function paymentMethodLabel(val: string | null) {
   const map: Record<string, string> = { bank_transfer: '银行转账', wechat: '微信', alipay: '支付宝', cash: '现金' }
