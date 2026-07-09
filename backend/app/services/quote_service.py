@@ -106,12 +106,39 @@ class QuoteService:
 
             await self.calculate_quote(quote_id)
 
+        # 同步更新关联外协任务的描述信息（项目名称等）
+        from app.models.outsource import OutsourceTask
+        from sqlalchemy import select
+        tasks = (await self.db.execute(
+            select(OutsourceTask).where(
+                (OutsourceTask.related_doc_id == quote_id) & (OutsourceTask.related_doc_type == "quote")
+            )
+        )).scalars().all()
+        for task in tasks:
+            task.description = quote.project_name
+            if quote.total_amount is not None:
+                task.unit_price = float(quote.total_amount)
+                task.total_amount = float(quote.total_amount)
+        if tasks:
+            await self.db.flush()
+
         return self._quote_to_detail(quote)
 
     async def delete_quote(self, quote_id: UUID) -> bool:
+        """软删除报价单，同时级联删除关联的外协任务"""
         quote = await self.repo.get_by_id(quote_id)
         if not quote:
             return False
+        # 级联删除关联的外协任务（通过 related_doc_id）
+        from app.models.outsource import OutsourceTask
+        from sqlalchemy import select
+        tasks = (await self.db.execute(
+            select(OutsourceTask).where(
+                (OutsourceTask.related_doc_id == quote_id) & (OutsourceTask.related_doc_type == "quote")
+            )
+        )).scalars().all()
+        for task in tasks:
+            await self.db.delete(task)
         await self.repo.soft_delete(quote)
         return True
 
@@ -278,6 +305,23 @@ class QuoteService:
 
         quote.status = "converted"
         await self.db.flush()
+
+        # 同步更新关联外协任务：将 quote 引用更新为 order 引用（设置 order_id）
+        from app.models.outsource import OutsourceTask
+        from sqlalchemy import select
+        outsource_tasks = (await self.db.execute(
+            select(OutsourceTask).where(
+                (OutsourceTask.related_doc_id == quote_id) & (OutsourceTask.related_doc_type == "quote")
+            )
+        )).scalars().all()
+        for otask in outsource_tasks:
+            otask.order_id = order.id
+            otask.description = quote.project_name
+            if quote.total_amount is not None:
+                otask.unit_price = float(quote.total_amount)
+                otask.total_amount = float(quote.total_amount)
+        if outsource_tasks:
+            await self.db.flush()
 
         return {
             "id": str(order.id),

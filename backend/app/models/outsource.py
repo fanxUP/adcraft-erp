@@ -26,7 +26,7 @@ class OutsourceVendor(Base, TimestampMixin, SoftDeleteMixin):
     tasks: Mapped[list["OutsourceTask"]] = relationship(viewonly=True, lazy="selectin")
 
 
-class OutsourceTask(Base, TimestampMixin):
+class OutsourceTask(Base, TimestampMixin, SoftDeleteMixin):
     """外协任务"""
     __tablename__ = "outsource_tasks"
 

@@ -496,6 +496,7 @@ export interface OutsourceTaskResponse {
   completed_at?: string
   remark?: string
   created_at?: string
+  deleted_at?: string
 }
 
 export interface OutsourcePaymentResponse {

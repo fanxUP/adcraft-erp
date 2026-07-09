@@ -93,6 +93,7 @@ class OutsourceTaskResponse(BaseModel):
     completed_at: str | None = None
     remark: str | None = None
     created_at: str | None = None
+    deleted_at: str | None = None
 
 
 # ── Payment ──

@@ -2,7 +2,10 @@
   <div class="page">
     <div class="page-header">
       <h2>外协任务</h2>
-      <el-button type="danger" @click="handleCreate">新建外协任务</el-button>
+      <div style="display: flex; gap: 8px;">
+        <el-button type="danger" @click="handleCreate">新建外协任务</el-button>
+        <el-button v-if="isAdmin" @click="$router.push('/outsource/tasks/recycle')">回收站</el-button>
+      </div>
     </div>
 
     <div class="search-bar">
