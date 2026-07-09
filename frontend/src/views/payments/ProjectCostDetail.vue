@@ -161,20 +161,9 @@
           <el-input :value="(isQuote ? (order?.quote_no || '') : (order?.order_no || '')) + ' ' + (order?.project_name || '')" disabled />
         </el-form-item>
         <el-form-item label="分项">
-          <el-select v-if="isQuote" v-model="form.quote_item_id" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
+          <el-select v-model="selectedItemId" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
             <el-option
-              v-for="item in quoteItems"
-              :key="item.id"
-              :label="item.item_name"
-              :value="item.id"
-            >
-              <span>{{ item.item_name }}</span>
-              <span v-if="item.group_name" style="float: right; color: #909399; font-size: 12px">{{ item.group_name }}</span>
-            </el-option>
-          </el-select>
-          <el-select v-else v-model="form.order_item_id" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
-            <el-option
-              v-for="item in orderItems"
+              v-for="item in (isQuote ? quoteItems : orderItems)"
               :key="item.id"
               :label="item.item_name"
               :value="item.id"
@@ -394,6 +383,13 @@ const totalCost = computed(() => {
 
 const orderItems = computed(() => order.value?.items || [])
 const quoteItems = computed(() => order.value?.items || [])
+const selectedItemId = computed({
+  get: () => isQuote.value ? form.quote_item_id : form.order_item_id,
+  set: (val: string) => {
+    if (isQuote.value) form.quote_item_id = val
+    else form.order_item_id = val
+  },
+})
 
 const form = reactive({
   category: '',
