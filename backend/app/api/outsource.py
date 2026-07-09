@@ -10,7 +10,7 @@ from app.models.user import User
 from app.schemas.common import success, success_paginated, error
 from app.schemas.outsource import VendorCreate, VendorUpdate, OutsourceTaskCreate, OutsourceTaskUpdate, OutsourcePaymentCreate
 from app.services.outsource_service import OutsourceService
-from app.services.operation_log_service import log_operation, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
+from app.services.operation_log_service import log_operation, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, ACTION_STATUS_CHANGE
 from app.services.operation_log_service import OBJ_OUTSOURCE_VENDOR, OBJ_OUTSOURCE_TASK, OBJ_OUTSOURCE_PAYMENT
 
 router = APIRouter(prefix="/outsource", tags=["Outsource"])
