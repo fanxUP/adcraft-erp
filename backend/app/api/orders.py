@@ -23,7 +23,7 @@ class CostEntry(BaseModel):
 @router.get("/")
 async def list_orders(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=9999),
     status: str | None = None,
     customer_id: str | None = None,
     keyword: str | None = None,
@@ -39,7 +39,7 @@ async def list_orders(
 @router.get("/recycle/list")
 async def list_deleted_orders(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=9999),
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
