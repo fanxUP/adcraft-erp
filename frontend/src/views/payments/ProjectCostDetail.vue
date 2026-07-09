@@ -330,7 +330,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getProjectCosts, createProjectCost, updateProjectCost, deleteProjectCost, batchDeleteProjectCosts, importProjectCosts,
@@ -382,14 +382,16 @@ const totalCost = computed(() => {
 })
 
 const allItems = computed(() => order.value?.items || [])
-const selectedItemId = ref('')
-watch(selectedItemId, (val) => {
-  if (isQuote.value) form.quote_item_id = val
-  else form.order_item_id = val
+const selectedItemId = computed({
+  get: () => isQuote.value ? form.quote_item_id : form.order_item_id,
+  set: (val: string) => {
+    if (isQuote.value) {
+      form.quote_item_id = val || ''
+    } else {
+      form.order_item_id = val || ''
+    }
+  },
 })
-watch([() => form.order_item_id, () => form.quote_item_id], () => {
-  selectedItemId.value = isQuote.value ? form.quote_item_id : form.order_item_id
-}, { immediate: true })
 
 const form = reactive({
   category: '',
