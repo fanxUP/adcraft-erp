@@ -48,6 +48,7 @@ class OutsourceTaskCreate(BaseModel):
     vendor_id: str = Field(...)
     related_doc_id: str | None = None
     related_doc_type: str | None = None
+    related_doc_no: str | None = None
     order_id: str | None = None
     task_type: str = Field(...)
     description: str | None = None
@@ -78,6 +79,7 @@ class OutsourceTaskResponse(BaseModel):
     vendor_name: str | None = None
     related_doc_id: str | None = None
     related_doc_type: str | None = None
+    related_doc_no: str | None = None
     order_id: str | None = None
     task_type: str
     description: str | None = None

@@ -136,6 +136,7 @@ export interface OrderDetailResponse {
   order_no: string
   related_doc_id?: string
   related_doc_type?: string
+  related_doc_no?: string
   customer_id: string
   customer_name?: string
   project_name: string
@@ -357,6 +358,7 @@ export interface ProjectCostResponse {
   order_id?: string
   related_doc_id?: string
   related_doc_type?: string
+  related_doc_no?: string
   quote_no?: string
   order_item_id?: string
   order_item_name?: string
@@ -389,6 +391,7 @@ export interface DebtResponse {
   order_id?: string
   related_doc_id?: string
   related_doc_type?: string
+  related_doc_no?: string
   order_no?: string
   quote_no?: string
   project_name?: string
@@ -479,6 +482,7 @@ export interface OutsourceTaskResponse {
   vendor_name?: string
   related_doc_id?: string
   related_doc_type?: string
+  related_doc_no?: string
   order_id?: string
   task_type: string
   description?: string
