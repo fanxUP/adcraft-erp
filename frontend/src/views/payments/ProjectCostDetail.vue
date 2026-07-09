@@ -328,7 +328,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const CATEGORIES = ['人工/工时费', '运输/物流费', '安装杂费', '其他']
+const CATEGORIES = ['人工/工时费', '材料费', '租赁费', '运输/物流费', '安装杂费', '办公费', '餐费/交通费', '差旅费', '其他']
 const PAYMENT_METHODS = ['现金支付', '微信支付', '转账支付', '对公支付', '其它支付']
 
 const loading = ref(false)

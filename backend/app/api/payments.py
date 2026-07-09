@@ -332,7 +332,7 @@ async def download_project_cost_template(
 
         ws.merge_cells("A4:J4")
         note_cell = ws.cell(row=4, column=1,
-            value="说明：成本类别可选值 — 人工/工时费、运输/物流费、安装杂费、其他；付款方式可选值 — 现金支付、微信支付、转账支付、对公支付、其它支付")
+            value="说明：成本类别可选值 — 人工/工时费、材料费、租赁费、运输/物流费、安装杂费、办公费、餐费/交通费、差旅费、其他；付款方式可选值 — 现金支付、微信支付、转账支付、对公支付、其它支付")
         note_cell.font = Font(name="微软雅黑", size=9, color="999999", italic=True)
 
         buf = BytesIO()
