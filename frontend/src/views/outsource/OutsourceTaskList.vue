@@ -64,14 +64,14 @@
             <el-option v-for="v in vendors" :key="v.id" :label="v.name" :value="v.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="报价单">
-          <el-select v-model="form.quote_id" filterable clearable placeholder="请选择报价单" style="width: 100%">
-            <el-option v-for="q in quotes" :key="q.id" :label="q.label" :value="q.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="订单">
-          <el-select v-model="form.order_id" filterable clearable placeholder="请选择订单" style="width: 100%">
-            <el-option v-for="o in orders" :key="o.id" :label="o.label" :value="o.id" />
+        <el-form-item label="关联任务">
+          <el-select v-model="form.related_doc_id" filterable clearable placeholder="请选择关联的报价单或订单" style="width: 100%" @change="onRelatedDocChange">
+            <el-option-group label="报价单">
+              <el-option v-for="q in quotes" :key="'q_' + q.id" :label="q.label" :value="q.id" />
+            </el-option-group>
+            <el-option-group label="订单">
+              <el-option v-for="o in orders" :key="'o_' + o.id" :label="o.label" :value="o.id" />
+            </el-option-group>
           </el-select>
         </el-form-item>
         <el-form-item label="任务类型" prop="task_type">
@@ -128,7 +128,7 @@ const vendors = ref<{id: string; name: string}[]>([])
 const quotes = ref<{id: string; label: string}[]>([])
 const orders = ref<{id: string; label: string}[]>([])
 const form = reactive({
-  vendor_id: '', quote_id: '', order_id: '', task_type: 'production', description: '',
+  vendor_id: '', related_doc_id: '', related_doc_type: '', task_type: 'production', description: '',
   quantity: 1, unit_price: 0, remark: '',
 })
 const authStore = useAuthStore()
@@ -187,16 +187,27 @@ async function fetchData() {
   }
 }
 
+// 关联任务下拉选中时自动设置类型
+function onRelatedDocChange(val: string) {
+  if (!val) {
+    form.related_doc_type = ''
+    return
+  }
+  // 判断选中项是报价单还是订单
+  const foundQuote = quotes.value.find(q => q.id === val)
+  form.related_doc_type = foundQuote ? 'quote' : 'order'
+}
+
 function handleCreate() {
   editingId.value = null
-  Object.assign(form, { vendor_id: '', quote_id: '', order_id: '', task_type: 'production', description: '', quantity: 1, unit_price: 0, remark: '' })
+  Object.assign(form, { vendor_id: '', related_doc_id: '', related_doc_type: '', task_type: 'production', description: '', quantity: 1, unit_price: 0, remark: '' })
   dialogVisible.value = true
 }
 
 function handleEdit(row: OutsourceTaskResponse) {
   editingId.value = row.id
   Object.assign(form, {
-    vendor_id: row.vendor_id, quote_id: row.quote_id || '', order_id: row.order_id || '',
+    vendor_id: row.vendor_id, related_doc_id: row.related_doc_id || '', related_doc_type: row.related_doc_type || '',
     task_type: row.task_type, description: row.description,
     quantity: row.quantity, unit_price: row.unit_price, remark: row.remark,
   })

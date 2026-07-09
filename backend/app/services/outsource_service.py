@@ -74,7 +74,7 @@ class OutsourceService:
     async def create_task(self, data: dict) -> dict:
         data["task_no"] = await generate_outsource_task_no(self.db)
         # 空字符串转 None，避免 UUID 字段报错
-        for k in ("quote_id", "order_id"):
+        for k in ("related_doc_id", "order_id"):
             if k in data and not data[k]:
                 data[k] = None
         if "quantity" not in data:
@@ -91,7 +91,7 @@ class OutsourceService:
         if not task:
             raise ValueError("外协任务不存在")
         # 空字符串转 None，避免 UUID 字段报错
-        for k in ("quote_id", "order_id"):
+        for k in ("related_doc_id", "order_id"):
             if k in data and not data[k]:
                 data[k] = None
         # 编辑已取消的任务时自动恢复为待处理（重新激活）
@@ -150,7 +150,8 @@ class OutsourceService:
             "id": str(t.id), "task_no": t.task_no,
             "vendor_id": str(t.vendor_id),
             "vendor_name": vendor_name,
-            "quote_id": str(t.quote_id) if t.quote_id else None,
+            "related_doc_id": str(t.related_doc_id) if t.related_doc_id else None,
+            "related_doc_type": t.related_doc_type,
             "order_id": str(t.order_id) if t.order_id else None,
             "task_type": t.task_type,
             "description": t.description,
