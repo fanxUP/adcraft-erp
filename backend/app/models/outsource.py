@@ -66,6 +66,7 @@ class OutsourcePayment(Base, TimestampMixin):
     task_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("outsource_tasks.id"), nullable=True)
     amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    payee_company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)

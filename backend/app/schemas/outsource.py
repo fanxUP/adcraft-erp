@@ -102,6 +102,7 @@ class OutsourcePaymentCreate(BaseModel):
     task_id: str | None = None
     amount: Decimal = Field(...)
     payment_method: str | None = None
+    payee_company_name: str | None = None
     paid_at: str | None = None
     remark: str | None = None
 
@@ -114,6 +115,7 @@ class OutsourcePaymentResponse(BaseModel):
     task_id: str | None = None
     amount: float
     payment_method: str | None = None
+    payee_company_name: str | None = None
     paid_at: str | None = None
     remark: str | None = None
     created_by: str | None = None
