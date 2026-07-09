@@ -142,6 +142,7 @@ class OutsourceService:
             "id": str(t.id), "task_no": t.task_no,
             "vendor_id": str(t.vendor_id),
             "vendor_name": vendor_name,
+            "quote_id": str(t.quote_id) if t.quote_id else None,
             "order_id": str(t.order_id) if t.order_id else None,
             "task_type": t.task_type,
             "description": t.description,

@@ -269,3 +269,45 @@ async def delete_task(
             return success(None)
     except ValueError as e:
         return error(40401, str(e))
+
+
+# ── Quote & Order dropdown data ──
+
+@router.get("/quotes-for-dropdown")
+async def list_quotes_for_dropdown(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """返回所有报价单供下拉选择（精简字段）"""
+    from sqlalchemy import select
+    from app.models.quote import Quote
+    result = await db.execute(
+        select(Quote.id, Quote.quote_no, Quote.project_name, Quote.customer_name)
+        .where(Quote.deleted_at.is_(None))
+        .order_by(Quote.created_at.desc())
+    )
+    rows = result.all()
+    return success([
+        {"id": str(r.id), "label": f"{r.quote_no} - {r.project_name}", "quote_no": r.quote_no, "project_name": r.project_name, "customer_name": r.customer_name}
+        for r in rows
+    ])
+
+
+@router.get("/orders-for-dropdown")
+async def list_orders_for_dropdown(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """返回所有订单供下拉选择（精简字段）"""
+    from sqlalchemy import select
+    from app.models.order import Order
+    result = await db.execute(
+        select(Order.id, Order.order_no, Order.project_name)
+        .where(Order.deleted_at.is_(None))
+        .order_by(Order.created_at.desc())
+    )
+    rows = result.all()
+    return success([
+        {"id": str(r.id), "label": f"{r.order_no} - {r.project_name}", "order_no": r.order_no, "project_name": r.project_name}
+        for r in rows
+    ])
