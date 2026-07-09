@@ -500,6 +500,26 @@ async def update_project_cost(
     return success(cost)
 
 
+@cost_router.delete("/batch")
+async def batch_delete_project_costs(
+    cost_ids: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Batch delete project costs by comma-separated IDs."""
+    service = ProjectCostService(db)
+    ids = [UUID(oid.strip()) for oid in cost_ids.split(",") if oid.strip()]
+    if not ids:
+        return {"code": 40001, "message": "请提供要删除的成本ID", "data": None}
+    deleted = await service.batch_delete_costs(ids)
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_PROJECT_COST, None, ACTION_DELETE,
+                        ip_address=request.client.host if request.client else None,
+                        after_data={"batch_delete_count": deleted, "ids": cost_ids})
+    return success({"deleted": deleted})
+
+
 @cost_router.delete("/{cost_id}")
 async def delete_project_cost(
     cost_id: str,

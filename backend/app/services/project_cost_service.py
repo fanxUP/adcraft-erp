@@ -189,6 +189,20 @@ class ProjectCostService:
         if order_id:
             await self._sync_order_cost(order_id)
 
+    async def batch_delete_costs(self, cost_ids: list[UUID]) -> int:
+        from app.models.project_cost import ProjectCost
+        from sqlalchemy import select
+        # Collect order_ids before deletion for cost sync
+        result = await self.db.execute(
+            select(ProjectCost.order_id)
+            .where(ProjectCost.id.in_(cost_ids), ProjectCost.deleted_at.is_(None))
+        )
+        order_ids = {row[0] for row in result.all() if row[0]}
+        deleted = await self.repo.batch_soft_delete(cost_ids)
+        for oid in order_ids:
+            await self._sync_order_cost(oid)
+        return deleted
+
     async def get_costs_summary(self, order_ids: list[UUID]) -> dict[str, float]:
         """Return {order_id: total_cost} for a batch of orders."""
         return await self.repo.get_costs_summary(order_ids)

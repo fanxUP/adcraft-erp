@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, update
 from sqlalchemy.orm import selectinload
 
 from app.models.project_cost import ProjectCost
@@ -73,6 +73,17 @@ class ProjectCostRepository:
         cost.deleted_at = datetime.now()
         await self.db.flush()
         return cost
+
+    async def batch_soft_delete(self, cost_ids: list[UUID]) -> int:
+        from sqlalchemy import update
+        now = datetime.now()
+        result = await self.db.execute(
+            update(ProjectCost)
+            .where(ProjectCost.id.in_(cost_ids), ProjectCost.deleted_at.is_(None))
+            .values(deleted_at=now)
+        )
+        await self.db.flush()
+        return result.rowcount
 
     async def get_order_cost_sum(self, order_id: UUID) -> Decimal:
         result = await self.db.execute(
