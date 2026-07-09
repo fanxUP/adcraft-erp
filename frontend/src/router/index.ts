@@ -46,6 +46,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'reports/monthly', name: 'MonthlyReport', component: () => import('@/views/reports/MonthlyReport.vue') },
       { path: 'outsource/vendors', name: 'OutsourceVendorList', component: () => import('@/views/outsource/OutsourceVendorList.vue') },
       { path: 'outsource/tasks', name: 'OutsourceTaskList', component: () => import('@/views/outsource/OutsourceTaskList.vue') },
+      { path: 'outsource/tasks/recycle', name: 'OutsourceTaskRecycle', meta: { roles: ['admin'] }, component: () => import('@/views/outsource/OutsourceTaskRecycle.vue') },
       { path: 'outsource/payments', name: 'OutsourcePaymentList', component: () => import('@/views/outsource/OutsourcePaymentList.vue') },
       { path: 'inventory', name: 'InventoryList', component: () => import('@/views/inventory/InventoryList.vue') },
       { path: 'operation-logs', name: 'OperationLogList', meta: { roles: ['admin'] }, component: () => import('@/views/system/OperationLogList.vue') },

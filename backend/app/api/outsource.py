@@ -285,6 +285,42 @@ async def delete_task(
         return error(40401, str(e))
 
 
+# ── Recycle Bin ──
+
+@router.get("/tasks/recycle/list")
+async def list_deleted_tasks(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """列出已删除的外协任务（回收站）"""
+    service = OutsourceService(db)
+    tasks, total = await service.list_deleted(page, page_size)
+    return success_paginated(tasks, total, page, page_size)
+
+
+@router.post("/tasks/{task_id}/restore")
+async def restore_task(
+    task_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """从回收站恢复外协任务"""
+    service = OutsourceService(db)
+    tid = UUID(task_id)
+    try:
+        task = await service.restore_task(tid)
+        await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                            OBJ_OUTSOURCE_TASK, tid, "restore",
+                            ip_address=request.client.host if request.client else None,
+                            after_data={"status": "cancelled"})
+        return success(task)
+    except ValueError as e:
+        return error(40401, str(e))
+
+
 # ── Quote & Order dropdown data ──
 
 @router.get("/quotes-for-dropdown")

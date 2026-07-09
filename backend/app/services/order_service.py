@@ -240,11 +240,23 @@ class OrderService:
         return await self.set_cost(order_id, float(total_cost))
 
     async def delete_order(self, order_id: UUID) -> None:
+        """软删除订单，同时级联删除关联的外协任务"""
         order = await self.repo.get_by_id(order_id)
         if not order:
             raise ValueError("订单不存在")
         if order.status != "cancelled":
             raise ValueError("只有已取消的订单可以删除")
+        # 级联删除关联的外协任务（通过 order_id 或 related_doc_id）
+        from app.models.outsource import OutsourceTask
+        from sqlalchemy import select
+        tasks = (await self.db.execute(
+            select(OutsourceTask).where(
+                (OutsourceTask.order_id == order_id) |
+                ((OutsourceTask.related_doc_id == order_id) & (OutsourceTask.related_doc_type == "order"))
+            )
+        )).scalars().all()
+        for task in tasks:
+            await self.db.delete(task)
         await self.repo.soft_delete(order)
 
     async def convert_to_quote(self, order_id: UUID, created_by: UUID) -> dict:
@@ -324,6 +336,22 @@ class OrderService:
                 quote = await quote_svc.create_quote(self._order_to_quote_data(order, await generate_quote_no(self.db)))
         else:
             quote = await quote_svc.create_quote(self._order_to_quote_data(order, await generate_quote_no(self.db)))
+
+        # 同步外协任务：将 order 引用改为 quote 引用，并更新描述和金额
+        tasks = (await self.db.execute(
+            select(OutsourceTask).where(
+                (OutsourceTask.order_id == order_id) |
+                ((OutsourceTask.related_doc_id == order_id) & (OutsourceTask.related_doc_type == "order"))
+            )
+        )).scalars().all()
+        for task in tasks:
+            task.related_doc_id = quote["id"]
+            task.related_doc_type = "quote"
+            task.order_id = None
+            task.description = quote.get("project_name") or order.project_name
+            if quote.get("total_amount") is not None:
+                task.unit_price = float(quote["total_amount"])
+                task.total_amount = float(quote["total_amount"])
 
         # 转报价后删除原订单（硬删除，不进回收站）
         from app.models.acceptance import AcceptanceForm

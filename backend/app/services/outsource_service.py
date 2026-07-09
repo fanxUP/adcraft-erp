@@ -212,6 +212,30 @@ class OutsourceService:
             return None
         return result.scalar_one_or_none()
 
+
+    # ── Recycle Bin ──
+
+    async def list_deleted(self, page: int, page_size: int) -> tuple[list, int]:
+        """列出已删除的外协任务（回收站）"""
+        skip = (page - 1) * page_size
+        tasks, total = await self.task_repo.list_deleted_tasks(skip, page_size)
+        result = []
+        for t in tasks:
+            vname = await self._task_vendor_name(t)
+            pname = await self._related_project_name(t.related_doc_id, t.related_doc_type)
+            result.append(self._task_to_dict(t, vname, pname))
+        return result, total
+
+    async def restore_task(self, task_id: UUID) -> dict:
+        """从回收站恢复外协任务"""
+        task = await self.task_repo.get_deleted_by_id(task_id)
+        if not task:
+            raise ValueError("外协任务不存在或未被删除")
+        await self.task_repo.restore(task)
+        vname = await self._task_vendor_name(task)
+        pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
+        return self._task_to_dict(task, vname, pname)
+
     # ── Helpers ──
 
     def _vendor_to_dict(self, v) -> dict:
@@ -245,6 +269,7 @@ class OutsourceService:
             "completed_at": t.completed_at.isoformat() if t.completed_at else None,
             "remark": t.remark,
             "created_at": t.created_at.isoformat() if t.created_at else None,
+            "deleted_at": t.deleted_at.isoformat() if t.deleted_at else None,
         }
 
     def _payment_to_dict(self, p, vendor_name: str | None = None) -> dict:
@@ -289,14 +314,22 @@ class OutsourceService:
         vname = await self._task_vendor_name(task)
         return self._task_to_dict(task, vname)
 
-    # ── Delete Task (admin only) ──
+    # ── Delete Task (admin only, soft delete + cascade payments) ──
 
     async def delete_task(self, task_id: UUID) -> bool:
+        """软删除外协任务，同时级联删除关联的外协付款"""
         task = await self.task_repo.get_by_id(task_id)
         if not task:
             raise ValueError("外协任务不存在")
         if task.status != "cancelled":
             raise ValueError("仅已取消的外协任务可以删除")
-        await self.db.delete(task)
-        await self.db.flush()
+        # 级联删除关联的外协付款
+        from app.models.outsource import OutsourcePayment
+        from sqlalchemy import select
+        payments = (await self.db.execute(
+            select(OutsourcePayment).where(OutsourcePayment.task_id == task_id)
+        )).scalars().all()
+        for p in payments:
+            await self.db.delete(p)
+        await self.task_repo.soft_delete(task)
         return True

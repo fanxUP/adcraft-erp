@@ -61,7 +61,7 @@ class OutsourceTaskRepository:
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
                          vendor_id: UUID | None = None, order_id: UUID | None = None) -> tuple[list[OutsourceTask], int]:
-        q = select(OutsourceTask)
+        q = select(OutsourceTask).where(OutsourceTask.deleted_at.is_(None))
         if status:
             q = q.where(OutsourceTask.status == status)
         if vendor_id:
@@ -87,6 +87,31 @@ class OutsourceTaskRepository:
                 setattr(task, k, v)
         await self.db.flush()
         return task
+
+
+    async def soft_delete(self, task: OutsourceTask) -> None:
+        from datetime import datetime
+        task.deleted_at = datetime.now()
+        await self.db.flush()
+
+    async def restore(self, task: OutsourceTask) -> None:
+        task.deleted_at = None
+        task.status = cancelled
+        await self.db.flush()
+
+    async def list_deleted_tasks(self, skip: int = 0, limit: int = 20) -> tuple[list[OutsourceTask], int]:
+        q = select(OutsourceTask).where(OutsourceTask.deleted_at.isnot(None))
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self.db.execute(count_q)).scalar()
+        q = q.order_by(OutsourceTask.deleted_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all()), total
+
+    async def get_deleted_by_id(self, task_id: UUID) -> OutsourceTask | None:
+        result = await self.db.execute(
+            select(OutsourceTask).where(OutsourceTask.id == task_id, OutsourceTask.deleted_at.isnot(None))
+        )
+        return result.scalar_one_or_none()
 
 
 class OutsourcePaymentRepository:
