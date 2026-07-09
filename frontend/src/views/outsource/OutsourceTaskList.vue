@@ -337,6 +337,7 @@ async function handlePaySubmit() {
       task_id: payTask.value.id,
       amount: payForm.amount,
       payment_method: payForm.payment_method || undefined,
+      payee_company_name: payForm.payee_company_name || undefined,
       paid_at: payForm.paid_at || undefined,
       remark: payForm.remark || undefined,
     })
