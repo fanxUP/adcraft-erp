@@ -16,7 +16,7 @@ class ProjectCostRepository:
     async def get_by_id(self, cost_id: UUID) -> ProjectCost | None:
         result = await self.db.execute(
             select(ProjectCost)
-            .options(selectinload(ProjectCost.order), selectinload(ProjectCost.customer))
+            .options(selectinload(ProjectCost.order), selectinload(ProjectCost.quote), selectinload(ProjectCost.customer))
             .where(ProjectCost.id == cost_id, ProjectCost.deleted_at.is_(None))
         )
         return result.scalar_one_or_none()
@@ -26,13 +26,23 @@ class ProjectCostRepository:
         skip: int = 0,
         limit: int = 20,
         order_id: UUID | None = None,
+        quote_id: UUID | None = None,
+        source_type: str | None = None,
         category: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
     ) -> tuple[list[ProjectCost], int]:
-        q = select(ProjectCost).options(selectinload(ProjectCost.order), selectinload(ProjectCost.customer)).where(ProjectCost.deleted_at.is_(None))
+        q = select(ProjectCost).options(
+            selectinload(ProjectCost.order),
+            selectinload(ProjectCost.quote),
+            selectinload(ProjectCost.customer),
+        ).where(ProjectCost.deleted_at.is_(None))
+        if source_type:
+            q = q.where(ProjectCost.source_type == source_type)
         if order_id:
             q = q.where(ProjectCost.order_id == order_id)
+        if quote_id:
+            q = q.where(ProjectCost.quote_id == quote_id)
         if category:
             q = q.where(ProjectCost.category == category)
         if date_from:
@@ -82,5 +92,20 @@ class ProjectCostRepository:
                 ProjectCost.deleted_at.is_(None),
             )
             .group_by(ProjectCost.order_id)
+        )
+        return {str(row[0]): float(row[1]) for row in result.all()}
+
+    async def get_quote_costs_summary(self, quote_ids: list[UUID]) -> dict[str, float]:
+        """Return {quote_id: total_cost} for a batch of quotes."""
+        if not quote_ids:
+            return {}
+        result = await self.db.execute(
+            select(ProjectCost.quote_id, func.coalesce(func.sum(ProjectCost.amount), 0))
+            .where(
+                ProjectCost.quote_id.in_(quote_ids),
+                ProjectCost.deleted_at.is_(None),
+                ProjectCost.source_type == "quote",
+            )
+            .group_by(ProjectCost.quote_id)
         )
         return {str(row[0]): float(row[1]) for row in result.all()}

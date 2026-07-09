@@ -122,12 +122,19 @@ class AcceptanceService:
             "order_no": form.order.order_no if form.order else None,
             "customer_name": form.order.customer.name if form.order and form.order.customer else None,
             "project_name": form.order.project_name if form.order else None,
+            "department": form.order.department if form.order else None,
             "status": form.status,
             "accepted_at": form.accepted_at.isoformat() if form.accepted_at else None,
             "accepted_by": form.accepted_by,
             "created_at": form.created_at.isoformat() if form.created_at else None,
         }
 
+    @staticmethod
+    def _get_primary_contact(customer) -> str | None:
+        if not customer or not customer.contacts:
+            return None
+        primary = next((c for c in customer.contacts if c.is_primary), None)
+        return primary.name if primary else (customer.contacts[0].name if customer.contacts else None)
     def _to_detail_dict(self, form: AcceptanceForm) -> dict:
         return {
             "id": str(form.id),
@@ -135,7 +142,13 @@ class AcceptanceService:
             "order_id": str(form.order_id),
             "order_no": form.order.order_no if form.order else None,
             "customer_name": form.order.customer.name if form.order and form.order.customer else None,
+            "customer_phone": form.order.customer.phone if form.order and form.order.customer else None,
+            "customer_address": form.order.customer.address if form.order and form.order.customer else None,
+            "contact_person": form.order.contact_person if form.order and form.order.contact_person else (self._get_primary_contact(form.order.customer) if form.order and form.order.customer else None),
+            "contact_phone": form.order.contact_phone if form.order else None,
+            "order_date": form.order.created_at.isoformat() if form.order and form.order.created_at else None,
             "project_name": form.order.project_name if form.order else None,
+            "department": form.order.department if form.order else None,
             "status": form.status,
             "accepted_at": form.accepted_at.isoformat() if form.accepted_at else None,
             "accepted_by": form.accepted_by,
@@ -143,6 +156,8 @@ class AcceptanceService:
             "our_acceptor_name": form.our_acceptor.name if form.our_acceptor else None,
             "remark": form.remark,
             "reject_reason": form.reject_reason,
+            "discount_amount": float(form.discount_amount),
+            "advance_amount": float(form.advance_amount),
             "created_at": form.created_at.isoformat() if form.created_at else None,
             "updated_at": form.updated_at.isoformat() if form.updated_at else None,
             "items": [
@@ -151,11 +166,17 @@ class AcceptanceService:
                     "acceptance_id": str(item.acceptance_id),
                     "order_item_id": str(item.order_item_id) if item.order_item_id else None,
                     "item_name": item.item_name,
+                    "material_process": item.material_process,
                     "specification": item.specification,
                     "quantity": float(item.quantity) if item.quantity is not None else None,
                     "unit": item.unit,
+                    "area": float(item.area) if item.area is not None else None,
+                    "unit_price": float(item.unit_price) if item.unit_price is not None else None,
+                    "subtotal": float(item.subtotal) if item.subtotal is not None else None,
+                    "image_url": item.image_url,
                     "item_status": item.item_status,
                     "remark": item.remark,
+                    "group_name": item.group_name,
                 }
                 for item in (form.items or [])
             ],

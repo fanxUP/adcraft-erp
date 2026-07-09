@@ -18,7 +18,7 @@ class AuthService:
             return None
         if not verify_password(data.password, user.password_hash):
             return None
-        token = create_access_token(user.id, user.username)
+        token = create_access_token(user.id, user.username, token_version=user.token_version)
         return user, token
 
     async def get_profile(self, user_id: UUID) -> dict:

@@ -15,6 +15,9 @@ from app.models.task import DesignTask, ProductionTask, InstallationTask, Attach
 from app.models.payment import Payment, CustomerStatement, Expense
 from app.models.outsource import OutsourceVendor, OutsourceTask, OutsourcePayment
 from app.models.inventory import InventoryItem, StockRecord
+from app.models.project_cost import ProjectCost
+from app.models.chat import Conversation, ConversationMember, Message, MessageReadReceipt, UserPresence
+from app.models.notification import Notification
 from app.models.acceptance import AcceptanceForm, AcceptanceItem, AcceptanceAttachment
 
 config = context.config

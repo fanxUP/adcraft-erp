@@ -41,7 +41,7 @@
       @change="fetchData"
     />
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑材质' : '新建材质'" width="500px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑材质' : '新建材质'" width="500px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-form-item label="材质名称">
           <el-input v-model="form.name" />
@@ -74,7 +74,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="importDialogVisible" title="导入材质" width="520px">
+    <el-dialog v-model="importDialogVisible" title="导入材质" width="520px" :close-on-click-modal="false">
       <div style="margin-bottom: 16px; font-size: 13px; color: var(--ad-text-secondary)">
         <p>支持 .xlsx / .xls 格式，请确保 Excel 包含以下列（<span style="color: #f56c6c">*</span>为必填）：</p>
         <el-table :data="templateColumns" border size="small" style="margin: 12px 0">

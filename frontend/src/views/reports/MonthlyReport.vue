@@ -3,6 +3,7 @@
     <div class="page-header">
       <h2>销售月报</h2>
       <div style="display: flex; gap: 12px; align-items: center">
+        <el-button @click="handlePrintView"><el-icon><Printer /></el-icon> 打印</el-button>
         <el-select v-model="reportYear" style="width: 100px" @change="fetchData">
           <el-option v-for="y in years" :key="y" :label="String(y)" :value="y" />
         </el-select>
@@ -80,6 +81,8 @@
 </template>
 
 <script setup lang="ts">
+import { Printer } from '@element-plus/icons-vue'
+import { usePrint } from '@/composables/usePrint'
 import { ref, reactive, onMounted } from 'vue'
 import { getMonthlyReport } from '@/api/payments'
 import type { MonthlyReportOrder } from '@/types/api'
@@ -108,6 +111,11 @@ async function fetchData() {
   } finally { loading.value = false }
 }
 
+
+const { handlePrintBySelector } = usePrint()
+function handlePrintView() {
+  handlePrintBySelector('.page')
+}
 onMounted(fetchData)
 </script>
 

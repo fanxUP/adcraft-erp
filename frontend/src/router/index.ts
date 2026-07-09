@@ -25,7 +25,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'orders/recycle', name: 'OrderRecycle', meta: { roles: ['admin'] }, component: () => import('@/views/orders/OrderRecycle.vue') },
       { path: 'orders/:id', name: 'OrderDetail', component: () => import('@/views/orders/OrderDetail.vue') },
       { path: 'acceptances', name: 'AcceptanceList', component: () => import('@/views/acceptances/AcceptanceList.vue') },
-      { path: 'acceptances/new', name: 'AcceptanceCreate', component: () => import('@/views/acceptances/AcceptanceDetail.vue') },
       { path: 'acceptances/:id', name: 'AcceptanceDetail', component: () => import('@/views/acceptances/AcceptanceDetail.vue') },
       { path: 'design-tasks', name: 'DesignTaskList', component: () => import('@/views/tasks/DesignTaskList.vue') },
       { path: 'design-tasks/:id', name: 'DesignTaskDetail', component: () => import('@/views/tasks/DesignTaskDetail.vue') },
@@ -41,10 +40,13 @@ const routes: RouteRecordRaw[] = [
       { path: 'statements/:id', name: 'StatementDetail', component: () => import('@/views/payments/StatementDetail.vue') },
       { path: 'project-costs', name: 'ProjectCostList', component: () => import('@/views/payments/ProjectCostList.vue') },
       { path: 'project-costs/:orderId', name: 'ProjectCostDetail', component: () => import('@/views/payments/ProjectCostDetail.vue') },
+      { path: 'quote-costs/:quoteId', name: 'QuoteCostDetail', component: () => import('@/views/payments/ProjectCostDetail.vue') },
+      { path: 'cost-debts', name: 'CostDebtList', component: () => import('@/views/payments/CostDebtList.vue') },
       { path: 'reports/daily', name: 'DailyReport', component: () => import('@/views/reports/DailyReport.vue') },
       { path: 'reports/monthly', name: 'MonthlyReport', component: () => import('@/views/reports/MonthlyReport.vue') },
       { path: 'outsource/vendors', name: 'OutsourceVendorList', component: () => import('@/views/outsource/OutsourceVendorList.vue') },
       { path: 'outsource/tasks', name: 'OutsourceTaskList', component: () => import('@/views/outsource/OutsourceTaskList.vue') },
+      { path: 'outsource/tasks/recycle', name: 'OutsourceTaskRecycle', meta: { roles: ['admin'] }, component: () => import('@/views/outsource/OutsourceTaskRecycle.vue') },
       { path: 'outsource/payments', name: 'OutsourcePaymentList', component: () => import('@/views/outsource/OutsourcePaymentList.vue') },
       { path: 'inventory', name: 'InventoryList', component: () => import('@/views/inventory/InventoryList.vue') },
       { path: 'operation-logs', name: 'OperationLogList', meta: { roles: ['admin'] }, component: () => import('@/views/system/OperationLogList.vue') },
@@ -101,6 +103,28 @@ router.beforeEach(async (to, _from, next) => {
     }
   } else {
     next()
+  }
+})
+
+// 每次路由切换时检查是否有版本更新
+const VERSION_KEY = 'app_version'
+router.afterEach(async () => {
+  try {
+    const res = await fetch(`/version.json?t=${Date.now()}`)
+    if (!res.ok) return
+    const data = await res.json()
+    const currentVersion = data.version || ''
+    if (!currentVersion) return
+    const storedVersion = localStorage.getItem(VERSION_KEY)
+    if (storedVersion && storedVersion !== currentVersion) {
+      // 版本已变化，标记为有更新（UpdateNotification 会显示提示条）
+      // 如果 localStorage 里还没有版本号，存一下
+    }
+    if (!storedVersion) {
+      localStorage.setItem(VERSION_KEY, currentVersion)
+    }
+  } catch {
+    // ignore
   }
 })
 

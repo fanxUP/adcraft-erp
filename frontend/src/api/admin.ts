@@ -1,4 +1,4 @@
-import { get, post, put, del } from './index'
+import { get, post, put, del, apiClient } from './index'
 import { SuccessResponse } from '@/types/api'
 
 // ── Roles ──
@@ -59,6 +59,10 @@ export interface SystemSettings {
 
 export function getSystemSettings() {
   return get<SystemSettings>('/admin/settings')
+}
+
+export function forceRelogin() {
+  return apiClient.post('/users/bump-token-version')
 }
 
 export function updateSystemSettings(data: Record<string, unknown>) {

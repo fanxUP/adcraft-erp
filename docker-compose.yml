@@ -18,6 +18,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY=http://172.17.0.1:7890
+        - HTTPS_PROXY=http://172.17.0.1:7890
     container_name: adcraft_frontend
     restart: unless-stopped
     networks:
@@ -27,6 +30,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY=http://172.17.0.1:7890
+        - HTTPS_PROXY=http://172.17.0.1:7890
+        - NO_PROXY=postgres,redis,minio,localhost,127.0.0.1
     container_name: adcraft_backend
     env_file:
       - .env

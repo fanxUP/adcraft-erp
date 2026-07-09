@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.quote_repo import QuoteRepository
-from app.services.number_generator import generate_quote_no, generate_order_no
+from app.services.number_generator import generate_quote_no
 
 
 class QuoteService:
@@ -76,7 +76,7 @@ class QuoteService:
             # All nullable fields that must be explicitly set (even when None)
             nullable_fields = ("product_id", "material_id", "process_id",
                                "length", "length_unit", "width", "width_unit",
-                               "height", "height_unit", "unit", "remark", "group_name", "material_process")
+                               "height", "height_unit", "pieces", "unit", "remark", "group_name", "material_process")
 
             for idx, item_data in enumerate(items_data):
                 item_data["sort_order"] = idx
@@ -106,12 +106,46 @@ class QuoteService:
 
             await self.calculate_quote(quote_id)
 
+        # 同步更新关联外协任务的描述信息（项目名称等）
+        from app.models.outsource import OutsourceTask
+        from sqlalchemy import select
+        tasks = (await self.db.execute(
+            select(OutsourceTask).where(
+                (OutsourceTask.related_doc_id == quote_id) & (OutsourceTask.related_doc_type == "quote")
+            )
+        )).scalars().all()
+        for task in tasks:
+            task.description = quote.project_name
+            if quote.total_amount is not None:
+                task.unit_price = float(quote.total_amount)
+                task.total_amount = float(quote.total_amount)
+        if tasks:
+            await self.db.flush()
+
         return self._quote_to_detail(quote)
 
     async def delete_quote(self, quote_id: UUID) -> bool:
+        """软删除报价单，同时级联删除关联的外协任务"""
         quote = await self.repo.get_by_id(quote_id)
         if not quote:
             return False
+        # 级联删除关联的外协任务（通过 related_doc_id）
+        from app.models.outsource import OutsourceTask
+        from sqlalchemy import select
+        tasks = (await self.db.execute(
+            select(OutsourceTask).where(
+                (OutsourceTask.related_doc_id == quote_id) & (OutsourceTask.related_doc_type == "quote")
+            )
+        )).scalars().all()
+        for task in tasks:
+            # 先级联删除关联的外协付款，再删除任务
+            from app.models.outsource import OutsourcePayment
+            payments = (await self.db.execute(
+                select(OutsourcePayment).where(OutsourcePayment.task_id == task.id)
+            )).scalars().all()
+            for p in payments:
+                await self.db.delete(p)
+            await self.db.delete(task)
         await self.repo.soft_delete(quote)
         return True
 
@@ -142,17 +176,15 @@ class QuoteService:
             transport_fee = Decimal(str(item.transport_fee))
             other_fee = Decimal(str(item.other_fee))
 
-            # 计算面积（考虑单位转换）
+            # 计算面积（考虑单位转换和件数）
             length_in_m = convert_to_meters(length, item.length_unit or "m")
             width_in_m = convert_to_meters(width, item.width_unit or "m")
-            area = length_in_m * width_in_m * quantity
+            pieces = Decimal(str(item.pieces or 1))
+            area = length_in_m * width_in_m * pieces
             item.area = float(area)
 
-            # 根据 use_area 决定计算方式
-            if item.use_area:
-                item_subtotal = area * unit_price + process_fee + installation_fee + design_fee + transport_fee + other_fee
-            else:
-                item_subtotal = quantity * unit_price + process_fee + installation_fee + design_fee + transport_fee + other_fee
+            # 小计统一用 quantity（前端已保证 quantity = 面积 × 件数）
+            item_subtotal = quantity * unit_price + process_fee + installation_fee + design_fee + transport_fee + other_fee
 
             item.subtotal_amount = float(item_subtotal)
             subtotal += item_subtotal
@@ -201,7 +233,10 @@ class QuoteService:
         if not quote.customer_id and quote.customer_name:
             from app.services.customer_service import CustomerService
             customer_svc = CustomerService(self.db)
-            new_customer = await customer_svc.create_customer({"name": quote.customer_name})
+            new_customer = await customer_svc.create_customer({
+                "name": quote.customer_name,
+                "remark": f"由报价 {quote.quote_no} 转订单时自动创建",
+            })
             quote.customer_id = UUID(new_customer["id"])
 
         # Save version snapshot
@@ -213,7 +248,8 @@ class QuoteService:
         from app.models.order import Order, OrderItem, OrderStatusLog
         from datetime import datetime
 
-        order_no = await generate_order_no(self.db)
+        # 统一编号后报价和订单使用同一编号
+        order_no = quote.quote_no
         order = Order(
             order_no=order_no,
             quote_id=quote.id,
@@ -222,6 +258,9 @@ class QuoteService:
             sales_user_id=quote.sales_user_id,
             status="pending_confirm",
             total_amount=quote.total_amount,
+            department=quote.department,
+            contact_person=quote.contact_person,
+            contact_phone=quote.contact_phone,
         )
         self.db.add(order)
 
@@ -235,13 +274,29 @@ class QuoteService:
                 material_id=item.material_id,
                 process_id=item.process_id,
                 length=item.length,
+                length_unit=item.length_unit,
                 width=item.width,
+                width_unit=item.width_unit,
                 height=item.height,
+                height_unit=item.height_unit,
                 quantity=item.quantity,
                 unit=item.unit,
+                use_area=item.use_area,
+                quantity_mode=item.quantity_mode,
+                pieces=item.pieces,
+                area=item.area,
                 unit_price=item.unit_price,
+                process_fee=item.process_fee,
+                installation_fee=item.installation_fee,
+                design_fee=item.design_fee,
+                transport_fee=item.transport_fee,
+                other_fee=item.other_fee,
                 subtotal_amount=item.subtotal_amount,
                 remark=item.remark,
+                image_url=item.image_url,
+                sort_order=item.sort_order,
+                group_name=item.group_name,
+                material_process=item.material_process,
             )
             self.db.add(order_item)
 
@@ -257,6 +312,23 @@ class QuoteService:
 
         quote.status = "converted"
         await self.db.flush()
+
+        # 同步更新关联外协任务：将 quote 引用更新为 order 引用（设置 order_id）
+        from app.models.outsource import OutsourceTask
+        from sqlalchemy import select
+        outsource_tasks = (await self.db.execute(
+            select(OutsourceTask).where(
+                (OutsourceTask.related_doc_id == quote_id) & (OutsourceTask.related_doc_type == "quote")
+            )
+        )).scalars().all()
+        for otask in outsource_tasks:
+            otask.order_id = order.id
+            otask.description = quote.project_name
+            if quote.total_amount is not None:
+                otask.unit_price = float(quote.total_amount)
+                otask.total_amount = float(quote.total_amount)
+        if outsource_tasks:
+            await self.db.flush()
 
         return {
             "id": str(order.id),
@@ -276,6 +348,9 @@ class QuoteService:
             "status": q.status, "total_amount": float(q.total_amount),
             "valid_until": q.valid_until.isoformat() if q.valid_until else None,
             "created_at": q.created_at.isoformat() if q.created_at else None,
+            "department": q.department,
+            "contact_person": q.contact_person,
+            "contact_phone": q.contact_phone,
         }
 
     def _quote_to_detail(self, q) -> dict:
@@ -293,6 +368,9 @@ class QuoteService:
             "total_amount": float(q.total_amount),
             "valid_until": q.valid_until.isoformat() if q.valid_until else None,
             "remark": q.remark,
+            "department": q.department,
+            "contact_person": q.contact_person,
+            "contact_phone": q.contact_phone,
             "created_at": q.created_at.isoformat() if q.created_at else None,
             "items": [
                 {
@@ -311,6 +389,7 @@ class QuoteService:
                     "unit": item.unit,
                     "use_area": item.use_area,
                     "quantity_mode": item.quantity_mode,
+                    "pieces": float(item.pieces) if item.pieces else None,
                     "area": float(item.area) if item.area else None,
                     "unit_price": float(item.unit_price),
                     "process_fee": float(item.process_fee),
@@ -320,6 +399,7 @@ class QuoteService:
                     "other_fee": float(item.other_fee),
                     "subtotal_amount": float(item.subtotal_amount),
                     "remark": item.remark,
+                    "image_url": item.image_url,
                     "sort_order": item.sort_order,
                     "group_name": item.group_name,
                     "material_process": item.material_process,

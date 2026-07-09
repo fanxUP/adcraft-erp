@@ -44,3 +44,35 @@ export function getOutsourcePayments(params: { page?: number; page_size?: number
 export function createOutsourcePayment(data: Omit<Partial<OutsourcePaymentResponse>, 'id' | 'payment_no' | 'vendor_name' | 'created_at' | 'created_by'>) {
   return post<OutsourcePaymentResponse>('/outsource/payments', data)
 }
+
+export function cancelOutsourceTask(id: string) {
+  return post<OutsourceTaskResponse>(`/outsource/tasks/${id}/cancel`)
+}
+
+export function revertOutsourceTask(id: string) {
+  return post<OutsourceTaskResponse>(`/outsource/tasks/${id}/revert`)
+}
+
+export function deleteOutsourceTask(id: string) {
+  return del<SuccessResponse>(`/outsource/tasks/${id}`)
+}
+
+export function getOutsourceTaskPaymentSummary(id: string) {
+  return get<{task_id: string; task_no: string; vendor_name: string; total_amount: number; paid_amount: number; unpaid_amount: number; payments: Array<{payment_no: string; amount: number; payment_method: string | null; paid_at: string | null; remark: string | null; created_at: string | null}>}>(`/outsource/tasks/payment-summary/${id}`)
+}
+
+export function getDeletedOutsourceTasks(params: { page?: number; page_size?: number }) {
+  return get<PaginatedData<OutsourceTaskResponse>>('/outsource/tasks/recycle/list', { params })
+}
+
+export function restoreOutsourceTask(id: string) {
+  return post<OutsourceTaskResponse>(`/outsource/tasks/${id}/restore`)
+}
+
+export function getQuotesForDropdown() {
+  return get<{id: string; label: string; quote_no: string; project_name: string; customer_name: string | null}[]>('/outsource/quotes-for-dropdown')
+}
+
+export function getOrdersForDropdown() {
+  return get<{id: string; label: string; order_no: string; project_name: string}[]>('/outsource/orders-for-dropdown')
+}

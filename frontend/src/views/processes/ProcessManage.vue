@@ -33,7 +33,7 @@
       @change="fetchData"
     />
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑工艺' : '新建工艺'" width="500px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑工艺' : '新建工艺'" width="500px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-form-item label="工艺名称">
           <el-input v-model="form.name" />

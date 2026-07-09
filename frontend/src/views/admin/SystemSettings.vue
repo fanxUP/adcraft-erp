@@ -34,6 +34,25 @@
       </div>
     </el-card>
 
+    <!-- Force Re-login -->
+    <el-card shadow="never" style="margin-bottom: 16px">
+      <template #header>
+        <span>安全控制</span>
+      </template>
+      <el-form label-width="140px" style="max-width: 600px">
+        <el-form-item label="强制重新登录">
+          <div>
+            <el-button type="danger" :loading="bumping" @click="handleBumpToken">
+              强制所有用户重新登录
+            </el-button>
+            <div style="font-size: 12px; color: #909399; margin-top: 4px">
+              发布需要重新登录才能生效的更新后，点击此按钮强制所有已登录用户退出并重新登录
+            </div>
+          </div>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
     <!-- Typography Settings -->
     <el-card shadow="never" style="margin-bottom: 16px">
       <template #header>
@@ -138,6 +157,7 @@ const fontWeightLocal = computed({
 
 const loading = ref(false)
 const saving = ref(false)
+const bumping = ref(false)
 const settings = ref<SystemSettings | null>(null)
 
 const form = reactive({
@@ -169,6 +189,22 @@ async function fetchSettings() {
       AI_API_BASE_URL: data.AI_API_BASE_URL,
     })
   } finally { loading.value = false }
+}
+
+async function handleBumpToken() {
+  try {
+    await ElMessageBox.confirm(
+      '确定强制所有用户重新登录？当前所有已登录用户将被立即退出，需要重新输入密码。',
+      '确认操作',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch { return }
+  bumping.value = true
+  try {
+    const { forceRelogin } = await import('@/api/admin')
+    const res = await forceRelogin()
+    ElMessage.success(res.message || '已强制所有用户重新登录')
+  } catch { /* handled */ } finally { bumping.value = false }
 }
 
 async function handleSave() {
