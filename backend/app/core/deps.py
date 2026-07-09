@@ -25,4 +25,8 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在或已禁用")
+    # 校验 token 版本号，如果用户 token_version 已升级则强制重新登录
+    token_ver = payload.get("token_version", 1)
+    if token_ver < user.token_version:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录已过期，请重新登录")
     return user

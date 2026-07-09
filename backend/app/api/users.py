@@ -98,6 +98,18 @@ async def delete_user(
         return {"code": 40401, "message": "用户不存在", "data": None}
     return success(None)
 
+@router.post("/bump-token-version")
+async def bump_token_version(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """管理员：将所有用户的 token_version +1，强制所有已登录用户重新登录。"""
+    from sqlalchemy import update as sa_update
+    from app.models.user import User as UserModel
+    await db.execute(sa_update(UserModel).values(token_version=UserModel.token_version + 1))
+    await db.commit()
+    return success({"message": "已强制所有用户重新登录"})
+
 
 @router.post("/{user_id}/reset-password")
 async def reset_password(
@@ -111,3 +123,15 @@ async def reset_password(
     if not ok:
         return {"code": 40401, "message": "用户不存在", "data": None}
     return success(None)
+
+@router.post("/bump-token-version")
+async def bump_token_version(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """管理员：将所有用户的 token_version +1，强制所有已登录用户重新登录。"""
+    from sqlalchemy import update as sa_update
+    from app.models.user import User as UserModel
+    await db.execute(sa_update(UserModel).values(token_version=UserModel.token_version + 1))
+    await db.commit()
+    return success({"message": "已强制所有用户重新登录"})
