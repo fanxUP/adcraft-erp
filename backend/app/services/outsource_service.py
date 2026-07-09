@@ -164,3 +164,16 @@ class OutsourceService:
             "created_by": str(p.created_by) if p.created_by else None,
             "created_at": p.created_at.isoformat() if p.created_at else None,
         }
+
+    # ── Cancel Task (admin only) ──
+
+    async def cancel_task(self, task_id: UUID) -> dict:
+        task = await self.task_repo.get_by_id(task_id)
+        if not task:
+            raise ValueError("外协任务不存在")
+        if task.status in ("completed", "settled", "cancelled"):
+            raise ValueError(f"当前状态「{task.status}」不允许取消")
+        task.status = "cancelled"
+        await self.db.flush()
+        vname = await self._task_vendor_name(task)
+        return self._task_to_dict(task, vname)

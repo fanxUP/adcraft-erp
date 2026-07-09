@@ -44,3 +44,7 @@ export function getOutsourcePayments(params: { page?: number; page_size?: number
 export function createOutsourcePayment(data: Omit<Partial<OutsourcePaymentResponse>, 'id' | 'payment_no' | 'vendor_name' | 'created_at' | 'created_by'>) {
   return post<OutsourcePaymentResponse>('/outsource/payments', data)
 }
+
+export function cancelOutsourceTask(id: string) {
+  return post<OutsourceTaskResponse>(`/outsource/tasks/${id}/cancel`)
+}
