@@ -77,11 +77,12 @@ class ProjectCostService:
         project_name_val = None
         order_id_val = None
         quote_id_val = None
+        quote_no_val = None
 
         if source_type == "quote":
             quote_id = UUID(data["quote_id"])
             result = await self.db.execute(
-                select(Quote.id, Quote.customer_id, Quote.project_name).where(Quote.id == quote_id)
+                select(Quote.id, Quote.customer_id, Quote.project_name, Quote.quote_no).where(Quote.id == quote_id)
             )
             quote_row = result.one_or_none()
             if not quote_row:
@@ -89,6 +90,7 @@ class ProjectCostService:
             quote_id_val = quote_row[0]
             customer_id_val = quote_row[1]
             project_name_val = quote_row[2]
+            quote_no_val = quote_row[3]
         else:
             order_id = UUID(data["order_id"])
             result = await self.db.execute(
@@ -140,9 +142,9 @@ class ProjectCostService:
             "source_type": cost.source_type,
             "order_id": str(cost.order_id) if cost.order_id else None,
             "quote_id": str(cost.quote_id) if cost.quote_id else None,
-            "quote_no": cost.quote.quote_no if cost.quote else None,
+            "quote_no": quote_no_val,  # use locally fetched value
             "order_item_id": str(cost.order_item_id) if cost.order_item_id else None,
-            "order_item_name": cost.order_item.item_name if cost.order_item else None,
+            "order_item_name": None,  # avoid lazy load in import context
             "customer_id": str(cost.customer_id) if cost.customer_id else None,
             "customer_name": None,  # populated by list query via relationship
             "project_name": project_name_val,
