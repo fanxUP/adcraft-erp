@@ -21,8 +21,10 @@ class ProjectCostService:
         self.repo = ProjectCostRepository(db)
         self.attachment_repo = AttachmentRepository(db)
 
-    async def _sync_order_cost(self, order_id: UUID) -> None:
+    async def _sync_order_cost(self, order_id: UUID | None) -> None:
         """Re-calculate order cost from all sources (outsource + material stock + project costs)."""
+        if not order_id:
+            return
         from app.services.order_service import OrderService
         order_svc = OrderService(self.db)
         await order_svc.auto_calculate_cost(order_id)
