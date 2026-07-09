@@ -92,6 +92,8 @@
         <template #default="{ row }">
           <span v-if="row.order_item_name">{{ row.order_item_name }}</span>
           <span v-else-if="row.quote_item_name">{{ row.quote_item_name }}</span>
+          <span v-else-if="row.order_item_id" style="color: #c0c4cc">{{ row.order_item_id.slice(0, 8) }}...</span>
+          <span v-else-if="row.quote_item_id" style="color: #c0c4cc">{{ row.quote_item_id.slice(0, 8) }}...</span>
           <span v-else style="color: #c0c4cc">-</span>
         </template>
       </el-table-column>

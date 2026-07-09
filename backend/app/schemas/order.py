@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 
@@ -21,7 +21,7 @@ class OrderListResponse(BaseModel):
 
 class OrderItemResponse(BaseModel):
     id: str
-    item_name: str
+    item_name: str = Field(..., min_length=1)
     product_id: str | None = None
     material_id: str | None = None
     process_id: str | None = None
