@@ -27,6 +27,7 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
     is_settled: Mapped[bool] = mapped_column(Boolean, default=False, comment="欠款是否已结清")
     settled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="欠款结清时间")
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True, comment="成本摘要")
     cost_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     receipt_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
