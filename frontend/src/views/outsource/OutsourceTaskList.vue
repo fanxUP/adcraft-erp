@@ -137,6 +137,7 @@ const isAdmin = computed(() => authStore.isAdmin)
 const rules = {
   vendor_id: [{ required: true, message: '请选择外协商', trigger: 'change' }],
   task_type: [{ required: true, message: '请选择任务类型', trigger: 'change' }],
+  related_doc_id: [{ required: true, message: '请选择关联任务', trigger: 'change' }],
 }
 
 function taskTypeLabel(val: string) {
