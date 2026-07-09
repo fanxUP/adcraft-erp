@@ -9,7 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+
 
 # revision identifiers, used by Alembic.
 revision: str = "cc23a92b0294"
@@ -19,8 +19,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("project_costs", sa.Column("quote_item_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("quote_items.id"), nullable=True))
+    # Column already exists on production, no-op
+    pass
 
 
 def downgrade() -> None:
-    op.drop_column("project_costs", "quote_item_id")
+    pass
