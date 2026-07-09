@@ -64,7 +64,24 @@
     </div>
 
     <!-- Cost table -->
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <div style="display: flex; gap: 8px; margin: 16px 0; align-items: center;">
+      <el-button
+        v-if="authStore.isAdmin && selectedIds.length > 0"
+        type="danger"
+        @click="handleBatchDelete"
+      >
+        批量删除（{{ selectedIds.length }}）
+      </el-button>
+      <span v-if="selectedIds.length > 0" style="font-size: 13px; color: #909399">已选中 {{ selectedIds.length }} 条记录</span>
+    </div>
+    <el-table
+      :data="list"
+      v-loading="loading"
+      stripe
+      style="margin-top: 16px"
+      @selection-change="onSelectionChange"
+    >
+      <el-table-column type="selection" width="50" />
       <el-table-column prop="cost_no" label="编号" width="180" />
       <el-table-column label="类别" width="120">
         <template #default="{ row }">
@@ -315,7 +332,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  getProjectCosts, createProjectCost, updateProjectCost, deleteProjectCost, importProjectCosts,
+  getProjectCosts, createProjectCost, updateProjectCost, deleteProjectCost, batchDeleteProjectCosts, importProjectCosts,
   getProjectCostAttachments, uploadProjectCostAttachment, deleteProjectCostAttachment,
 } from '@/api/payments'
 import { getOrder } from '@/api/orders'
@@ -391,6 +408,29 @@ function statusLabel(s: string) {
 function statusColor(s: string) {
   const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', in_progress: '', in_production: '', in_installation: '', completed: 'success', cancelled: 'danger' }
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+}
+
+const selectedIds = ref<string[]>([])
+
+function onSelectionChange(rows: ProjectCostResponse[]) {
+  selectedIds.value = rows.map(r => r.id)
+}
+
+async function handleBatchDelete() {
+  if (selectedIds.value.length === 0) return
+  try {
+    await ElMessageBox.confirm(`确定批量删除选中的 ${selectedIds.value.length} 条成本记录吗？`, '确认批量删除', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await batchDeleteProjectCosts(selectedIds.value)
+    ElMessage.success(`已删除 ${selectedIds.value.length} 条记录`)
+    selectedIds.value = []
+    fetchData()
+  } catch {
+    // cancelled or API error
+  }
 }
 
 function resetForm() {

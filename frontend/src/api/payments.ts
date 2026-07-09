@@ -43,6 +43,10 @@ export function updateProjectCost(id: string, data: Partial<Omit<ProjectCostResp
 export function deleteProjectCost(id: string) {
   return del<SuccessResponse>(`/project-costs/${id}`)
 }
+
+export function batchDeleteProjectCosts(ids: string[]) {
+  return del<SuccessResponse>(`/project-costs/batch?cost_ids=${ids.join(',')}`)
+}
 export function getProjectCostSummary(orderIds: string[]) {
   return get<ProjectCostSummaryResponse>('/project-costs/summary', { params: { order_ids: orderIds.join(',') } })
 }
