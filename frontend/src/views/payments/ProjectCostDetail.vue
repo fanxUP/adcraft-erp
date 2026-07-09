@@ -162,12 +162,14 @@
           <el-input :value="(isQuote ? (order?.quote_no || '') : (order?.order_no || '')) + ' ' + (order?.project_name || '')" disabled />
         </el-form-item>
         <el-form-item label="分项">
-          <el-select v-model="selectedItemId" placeholder="选择分项（可选）" clearable style="width: 100%">
+          <el-select v-model="selectedItemId" placeholder="选择项目内容（可选）" clearable style="width: 100%">
             <el-option
-              v-for="item in allItems"
-              :key="item.id"
-              :label="item.group_name ? item.item_name + ' (' + item.group_name + ')' : item.item_name"
-              :value="item.id"
+              v-for="opt in groupedItemOptions"
+              :key="opt.value || ('group-' + opt.group)"
+              :label="opt.label"
+              :value="opt.value"
+              :disabled="opt.isGroupHeader"
+              :class="{ 'group-header-option': opt.isGroupHeader }"
             />
           </el-select>
         </el-form-item>
@@ -380,6 +382,57 @@ const totalCost = computed(() => {
 })
 
 const allItems = computed(() => order.value?.items || [])
+
+// 按分项分组，构建层级下拉选项
+interface GroupedItemOption {
+  label: string
+  value: string
+  group: string
+  isGroupHeader: boolean
+}
+const groupedItemOptions = computed<GroupedItemOption[]>(() => {
+  const items = allItems.value
+  const result: GroupedItemOption[] = []
+  const groupNames = new Set<string>()
+
+  // 先收集所有分组名
+  for (const item of items) {
+    if (item.group_name) groupNames.add(item.group_name)
+  }
+
+  // 无分组的项目内容 — 直接挂在总项目下
+  const ungrouped = items.filter(i => !i.group_name)
+  for (const item of ungrouped) {
+    result.push({
+      label: item.item_name || '未命名',
+      value: item.id,
+      group: '',
+      isGroupHeader: false,
+    })
+  }
+
+  // 有分组的 — 分项名作为组头，项目内容挂下面
+  for (const gn of groupNames) {
+    const groupItems = items.filter(i => i.group_name === gn)
+    // 分项头（可选，作为提示）
+    result.push({
+      label: '▸ ' + gn,
+      value: '',
+      group: gn,
+      isGroupHeader: true,
+    })
+    for (const item of groupItems) {
+      result.push({
+        label: '    ' + (item.item_name || '未命名'),
+        value: item.id,
+        group: gn,
+        isGroupHeader: false,
+      })
+    }
+  }
+
+  return result
+})
 const selectedItemId = computed({
   get: () => isQuote.value ? form.quote_item_id : form.order_item_id,
   set: (val: string) => {
@@ -771,5 +824,16 @@ onMounted(() => {
 }
 .att-thumb:hover .att-del {
   opacity: 1;
+}
+
+/* 分项组头样式 */
+:deep(.group-header-option) {
+  font-weight: 600;
+  color: #409eff;
+  font-size: 13px;
+  pointer-events: none;
+  border-bottom: 1px solid #ebeef5;
+  padding-bottom: 4px;
+  margin-bottom: 2px;
 }
 </style>
