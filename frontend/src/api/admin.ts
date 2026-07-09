@@ -61,6 +61,10 @@ export function getSystemSettings() {
   return get<SystemSettings>('/admin/settings')
 }
 
+export function forceRelogin() {
+  return request.post('/users/bump-token-version')
+}
+
 export function updateSystemSettings(data: Record<string, unknown>) {
   return put<{ updated: Record<string, string>; message: string }>('/admin/settings', data)
 }
