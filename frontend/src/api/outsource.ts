@@ -56,3 +56,11 @@ export function revertOutsourceTask(id: string) {
 export function deleteOutsourceTask(id: string) {
   return del<SuccessResponse>(`/outsource/tasks/${id}`)
 }
+
+export function getQuotesForDropdown() {
+  return get<{id: string; label: string; quote_no: string; project_name: string; customer_name: string | null}[]>('/outsource/quotes-for-dropdown')
+}
+
+export function getOrdersForDropdown() {
+  return get<{id: string; label: string; order_no: string; project_name: string}[]>('/outsource/orders-for-dropdown')
+}

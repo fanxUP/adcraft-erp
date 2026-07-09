@@ -46,6 +46,7 @@ class VendorResponse(BaseModel):
 
 class OutsourceTaskCreate(BaseModel):
     vendor_id: str = Field(...)
+    quote_id: str | None = None
     order_id: str | None = None
     task_type: str = Field(...)
     description: str | None = None
@@ -57,6 +58,7 @@ class OutsourceTaskCreate(BaseModel):
 
 class OutsourceTaskUpdate(BaseModel):
     vendor_id: str | None = None
+    quote_id: str | None = None
     task_type: str | None = None
     description: str | None = None
     quantity: int | None = None
@@ -72,6 +74,7 @@ class OutsourceTaskResponse(BaseModel):
     task_no: str
     vendor_id: str
     vendor_name: str | None = None
+    quote_id: str | None = None
     order_id: str | None = None
     task_type: str
     description: str | None = None

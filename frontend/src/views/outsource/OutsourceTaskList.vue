@@ -64,6 +64,16 @@
             <el-option v-for="v in vendors" :key="v.id" :label="v.name" :value="v.id" />
           </el-select>
         </el-form-item>
+        <el-form-item label="报价单">
+          <el-select v-model="form.quote_id" filterable clearable placeholder="请选择报价单" style="width: 100%">
+            <el-option v-for="q in quotes" :key="q.id" :label="q.label" :value="q.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="订单">
+          <el-select v-model="form.order_id" filterable clearable placeholder="请选择订单" style="width: 100%">
+            <el-option v-for="o in orders" :key="o.id" :label="o.label" :value="o.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="任务类型" prop="task_type">
           <el-select v-model="form.task_type" clearable style="width: 100%">
             <el-option label="制作" value="production" />
@@ -97,9 +107,10 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import {
   getOutsourceVendors, getOutsourceTasks, createOutsourceTask, updateOutsourceTask, cancelOutsourceTask, revertOutsourceTask, deleteOutsourceTask,
+  getQuotesForDropdown, getOrdersForDropdown,
 } from '@/api/outsource'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { OutsourceTaskResponse, VendorResponse } from '@/types/api'
+import { OutsourceTaskResponse } from '@/types/api'
 import { useAuthStore } from '@/stores/auth'
 
 const loading = ref(false)
@@ -111,9 +122,12 @@ const pageSize = ref(20)
 const statusFilter = ref('')
 const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
-const vendors = ref<VendorResponse[]>([])
+
+
+const quotes = ref<{id: string; label: string}[]>([])
+const orders = ref<{id: string; label: string}[]>([])
 const form = reactive({
-  vendor_id: '', task_type: 'production', description: '',
+  vendor_id: '', quote_id: '', order_id: '', task_type: 'production', description: '',
   quantity: 1, unit_price: 0, remark: '',
 })
 const authStore = useAuthStore()
@@ -139,6 +153,18 @@ function statusLabel(val: string) {
   return map[val] || val
 }
 
+async function loadQuotes() {
+  try {
+    const data = await getQuotesForDropdown()
+    quotes.value = data
+  } catch { /* ignore */ }
+}
+async function loadOrders() {
+  try {
+    const data = await getOrdersForDropdown()
+    orders.value = data
+  } catch { /* ignore */ }
+}
 async function loadVendors() {
   try {
     const data = await getOutsourceVendors({ page: 1, page_size: 100 })
@@ -162,14 +188,15 @@ async function fetchData() {
 
 function handleCreate() {
   editingId.value = null
-  Object.assign(form, { vendor_id: '', task_type: 'production', description: '', quantity: 1, unit_price: 0, remark: '' })
+  Object.assign(form, { vendor_id: '', quote_id: '', order_id: '', task_type: 'production', description: '', quantity: 1, unit_price: 0, remark: '' })
   dialogVisible.value = true
 }
 
 function handleEdit(row: OutsourceTaskResponse) {
   editingId.value = row.id
   Object.assign(form, {
-    vendor_id: row.vendor_id, task_type: row.task_type, description: row.description,
+    vendor_id: row.vendor_id, quote_id: row.quote_id || '', order_id: row.order_id || '',
+    task_type: row.task_type, description: row.description,
     quantity: row.quantity, unit_price: row.unit_price, remark: row.remark,
   })
   dialogVisible.value = true
@@ -247,7 +274,7 @@ async function handleDelete(row: OutsourceTaskResponse) {
   }
 }
 
-onMounted(() => { fetchData(); loadVendors() })
+onMounted(() => { fetchData(); loadVendors(); loadQuotes(); loadOrders() })
 </script>
 
 <style scoped>

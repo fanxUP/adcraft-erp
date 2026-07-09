@@ -474,6 +474,7 @@ export interface OutsourceTaskResponse {
   task_no: string
   vendor_id: string
   vendor_name?: string
+  quote_id?: string
   order_id?: string
   task_type: string
   description?: string
