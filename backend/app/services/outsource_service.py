@@ -131,6 +131,12 @@ class OutsourceService:
 
     async def create_payment(self, data: dict) -> dict:
         data["payment_no"] = await generate_outsource_payment_no(self.db)
+        # Convert string fields to proper types
+        if data.get("paid_at"):
+            from datetime import datetime as dt
+            data["paid_at"] = dt.fromisoformat(data["paid_at"])
+        if data.get("task_id") and not isinstance(data["task_id"], UUID):
+            data["task_id"] = UUID(data["task_id"])
         payment = await self.payment_repo.create(data)
         # 同步更新关联任务的已付/未付金额
         if payment.task_id:
@@ -140,7 +146,7 @@ class OutsourceService:
 
     async def _update_task_paid_amounts(self, task_id: UUID) -> None:
         """根据所有付款记录重新计算任务的已付/未付金额"""
-        from sqlalchemy import select, func, func
+        from sqlalchemy import select, func
         result = await self.db.execute(
             select(func.coalesce(func.sum(OutsourcePayment.amount), 0))
             .where(OutsourcePayment.task_id == task_id)
