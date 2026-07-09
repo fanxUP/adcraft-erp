@@ -562,7 +562,6 @@ export interface QuoteItemResponse {
   sort_order: number
   group_name?: string
   material_process?: string
-  pieces?: number
   specification?: string
 }
 

@@ -7,11 +7,11 @@ export function getNotifications(params: {
   page?: number
   page_size?: number
 } = {}): Promise<PaginatedData<NotificationResponse>> {
-  return get('/notifications', params)
+  return get('/notifications', { params })
 }
 
 export function getRecentNotifications(limit = 10): Promise<NotificationResponse[]> {
-  return get('/notifications/recent', { limit })
+  return get('/notifications/recent', { params: { limit } })
 }
 
 export function getUnreadCount(): Promise<UnreadCountResponse> {
