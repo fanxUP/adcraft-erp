@@ -256,6 +256,13 @@ class OrderService:
             )
         )).scalars().all()
         for task in tasks:
+            # 先级联删除关联的外协付款，再删除任务
+            from app.models.outsource import OutsourcePayment
+            payments = (await self.db.execute(
+                select(OutsourcePayment).where(OutsourcePayment.task_id == task.id)
+            )).scalars().all()
+            for p in payments:
+                await self.db.delete(p)
             await self.db.delete(task)
         await self.repo.soft_delete(order)
 
