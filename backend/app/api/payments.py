@@ -365,9 +365,19 @@ async def list_quotes_for_cost(
     from app.models.quote import Quote as QuoteModel
     from app.repositories.project_cost_repo import ProjectCostRepository
 
-    from sqlalchemy import or_, select, func
+    from sqlalchemy import or_, select, func, not_
+    from app.models.order import Order as OrderModel
 
-    q = select(QuoteModel).where(QuoteModel.deleted_at.is_(None))
+    # Exclude quotes that have already been converted to orders
+    converted = select(OrderModel.quote_id).where(
+        OrderModel.quote_id.isnot(None),
+        OrderModel.deleted_at.is_(None),
+    )
+
+    q = select(QuoteModel).where(
+        QuoteModel.deleted_at.is_(None),
+        not_(QuoteModel.id.in_(converted)),
+    )
     if keyword:
         fuzzy = f"%{keyword}%"
         q = q.where(

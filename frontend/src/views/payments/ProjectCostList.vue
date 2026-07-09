@@ -179,8 +179,8 @@ const combinedList = computed(() => {
 async function fetchData() {
   loading.value = true
   try {
-    const orderParams: Record<string, unknown> = { page: 1, page_size: 999 }
-    const quoteParams: Record<string, unknown> = { page: 1, page_size: 999 }
+    const orderParams: Record<string, unknown> = { page: 1, page_size: 100 }
+    const quoteParams: Record<string, unknown> = { page: 1, page_size: 100 }
 
     // Fetch both
     const [orderData, quoteData] = await Promise.all([
