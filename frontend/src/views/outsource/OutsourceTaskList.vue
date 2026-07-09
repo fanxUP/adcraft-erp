@@ -66,12 +66,7 @@
         </el-form-item>
         <el-form-item label="关联任务">
           <el-select v-model="form.related_doc_id" filterable clearable placeholder="请选择关联的报价单或订单" style="width: 100%" @change="onRelatedDocChange">
-            <el-option-group label="报价单">
-              <el-option v-for="q in quotes" :key="'q_' + q.id" :label="q.label" :value="q.id" />
-            </el-option-group>
-            <el-option-group label="订单">
-              <el-option v-for="o in orders" :key="'o_' + o.id" :label="o.label" :value="o.id" />
-            </el-option-group>
+            <el-option v-for="d in documents" :key="d.id" :label="d.label" :value="d.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="任务类型" prop="task_type">
@@ -107,7 +102,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import {
   getOutsourceVendors, getOutsourceTasks, createOutsourceTask, updateOutsourceTask, cancelOutsourceTask, revertOutsourceTask, deleteOutsourceTask,
-  getQuotesForDropdown, getOrdersForDropdown,
+  getDocumentsForDropdown,
 } from '@/api/outsource'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { OutsourceTaskResponse } from '@/types/api'
@@ -125,8 +120,7 @@ const editingId = ref<string | null>(null)
 
 
 const vendors = ref<{id: string; name: string}[]>([])
-const quotes = ref<{id: string; label: string}[]>([])
-const orders = ref<{id: string; label: string}[]>([])
+const documents = ref<{id: string; label: string; doc_type: string}[]>([])
 const form = reactive({
   vendor_id: '', related_doc_id: '', related_doc_type: '', task_type: 'production', description: '',
   quantity: 1, unit_price: 0, remark: '',
@@ -154,16 +148,10 @@ function statusLabel(val: string) {
   return map[val] || val
 }
 
-async function loadQuotes() {
+async function loadDocuments() {
   try {
-    const data = await getQuotesForDropdown()
-    quotes.value = data
-  } catch { /* ignore */ }
-}
-async function loadOrders() {
-  try {
-    const data = await getOrdersForDropdown()
-    orders.value = data
+    const data = await getDocumentsForDropdown()
+    documents.value = data
   } catch { /* ignore */ }
 }
 async function loadVendors() {
@@ -193,9 +181,9 @@ function onRelatedDocChange(val: string) {
     form.related_doc_type = ''
     return
   }
-  // 判断选中项是报价单还是订单
-  const foundQuote = quotes.value.find(q => q.id === val)
-  form.related_doc_type = foundQuote ? 'quote' : 'order'
+  // 从合并列表中查找选中文档的类型
+  const found = documents.value.find(d => d.id === val)
+  form.related_doc_type = found ? found.doc_type : ''
 }
 
 function handleCreate() {
@@ -286,7 +274,7 @@ async function handleDelete(row: OutsourceTaskResponse) {
   }
 }
 
-onMounted(() => { fetchData(); loadVendors(); loadQuotes(); loadOrders() })
+onMounted(() => { fetchData(); loadVendors(); loadDocuments() })
 </script>
 
 <style scoped>
