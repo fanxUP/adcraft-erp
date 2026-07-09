@@ -57,8 +57,8 @@ class OutsourceService:
         result = []
         for t in tasks:
             vname = await self._task_vendor_name(t)
-            doc_no = await self._related_doc_no(t.related_doc_id, t.related_doc_type)
-            result.append(self._task_to_dict(t, vname, doc_no))
+            pname = await self._related_project_name(t.related_doc_id, t.related_doc_type)
+            result.append(self._task_to_dict(t, vname, pname))
         return result, total
 
     async def _task_vendor_name(self, task) -> str | None:
@@ -70,7 +70,7 @@ class OutsourceService:
         if not task:
             return None
         vname = await self._task_vendor_name(task)
-        doc_no = await self._related_doc_no(task.related_doc_id, task.related_doc_type)
+        pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
         return self._task_to_dict(task, vname, doc_no)
 
     async def create_task(self, data: dict) -> dict:
@@ -86,7 +86,7 @@ class OutsourceService:
         data["total_amount"] = float(qty * price)
         task = await self.task_repo.create(data)
         vname = await self._task_vendor_name(task)
-        doc_no = await self._related_doc_no(task.related_doc_id, task.related_doc_type)
+        pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
         return self._task_to_dict(task, vname, doc_no)
 
     async def update_task(self, task_id: UUID, data: dict) -> dict:
@@ -112,7 +112,7 @@ class OutsourceService:
             data["total_amount"] = float(qty * price)
         task = await self.task_repo.update(task, data)
         vname = await self._task_vendor_name(task)
-        doc_no = await self._related_doc_no(task.related_doc_id, task.related_doc_type)
+        pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
         return self._task_to_dict(task, vname, doc_no)
 
     # ── Payment ──
@@ -137,15 +137,15 @@ class OutsourceService:
         result = await self.db.execute(select(OutsourceVendor.name).where(OutsourceVendor.id == vendor_id))
         return result.scalar_one_or_none()
 
-    async def _related_doc_no(self, doc_id: UUID | None, doc_type: str | None) -> str | None:
+    async def _related_project_name(self, doc_id: UUID | None, doc_type: str | None) -> str | None:
         if not doc_id or not doc_type:
             return None
         if doc_type == "quote":
             from app.models.quote import Quote
-            result = await self.db.execute(select(Quote.quote_no).where(Quote.id == doc_id))
+            result = await self.db.execute(select(Quote.project_name).where(Quote.id == doc_id))
         elif doc_type == "order":
             from app.models.order import Order
-            result = await self.db.execute(select(Order.order_no).where(Order.id == doc_id))
+            result = await self.db.execute(select(Order.project_name).where(Order.id == doc_id))
         else:
             return None
         return result.scalar_one_or_none()
@@ -162,14 +162,14 @@ class OutsourceService:
             "created_at": v.created_at.isoformat() if v.created_at else None,
         }
 
-    def _task_to_dict(self, t, vendor_name: str | None = None, related_doc_no: str | None = None) -> dict:
+    def _task_to_dict(self, t, vendor_name: str | None = None, related_project_name: str | None = None) -> dict:
         return {
             "id": str(t.id), "task_no": t.task_no,
             "vendor_id": str(t.vendor_id),
             "vendor_name": vendor_name,
             "related_doc_id": str(t.related_doc_id) if t.related_doc_id else None,
             "related_doc_type": t.related_doc_type,
-            "related_doc_no": related_doc_no,
+            "related_project_name": related_project_name,
             "order_id": str(t.order_id) if t.order_id else None,
             "task_type": t.task_type,
             "description": t.description,

@@ -19,9 +19,9 @@
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协任务">
       <el-table-column prop="task_no" label="任务编号" width="160" />
       <el-table-column prop="vendor_name" label="外协商" width="150" />
-      <el-table-column label="关联单据" width="180">
+      <el-table-column label="任务" width="200" show-overflow-tooltip>
         <template #default="{ row }">
-          <span v-if="row.related_doc_no">{{ row.related_doc_no }}</span>
+          <span v-if="row.related_project_name">{{ row.related_project_name }}</span>
           <span v-else style="color: #999">-</span>
         </template>
       </el-table-column>
