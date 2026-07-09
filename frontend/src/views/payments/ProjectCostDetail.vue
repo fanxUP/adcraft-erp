@@ -93,6 +93,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="summary" label="成本摘要" min-width="180" show-overflow-tooltip />
       <el-table-column label="凭证" width="80" align="center">
         <template #default="{ row }">
           <el-tag v-if="row.attachment_count > 0" size="small" type="success">{{ row.attachment_count }}</el-tag>
@@ -144,6 +145,9 @@
               <span v-if="item.group_name" style="float: right; color: #909399; font-size: 12px">{{ item.group_name }}</span>
             </el-option>
           </el-select>
+        </el-form-item>
+        <el-form-item label="成本摘要">
+          <el-input v-model="form.summary" type="textarea" :rows="2" placeholder="成本摘要说明…" />
         </el-form-item>
         <el-form-item label="成本类别" required>
           <el-select
@@ -241,7 +245,7 @@
     <el-dialog v-model="showImport" title="导入Excel" width="480px" :close-on-click-modal="false">
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary)">
         Excel 需包含以下列：<br />
-        <b>成本类别、金额、描述(可选)、成本日期(可选)、备注(可选)</b>
+        <b>分项、成本类别、付款方式、收款公司、金额、欠款金额、成本日期、说明、成本摘要、备注</b>
       </p>
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 13px">
         导入的成本将自动关联到 <b>{{ isQuote ? (order?.quote_no || '报价单') : (order?.order_no || '订单') }}</b>
@@ -352,6 +356,7 @@ const form = reactive({
   cost_date: '',
   description: '',
   remark: '',
+  summary: '',
   order_item_id: '',
 })
 
@@ -368,7 +373,7 @@ function statusColor(s: string) {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', remark: '', order_item_id: '' })
+  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', order_item_id: '' })
   isEditing.value = false
   editingId.value = ''
   dialogAttachments.value = []
@@ -390,6 +395,7 @@ function openEdit(row: ProjectCostResponse) {
   form.cost_date = row.cost_date?.slice(0, 10) || ''
   form.description = row.description || ''
   form.remark = row.remark || ''
+  form.summary = row.summary || ''
   form.order_item_id = row.order_item_id || ''
   dialogAttachments.value = []
   showDialog.value = true

@@ -370,6 +370,7 @@ export interface ProjectCostResponse {
   is_settled: boolean
   settled_at?: string
   description?: string
+  summary?: string
   cost_date?: string
   receipt_url?: string
   remark?: string

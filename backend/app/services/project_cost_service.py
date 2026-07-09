@@ -116,6 +116,7 @@ class ProjectCostService:
             category=data["category"],
             amount=data["amount"],
             description=data.get("description"),
+            summary=data.get("summary"),
             cost_date=datetime.fromisoformat(data["cost_date"]) if data.get("cost_date") else None,
             receipt_url=data.get("receipt_url"),
             remark=data.get("remark"),
@@ -150,6 +151,7 @@ class ProjectCostService:
             "is_settled": cost.is_settled,
             "settled_at": cost.settled_at.isoformat() if cost.settled_at else None,
             "description": cost.description,
+            "summary": cost.summary,
             "cost_date": cost.cost_date.isoformat() if cost.cost_date else None,
             "receipt_url": cost.receipt_url,
             "remark": cost.remark,
@@ -304,7 +306,8 @@ class ProjectCostService:
                     debt_amount = float(row[5]) if len(row) > 5 and row[5] else 0
                     cost_date_str = str(row[6]).strip() if len(row) > 6 and row[6] else None
                     description = str(row[7]).strip() if len(row) > 7 and row[7] else None
-                    remark = str(row[8]).strip() if len(row) > 8 and row[8] else None
+                    summary = str(row[8]).strip() if len(row) > 8 and row[8] else None
+                    remark = str(row[9]).strip() if len(row) > 9 and row[9] else None
 
                     if not category or amount <= 0:
                         errors.append({"row": i, "error": "成本类别和金额(>0)为必填项"})
@@ -327,6 +330,7 @@ class ProjectCostService:
                         "payee_company_name": payee_company_name,
                         "debt_amount": debt_amount,
                         "description": description,
+                        "summary": summary,
                         "cost_date": cost_date.isoformat() if cost_date else None,
                         "remark": remark,
                     }, created_by)
@@ -343,7 +347,8 @@ class ProjectCostService:
                     debt_amount = float(row[6]) if len(row) > 6 and row[6] else 0
                     cost_date_str = str(row[7]).strip() if len(row) > 7 and row[7] else None
                     description = str(row[8]).strip() if len(row) > 8 and row[8] else None
-                    remark = str(row[9]).strip() if len(row) > 9 and row[9] else None
+                    summary = str(row[9]).strip() if len(row) > 9 and row[9] else None
+                    remark = str(row[10]).strip() if len(row) > 10 and row[10] else None
 
                     if not order_no or not category or amount <= 0:
                         errors.append({"row": i, "error": "订单编号、成本类别和金额(>0)为必填项"})
@@ -369,6 +374,7 @@ class ProjectCostService:
                         "category": category,
                         "amount": amount,
                         "description": description,
+                        "summary": summary,
                         "cost_date": cost_date.isoformat() if cost_date else None,
                         "remark": remark,
                     }, created_by)
@@ -420,6 +426,7 @@ class ProjectCostService:
             "is_settled": c.is_settled,
             "settled_at": c.settled_at.isoformat() if c.settled_at else None,
             "description": c.description,
+            "summary": c.summary,
             "cost_date": c.cost_date.isoformat() if c.cost_date else None,
             "receipt_url": c.receipt_url,
             "remark": c.remark,
