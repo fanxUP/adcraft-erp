@@ -177,13 +177,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import {
   getOutsourceVendors, getOutsourceTasks, getOutsourceTaskPaymentSummary,
   createOutsourceTask, updateOutsourceTask, createOutsourcePayment,
   cancelOutsourceTask, revertOutsourceTask, deleteOutsourceTask,
   getQuotesForDropdown, getOrdersForDropdown,
 } from '@/api/outsource'
+import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { OutsourceTaskResponse } from '@/types/api'
 
@@ -222,7 +223,8 @@ const payRules = {
 }
 
 // 是否管理员（从 localStorage 取角色）
-const isAdmin = ref(false)
+const authStore = useAuthStore()
+const isAdmin = computed(() => authStore.isAdmin)
 
 function statusType(val: string) {
   const map: Record<string, string> = { pending: 'info', in_progress: 'warning', completed: 'success', settled: '', cancelled: 'danger' }
@@ -386,14 +388,6 @@ async function handleDelete(row: OutsourceTaskResponse) {
 }
 
 onMounted(() => {
-  // 检查管理员角色
-  try {
-    const userStr = localStorage.getItem('user')
-    if (userStr) {
-      const user = JSON.parse(userStr)
-      isAdmin.value = user.role === 'admin'
-    }
-  } catch { /* ignore */ }
   fetchData(); loadVendors(); loadQuotes(); loadOrders()
 })
 </script>
