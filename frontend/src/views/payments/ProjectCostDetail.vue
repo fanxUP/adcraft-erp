@@ -165,12 +165,9 @@
             <el-option
               v-for="item in allItems"
               :key="item.id"
-              :label="item.item_name"
+              :label="item.group_name ? item.item_name + ' (' + item.group_name + ')' : item.item_name"
               :value="item.id"
-            >
-              <span>{{ item.item_name }}</span>
-              <span v-if="item.group_name" style="float: right; color: #909399; font-size: 12px">{{ item.group_name }}</span>
-            </el-option>
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="成本摘要">
