@@ -141,6 +141,7 @@ class ProjectCostCreate(BaseModel):
     receipt_url: str | None = None
     remark: str | None = None
     order_item_id: str | None = None
+    quote_item_id: str | None = None
     payment_method: str | None = None
     payee_company_name: str | None = None
     debt_amount: float | None = None
@@ -174,6 +175,7 @@ class ProjectCostUpdate(BaseModel):
     receipt_url: str | None = None
     remark: str | None = None
     order_item_id: str | None = None
+    quote_item_id: str | None = None
     payment_method: str | None = None
     payee_company_name: str | None = None
     source_type: str | None = None
@@ -193,7 +195,9 @@ class ProjectCostResponse(BaseModel):
     quote_id: str | None = None
     quote_no: str | None = None
     order_item_id: str | None = None
+    quote_item_id: str | None = None
     order_item_name: str | None = None
+    quote_item_name: str | None = None
     customer_id: str | None = None
     customer_name: str | None = None
     project_name: str | None = None

@@ -361,7 +361,9 @@ export interface ProjectCostResponse {
   related_project_name?: string
   quote_no?: string
   order_item_id?: string
+  quote_item_id?: string
   order_item_name?: string
+  quote_item_name?: string
   customer_id?: string
   customer_name?: string
   project_name?: string

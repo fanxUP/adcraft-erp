@@ -17,6 +17,7 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
     order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
     quote_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("quotes.id"), nullable=True)
     order_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("order_items.id"), nullable=True)
+    quote_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("quote_items.id"), nullable=True)
     customer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
     category: Mapped[str] = mapped_column(String(64), nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
@@ -39,4 +40,5 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
     order: Mapped["Order"] = relationship(lazy="selectin")
     quote: Mapped["Quote"] = relationship(lazy="selectin")
     order_item: Mapped["OrderItem | None"] = relationship(lazy="selectin")
+    quote_item: Mapped["QuoteItem | None"] = relationship(lazy="selectin")
     customer: Mapped["Customer"] = relationship(lazy="selectin")
