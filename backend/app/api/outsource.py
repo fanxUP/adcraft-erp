@@ -200,3 +200,26 @@ async def create_payment(
                         ip_address=request.client.host if request.client else None,
                         after_data={"payment_no": payment["payment_no"], "amount": payment["amount"]})
     return success(payment)
+
+
+# ── Cancel Task (admin only) ──
+
+@router.post("/tasks/{task_id}/cancel")
+async def cancel_task(
+    task_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """取消外协任务。仅限管理员操作。"""
+    service = OutsourceService(db)
+    tid = UUID(task_id)
+    try:
+        task = await service.cancel_task(tid)
+        await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                            OBJ_OUTSOURCE_TASK, tid, ACTION_STATUS_CHANGE,
+                            ip_address=request.client.host if request.client else None,
+                            after_data={"status": "cancelled"})
+        return success(task)
+    except ValueError as e:
+        return error(40401, str(e))

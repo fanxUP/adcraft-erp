@@ -11,6 +11,7 @@
         <el-option label="进行中" value="in_progress" />
         <el-option label="已完成" value="completed" />
         <el-option label="已结算" value="settled" />
+        <el-option label="已取消" value="cancelled" />
       </el-select>
       <el-button type="primary" @click="fetchData" style="margin-left: 12px">搜索</el-button>
     </div>
@@ -39,6 +40,7 @@
           <el-button text type="primary" @click="handleEdit(row as OutsourceTaskResponse)">编辑</el-button>
           <el-button v-if="row.status === 'pending'" text type="primary" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'in_progress')">开始</el-button>
           <el-button v-if="row.status === 'in_progress'" text type="success" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'completed')">完成</el-button>
+          <el-button v-if="isAdmin && !['completed', 'settled', 'cancelled'].includes(row.status)" text type="danger" @click="handleCancel(row as OutsourceTaskResponse)">取消</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -91,11 +93,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import {
-  getOutsourceVendors, getOutsourceTasks, createOutsourceTask, updateOutsourceTask,
+  getOutsourceVendors, getOutsourceTasks, createOutsourceTask, updateOutsourceTask, cancelOutsourceTask,
 } from '@/api/outsource'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { OutsourceTaskResponse, VendorResponse } from '@/types/api'
+import { useAuthStore } from '@/stores/auth'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -111,6 +115,9 @@ const form = reactive({
   vendor_id: '', task_type: 'production', description: '',
   quantity: 1, unit_price: 0, remark: '',
 })
+const authStore = useAuthStore()
+const isAdmin = computed(() => authStore.isAdmin)
+
 const rules = {
   vendor_id: [{ required: true, message: '请选择外协商', trigger: 'change' }],
   task_type: [{ required: true, message: '请选择任务类型', trigger: 'change' }],
@@ -122,12 +129,12 @@ function taskTypeLabel(val: string) {
 }
 
 function statusType(val: string) {
-  const map: Record<string, string> = { pending: 'info', in_progress: 'warning', completed: 'success', settled: '' }
+  const map: Record<string, string> = { pending: 'info', in_progress: 'warning', completed: 'success', settled: '', cancelled: 'danger' }
   return (map[val] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
 function statusLabel(val: string) {
-  const map: Record<string, string> = { pending: '待处理', in_progress: '进行中', completed: '已完成', settled: '已结算' }
+  const map: Record<string, string> = { pending: '待处理', in_progress: '进行中', completed: '已完成', settled: '已结算', cancelled: '已取消' }
   return map[val] || val
 }
 
@@ -191,6 +198,21 @@ async function handleUpdateStatus(row: OutsourceTaskResponse, status: string) {
     await fetchData()
   } catch {
     // API error handled by interceptor
+  }
+}
+
+async function handleCancel(row: OutsourceTaskResponse) {
+  try {
+    await ElMessageBox.confirm(`确认取消外协任务「${row.task_no}」？`, '确认', {
+      confirmButtonText: '确认取消',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await cancelOutsourceTask(row.id)
+    ElMessage.success('外协任务已取消')
+    await fetchData()
+  } catch {
+    // cancelled by user or error handled by interceptor
   }
 }
 
