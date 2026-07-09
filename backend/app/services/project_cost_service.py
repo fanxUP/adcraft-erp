@@ -328,6 +328,11 @@ class ProjectCostService:
                     category = str(get("成本类别") or "").strip()
                     payment_method = str(get("付款方式") or "").strip() or None
                     payee_company_name = str(get("收款公司") or "").strip() or None
+                    quantity_val = get("数量")
+                    quantity = float(quantity_val) if quantity_val else None
+                    unit = str(get("单位") or "").strip() or None
+                    unit_price_val = get("单价")
+                    unit_price = float(unit_price_val) if unit_price_val else None
                     amount_val = get("金额")
                     amount = float(amount_val) if amount_val else 0
                     debt_val = get("欠款金额")
@@ -374,6 +379,11 @@ class ProjectCostService:
                     category = str(get("成本类别") or "").strip()
                     payment_method = str(get("付款方式") or "").strip() or None
                     payee_company_name = str(get("收款公司") or "").strip() or None
+                    quantity_val = get("数量")
+                    quantity = float(quantity_val) if quantity_val else None
+                    unit = str(get("单位") or "").strip() or None
+                    unit_price_val = get("单价")
+                    unit_price = float(unit_price_val) if unit_price_val else None
                     amount_val = get("金额")
                     amount = float(amount_val) if amount_val else 0
                     debt_val = get("欠款金额")
