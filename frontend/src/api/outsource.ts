@@ -52,3 +52,7 @@ export function cancelOutsourceTask(id: string) {
 export function revertOutsourceTask(id: string) {
   return post<OutsourceTaskResponse>(`/outsource/tasks/${id}/revert`)
 }
+
+export function deleteOutsourceTask(id: string) {
+  return del<SuccessResponse>(`/outsource/tasks/${id}`)
+}

@@ -4,7 +4,6 @@
       <span class="update-icon">🔄</span>
       <span class="update-text">系统已更新，请刷新页面以加载最新版本</span>
       <button class="update-btn" @click="refreshPage">立即刷新</button>
-      <button class="close-btn" @click="dismissUpdate">✕</button>
     </div>
   </Transition>
 </template>
@@ -12,7 +11,7 @@
 <script setup lang="ts">
 import { useVersionCheck } from '@/composables/useVersionCheck'
 
-const { hasUpdate, dismissUpdate, refreshPage } = useVersionCheck()
+const { hasUpdate, refreshPage } = useVersionCheck()
 </script>
 
 <style scoped>
@@ -26,10 +25,10 @@ const { hasUpdate, dismissUpdate, refreshPage } = useVersionCheck()
   align-items: center;
   gap: 12px;
   padding: 10px 24px;
-  background: linear-gradient(135deg, #409eff, #337ecc);
+  background: linear-gradient(135deg, #e6a23c, #d48806);
   color: #fff;
   font-size: 14px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
 }
 
 .update-icon {
@@ -45,7 +44,7 @@ const { hasUpdate, dismissUpdate, refreshPage } = useVersionCheck()
   padding: 5px 16px;
   border: 1px solid rgba(255, 255, 255, 0.8);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25);
   color: #fff;
   font-size: 13px;
   cursor: pointer;
@@ -54,27 +53,7 @@ const { hasUpdate, dismissUpdate, refreshPage } = useVersionCheck()
 }
 
 .update-btn:hover {
-  background: rgba(255, 255, 255, 0.35);
-}
-
-.close-btn {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background 0.2s;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.4);
 }
 
 /* Transition */

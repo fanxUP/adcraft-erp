@@ -246,3 +246,26 @@ async def revert_task(
         return success(task)
     except ValueError as e:
         return error(40401, str(e))
+
+
+# ── Delete Task (admin only: cancelled only) ──
+
+@router.delete("/tasks/{task_id}")
+async def delete_task(
+    task_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """删除已取消的外协任务。仅限管理员操作。"""
+    service = OutsourceService(db)
+    tid = UUID(task_id)
+    try:
+        ok = await service.delete_task(tid)
+        if ok:
+            await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                                OBJ_OUTSOURCE_TASK, tid, ACTION_DELETE,
+                                ip_address=request.client.host if request.client else None)
+            return success(None)
+    except ValueError as e:
+        return error(40401, str(e))

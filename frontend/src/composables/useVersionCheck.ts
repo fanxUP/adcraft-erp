@@ -1,7 +1,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 
 const VERSION_KEY = 'app_version'
-const CHECK_INTERVAL = 5 * 60 * 1000 // 5 分钟
+const CHECK_INTERVAL = 2 * 60 * 1000 // 2 分钟轮询一次
 
 const hasUpdate = ref(false)
 const serverVersion = ref('')
@@ -34,10 +34,18 @@ async function checkVersion() {
   }
 }
 
+/** 切换回该标签页时立即检查版本，避免用户长时间挂在后台漏掉更新 */
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    checkVersion()
+  }
+}
+
 export function useVersionCheck() {
   onMounted(() => {
     checkVersion()
     timer = setInterval(checkVersion, CHECK_INTERVAL)
+    document.addEventListener('visibilitychange', onVisibilityChange)
   })
 
   onUnmounted(() => {
@@ -45,24 +53,19 @@ export function useVersionCheck() {
       clearInterval(timer)
       timer = null
     }
+    document.removeEventListener('visibilitychange', onVisibilityChange)
   })
 
-  function dismissUpdate() {
-    // 用户点了刷新或关闭，更新本地版本号，不再提示
+  /** 用户点了「立即刷新」后刷新页面 */
+  function refreshPage() {
     if (serverVersion.value) {
       localStorage.setItem(VERSION_KEY, serverVersion.value)
     }
-    hasUpdate.value = false
-  }
-
-  function refreshPage() {
-    localStorage.setItem(VERSION_KEY, serverVersion.value)
     window.location.reload()
   }
 
   return {
     hasUpdate,
-    dismissUpdate,
     refreshPage,
   }
 }

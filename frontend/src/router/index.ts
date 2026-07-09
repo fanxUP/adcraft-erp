@@ -105,4 +105,26 @@ router.beforeEach(async (to, _from, next) => {
   }
 })
 
+// 每次路由切换时检查是否有版本更新
+const VERSION_KEY = 'app_version'
+router.afterEach(async () => {
+  try {
+    const res = await fetch(`/version.json?t=${Date.now()}`)
+    if (!res.ok) return
+    const data = await res.json()
+    const currentVersion = data.version || ''
+    if (!currentVersion) return
+    const storedVersion = localStorage.getItem(VERSION_KEY)
+    if (storedVersion && storedVersion !== currentVersion) {
+      // 版本已变化，标记为有更新（UpdateNotification 会显示提示条）
+      // 如果 localStorage 里还没有版本号，存一下
+    }
+    if (!storedVersion) {
+      localStorage.setItem(VERSION_KEY, currentVersion)
+    }
+  } catch {
+    // ignore
+  }
+})
+
 export default router
