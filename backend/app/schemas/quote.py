@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 from datetime import datetime, date
 
 
@@ -7,7 +7,7 @@ class QuoteItemCreate(BaseModel):
     product_id: str | None = None
     material_id: str | None = None
     process_id: str | None = None
-    item_name: str
+    item_name: str = Field(..., min_length=1)
     length: float | None = None
     length_unit: str | None = "m"
     width: float | None = None
@@ -36,7 +36,7 @@ class QuoteItemUpdate(BaseModel):
     product_id: str | None = None
     material_id: str | None = None
     process_id: str | None = None
-    item_name: str | None = None
+    item_name: str | None = Field(None, min_length=1)
     length: float | None = None
     length_unit: str | None = None
     width: float | None = None
@@ -67,7 +67,7 @@ class QuoteItemResponse(BaseModel):
     product_id: str | None = None
     material_id: str | None = None
     process_id: str | None = None
-    item_name: str
+    item_name: str = Field(..., min_length=1)
     length: float | None = None
     length_unit: str | None = "m"
     width: float | None = None
