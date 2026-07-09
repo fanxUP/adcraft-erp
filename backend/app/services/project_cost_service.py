@@ -132,7 +132,8 @@ class ProjectCostService:
             created_by=created_by,
         )
         await self.repo.create(cost)
-        await self._sync_order_cost(order_id)
+        if order_id_val:
+            await self._sync_order_cost(order_id_val)
         return {
             "id": str(cost.id),
             "cost_no": cost.cost_no,
@@ -183,7 +184,8 @@ class ProjectCostService:
             raise ValueError("项目成本记录不存在")
         order_id = c.order_id
         await self.repo.soft_delete(c)
-        await self._sync_order_cost(order_id)
+        if order_id:
+            await self._sync_order_cost(order_id)
 
     async def get_costs_summary(self, order_ids: list[UUID]) -> dict[str, float]:
         """Return {order_id: total_cost} for a batch of orders."""
@@ -320,7 +322,7 @@ class ProjectCostService:
             if not row:
                 continue
             try:
-                if order_id:
+                if order_id or quote_id:
                     # Import within order context — order_id pre-set
                     order_item_name = str(get("分项") or "").strip() or None
                     category = str(get("成本类别") or "").strip()
