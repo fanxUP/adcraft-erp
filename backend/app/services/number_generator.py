@@ -52,6 +52,23 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
         result = await db.execute(
             select(Expense.expense_no).where(Expense.expense_no.like(pattern)).order_by(Expense.expense_no.desc()).limit(1)
         )
+    elif prefix == "SO":
+        from app.models.quote import Quote
+        from app.models.order import Order
+        result1 = await db.execute(
+            select(Quote.quote_no).where(Quote.quote_no.like(pattern)).order_by(Quote.quote_no.desc()).limit(1)
+        )
+        result2 = await db.execute(
+            select(Order.order_no).where(Order.order_no.like(pattern)).order_by(Order.order_no.desc()).limit(1)
+        )
+        last1 = result1.scalar_one_or_none()
+        last2 = result2.scalar_one_or_none()
+        last = last1 if (last1 and last1 >= (last2 or '')) else last2
+        if last:
+            seq = int(last.split("-")[1]) + 1
+        else:
+            seq = 1
+        return f"SO{today}-{seq:04d}"
     elif prefix == "V":
         from app.models.outsource import OutsourceVendor
         result = await db.execute(
@@ -90,11 +107,11 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
 
 
 async def generate_quote_no(db: AsyncSession) -> str:
-    return await _generate_no(db, "Q")
+    return await _generate_no(db, "SO")
 
 
 async def generate_order_no(db: AsyncSession) -> str:
-    return await _generate_no(db, "O")
+    return await _generate_no(db, "SO")
 
 
 async def generate_customer_no(db: AsyncSession) -> str:

@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.quote_repo import QuoteRepository
-from app.services.number_generator import generate_quote_no, generate_order_no
+from app.services.number_generator import generate_quote_no
 
 
 class QuoteService:
@@ -214,7 +214,8 @@ class QuoteService:
         from app.models.order import Order, OrderItem, OrderStatusLog
         from datetime import datetime
 
-        order_no = "O" + quote.quote_no[1:] if quote.quote_no and quote.quote_no.startswith("Q") else await generate_order_no(self.db)
+        # 统一编号后报价和订单使用同一编号
+        order_no = quote.quote_no
         order = Order(
             order_no=order_no,
             quote_id=quote.id,
