@@ -75,6 +75,8 @@ class OutsourceService:
 
     async def create_task(self, data: dict) -> dict:
         data["task_no"] = await generate_outsource_task_no(self.db)
+        # 移除前端传入的响应-only 字段，避免 ORM 报错
+        data.pop("related_project_name", None)
         # 空字符串转 None，避免 UUID 字段报错
         for k in ("related_doc_id", "order_id"):
             if k in data and not data[k]:
@@ -95,6 +97,8 @@ class OutsourceService:
         task = await self.task_repo.get_by_id(task_id)
         if not task:
             raise ValueError("外协任务不存在")
+        # 移除前端传入的响应-only 字段，避免 ORM 报错
+        data.pop("related_project_name", None)
         # 空字符串转 None，避免 UUID 字段报错
         for k in ("related_doc_id", "order_id"):
             if k in data and not data[k]:
