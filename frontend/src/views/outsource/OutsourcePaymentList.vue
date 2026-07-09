@@ -107,6 +107,9 @@
             <el-option label="现金" value="cash" />
           </el-select>
         </el-form-item>
+        <el-form-item label="收款公司">
+          <el-input v-model="payForm.payee_company_name" placeholder="收款公司名称（可选）" />
+        </el-form-item>
         <el-form-item label="付款日期">
           <el-date-picker v-model="payForm.paid_at" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
@@ -216,6 +219,7 @@ async function handlePay(row: OutsourceTaskResponse) {
       payment_method: 'bank_transfer',
       paid_at: '',
       remark: '',
+      payee_company_name: '',
     }
     payDialogVisible.value = true
   } catch {
@@ -225,6 +229,7 @@ async function handlePay(row: OutsourceTaskResponse) {
       payment_method: 'bank_transfer',
       paid_at: '',
       remark: '',
+      payee_company_name: '',
     }
     payDialogVisible.value = true
   }

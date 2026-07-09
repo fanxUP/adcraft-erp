@@ -506,6 +506,7 @@ export interface OutsourcePaymentResponse {
   task_id?: string
   amount: number
   payment_method?: string
+  payee_company_name?: string
   paid_at?: string
   remark?: string
   created_by?: string
