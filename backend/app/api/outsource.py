@@ -281,9 +281,10 @@ async def list_quotes_for_dropdown(
     """返回所有报价单供下拉选择（精简字段）"""
     from sqlalchemy import select
     from app.models.quote import Quote
+    # 已转订单的报价单不再显示（避免下拉中与订单重复）
     result = await db.execute(
         select(Quote.id, Quote.quote_no, Quote.project_name, Quote.customer_name)
-        .where(Quote.deleted_at.is_(None))
+        .where(Quote.deleted_at.is_(None), Quote.status != "converted")
         .order_by(Quote.created_at.desc())
     )
     rows = result.all()
