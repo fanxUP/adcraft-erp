@@ -4,147 +4,117 @@
       <h2>项目成本</h2>
     </div>
 
-    <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-      <el-tab-pane label="订单成本" name="order">
-        <el-card shadow="never" class="filter-card">
-          <el-form :model="orderFilters" inline>
-            <el-form-item label="关键词">
-              <el-input v-model="orderFilters.keyword" placeholder="订单编号/项目名称" clearable style="width: 220px" @keyup.enter="handleSearch" />
-            </el-form-item>
-            <el-form-item label="状态">
-              <el-select v-model="orderFilters.status" clearable placeholder="全部" style="width: 120px">
-                <el-option label="待确认" value="pending_confirm" />
-                <el-option label="已确认" value="confirmed" />
-                <el-option label="进行中" value="in_progress" />
-                <el-option label="生产中" value="in_production" />
-                <el-option label="安装中" value="in_installation" />
-                <el-option label="已完成" value="completed" />
-                <el-option label="已取消" value="cancelled" />
-              </el-select>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="handleSearch">搜索</el-button>
-              <el-button @click="handleReset">重置</el-button>
-            </el-form-item>
-          </el-form>
-        </el-card>
+    <!-- Unified filter -->
+    <el-card shadow="never" class="filter-card">
+      <el-form inline>
+        <el-form-item label="类型">
+          <el-select v-model="filterType" clearable placeholder="全部" style="width: 120px" @change="handleSearch">
+            <el-option label="订单" value="order" />
+            <el-option label="报价单" value="quote" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="关键词">
+          <el-input v-model="keyword" placeholder="编号/项目名称" clearable style="width: 220px" @keyup.enter="handleSearch" />
+        </el-form-item>
+        <el-form-item v-if="filterType !== 'quote'" label="状态">
+          <el-select v-model="statusFilter" clearable placeholder="全部" style="width: 120px" @change="handleSearch">
+            <el-option label="待确认" value="pending_confirm" />
+            <el-option label="已确认" value="confirmed" />
+            <el-option label="进行中" value="in_progress" />
+            <el-option label="生产中" value="in_production" />
+            <el-option label="安装中" value="in_installation" />
+            <el-option label="已完成" value="completed" />
+            <el-option label="已取消" value="cancelled" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleSearch">搜索</el-button>
+          <el-button @click="handleReset">重置</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
 
-        <el-table :data="orderList" v-loading="orderLoading" stripe style="margin-top: 16px">
-          <el-table-column prop="order_no" label="订单编号" width="180" />
-          <el-table-column prop="project_name" label="项目名称" min-width="180" show-overflow-tooltip />
-          <el-table-column label="客户" min-width="140" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.customer_name || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="状态" width="110">
-            <template #default="{ row }">
-              <el-tag :type="statusColor(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="订单金额" width="120" align="right">
-            <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
-          </el-table-column>
-          <el-table-column label="项目成本" width="120" align="right">
-            <template #default="{ row }">
-              <span :style="{ color: (costMap[row.id] || 0) > 0 ? '#e6a23c' : '' }">
-                ¥ {{ (costMap[row.id] || 0).toFixed(2) }}
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column label="创建时间" width="110">
-            <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="140" fixed="right">
-            <template #default="{ row }">
-              <el-button type="danger" size="small" @click="$router.push(`/project-costs/${row.id}`)">登记成本</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+    <!-- Unified table -->
+    <el-table :data="combinedList" v-loading="loading" stripe style="margin-top: 16px" row-key="id">
+      <el-table-column label="类型" width="90" fixed>
+        <template #default="{ row }">
+          <el-tag v-if="row._type === 'order'" type="primary" size="small">订单</el-tag>
+          <el-tag v-else type="success" size="small">报价单</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="编号" width="180">
+        <template #default="{ row }">{{ row._type === 'order' ? row.order_no : row.quote_no }}</template>
+      </el-table-column>
+      <el-table-column prop="project_name" label="项目名称" min-width="180" show-overflow-tooltip />
+      <el-table-column label="客户" min-width="140" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.customer_name || '-' }}</template>
+      </el-table-column>
+      <el-table-column v-if="filterType !== 'quote'" label="状态" width="110">
+        <template #default="{ row }">
+          <el-tag v-if="row._type === 'order'" :type="statusColor(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="金额" width="120" align="right">
+        <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
+      </el-table-column>
+      <el-table-column label="项目成本" width="120" align="right">
+        <template #default="{ row }">
+          <span v-if="row._type === 'order'" :style="{ color: (costMap[row.id] || 0) > 0 ? '#e6a23c' : '' }">
+            ¥ {{ (costMap[row.id] || 0).toFixed(2) }}
+          </span>
+          <span v-else :style="{ color: (row.cost_amount || 0) > 0 ? '#e6a23c' : '' }">
+            ¥ {{ (row.cost_amount || 0).toFixed(2) }}
+          </span>
+        </template>
+      </el-table-column>
+      <el-table-column label="创建时间" width="110">
+        <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
+      </el-table-column>
+      <el-table-column label="操作" width="140" fixed="right">
+        <template #default="{ row }">
+          <el-button type="danger" size="small" @click="$router.push(row._type === 'order' ? `/project-costs/${row.id}` : `/quote-costs/${row.id}`)">
+            登记成本
+          </el-button>
+        </template>
+      </el-table-column>
+    </el-table>
 
-        <el-pagination
-          v-model:current-page="orderPage"
-          v-model:page-size="orderPageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="orderTotal"
-          layout="total, sizes, prev, pager, next"
-          style="margin-top: 16px; justify-content: flex-end"
-          @change="fetchOrders"
-        />
-      </el-tab-pane>
-
-      <el-tab-pane label="报价单成本" name="quote">
-        <el-card shadow="never" class="filter-card">
-          <el-form :model="quoteFilters" inline>
-            <el-form-item label="关键词">
-              <el-input v-model="quoteFilters.keyword" placeholder="报价单编号/项目名称" clearable style="width: 220px" @keyup.enter="handleSearch" />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="handleSearch">搜索</el-button>
-              <el-button @click="handleReset">重置</el-button>
-            </el-form-item>
-          </el-form>
-        </el-card>
-
-        <el-table :data="quoteList" v-loading="quoteLoading" stripe style="margin-top: 16px">
-          <el-table-column prop="quote_no" label="报价单编号" width="180" />
-          <el-table-column prop="project_name" label="项目名称" min-width="180" show-overflow-tooltip />
-          <el-table-column label="客户" min-width="140" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.customer_name || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="报价金额" width="120" align="right">
-            <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
-          </el-table-column>
-          <el-table-column label="项目成本" width="120" align="right">
-            <template #default="{ row }">
-              <span :style="{ color: (row.cost_amount || 0) > 0 ? '#e6a23c' : '' }">
-                ¥ {{ (row.cost_amount || 0).toFixed(2) }}
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="140" fixed="right">
-            <template #default="{ row }">
-              <el-button type="danger" size="small" @click="$router.push(`/quote-costs/${row.id}`)">登记成本</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <el-pagination
-          v-model:current-page="quotePage"
-          v-model:page-size="quotePageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="quoteTotal"
-          layout="total, sizes, prev, pager, next"
-          style="margin-top: 16px; justify-content: flex-end"
-          @change="fetchQuotes"
-        />
-      </el-tab-pane>
-    </el-tabs>
+    <el-pagination
+      v-model:current-page="page"
+      v-model:page-size="pageSize"
+      :page-sizes="[10, 20, 50, 100]"
+      :total="totalCount"
+      layout="total, sizes, prev, pager, next"
+      style="margin-top: 16px; justify-content: flex-end"
+      @change="fetchData"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { getOrders } from '@/api/orders'
 import { getProjectCostSummary, getQuotesForCost } from '@/api/payments'
 import type { OrderListResponse, QuoteCostResponse } from '@/types/api'
 
-const activeTab = ref('order')
+const loading = ref(false)
+const keyword = ref('')
+const filterType = ref('')
+const statusFilter = ref('')
+const page = ref(1)
+const pageSize = ref(20)
 
-// ── Orders ──
-const orderLoading = ref(false)
-const orderList = ref<OrderListResponse[]>([])
-const orderTotal = ref(0)
-const orderPage = ref(1)
-const orderPageSize = ref(20)
+// Internal storage
+type CombinedRow = (OrderListResponse | QuoteCostResponse) & {
+  _type: 'order' | 'quote'
+  _sortKey: string
+}
+
+const allRows = ref<CombinedRow[]>([])
+
+// Cost summary map for orders
 const costMap = ref<Record<string, number>>({})
-const orderFilters = reactive({ keyword: '', status: '' })
-
-// ── Quotes ──
-const quoteLoading = ref(false)
-const quoteList = ref<QuoteCostResponse[]>([])
-const quoteTotal = ref(0)
-const quotePage = ref(1)
-const quotePageSize = ref(20)
-const quoteFilters = reactive({ keyword: '' })
 
 function statusLabel(s: string) {
   const map: Record<string, string> = {
@@ -158,66 +128,110 @@ function statusColor(s: string) {
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
-async function fetchOrders() {
-  orderLoading.value = true
+// Total count for pagination (client-side filtered)
+const totalCount = computed(() => {
+  let list = allRows.value
+  if (filterType.value) {
+    list = list.filter(r => r._type === filterType.value)
+  }
+  if (keyword.value) {
+    const kw = keyword.value.toLowerCase()
+    list = list.filter(r => {
+      const no = r._type === 'order' ? (r as unknown as Record<string, unknown>).order_no : (r as unknown as Record<string, unknown>).quote_no
+      return (no?.toLowerCase().includes(kw)) || (r.project_name?.toLowerCase().includes(kw))
+    })
+  }
+  if (statusFilter.value) {
+    list = list.filter(r => r._type === 'order' && (r as unknown as Record<string, unknown>).status === statusFilter.value)
+  }
+  return list.length
+})
+
+// Client-side paginated & filtered view
+const combinedList = computed(() => {
+  let list = allRows.value
+
+  // Client-side type filter
+  if (filterType.value) {
+    list = list.filter(r => r._type === filterType.value)
+  }
+  // Keyword filter
+  if (keyword.value) {
+    const kw = keyword.value.toLowerCase()
+    list = list.filter(r => {
+      const no = r._type === 'order' ? (r as unknown as Record<string, unknown>).order_no : (r as unknown as Record<string, unknown>).quote_no
+      return (no?.toLowerCase().includes(kw)) || (r.project_name?.toLowerCase().includes(kw))
+    })
+  }
+  // Status filter (only for orders)
+  if (statusFilter.value) {
+    list = list.filter(r => r._type === 'order' && (r as unknown as Record<string, unknown>).status === statusFilter.value)
+  }
+
+  // Sort by _sortKey (created_at) descending
+  const sorted = [...list].sort((a, b) => b._sortKey.localeCompare(a._sortKey))
+
+  // Paginate
+  const start = (page.value - 1) * pageSize.value
+  return sorted.slice(start, start + pageSize.value)
+})
+
+async function fetchData() {
+  loading.value = true
   try {
-    const params: Record<string, unknown> = { page: orderPage.value, page_size: orderPageSize.value }
-    if (orderFilters.keyword) params.keyword = orderFilters.keyword
-    if (orderFilters.status) params.status = orderFilters.status
-    const data = await getOrders(params)
-    orderList.value = data.items
-    orderTotal.value = data.total
-    if (data.items.length > 0) {
-      const ids = data.items.map((o: OrderListResponse) => o.id)
+    const orderParams: Record<string, unknown> = { page: 1, page_size: 999 }
+    const quoteParams: Record<string, unknown> = { page: 1, page_size: 999 }
+
+    // Fetch both
+    const [orderData, quoteData] = await Promise.all([
+      getOrders(orderParams),
+      getQuotesForCost(quoteParams),
+    ])
+
+    // Build order rows
+    const orders: CombinedRow[] = (orderData.items || []).map((o: OrderListResponse) => ({
+      ...o,
+      _type: 'order' as const,
+      _sortKey: o.created_at || '',
+    }))
+
+    // Build quote rows
+    const quotes: CombinedRow[] = (quoteData.items || []).map((q: QuoteCostResponse) => ({
+      ...q,
+      _type: 'quote' as const,
+      _sortKey: q.created_at || '',
+    }))
+
+    allRows.value = [...orders, ...quotes]
+
+    // Fetch cost summaries for orders
+    if (orders.length > 0) {
+      const ids = orders.map(o => o.id)
       try {
         const summary = await getProjectCostSummary(ids)
         costMap.value = summary.costs
       } catch { /* ignore */ }
+    } else {
+      costMap.value = {}
     }
-  } finally { orderLoading.value = false }
-}
-
-async function fetchQuotes() {
-  quoteLoading.value = true
-  try {
-    const params: Record<string, unknown> = { page: quotePage.value, page_size: quotePageSize.value }
-    if (quoteFilters.keyword) params.keyword = quoteFilters.keyword
-    const data = await getQuotesForCost(params)
-    quoteList.value = data.items
-    quoteTotal.value = data.total
-  } finally { quoteLoading.value = false }
+  } finally {
+    loading.value = false
+  }
 }
 
 function handleSearch() {
-  if (activeTab.value === 'order') {
-    orderPage.value = 1
-    fetchOrders()
-  } else {
-    quotePage.value = 1
-    fetchQuotes()
-  }
+  page.value = 1
+  // For client-side filtering, just re-compute
 }
 
 function handleReset() {
-  if (activeTab.value === 'order') {
-    orderFilters.keyword = ''
-    orderFilters.status = ''
-    orderPage.value = 1
-    fetchOrders()
-  } else {
-    quoteFilters.keyword = ''
-    quotePage.value = 1
-    fetchQuotes()
-  }
+  keyword.value = ''
+  filterType.value = ''
+  statusFilter.value = ''
+  page.value = 1
 }
 
-function handleTabChange() {
-  if (activeTab.value === 'quote' && quoteList.value.length === 0) {
-    fetchQuotes()
-  }
-}
-
-onMounted(fetchOrders)
+onMounted(fetchData)
 </script>
 
 <style scoped>

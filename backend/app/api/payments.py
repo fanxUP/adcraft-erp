@@ -400,6 +400,7 @@ async def list_quotes_for_cost(
             "status": q.status,
             "total_amount": float(q.total_amount),
             "cost_amount": float(cost_map.get(str(q.id), 0)),
+            "created_at": q.created_at.isoformat() if q.created_at else None,
         })
     return success_paginated(items, total, page, page_size)
 

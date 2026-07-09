@@ -425,6 +425,7 @@ export interface QuoteCostResponse {
   status: string
   total_amount: number
   cost_amount: number
+  created_at?: string
 }
 
 export interface ProjectCostImportResponse {
