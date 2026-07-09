@@ -213,7 +213,7 @@ async function fetchData() {
 async function handlePay(row: OutsourceTaskResponse) {
   try {
     const summary = await getOutsourceTaskPaymentSummary(row.id)
-    payTask.value = summary
+    payTask.value = { ...summary, id: summary.task_id }
     payForm.value = {
       amount: summary.unpaid_amount > 0 ? summary.unpaid_amount : 0,
       payment_method: 'bank_transfer',
