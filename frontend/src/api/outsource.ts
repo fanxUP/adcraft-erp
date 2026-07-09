@@ -48,3 +48,7 @@ export function createOutsourcePayment(data: Omit<Partial<OutsourcePaymentRespon
 export function cancelOutsourceTask(id: string) {
   return post<OutsourceTaskResponse>(`/outsource/tasks/${id}/cancel`)
 }
+
+export function revertOutsourceTask(id: string) {
+  return post<OutsourceTaskResponse>(`/outsource/tasks/${id}/revert`)
+}
