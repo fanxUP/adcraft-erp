@@ -144,6 +144,9 @@ class ProjectCostCreate(BaseModel):
     payment_method: str | None = None
     payee_company_name: str | None = None
     debt_amount: float | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    unit_price: float | None = None
     summary: str | None = None
 
     @field_validator("amount")
@@ -176,6 +179,9 @@ class ProjectCostUpdate(BaseModel):
     source_type: str | None = None
     quote_id: str | None = None
     debt_amount: float | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    unit_price: float | None = None
     summary: str | None = None
 
 
@@ -196,6 +202,9 @@ class ProjectCostResponse(BaseModel):
     payment_method: str | None = None
     payee_company_name: str | None = None
     debt_amount: float | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    unit_price: float | None = None
     summary: str | None = None
     is_debt: bool = False
     is_settled: bool = False
@@ -231,6 +240,9 @@ class DebtResponse(BaseModel):
     customer_name: str | None = None
     category: str
     amount: float
+    quantity: float | None = None
+    unit: str | None = None
+    unit_price: float | None = None
     payment_method: str | None = None
     payee_company_name: str | None = None
     debt_amount: float

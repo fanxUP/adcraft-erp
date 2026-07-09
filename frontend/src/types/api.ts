@@ -367,6 +367,9 @@ export interface ProjectCostResponse {
   project_name?: string
   category: string
   amount: number
+  quantity?: number
+  unit?: string
+  unit_price?: number
   payment_method?: string
   payee_company_name?: string
   debt_amount?: number
@@ -398,6 +401,9 @@ export interface DebtResponse {
   customer_id?: string
   customer_name?: string
   category: string
+  quantity?: number
+  unit?: string
+  unit_price?: number
   amount: number
   payment_method?: string
   payee_company_name?: string

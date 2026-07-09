@@ -77,6 +77,15 @@
           <span v-else style="color: #c0c4cc">-</span>
         </template>
       </el-table-column>
+      <el-table-column label="数量" width="100" align="right">
+        <template #default="{ row }">{{ row.quantity ?? '-' }}</template>
+      </el-table-column>
+      <el-table-column label="单位" width="80" align="center">
+        <template #default="{ row }">{{ row.unit || '-' }}</template>
+      </el-table-column>
+      <el-table-column label="单价" width="120" align="right">
+        <template #default="{ row }">¥ {{ row.unit_price?.toFixed(2) ?? '-' }}</template>
+      </el-table-column>
       <el-table-column label="金额" width="140" align="right">
         <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
       </el-table-column>
@@ -172,6 +181,15 @@
         </el-form-item>
         <el-form-item label="金额" required>
           <el-input-number v-model="form.amount" :min="0.01" :precision="2" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="数量">
+          <el-input-number v-model="form.quantity" :min="0" :precision="2" style="width: 100%" placeholder="成本数量" />
+        </el-form-item>
+        <el-form-item label="单位">
+          <el-input v-model="form.unit" placeholder="单位（个/米/平方米/套…）" clearable />
+        </el-form-item>
+        <el-form-item label="单价">
+          <el-input-number v-model="form.unit_price" :min="0" :precision="2" style="width: 100%" placeholder="成本单价" />
         </el-form-item>
         <el-form-item label="欠款金额">
           <el-input-number v-model="form.debt_amount" :min="0" :precision="2" style="width: 100%" placeholder="0 表示无欠款" />
@@ -349,6 +367,9 @@ const orderItems = computed(() => order.value?.items || [])
 
 const form = reactive({
   category: '',
+  quantity: 0,
+  unit: "",
+  unit_price: 0,
   amount: 0,
   payment_method: '',
   payee_company_name: '',
@@ -373,7 +394,7 @@ function statusColor(s: string) {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', order_item_id: '' })
+  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', order_item_id: '', quantity: 0, unit: '', unit_price: 0 })
   isEditing.value = false
   editingId.value = ''
   dialogAttachments.value = []
@@ -396,6 +417,9 @@ function openEdit(row: ProjectCostResponse) {
   form.description = row.description || ''
   form.remark = row.remark || ''
   form.summary = row.summary || ''
+  form.quantity = row.quantity || 0
+  form.unit = row.unit || ''
+  form.unit_price = row.unit_price || 0
   form.order_item_id = row.order_item_id || ''
   dialogAttachments.value = []
   showDialog.value = true
@@ -481,6 +505,9 @@ async function handleSave() {
       if (form.amount > 0) payload.amount = form.amount
       if (form.payment_method) payload.payment_method = form.payment_method
       if (form.payee_company_name) payload.payee_company_name = form.payee_company_name
+      if (form.quantity > 0) payload.quantity = form.quantity
+      if (form.unit) payload.unit = form.unit
+      if (form.unit_price > 0) payload.unit_price = form.unit_price
       if (form.debt_amount > 0) payload.debt_amount = form.debt_amount
       else payload.debt_amount = 0
       if (form.cost_date) payload.cost_date = form.cost_date
@@ -502,6 +529,9 @@ async function handleSave() {
           order_item_id: form.order_item_id || undefined,
           payment_method: form.payment_method || undefined,
           payee_company_name: form.payee_company_name || undefined,
+          quantity: form.quantity > 0 ? form.quantity : undefined,
+          unit: form.unit || undefined,
+          unit_price: form.unit_price > 0 ? form.unit_price : undefined,
           debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,
         })
       } else {
@@ -516,6 +546,9 @@ async function handleSave() {
           order_item_id: form.order_item_id || undefined,
           payment_method: form.payment_method || undefined,
           payee_company_name: form.payee_company_name || undefined,
+          quantity: form.quantity > 0 ? form.quantity : undefined,
+          unit: form.unit || undefined,
+          unit_price: form.unit_price > 0 ? form.unit_price : undefined,
           debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,
         })
       }
