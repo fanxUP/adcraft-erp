@@ -92,8 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import {
   getOutsourceVendors, getOutsourceTasks, createOutsourceTask, updateOutsourceTask, cancelOutsourceTask,
 } from '@/api/outsource'
