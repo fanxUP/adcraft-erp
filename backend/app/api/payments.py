@@ -30,7 +30,7 @@ cost_router = APIRouter(prefix="/project-costs", tags=["Project Costs"])
 @pay_router.get("/")
 async def list_payments(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=9999),
     order_id: str | None = None,
     customer_id: str | None = None,
     is_voided: bool | None = None,
@@ -132,7 +132,7 @@ async def upload_receipt(
 @stmt_router.get("/")
 async def list_statements(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=9999),
     customer_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -183,7 +183,7 @@ async def confirm_statement(
 @exp_router.get("/")
 async def list_expenses(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=9999),
     category: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
@@ -262,7 +262,7 @@ async def delete_expense(
 @cost_router.get("/")
 async def list_project_costs(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=9999),
     order_id: str | None = None,
     quote_id: str | None = None,
     source_type: str | None = None,
@@ -356,7 +356,7 @@ async def download_project_cost_template(
 @cost_router.get("/quotes")
 async def list_quotes_for_cost(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=9999),
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -408,7 +408,7 @@ async def list_quotes_for_cost(
 @cost_router.get("/debts/list")
 async def list_cost_debts(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=9999),
     keyword: str | None = None,
     is_settled: bool | None = None,
     db: AsyncSession = Depends(get_db),
