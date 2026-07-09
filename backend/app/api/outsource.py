@@ -311,3 +311,44 @@ async def list_orders_for_dropdown(
         {"id": str(r.id), "label": f"{r.order_no} - {r.project_name}", "order_no": r.order_no, "project_name": r.project_name}
         for r in rows
     ])
+
+
+# ── Combined quote & order dropdown data ──
+
+@router.get("/documents-for-dropdown")
+async def list_documents_for_dropdown(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """返回所有报价单和订单（合并列表）供关联任务下拉选择"""
+    from sqlalchemy import select, union
+    from app.models.quote import Quote
+    from app.models.order import Order
+
+    # 查询报价单
+    q_result = await db.execute(
+        select(Quote.id, Quote.quote_no, Quote.project_name)
+        .where(Quote.deleted_at.is_(None))
+        .order_by(Quote.created_at.desc())
+    )
+    quotes = [
+        {"id": str(r.id), "doc_no": r.quote_no, "project_name": r.project_name or "", "doc_type": "quote", "label": f"{r.quote_no} - {r.project_name or ''}（报价单）"}
+        for r in q_result.all()
+    ]
+
+    # 查询订单
+    o_result = await db.execute(
+        select(Order.id, Order.order_no, Order.project_name)
+        .where(Order.deleted_at.is_(None))
+        .order_by(Order.created_at.desc())
+    )
+    orders = [
+        {"id": str(o.id), "doc_no": o.order_no, "project_name": o.project_name or "", "doc_type": "order", "label": f"{o.order_no} - {o.project_name or ''}（订单）"}
+        for o in o_result.all()
+    ]
+
+    # 合并，按编号排序（最新的在前）
+    combined = quotes + orders
+    combined.sort(key=lambda x: x["doc_no"], reverse=True)
+
+    return success(combined)
