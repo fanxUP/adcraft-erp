@@ -223,3 +223,26 @@ async def cancel_task(
         return success(task)
     except ValueError as e:
         return error(40401, str(e))
+
+
+# ── Revert Task (admin only: completed → in_progress) ──
+
+@router.post("/tasks/{task_id}/revert")
+async def revert_task(
+    task_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """退回已完成的外协任务为进行中。仅限管理员操作。"""
+    service = OutsourceService(db)
+    tid = UUID(task_id)
+    try:
+        task = await service.revert_task(tid)
+        await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                            OBJ_OUTSOURCE_TASK, tid, ACTION_STATUS_CHANGE,
+                            ip_address=request.client.host if request.client else None,
+                            after_data={"status": "in_progress"})
+        return success(task)
+    except ValueError as e:
+        return error(40401, str(e))

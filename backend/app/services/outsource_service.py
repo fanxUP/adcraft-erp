@@ -177,3 +177,17 @@ class OutsourceService:
         await self.db.flush()
         vname = await self._task_vendor_name(task)
         return self._task_to_dict(task, vname)
+
+    # ── Revert Task (admin only: completed → in_progress) ──
+
+    async def revert_task(self, task_id: UUID) -> dict:
+        task = await self.task_repo.get_by_id(task_id)
+        if not task:
+            raise ValueError("外协任务不存在")
+        if task.status != "completed":
+            raise ValueError(f"当前状态「{task.status}」不允许退回，仅已完成的任务可以退回")
+        task.status = "in_progress"
+        task.completed_at = None
+        await self.db.flush()
+        vname = await self._task_vendor_name(task)
+        return self._task_to_dict(task, vname)

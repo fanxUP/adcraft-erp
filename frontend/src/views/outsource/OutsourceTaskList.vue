@@ -40,6 +40,7 @@
           <el-button text type="primary" @click="handleEdit(row as OutsourceTaskResponse)">编辑</el-button>
           <el-button v-if="row.status === 'pending'" text type="primary" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'in_progress')">开始</el-button>
           <el-button v-if="row.status === 'in_progress'" text type="success" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'completed')">完成</el-button>
+          <el-button v-if="isAdmin && row.status === 'completed'" text type="warning" @click="handleRevert(row as OutsourceTaskResponse)">退回</el-button>
           <el-button v-if="isAdmin && !['completed', 'settled', 'cancelled'].includes(row.status)" text type="danger" @click="handleCancel(row as OutsourceTaskResponse)">取消</el-button>
         </template>
       </el-table-column>
@@ -94,7 +95,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import {
-  getOutsourceVendors, getOutsourceTasks, createOutsourceTask, updateOutsourceTask, cancelOutsourceTask,
+  getOutsourceVendors, getOutsourceTasks, createOutsourceTask, updateOutsourceTask, cancelOutsourceTask, revertOutsourceTask,
 } from '@/api/outsource'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { OutsourceTaskResponse, VendorResponse } from '@/types/api'
@@ -209,6 +210,21 @@ async function handleCancel(row: OutsourceTaskResponse) {
     })
     await cancelOutsourceTask(row.id)
     ElMessage.success('外协任务已取消')
+    await fetchData()
+  } catch {
+    // cancelled by user or error handled by interceptor
+  }
+}
+
+async function handleRevert(row: OutsourceTaskResponse) {
+  try {
+    await ElMessageBox.confirm(`确认退回外协任务「${row.task_no}」为进行中？`, '确认', {
+      confirmButtonText: '确认退回',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await revertOutsourceTask(row.id)
+    ElMessage.success('外协任务已退回为进行中')
     await fetchData()
   } catch {
     // cancelled by user or error handled by interceptor
