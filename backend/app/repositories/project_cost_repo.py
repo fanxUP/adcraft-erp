@@ -16,7 +16,13 @@ class ProjectCostRepository:
     async def get_by_id(self, cost_id: UUID) -> ProjectCost | None:
         result = await self.db.execute(
             select(ProjectCost)
-            .options(selectinload(ProjectCost.order), selectinload(ProjectCost.quote), selectinload(ProjectCost.customer))
+            .options(
+                selectinload(ProjectCost.order),
+                selectinload(ProjectCost.quote),
+                selectinload(ProjectCost.order_item),
+                selectinload(ProjectCost.quote_item),
+                selectinload(ProjectCost.customer),
+            )
             .where(ProjectCost.id == cost_id, ProjectCost.deleted_at.is_(None))
         )
         return result.scalar_one_or_none()
@@ -35,6 +41,8 @@ class ProjectCostRepository:
         q = select(ProjectCost).options(
             selectinload(ProjectCost.order),
             selectinload(ProjectCost.quote),
+            selectinload(ProjectCost.order_item),
+            selectinload(ProjectCost.quote_item),
             selectinload(ProjectCost.customer),
         ).where(ProjectCost.deleted_at.is_(None))
         if source_type:
