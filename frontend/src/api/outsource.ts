@@ -64,7 +64,3 @@ export function getQuotesForDropdown() {
 export function getOrdersForDropdown() {
   return get<{id: string; label: string; order_no: string; project_name: string}[]>('/outsource/orders-for-dropdown')
 }
-
-export function getDocumentsForDropdown() {
-  return get<{id: string; doc_no: string; project_name: string; doc_type: string; label: string}[]>('/outsource/documents-for-dropdown')
-}
