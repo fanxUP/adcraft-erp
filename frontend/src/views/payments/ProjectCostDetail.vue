@@ -263,7 +263,7 @@
     <el-dialog v-model="showImport" title="导入Excel" width="480px" :close-on-click-modal="false">
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary)">
         Excel 需包含以下列：<br />
-        <b>分项、成本类别、付款方式、收款公司、金额、欠款金额、成本日期、说明、成本摘要、备注</b>
+        <b>分项、成本类别、付款方式、收款公司、数量、单位、单价、金额、欠款金额、成本日期、说明、成本摘要、备注</b>
       </p>
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 13px">
         导入的成本将自动关联到 <b>{{ isQuote ? (order?.quote_no || '报价单') : (order?.order_no || '订单') }}</b>
