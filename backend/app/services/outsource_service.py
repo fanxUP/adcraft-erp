@@ -194,3 +194,15 @@ class OutsourceService:
         await self.db.flush()
         vname = await self._task_vendor_name(task)
         return self._task_to_dict(task, vname)
+
+    # ── Delete Task (admin only) ──
+
+    async def delete_task(self, task_id: UUID) -> bool:
+        task = await self.task_repo.get_by_id(task_id)
+        if not task:
+            raise ValueError("外协任务不存在")
+        if task.status != "cancelled":
+            raise ValueError("仅已取消的外协任务可以删除")
+        await self.db.delete(task)
+        await self.db.flush()
+        return True
