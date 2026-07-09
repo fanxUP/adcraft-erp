@@ -46,10 +46,12 @@ export function deleteProjectCost(id: string) {
 export function getProjectCostSummary(orderIds: string[]) {
   return get<ProjectCostSummaryResponse>('/project-costs/summary', { params: { order_ids: orderIds.join(',') } })
 }
-export function importProjectCosts(file: File, orderId?: string) {
+export function importProjectCosts(file: File, orderId?: string, quoteId?: string, sourceType: string = 'order') {
   const form = new FormData()
   form.append('file', file)
-  const params = orderId ? { order_id: orderId } : undefined
+  const params: Record<string, string> = { source_type: sourceType }
+  if (orderId) params.order_id = orderId
+  if (quoteId) params.quote_id = quoteId
   return post<ProjectCostImportResponse>('/project-costs/import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
     params,
