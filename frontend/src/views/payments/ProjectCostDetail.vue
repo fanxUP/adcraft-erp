@@ -91,6 +91,7 @@
       <el-table-column label="分项" min-width="140" show-overflow-tooltip>
         <template #default="{ row }">
           <span v-if="row.order_item_name">{{ row.order_item_name }}</span>
+          <span v-else-if="row.quote_item_name">{{ row.quote_item_name }}</span>
           <span v-else style="color: #c0c4cc">-</span>
         </template>
       </el-table-column>
@@ -160,7 +161,18 @@
           <el-input :value="(isQuote ? (order?.quote_no || '') : (order?.order_no || '')) + ' ' + (order?.project_name || '')" disabled />
         </el-form-item>
         <el-form-item label="分项">
-          <el-select v-model="form.order_item_id" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
+          <el-select v-if="isQuote" v-model="form.quote_item_id" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
+            <el-option
+              v-for="item in quoteItems"
+              :key="item.id"
+              :label="item.item_name"
+              :value="item.id"
+            >
+              <span>{{ item.item_name }}</span>
+              <span v-if="item.group_name" style="float: right; color: #909399; font-size: 12px">{{ item.group_name }}</span>
+            </el-option>
+          </el-select>
+          <el-select v-else v-model="form.order_item_id" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
             <el-option
               v-for="item in orderItems"
               :key="item.id"
@@ -381,6 +393,7 @@ const totalCost = computed(() => {
 })
 
 const orderItems = computed(() => order.value?.items || [])
+const quoteItems = computed(() => order.value?.items || [])
 
 const form = reactive({
   category: '',
@@ -396,6 +409,7 @@ const form = reactive({
   remark: '',
   summary: '',
   order_item_id: '',
+  quote_item_id: '',
 })
 
 function statusLabel(s: string) {
@@ -434,7 +448,7 @@ async function handleBatchDelete() {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', order_item_id: '', quantity: 0, unit: '', unit_price: 0 })
+  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', order_item_id: '', quote_item_id: '', quantity: 0, unit: '', unit_price: 0 })
   isEditing.value = false
   editingId.value = ''
   dialogAttachments.value = []
@@ -461,6 +475,7 @@ function openEdit(row: ProjectCostResponse) {
   form.unit = row.unit || ''
   form.unit_price = row.unit_price || 0
   form.order_item_id = row.order_item_id || ''
+  form.quote_item_id = row.quote_item_id || ''
   dialogAttachments.value = []
   showDialog.value = true
   loadAttachments(row.id)
@@ -554,6 +569,7 @@ async function handleSave() {
       if (form.description) payload.description = form.description
       if (form.remark) payload.remark = form.remark
       if (form.order_item_id) payload.order_item_id = form.order_item_id
+      if (form.quote_item_id) payload.quote_item_id = form.quote_item_id
       await updateProjectCost(editingId.value, payload)
       ElMessage.success('成本已更新')
     } else {
@@ -566,7 +582,7 @@ async function handleSave() {
           cost_date: form.cost_date || undefined,
           description: form.description || undefined,
           remark: form.remark || undefined,
-          order_item_id: form.order_item_id || undefined,
+          quote_item_id: form.quote_item_id || undefined,
           payment_method: form.payment_method || undefined,
           payee_company_name: form.payee_company_name || undefined,
           quantity: form.quantity > 0 ? form.quantity : undefined,

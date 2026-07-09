@@ -126,6 +126,7 @@ class ProjectCostService:
             unit_price=data.get("unit_price"),
             remark=data.get("remark"),
             order_item_id=UUID(data["order_item_id"]) if data.get("order_item_id") else None,
+            quote_item_id=UUID(data["quote_item_id"]) if data.get("quote_item_id") else None,
             payment_method=data.get("payment_method"),
             payee_company_name=data.get("payee_company_name"),
             debt_amount=debt_amount,
@@ -144,7 +145,9 @@ class ProjectCostService:
             "quote_id": str(cost.quote_id) if cost.quote_id else None,
             "quote_no": quote_no_val,  # use locally fetched value
             "order_item_id": str(cost.order_item_id) if cost.order_item_id else None,
+            "quote_item_id": str(cost.quote_item_id) if cost.quote_item_id else None,
             "order_item_name": None,  # avoid lazy load in import context
+            "quote_item_name": None,
             "customer_id": str(cost.customer_id) if cost.customer_id else None,
             "customer_name": None,  # populated by list query via relationship
             "project_name": project_name_val,
@@ -478,7 +481,9 @@ class ProjectCostService:
             "quote_id": str(c.quote_id) if c.quote_id else None,
             "quote_no": c.quote.quote_no if c.quote else None,
             "order_item_id": str(c.order_item_id) if c.order_item_id else None,
+            "quote_item_id": str(c.quote_item_id) if c.quote_item_id else None,
             "order_item_name": c.order_item.item_name if c.order_item else None,
+            "quote_item_name": c.quote_item.item_name if c.quote_item else None,
             "customer_id": str(c.customer_id) if c.customer_id else None,
             "customer_name": c.customer.name if c.customer else None,
             "project_name": project_name,
