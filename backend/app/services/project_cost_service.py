@@ -112,7 +112,7 @@ class ProjectCostService:
             source_type=source_type,
             order_id=order_id_val,
             quote_id=quote_id_val,
-            customer_id=UUID(customer_id_val) if customer_id_val else None,
+            customer_id=customer_id_val,
             category=data["category"],
             amount=data["amount"],
             description=data.get("description"),
