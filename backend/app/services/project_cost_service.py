@@ -287,10 +287,28 @@ class ProjectCostService:
 
         wb = openpyxl.load_workbook(file, read_only=True)
         ws = wb.active
-        rows = list(ws.iter_rows(min_row=2, values_only=True))  # Skip header
+        # Read header row to build column name → index mapping
+        headers = list(ws.iter_rows(min_row=1, max_row=1, values_only=True))
+        if not headers or not headers[0]:
+            return {"created": 0, "errors": [{"row": 1, "error": "Excel 文件缺少表头行"}]}
+        col_map = {}
+        for col_idx, h in enumerate(headers[0]):
+            if h is None:
+                continue
+            name = str(h).strip()
+            col_map[name] = col_idx
+
+        rows = list(ws.iter_rows(min_row=2, values_only=True))
 
         created = 0
         errors = []
+
+        def get(col_name: str, default=None):
+            """Get value from row by column name."""
+            idx = col_map.get(col_name)
+            if idx is None:
+                return default
+            return row[idx] if idx < len(row) else default
 
         for i, row in enumerate(rows, start=2):
             if not row:
@@ -298,16 +316,18 @@ class ProjectCostService:
             try:
                 if order_id:
                     # Import within order context — order_id pre-set
-                    order_item_name = str(row[0]).strip() if len(row) > 0 and row[0] else None
-                    category = str(row[1]).strip() if len(row) > 1 and row[1] else ""
-                    payment_method = str(row[2]).strip() if len(row) > 2 and row[2] else None
-                    payee_company_name = str(row[3]).strip() if len(row) > 3 and row[3] else None
-                    amount = float(row[4]) if len(row) > 4 and row[4] else 0
-                    debt_amount = float(row[5]) if len(row) > 5 and row[5] else 0
-                    cost_date_str = str(row[6]).strip() if len(row) > 6 and row[6] else None
-                    description = str(row[7]).strip() if len(row) > 7 and row[7] else None
-                    summary = str(row[8]).strip() if len(row) > 8 and row[8] else None
-                    remark = str(row[9]).strip() if len(row) > 9 and row[9] else None
+                    order_item_name = str(get("分项") or "").strip() or None
+                    category = str(get("成本类别") or "").strip()
+                    payment_method = str(get("付款方式") or "").strip() or None
+                    payee_company_name = str(get("收款公司") or "").strip() or None
+                    amount_val = get("金额")
+                    amount = float(amount_val) if amount_val else 0
+                    debt_val = get("欠款金额")
+                    debt_amount = float(debt_val) if debt_val else 0
+                    cost_date_str = str(get("成本日期") or "").strip() or None
+                    description = str(get("说明") or "").strip() or None
+                    summary = str(get("成本摘要") or "").strip() or None
+                    remark = str(get("备注") or "").strip() or None
 
                     if not category or amount <= 0:
                         errors.append({"row": i, "error": "成本类别和金额(>0)为必填项"})
@@ -335,20 +355,22 @@ class ProjectCostService:
                         "remark": remark,
                     }, created_by)
                 else:
-                    # Standalone import — Excel must include order_no
-                    if not row[0]:
+                    # Standalone import — Excel must include order_no/报价单编号
+                    order_no = str(get("订单编号") or get("报价单编号") or "").strip()
+                    if not order_no:
                         continue
-                    order_no = str(row[0]).strip()
-                    order_item_name = str(row[1]).strip() if len(row) > 1 and row[1] else None
-                    category = str(row[2]).strip() if len(row) > 2 and row[2] else ""
-                    payment_method = str(row[3]).strip() if len(row) > 3 and row[3] else None
-                    payee_company_name = str(row[4]).strip() if len(row) > 4 and row[4] else None
-                    amount = float(row[5]) if len(row) > 5 and row[5] else 0
-                    debt_amount = float(row[6]) if len(row) > 6 and row[6] else 0
-                    cost_date_str = str(row[7]).strip() if len(row) > 7 and row[7] else None
-                    description = str(row[8]).strip() if len(row) > 8 and row[8] else None
-                    summary = str(row[9]).strip() if len(row) > 9 and row[9] else None
-                    remark = str(row[10]).strip() if len(row) > 10 and row[10] else None
+                    order_item_name = str(get("分项") or "").strip() or None
+                    category = str(get("成本类别") or "").strip()
+                    payment_method = str(get("付款方式") or "").strip() or None
+                    payee_company_name = str(get("收款公司") or "").strip() or None
+                    amount_val = get("金额")
+                    amount = float(amount_val) if amount_val else 0
+                    debt_val = get("欠款金额")
+                    debt_amount = float(debt_val) if debt_val else 0
+                    cost_date_str = str(get("成本日期") or "").strip() or None
+                    description = str(get("说明") or "").strip() or None
+                    summary = str(get("成本摘要") or "").strip() or None
+                    remark = str(get("备注") or "").strip() or None
 
                     if not order_no or not category or amount <= 0:
                         errors.append({"row": i, "error": "订单编号、成本类别和金额(>0)为必填项"})
@@ -356,8 +378,8 @@ class ProjectCostService:
 
                     # Look up order by order_no
                     order_result = await self.db.execute(select(Order).where(Order.order_no == order_no))
-                    order = order_result.scalar_one_or_none()
-                    if not order:
+                    order_obj = order_result.scalar_one_or_none()
+                    if not order_obj:
                         errors.append({"row": i, "error": f"订单编号「{order_no}」不存在"})
                         continue
 
@@ -370,9 +392,12 @@ class ProjectCostService:
 
                     await self.create_cost({
                         "source_type": source_type,
-                        "order_id": str(order.id) if order_id else None,
+                        "order_id": str(order_obj.id) if order_obj else None,
                         "category": category,
                         "amount": amount,
+                        "payment_method": payment_method,
+                        "payee_company_name": payee_company_name,
+                        "debt_amount": debt_amount,
                         "description": description,
                         "summary": summary,
                         "cost_date": cost_date.isoformat() if cost_date else None,
