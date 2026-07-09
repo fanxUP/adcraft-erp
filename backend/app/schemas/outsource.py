@@ -86,6 +86,8 @@ class OutsourceTaskResponse(BaseModel):
     quantity: int = 1
     unit_price: float = 0
     total_amount: float = 0
+    paid_amount: float = 0
+    unpaid_amount: float = 0
     status: str = "pending"
     expected_at: str | None = None
     completed_at: str | None = None

@@ -1,22 +1,58 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <h2>外协付款</h2>
-      <el-button type="danger" @click="handleCreate">新建付款</el-button>
+      <h2>外协任务付款</h2>
     </div>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协付款记录">
-      <el-table-column prop="payment_no" label="付款编号" width="160" />
-      <el-table-column prop="vendor_name" label="外协商" width="150" />
-      <el-table-column prop="amount" label="金额" width="140" align="right">
-        <template #default="{ row }">¥{{ row.amount?.toFixed(2) }}</template>
+    <div class="search-bar">
+      <el-select v-model="statusFilter" placeholder="状态" clearable style="width: 140px">
+        <el-option label="待处理" value="pending" />
+        <el-option label="进行中" value="in_progress" />
+        <el-option label="已完成" value="completed" />
+        <el-option label="已结算" value="settled" />
+        <el-option label="已取消" value="cancelled" />
+      </el-select>
+      <el-select v-model="vendorFilter" placeholder="外协商" filterable clearable style="width: 180px; margin-left: 8px;">
+        <el-option v-for="v in vendors" :key="v.id" :label="v.name" :value="v.id" />
+      </el-select>
+      <el-button type="primary" @click="fetchData" style="margin-left: 12px">搜索</el-button>
+    </div>
+
+    <!-- 任务付款汇总列表 -->
+    <el-table :data="taskList" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协任务">
+      <el-table-column prop="task_no" label="任务编号" width="140" />
+      <el-table-column prop="vendor_name" label="外协商" width="140" />
+      <el-table-column label="项目" width="160" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span v-if="row.related_project_name">{{ row.related_project_name }}</span>
+          <span v-else style="color: #999">-</span>
+        </template>
       </el-table-column>
-      <el-table-column label="付款方式" width="120">
-        <template #default="{ row }">{{ paymentMethodLabel(row.payment_method) }}</template>
+      <el-table-column label="状态" width="80">
+        <template #default="{ row }">
+          <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+        </template>
       </el-table-column>
-      <el-table-column prop="paid_at" label="付款日期" width="180" />
-      <el-table-column prop="remark" label="备注" min-width="200" show-overflow-tooltip />
-      <el-table-column prop="created_at" label="创建时间" width="180" />
+      <el-table-column prop="total_amount" label="总金额" width="120" align="right">
+        <template #default="{ row }">¥{{ row.total_amount?.toFixed(2) }}</template>
+      </el-table-column>
+      <el-table-column label="已付金额" width="120" align="right">
+        <template #default="{ row }">
+          <span style="color: var(--el-color-success)">¥{{ row.paid_amount?.toFixed(2) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="未付金额" width="120" align="right">
+        <template #default="{ row }">
+          <span v-if="row.unpaid_amount > 0" style="color: var(--el-color-danger); font-weight: 600">¥{{ row.unpaid_amount?.toFixed(2) }}</span>
+          <span v-else style="color: var(--el-color-success)">已结清</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="200">
+        <template #default="{ row }">
+          <el-button v-if="row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" type="warning" size="small" @click="handlePay(row)">付款</el-button>
+          <el-button text type="primary" @click="handleViewPayments(row)">付款记录</el-button>
+        </template>
+      </el-table-column>
     </el-table>
 
     <el-pagination
@@ -29,18 +65,42 @@
       @change="fetchData"
     />
 
-    <el-dialog v-model="dialogVisible" title="新建外协付款" width="500px" :close-on-click-modal="false">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="外协商" prop="vendor_id">
-          <el-select v-model="form.vendor_id" filterable clearable style="width: 100%">
-            <el-option v-for="v in vendors" :key="v.id" :label="v.name" :value="v.id" />
-          </el-select>
+    <!-- 付款对话框 -->
+    <el-dialog v-model="payDialogVisible" title="外协付款" width="500px" :close-on-click-modal="false">
+      <div v-if="payTask" class="pay-summary">
+        <div class="pay-summary-row">
+          <span class="label">外协商：</span>
+          <span class="value">{{ payTask.vendor_name }}</span>
+        </div>
+        <div class="pay-summary-row">
+          <span class="label">任务编号：</span>
+          <span class="value">{{ payTask.task_no }}</span>
+        </div>
+        <div class="pay-summary-row">
+          <span class="label">项目名称：</span>
+          <span class="value">{{ payTask.related_project_name || '-' }}</span>
+        </div>
+        <div class="pay-divider"></div>
+        <div class="pay-summary-row">
+          <span class="label">总金额：</span>
+          <span class="value total">¥{{ payTask.total_amount?.toFixed(2) }}</span>
+        </div>
+        <div class="pay-summary-row">
+          <span class="label">已付金额：</span>
+          <span class="value paid">¥{{ payTask.paid_amount?.toFixed(2) }}</span>
+        </div>
+        <div class="pay-summary-row">
+          <span class="label">待付金额：</span>
+          <span class="value unpaid">¥{{ payTask.unpaid_amount?.toFixed(2) }}</span>
+        </div>
+        <div class="pay-divider"></div>
+      </div>
+      <el-form ref="payFormRef" :model="payForm" :rules="payRules" label-width="100px">
+        <el-form-item label="付款金额" prop="amount">
+          <el-input-number v-model="payForm.amount" :min="0.01" :max="payTask?.unpaid_amount || 0" :precision="2" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="金额" prop="amount">
-          <el-input-number v-model="form.amount" :min="0.01" :precision="2" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="付款方式">
-          <el-select v-model="form.payment_method" clearable style="width: 100%">
+        <el-form-item label="付款方式" prop="payment_method">
+          <el-select v-model="payForm.payment_method" clearable style="width: 100%">
             <el-option label="银行转账" value="bank_transfer" />
             <el-option label="微信" value="wechat" />
             <el-option label="支付宝" value="alipay" />
@@ -48,47 +108,81 @@
           </el-select>
         </el-form-item>
         <el-form-item label="付款日期">
-          <el-date-picker v-model="form.paid_at" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+          <el-date-picker v-model="payForm.paid_at" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" />
+          <el-input v-model="payForm.remark" type="textarea" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button @click="payDialogVisible = false">取消</el-button>
+        <el-button type="danger" :loading="paySaving" @click="handlePaySubmit">确认付款</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 付款记录对话框 -->
+    <el-dialog v-model="recordDialogVisible" :title="'付款记录 - ' + (recordTask?.task_no || '')" width="700px" :close-on-click-modal="false">
+      <el-table :data="paymentRecords" stripe empty-text="暂无付款记录">
+        <el-table-column prop="payment_no" label="付款编号" width="160" />
+        <el-table-column prop="amount" label="金额" width="120" align="right">
+          <template #default="{ row }">¥{{ row.amount?.toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column label="付款方式" width="120">
+          <template #default="{ row }">{{ paymentMethodLabel(row.payment_method) }}</template>
+        </el-table-column>
+        <el-table-column prop="paid_at" label="付款日期" width="120" />
+        <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
+      </el-table>
+      <template #footer>
+        <el-button @click="recordDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import {
-  getOutsourceVendors, getOutsourcePayments, createOutsourcePayment,
+  getOutsourceVendors, getOutsourceTasks, getOutsourceTaskPaymentSummary,
+  createOutsourcePayment,
 } from '@/api/outsource'
 import { ElMessage } from 'element-plus'
-import { OutsourcePaymentResponse, VendorResponse } from '@/types/api'
+import { OutsourceTaskResponse } from '@/types/api'
 
 const loading = ref(false)
-const saving = ref(false)
-const list = ref<OutsourcePaymentResponse[]>([])
+const taskList = ref<OutsourceTaskResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
-const dialogVisible = ref(false)
-const vendors = ref<VendorResponse[]>([])
-const form = reactive({
-  vendor_id: '', amount: 0, payment_method: 'bank_transfer', paid_at: '', remark: '',
-})
-const rules = {
-  vendor_id: [{ required: true, message: '请选择外协商', trigger: 'change' }],
-  amount: [{ required: true, message: '请输入金额', trigger: 'blur' }],
-}
+const statusFilter = ref('')
+const vendorFilter = ref('')
+const vendors = ref<{id: string; name: string}[]>([])
+
+// 付款对话框
+const payDialogVisible = ref(false)
+const paySaving = ref(false)
+const payTask = ref<OutsourceTaskResponse | null>(null)
+const payForm = ref({ amount: 0, payment_method: 'bank_transfer', paid_at: '', remark: '' })
+const payRules = { amount: [{ required: true, message: '请输入付款金额', trigger: 'blur' }] }
+
+// 付款记录对话框
+const recordDialogVisible = ref(false)
+const recordTask = ref<OutsourceTaskResponse | null>(null)
+const paymentRecords = ref<{payment_no: string; amount: number; payment_method: string; paid_at: string; remark: string}[]>([])
 
 function paymentMethodLabel(val: string | null) {
   const map: Record<string, string> = { bank_transfer: '银行转账', wechat: '微信', alipay: '支付宝', cash: '现金' }
   return map[val || ''] || val || '-'
+}
+
+function statusType(val: string) {
+  const map: Record<string, string> = { pending: 'info', in_progress: 'warning', completed: 'success', settled: '', cancelled: 'danger' }
+  return (map[val] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+}
+
+function statusLabel(val: string) {
+  const map: Record<string, string> = { pending: '待处理', in_progress: '进行中', completed: '已完成', settled: '已结算', cancelled: '已取消' }
+  return map[val] || val
 }
 
 async function loadVendors() {
@@ -101,29 +195,70 @@ async function loadVendors() {
 async function fetchData() {
   loading.value = true
   try {
-    const data = await getOutsourcePayments({ page: page.value, page_size: pageSize.value })
-    list.value = data.items
+    const data = await getOutsourceTasks({
+      page: page.value, page_size: pageSize.value,
+      status: statusFilter.value || undefined,
+      vendor_id: vendorFilter.value || undefined,
+    })
+    taskList.value = data.items
     total.value = data.total
   } finally {
     loading.value = false
   }
 }
 
-function handleCreate() {
-  Object.assign(form, { vendor_id: '', amount: 0, payment_method: 'bank_transfer', paid_at: '', remark: '' })
-  dialogVisible.value = true
+async function handlePay(row: OutsourceTaskResponse) {
+  try {
+    const summary = await getOutsourceTaskPaymentSummary(row.id)
+    payTask.value = summary
+    payForm.value = {
+      amount: summary.unpaid_amount > 0 ? summary.unpaid_amount : 0,
+      payment_method: 'bank_transfer',
+      paid_at: '',
+      remark: '',
+    }
+    payDialogVisible.value = true
+  } catch {
+    payTask.value = row
+    payForm.value = {
+      amount: row.unpaid_amount > 0 ? row.unpaid_amount : 0,
+      payment_method: 'bank_transfer',
+      paid_at: '',
+      remark: '',
+    }
+    payDialogVisible.value = true
+  }
 }
 
-async function handleSave() {
-  saving.value = true
+async function handlePaySubmit() {
+  if (!payTask.value) return
+  paySaving.value = true
   try {
-    await createOutsourcePayment(form)
-    ElMessage.success('创建成功')
-    dialogVisible.value = false
+    await createOutsourcePayment({
+      vendor_id: payTask.value.vendor_id,
+      task_id: payTask.value.id,
+      amount: payForm.value.amount,
+      payment_method: payForm.value.payment_method || undefined,
+      paid_at: payForm.value.paid_at || undefined,
+      remark: payForm.value.remark || undefined,
+    })
+    ElMessage.success('付款成功')
+    payDialogVisible.value = false
     await fetchData()
   } finally {
-    saving.value = false
+    paySaving.value = false
   }
+}
+
+async function handleViewPayments(row: OutsourceTaskResponse) {
+  recordTask.value = row
+  try {
+    const summary = await getOutsourceTaskPaymentSummary(row.id)
+    paymentRecords.value = summary.payments || []
+  } catch {
+    paymentRecords.value = []
+  }
+  recordDialogVisible.value = true
 }
 
 onMounted(() => { fetchData(); loadVendors() })
@@ -133,4 +268,28 @@ onMounted(() => { fetchData(); loadVendors() })
 .page { padding: 0; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
+.search-bar { display: flex; align-items: center; }
+
+.pay-summary {
+  background: var(--el-fill-color-light);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.pay-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 14px;
+}
+.pay-summary-row .label { color: var(--el-text-color-secondary); }
+.pay-summary-row .value { font-weight: 500; }
+.pay-summary-row .value.total { font-weight: 600; color: var(--el-color-primary); }
+.pay-summary-row .value.paid { color: var(--el-color-success); }
+.pay-summary-row .value.unpaid { color: var(--el-color-danger); font-weight: 600; }
+.pay-divider {
+  height: 1px;
+  background: var(--el-border-color-light);
+  margin: 8px 0;
+}
 </style>

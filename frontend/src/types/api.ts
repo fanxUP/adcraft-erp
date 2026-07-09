@@ -489,6 +489,8 @@ export interface OutsourceTaskResponse {
   quantity: number
   unit_price: number
   total_amount: number
+  paid_amount: number
+  unpaid_amount: number
   status: string
   expected_at?: string
   completed_at?: string
@@ -649,6 +651,8 @@ export interface DailyReportOrder {
   order_no: string
   project_name: string
   total_amount: number
+  paid_amount: number
+  unpaid_amount: number
   status: string
 }
 

@@ -17,35 +17,40 @@
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协任务">
-      <el-table-column prop="task_no" label="任务编号" width="160" />
-      <el-table-column prop="vendor_name" label="外协商" width="150" />
-      <el-table-column label="任务" width="200" show-overflow-tooltip>
+      <el-table-column prop="task_no" label="任务编号" width="140" />
+      <el-table-column prop="vendor_name" label="外协商" width="140" />
+      <el-table-column label="任务" width="160" show-overflow-tooltip>
         <template #default="{ row }">
           <span v-if="row.related_project_name">{{ row.related_project_name }}</span>
           <span v-else style="color: #999">-</span>
         </template>
       </el-table-column>
-      <el-table-column label="任务类型" width="100">
-        <template #default="{ row }">{{ taskTypeLabel(row.task_type) }}</template>
-      </el-table-column>
-      <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
-      <el-table-column prop="quantity" label="数量" width="70" />
-      <el-table-column prop="unit_price" label="单价" width="100" align="right">
-        <template #default="{ row }">¥{{ row.unit_price?.toFixed(2) }}</template>
-      </el-table-column>
-      <el-table-column prop="total_amount" label="总金额" width="120" align="right">
+      <el-table-column prop="description" label="描述" min-width="150" show-overflow-tooltip />
+      <el-table-column prop="total_amount" label="总金额" width="110" align="right">
         <template #default="{ row }">¥{{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column label="状态" width="90">
+      <el-table-column label="已付" width="100" align="right">
+        <template #default="{ row }">
+          <span style="color: var(--el-color-success)">¥{{ row.paid_amount?.toFixed(2) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="未付" width="100" align="right">
+        <template #default="{ row }">
+          <span v-if="row.unpaid_amount > 0" style="color: var(--el-color-danger)">¥{{ row.unpaid_amount?.toFixed(2) }}</span>
+          <span v-else style="color: var(--el-color-success)">已结清</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="状态" width="80">
         <template #default="{ row }">
           <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180">
+      <el-table-column label="操作" min-width="240">
         <template #default="{ row }">
           <el-button text type="primary" @click="handleEdit(row as OutsourceTaskResponse)">编辑</el-button>
           <el-button v-if="row.status === 'pending'" text type="primary" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'in_progress')">开始</el-button>
           <el-button v-if="row.status === 'in_progress'" text type="success" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'completed')">完成</el-button>
+          <el-button v-if="row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" text type="warning" @click="handlePay(row as OutsourceTaskResponse)">付款</el-button>
           <el-button v-if="isAdmin && row.status === 'completed'" text type="warning" @click="handleRevert(row as OutsourceTaskResponse)">退回</el-button>
           <el-button v-if="isAdmin && !['completed', 'settled', 'cancelled'].includes(row.status)" text type="danger" @click="handleCancel(row as OutsourceTaskResponse)">取消</el-button>
           <el-button v-if="isAdmin && row.status === 'cancelled'" text type="danger" @click="handleDelete(row as OutsourceTaskResponse)">删除</el-button>
@@ -63,6 +68,7 @@
       @change="fetchData"
     />
 
+    <!-- 新建/编辑任务对话框 -->
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑外协任务' : '新建外协任务'" width="550px" :close-on-click-modal="false">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="外协商" prop="vendor_id">
@@ -91,10 +97,10 @@
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" />
         </el-form-item>
-        <el-form-item label="数量">
+        <el-form-item label="数量" prop="quantity">
           <el-input-number v-model="form.quantity" :min="1" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="单价">
+        <el-form-item label="单价" prop="unit_price">
           <el-input-number v-model="form.unit_price" :min="0" :precision="2" style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
@@ -106,18 +112,74 @@
         <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 付款对话框 -->
+    <el-dialog v-model="payDialogVisible" title="外协付款" width="500px" :close-on-click-modal="false">
+      <div v-if="payTask" class="pay-summary">
+        <div class="pay-summary-row">
+          <span class="label">外协商：</span>
+          <span class="value">{{ payTask.vendor_name }}</span>
+        </div>
+        <div class="pay-summary-row">
+          <span class="label">任务编号：</span>
+          <span class="value">{{ payTask.task_no }}</span>
+        </div>
+        <div class="pay-summary-row">
+          <span class="label">项目名称：</span>
+          <span class="value">{{ payTask.related_project_name || '-' }}</span>
+        </div>
+        <div class="pay-divider"></div>
+        <div class="pay-summary-row">
+          <span class="label">总金额：</span>
+          <span class="value total">¥{{ payTask.total_amount?.toFixed(2) }}</span>
+        </div>
+        <div class="pay-summary-row">
+          <span class="label">已付金额：</span>
+          <span class="value paid">¥{{ payTask.paid_amount?.toFixed(2) }}</span>
+        </div>
+        <div class="pay-summary-row">
+          <span class="label">待付金额：</span>
+          <span class="value unpaid">¥{{ payTask.unpaid_amount?.toFixed(2) }}</span>
+        </div>
+        <div class="pay-divider"></div>
+      </div>
+      <el-form ref="payFormRef" :model="payForm" :rules="payRules" label-width="100px">
+        <el-form-item label="付款金额" prop="amount">
+          <el-input-number v-model="payForm.amount" :min="0.01" :max="payTask?.unpaid_amount || 0" :precision="2" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="付款方式" prop="payment_method">
+          <el-select v-model="payForm.payment_method" clearable style="width: 100%">
+            <el-option label="银行转账" value="bank_transfer" />
+            <el-option label="微信" value="wechat" />
+            <el-option label="支付宝" value="alipay" />
+            <el-option label="现金" value="cash" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="付款日期">
+          <el-date-picker v-model="payForm.paid_at" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="payForm.remark" type="textarea" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="payDialogVisible = false">取消</el-button>
+        <el-button type="danger" :loading="paySaving" @click="handlePaySubmit">确认付款</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import {
-  getOutsourceVendors, getOutsourceTasks, createOutsourceTask, updateOutsourceTask, cancelOutsourceTask, revertOutsourceTask, deleteOutsourceTask,
+  getOutsourceVendors, getOutsourceTasks, getOutsourceTaskPaymentSummary,
+  createOutsourceTask, updateOutsourceTask, createOutsourcePayment,
+  cancelOutsourceTask, revertOutsourceTask, deleteOutsourceTask,
   getQuotesForDropdown, getOrdersForDropdown,
 } from '@/api/outsource'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { OutsourceTaskResponse } from '@/types/api'
-import { useAuthStore } from '@/stores/auth'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -128,28 +190,33 @@ const pageSize = ref(20)
 const statusFilter = ref('')
 const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
-
-
 const vendors = ref<{id: string; name: string}[]>([])
-const quotes = ref<{id: string; label: string}[]>([])
-const orders = ref<{id: string; label: string}[]>([])
-const form = reactive({
-  vendor_id: '', related_doc_id: '', related_doc_type: '', task_type: 'production', description: '',
-  quantity: 1, unit_price: 0, remark: '',
-})
-const authStore = useAuthStore()
-const isAdmin = computed(() => authStore.isAdmin)
+const quotes = ref<{id: string; label: string; project_name: string}[]>([])
+const orders = ref<{id: string; label: string; project_name: string}[]>([])
 
+const form = reactive({
+  vendor_id: '', related_doc_id: '', related_doc_type: '', task_type: 'production',
+  description: '', quantity: 1, unit_price: 0, remark: '',
+})
 const rules = {
   vendor_id: [{ required: true, message: '请选择外协商', trigger: 'change' }],
   task_type: [{ required: true, message: '请选择任务类型', trigger: 'change' }],
   related_doc_id: [{ required: true, message: '请选择关联任务', trigger: 'change' }],
 }
 
-function taskTypeLabel(val: string) {
-  const map: Record<string, string> = { production: '制作', installation: '安装', design: '设计', transport: '运输' }
-  return map[val] || val
+// 付款对话框
+const payDialogVisible = ref(false)
+const paySaving = ref(false)
+const payTask = ref<OutsourceTaskResponse | null>(null)
+const payForm = reactive({
+  amount: 0, payment_method: 'bank_transfer', paid_at: '', remark: '',
+})
+const payRules = {
+  amount: [{ required: true, message: '请输入付款金额', trigger: 'blur' }],
 }
+
+// 是否管理员（从 localStorage 取角色）
+const isAdmin = ref(false)
 
 function statusType(val: string) {
   const map: Record<string, string> = { pending: 'info', in_progress: 'warning', completed: 'success', settled: '', cancelled: 'danger' }
@@ -162,16 +229,10 @@ function statusLabel(val: string) {
 }
 
 async function loadQuotes() {
-  try {
-    const data = await getQuotesForDropdown()
-    quotes.value = data
-  } catch { /* ignore */ }
+  try { quotes.value = await getQuotesForDropdown() } catch { /* ignore */ }
 }
 async function loadOrders() {
-  try {
-    const data = await getOrdersForDropdown()
-    orders.value = data
-  } catch { /* ignore */ }
+  try { orders.value = await getOrdersForDropdown() } catch { /* ignore */ }
 }
 async function loadVendors() {
   try {
@@ -194,13 +255,8 @@ async function fetchData() {
   }
 }
 
-// 关联任务下拉选中时自动设置类型
 function onRelatedDocChange(val: string) {
-  if (!val) {
-    form.related_doc_type = ''
-    return
-  }
-  // 判断选中项是报价单还是订单
+  if (!val) { form.related_doc_type = ''; return }
   const foundQuote = quotes.value.find(q => q.id === val)
   form.related_doc_type = foundQuote ? 'quote' : 'order'
 }
@@ -243,57 +299,94 @@ async function handleUpdateStatus(row: OutsourceTaskResponse, status: string) {
     await updateOutsourceTask(row.id, { status })
     ElMessage.success(`已更新为：${statusLabel(status)}`)
     await fetchData()
+  } catch { /* ignore */ }
+}
+
+async function handlePay(row: OutsourceTaskResponse) {
+  // 先刷新最新的付款摘要
+  try {
+    const summary = await getOutsourceTaskPaymentSummary(row.id)
+    payTask.value = summary
+    payForm.amount = summary.unpaid_amount > 0 ? summary.unpaid_amount : 0
+    payForm.payment_method = 'bank_transfer'
+    payForm.paid_at = ''
+    payForm.remark = ''
+    payDialogVisible.value = true
   } catch {
-    // API error handled by interceptor
+    // fallback: use row data
+    payTask.value = row
+    payForm.amount = row.unpaid_amount > 0 ? row.unpaid_amount : 0
+    payForm.payment_method = 'bank_transfer'
+    payForm.paid_at = ''
+    payForm.remark = ''
+    payDialogVisible.value = true
+  }
+}
+
+async function handlePaySubmit() {
+  if (!payTask.value) return
+  paySaving.value = true
+  try {
+    await createOutsourcePayment({
+      vendor_id: payTask.value.vendor_id,
+      task_id: payTask.value.id,
+      amount: payForm.amount,
+      payment_method: payForm.payment_method || undefined,
+      paid_at: payForm.paid_at || undefined,
+      remark: payForm.remark || undefined,
+    })
+    ElMessage.success('付款成功')
+    payDialogVisible.value = false
+    await fetchData()
+  } finally {
+    paySaving.value = false
   }
 }
 
 async function handleCancel(row: OutsourceTaskResponse) {
   try {
     await ElMessageBox.confirm(`确认取消外协任务「${row.task_no}」？`, '确认', {
-      confirmButtonText: '确认取消',
-      cancelButtonText: '取消',
-      type: 'warning',
+      confirmButtonText: '确认取消', cancelButtonText: '取消', type: 'warning',
     })
     await cancelOutsourceTask(row.id)
     ElMessage.success('外协任务已取消')
     await fetchData()
-  } catch {
-    // cancelled by user or error handled by interceptor
-  }
+  } catch { /* ignore */ }
 }
 
 async function handleRevert(row: OutsourceTaskResponse) {
   try {
     await ElMessageBox.confirm(`确认退回外协任务「${row.task_no}」为进行中？`, '确认', {
-      confirmButtonText: '确认退回',
-      cancelButtonText: '取消',
-      type: 'warning',
+      confirmButtonText: '确认退回', cancelButtonText: '取消', type: 'warning',
     })
     await revertOutsourceTask(row.id)
     ElMessage.success('外协任务已退回为进行中')
     await fetchData()
-  } catch {
-    // cancelled by user or error handled by interceptor
-  }
+  } catch { /* ignore */ }
 }
 
 async function handleDelete(row: OutsourceTaskResponse) {
   try {
     await ElMessageBox.confirm(`确认删除外协任务「${row.task_no}」？删除后不可恢复。`, '确认', {
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消',
-      type: 'warning',
+      confirmButtonText: '确认删除', cancelButtonText: '取消', type: 'warning',
     })
     await deleteOutsourceTask(row.id)
     ElMessage.success('外协任务已删除')
     await fetchData()
-  } catch {
-    // cancelled by user or error handled by interceptor
-  }
+  } catch { /* ignore */ }
 }
 
-onMounted(() => { fetchData(); loadVendors(); loadQuotes(); loadOrders() })
+onMounted(() => {
+  // 检查管理员角色
+  try {
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      const user = JSON.parse(userStr)
+      isAdmin.value = user.role === 'admin'
+    }
+  } catch { /* ignore */ }
+  fetchData(); loadVendors(); loadQuotes(); loadOrders()
+})
 </script>
 
 <style scoped>
@@ -301,4 +394,27 @@ onMounted(() => { fetchData(); loadVendors(); loadQuotes(); loadOrders() })
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .search-bar { display: flex; align-items: center; }
+
+.pay-summary {
+  background: var(--el-fill-color-light);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.pay-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 14px;
+}
+.pay-summary-row .label { color: var(--el-text-color-secondary); }
+.pay-summary-row .value { font-weight: 500; }
+.pay-summary-row .value.total { font-weight: 600; color: var(--el-color-primary); }
+.pay-summary-row .value.paid { color: var(--el-color-success); }
+.pay-summary-row .value.unpaid { color: var(--el-color-danger); font-weight: 600; }
+.pay-divider {
+  height: 1px;
+  background: var(--el-border-color-light);
+  margin: 8px 0;
+}
 </style>

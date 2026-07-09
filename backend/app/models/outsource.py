@@ -42,6 +42,8 @@ class OutsourceTask(Base, TimestampMixin):
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     unit_price: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     total_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    paid_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    unpaid_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     status: Mapped[str] = mapped_column(String(32), default="pending")  # pending, in_progress, completed, settled
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     expected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

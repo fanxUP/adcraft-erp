@@ -118,6 +118,21 @@ async def list_tasks(
     return success_paginated(tasks, total, page, page_size)
 
 
+@router.get("/tasks/payment-summary/{task_id}")
+async def get_task_payment_summary(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取外协任务付款摘要：总金额、已付、未付、付款明细"""
+    from uuid import UUID
+    service = OutsourceService(db)
+    summary = await service.get_task_payment_summary(UUID(task_id))
+    if not summary:
+        return error(40401, "外协任务不存在")
+    return success(summary)
+
+
 @router.get("/tasks/{task_id}")
 async def get_task(
     task_id: str,
@@ -203,7 +218,6 @@ async def create_payment(
 
 
 # ── Cancel Task (admin only) ──
-
 @router.post("/tasks/{task_id}/cancel")
 async def cancel_task(
     task_id: str,

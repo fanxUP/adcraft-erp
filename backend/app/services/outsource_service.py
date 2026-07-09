@@ -1,11 +1,11 @@
 from uuid import UUID
 from decimal import Decimal
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.outsource_repo import OutsourceVendorRepository, OutsourceTaskRepository, OutsourcePaymentRepository
 from app.services.number_generator import generate_vendor_no, generate_outsource_task_no, generate_outsource_payment_no
-from app.models.outsource import OutsourceVendor
+from app.models.outsource import OutsourceVendor, OutsourcePayment
 
 
 class OutsourceService:
@@ -71,7 +71,7 @@ class OutsourceService:
             return None
         vname = await self._task_vendor_name(task)
         pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
-        return self._task_to_dict(task, vname, doc_no)
+        return self._task_to_dict(task, vname, pname)
 
     async def create_task(self, data: dict) -> dict:
         data["task_no"] = await generate_outsource_task_no(self.db)
@@ -84,10 +84,12 @@ class OutsourceService:
         qty = Decimal(str(data.get("quantity", 1)))
         price = Decimal(str(data.get("unit_price", 0)))
         data["total_amount"] = float(qty * price)
+        data["paid_amount"] = 0
+        data["unpaid_amount"] = data["total_amount"]
         task = await self.task_repo.create(data)
         vname = await self._task_vendor_name(task)
         pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
-        return self._task_to_dict(task, vname, doc_no)
+        return self._task_to_dict(task, vname, pname)
 
     async def update_task(self, task_id: UUID, data: dict) -> dict:
         task = await self.task_repo.get_by_id(task_id)
@@ -113,7 +115,7 @@ class OutsourceService:
         task = await self.task_repo.update(task, data)
         vname = await self._task_vendor_name(task)
         pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
-        return self._task_to_dict(task, vname, doc_no)
+        return self._task_to_dict(task, vname, pname)
 
     # ── Payment ──
 
@@ -130,8 +132,61 @@ class OutsourceService:
     async def create_payment(self, data: dict) -> dict:
         data["payment_no"] = await generate_outsource_payment_no(self.db)
         payment = await self.payment_repo.create(data)
+        # 同步更新关联任务的已付/未付金额
+        if payment.task_id:
+            await self._update_task_paid_amounts(payment.task_id)
         vname = await self._vendor_name(payment.vendor_id)
         return self._payment_to_dict(payment, vname)
+
+    async def _update_task_paid_amounts(self, task_id: UUID) -> None:
+        """根据所有付款记录重新计算任务的已付/未付金额"""
+        from sqlalchemy import select, func, func
+        result = await self.db.execute(
+            select(func.coalesce(func.sum(OutsourcePayment.amount), 0))
+            .where(OutsourcePayment.task_id == task_id)
+        )
+        total_paid = float(result.scalar())
+        task = await self.task_repo.get_by_id(task_id)
+        if task:
+            task.paid_amount = total_paid
+            task.unpaid_amount = max(0, float(task.total_amount) - total_paid)
+            await self.db.flush()
+
+    async def get_task_payment_summary(self, task_id: UUID) -> dict | None:
+        """获取任务付款摘要：总金额、已付、未付、付款明细"""
+        task = await self.task_repo.get_by_id(task_id)
+        if not task:
+            return None
+        from sqlalchemy import select, func
+        result = await self.db.execute(
+            select(OutsourcePayment).where(OutsourcePayment.task_id == task_id)
+            .order_by(OutsourcePayment.created_at.desc())
+        )
+        payments = result.scalars().all()
+        vname = await self._vendor_name(task.vendor_id)
+        pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
+        return {
+            "task_id": str(task.id),
+            "task_no": task.task_no,
+            "vendor_id": str(task.vendor_id),
+            "vendor_name": vname,
+            "related_project_name": pname,
+            "total_amount": float(task.total_amount),
+            "paid_amount": float(task.paid_amount),
+            "unpaid_amount": float(task.unpaid_amount),
+            "payments": [
+                {
+                    "id": str(p.id),
+                    "payment_no": p.payment_no,
+                    "amount": float(p.amount),
+                    "payment_method": p.payment_method,
+                    "paid_at": p.paid_at.isoformat() if p.paid_at else None,
+                    "remark": p.remark,
+                    "created_at": p.created_at.isoformat() if p.created_at else None,
+                }
+                for p in payments
+            ],
+        }
 
     async def _vendor_name(self, vendor_id: UUID) -> str | None:
         result = await self.db.execute(select(OutsourceVendor.name).where(OutsourceVendor.id == vendor_id))
@@ -176,6 +231,8 @@ class OutsourceService:
             "quantity": t.quantity,
             "unit_price": float(t.unit_price),
             "total_amount": float(t.total_amount),
+            "paid_amount": float(t.paid_amount),
+            "unpaid_amount": float(t.unpaid_amount),
             "status": t.status,
             "expected_at": t.expected_at.isoformat() if t.expected_at else None,
             "completed_at": t.completed_at.isoformat() if t.completed_at else None,
