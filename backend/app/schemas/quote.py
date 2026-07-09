@@ -18,6 +18,7 @@ class QuoteItemCreate(BaseModel):
     unit: str | None = None
     use_area: bool = False
     quantity_mode: str = "piece"
+    pieces: float | None = 1
     unit_price: float = 0
     process_fee: float = 0
     installation_fee: float = 0
@@ -25,6 +26,7 @@ class QuoteItemCreate(BaseModel):
     transport_fee: float = 0
     other_fee: float = 0
     remark: str | None = None
+    image_url: str | None = None
     sort_order: int = 0
     group_name: str | None = None
     material_process: str | None = None
@@ -45,6 +47,7 @@ class QuoteItemUpdate(BaseModel):
     unit: str | None = None
     use_area: bool | None = None
     quantity_mode: str | None = None
+    pieces: float | None = None
     unit_price: float | None = None
     process_fee: float | None = None
     installation_fee: float | None = None
@@ -52,6 +55,7 @@ class QuoteItemUpdate(BaseModel):
     transport_fee: float | None = None
     other_fee: float | None = None
     remark: str | None = None
+    image_url: str | None = None
     sort_order: int | None = None
     group_name: str | None = None
     material_process: str | None = None
@@ -74,6 +78,7 @@ class QuoteItemResponse(BaseModel):
     unit: str | None = None
     use_area: bool = False
     quantity_mode: str = "piece"
+    pieces: float | None = None
     area: float | None = None
     unit_price: float
     process_fee: float
@@ -83,6 +88,7 @@ class QuoteItemResponse(BaseModel):
     other_fee: float
     subtotal_amount: float
     remark: str | None = None
+    image_url: str | None = None
     sort_order: int = 0
     group_name: str | None = None
     material_process: str | None = None
@@ -98,6 +104,9 @@ class QuoteCreate(BaseModel):
     tax_rate: float = 0
     valid_until: date | None = None
     remark: str | None = None
+    department: str | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
     items: list[QuoteItemCreate] = []
 
     @model_validator(mode='after')
@@ -114,6 +123,9 @@ class QuoteUpdate(BaseModel):
     tax_rate: float | None = None
     valid_until: date | None = None
     remark: str | None = None
+    department: str | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
     items: list[QuoteItemCreate] | None = None
 
 
@@ -127,6 +139,9 @@ class QuoteListResponse(BaseModel):
     total_amount: float
     valid_until: str | None = None
     created_at: datetime | None = None
+    department: str | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -146,6 +161,9 @@ class QuoteDetailResponse(BaseModel):
     total_amount: float
     valid_until: str | None = None
     remark: str | None = None
+    department: str | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
     created_at: datetime | None = None
     items: list[QuoteItemResponse] = []
 

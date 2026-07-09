@@ -40,7 +40,7 @@
     />
 
     <!-- Create/Edit Dialog -->
-    <el-dialog v-model="showDialog" :title="isEditing ? '编辑用户' : '新增用户'" width="480px">
+    <el-dialog v-model="showDialog" :title="isEditing ? '编辑用户' : '新增用户'" width="480px" :close-on-click-modal="false">
       <el-form :model="form" label-width="80px">
         <el-form-item label="用户名" required>
           <el-input v-model="form.username" :disabled="isEditing" placeholder="登录用户名" />

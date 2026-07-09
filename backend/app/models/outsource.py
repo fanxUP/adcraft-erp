@@ -26,13 +26,15 @@ class OutsourceVendor(Base, TimestampMixin, SoftDeleteMixin):
     tasks: Mapped[list["OutsourceTask"]] = relationship(viewonly=True, lazy="selectin")
 
 
-class OutsourceTask(Base, TimestampMixin):
+class OutsourceTask(Base, TimestampMixin, SoftDeleteMixin):
     """外协任务"""
     __tablename__ = "outsource_tasks"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     task_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     vendor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("outsource_vendors.id"), nullable=False)
+    related_doc_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    related_doc_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
     order_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     task_type: Mapped[str] = mapped_column(String(32), nullable=False)  # production, installation, design, transport
@@ -40,6 +42,8 @@ class OutsourceTask(Base, TimestampMixin):
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     unit_price: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     total_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    paid_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    unpaid_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     status: Mapped[str] = mapped_column(String(32), default="pending")  # pending, in_progress, completed, settled
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     expected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -62,6 +66,7 @@ class OutsourcePayment(Base, TimestampMixin):
     task_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("outsource_tasks.id"), nullable=True)
     amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    payee_company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)

@@ -48,6 +48,9 @@ def make_mock_quote(quote_id=SAMPLE_QUOTE_ID, status="draft", total_amount=10000
         mock_item.width = 1.5
         mock_item.height = None
         mock_item.quantity = 3
+        mock_item.pieces = None
+        mock_item.length_unit = "m"
+        mock_item.width_unit = "m"
         mock_item.unit = "㎡"
         mock_item.area = 9.0
         mock_item.unit_price = 500.0
@@ -187,7 +190,7 @@ class TestQuoteCalculation:
         mock_item.length = 6.0
         mock_item.width = 2.0
         mock_item.height = None
-        mock_item.quantity = 1
+        mock_item.quantity = 12.0
         mock_item.unit_price = 500.0
         mock_item.process_fee = 100.0
         mock_item.installation_fee = 200.0
@@ -196,6 +199,9 @@ class TestQuoteCalculation:
         mock_item.other_fee = 0.0
         mock_item.area = None
         mock_item.subtotal_amount = None
+        mock_item.pieces = None
+        mock_item.length_unit = "m"
+        mock_item.width_unit = "m"
         mock_quote.items = [mock_item]
         mock_quote.subtotal_amount = 0
         mock_quote.discount_amount = 0

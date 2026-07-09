@@ -58,7 +58,7 @@
       @change="fetchData"
     />
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑外协商' : '新建外协商'" width="550px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑外协商' : '新建外协商'" width="550px" :close-on-click-modal="false">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="名称" prop="name">
           <el-input v-model="form.name" />

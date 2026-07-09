@@ -8,6 +8,73 @@ from app.models.inventory import StockRecord
 from app.models.project_cost import ProjectCost
 
 
+def _build_spec(item) -> str | None:
+    """Build specification string from order/quote item dimensions + pieces."""
+    parts = []
+    if item.length:
+        v = float(item.length)
+        num = str(int(v)) if v == int(v) else str(v)
+        parts.append(f"{num}{item.length_unit or 'm'}")
+    if item.width:
+        v = float(item.width)
+        num = str(int(v)) if v == int(v) else str(v)
+        parts.append(f"{num}{item.width_unit or 'm'}")
+    if item.height:
+        v = float(item.height)
+        num = str(int(v)) if v == int(v) else str(v)
+        parts.append(f"{num}{item.height_unit or 'm'}")
+    if item.pieces and item.pieces > 1:
+        parts.append(str(int(item.pieces)))
+    return " × ".join(parts) if parts else None
+
+
+def _order_to_quote_data(order, quote_no: str) -> dict:
+    """从订单构建报价数据字典"""
+    return {
+        "quote_no": quote_no,
+        "customer_id": str(order.customer_id) if order.customer_id else None,
+        "customer_name": order.customer.name if order.customer else None,
+        "project_name": order.project_name,
+        "sales_user_id": str(order.sales_user_id) if order.sales_user_id else None,
+        "status": "draft",
+        "remark": f"由订单 {order.order_no} 恢复",
+        "contact_person": order.contact_person,
+        "contact_phone": order.contact_phone,
+        "items": [
+            {
+                "item_name": i.item_name,
+                "product_id": str(i.product_id) if i.product_id else None,
+                "material_id": str(i.material_id) if i.material_id else None,
+                "process_id": str(i.process_id) if i.process_id else None,
+                "length": float(i.length) if i.length else None,
+                "length_unit": i.length_unit,
+                "width": float(i.width) if i.width else None,
+                "width_unit": i.width_unit,
+                "height": float(i.height) if i.height else None,
+                "height_unit": i.height_unit,
+                "quantity": float(i.quantity),
+                "unit": i.unit,
+                "use_area": i.use_area,
+                "quantity_mode": i.quantity_mode,
+                "pieces": float(i.pieces) if i.pieces else None,
+                "area": float(i.area) if i.area else None,
+                "unit_price": float(i.unit_price),
+                "process_fee": float(i.process_fee),
+                "installation_fee": float(i.installation_fee),
+                "design_fee": float(i.design_fee),
+                "transport_fee": float(i.transport_fee),
+                "other_fee": float(i.other_fee),
+                "remark": i.remark,
+                "image_url": i.image_url,
+                "sort_order": i.sort_order,
+                "group_name": i.group_name,
+                "material_process": i.material_process,
+            }
+            for i in (order.items or [])
+        ],
+    }
+
+
 class OrderService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -26,21 +93,52 @@ class OrderService:
             return None
         return self._order_to_detail(order)
 
+    ORDER_TRANSITIONS = {
+        "pending_confirm": ["confirmed", "cancelled"],
+        "confirmed": ["in_progress", "cancelled"],
+        "in_progress": ["in_production", "in_installation", "completed", "cancelled"],
+        "in_production": ["in_installation", "completed", "cancelled"],
+        "in_installation": ["completed", "cancelled"],
+        "completed": ["cancelled"],
+        "cancelled": [],
+    }
+
     async def change_status(self, order_id: UUID, to_status: str, reason: str | None, operated_by: UUID) -> dict:
         order = await self.repo.get_by_id(order_id)
         if not order:
             raise ValueError("订单不存在")
         from_status = order.status
+        allowed = self.ORDER_TRANSITIONS.get(from_status, [])
+        if to_status not in allowed:
+            raise ValueError(f"不允许从 {from_status} 流转到 {to_status}")
         await self.repo.update(order, {"status": to_status})
+        await self.db.flush()
         await self.repo.create_status_log(order_id, from_status, to_status, reason, operated_by)
+
+        # 订单完成时自动创建验收单
+        if to_status == "completed":
+            await self._auto_create_acceptance(order)
+
+        # 订单取消时同步删除关联验收单
+        if to_status == "cancelled":
+            from app.models.acceptance import AcceptanceForm
+            from datetime import datetime
+            result = await self.db.execute(
+                select(AcceptanceForm).where(
+                    AcceptanceForm.order_id == order_id,
+                    AcceptanceForm.deleted_at.is_(None),
+                )
+            )
+            for af in result.scalars().all():
+                af.deleted_at = datetime.now()
 
         # Send notification to sales user
         if order.sales_user_id and order.sales_user_id != operated_by:
             from app.services.notification_service import NotificationService
             notif_svc = NotificationService(self.db)
             status_labels = {
-                "draft": "草稿", "confirmed": "已确认", "designing": "设计中",
-                "producing": "制作中", "installing": "安装中", "completed": "已完成", "cancelled": "已取消",
+                "pending_confirm": "待确认", "confirmed": "已确认", "in_progress": "进行中",
+                "in_production": "生产中", "in_installation": "安装中", "completed": "已完成", "cancelled": "已取消",
             }
             from_label = status_labels.get(from_status, from_status)
             to_label = status_labels.get(to_status, to_status)
@@ -53,6 +151,52 @@ class OrderService:
             )
 
         return self._order_to_detail(order)
+
+    async def _auto_create_acceptance(self, order) -> None:
+        """订单完成时自动创建验收单（如该订单尚无验收单）"""
+        from app.models.acceptance import AcceptanceForm, AcceptanceItem
+        from app.services.number_generator import generate_acceptance_no
+
+        existing = await self.db.execute(
+            select(AcceptanceForm).where(
+                AcceptanceForm.order_id == order.id,
+                AcceptanceForm.deleted_at.is_(None),
+            )
+        )
+        if existing.scalar_one_or_none():
+            return
+
+        acceptance_no = await generate_acceptance_no(self.db)
+        form = AcceptanceForm(
+            acceptance_no=acceptance_no,
+            order_id=order.id,
+            status="draft",
+        )
+        self.db.add(form)
+        await self.db.flush()
+
+        for oi in order.items or []:
+            spec = _build_spec(oi)
+
+            item = AcceptanceItem(
+                acceptance_id=form.id,
+                order_item_id=oi.id,
+                item_name=oi.item_name,
+                material_process=oi.material_process,
+                specification=spec,
+                quantity=float(oi.quantity) if oi.quantity else None,
+                unit=oi.unit,
+                area=float(oi.area) if oi.area else None,
+                unit_price=float(oi.unit_price) if oi.unit_price else None,
+                subtotal=float(oi.subtotal_amount) if oi.subtotal_amount else None,
+                item_status="pending",
+                group_name=oi.group_name,
+                remark=oi.remark,
+                image_url=oi.image_url,
+            )
+            self.db.add(item)
+
+        await self.db.flush()
 
     async def set_cost(self, order_id: UUID, cost_amount: float) -> dict:
         """Set order cost and recalculate gross profit."""
@@ -72,10 +216,10 @@ class OrderService:
         """Auto-calculate order cost from outsource tasks + material stock-out records + manual project costs."""
         total_cost = Decimal("0")
 
-        # Outsource costs
+        # Outsource costs (settled + completed)
         result = await self.db.execute(
             select(func.coalesce(func.sum(OutsourceTask.total_amount), 0))
-            .where(OutsourceTask.order_id == order_id, OutsourceTask.status == "settled")
+            .where(OutsourceTask.order_id == order_id, OutsourceTask.status.in_(["completed", "settled"]))
         )
         total_cost += Decimal(str(result.scalar()))
 
@@ -96,58 +240,134 @@ class OrderService:
         return await self.set_cost(order_id, float(total_cost))
 
     async def delete_order(self, order_id: UUID) -> None:
+        """软删除订单，同时级联删除关联的外协任务"""
         order = await self.repo.get_by_id(order_id)
         if not order:
             raise ValueError("订单不存在")
         if order.status != "cancelled":
             raise ValueError("只有已取消的订单可以删除")
+        # 级联删除关联的外协任务（通过 order_id 或 related_doc_id）
+        from app.models.outsource import OutsourceTask
+        from sqlalchemy import select
+        tasks = (await self.db.execute(
+            select(OutsourceTask).where(
+                (OutsourceTask.order_id == order_id) |
+                ((OutsourceTask.related_doc_id == order_id) & (OutsourceTask.related_doc_type == "order"))
+            )
+        )).scalars().all()
+        for task in tasks:
+            # 先级联删除关联的外协付款，再删除任务
+            from app.models.outsource import OutsourcePayment
+            payments = (await self.db.execute(
+                select(OutsourcePayment).where(OutsourcePayment.task_id == task.id)
+            )).scalars().all()
+            for p in payments:
+                await self.db.delete(p)
+            await self.db.delete(task)
         await self.repo.soft_delete(order)
 
     async def convert_to_quote(self, order_id: UUID, created_by: UUID) -> dict:
-        """已取消订单转报价单，并删除原订单"""
+        """已取消订单转报价单"""
         order = await self.repo.get_by_id(order_id)
         if not order:
             raise ValueError("订单不存在")
         if order.status != "cancelled":
             raise ValueError("只有已取消的订单可以转报价")
 
-        # 创建报价单
+        # 创建报价单（优先恢复原报价，否则新建）
+        from app.models.quote import Quote, QuoteItem
         from app.services.quote_service import QuoteService
         from app.services.number_generator import generate_quote_no
 
         quote_svc = QuoteService(self.db)
-        quote_no = await generate_quote_no(self.db)
 
-        quote_data = {
-            "quote_no": quote_no,
-            "customer_id": str(order.customer_id) if order.customer_id else None,
-            "customer_name": order.customer.name if order.customer else None,
-            "project_name": order.project_name,
-            "sales_user_id": str(order.sales_user_id) if order.sales_user_id else None,
-            "status": "draft",
-            "remark": f"由订单 {order.order_no} 转换",
-            "items": []
-        }
+        if order.quote_id:
+            orig_quote = await self.db.get(Quote, order.quote_id)
+            if orig_quote:
+                # 恢复原报价：更新基本信息、明细，重置状态
+                orig_quote.deleted_at = None
+                orig_quote.customer_id = order.customer_id
+                orig_quote.customer_name = order.customer.name if order.customer else None
+                orig_quote.project_name = order.project_name
+                orig_quote.sales_user_id = order.sales_user_id
+                orig_quote.status = "draft"
+                orig_quote.remark = f"由订单 {order.order_no} 恢复"
+                orig_quote.contact_person = order.contact_person
+                orig_quote.contact_phone = order.contact_phone
+                # 更新现有明细（不删除：被 order_items 外键引用）
+                order_items_list = order.items or []
+                old_items = (await self.db.execute(
+                    select(QuoteItem).where(QuoteItem.quote_id == order.quote_id).order_by(QuoteItem.sort_order)
+                )).scalars().all()
+                for idx, item in enumerate(order_items_list):
+                    fields = dict(
+                        item_name=item.item_name,
+                        product_id=item.product_id,
+                        material_id=item.material_id,
+                        process_id=item.process_id,
+                        length=float(item.length) if item.length else None,
+                        length_unit=item.length_unit,
+                        width=float(item.width) if item.width else None,
+                        width_unit=item.width_unit,
+                        height=float(item.height) if item.height else None,
+                        height_unit=item.height_unit,
+                        quantity=float(item.quantity),
+                        unit=item.unit,
+                        use_area=item.use_area,
+                        quantity_mode=item.quantity_mode,
+                        pieces=float(item.pieces) if item.pieces else None,
+                        area=float(item.area) if item.area else None,
+                        unit_price=float(item.unit_price),
+                        process_fee=float(item.process_fee),
+                        installation_fee=float(item.installation_fee),
+                        design_fee=float(item.design_fee),
+                        transport_fee=float(item.transport_fee),
+                        other_fee=float(item.other_fee),
+                        remark=item.remark,
+                        image_url=item.image_url,
+                        sort_order=idx,
+                        group_name=item.group_name,
+                        material_process=item.material_process,
+                        subtotal_amount=float(item.subtotal_amount),
+                    )
+                    if idx < len(old_items):
+                        for k, v in fields.items():
+                            setattr(old_items[idx], k, v)
+                    else:
+                        self.db.add(QuoteItem(quote_id=order.quote_id, **fields))
+                await self.db.flush()
+                await quote_svc.calculate_quote(order.quote_id)
+                quote = quote_svc._quote_to_detail(orig_quote)
+            else:
+                # 原报价已不存在，新建
+                quote = await quote_svc.create_quote(self._order_to_quote_data(order, await generate_quote_no(self.db)))
+        else:
+            quote = await quote_svc.create_quote(self._order_to_quote_data(order, await generate_quote_no(self.db)))
 
-        # 复制订单明细
-        for item in (order.items or []):
-            quote_data["items"].append({
-                "item_name": item.item_name,
-                "product_id": str(item.product_id) if item.product_id else None,
-                "material_id": str(item.material_id) if item.material_id else None,
-                "process_id": str(item.process_id) if item.process_id else None,
-                "length": float(item.length) if item.length else None,
-                "width": float(item.width) if item.width else None,
-                "height": float(item.height) if item.height else None,
-                "quantity": float(item.quantity),
-                "unit": item.unit,
-                "unit_price": float(item.unit_price),
-            })
+        # 同步外协任务：将 order 引用改为 quote 引用，并更新描述和金额
+        tasks = (await self.db.execute(
+            select(OutsourceTask).where(
+                (OutsourceTask.order_id == order_id) |
+                ((OutsourceTask.related_doc_id == order_id) & (OutsourceTask.related_doc_type == "order"))
+            )
+        )).scalars().all()
+        for task in tasks:
+            task.related_doc_id = quote["id"]
+            task.related_doc_type = "quote"
+            task.order_id = None
+            task.description = quote.get("project_name") or order.project_name
+            if quote.get("total_amount") is not None:
+                task.unit_price = float(quote["total_amount"])
+                task.total_amount = float(quote["total_amount"])
 
-        quote = await quote_svc.create_quote(quote_data)
-
-        # 删除原订单（软删除）
-        await self.repo.soft_delete(order)
+        # 转报价后删除原订单（硬删除，不进回收站）
+        from app.models.acceptance import AcceptanceForm
+        for af in (await self.db.execute(
+            select(AcceptanceForm).where(AcceptanceForm.order_id == order_id)
+        )).scalars().all():
+            await self.db.delete(af)
+        await self.db.flush()
+        await self.db.delete(order)
 
         return quote
 
@@ -169,6 +389,9 @@ class OrderService:
             "customer_id": str(o.customer_id),
             "customer_name": o.customer.name if o.customer else None,
             "project_name": o.project_name,
+            "department": o.department,
+            "contact_person": o.contact_person,
+            "contact_phone": o.contact_phone,
             "status": o.status,
             "total_amount": float(o.total_amount),
             "paid_amount": float(o.paid_amount),
@@ -185,6 +408,9 @@ class OrderService:
             "customer_id": str(o.customer_id),
             "customer_name": o.customer.name if o.customer else None,
             "project_name": o.project_name,
+            "department": o.department,
+            "contact_person": o.contact_person,
+            "contact_phone": o.contact_phone,
             "sales_user_id": str(o.sales_user_id) if o.sales_user_id else None,
             "status": o.status,
             "total_amount": float(o.total_amount),
@@ -203,13 +429,29 @@ class OrderService:
                     "material_id": str(item.material_id) if item.material_id else None,
                     "process_id": str(item.process_id) if item.process_id else None,
                     "length": float(item.length) if item.length else None,
+                    "length_unit": item.length_unit,
                     "width": float(item.width) if item.width else None,
+                    "width_unit": item.width_unit,
                     "height": float(item.height) if item.height else None,
+                    "height_unit": item.height_unit,
                     "quantity": float(item.quantity),
                     "unit": item.unit,
+                    "use_area": item.use_area,
+                    "quantity_mode": item.quantity_mode,
+                    "pieces": float(item.pieces) if item.pieces else None,
+                    "specification": _build_spec(item),
+                    "area": float(item.area) if item.area else None,
                     "unit_price": float(item.unit_price),
+                    "process_fee": float(item.process_fee),
+                    "installation_fee": float(item.installation_fee),
+                    "design_fee": float(item.design_fee),
+                    "transport_fee": float(item.transport_fee),
+                    "other_fee": float(item.other_fee),
                     "subtotal_amount": float(item.subtotal_amount),
                     "remark": item.remark,
+                    "sort_order": item.sort_order,
+                    "group_name": item.group_name,
+                    "material_process": item.material_process,
                 }
                 for item in (o.items or [])
             ],

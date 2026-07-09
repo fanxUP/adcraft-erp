@@ -93,7 +93,7 @@
     </template>
 
     <!-- Create / Edit Item Dialog -->
-    <el-dialog v-model="itemDialogVisible" :title="editingItemId ? '编辑物料' : '新建物料'" width="500px">
+    <el-dialog v-model="itemDialogVisible" :title="editingItemId ? '编辑物料' : '新建物料'" width="500px" :close-on-click-modal="false">
       <el-form ref="itemFormRef" :model="itemForm" :rules="itemRules" label-width="100px">
         <el-form-item label="物料名称" prop="material_name">
           <el-input v-model="itemForm.material_name" />
@@ -131,7 +131,7 @@
     </el-dialog>
 
     <!-- Stock In / Out Dialog -->
-    <el-dialog v-model="stockDialogVisible" :title="stockType === 'in' ? '入库' : '出库'" width="400px">
+    <el-dialog v-model="stockDialogVisible" :title="stockType === 'in' ? '入库' : '出库'" width="400px" :close-on-click-modal="false">
       <el-form ref="stockFormRef" :model="stockForm" :rules="stockRules" label-width="80px">
         <el-form-item label="物料">
           <span>{{ selectedItem?.material_name }}</span>

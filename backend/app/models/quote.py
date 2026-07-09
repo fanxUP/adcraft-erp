@@ -24,6 +24,9 @@ class Quote(Base, TimestampMixin, SoftDeleteMixin):
     total_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     valid_until: Mapped[str | None] = mapped_column(Date, nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    department: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="部门/科室")
+    contact_person: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="联系人")
+    contact_phone: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="联系电话")
 
     items: Mapped[list["QuoteItem"]] = relationship(back_populates="quote", lazy="selectin", cascade="all, delete-orphan")
 
@@ -47,6 +50,7 @@ class QuoteItem(Base, TimestampMixin):
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
     use_area: Mapped[bool] = mapped_column(default=False)
     quantity_mode: Mapped[str] = mapped_column(String(16), default="piece")
+    pieces: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, default=1, comment="件数")
     area: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
     unit_price: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     process_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
@@ -56,6 +60,7 @@ class QuoteItem(Base, TimestampMixin):
     other_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     subtotal_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     group_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     material_process: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)

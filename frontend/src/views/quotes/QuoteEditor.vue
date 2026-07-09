@@ -16,6 +16,15 @@
         <el-form-item label="项目名称" required>
           <el-input v-model="form.project_name" :disabled="isReadonly" style="width: 260px" />
         </el-form-item>
+        <el-form-item label="部门/科室">
+          <el-input v-model="form.department" :disabled="isReadonly" placeholder="如：宣传部、办公室" style="width: 260px" />
+        </el-form-item>
+        <el-form-item label="联系人">
+          <el-input v-model="form.contact_person" :disabled="isReadonly" placeholder="联系人姓名" style="width: 160px" />
+        </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="form.contact_phone" :disabled="isReadonly" placeholder="手机/电话" style="width: 160px" />
+        </el-form-item>
         <el-form-item label="税率">
           <el-input-number v-model="form.tax_rate" :precision="4" :min="0" :step="0.01" :disabled="isReadonly" style="width: 160px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
         </el-form-item>
@@ -109,6 +118,13 @@
             </template>
           </template>
         </el-table-column>
+        <el-table-column label="件数" width="70">
+          <template #default="{ row }">
+            <template v-if="row.type === 'item'">
+              <el-input-number v-model="row.item.pieces" :precision="0" :min="1" :disabled="isReadonly" size="small" :controls="false" @change="syncAreaQuantity(row.item)" />
+            </template>
+          </template>
+        </el-table-column>
         <el-table-column label="面积" width="130">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
@@ -137,7 +153,7 @@
                 placeholder="选择/输入"
                 style="width: 100%"
                 :trigger-on-focus="true"
-                @select="(opt: { value: string; disabled?: boolean }) => { if (!opt.disabled) row.item.unit = opt.value }"
+                @select="(opt) => { if (!opt.disabled) row.item.unit = opt.value }"
                 @blur="addRecentUnit(row.item.unit)"
               >
                 <template #default="{ item }">
@@ -190,6 +206,20 @@
             <template v-else-if="row.type === 'group-total'"><strong>¥ {{ row.total.toFixed(2) }}</strong></template>
           </template>
         </el-table-column>
+        <el-table-column label="样图" width="90">
+          <template #default="{ row }">
+            <template v-if="row.type === 'item'">
+              <div v-if="row.item.image_url" style="display: flex; align-items: center; gap: 4px;">
+                <el-image :src="row.item.image_url" :preview-src-list="[row.item.image_url]" fit="cover" style="width: 32px; height: 32px; border-radius: 4px; cursor: pointer;" />
+                <el-button v-if="!isReadonly" text type="danger" size="small" @click="row.item.image_url = ''" style="padding: 0;">×</el-button>
+              </div>
+              <el-upload v-else-if="!isReadonly" :show-file-list="false" :http-request="(opt: any) => handleImageUpload(opt, row.item)" accept="image/*" style="display: inline;">
+                <el-button text type="primary" size="small" style="padding: 0;">上传</el-button>
+              </el-upload>
+              <span v-else style="color: #999;">-</span>
+            </template>
+          </template>
+        </el-table-column>
         <el-table-column label="备注" min-width="120">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
@@ -224,23 +254,30 @@
           </div>
           <div class="summary-item"><span>税额：</span><strong>¥ {{ calcTax().toFixed(2) }}</strong></div>
           <div class="summary-item total"><span>总计：</span><strong>¥ {{ calcTotal().toFixed(2) }}</strong></div>
+          <div style="text-align: right; font-size: 13px; color: var(--ad-text-secondary); margin-top: 4px;">
+            大写金额：{{ toChineseAmount(calcTotal()) }}
+          </div>
         </el-col>
       </el-row>
     </el-card>
 
-    <div style="margin-top: 24px; display: flex; gap: 12px; align-items: center">
-      <el-button v-if="!isReadonly && quote?.status !== 'confirmed'" type="primary" :loading="saving" @click="handleSave">保存草稿</el-button>
-      <el-button v-if="!isReadonly && quote?.status === 'confirmed'" type="warning" :loading="reverting" @click="handleRevertToDraft">转草稿</el-button>
-      <el-button v-if="!isReadonly" type="warning" :loading="calculating" @click="handleCalculate">服务端计算</el-button>
-      <el-button v-if="isEdit && quote?.status === 'draft'" type="success" @click="handleConfirm">确认报价</el-button>
-      <el-button v-if="isEdit && quote?.status === 'confirmed'" type="danger" :loading="converting" @click="handleConvert">转订单</el-button>
-      <el-button v-if="isEdit" type="success" @click="previewVisible = true">预览</el-button>
-      <el-tag v-if="isReadonly" size="large" :type="quote?.status === 'converted' ? 'success' : 'danger'" style="font-size: 15px; padding: 8px 16px">
-        {{ quote?.status === 'converted' ? '已转订单，不可编辑' : '已作废，不可编辑' }}
-      </el-tag>
-    </div>
+    <!-- 报价状态流程图 -->
+    <QuoteWorkflow
+      :current-status="quote?.status || 'draft'"
+      :is-existing="isEdit"
+      :saving="saving"
+      :converting="converting"
+      :reverting="reverting"
+      @save="handleSave"
+      @confirm="handleConfirm"
+      @convert="handleConvert"
+      @revert="handleRevertToDraft"
+      @preview="previewVisible = true"
+    />
 
+    <!-- 预览弹窗 -->
     <QuotePreview :visible="previewVisible" :quote-id="quoteId" :current-items="items" @close="previewVisible = false" />
+
     <div v-if="quote?.status === 'confirmed'" style="margin-top: 8px; color: var(--ad-text-secondary); font-size: 13px">
       如需修改报价，请先将报价转成草稿
     </div>
@@ -248,19 +285,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import QuoteWorkflow from './QuoteWorkflow.vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createQuote, getQuote, updateQuote, calculateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft } from '@/api/quotes'
+import { onBeforeRouteLeave } from 'vue-router'
+import { createQuote, getQuote, updateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft } from '@/api/quotes'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { uploadAttachment } from '@/api/tasks'
 import type { QuoteItemResponse, QuoteDetailResponse, CustomerResponse } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
 
 const route = useRoute()
 const router = useRouter()
-const isEdit = !!route.params.id
+const isEdit = computed(() => !!route.params.id)
 const saving = ref(false)
-const calculating = ref(false)
 const converting = ref(false)
 const reverting = ref(false)
 const customerSelectRef = ref()
@@ -276,6 +315,9 @@ const form = reactive({
   discount_amount: 0,
   valid_until: '',
   remark: '',
+  department: '',
+  contact_person: '',
+  contact_phone: '',
 })
 
 const newItem = (groupName?: string): QuoteItemResponse => ({
@@ -291,6 +333,7 @@ const newItem = (groupName?: string): QuoteItemResponse => ({
   quantity: 1,
   unit: '',
   use_area: false,
+  pieces: 1,
   unit_price: 0,
   process_fee: 0,
   installation_fee: 0,
@@ -298,6 +341,8 @@ const newItem = (groupName?: string): QuoteItemResponse => ({
   transport_fee: 0,
   other_fee: 0,
   subtotal_amount: 0,
+  remark: '',
+  image_url: '',
   sort_order: 0,
   group_name: groupName || undefined,
   material_process: '',
@@ -305,8 +350,65 @@ const newItem = (groupName?: string): QuoteItemResponse => ({
 
 const items = ref<QuoteItemResponse[]>([newItem()])
 
+// ===== 未保存修改检测 =====
+const dirty = ref(false)
+const isLoaded = ref(false)
+let cleanSnapshot: string = ''
+
+function captureCleanSnapshot() {
+  cleanSnapshot = JSON.stringify({
+    form: { ...form },
+    items: items.value.map(i => ({ ...i, subtotal_amount: calcSubtotal(i) })),
+  })
+  isLoaded.value = true
+  dirty.value = false
+}
+
+function hasUnsavedChanges(): boolean {
+  if (!isLoaded.value) return false
+  const current = JSON.stringify({
+    form: { ...form },
+    items: items.value.map(i => ({ ...i, subtotal_amount: calcSubtotal(i) })),
+  })
+  return current !== cleanSnapshot
+}
+
+// 监听表单和明细变化
+watch(
+  [form, items],
+  () => {
+    dirty.value = hasUnsavedChanges()
+  },
+  { deep: true }
+)
+
+// 路由离开守卫
+onBeforeRouteLeave((to, from, next) => {
+  if (!dirty.value) return next()
+  ElMessageBox.confirm(
+    '您有未保存的修改，确定要离开吗？离开后修改将丢失。',
+    '未保存的修改',
+    { confirmButtonText: '离开', cancelButtonText: '取消', type: 'warning' }
+  ).then(() => next()).catch(() => next(false))
+})
+
+// 浏览器刷新/关闭
+function handleBeforeUnload(e: BeforeUnloadEvent) {
+  if (dirty.value) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
 const isReadonly = computed(() => {
-  if (!isEdit || !quote.value) return false
+  if (!isEdit.value || !quote.value) return false
   return quote.value.status === 'converted' || quote.value.status === 'cancelled'
 })
 
@@ -321,7 +423,8 @@ function convertToMeters(value: number, unit: string): number {
 function calcArea(item: QuoteItemResponse) {
   const length = convertToMeters(item.length || 0, item.length_unit || 'm')
   const width = convertToMeters(item.width || 0, item.width_unit || 'm')
-  return length * width
+  const raw = length * width * (item.pieces || 1)
+  return Math.round(raw * 100) / 100
 }
 
 function onAreaToggle(row: QuoteItemResponse, val: boolean) {
@@ -364,6 +467,47 @@ function calcItemSubtotal(item: QuoteItemResponse) {
 function calcQuoteSubtotal() { return items.value.reduce((s, i) => s + calcSubtotal(i), 0) }
 function calcTax() { return (calcQuoteSubtotal() - (form.discount_amount || 0)) * (form.tax_rate || 0) }
 function calcTotal() { return calcQuoteSubtotal() - (form.discount_amount || 0) + calcTax() }
+
+function toChineseAmount(n: number): string {
+  const digits = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖']
+  const units = ['', '拾', '佰', '仟']
+  const bigUnits = ['', '万', '亿']
+  if (n === 0) return '零元整'
+  const negative = n < 0
+  n = Math.abs(n)
+  const intPart = Math.floor(n)
+  const decPart = Math.round((n - intPart) * 100)
+  const jiao = Math.floor(decPart / 10)
+  const fen = decPart % 10
+  let result = ''
+  if (intPart > 0) {
+    const str = String(intPart)
+    const len = str.length
+    let zeroFlag = false
+    for (let i = 0; i < len; i++) {
+      const d = parseInt(str[i])
+      const pos = len - 1 - i
+      const unitIdx = pos % 4
+      const bigIdx = Math.floor(pos / 4)
+      if (d === 0) {
+        zeroFlag = true
+        if (unitIdx === 0 && bigUnits[bigIdx]) { result += bigUnits[bigIdx]; zeroFlag = false }
+      } else {
+        if (zeroFlag) { result += '零'; zeroFlag = false }
+        result += digits[d] + units[unitIdx]
+        if (unitIdx === 0 && bigUnits[bigIdx]) result += bigUnits[bigIdx]
+      }
+    }
+    result += '元'
+  }
+  if (jiao === 0 && fen === 0) { result += '整' }
+  else {
+    if (jiao > 0) result += digits[jiao] + '角'
+    else if (intPart > 0) result += '零'
+    if (fen > 0) result += digits[fen] + '分'
+  }
+  return (negative ? '负' : '') + result
+}
 
 function addItem(groupName?: string) { items.value.push(newItem(groupName)) }
 
@@ -475,12 +619,26 @@ async function fetchQuote() {
     discount_amount: quote.value.discount_amount,
     valid_until: quote.value.valid_until || '',
     remark: quote.value.remark || '',
+    department: quote.value.department || '',
+    contact_person: quote.value.contact_person || '',
+    contact_phone: quote.value.contact_phone || '',
   })
   items.value = quote.value.items?.length ? quote.value.items.map(i => ({ ...i })) : [newItem()]
+  captureCleanSnapshot()
 }
 
 function isExistingCustomer(value: string): boolean {
   return customerOptions.value.some(c => c.id === value)
+}
+
+async function handleImageUpload(opt: { file: File }, item: QuoteItemResponse) {
+  try {
+    const res = await uploadAttachment('quote_item', item.id || route.params.id as string, opt.file, 'image')
+    item.image_url = `/uploads/${res.file_path}`
+    ElMessage.success('上传成功')
+  } catch {
+    ElMessage.error('上传失败')
+  }
 }
 
 async function handleSave() {
@@ -489,7 +647,7 @@ async function handleSave() {
     // 更新所有 items 的小计
     items.value.forEach(item => calcItemSubtotal(item))
 
-    if (isEdit) {
+    if (isEdit.value) {
       // Prepare items for update - only send editable fields
       const cleanItems = items.value.map((item, idx) => ({
         ...(item.id ? { id: item.id } : {}),
@@ -506,6 +664,7 @@ async function handleSave() {
         quantity: item.quantity,
         unit: item.unit || null,
         use_area: item.use_area || false,
+        pieces: item.pieces || 1,
         unit_price: item.unit_price || 0,
         process_fee: item.process_fee || 0,
         installation_fee: item.installation_fee || 0,
@@ -513,6 +672,7 @@ async function handleSave() {
         transport_fee: item.transport_fee || 0,
         other_fee: item.other_fee || 0,
         remark: item.remark || undefined,
+        image_url: item.image_url || undefined,
         sort_order: idx,
         group_name: item.group_name || null,
         material_process: item.material_process || undefined,
@@ -523,14 +683,49 @@ async function handleSave() {
         discount_amount: form.discount_amount,
         valid_until: form.valid_until || undefined,
         remark: form.remark,
+        department: form.department || undefined,
+        contact_person: form.contact_person || undefined,
+        contact_phone: form.contact_phone || undefined,
         items: cleanItems,
       })
       ElMessage.success('保存成功')
+      dirty.value = false
+      captureCleanSnapshot()
     } else {
-      const payload: Record<string, unknown> = { ...form, items: items.value }
+      const cleanItems = items.value.map((item, idx) => ({
+        ...(item.id ? { id: item.id } : {}),
+        item_name: item.item_name,
+        product_id: item.product_id || undefined,
+        material_id: item.material_id || undefined,
+        process_id: item.process_id || undefined,
+        length: item.length || undefined,
+        length_unit: item.length_unit || undefined,
+        width: item.width || undefined,
+        width_unit: item.width_unit || undefined,
+        height: item.height || undefined,
+        height_unit: item.height_unit || undefined,
+        quantity: item.quantity,
+        unit: item.unit || null,
+        use_area: item.use_area || false,
+        pieces: item.pieces || 1,
+        unit_price: item.unit_price || 0,
+        process_fee: item.process_fee || 0,
+        installation_fee: item.installation_fee || 0,
+        design_fee: item.design_fee || 0,
+        transport_fee: item.transport_fee || 0,
+        other_fee: item.other_fee || 0,
+        remark: item.remark || undefined,
+        image_url: item.image_url || undefined,
+        sort_order: idx,
+        group_name: item.group_name || null,
+        material_process: item.material_process || undefined,
+      }))
+      const payload: Record<string, unknown> = { ...form, items: cleanItems }
       // Clean empty optional fields that Pydantic would reject
       if (!payload.valid_until) delete payload.valid_until
       if (!payload.remark) delete payload.remark
+      if (!payload.contact_person) delete payload.contact_person
+      if (!payload.contact_phone) delete payload.contact_phone
       // discount_amount is not a field on QuoteCreate — remove it
       delete payload.discount_amount
       if (form.customer_id && !isExistingCustomer(form.customer_id)) {
@@ -544,23 +739,12 @@ async function handleSave() {
       // else: existing customer UUID stays as customer_id
       const result = await createQuote(payload)
       ElMessage.success('创建成功')
-      router.push(`/quotes/${result.id}/edit`)
+      dirty.value = false
+      captureCleanSnapshot()
+      const quoteId = result.id
+      await router.replace(`/quotes/${quoteId}/edit`)
     }
   } finally { saving.value = false }
-}
-
-async function handleCalculate() {
-  if (!isEdit) { ElMessage.warning('请先保存草稿'); return }
-  calculating.value = true
-  try {
-    quote.value = await calculateQuote(route.params.id as string)
-    Object.assign(form, {
-      tax_rate: quote.value.tax_rate,
-      discount_amount: quote.value.discount_amount,
-    })
-    items.value = quote.value.items?.length ? quote.value.items.map(i => ({ ...i })) : items.value
-    ElMessage.success('计算完成')
-  } finally { calculating.value = false }
 }
 
 async function handleConfirm() {
@@ -571,6 +755,7 @@ async function handleConfirm() {
   })
   await confirmQuote(route.params.id as string)
   ElMessage.success('报价已确认')
+  dirty.value = false
   fetchQuote()
 }
 
@@ -603,7 +788,18 @@ async function handleRevertToDraft() {
 
 onMounted(async () => {
   await loadCustomers()
-  if (isEdit) await fetchQuote()
+  if (route.params.id) {
+    await fetchQuote()
+  } else {
+    // 新建报价：初始空白状态作为干净快照
+    captureCleanSnapshot()
+  }
+})
+
+watch(() => route.params.id, async (newId) => {
+  if (newId) {
+    await fetchQuote()
+  }
 })
 </script>
 

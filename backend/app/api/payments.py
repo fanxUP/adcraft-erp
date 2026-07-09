@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.permissions import require_role
 from app.models.user import User
-from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate, ProjectCostCreate, ProjectCostUpdate
+from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate, ProjectCostCreate, ProjectCostUpdate, DebtSettleCreate
 from app.schemas.common import success, success_paginated
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
 from app.services.project_cost_service import ProjectCostService
@@ -264,6 +264,8 @@ async def list_project_costs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     order_id: str | None = None,
+    quote_id: str | None = None,
+    source_type: str | None = None,
     category: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -272,7 +274,8 @@ async def list_project_costs(
 ):
     service = ProjectCostService(db)
     oid = UUID(order_id) if order_id else None
-    costs, total = await service.list_costs(page, page_size, oid, category, date_from, date_to)
+    qid = UUID(quote_id) if quote_id else None
+    costs, total = await service.list_costs(page, page_size, oid, qid, source_type, category, date_from, date_to)
     return success_paginated(costs, total, page, page_size)
 
 
@@ -286,6 +289,155 @@ async def get_project_costs_summary(
     ids = [UUID(oid.strip()) for oid in order_ids.split(",") if oid.strip()]
     costs = await service.get_costs_summary(ids)
     return success({"costs": costs})
+
+
+@cost_router.get("/template")
+async def download_project_cost_template(
+    current_user: User = Depends(get_current_user),
+):
+    """Download an Excel template for importing project costs."""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from fastapi.responses import Response
+
+    try:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "成本导入模板"
+
+        header_font = Font(name="微软雅黑", bold=True, size=11, color="FFFFFF")
+        header_fill = PatternFill(start_color="409EFF", end_color="409EFF", fill_type="solid")
+        header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin_border = Border(
+            left=Side(style="thin"), right=Side(style="thin"),
+            top=Side(style="thin"), bottom=Side(style="thin"),
+        )
+
+        headers = ["分项", "成本类别", "付款方式", "收款公司", "金额", "欠款金额", "成本日期", "说明", "成本摘要", "备注"]
+        col_widths = [20, 18, 16, 22, 14, 14, 18, 30, 30, 30]
+
+        for col_idx, (header, width) in enumerate(zip(headers, col_widths), 1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_align
+            cell.border = thin_border
+            ws.column_dimensions[chr(64 + col_idx)].width = width
+
+        example_data = ["灯箱制作", "人工/工时费", "转账支付", "XX广告制作公司", 500.00, 0, "2026-07-08", "安装工人加班费", "灯箱制作成本摘要", "示例数据，可删除"]
+        for col_idx, val in enumerate(example_data, 1):
+            cell = ws.cell(row=2, column=col_idx, value=val)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = thin_border
+
+        ws.merge_cells("A4:J4")
+        note_cell = ws.cell(row=4, column=1,
+            value="说明：成本类别可选值 — 人工/工时费、运输/物流费、安装杂费、其他；付款方式可选值 — 现金支付、微信支付、转账支付、对公支付、其它支付")
+        note_cell.font = Font(name="微软雅黑", size=9, color="999999", italic=True)
+
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        data = buf.getvalue()
+
+        return Response(
+            content=data,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": "attachment; filename=%E9%A1%B9%E7%9B%AE%E6%88%90%E6%9C%AC%E5%AF%BC%E5%85%A5%E6%A8%A1%E6%9D%BF.xlsx",
+                "Content-Length": str(len(data)),
+            },
+        )
+    except Exception as e:
+        import traceback
+        return {"code": 50001, "message": f"生成模板失败: {str(e)}", "detail": traceback.format_exc()}
+
+
+@cost_router.get("/quotes")
+async def list_quotes_for_cost(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取可登记成本的报价单列表"""
+    from app.models.quote import Quote as QuoteModel
+    from app.repositories.project_cost_repo import ProjectCostRepository
+
+    from sqlalchemy import or_, select, func
+
+    q = select(QuoteModel).where(QuoteModel.deleted_at.is_(None))
+    if keyword:
+        fuzzy = f"%{keyword}%"
+        q = q.where(
+            or_(
+                QuoteModel.quote_no.ilike(fuzzy),
+                QuoteModel.project_name.ilike(fuzzy),
+                QuoteModel.customer_name.ilike(fuzzy),
+            )
+        )
+    count_q = select(func.count()).select_from(q.subquery())
+    total = (await db.execute(count_q)).scalar()
+    q = q.order_by(QuoteModel.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(q)
+    quotes = result.scalars().all()
+
+    # Get cost summaries for these quotes
+    repo = ProjectCostRepository(db)
+    quote_ids = [q.id for q in quotes]
+    cost_map = {}
+    if quote_ids:
+        cost_map = await repo.get_quote_costs_summary(quote_ids)
+
+    items = []
+    for q in quotes:
+        items.append({
+            "id": str(q.id),
+            "quote_no": q.quote_no,
+            "project_name": q.project_name,
+            "customer_name": q.customer_name,
+            "status": q.status,
+            "total_amount": float(q.total_amount),
+            "cost_amount": float(cost_map.get(str(q.id), 0)),
+        })
+    return success_paginated(items, total, page, page_size)
+
+
+@cost_router.get("/debts/list")
+async def list_cost_debts(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = None,
+    is_settled: bool | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取成本欠款清单"""
+    service = ProjectCostService(db)
+    debts, total = await service.list_debts(page, page_size, keyword, is_settled)
+    return success_paginated(debts, total, page, page_size)
+
+
+@cost_router.post("/{cost_id}/settle-debt")
+async def settle_cost_debt(
+    cost_id: str,
+    data: DebtSettleCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """冲红：结算成本欠款"""
+    service = ProjectCostService(db)
+    try:
+        cost = await service.settle_debt(UUID(cost_id), data.model_dump())
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_PROJECT_COST, UUID(cost_id), "settle_debt",
+                        ip_address=request.client.host if request.client else None,
+                        after_data={"settle_amount": data.settle_amount, "payment_method": data.payment_method})
+    return success(cost)
 
 
 @cost_router.get("/{cost_id}")
@@ -309,8 +461,15 @@ async def create_project_cost(
     current_user: User = Depends(get_current_user),
 ):
     service = ProjectCostService(db)
+    payload = data.model_dump()
+    # Validate source_id presence
+    source_type = payload.get("source_type", "order")
+    if source_type == "quote" and not payload.get("quote_id"):
+        return {"code": 40001, "message": "报价单ID不能为空", "data": None}
+    if source_type == "order" and not payload.get("order_id"):
+        return {"code": 40001, "message": "订单ID不能为空", "data": None}
     try:
-        cost = await service.create_cost(data.model_dump(), current_user.id)
+        cost = await service.create_cost(payload, current_user.id)
     except ValueError as e:
         return {"code": 40001, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
@@ -363,6 +522,8 @@ async def delete_project_cost(
 async def import_project_costs(
     file: UploadFile = File(...),
     order_id: str | None = None,
+    quote_id: str | None = None,
+    source_type: str = "order",
     request: Request = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -372,7 +533,12 @@ async def import_project_costs(
     content = await file.read()
     service = ProjectCostService(db)
     try:
-        result = await service.import_from_excel(BytesIO(content), current_user.id, order_id=UUID(order_id) if order_id else None)
+        result = await service.import_from_excel(
+            BytesIO(content), current_user.id,
+            order_id=UUID(order_id) if order_id else None,
+            quote_id=UUID(quote_id) if quote_id else None,
+            source_type=source_type,
+        )
     except Exception as e:
         return {"code": 40001, "message": f"导入失败: {str(e)}", "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,

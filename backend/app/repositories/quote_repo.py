@@ -25,6 +25,7 @@ class QuoteRepository:
                           keyword: str | None = None,
                           date_from: date | None = None, date_to: date | None = None) -> tuple[list[Quote], int]:
         q = select(Quote).where(Quote.deleted_at.is_(None))
+        q = q.where(Quote.status != "converted")
         if status:
             q = q.where(Quote.status == status)
         if customer_id:

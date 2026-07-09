@@ -2,8 +2,8 @@
   <div class="page">
     <!-- Order info header -->
     <div class="order-header">
-      <el-button text @click="$router.push('/project-costs')">
-        <el-icon><ArrowLeft /></el-icon> 返回订单列表
+      <el-button text @click="goBack">
+        <el-icon><ArrowLeft /></el-icon> 返回列表
       </el-button>
       <el-card v-if="order" shadow="never" class="order-card" style="margin-top: 12px">
         <div class="order-info-row">
@@ -71,8 +71,21 @@
           <el-tag size="small">{{ row.category }}</el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="分项" min-width="140" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span v-if="row.order_item_name">{{ row.order_item_name }}</span>
+          <span v-else style="color: #c0c4cc">-</span>
+        </template>
+      </el-table-column>
       <el-table-column label="金额" width="140" align="right">
         <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
+      </el-table-column>
+      <el-table-column label="欠款" width="90" align="center">
+        <template #default="{ row }">
+          <el-tag v-if="row.is_debt && !row.is_settled" type="danger" size="small">欠款</el-tag>
+          <el-tag v-else-if="row.is_debt && row.is_settled" type="success" size="small">已结清</el-tag>
+          <span v-else style="color: #c0c4cc">-</span>
+        </template>
       </el-table-column>
       <el-table-column label="日期" width="120">
         <template #default="{ row }">
@@ -80,6 +93,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="summary" label="成本摘要" min-width="180" show-overflow-tooltip />
       <el-table-column label="凭证" width="80" align="center">
         <template #default="{ row }">
           <el-tag v-if="row.attachment_count > 0" size="small" type="success">{{ row.attachment_count }}</el-tag>
@@ -114,10 +128,26 @@
     />
 
     <!-- Create/Edit Dialog -->
-    <el-dialog v-model="showDialog" :title="isEditing ? '编辑成本' : '登记成本'" width="520px">
+    <el-dialog v-model="showDialog" :title="isEditing ? '编辑成本' : '登记成本'" width="520px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
-        <el-form-item label="订单">
-          <el-input :value="order?.order_no + ' ' + order?.project_name" disabled />
+        <el-form-item :label="isQuote ? '报价单' : '订单'">
+          <el-input :value="(isQuote ? (order?.quote_no || '') : (order?.order_no || '')) + ' ' + (order?.project_name || '')" disabled />
+        </el-form-item>
+        <el-form-item label="分项">
+          <el-select v-model="form.order_item_id" placeholder="选择分项（可选）" clearable filterable style="width: 100%">
+            <el-option
+              v-for="item in orderItems"
+              :key="item.id"
+              :label="item.item_name"
+              :value="item.id"
+            >
+              <span>{{ item.item_name }}</span>
+              <span v-if="item.group_name" style="float: right; color: #909399; font-size: 12px">{{ item.group_name }}</span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="成本摘要">
+          <el-input v-model="form.summary" type="textarea" :rows="2" placeholder="成本摘要说明…" />
         </el-form-item>
         <el-form-item label="成本类别" required>
           <el-select
@@ -131,8 +161,21 @@
             <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
           </el-select>
         </el-form-item>
+        <el-form-item label="付款方式">
+          <el-select v-model="form.payment_method" placeholder="选择付款方式" clearable style="width: 100%">
+            <el-option v-for="pm in PAYMENT_METHODS" :key="pm" :label="pm" :value="pm" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="收款公司">
+          <el-input v-model="form.payee_company_name" placeholder="输入对方收款公司名称" clearable />
+          <div style="font-size: 12px; color: #909399; margin-top: 2px">对方收款公司名称（可选）</div>
+        </el-form-item>
         <el-form-item label="金额" required>
           <el-input-number v-model="form.amount" :min="0.01" :precision="2" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="欠款金额">
+          <el-input-number v-model="form.debt_amount" :min="0" :precision="2" style="width: 100%" placeholder="0 表示无欠款" />
+          <div style="font-size: 12px; color: #909399; margin-top: 4px">大于0时自动记为欠款</div>
         </el-form-item>
         <el-form-item label="日期">
           <el-date-picker
@@ -199,14 +242,19 @@
     </el-dialog>
 
     <!-- Import Dialog -->
-    <el-dialog v-model="showImport" title="导入Excel" width="480px">
+    <el-dialog v-model="showImport" title="导入Excel" width="480px" :close-on-click-modal="false">
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary)">
         Excel 需包含以下列：<br />
-        <b>成本类别、金额、描述(可选)、成本日期(可选)、备注(可选)</b>
+        <b>分项、成本类别、付款方式、收款公司、金额、欠款金额、成本日期、说明、成本摘要、备注</b>
       </p>
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 13px">
-        导入的成本将自动关联到订单 <b>{{ order?.order_no }}</b>
+        导入的成本将自动关联到 <b>{{ isQuote ? (order?.quote_no || '报价单') : (order?.order_no || '订单') }}</b>
       </p>
+      <div style="margin-bottom: 12px;">
+        <el-button size="small" @click="downloadTemplate">
+          <el-icon><Download /></el-icon> 下载导入模板
+        </el-button>
+      </div>
       <el-upload
         ref="uploadRef"
         :auto-upload="false"
@@ -247,7 +295,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   getProjectCosts, createProjectCost, updateProjectCost, deleteProjectCost, importProjectCosts,
   getProjectCostAttachments, uploadProjectCostAttachment, deleteProjectCostAttachment,
@@ -255,13 +303,15 @@ import {
 import { getOrder } from '@/api/orders'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Plus, Delete } from '@element-plus/icons-vue'
+import { ArrowLeft, Plus, Delete, Download } from '@element-plus/icons-vue'
 import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, AttachmentResponse } from '@/types/api'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 
 const CATEGORIES = ['人工/工时费', '运输/物流费', '安装杂费', '其他']
+const PAYMENT_METHODS = ['现金支付', '微信支付', '转账支付', '对公支付', '其它支付']
 
 const loading = ref(false)
 const saving = ref(false)
@@ -284,18 +334,30 @@ const uploadingAtt = ref(false)
 const previewVisible = ref(false)
 const previewUrl = ref('')
 
-const orderId = route.params.orderId as string
+// Detect source type: order or quote
+const isQuote = computed(() => route.path.includes('/quote-costs/'))
+const sourceId = computed(() => {
+  if (isQuote.value) return route.params.quoteId as string
+  return route.params.orderId as string
+})
 
 const totalCost = computed(() => {
   return list.value.reduce((sum, c) => sum + (c.amount || 0), 0)
 })
 
+const orderItems = computed(() => order.value?.items || [])
+
 const form = reactive({
   category: '',
   amount: 0,
+  payment_method: '',
+  payee_company_name: '',
+  debt_amount: 0,
   cost_date: '',
   description: '',
   remark: '',
+  summary: '',
+  order_item_id: '',
 })
 
 function statusLabel(s: string) {
@@ -311,7 +373,7 @@ function statusColor(s: string) {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, cost_date: '', description: '', remark: '' })
+  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', order_item_id: '' })
   isEditing.value = false
   editingId.value = ''
   dialogAttachments.value = []
@@ -327,9 +389,14 @@ function openEdit(row: ProjectCostResponse) {
   editingId.value = row.id
   form.category = row.category
   form.amount = row.amount
+  form.payment_method = row.payment_method || ''
+  form.payee_company_name = row.payee_company_name || ''
+  form.debt_amount = row.debt_amount || 0
   form.cost_date = row.cost_date?.slice(0, 10) || ''
   form.description = row.description || ''
   form.remark = row.remark || ''
+  form.summary = row.summary || ''
+  form.order_item_id = row.order_item_id || ''
   dialogAttachments.value = []
   showDialog.value = true
   loadAttachments(row.id)
@@ -345,9 +412,37 @@ function onFileChange(file: unknown) {
   selectedFile.value = file.raw
 }
 
+function downloadTemplate() {
+  const token = localStorage.getItem('token')
+  const url = '/api/v1/project-costs/template'
+  fetch(url, { headers: { Authorization: 'Bearer ' + token } })
+    .then(function(res) {
+      if (!res.ok) throw new Error('Download failed')
+      return res.blob()
+    })
+    .then(function(blob) {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = '项目成本导入模板.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    })
+    .catch(function() {
+      ElMessage.error('下载模板失败')
+    })
+}
+
 async function fetchOrder() {
   try {
-    order.value = await getOrder(orderId)
+    if (isQuote.value) {
+      const { getQuote } = await import('@/api/quotes')
+      order.value = await getQuote(sourceId.value)
+    } else {
+      order.value = await getOrder(sourceId.value)
+    }
   } catch { /* ignore */ }
 }
 
@@ -357,7 +452,12 @@ async function fetchData() {
     const params: Record<string, unknown> = {
       page: page.value,
       page_size: pageSize.value,
-      order_id: orderId,
+    }
+    if (isQuote.value) {
+      params.quote_id = sourceId.value
+      params.source_type = 'quote'
+    } else {
+      params.order_id = sourceId.value
     }
     if (filterCategory.value) params.category = filterCategory.value
     if (dateRange.value) {
@@ -379,20 +479,46 @@ async function handleSave() {
       const payload: Record<string, unknown> = {}
       if (form.category) payload.category = form.category
       if (form.amount > 0) payload.amount = form.amount
+      if (form.payment_method) payload.payment_method = form.payment_method
+      if (form.payee_company_name) payload.payee_company_name = form.payee_company_name
+      if (form.debt_amount > 0) payload.debt_amount = form.debt_amount
+      else payload.debt_amount = 0
       if (form.cost_date) payload.cost_date = form.cost_date
       if (form.description) payload.description = form.description
       if (form.remark) payload.remark = form.remark
+      if (form.order_item_id) payload.order_item_id = form.order_item_id
       await updateProjectCost(editingId.value, payload)
       ElMessage.success('成本已更新')
     } else {
-      await createProjectCost({
-        order_id: orderId,
-        category: form.category,
-        amount: form.amount,
-        cost_date: form.cost_date || undefined,
-        description: form.description || undefined,
-        remark: form.remark || undefined,
-      })
+      if (isQuote.value) {
+        await createProjectCost({
+          source_type: 'quote',
+          quote_id: sourceId.value,
+          category: form.category,
+          amount: form.amount,
+          cost_date: form.cost_date || undefined,
+          description: form.description || undefined,
+          remark: form.remark || undefined,
+          order_item_id: form.order_item_id || undefined,
+          payment_method: form.payment_method || undefined,
+          payee_company_name: form.payee_company_name || undefined,
+          debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,
+        })
+      } else {
+        await createProjectCost({
+          source_type: 'order',
+          order_id: sourceId.value,
+          category: form.category,
+          amount: form.amount,
+          cost_date: form.cost_date || undefined,
+          description: form.description || undefined,
+          remark: form.remark || undefined,
+          order_item_id: form.order_item_id || undefined,
+          payment_method: form.payment_method || undefined,
+          payee_company_name: form.payee_company_name || undefined,
+          debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,
+        })
+      }
       ElMessage.success('成本登记成功')
     }
     showDialog.value = false
@@ -420,6 +546,14 @@ async function handleDelete(row: ProjectCostResponse) {
   }
 }
 
+function goBack() {
+  if (isQuote.value && window.history.length > 1) {
+    history.back()
+  } else {
+    router.push('/project-costs')
+  }
+}
+
 async function handleImport() {
   if (!selectedFile.value) {
     ElMessage.warning('请选择Excel文件')
@@ -427,7 +561,7 @@ async function handleImport() {
   }
   importing.value = true
   try {
-    const result = await importProjectCosts(selectedFile.value, orderId)
+    const result = await importProjectCosts(selectedFile.value, isQuote.value ? undefined : sourceId.value, isQuote.value ? sourceId.value : undefined, isQuote.value ? 'quote' : 'order')
     importResult.value = result
     if (result.created > 0) {
       fetchData()

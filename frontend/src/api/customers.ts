@@ -9,11 +9,11 @@ export function getCustomer(id: string) {
   return get<CustomerResponse>(`/customers/${id}`)
 }
 
-export function createCustomer(data: Omit<Partial<CustomerResponse>, 'id' | 'created_at' | 'contacts'>) {
+export function createCustomer(data: Omit<Partial<CustomerResponse>, 'id' | 'created_at'>) {
   return post<CustomerResponse>('/customers/', data)
 }
 
-export function updateCustomer(id: string, data: Partial<Omit<CustomerResponse, 'id' | 'created_at' | 'contacts'>>) {
+export function updateCustomer(id: string, data: Partial<Omit<CustomerResponse, 'id' | 'created_at'>>) {
   return put<CustomerResponse>(`/customers/${id}`, data)
 }
 

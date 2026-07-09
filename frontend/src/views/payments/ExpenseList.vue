@@ -55,7 +55,7 @@
       @change="fetchData"
     />
 
-    <el-dialog v-model="showDialog" :title="isEditing ? '编辑支出' : '登记支出'" width="480px">
+    <el-dialog v-model="showDialog" :title="isEditing ? '编辑支出' : '登记支出'" width="480px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-form-item label="分类">
           <el-select v-model="form.category" placeholder="选择分类" clearable style="width: 100%">

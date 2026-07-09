@@ -46,6 +46,9 @@ class VendorResponse(BaseModel):
 
 class OutsourceTaskCreate(BaseModel):
     vendor_id: str = Field(...)
+    related_doc_id: str | None = None
+    related_doc_type: str | None = None
+    related_project_name: str | None = None
     order_id: str | None = None
     task_type: str = Field(...)
     description: str | None = None
@@ -57,6 +60,8 @@ class OutsourceTaskCreate(BaseModel):
 
 class OutsourceTaskUpdate(BaseModel):
     vendor_id: str | None = None
+    related_doc_id: str | None = None
+    related_doc_type: str | None = None
     task_type: str | None = None
     description: str | None = None
     quantity: int | None = None
@@ -72,17 +77,23 @@ class OutsourceTaskResponse(BaseModel):
     task_no: str
     vendor_id: str
     vendor_name: str | None = None
+    related_doc_id: str | None = None
+    related_doc_type: str | None = None
+    related_project_name: str | None = None
     order_id: str | None = None
     task_type: str
     description: str | None = None
     quantity: int = 1
     unit_price: float = 0
     total_amount: float = 0
+    paid_amount: float = 0
+    unpaid_amount: float = 0
     status: str = "pending"
     expected_at: str | None = None
     completed_at: str | None = None
     remark: str | None = None
     created_at: str | None = None
+    deleted_at: str | None = None
 
 
 # ── Payment ──
@@ -92,6 +103,7 @@ class OutsourcePaymentCreate(BaseModel):
     task_id: str | None = None
     amount: Decimal = Field(...)
     payment_method: str | None = None
+    payee_company_name: str | None = None
     paid_at: str | None = None
     remark: str | None = None
 
@@ -104,6 +116,7 @@ class OutsourcePaymentResponse(BaseModel):
     task_id: str | None = None
     amount: float
     payment_method: str | None = None
+    payee_company_name: str | None = None
     paid_at: str | None = None
     remark: str | None = None
     created_by: str | None = None

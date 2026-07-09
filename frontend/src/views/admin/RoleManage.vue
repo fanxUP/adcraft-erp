@@ -58,7 +58,7 @@
     </el-row>
 
     <!-- Create/Edit Role Dialog -->
-    <el-dialog v-model="showDialog" :title="isEditing ? '编辑角色' : '新增角色'" width="400px">
+    <el-dialog v-model="showDialog" :title="isEditing ? '编辑角色' : '新增角色'" width="400px" :close-on-click-modal="false">
       <el-form :model="form" label-width="80px">
         <el-form-item label="角色名" required>
           <el-input v-model="form.name" placeholder="英文标识，如 designer" />

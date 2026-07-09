@@ -86,6 +86,7 @@ export interface OrderListResponse {
   total_amount: number
   paid_amount: number
   unpaid_amount: number
+  department?: string
   created_at?: string
 }
 
@@ -96,13 +97,28 @@ export interface OrderItemResponse {
   material_id?: string
   process_id?: string
   length?: number
+  length_unit?: string
   width?: number
+  width_unit?: string
   height?: number
+  height_unit?: string
   quantity: number
   unit?: string
+  use_area?: boolean
+  quantity_mode?: 'piece' | 'area'
+  area?: number
   unit_price: number
+  process_fee: number
+  installation_fee: number
+  design_fee: number
+  transport_fee: number
+  other_fee: number
   subtotal_amount: number
   remark?: string
+  image_url?: string
+  sort_order: number
+  group_name?: string
+  material_process?: string
 }
 
 export interface OrderStatusLogResponse {
@@ -118,7 +134,9 @@ export interface OrderDetailResponse {
   id: string
   order_id?: string
   order_no: string
-  quote_id?: string
+  related_doc_id?: string
+  related_doc_type?: string
+  related_project_name?: string
   customer_id: string
   customer_name?: string
   project_name: string
@@ -130,6 +148,9 @@ export interface OrderDetailResponse {
   delivery_deadline?: string
   installation_address?: string
   remark?: string
+  department?: string
+  contact_person?: string
+  contact_phone?: string
   created_at?: string
   items: OrderItemResponse[]
   status_logs: OrderStatusLogResponse[]
@@ -333,13 +354,27 @@ export interface ExpenseResponse {
 export interface ProjectCostResponse {
   id: string
   cost_no: string
-  order_id: string
+  source_type: string
+  order_id?: string
+  related_doc_id?: string
+  related_doc_type?: string
+  related_project_name?: string
+  quote_no?: string
+  order_item_id?: string
+  order_item_name?: string
   customer_id?: string
   customer_name?: string
   project_name?: string
   category: string
   amount: number
+  payment_method?: string
+  payee_company_name?: string
+  debt_amount?: number
+  is_debt: boolean
+  is_settled: boolean
+  settled_at?: string
   description?: string
+  summary?: string
   cost_date?: string
   receipt_url?: string
   remark?: string
@@ -347,6 +382,43 @@ export interface ProjectCostResponse {
   created_at?: string
   attachment_count?: number
   attachments?: AttachmentResponse[]
+}
+
+export interface DebtResponse {
+  id: string
+  cost_no: string
+  source_type: string
+  order_id?: string
+  related_doc_id?: string
+  related_doc_type?: string
+  related_project_name?: string
+  order_no?: string
+  quote_no?: string
+  project_name?: string
+  customer_id?: string
+  customer_name?: string
+  category: string
+  amount: number
+  payment_method?: string
+  payee_company_name?: string
+  debt_amount: number
+  is_settled: boolean
+  settled_at?: string
+  cost_date?: string
+  description?: string
+  remark?: string
+  created_by?: string
+  created_at?: string
+}
+
+export interface QuoteCostResponse {
+  id: string
+  quote_no: string
+  project_name: string
+  customer_name?: string
+  status: string
+  total_amount: number
+  cost_amount: number
 }
 
 export interface ProjectCostImportResponse {
@@ -408,17 +480,23 @@ export interface OutsourceTaskResponse {
   task_no: string
   vendor_id: string
   vendor_name?: string
+  related_doc_id?: string
+  related_doc_type?: string
+  related_project_name?: string
   order_id?: string
   task_type: string
   description?: string
   quantity: number
   unit_price: number
   total_amount: number
+  paid_amount: number
+  unpaid_amount: number
   status: string
   expected_at?: string
   completed_at?: string
   remark?: string
   created_at?: string
+  deleted_at?: string
 }
 
 export interface OutsourcePaymentResponse {
@@ -429,6 +507,7 @@ export interface OutsourcePaymentResponse {
   task_id?: string
   amount: number
   payment_method?: string
+  payee_company_name?: string
   paid_at?: string
   remark?: string
   created_by?: string
@@ -470,6 +549,7 @@ export interface QuoteItemResponse {
   use_area?: boolean
   quantity_mode?: 'piece' | 'area'
   area?: number
+  pieces?: number
   unit_price: number
   process_fee: number
   installation_fee: number
@@ -478,9 +558,11 @@ export interface QuoteItemResponse {
   other_fee: number
   subtotal_amount: number
   remark?: string
+  image_url?: string
   sort_order: number
   group_name?: string
   material_process?: string
+  specification?: string
 }
 
 export interface QuoteListResponse {
@@ -493,6 +575,9 @@ export interface QuoteListResponse {
   total_amount: number
   valid_until?: string
   created_at?: string
+  department?: string
+  contact_person?: string
+  contact_phone?: string
 }
 
 export interface QuoteDetailResponse {
@@ -510,6 +595,9 @@ export interface QuoteDetailResponse {
   total_amount: number
   valid_until?: string
   remark?: string
+  department?: string
+  contact_person?: string
+  contact_phone?: string
   created_at?: string
   items: QuoteItemResponse[]
 }
@@ -564,6 +652,8 @@ export interface DailyReportOrder {
   order_no: string
   project_name: string
   total_amount: number
+  paid_amount: number
+  unpaid_amount: number
   status: string
 }
 
@@ -798,11 +888,17 @@ export interface AcceptanceItemResponse {
   acceptance_id: string
   order_item_id?: string
   item_name: string
+  material_process?: string
   specification?: string
   quantity?: number
   unit?: string
+  area?: number
+  unit_price?: number
+  subtotal?: number
+  image_url?: string
   item_status: string
   remark?: string
+  group_name?: string
 }
 
 export interface AcceptanceAttachmentResponse {
@@ -821,6 +917,7 @@ export interface AcceptanceListResponse {
   order_no?: string
   customer_name?: string
   project_name?: string
+  department?: string
   status: string
   accepted_at?: string
   accepted_by?: string
@@ -828,10 +925,17 @@ export interface AcceptanceListResponse {
 }
 
 export interface AcceptanceDetailResponse extends AcceptanceListResponse {
+  customer_phone?: string
+  customer_address?: string
+  contact_person?: string
+  contact_phone?: string
+  order_date?: string
   our_acceptor_id?: string
   our_acceptor_name?: string
   remark?: string
   reject_reason?: string
+  discount_amount: number
+  advance_amount: number
   updated_at: string
   items: AcceptanceItemResponse[]
   attachments: AcceptanceAttachmentResponse[]
