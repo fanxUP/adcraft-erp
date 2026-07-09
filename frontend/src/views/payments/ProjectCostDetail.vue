@@ -90,9 +90,10 @@
       </el-table-column>
       <el-table-column label="分项" min-width="140" show-overflow-tooltip>
         <template #default="{ row }">
-          <span v-if="row.order_item_name">{{ row.order_item_name }}</span>
+          <span v-if="row.group_name" style="font-weight: 500">{{ row.group_name }}（分项）</span>
+          <span v-else-if="row.order_item_name">{{ row.order_item_name }}</span>
           <span v-else-if="row.quote_item_name">{{ row.quote_item_name }}</span>
-          <span v-else-if="row.order_item_id || row.quote_item_id" style="color: #c0c4cc">未命名分项</span>
+          <span v-else-if="row.order_item_id || row.quote_item_id" style="color: #c0c4cc">未命名</span>
           <span v-else style="color: #c0c4cc">-</span>
         </template>
       </el-table-column>
@@ -162,14 +163,12 @@
           <el-input :value="(isQuote ? (order?.quote_no || '') : (order?.order_no || '')) + ' ' + (order?.project_name || '')" disabled />
         </el-form-item>
         <el-form-item label="分项">
-          <el-select v-model="selectedItemId" placeholder="选择项目内容（可选）" clearable style="width: 100%">
+          <el-select v-model="selectedItemId" placeholder="选择分项或项目内容（可选）" clearable style="width: 100%">
             <el-option
               v-for="opt in groupedItemOptions"
               :key="opt.value || ('group-' + opt.group)"
               :label="opt.label"
               :value="opt.value"
-              :disabled="opt.isGroupHeader"
-              :class="{ 'group-header-option': opt.isGroupHeader }"
             />
           </el-select>
         </el-form-item>
@@ -400,30 +399,31 @@ const groupedItemOptions = computed<GroupedItemOption[]>(() => {
     if (item.group_name) groupNames.add(item.group_name)
   }
 
-  // 无分组的项目内容 — 直接挂在总项目下
+  // 无分组的项目内容 — 直接挂在总项目下（2级）
   const ungrouped = items.filter(i => !i.group_name)
   for (const item of ungrouped) {
     result.push({
-      label: item.item_name || '未命名',
+      label: (item.item_name || '未命名') + '（总项目）',
       value: item.id,
       group: '',
       isGroupHeader: false,
     })
   }
 
-  // 有分组的 — 分项名作为组头，项目内容挂下面
+  // 有分组的
   for (const gn of groupNames) {
     const groupItems = items.filter(i => i.group_name === gn)
-    // 分项头（可选，作为提示）
+    // 分项本身作为1级选项，value 用 group: 前缀
     result.push({
-      label: '▸ ' + gn,
-      value: '',
+      label: '📁 ' + gn + '（分项）',
+      value: 'group:' + gn,
       group: gn,
-      isGroupHeader: true,
+      isGroupHeader: false,
     })
+    // 分项下的项目内容（2级）
     for (const item of groupItems) {
       result.push({
-        label: '    ' + (item.item_name || '未命名'),
+        label: '    └ ' + (item.item_name || '未命名') + '（内容）',
         value: item.id,
         group: gn,
         isGroupHeader: false,
@@ -434,12 +434,27 @@ const groupedItemOptions = computed<GroupedItemOption[]>(() => {
   return result
 })
 const selectedItemId = computed({
-  get: () => isQuote.value ? form.quote_item_id : form.order_item_id,
+  get: () => {
+    if (form.group_name) return 'group:' + form.group_name
+    return isQuote.value ? form.quote_item_id : form.order_item_id
+  },
   set: (val: string) => {
-    if (isQuote.value) {
-      form.quote_item_id = val || ''
+    if (val && val.startsWith('group:')) {
+      // 选中了分项（1级）
+      form.group_name = val.slice(6)
+      if (isQuote.value) {
+        form.quote_item_id = ''
+      } else {
+        form.order_item_id = ''
+      }
     } else {
-      form.order_item_id = val || ''
+      // 选中了项目内容（2级）或清空
+      form.group_name = ''
+      if (isQuote.value) {
+        form.quote_item_id = val || ''
+      } else {
+        form.order_item_id = val || ''
+      }
     }
   },
 })
@@ -457,6 +472,7 @@ const form = reactive({
   description: '',
   remark: '',
   summary: '',
+  group_name: '',
   order_item_id: '',
   quote_item_id: '',
 })
@@ -497,7 +513,7 @@ async function handleBatchDelete() {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', order_item_id: '', quote_item_id: '', quantity: 0, unit: '', unit_price: 0 })
+  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', group_name: '', order_item_id: '', quote_item_id: '', quantity: 0, unit: '', unit_price: 0 })
   isEditing.value = false
   editingId.value = ''
   dialogAttachments.value = []
@@ -523,6 +539,7 @@ function openEdit(row: ProjectCostResponse) {
   form.quantity = row.quantity || 0
   form.unit = row.unit || ''
   form.unit_price = row.unit_price || 0
+  form.group_name = row.group_name || ''
   form.order_item_id = row.order_item_id || ''
   form.quote_item_id = row.quote_item_id || ''
   dialogAttachments.value = []
@@ -619,6 +636,7 @@ async function handleSave() {
       if (form.remark) payload.remark = form.remark
       if (form.order_item_id) payload.order_item_id = form.order_item_id
       if (form.quote_item_id) payload.quote_item_id = form.quote_item_id
+      if (form.group_name) payload.group_name = form.group_name
       await updateProjectCost(editingId.value, payload)
       ElMessage.success('成本已更新')
     } else {
@@ -632,6 +650,7 @@ async function handleSave() {
           description: form.description || undefined,
           remark: form.remark || undefined,
           quote_item_id: form.quote_item_id || undefined,
+          group_name: form.group_name || undefined,
           payment_method: form.payment_method || undefined,
           payee_company_name: form.payee_company_name || undefined,
           quantity: form.quantity > 0 ? form.quantity : undefined,
@@ -649,6 +668,7 @@ async function handleSave() {
           description: form.description || undefined,
           remark: form.remark || undefined,
           order_item_id: form.order_item_id || undefined,
+          group_name: form.group_name || undefined,
           payment_method: form.payment_method || undefined,
           payee_company_name: form.payee_company_name || undefined,
           quantity: form.quantity > 0 ? form.quantity : undefined,
@@ -826,14 +846,4 @@ onMounted(() => {
   opacity: 1;
 }
 
-/* 分项组头样式 */
-:deep(.group-header-option) {
-  font-weight: 600;
-  color: #409eff;
-  font-size: 13px;
-  pointer-events: none;
-  border-bottom: 1px solid #ebeef5;
-  padding-bottom: 4px;
-  margin-bottom: 2px;
-}
 </style>

@@ -18,6 +18,7 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
     quote_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("quotes.id"), nullable=True)
     order_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("order_items.id", ondelete="SET NULL"), nullable=True)
     quote_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("quote_items.id", ondelete="SET NULL"), nullable=True)
+    group_name: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="分项名（1级分组）")
     customer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
     category: Mapped[str] = mapped_column(String(64), nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
