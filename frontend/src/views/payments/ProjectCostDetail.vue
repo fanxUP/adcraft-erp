@@ -163,6 +163,16 @@
         <el-form-item :label="isQuote ? '报价单' : '订单'">
           <el-input :value="(isQuote ? (order?.quote_no || '') : (order?.order_no || '')) + ' ' + (order?.project_name || '')" disabled />
         </el-form-item>
+        <el-form-item label="分项">
+          <el-select v-model="selectedItemId" placeholder="选择分项或项目内容（可选）" clearable style="width: 100%">
+            <el-option
+              v-for="opt in groupedItemOptions"
+              :key="opt.value || ('group-' + opt.group)"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="成本摘要">
           <el-input v-model="form.summary" type="textarea" :rows="2" placeholder="成本摘要说明…" />
         </el-form-item>
@@ -436,12 +446,27 @@ const groupedItemOptions = computed<GroupedItemOption[]>(() => {
   return result
 })
 const selectedItemId = computed({
-  get: () => isQuote.value ? form.quote_item_id : form.order_item_id,
+  get: () => {
+    if (form.group_name) return 'group:' + form.group_name
+    return isQuote.value ? form.quote_item_id : form.order_item_id
+  },
   set: (val: string) => {
-    if (isQuote.value) {
-      form.quote_item_id = val || ''
+    if (val && val.startsWith('group:')) {
+      // 选中了分项（1级）
+      form.group_name = val.slice(6)
+      if (isQuote.value) {
+        form.quote_item_id = ''
+      } else {
+        form.order_item_id = ''
+      }
     } else {
-      form.order_item_id = val || ''
+      // 选中了项目内容（2级）或清空
+      form.group_name = ''
+      if (isQuote.value) {
+        form.quote_item_id = val || ''
+      } else {
+        form.order_item_id = val || ''
+      }
     }
   },
 })
@@ -459,6 +484,7 @@ const form = reactive({
   description: '',
   remark: '',
   summary: '',
+  group_name: '',
   order_item_id: '',
   quote_item_id: '',
 })
@@ -499,7 +525,7 @@ async function handleBatchDelete() {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', order_item_id: '', quote_item_id: '', quantity: 0, unit: '', unit_price: 0 })
+  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', group_name: '', order_item_id: '', quote_item_id: '', quantity: 0, unit: '', unit_price: 0 })
   isEditing.value = false
   editingId.value = ''
   dialogAttachments.value = []
@@ -525,6 +551,7 @@ function openEdit(row: ProjectCostResponse) {
   form.quantity = row.quantity || 0
   form.unit = row.unit || ''
   form.unit_price = row.unit_price || 0
+  form.group_name = row.group_name || ''
   form.order_item_id = row.order_item_id || ''
   form.quote_item_id = row.quote_item_id || ''
   dialogAttachments.value = []
@@ -621,6 +648,7 @@ async function handleSave() {
       if (form.remark) payload.remark = form.remark
       if (form.order_item_id) payload.order_item_id = form.order_item_id
       if (form.quote_item_id) payload.quote_item_id = form.quote_item_id
+      if (form.group_name) payload.group_name = form.group_name
       await updateProjectCost(editingId.value, payload)
       ElMessage.success('成本已更新')
     } else {
@@ -634,6 +662,7 @@ async function handleSave() {
           description: form.description || undefined,
           remark: form.remark || undefined,
           quote_item_id: form.quote_item_id || undefined,
+          group_name: form.group_name || undefined,
           payment_method: form.payment_method || undefined,
           payee_company_name: form.payee_company_name || undefined,
           quantity: form.quantity > 0 ? form.quantity : undefined,
@@ -651,6 +680,7 @@ async function handleSave() {
           description: form.description || undefined,
           remark: form.remark || undefined,
           order_item_id: form.order_item_id || undefined,
+          group_name: form.group_name || undefined,
           payment_method: form.payment_method || undefined,
           payee_company_name: form.payee_company_name || undefined,
           quantity: form.quantity > 0 ? form.quantity : undefined,
