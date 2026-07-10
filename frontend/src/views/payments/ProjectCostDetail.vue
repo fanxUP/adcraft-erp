@@ -164,14 +164,7 @@
           <el-input :value="(isQuote ? (order?.quote_no || '') : (order?.order_no || '')) + ' ' + (order?.project_name || '')" disabled />
         </el-form-item>
         <el-form-item label="分项">
-          <el-select v-model="selectedItemId" placeholder="选择分项或项目内容（可选）" clearable style="width: 100%">
-            <el-option
-              v-for="opt in groupedItemOptions"
-              :key="opt.value || ('group-' + opt.group)"
-              :label="opt.label"
-              :value="opt.value"
-            />
-          </el-select>
+          <el-input v-model="form.group_name" placeholder="输入分项名称（可选）" clearable />
         </el-form-item>
         <el-form-item label="成本摘要">
           <el-input v-model="form.summary" type="textarea" :rows="2" placeholder="成本摘要说明…" />
