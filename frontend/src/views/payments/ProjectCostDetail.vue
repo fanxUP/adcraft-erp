@@ -95,7 +95,7 @@
           <span v-else-if="row.quote_item_name && itemGroupMap[row.quote_item_id]">{{ itemGroupMap[row.quote_item_id] }}/{{ row.quote_item_name }}</span>
           <span v-else-if="row.order_item_name">{{ row.order_item_name }}</span>
           <span v-else-if="row.quote_item_name">{{ row.quote_item_name }}</span>
-          <span v-else style="color: #c0c4cc">-</span>
+          <span v-else></span>
         </template>
       </el-table-column>
       <el-table-column label="数量" width="100" align="right">
@@ -114,7 +114,7 @@
         <template #default="{ row }">
           <el-tag v-if="row.is_debt && !row.is_settled" type="danger" size="small">欠款</el-tag>
           <el-tag v-else-if="row.is_debt && row.is_settled" type="success" size="small">已结清</el-tag>
-          <span v-else style="color: #c0c4cc">-</span>
+          <span v-else></span>
         </template>
       </el-table-column>
       <el-table-column label="日期" width="120">
@@ -127,7 +127,7 @@
       <el-table-column label="凭证" width="80" align="center">
         <template #default="{ row }">
           <el-tag v-if="row.attachment_count > 0" size="small" type="success">{{ row.attachment_count }}</el-tag>
-          <span v-else style="color: #c0c4cc">-</span>
+          <span v-else></span>
         </template>
       </el-table-column>
       <el-table-column prop="remark" label="备注" min-width="140" show-overflow-tooltip />
