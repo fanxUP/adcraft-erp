@@ -612,6 +612,49 @@ export interface QuoteDetailResponse {
   items: QuoteItemResponse[]
 }
 
+// ---- Contract ----
+
+export interface ContractListResponse {
+  id: string
+  contract_no: string
+  customer_name: string
+  project_name: string
+  total_amount: number
+  paid_amount: number
+  unpaid_amount: number
+  contract_type?: string
+  status: string
+  sign_date?: string
+  start_date?: string
+  end_date?: string
+  created_at?: string
+}
+
+export interface SimpleOrderRef {
+  id: string
+  order_no: string
+  project_name: string
+  total_amount: number
+}
+
+export interface SimpleQuoteRef {
+  id: string
+  quote_no: string
+  project_name: string
+  total_amount: number
+}
+
+export interface ContractDetailResponse extends ContractListResponse {
+  customer_id: string
+  our_signatory?: string
+  customer_signatory?: string
+  content?: string
+  remark?: string
+  created_by?: string
+  orders: SimpleOrderRef[]
+  quotes: SimpleQuoteRef[]
+}
+
 // ---- Backup ----
 
 export interface BackupItem {

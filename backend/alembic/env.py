@@ -19,6 +19,7 @@ from app.models.project_cost import ProjectCost
 from app.models.chat import Conversation, ConversationMember, Message, MessageReadReceipt, UserPresence
 from app.models.notification import Notification
 from app.models.acceptance import AcceptanceForm, AcceptanceItem, AcceptanceAttachment
+from app.models.contract import Contract, ContractOrder, ContractQuote
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)

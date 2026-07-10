@@ -21,6 +21,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'quotes', name: 'QuoteList', component: () => import('@/views/quotes/QuoteList.vue') },
       { path: 'quotes/new', name: 'QuoteCreate', component: () => import('@/views/quotes/QuoteEditor.vue') },
       { path: 'quotes/:id/edit', name: 'QuoteEdit', component: () => import('@/views/quotes/QuoteEditor.vue') },
+      { path: 'contracts', name: 'ContractList', component: () => import('@/views/contracts/ContractList.vue') },
       { path: 'orders', name: 'OrderList', component: () => import('@/views/orders/OrderList.vue') },
       { path: 'orders/recycle', name: 'OrderRecycle', meta: { roles: ['admin'] }, component: () => import('@/views/orders/OrderRecycle.vue') },
       { path: 'orders/:id', name: 'OrderDetail', component: () => import('@/views/orders/OrderDetail.vue') },

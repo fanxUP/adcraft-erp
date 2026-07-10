@@ -94,6 +94,11 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
         result = await db.execute(
             select(AcceptanceForm.acceptance_no).where(AcceptanceForm.acceptance_no.like(pattern)).order_by(AcceptanceForm.acceptance_no.desc()).limit(1)
         )
+    elif prefix == "CT":
+        from app.models.contract import Contract
+        result = await db.execute(
+            select(Contract.contract_no).where(Contract.contract_no.like(pattern)).order_by(Contract.contract_no.desc()).limit(1)
+        )
     else:
         raise ValueError(f"Unknown prefix: {prefix}")
 
@@ -160,3 +165,7 @@ async def generate_project_cost_no(db: AsyncSession) -> str:
 
 async def generate_acceptance_no(db: AsyncSession) -> str:
     return await _generate_no(db, "A")
+
+
+async def generate_contract_no(db: AsyncSession) -> str:
+    return await _generate_no(db, "CT")
