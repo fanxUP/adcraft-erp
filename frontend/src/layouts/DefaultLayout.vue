@@ -35,10 +35,6 @@
             <el-icon><Tickets /></el-icon>
             <span>订单管理</span>
           </el-menu-item>
-          <el-menu-item v-if="authStore.isAdmin" index="/orders/recycle">
-            <el-icon><Delete /></el-icon>
-            <span>订单回收站</span>
-          </el-menu-item>
           <el-menu-item v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/acceptances">
             <el-icon><Stamp /></el-icon>
             <span>验收管理</span>
