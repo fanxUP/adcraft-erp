@@ -487,14 +487,13 @@ async def create_project_cost(
                         OBJ_PROJECT_COST, UUID(cost["id"]), ACTION_CREATE,
                         ip_address=request.client.host if request.client else None,
                         after_data={"cost_no": cost["cost_no"], "amount": cost["amount"], "category": cost["category"]})
-    # Direct SQL fallback for group_name (bypasses Docker cache / ORM kwarg issue)
+    # Direct SQL fallback for group_name (session auto-commits on exit)
     if payload.get("group_name"):
         from sqlalchemy import text
         await db.execute(
             text("UPDATE project_costs SET group_name = :gn WHERE id = :cid"),
             {"gn": payload["group_name"], "cid": cost["id"]},
         )
-        await db.commit()
         cost["group_name"] = payload["group_name"]
     return success(cost)
 
