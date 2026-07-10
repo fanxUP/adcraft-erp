@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
@@ -13,6 +14,8 @@ from app.models.quote import Quote
 from app.models.task import Attachment
 from app.repositories.project_cost_repo import ProjectCostRepository
 from app.repositories.task_repo import AttachmentRepository
+logger = logging.getLogger(__name__)
+
 from app.services.number_generator import generate_project_cost_no
 
 
@@ -129,6 +132,7 @@ class ProjectCostService:
             unit_price=data.get("unit_price"),
             remark=data.get("remark"),
             order_item_id=UUID(data["order_item_id"]) if data.get("order_item_id") else None,
+        logger.warning(f"[DEBUG create_cost] group_name from data: {data.get('group_name')!r}, data keys: {list(data.keys())}")
             quote_item_id=UUID(data["quote_item_id"]) if data.get("quote_item_id") else None,
             group_name=data.get("group_name"),
             payment_method=data.get("payment_method"),
@@ -271,7 +275,8 @@ class ProjectCostService:
 
     async def settle_debt(self, cost_id: UUID, settle_data: dict) -> dict:
         """Settle a cost debt (write-off)."""
-        from datetime import datetime, timezone
+        import logging
+from datetime import datetime, timezone
 
         c = await self.repo.get_by_id(cost_id)
         if not c:
@@ -289,7 +294,9 @@ class ProjectCostService:
         await self.db.flush()
 
         # Also create a formal cost entry for the settled debt amount
-        from app.services.number_generator import generate_project_cost_no
+        logger = logging.getLogger(__name__)
+
+from app.services.number_generator import generate_project_cost_no
         settle_cost = ProjectCost(
             cost_no=await generate_project_cost_no(self.db),
             order_id=c.order_id,
