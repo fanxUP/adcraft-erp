@@ -131,7 +131,6 @@ class ProjectCostService:
             remark=data.get("remark"),
             order_item_id=UUID(data["order_item_id"]) if data.get("order_item_id") else None,
             quote_item_id=UUID(data["quote_item_id"]) if data.get("quote_item_id") else None,
-            group_name=data.get("group_name"),
             payment_method=data.get("payment_method"),
             payee_company_name=data.get("payee_company_name"),
             debt_amount=debt_amount,
@@ -139,6 +138,9 @@ class ProjectCostService:
             is_settled=False,
             created_by=created_by,
         )
+        # Explicitly set group_name after constructor (SQLAlchemy kwarg issue)
+        if data.get("group_name"):
+            cost.group_name = data["group_name"]
         await self.repo.create(cost)
         if order_id_val:
             await self._sync_order_cost(order_id_val)
