@@ -143,6 +143,13 @@ PERM_CHAT_DELETE = "chat:delete"
 PERM_CHAT_GROUP_CREATE = "chat:group:create"
 PERM_CHAT_GROUP_MANAGE = "chat:group:manage"
 
+# Contract
+PERM_CONTRACT_READ = "contract:read"
+PERM_CONTRACT_CREATE = "contract:create"
+PERM_CONTRACT_UPDATE = "contract:update"
+PERM_CONTRACT_DELETE = "contract:delete"
+PERM_CONTRACT_CHANGE_STATUS = "contract:change_status"
+
 # Acceptance
 PERM_ACCEPTANCE_READ = "acceptance:read"
 PERM_ACCEPTANCE_CREATE = "acceptance:create"

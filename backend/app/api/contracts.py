@@ -1,0 +1,122 @@
+import logging
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
+
+from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.permissions import require_any_role
+from app.models.user import User
+from app.schemas.contract import ContractCreate, ContractUpdate, ContractStatusChange
+from app.schemas.common import success, success_paginated
+from app.services.contract_service import ContractService
+from app.services.operation_log_service import (
+    log_operation, OBJ_CONTRACT, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE,
+)
+
+router = APIRouter(prefix="/contracts", tags=["Contracts"])
+
+
+@router.get("/")
+async def list_contracts(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status: str | None = None,
+    keyword: str | None = None,
+    customer_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ContractService(db)
+    contracts, total = await service.list_contracts(page, page_size, status, keyword, customer_id)
+    return success_paginated(contracts, total, page, page_size)
+
+
+@router.get("/{contract_id}")
+async def get_contract(
+    contract_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ContractService(db)
+    contract = await service.get_contract(UUID(contract_id))
+    if not contract:
+        return {"code": 40401, "message": "合同不存在", "data": None}
+    return success(contract)
+
+
+@router.post("/")
+async def create_contract(
+    data: ContractCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_role("admin", "sales")),
+):
+    service = ContractService(db)
+    contract = await service.create_contract(data.model_dump())
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_CONTRACT, UUID(contract["id"]), ACTION_CREATE,
+                        ip_address=request.client.host if request.client else None,
+                        after_data={"contract_no": contract["contract_no"], "project_name": contract["project_name"]})
+    return success(contract)
+
+
+@router.put("/{contract_id}")
+async def update_contract(
+    contract_id: str,
+    data: ContractUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_role("admin", "sales")),
+):
+    service = ContractService(db)
+    cid = UUID(contract_id)
+    before = await service.get_contract(cid)
+    contract = await service.update_contract(cid, data.model_dump(exclude_none=True))
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_CONTRACT, cid, ACTION_UPDATE,
+                        ip_address=request.client.host if request.client else None,
+                        before_data=before, after_data=contract)
+    return success(contract)
+
+
+@router.delete("/{contract_id}")
+async def delete_contract(
+    contract_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_role("admin", "sales")),
+):
+    service = ContractService(db)
+    cid = UUID(contract_id)
+    before = await service.get_contract(cid)
+    ok = await service.delete_contract(cid)
+    if not ok:
+        return {"code": 40401, "message": "合同不存在", "data": None}
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_CONTRACT, cid, ACTION_DELETE,
+                        ip_address=request.client.host if request.client else None,
+                        before_data=before)
+    return success(None)
+
+
+@router.post("/{contract_id}/status")
+async def change_contract_status(
+    contract_id: str,
+    data: ContractStatusChange,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_role("admin", "sales")),
+):
+    service = ContractService(db)
+    cid = UUID(contract_id)
+    before = await service.get_contract(cid)
+    contract = await service.change_status(cid, data.to_status, data.reason)
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_CONTRACT, cid, "change_status",
+                        ip_address=request.client.host if request.client else None,
+                        before_data=before, after_data=contract)
+    return success(contract)
