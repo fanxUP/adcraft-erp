@@ -290,9 +290,6 @@ class ProjectCostService:
         await self.db.flush()
 
         # Also create a formal cost entry for the settled debt amount
-        logger = logging.getLogger(__name__)
-
-from app.services.number_generator import generate_project_cost_no
         settle_cost = ProjectCost(
             cost_no=await generate_project_cost_no(self.db),
             order_id=c.order_id,
