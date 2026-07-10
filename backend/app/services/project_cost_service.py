@@ -199,7 +199,7 @@ class ProjectCostService:
 
     async def batch_delete_costs(self, cost_ids: list[UUID]) -> int:
         from app.models.order import Order
-from app.models.project_cost import ProjectCost
+        from app.models.project_cost import ProjectCost
         from sqlalchemy import select
         # Collect order_ids before deletion for cost sync
         result = await self.db.execute(
