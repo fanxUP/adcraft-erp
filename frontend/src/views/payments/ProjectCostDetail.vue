@@ -90,10 +90,11 @@
       </el-table-column>
       <el-table-column label="分项" min-width="140" show-overflow-tooltip>
         <template #default="{ row }">
-          <span v-if="row.group_name" style="font-weight: 500">{{ row.group_name }}（分项）</span>
+          <span v-if="row.group_name">{{ row.group_name }}</span>
+          <span v-else-if="row.order_item_name && itemGroupMap[row.order_item_id]">{{ itemGroupMap[row.order_item_id] }}/{{ row.order_item_name }}</span>
+          <span v-else-if="row.quote_item_name && itemGroupMap[row.quote_item_id]">{{ itemGroupMap[row.quote_item_id] }}/{{ row.quote_item_name }}</span>
           <span v-else-if="row.order_item_name">{{ row.order_item_name }}</span>
           <span v-else-if="row.quote_item_name">{{ row.quote_item_name }}</span>
-          <span v-else-if="row.order_item_id || row.quote_item_id" style="color: #c0c4cc">未命名</span>
           <span v-else style="color: #c0c4cc">-</span>
         </template>
       </el-table-column>
@@ -382,6 +383,17 @@ const totalCost = computed(() => {
 
 const allItems = computed(() => order.value?.items || [])
 
+// item_id → group_name 快速查找表
+const itemGroupMap = computed(() => {
+  const map: Record<string, string> = {}
+  for (const item of allItems.value) {
+    if (item.group_name) {
+      map[item.id] = item.group_name
+    }
+  }
+  return map
+})
+
 // 按分项分组，构建层级下拉选项
 interface GroupedItemOption {
   label: string
@@ -403,7 +415,7 @@ const groupedItemOptions = computed<GroupedItemOption[]>(() => {
   const ungrouped = items.filter(i => !i.group_name)
   for (const item of ungrouped) {
     result.push({
-      label: (item.item_name || '未命名') + '（总项目）',
+      label: (item.item_name || '未命名'),
       value: item.id,
       group: '',
       isGroupHeader: false,
@@ -415,7 +427,7 @@ const groupedItemOptions = computed<GroupedItemOption[]>(() => {
     const groupItems = items.filter(i => i.group_name === gn)
     // 分项本身作为1级选项，value 用 group: 前缀
     result.push({
-      label: '📁 ' + gn + '（分项）',
+      label: gn,
       value: 'group:' + gn,
       group: gn,
       isGroupHeader: false,
@@ -423,7 +435,7 @@ const groupedItemOptions = computed<GroupedItemOption[]>(() => {
     // 分项下的项目内容（2级）
     for (const item of groupItems) {
       result.push({
-        label: '    └ ' + (item.item_name || '未命名') + '（内容）',
+        label: '    ' + gn + '/' + (item.item_name || '未命名'),
         value: item.id,
         group: gn,
         isGroupHeader: false,
