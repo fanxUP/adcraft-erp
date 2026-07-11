@@ -55,6 +55,15 @@ class ProductService:
             "name": p.name, "unit": p.unit, "pricing_method": p.pricing_method,
             "default_price": float(p.default_price), "min_charge": float(p.min_charge),
             "remark": p.remark, "is_active": p.is_active,
+            "material_id": str(p.material_id) if p.material_id else None,
+            "process_id": str(p.process_id) if p.process_id else None,
+            "material_name": p.material.name if p.material else None,
+            "process_name": p.process.name if p.process else None,
+            "length": float(p.length) if p.length else None,
+            "width": float(p.width) if p.width else None,
+            "height": float(p.height) if p.height else None,
+            "area": float(p.area) if p.area else None,
+            "quantity": float(p.quantity) if p.quantity else None,
             "created_at": p.created_at.isoformat() if p.created_at else None,
         }
 

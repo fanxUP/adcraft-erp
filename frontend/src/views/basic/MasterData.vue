@@ -60,7 +60,7 @@
             style="margin-top: 16px; justify-content: flex-end" @change="fetchAll"
           />
 
-          <el-dialog v-model="dialogVisible" :title="editingId ? '编辑' : '新建'" width="550px" :close-on-click-modal="false">
+          <el-dialog v-model="dialogVisible" :title="editingId ? '编辑' : '新建'" width="600px" :close-on-click-modal="false">
             <el-form :model="form" ref="formRef" :rules="rules" label-width="100px">
               <el-form-item label="类型" prop="_type">
                 <el-select v-model="form._type" :disabled="!!editingId" style="width: 100%">
@@ -75,17 +75,28 @@
 
               <!-- 产品专用字段 -->
               <template v-if="form._type === 'product'">
-                <el-form-item label="单位">
-                  <el-select v-model="form.unit" style="width: 100%">
-                    <el-option label="项" value="项" /><el-option label="㎡" value="㎡" />
-                    <el-option label="米" value="米" /><el-option label="个" value="个" /><el-option label="套" value="套" />
+                <el-form-item label="材质">
+                  <el-select v-model="form.material_id" clearable filterable placeholder="选择材质" style="width: 100%">
+                    <el-option v-for="m in materialOptions" :key="m.id" :label="m.name" :value="m.id" />
                   </el-select>
                 </el-form-item>
-                <el-form-item label="计价方式">
-                  <el-select v-model="form.pricing_method" style="width: 100%">
-                    <el-option label="按面积" value="area" /><el-option label="按数量" value="quantity" />
-                    <el-option label="按长度" value="length" /><el-option label="按字数" value="word_count" />
+                <el-form-item label="工艺">
+                  <el-select v-model="form.process_id" clearable filterable placeholder="选择工艺" style="width: 100%">
+                    <el-option v-for="p in processOptions" :key="p.id" :label="p.name" :value="p.id" />
                   </el-select>
+                </el-form-item>
+                <el-form-item label="规格尺寸">
+                  <div style="display: flex; gap: 8px; width: 100%; flex-wrap: wrap">
+                    <el-input-number v-model="form.length" :precision="3" :min="0" placeholder="长" style="width: 100px" />
+                    <span style="line-height: 32px; color: var(--ad-text-secondary)">×</span>
+                    <el-input-number v-model="form.width" :precision="3" :min="0" placeholder="宽" style="width: 100px" />
+                    <span style="line-height: 32px; color: var(--ad-text-secondary)">×</span>
+                    <el-input-number v-model="form.height" :precision="3" :min="0" placeholder="高" style="width: 100px" />
+                    <span style="line-height: 32px; color: var(--ad-text-secondary); margin: 0 4px">面积</span>
+                    <el-input-number v-model="form.area" :precision="3" :min="0" placeholder="面积" style="width: 100px" />
+                    <span style="line-height: 32px; color: var(--ad-text-secondary); margin: 0 4px">数量</span>
+                    <el-input-number v-model="form.quantity" :precision="3" :min="0" placeholder="数量" style="width: 100px" />
+                  </div>
                 </el-form-item>
                 <el-form-item label="默认单价">
                   <el-input-number v-model="form.default_price" :precision="2" :min="0" style="width: 100%" />
@@ -236,14 +247,35 @@ const editingId = ref<string | null>(null)
 const editingType = ref<'product' | 'material' | 'process' | null>(null)
 const formRef = ref<FormInstance>()
 
+const materialOptions = ref<{ id: string; name: string }[]>([])
+const processOptions = ref<{ id: string; name: string }[]>([])
+
+async function loadMaterialProcessOptions() {
+  try {
+    const [matData, procData] = await Promise.all([
+      getMaterials({ page: 1, page_size: 999 }),
+      getProcesses({ page: 1, page_size: 999 }),
+    ])
+    materialOptions.value = matData.items.map((m: MaterialResponse) => ({ id: m.id, name: m.name }))
+    processOptions.value = procData.items.map((p: ProcessResponse) => ({ id: p.id, name: p.name }))
+  } catch { /* ignore */ }
+}
+
 const form = reactive({
   _type: 'product' as 'product' | 'material' | 'process',
   name: '',
   // Product
+  material_id: '',
+  process_id: '',
   unit: '项',
   pricing_method: 'quantity',
   default_price: 0,
   min_charge: 0,
+  length: undefined as number | undefined,
+  width: undefined as number | undefined,
+  height: undefined as number | undefined,
+  area: undefined as number | undefined,
+  quantity: undefined as number | undefined,
   // Material
   spec: '',
   purchase_price: 0,
@@ -320,9 +352,12 @@ function handleCreate() {
   editingId.value = null
   editingType.value = null
   Object.assign(form, {
-    _type: 'product', name: '', unit: '项', pricing_method: 'quantity',
-    default_price: 0, min_charge: 0, spec: '', purchase_price: 0,
-    sale_price: 0, loss_rate: 0, charge_method: 'fixed', remark: '',
+    _type: 'product', name: '',
+    material_id: '', process_id: '', unit: '项', pricing_method: 'quantity',
+    default_price: 0, min_charge: 0, length: undefined, width: undefined,
+    height: undefined, area: undefined, quantity: undefined,
+    spec: '', purchase_price: 0, sale_price: 0, loss_rate: 0,
+    charge_method: 'fixed', remark: '',
   })
   dialogVisible.value = true
 }
@@ -336,6 +371,13 @@ function handleEdit(row: UnifiedItem) {
 
   if (row._type === 'product') {
     const p = row as ProductResponse
+    form.material_id = p.material_id || ''
+    form.process_id = p.process_id || ''
+    form.length = p.length ?? undefined
+    form.width = p.width ?? undefined
+    form.height = p.height ?? undefined
+    form.area = p.area ?? undefined
+    form.quantity = p.quantity ?? undefined
     form.unit = p.unit
     form.pricing_method = p.pricing_method
     form.default_price = p.default_price
@@ -364,7 +406,21 @@ async function handleSave() {
   try {
     const t = form._type
     if (t === 'product') {
-      const payload = { name: form.name, unit: form.unit, pricing_method: form.pricing_method, default_price: form.default_price, min_charge: form.min_charge, remark: form.remark }
+      const payload: Record<string, unknown> = {
+        name: form.name,
+        unit: form.unit,
+        pricing_method: form.pricing_method,
+        default_price: form.default_price,
+        min_charge: form.min_charge,
+        remark: form.remark,
+        material_id: form.material_id || undefined,
+        process_id: form.process_id || undefined,
+        length: form.length ?? undefined,
+        width: form.width ?? undefined,
+        height: form.height ?? undefined,
+        area: form.area ?? undefined,
+        quantity: form.quantity ?? undefined,
+      }
       if (editingId.value) {
         await updateProduct(editingId.value, payload)
       } else {
@@ -467,6 +523,7 @@ const sup = useSupplierTab()
 
 onMounted(() => {
   fetchAll()
+  loadMaterialProcessOptions()
 })
 </script>
 

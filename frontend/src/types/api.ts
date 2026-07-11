@@ -252,6 +252,15 @@ export interface ProductResponse {
   remark?: string
   is_active: boolean
   created_at?: string
+  material_id?: string
+  process_id?: string
+  material_name?: string
+  process_name?: string
+  length?: number
+  width?: number
+  height?: number
+  area?: number
+  quantity?: number
 }
 
 export interface MaterialResponse {
