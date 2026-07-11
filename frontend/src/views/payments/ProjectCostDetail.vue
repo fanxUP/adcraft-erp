@@ -83,21 +83,13 @@
     >
       <el-table-column type="selection" width="50" />
       <el-table-column prop="cost_no" label="编号" width="180" />
-      <el-table-column label="类别" width="120">
+      <el-table-column label="日期" width="120">
         <template #default="{ row }">
-          <el-tag size="small">{{ row.category }}</el-tag>
+          {{ row.cost_date?.slice(0, 10) || '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="分项" min-width="140" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span v-if="row.group_name">{{ row.group_name }}</span>
-          <span v-else-if="row.order_item_name && itemGroupMap[row.order_item_id]">{{ itemGroupMap[row.order_item_id] }}/{{ row.order_item_name }}</span>
-          <span v-else-if="row.quote_item_name && itemGroupMap[row.quote_item_id]">{{ itemGroupMap[row.quote_item_id] }}/{{ row.quote_item_name }}</span>
-          <span v-else-if="row.order_item_name">{{ row.order_item_name }}</span>
-          <span v-else-if="row.quote_item_name">{{ row.quote_item_name }}</span>
-          <span v-else></span>
-        </template>
-      </el-table-column>
+      <el-table-column prop="summary" label="成本摘要" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
       <el-table-column label="数量" width="100" align="right">
         <template #default="{ row }">{{ row.quantity ?? '-' }}</template>
       </el-table-column>
@@ -117,13 +109,6 @@
           <span v-else></span>
         </template>
       </el-table-column>
-      <el-table-column label="日期" width="120">
-        <template #default="{ row }">
-          {{ row.cost_date?.slice(0, 10) || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="summary" label="成本摘要" min-width="180" show-overflow-tooltip />
       <el-table-column label="凭证" width="80" align="center">
         <template #default="{ row }">
           <el-tag v-if="row.attachment_count > 0" size="small" type="success">{{ row.attachment_count }}</el-tag>
@@ -372,96 +357,6 @@ const sourceId = computed(() => {
 
 const totalCost = computed(() => {
   return list.value.reduce((sum, c) => sum + (c.amount || 0), 0)
-})
-
-const allItems = computed(() => order.value?.items || [])
-
-// item_id → group_name 快速查找表
-const itemGroupMap = computed(() => {
-  const map: Record<string, string> = {}
-  for (const item of allItems.value) {
-    if (item.group_name) {
-      map[item.id] = item.group_name
-    }
-  }
-  return map
-})
-
-// 按分项分组，构建层级下拉选项
-interface GroupedItemOption {
-  label: string
-  value: string
-  group: string
-  isGroupHeader: boolean
-}
-const groupedItemOptions = computed<GroupedItemOption[]>(() => {
-  const items = allItems.value
-  const result: GroupedItemOption[] = []
-  const groupNames = new Set<string>()
-
-  // 先收集所有分组名
-  for (const item of items) {
-    if (item.group_name) groupNames.add(item.group_name)
-  }
-
-  // 无分组的项目内容 — 直接挂在总项目下（2级）
-  const ungrouped = items.filter(i => !i.group_name)
-  for (const item of ungrouped) {
-    result.push({
-      label: (item.item_name || '未命名'),
-      value: item.id,
-      group: '',
-      isGroupHeader: false,
-    })
-  }
-
-  // 有分组的
-  for (const gn of groupNames) {
-    const groupItems = items.filter(i => i.group_name === gn)
-    // 分项本身作为1级选项，value 用 group: 前缀
-    result.push({
-      label: gn,
-      value: 'group:' + gn,
-      group: gn,
-      isGroupHeader: false,
-    })
-    // 分项下的项目内容（2级）
-    for (const item of groupItems) {
-      result.push({
-        label: '    ' + gn + '/' + (item.item_name || '未命名'),
-        value: item.id,
-        group: gn,
-        isGroupHeader: false,
-      })
-    }
-  }
-
-  return result
-})
-const selectedItemId = computed({
-  get: () => {
-    if (form.group_name) return 'group:' + form.group_name
-    return isQuote.value ? form.quote_item_id : form.order_item_id
-  },
-  set: (val: string) => {
-    if (val && val.startsWith('group:')) {
-      // 选中了分项（1级）
-      form.group_name = val.slice(6)
-      if (isQuote.value) {
-        form.quote_item_id = ''
-      } else {
-        form.order_item_id = ''
-      }
-    } else {
-      // 选中了项目内容（2级）或清空
-      form.group_name = ''
-      if (isQuote.value) {
-        form.quote_item_id = val || ''
-      } else {
-        form.order_item_id = val || ''
-      }
-    }
-  },
 })
 
 const form = reactive({
