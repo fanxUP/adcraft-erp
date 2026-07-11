@@ -131,7 +131,7 @@
     </el-tabs>
 
     <!-- 产品 Dialog -->
-    <el-dialog v-model="prod.dialogVisible" :title="prod.editingId ? '编辑产品' : '新建产品'" width="600px" :close-on-click-modal="false" destroy-on-close>
+    <el-dialog v-if="activeTab === 'products'" v-model="prod.dialogVisible" :title="prod.editingId ? '编辑产品' : '新建产品'" width="600px" :close-on-click-modal="false" destroy-on-close>
       <el-form :model="prod.form" ref="prod.formRef" :rules="prod.rules" label-width="100px">
         <el-form-item label="名称" prop="name"><el-input v-model="prod.form.name" /></el-form-item>
         <el-form-item label="材质">
@@ -168,7 +168,7 @@
     </el-dialog>
 
     <!-- 材质 Dialog -->
-    <el-dialog v-model="mat.dialogVisible" :title="mat.editingId ? '编辑材质' : '新建材质'" width="500px" :close-on-click-modal="false" destroy-on-close>
+    <el-dialog v-if="activeTab === 'materials'" v-model="mat.dialogVisible" :title="mat.editingId ? '编辑材质' : '新建材质'" width="500px" :close-on-click-modal="false" destroy-on-close>
       <el-form :model="mat.form" label-width="100px">
         <el-form-item label="材质名称"><el-input v-model="mat.form.name" /></el-form-item>
         <el-form-item label="规格"><el-input v-model="mat.form.spec" placeholder="如 1220×2440mm" /></el-form-item>
@@ -190,7 +190,7 @@
     </el-dialog>
 
     <!-- 工艺 Dialog -->
-    <el-dialog v-model="proc.dialogVisible" :title="proc.editingId ? '编辑工艺' : '新建工艺'" width="500px" :close-on-click-modal="false" destroy-on-close>
+    <el-dialog v-if="activeTab === 'processes'" v-model="proc.dialogVisible" :title="proc.editingId ? '编辑工艺' : '新建工艺'" width="500px" :close-on-click-modal="false" destroy-on-close>
       <el-form :model="proc.form" label-width="100px">
         <el-form-item label="工艺名称"><el-input v-model="proc.form.name" /></el-form-item>
         <el-form-item label="计费方式">
@@ -208,7 +208,7 @@
     </el-dialog>
 
     <!-- 供应商 Dialog -->
-    <el-dialog v-model="sup.dialogVisible" :title="sup.editingId ? '编辑供应商' : '新建供应商'" width="550px" :close-on-click-modal="false" destroy-on-close>
+    <el-dialog v-if="activeTab === 'suppliers'" v-model="sup.dialogVisible" :title="sup.editingId ? '编辑供应商' : '新建供应商'" width="550px" :close-on-click-modal="false" destroy-on-close>
       <el-form ref="sup.formRef" :model="sup.form" :rules="sup.rules" label-width="100px">
         <el-form-item label="名称" prop="name"><el-input v-model="sup.form.name" /></el-form-item>
         <el-form-item label="联系人"><el-input v-model="sup.form.contact_person" /></el-form-item>
