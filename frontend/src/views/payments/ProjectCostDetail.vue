@@ -82,7 +82,8 @@
       @selection-change="onSelectionChange"
     >
       <el-table-column type="selection" width="50" />
-      <el-table-column prop="cost_no" label="编号" width="180" />
+      <el-table-column type="index" label="#" width="50" />
+      <el-table-column prop="cost_no" label="编号" width="180" sortable />
       <el-table-column label="分项" min-width="140" show-overflow-tooltip>
         <template #default="{ row }">
           <span v-if="row.group_name">{{ row.group_name }}</span>
@@ -91,23 +92,23 @@
           <span v-else></span>
         </template>
       </el-table-column>
-      <el-table-column label="日期" width="120">
+      <el-table-column prop="cost_date" label="日期" width="120" sortable>
         <template #default="{ row }">
           {{ row.cost_date?.slice(0, 10) || '-' }}
         </template>
       </el-table-column>
       <el-table-column prop="summary" label="成本摘要" min-width="180" show-overflow-tooltip />
       <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
-      <el-table-column label="数量" width="100" align="right">
+      <el-table-column prop="quantity" label="数量" width="100" align="right" sortable>
         <template #default="{ row }">{{ row.quantity ?? '-' }}</template>
       </el-table-column>
       <el-table-column label="单位" width="80" align="center">
         <template #default="{ row }">{{ row.unit || '-' }}</template>
       </el-table-column>
-      <el-table-column label="单价" width="120" align="right">
+      <el-table-column prop="unit_price" label="单价" width="120" align="right" sortable>
         <template #default="{ row }">¥ {{ row.unit_price?.toFixed(2) ?? '-' }}</template>
       </el-table-column>
-      <el-table-column label="金额" width="140" align="right">
+      <el-table-column prop="amount" label="金额" width="140" align="right" sortable>
         <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
       </el-table-column>
       <el-table-column label="欠款" width="90" align="center">
