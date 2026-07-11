@@ -7,7 +7,7 @@
           <span v-else class="logo-short">A</span>
         </div>
         <el-menu
-          :default-active="route.path"
+          :default-active="menuActive"
           router
           :collapse="sidebarCollapsed"
         >
@@ -43,18 +43,16 @@
             <el-icon><Stamp /></el-icon>
             <span>验收管理</span>
           </el-menu-item>
-          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/products">
-            <el-icon><Goods /></el-icon>
-            <span>产品管理</span>
-          </el-menu-item>
-          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/materials">
-            <el-icon><Box /></el-icon>
-            <span>材质管理</span>
-          </el-menu-item>
-          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/processes">
-            <el-icon><Setting /></el-icon>
-            <span>工艺管理</span>
-          </el-menu-item>
+          <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/basic">
+            <template #title>
+              <el-icon><Goods /></el-icon>
+              <span>基础资料</span>
+            </template>
+            <el-menu-item index="/basic?tab=products">产品管理</el-menu-item>
+            <el-menu-item index="/basic?tab=materials">材质管理</el-menu-item>
+            <el-menu-item index="/basic?tab=processes">工艺管理</el-menu-item>
+            <el-menu-item index="/basic?tab=suppliers">供应商管理</el-menu-item>
+          </el-sub-menu>
           <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'production'])" index="/outsource">
             <template #title>
               <el-icon><Connection /></el-icon>
@@ -175,6 +173,12 @@ const appStore = useAppStore()
 const chatStore = useChatStore()
 
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
+const menuActive = computed(() => {
+  if (route.path === '/basic' && route.query.tab) {
+    return `/basic?tab=${route.query.tab}`
+  }
+  return route.path
+})
 
 function handleLogout() {
   chatStore.disconnectWebSocket()
