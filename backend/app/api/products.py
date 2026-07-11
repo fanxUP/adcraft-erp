@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
-from app.services.number_generator import generate_supplier_no
 from app.core.deps import get_current_user
 from app.core.permissions import require_role
 from app.models.user import User
@@ -15,7 +14,6 @@ from app.schemas.product import (
     ProductCategoryCreate, ProductCreate, ProductUpdate,
     MaterialCreate, MaterialUpdate,
     ProcessCreate, ProcessUpdate,
-    SupplierCreate, SupplierUpdate,
 )
 from app.schemas.common import success, success_paginated
 from app.services.product_service import ProductService
@@ -25,7 +23,6 @@ router = APIRouter(prefix="/products", tags=["Products"])
 cat_router = APIRouter(prefix="/product-categories", tags=["Product Categories"])
 mat_router = APIRouter(prefix="/materials", tags=["Materials"])
 proc_router = APIRouter(prefix="/processes", tags=["Processes"])
-supplier_router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
 
 
 # Product Categories
@@ -374,69 +371,4 @@ async def delete_process(
     ok = await service.delete_process(UUID(process_id))
     if not ok:
         return {"code": 40401, "message": "工艺不存在", "data": None}
-    return success(None)
-
-
-# Suppliers
-@supplier_router.get("/")
-async def list_suppliers(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    keyword: str | None = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    service = ProductService(db)
-    suppliers, total = await service.list_suppliers(page, page_size, keyword)
-    return success_paginated(suppliers, total, page, page_size)
-
-
-@supplier_router.post("/")
-async def create_supplier(
-    data: SupplierCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    service = ProductService(db)
-    payload = data.model_dump()
-    payload["supplier_no"] = await generate_supplier_no(db)
-    supplier = await service.create_supplier(payload)
-    return success(supplier)
-
-
-@supplier_router.get("/{supplier_id}")
-async def get_supplier(
-    supplier_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    service = ProductService(db)
-    supplier = await service.get_supplier(UUID(supplier_id))
-    if not supplier:
-        return {"code": 40401, "message": "供应商不存在", "data": None}
-    return success(supplier)
-
-
-@supplier_router.put("/{supplier_id}")
-async def update_supplier(
-    supplier_id: str,
-    data: SupplierUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    service = ProductService(db)
-    supplier = await service.update_supplier(UUID(supplier_id), data.model_dump(exclude_none=True))
-    return success(supplier)
-
-
-@supplier_router.delete("/{supplier_id}")
-async def delete_supplier(
-    supplier_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
-):
-    service = ProductService(db)
-    ok = await service.delete_supplier(UUID(supplier_id))
-    if not ok:
-        return {"code": 40401, "message": "供应商不存在", "data": None}
     return success(None)

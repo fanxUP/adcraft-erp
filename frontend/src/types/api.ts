@@ -993,20 +993,3 @@ export interface AcceptanceDetailResponse extends AcceptanceListResponse {
   items: AcceptanceItemResponse[]
   attachments: AcceptanceAttachmentResponse[]
 }
-
-
-// ---- Suppliers ----
-
-export interface SupplierResponse {
-  id: string
-  supplier_no: string
-  name: string
-  contact_person?: string
-  phone?: string
-  address?: string
-  supply_type?: string
-  bank_account?: string
-  remark?: string
-  is_active: boolean
-  created_at?: string
-}
