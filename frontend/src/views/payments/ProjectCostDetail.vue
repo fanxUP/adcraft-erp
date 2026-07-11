@@ -83,6 +83,14 @@
     >
       <el-table-column type="selection" width="50" />
       <el-table-column prop="cost_no" label="编号" width="180" />
+      <el-table-column label="分项" min-width="140" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span v-if="row.group_name">{{ row.group_name }}</span>
+          <span v-else-if="row.order_item_name">{{ row.order_item_name }}</span>
+          <span v-else-if="row.quote_item_name">{{ row.quote_item_name }}</span>
+          <span v-else></span>
+        </template>
+      </el-table-column>
       <el-table-column label="日期" width="120">
         <template #default="{ row }">
           {{ row.cost_date?.slice(0, 10) || '-' }}
