@@ -2,7 +2,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-from app.models.product import ProductCategory, Product, Material, Process, Supplier
+from app.models.product import ProductCategory, Product, Material, Process
 
 
 class ProductRepository:
@@ -124,36 +124,4 @@ class ProductRepository:
 
     async def delete_process(self, process: Process) -> None:
         await self.db.delete(process)
-        await self.db.flush()
-
-    # Suppliers
-    async def get_supplier_by_id(self, supplier_id: UUID) -> Supplier | None:
-        result = await self.db.execute(select(Supplier).where(Supplier.id == supplier_id))
-        return result.scalar_one_or_none()
-
-    async def list_suppliers(self, skip: int = 0, limit: int = 20, keyword: str | None = None) -> tuple[list[Supplier], int]:
-        q = select(Supplier)
-        if keyword:
-            q = q.where(Supplier.name.ilike(f"%{keyword}%"))
-        count_q = select(func.count()).select_from(q.subquery())
-        total = (await self.db.execute(count_q)).scalar()
-        q = q.order_by(Supplier.created_at.desc()).offset(skip).limit(limit)
-        result = await self.db.execute(q)
-        return list(result.scalars().all()), total
-
-    async def create_supplier(self, data: dict) -> Supplier:
-        supplier = Supplier(**data)
-        self.db.add(supplier)
-        await self.db.flush()
-        return supplier
-
-    async def update_supplier(self, supplier: Supplier, data: dict) -> Supplier:
-        for k, v in data.items():
-            if v is not None:
-                setattr(supplier, k, v)
-        await self.db.flush()
-        return supplier
-
-    async def delete_supplier(self, supplier: Supplier) -> None:
-        await self.db.delete(supplier)
         await self.db.flush()
