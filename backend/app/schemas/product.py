@@ -26,13 +26,6 @@ class ProductCreate(BaseModel):
     min_charge: float = 0
     remark: str | None = None
     is_active: bool = True
-    material_id: str | None = None
-    process_id: str | None = None
-    length: float | None = None
-    width: float | None = None
-    height: float | None = None
-    area: float | None = None
-    quantity: float | None = None
 
 
 class ProductUpdate(BaseModel):
@@ -44,13 +37,6 @@ class ProductUpdate(BaseModel):
     min_charge: float | None = None
     remark: str | None = None
     is_active: bool | None = None
-    material_id: str | None = None
-    process_id: str | None = None
-    length: float | None = None
-    width: float | None = None
-    height: float | None = None
-    area: float | None = None
-    quantity: float | None = None
 
 
 class ProductResponse(BaseModel):
@@ -64,15 +50,6 @@ class ProductResponse(BaseModel):
     remark: str | None = None
     is_active: bool
     created_at: datetime | None = None
-    material_id: str | None = None
-    process_id: str | None = None
-    material_name: str | None = None
-    process_name: str | None = None
-    length: float | None = None
-    width: float | None = None
-    height: float | None = None
-    area: float | None = None
-    quantity: float | None = None
 
     model_config = {"from_attributes": True}
 
