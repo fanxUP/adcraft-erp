@@ -1,7 +1,7 @@
 import uuid
 
 from sqlalchemy import Boolean, Integer, Numeric, String, Text, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from app.models.base import Base, TimestampMixin
@@ -28,18 +28,6 @@ class Product(Base, TimestampMixin):
     min_charge: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    # 材质工艺关联
-    material_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("materials.id"), nullable=True)
-    process_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("processes.id"), nullable=True)
-    # 默认规格尺寸（映射报价单尺寸系统）
-    length: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
-    width: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
-    height: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
-    area: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-    quantity: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-
-    material: Mapped["Material"] = relationship(lazy="selectin", foreign_keys=[material_id])
-    process: Mapped["Process"] = relationship(lazy="selectin", foreign_keys=[process_id])
 
 
 class Material(Base, TimestampMixin):
