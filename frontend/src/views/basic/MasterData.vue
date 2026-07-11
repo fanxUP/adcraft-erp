@@ -253,8 +253,8 @@ const processOptions = ref<{ id: string; name: string }[]>([])
 async function loadMaterialProcessOptions() {
   try {
     const [matData, procData] = await Promise.all([
-      getMaterials({ page: 1, page_size: 999 }),
-      getProcesses({ page: 1, page_size: 999 }),
+      getMaterials({ page: 1, page_size: 100 }),
+      getProcesses({ page: 1, page_size: 100 }),
     ])
     materialOptions.value = matData.items.map((m: MaterialResponse) => ({ id: m.id, name: m.name }))
     processOptions.value = procData.items.map((p: ProcessResponse) => ({ id: p.id, name: p.name }))
