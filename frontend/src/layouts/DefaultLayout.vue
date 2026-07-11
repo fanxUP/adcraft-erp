@@ -46,9 +46,11 @@
           <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/basic">
             <template #title>
               <el-icon><Goods /></el-icon>
-              <span>产品管理</span>
+              <span>基础资料</span>
             </template>
             <el-menu-item index="/basic?tab=products">产品管理</el-menu-item>
+            <el-menu-item index="/basic?tab=materials">材质管理</el-menu-item>
+            <el-menu-item index="/basic?tab=processes">工艺管理</el-menu-item>
             <el-menu-item index="/basic?tab=suppliers">供应商管理</el-menu-item>
           </el-sub-menu>
           <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'production'])" index="/outsource">
