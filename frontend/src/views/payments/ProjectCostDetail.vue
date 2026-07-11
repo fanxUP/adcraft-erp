@@ -117,6 +117,17 @@
           <span v-else></span>
         </template>
       </el-table-column>
+      <el-table-column label="成本类别" width="120">
+        <template #default="{ row }">
+          <el-tag size="small">{{ row.category || '-' }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="付款方式" width="120">
+        <template #default="{ row }">{{ row.payment_method || '-' }}</template>
+      </el-table-column>
+      <el-table-column label="收款公司" min-width="160" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.payee_company_name || '-' }}</template>
+      </el-table-column>
       <el-table-column label="凭证" width="80" align="center">
         <template #default="{ row }">
           <el-tag v-if="row.attachment_count > 0" size="small" type="success">{{ row.attachment_count }}</el-tag>
