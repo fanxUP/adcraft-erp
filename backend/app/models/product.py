@@ -56,6 +56,21 @@ class Process(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class Supplier(Base, TimestampMixin):
+    __tablename__ = "suppliers"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    supplier_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    contact_person: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    supply_type: Mapped[str | None] = mapped_column(String(32), nullable=True)  # material, processing, installation, transport, other
+    bank_account: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
 class PriceRule(Base, TimestampMixin):
     __tablename__ = "price_rules"
 
