@@ -83,7 +83,7 @@
     >
       <el-table-column type="selection" width="50" />
       <el-table-column type="index" label="#" width="50" />
-      <el-table-column prop="cost_no" label="编号" width="180" sortable />
+      <el-table-column prop="cost_no" label="编号" width="140" sortable />
       <el-table-column label="分项" min-width="140" show-overflow-tooltip>
         <template #default="{ row }">
           <span v-if="row.group_name">{{ row.group_name }}</span>

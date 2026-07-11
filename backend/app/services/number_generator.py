@@ -86,9 +86,17 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
         )
     elif prefix == "COST":
         from app.models.project_cost import ProjectCost
+        today_short = datetime.now(timezone.utc).strftime("%y%m%d")
+        pattern = f"{today_short}-%"
         result = await db.execute(
             select(ProjectCost.cost_no).where(ProjectCost.cost_no.like(pattern)).order_by(ProjectCost.cost_no.desc()).limit(1)
         )
+        last = result.scalar_one_or_none()
+        if last:
+            seq = int(last.split("-")[1]) + 1
+        else:
+            seq = 1
+        return f"{today_short}-{seq:03d}"
     elif prefix == "A":
         from app.models.acceptance import AcceptanceForm
         result = await db.execute(
