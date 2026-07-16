@@ -47,13 +47,9 @@
             <el-icon><Goods /></el-icon>
             <span>产品管理</span>
           </el-menu-item>
-          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/materials">
+          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/material-process">
             <el-icon><Box /></el-icon>
-            <span>材质管理</span>
-          </el-menu-item>
-          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'designer', 'production'])" index="/processes">
-            <el-icon><Setting /></el-icon>
-            <span>工艺管理</span>
+            <span>材质工艺</span>
           </el-menu-item>
           <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'production'])" index="/outsource">
             <template #title>
