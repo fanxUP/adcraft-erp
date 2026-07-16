@@ -98,7 +98,10 @@
         </template>
       </el-table-column>
       <el-table-column prop="summary" label="成本摘要" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="description" label="材质工艺" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="specification" label="规格尺寸" width="120" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.specification || '-' }}</template>
+      </el-table-column>
       <el-table-column prop="quantity" label="数量" width="100" align="right" sortable>
         <template #default="{ row }">{{ row.quantity ?? '-' }}</template>
       </el-table-column>
@@ -198,6 +201,9 @@
         <el-form-item label="金额" required>
           <el-input-number v-model="form.amount" :min="0.01" :precision="2" style="width: 100%" />
         </el-form-item>
+        <el-form-item label="规格尺寸">
+          <el-input v-model="form.specification" placeholder="规格尺寸（如 1200×2400mm）" clearable />
+        </el-form-item>
         <el-form-item label="数量">
           <el-input-number v-model="form.quantity" :min="0" :precision="2" style="width: 100%" placeholder="成本数量" />
         </el-form-item>
@@ -219,8 +225,8 @@
             style="width: 100%"
           />
         </el-form-item>
-        <el-form-item label="说明">
-          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="成本说明…" />
+        <el-form-item label="材质工艺">
+          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="材质工艺说明…" />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="备注…" />
@@ -279,7 +285,7 @@
     <el-dialog v-model="showImport" title="导入Excel" width="480px" :close-on-click-modal="false">
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary)">
         Excel 需包含以下列：<br />
-        <b>分项、成本类别、付款方式、收款公司、数量、单位、单价、金额、欠款金额、成本日期、说明、成本摘要、备注</b>
+        <b>分项、成本类别、付款方式、收款公司、规格尺寸、数量、单位、单价、金额、欠款金额、成本日期、材质工艺、成本摘要、备注</b>
       </p>
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 13px">
         导入的成本将自动关联到 <b>{{ isQuote ? (order?.quote_no || '报价单') : (order?.order_no || '订单') }}</b>
@@ -382,6 +388,7 @@ const totalCost = computed(() => {
 const form = reactive({
   category: '',
   quantity: 0,
+  specification: '',
   unit: "",
   unit_price: 0,
   amount: 0,
@@ -433,7 +440,7 @@ async function handleBatchDelete() {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', group_name: '', order_item_id: '', quote_item_id: '', quantity: 0, unit: '', unit_price: 0 })
+  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', group_name: '', order_item_id: '', quote_item_id: '', quantity: 0, specification: '', unit: '', unit_price: 0 })
   isEditing.value = false
   editingId.value = ''
   dialogAttachments.value = []
@@ -457,6 +464,7 @@ function openEdit(row: ProjectCostResponse) {
   form.remark = row.remark || ''
   form.summary = row.summary || ''
   form.quantity = row.quantity || 0
+  form.specification = row.specification || ''
   form.unit = row.unit || ''
   form.unit_price = row.unit_price || 0
   form.group_name = row.group_name || ''
@@ -547,6 +555,7 @@ async function handleSave() {
       if (form.payment_method) payload.payment_method = form.payment_method
       if (form.payee_company_name) payload.payee_company_name = form.payee_company_name
       if (form.quantity > 0) payload.quantity = form.quantity
+      if (form.specification) payload.specification = form.specification
       if (form.unit) payload.unit = form.unit
       if (form.unit_price > 0) payload.unit_price = form.unit_price
       if (form.debt_amount > 0) payload.debt_amount = form.debt_amount
@@ -574,6 +583,7 @@ async function handleSave() {
           payment_method: form.payment_method || undefined,
           payee_company_name: form.payee_company_name || undefined,
           quantity: form.quantity > 0 ? form.quantity : undefined,
+          specification: form.specification || undefined,
           unit: form.unit || undefined,
           unit_price: form.unit_price > 0 ? form.unit_price : undefined,
           debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,
@@ -592,6 +602,7 @@ async function handleSave() {
           payment_method: form.payment_method || undefined,
           payee_company_name: form.payee_company_name || undefined,
           quantity: form.quantity > 0 ? form.quantity : undefined,
+          specification: form.specification || undefined,
           unit: form.unit || undefined,
           unit_price: form.unit_price > 0 ? form.unit_price : undefined,
           debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,

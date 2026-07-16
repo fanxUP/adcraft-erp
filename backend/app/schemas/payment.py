@@ -147,6 +147,7 @@ class ProjectCostCreate(BaseModel):
     payee_company_name: str | None = None
     debt_amount: float | None = None
     quantity: float | None = None
+    specification: str | None = None
     unit: str | None = None
     unit_price: float | None = None
     summary: str | None = None
@@ -184,6 +185,7 @@ class ProjectCostUpdate(BaseModel):
     quote_id: str | None = None
     debt_amount: float | None = None
     quantity: float | None = None
+    specification: str | None = None
     unit: str | None = None
     unit_price: float | None = None
     summary: str | None = None
@@ -210,6 +212,7 @@ class ProjectCostResponse(BaseModel):
     payee_company_name: str | None = None
     debt_amount: float | None = None
     quantity: float | None = None
+    specification: str | None = None
     unit: str | None = None
     unit_price: float | None = None
     summary: str | None = None
@@ -248,6 +251,7 @@ class DebtResponse(BaseModel):
     category: str
     amount: float
     quantity: float | None = None
+    specification: str | None = None
     unit: str | None = None
     unit_price: float | None = None
     payment_method: str | None = None

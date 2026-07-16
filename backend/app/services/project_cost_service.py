@@ -126,6 +126,7 @@ class ProjectCostService:
             cost_date=datetime.fromisoformat(data["cost_date"]) if data.get("cost_date") else None,
             receipt_url=data.get("receipt_url"),
             quantity=data.get("quantity"),
+            specification=data.get("specification"),
             unit=data.get("unit"),
             unit_price=data.get("unit_price"),
             remark=data.get("remark"),
@@ -162,6 +163,7 @@ class ProjectCostService:
             "category": cost.category,
             "amount": float(cost.amount),
             "quantity": float(cost.quantity) if cost.quantity else None,
+            "specification": cost.specification,
             "unit": cost.unit,
             "unit_price": float(cost.unit_price) if cost.unit_price else None,
             "payment_method": cost.payment_method,
@@ -357,6 +359,7 @@ class ProjectCostService:
                     payee_company_name = str(get("收款公司") or "").strip() or None
                     quantity_val = get("数量")
                     quantity = float(quantity_val) if quantity_val else None
+                    specification = str(get("规格尺寸") or "").strip() or None
                     unit = str(get("单位") or "").strip() or None
                     unit_price_val = get("单价")
                     unit_price = float(unit_price_val) if unit_price_val else None
@@ -389,6 +392,7 @@ class ProjectCostService:
                         "payment_method": payment_method,
                         "payee_company_name": payee_company_name,
                         "quantity": quantity,
+                        "specification": specification,
                         "unit": unit,
                         "unit_price": unit_price,
                         "debt_amount": debt_amount,
@@ -408,6 +412,7 @@ class ProjectCostService:
                     payee_company_name = str(get("收款公司") or "").strip() or None
                     quantity_val = get("数量")
                     quantity = float(quantity_val) if quantity_val else None
+                    specification = str(get("规格尺寸") or "").strip() or None
                     unit = str(get("单位") or "").strip() or None
                     unit_price_val = get("单价")
                     unit_price = float(unit_price_val) if unit_price_val else None
@@ -446,6 +451,7 @@ class ProjectCostService:
                         "payment_method": payment_method,
                         "payee_company_name": payee_company_name,
                         "quantity": quantity,
+                        "specification": specification,
                         "unit": unit,
                         "unit_price": unit_price,
                         "debt_amount": debt_amount,
@@ -499,6 +505,7 @@ class ProjectCostService:
             "category": c.category,
             "amount": float(c.amount),
             "quantity": float(c.quantity) if c.quantity else None,
+            "specification": c.specification,
             "unit": c.unit,
             "unit_price": float(c.unit_price) if c.unit_price else None,
             "payment_method": c.payment_method,
