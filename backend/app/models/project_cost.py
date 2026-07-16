@@ -23,6 +23,7 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
     category: Mapped[str] = mapped_column(String(64), nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     quantity: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True, comment="数量")
+    specification: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="规格尺寸")
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="单位")
     unit_price: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True, comment="单价")
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="付款方式：现金支付/微信支付/转账支付/对公支付/其它支付")

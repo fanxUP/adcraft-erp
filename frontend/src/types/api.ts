@@ -379,6 +379,7 @@ export interface ProjectCostResponse {
   is_debt: boolean
   is_settled: boolean
   settled_at?: string
+  specification?: string
   description?: string
   summary?: string
   cost_date?: string
