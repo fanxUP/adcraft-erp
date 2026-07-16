@@ -174,8 +174,38 @@
         <el-form-item label="分项">
           <el-input v-model="form.group_name" placeholder="输入分项名称（可选）" clearable />
         </el-form-item>
+        <el-form-item label="日期">
+          <el-date-picker
+            v-model="form.cost_date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            style="width: 100%"
+          />
+        </el-form-item>
         <el-form-item label="成本摘要">
           <el-input v-model="form.summary" type="textarea" :rows="2" placeholder="成本摘要说明…" />
+        </el-form-item>
+        <el-form-item label="材质工艺">
+          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="材质工艺说明…" />
+        </el-form-item>
+        <el-form-item label="规格尺寸">
+          <el-input v-model="form.specification" placeholder="规格尺寸（如 1200×2400mm）" clearable />
+        </el-form-item>
+        <el-form-item label="数量">
+          <el-input-number v-model="form.quantity" :min="0" :precision="2" style="width: 100%" placeholder="成本数量" />
+        </el-form-item>
+        <el-form-item label="单位">
+          <el-input v-model="form.unit" placeholder="单位（个/米/平方米/套…）" clearable />
+        </el-form-item>
+        <el-form-item label="单价">
+          <el-input-number v-model="form.unit_price" :min="0" :precision="2" style="width: 100%" placeholder="成本单价" />
+        </el-form-item>
+        <el-form-item label="金额" required>
+          <el-input-number v-model="form.amount" :min="0.01" :precision="2" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="欠款金额">
+          <el-input-number v-model="form.debt_amount" :min="0" :precision="2" style="width: 100%" placeholder="0 表示无欠款" />
+          <div style="font-size: 12px; color: #909399; margin-top: 4px">大于0时自动记为欠款</div>
         </el-form-item>
         <el-form-item label="成本类别" required>
           <el-select
@@ -197,36 +227,6 @@
         <el-form-item label="收款公司">
           <el-input v-model="form.payee_company_name" placeholder="输入对方收款公司名称" clearable />
           <div style="font-size: 12px; color: #909399; margin-top: 2px">对方收款公司名称（可选）</div>
-        </el-form-item>
-        <el-form-item label="金额" required>
-          <el-input-number v-model="form.amount" :min="0.01" :precision="2" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="规格尺寸">
-          <el-input v-model="form.specification" placeholder="规格尺寸（如 1200×2400mm）" clearable />
-        </el-form-item>
-        <el-form-item label="数量">
-          <el-input-number v-model="form.quantity" :min="0" :precision="2" style="width: 100%" placeholder="成本数量" />
-        </el-form-item>
-        <el-form-item label="单位">
-          <el-input v-model="form.unit" placeholder="单位（个/米/平方米/套…）" clearable />
-        </el-form-item>
-        <el-form-item label="单价">
-          <el-input-number v-model="form.unit_price" :min="0" :precision="2" style="width: 100%" placeholder="成本单价" />
-        </el-form-item>
-        <el-form-item label="欠款金额">
-          <el-input-number v-model="form.debt_amount" :min="0" :precision="2" style="width: 100%" placeholder="0 表示无欠款" />
-          <div style="font-size: 12px; color: #909399; margin-top: 4px">大于0时自动记为欠款</div>
-        </el-form-item>
-        <el-form-item label="日期">
-          <el-date-picker
-            v-model="form.cost_date"
-            type="date"
-            value-format="YYYY-MM-DD"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="材质工艺">
-          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="材质工艺说明…" />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="备注…" />
