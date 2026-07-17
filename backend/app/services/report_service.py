@@ -173,6 +173,7 @@ class ReportService:
         contract_ids = [ct.id for ct in all_contracts]
         paid_map: dict[UUID, float] = {}
         if contract_ids:
+            from decimal import Decimal
             paid_result = await self.db.execute(
                 select(
                     ContractOrder.contract_id,
@@ -200,9 +201,9 @@ class ReportService:
                 continue
 
             # Stats from contracts (paid_amount from actual payments, not stored value)
-            total_contract = sum(ct.total_amount for ct in customer_contracts)
+            total_contract = float(sum(ct.total_amount for ct in customer_contracts))
             total_paid = sum(paid_map.get(ct.id, 0.0) for ct in customer_contracts)
-            total_debt = max(0, total_contract - total_paid)
+            total_debt = max(0.0, total_contract - total_paid)
             lp = last_payments.get(c.id)
 
             debts.append({
