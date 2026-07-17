@@ -22,7 +22,7 @@ router = APIRouter(prefix="/customers", tags=["Customers"])
 @router.get("/")
 async def list_customers(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=9999),
     keyword: str | None = None,
     customer_type: str | None = None,
     db: AsyncSession = Depends(get_db),
