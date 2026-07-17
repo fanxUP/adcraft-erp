@@ -107,7 +107,7 @@
           <el-input v-model="form.project_name" placeholder="项目名称" />
         </el-form-item>
         <el-row :gutter="20">
-          <el-col :span="8">
+          <el-col :span="6">
             <el-form-item label="合同类型">
               <el-select v-model="form.contract_type" clearable placeholder="请选择" style="width: 100%">
                 <el-option label="制作合同" value="制作合同" />
@@ -117,7 +117,7 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="10">
             <el-form-item label="合同金额">
               <el-input-number v-model="form.total_amount" :min="0" :precision="2" style="width: 100%" />
             </el-form-item>
