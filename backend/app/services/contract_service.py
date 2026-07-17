@@ -6,10 +6,11 @@ from app.repositories.contract_repo import ContractRepository
 from app.services.number_generator import generate_contract_no
 
 
-# 状态流转映射（仅草稿和生效）
+# 状态流转映射
 CONTRACT_TRANSITIONS = {
-    "draft": ["active"],
-    "active": ["draft"],
+    "draft": ["active", "completed"],
+    "active": ["draft", "completed"],
+    "completed": ["draft"],
 }
 
 
@@ -57,6 +58,21 @@ class ContractService:
             .group_by(ContractOrder.contract_id)
         )
         return {row[0]: float(row[1]) for row in result.all()}
+
+    async def _auto_complete_if_paid(self, contracts: list) -> None:
+        """已收金额>=合同金额时自动将状态改为已完成"""
+        cids = [c.id for c in contracts]
+        if not cids:
+            return
+        paid_map = await self._batch_paid_amounts(cids)
+        changed = False
+        for c in contracts:
+            paid = paid_map.get(c.id, 0.0)
+            if paid >= float(c.total_amount) and float(c.total_amount) > 0 and c.status not in ("completed",):
+                c.status = "completed"
+                changed = True
+        if changed:
+            await self.db.flush()
 
     def _to_response(self, contract) -> dict:
         return {
@@ -117,6 +133,9 @@ class ContractService:
         contracts, total = await self.repo.list_contracts(
             skip=skip, limit=page_size, status=status, keyword=keyword, customer_id=customer_id
         )
+        # Auto-complete contracts that are fully paid
+        await self._auto_complete_if_paid(contracts)
+
         # Batch-calculate paid_amount for all contracts in this page
         cids = [c.id for c in contracts]
         paid_map = await self._batch_paid_amounts(cids)
@@ -133,6 +152,8 @@ class ContractService:
         contract = await self.repo.get_by_id(contract_id)
         if not contract:
             return None
+        # Auto-complete if fully paid
+        await self._auto_complete_if_paid([contract])
         result = self._to_detail(contract)
         # Override paid_amount with actual payments on linked orders
         result["paid_amount"] = await self._calc_paid_amount(contract_id)
@@ -160,6 +181,8 @@ class ContractService:
         contract = await self.repo.create(data)
         # Re-fetch to load secondary relationships (orders/quotes)
         contract = await self.repo.get_by_id(contract.id)
+        # Auto-complete if fully paid
+        await self._auto_complete_if_paid([contract])
         result = self._to_detail(contract)
         result["paid_amount"] = await self._calc_paid_amount(contract.id)
         result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
@@ -189,6 +212,8 @@ class ContractService:
         contract = await self.repo.update(contract, data)
         # Re-fetch to load secondary relationships after updates
         contract = await self.repo.get_by_id(contract.id)
+        # Auto-complete if fully paid
+        await self._auto_complete_if_paid([contract])
         result = self._to_detail(contract)
         result["paid_amount"] = await self._calc_paid_amount(contract_id)
         result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
