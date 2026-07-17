@@ -98,7 +98,7 @@
           <el-input v-model="form.project_name" placeholder="项目名称" />
         </el-form-item>
         <el-row :gutter="20">
-          <el-col :span="6">
+          <el-col :span="7">
             <el-form-item label="合同类型">
               <el-select v-model="form.contract_type" clearable placeholder="请选择" style="width: 100%">
                 <el-option label="制作合同" value="制作合同" />
@@ -113,7 +113,7 @@
               <el-input-number v-model="form.total_amount" :min="0" :precision="2" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="7">
             <el-form-item label="已收金额">
               <el-input-number v-model="form.paid_amount" :min="0" :precision="2" style="width: 100%" />
             </el-form-item>
@@ -132,17 +132,17 @@
           </el-col>
         </el-row>
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="8">
             <el-form-item label="结束日期">
               <el-date-picker v-model="form.end_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="6">
+          <el-col :span="8">
             <el-form-item label="我方签约人">
               <el-input v-model="form.our_signatory" placeholder="我方签约人" />
             </el-form-item>
           </el-col>
-          <el-col :span="6">
+          <el-col :span="8">
             <el-form-item label="客户签约人">
               <el-input v-model="form.customer_signatory" placeholder="客户签约人" />
             </el-form-item>
