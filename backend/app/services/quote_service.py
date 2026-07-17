@@ -183,7 +183,10 @@ class QuoteService:
             area = length_in_m * width_in_m * pieces
             item.area = float(area)
 
-            # 小计统一用 quantity（前端已保证 quantity = 面积 × 件数）
+            # 面积模式下用实际面积作为数量，保持与前端 calcSubtotal 一致
+            if item.use_area:
+                quantity = area
+
             item_subtotal = quantity * unit_price + process_fee + installation_fee + design_fee + transport_fee + other_fee
 
             item.subtotal_amount = float(item_subtotal)
