@@ -363,3 +363,80 @@ async def convert_quote_to_order(
     service = QuoteService(db)
     order = await service.convert_to_order(UUID(quote_id), current_user.id)
     return success(order)
+
+
+# Item-only columns (skip header info)
+QUOTE_ITEM_COLUMNS = [
+    "明细分组", "项目名称(明细)", "材质工艺", "数量", "单位", "单价",
+    "长", "长单位", "宽", "宽单位", "高", "高单位", "件数",
+    "加工费", "安装费", "设计费", "运输费", "其他费用",
+    "面积开关", "明细备注",
+]
+
+QUOTE_ITEM_REQUIRED = ["项目名称(明细)", "数量"]
+QUOTE_ITEM_MAP = {k: QUOTE_COLUMN_MAP[k] for k in QUOTE_ITEM_COLUMNS if k in QUOTE_COLUMN_MAP}
+
+
+@router.post("/{quote_id}/import-items")
+async def import_quote_items(
+    quote_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Import items into an existing quote from Excel, skipping header columns."""
+    if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
+        return {"code": 40001, "message": "请上传 .xlsx 或 .xls 格式的 Excel 文件", "data": None}
+
+    service = QuoteService(db)
+    qid = UUID(quote_id)
+    quote = await service.get_quote(qid)
+    if not quote:
+        return {"code": 40401, "message": "报价不存在", "data": None}
+
+    content = await file.read()
+    rows, header_errors = parse_excel(content, QUOTE_ITEM_REQUIRED, QUOTE_ITEM_MAP)
+    if header_errors:
+        return {"code": 40002, "message": "文件格式错误", "data": {"errors": header_errors}}
+
+    items_data = []
+    skipped = 0
+    for row in rows:
+        item_name = format_value(row.get("item_name"))
+        if not item_name:
+            skipped += 1
+            continue
+        item_data = {
+            "item_name": item_name,
+            "group_name": format_value(row.get("group_name")),
+            "material_process": format_value(row.get("material_process")),
+            "quantity": parse_number(row.get("quantity")) or 1,
+            "unit": format_value(row.get("unit")),
+            "unit_price": parse_number(row.get("unit_price")) or 0,
+            "length": parse_number(row.get("length")),
+            "length_unit": format_value(row.get("length_unit")) or "m",
+            "width": parse_number(row.get("width")),
+            "width_unit": format_value(row.get("width_unit")) or "m",
+            "height": parse_number(row.get("height")),
+            "height_unit": format_value(row.get("height_unit")) or "m",
+            "pieces": parse_number(row.get("pieces")) or 1,
+            "process_fee": parse_number(row.get("process_fee")) or 0,
+            "installation_fee": parse_number(row.get("installation_fee")) or 0,
+            "design_fee": parse_number(row.get("design_fee")) or 0,
+            "transport_fee": parse_number(row.get("transport_fee")) or 0,
+            "other_fee": parse_number(row.get("other_fee")) or 0,
+            "remark": format_value(row.get("item_remark")),
+        }
+        area_raw = format_value(row.get("use_area"))
+        if area_raw:
+            item_data["use_area"] = area_raw.lower() in ("是", "1", "y", "yes", "true")
+        items_data.append(item_data)
+
+    if not items_data:
+        return {"code": 40003, "message": "文件中没有有效的明细数据", "data": None}
+
+    try:
+        quote = await service.add_items(qid, items_data)
+        return success(quote)
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}

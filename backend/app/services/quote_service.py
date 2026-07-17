@@ -339,6 +339,22 @@ class QuoteService:
             "total_amount": order.total_amount,
         }
 
+    async def add_items(self, quote_id: UUID, items_data: list[dict]) -> dict:
+        quote = await self.repo.get_by_id(quote_id)
+        if not quote:
+            raise ValueError("报价单不存在")
+
+        for item in items_data:
+            for fee_key in ("unit_price", "process_fee", "installation_fee", "design_fee", "transport_fee", "other_fee"):
+                item[fee_key] = Decimal(str(item.get(fee_key, "0")))
+            item["quantity"] = Decimal(str(item.get("quantity", "1")))
+
+        await self.repo.add_items(quote_id, items_data)
+        await self.calculate_quote(quote_id)
+
+        quote = await self.repo.get_by_id(quote_id)
+        return self._quote_to_detail(quote)
+
     def _quote_to_summary(self, q) -> dict:
         return {
             "id": str(q.id), "quote_no": q.quote_no,

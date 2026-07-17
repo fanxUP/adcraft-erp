@@ -88,6 +88,12 @@ class QuoteRepository:
         await self.db.flush()
         return item
 
+    async def add_items(self, quote_id: UUID, items_data: list[dict]) -> None:
+        for data in items_data:
+            item = QuoteItem(quote_id=quote_id, **data)
+            self.db.add(item)
+        await self.db.flush()
+
     async def update_item(self, item: QuoteItem, data: dict) -> QuoteItem:
         for k, v in data.items():
             setattr(item, k, v)
