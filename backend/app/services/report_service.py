@@ -120,21 +120,82 @@ class ReportService:
         }
 
     async def get_customer_debt(self) -> list:
+        """Return enriched customer debt data with per-customer order breakdown."""
+        # Aggregate per-customer order data
         result = await self.db.execute(
-            select(Order.customer_id, func.sum(Order.unpaid_amount).label("debt"))
+            select(
+                Order.customer_id,
+                func.sum(Order.total_amount).label("total_order"),
+                func.sum(Order.paid_amount).label("total_paid"),
+                func.sum(Order.unpaid_amount).label("debt"),
+                func.count(Order.id).label("order_count"),
+            )
             .where(Order.deleted_at.is_(None), Order.unpaid_amount > 0)
             .group_by(Order.customer_id)
             .order_by(func.sum(Order.unpaid_amount).desc())
         )
         rows = result.all()
+
+        if not rows:
+            return []
+
+        customer_ids = [row.customer_id for row in rows]
+
+        # Batch-fetch customer names
+        c_result = await self.db.execute(
+            select(Customer.id, Customer.name).where(Customer.id.in_(customer_ids))
+        )
+        customer_names = {c.id: c.name for c in c_result.all()}
+
+        # Batch-fetch last payment date per customer
+        lp_result = await self.db.execute(
+            select(
+                Payment.customer_id,
+                func.max(Payment.paid_at).label("last_payment"),
+            )
+            .where(Payment.customer_id.in_(customer_ids), Payment.is_voided == False)
+            .group_by(Payment.customer_id)
+        )
+        last_payments = {r.customer_id: r.last_payment for r in lp_result.all()}
+
+        # Batch-fetch all unpaid orders for these customers
+        orders_result = await self.db.execute(
+            select(Order)
+            .where(
+                Order.deleted_at.is_(None),
+                Order.unpaid_amount > 0,
+                Order.customer_id.in_(customer_ids),
+            )
+            .order_by(Order.created_at.desc())
+        )
+        all_orders = orders_result.scalars().all()
+
+        # Build response grouped by customer
         debts = []
-        for customer_id, debt in rows:
-            c_result = await self.db.execute(select(Customer).where(Customer.id == customer_id))
-            c = c_result.scalar_one_or_none()
+        for row in rows:
+            cid = row.customer_id
+            customer_orders = [o for o in all_orders if o.customer_id == cid]
+            lp = last_payments.get(cid)
             debts.append({
-                "customer_id": str(customer_id),
-                "customer_name": c.name if c else "未知",
-                "debt_amount": float(debt),
+                "customer_id": str(cid),
+                "customer_name": customer_names.get(cid, "未知"),
+                "debt_amount": float(row.debt),
+                "total_order_amount": float(row.total_order),
+                "total_paid": float(row.total_paid),
+                "order_count": row.order_count,
+                "last_payment_date": lp.isoformat() if lp else None,
+                "orders": [
+                    {
+                        "id": str(o.id),
+                        "order_no": o.order_no,
+                        "project_name": o.project_name,
+                        "total_amount": float(o.total_amount),
+                        "paid_amount": float(o.paid_amount),
+                        "unpaid_amount": float(o.unpaid_amount),
+                        "status": o.status,
+                    }
+                    for o in customer_orders
+                ],
             })
         return debts
 

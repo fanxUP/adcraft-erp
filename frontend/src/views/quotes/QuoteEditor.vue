@@ -838,4 +838,7 @@ watch(() => route.params.id, async (newId) => {
 :deep(.group-header-row td) { border-bottom: 2px solid var(--ad-primary, #409eff) !important; }
 :deep(.group-total-row) { background: var(--ad-bg-secondary, #fafafa) !important; }
 :deep(.group-total-row td) { border-top: 1px solid var(--ad-border, #dcdfe6) !important; font-weight: 600; }
+
+/* 修复 el-input-number 默认宽度(120px)超出窄列的问题 */
+:deep(.el-table .el-input-number) { width: 100%; }
 </style>

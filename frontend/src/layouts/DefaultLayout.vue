@@ -79,11 +79,10 @@
               <el-icon><Money /></el-icon>
               <span>财务管理</span>
             </template>
-            <el-menu-item index="/payments">收款记录</el-menu-item>
+            <el-menu-item index="/receivables">应收管理</el-menu-item>
             <el-menu-item index="/expenses">支出管理</el-menu-item>
             <el-menu-item index="/project-costs">项目成本</el-menu-item>
             <el-menu-item index="/cost-debts">成本欠款</el-menu-item>
-            <el-menu-item index="/customer-debts">客户欠款</el-menu-item>
             <el-menu-item index="/statements">对账单</el-menu-item>
           </el-sub-menu>
           <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'sales', 'finance'])" index="/reports">
