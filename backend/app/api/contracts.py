@@ -1,8 +1,13 @@
 import logging
+import os
+import time
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -120,3 +125,74 @@ async def change_contract_status(
                         ip_address=request.client.host if request.client else None,
                         before_data=before, after_data=contract)
     return success(contract)
+
+
+@router.post("/{contract_id}/upload")
+async def upload_contract_attachment(
+    contract_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ContractService(db)
+    cid = UUID(contract_id)
+    contract = await service.get_contract(cid)
+    if not contract:
+        return {"code": 40401, "message": "合同不存在", "data": None}
+
+    upload_dir = os.path.join(settings.LOCAL_UPLOAD_DIR, "contracts")
+    os.makedirs(upload_dir, exist_ok=True)
+    # Delete old file if exists
+    if contract.get("attachment_path"):
+        old_path = os.path.join(settings.LOCAL_UPLOAD_DIR, contract["attachment_path"])
+        if os.path.isfile(old_path):
+            os.remove(old_path)
+
+    ts = str(int(time.time()))
+    safe_name = f"{contract_id}_{ts}_{file.filename}"
+    file_path = os.path.join(upload_dir, safe_name)
+    contents = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    rel_path = f"contracts/{safe_name}"
+    updated = await service.update_attachment(cid, rel_path, file.filename)
+    return success(updated)
+
+
+@router.get("/{contract_id}/attachment")
+async def download_contract_attachment(
+    contract_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    service = ContractService(db)
+    contract = await service.get_contract(UUID(contract_id))
+    if not contract or not contract.get("attachment_path"):
+        return {"code": 40401, "message": "附件不存在", "data": None}
+
+    file_path = os.path.join(settings.LOCAL_UPLOAD_DIR, contract["attachment_path"])
+    if not os.path.isfile(file_path):
+        return {"code": 40401, "message": "附件文件不存在", "data": None}
+
+    return FileResponse(file_path, filename=contract.get("attachment_name") or "")
+
+
+@router.delete("/{contract_id}/attachment")
+async def delete_contract_attachment(
+    contract_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ContractService(db)
+    cid = UUID(contract_id)
+    contract = await service.get_contract(cid)
+    if not contract:
+        return {"code": 40401, "message": "合同不存在", "data": None}
+
+    if contract.get("attachment_path"):
+        file_path = os.path.join(settings.LOCAL_UPLOAD_DIR, contract["attachment_path"])
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+
+    await service.update_attachment(cid, None, None)
+    return success(None)

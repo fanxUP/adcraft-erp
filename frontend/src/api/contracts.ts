@@ -30,3 +30,19 @@ export function deleteContract(id: string) {
 export function changeContractStatus(id: string, data: { to_status: string; reason?: string }) {
   return post<ContractDetailResponse>(`/contracts/${id}/status`, data)
 }
+
+export function uploadContractAttachment(contractId: string, file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  return post<ContractDetailResponse>(`/contracts/${contractId}/upload`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function deleteContractAttachment(contractId: string) {
+  return del<SuccessResponse>(`/contracts/${contractId}/attachment`)
+}
+
+export function getContractAttachmentUrl(contractId: string) {
+  return `/api/v1/contracts/${contractId}/attachment`
+}

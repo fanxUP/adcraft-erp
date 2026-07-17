@@ -168,6 +168,27 @@
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="备注" />
         </el-form-item>
+        <el-form-item label="合同原件">
+          <div>
+            <el-upload
+              :auto-upload="false"
+              :show-file-list="false"
+              accept=".pdf,.doc,.docx,image/*"
+              :on-change="onAttachmentChange"
+            >
+              <el-button :loading="uploadingAtt">
+                <el-icon><Plus /></el-icon> 上传合同原件
+              </el-button>
+              <template #tip>
+                <div class="el-upload__tip">支持 PDF / Word / 图片，最大 10MB</div>
+              </template>
+            </el-upload>
+            <div v-if="attFileName" style="margin-top: 8px; display: flex; align-items: center; gap: 8px">
+              <span style="color: var(--el-color-primary)">{{ attFileName }}</span>
+              <el-button text type="danger" size="small" @click="handleDeleteAtt">删除</el-button>
+            </div>
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="formVisible = false">取消</el-button>
@@ -195,6 +216,12 @@
         <el-descriptions-item label="结束日期">{{ currentDetail.end_date?.slice(0, 10) || '-' }}</el-descriptions-item>
         <el-descriptions-item label="条款内容" :span="2">
           <pre style="white-space: pre-wrap; margin: 0">{{ currentDetail.content || '-' }}</pre>
+        </el-descriptions-item>
+        <el-descriptions-item label="合同原件" :span="2">
+          <template v-if="currentDetail?.attachment_name">
+            <a :href="'/api/v1/contracts/' + currentDetail.id + '/attachment'" target="_blank" style="color: var(--el-color-primary)">{{ currentDetail.attachment_name }}</a>
+          </template>
+          <template v-else>-</template>
         </el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">{{ currentDetail.remark || '-' }}</el-descriptions-item>
       </el-descriptions>
@@ -245,7 +272,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { getContracts, getContract, createContract, updateContract, deleteContract, changeContractStatus } from '@/api/contracts'
+import { getContracts, getContract, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment } from '@/api/contracts'
 import { getCustomers } from '@/api/customers'
 import { getOrders } from '@/api/orders'
 import { getQuotes } from '@/api/quotes'
@@ -329,6 +356,47 @@ const customerOptions = ref<Array<{ id: string; name: string }>>([])
 const orderOptions = ref<Array<{ id: string; order_no: string; project_name: string; customer_id?: string; customer_name?: string }>>([])
 const quoteOptions = ref<Array<{ id: string; quote_no: string; project_name: string; customer_id?: string; customer_name?: string }>>([])
 
+// Attachment
+const attFileName = ref('')
+const uploadingAtt = ref(false)
+let pendingContractFile: File | null = null
+
+function onAttachmentChange(uploadFile: unknown) {
+  const file = (uploadFile as { raw?: File }).raw || uploadFile as File
+  if ((file as File).size > 10 * 1024 * 1024) {
+    ElMessage.warning('文件大小不能超过 10MB')
+    return
+  }
+  handleUploadAtt(file as File)
+}
+
+async function handleUploadAtt(file: File) {
+  if (!editingId.value) {
+    // New contract: just remember the file for now
+    attFileName.value = file.name; pendingContractFile = file
+    return
+  }
+  uploadingAtt.value = true
+  try {
+    const detail = await uploadContractAttachment(editingId.value, file)
+    attFileName.value = detail.attachment_name || file.name
+    ElMessage.success('上传成功')
+  } catch { /* handled by interceptor */ } finally {
+    uploadingAtt.value = false
+  }
+}
+
+async function handleDeleteAtt() {
+  if (editingId.value) {
+    try {
+      await deleteContractAttachment(editingId.value)
+      ElMessage.success('已删除')
+    } catch { /* ignore */ }
+  }
+  attFileName.value = ''
+  ;pendingContractFile = null
+}
+
 function resetForm() {
   form.customer_id = ''
   form.customer_name = ''
@@ -345,6 +413,8 @@ function resetForm() {
   form.remark = ''
   form.order_ids = []
   form.quote_ids = []
+  attFileName.value = ''
+  ;pendingContractFile = null
   isEditing.value = false
   editingId.value = ''
 }
@@ -444,6 +514,7 @@ async function handleEdit(row: ContractListResponse) {
     form.remark = detail.remark || ''
     form.order_ids = detail.orders.map(o => o.id)
     form.quote_ids = detail.quotes.map(q => q.id)
+    attFileName.value = detail.attachment_name || ''
     await loadOrderOptions()
     await loadQuoteOptions()
     // Set customer name if customer_id is set
@@ -484,7 +555,13 @@ async function saveForm() {
       await updateContract(editingId.value, payload)
       ElMessage.success('合同更新成功')
     } else {
-      await createContract(payload)
+      const created = await createContract(payload)
+      // After creating, upload attachment if there is a pending file
+      const pendingFile = pendingContractFile as File | null
+      if (pendingFile && created?.id) {
+        await uploadContractAttachment(created.id, pendingFile)
+        ;pendingContractFile = null
+      }
       ElMessage.success('合同创建成功')
     }
     formVisible.value = false
