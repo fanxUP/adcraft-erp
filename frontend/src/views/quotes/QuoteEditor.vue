@@ -84,55 +84,55 @@
             </template>
           </template>
         </el-table-column>
+        <el-table-column label="长" width="170">
+          <template #default="{ row }">
+            <template v-if="row.type === 'item'">
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <el-input-number v-model="row.item.length" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" style="width: 90px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" @change="syncAreaQuantity(row.item)" />
+                <el-select v-model="row.item.length_unit" :disabled="isReadonly" size="small" placeholder="选择" style="width: 65px" @change="syncAreaQuantity(row.item)">
+                  <el-option label="选择" value="" disabled />
+                  <el-option label="m" value="m" />
+                  <el-option label="cm" value="cm" />
+                  <el-option label="mm" value="mm" />
+                </el-select>
+              </div>
+            </template>
+          </template>
+        </el-table-column>
+        <el-table-column label="宽" width="170">
+          <template #default="{ row }">
+            <template v-if="row.type === 'item'">
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <el-input-number v-model="row.item.width" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" style="width: 90px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" @change="syncAreaQuantity(row.item)" />
+                <el-select v-model="row.item.width_unit" :disabled="isReadonly" size="small" placeholder="选择" style="width: 65px" @change="syncAreaQuantity(row.item)">
+                  <el-option label="选择" value="" disabled />
+                  <el-option label="m" value="m" />
+                  <el-option label="cm" value="cm" />
+                  <el-option label="mm" value="mm" />
+                </el-select>
+              </div>
+            </template>
+          </template>
+        </el-table-column>
+        <el-table-column label="高" width="170">
+          <template #default="{ row }">
+            <template v-if="row.type === 'item'">
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <el-input-number v-model="row.item.height" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" style="width: 90px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
+                <el-select v-model="row.item.height_unit" :disabled="isReadonly" size="small" placeholder="选择" style="width: 65px">
+                  <el-option label="选择" value="" disabled />
+                  <el-option label="m" value="m" />
+                  <el-option label="cm" value="cm" />
+                  <el-option label="mm" value="mm" />
+                </el-select>
+              </div>
+            </template>
+          </template>
+        </el-table-column>
         <el-table-column label="件数" width="70">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
               <el-input-number v-model="row.item.pieces" :precision="0" :min="1" :disabled="isReadonly" size="small" :controls="false" @change="syncAreaQuantity(row.item)" />
-            </template>
-          </template>
-        </el-table-column>
-        <el-table-column label="长" width="140">
-          <template #default="{ row }">
-            <template v-if="row.type === 'item'">
-              <div style="display: flex; align-items: center; gap: 4px;">
-                <el-input-number v-model="row.item.length" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" style="width: 78px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" @change="syncAreaQuantity(row.item)" />
-                <el-select v-model="row.item.length_unit" :disabled="isReadonly" size="small" placeholder="选择" style="width: 52px" @change="syncAreaQuantity(row.item)">
-                  <el-option label="选择" value="" disabled />
-                  <el-option label="m" value="m" />
-                  <el-option label="cm" value="cm" />
-                  <el-option label="mm" value="mm" />
-                </el-select>
-              </div>
-            </template>
-          </template>
-        </el-table-column>
-        <el-table-column label="宽" width="140">
-          <template #default="{ row }">
-            <template v-if="row.type === 'item'">
-              <div style="display: flex; align-items: center; gap: 4px;">
-                <el-input-number v-model="row.item.width" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" style="width: 78px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" @change="syncAreaQuantity(row.item)" />
-                <el-select v-model="row.item.width_unit" :disabled="isReadonly" size="small" placeholder="选择" style="width: 52px" @change="syncAreaQuantity(row.item)">
-                  <el-option label="选择" value="" disabled />
-                  <el-option label="m" value="m" />
-                  <el-option label="cm" value="cm" />
-                  <el-option label="mm" value="mm" />
-                </el-select>
-              </div>
-            </template>
-          </template>
-        </el-table-column>
-        <el-table-column label="高" width="140">
-          <template #default="{ row }">
-            <template v-if="row.type === 'item'">
-              <div style="display: flex; align-items: center; gap: 4px;">
-                <el-input-number v-model="row.item.height" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" style="width: 78px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
-                <el-select v-model="row.item.height_unit" :disabled="isReadonly" size="small" placeholder="选择" style="width: 52px">
-                  <el-option label="选择" value="" disabled />
-                  <el-option label="m" value="m" />
-                  <el-option label="cm" value="cm" />
-                  <el-option label="mm" value="mm" />
-                </el-select>
-              </div>
             </template>
           </template>
         </el-table-column>
@@ -183,28 +183,28 @@
             </template>
           </template>
         </el-table-column>
-        <el-table-column label="工艺费" width="90">
+        <el-table-column label="工艺费" width="110">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
               <el-input-number v-model="row.item.process_fee" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
             </template>
           </template>
         </el-table-column>
-        <el-table-column label="安装费" width="90">
+        <el-table-column label="安装费" width="110">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
               <el-input-number v-model="row.item.installation_fee" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
             </template>
           </template>
         </el-table-column>
-        <el-table-column label="设计费" width="90">
+        <el-table-column label="设计费" width="110">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
               <el-input-number v-model="row.item.design_fee" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
             </template>
           </template>
         </el-table-column>
-        <el-table-column label="运输费" width="90">
+        <el-table-column label="运输费" width="110">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
               <el-input-number v-model="row.item.transport_fee" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
