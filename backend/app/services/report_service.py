@@ -6,6 +6,7 @@ from app.models.order import Order
 from app.models.payment import Payment
 from app.models.task import DesignTask, ProductionTask, InstallationTask
 from app.models.customer import Customer
+from app.models.quote import Quote
 
 
 class ReportService:
@@ -120,32 +121,33 @@ class ReportService:
         }
 
     async def get_customer_debt(self) -> list:
-        """Return enriched customer debt data with per-customer order breakdown."""
-        # Aggregate per-customer order data
-        result = await self.db.execute(
-            select(
-                Order.customer_id,
-                func.sum(Order.total_amount).label("total_order"),
-                func.sum(Order.paid_amount).label("total_paid"),
-                func.sum(Order.unpaid_amount).label("debt"),
-                func.count(Order.id).label("order_count"),
-            )
-            .where(Order.deleted_at.is_(None), Order.unpaid_amount > 0)
-            .group_by(Order.customer_id)
-            .order_by(func.sum(Order.unpaid_amount).desc())
+        """Return all customers with their orders and quotes for the receivables overview."""
+        # Fetch all active customers
+        c_result = await self.db.execute(
+            select(Customer).where(Customer.deleted_at.is_(None)).order_by(Customer.name)
         )
-        rows = result.all()
+        customers = c_result.scalars().all()
 
-        if not rows:
+        if not customers:
             return []
 
-        customer_ids = [row.customer_id for row in rows]
+        customer_ids = [c.id for c in customers]
 
-        # Batch-fetch customer names
-        c_result = await self.db.execute(
-            select(Customer.id, Customer.name).where(Customer.id.in_(customer_ids))
+        # Batch-fetch all orders grouped by customer
+        orders_result = await self.db.execute(
+            select(Order)
+            .where(Order.deleted_at.is_(None), Order.customer_id.in_(customer_ids))
+            .order_by(Order.created_at.desc())
         )
-        customer_names = {c.id: c.name for c in c_result.all()}
+        all_orders = orders_result.scalars().all()
+
+        # Batch-fetch all quotes grouped by customer (exclude converted ones)
+        quotes_result = await self.db.execute(
+            select(Quote)
+            .where(Quote.deleted_at.is_(None), Quote.customer_id.in_(customer_ids), Quote.status != "converted")
+            .order_by(Quote.created_at.desc())
+        )
+        all_quotes = quotes_result.scalars().all()
 
         # Batch-fetch last payment date per customer
         lp_result = await self.db.execute(
@@ -158,31 +160,29 @@ class ReportService:
         )
         last_payments = {r.customer_id: r.last_payment for r in lp_result.all()}
 
-        # Batch-fetch all unpaid orders for these customers
-        orders_result = await self.db.execute(
-            select(Order)
-            .where(
-                Order.deleted_at.is_(None),
-                Order.unpaid_amount > 0,
-                Order.customer_id.in_(customer_ids),
-            )
-            .order_by(Order.created_at.desc())
-        )
-        all_orders = orders_result.scalars().all()
-
-        # Build response grouped by customer
+        # Build response
         debts = []
-        for row in rows:
-            cid = row.customer_id
-            customer_orders = [o for o in all_orders if o.customer_id == cid]
-            lp = last_payments.get(cid)
+        for c in customers:
+            customer_orders = [o for o in all_orders if o.customer_id == c.id]
+            customer_quotes = [q for q in all_quotes if q.customer_id == c.id]
+
+            # Skip customers with no orders and no quotes
+            if not customer_orders and not customer_quotes:
+                continue
+
+            total_order = sum(o.total_amount for o in customer_orders)
+            total_paid = sum(o.paid_amount for o in customer_orders)
+            total_debt = sum(o.unpaid_amount for o in customer_orders)
+            lp = last_payments.get(c.id)
+
             debts.append({
-                "customer_id": str(cid),
-                "customer_name": customer_names.get(cid, "未知"),
-                "debt_amount": float(row.debt),
-                "total_order_amount": float(row.total_order),
-                "total_paid": float(row.total_paid),
-                "order_count": row.order_count,
+                "customer_id": str(c.id),
+                "customer_name": c.name,
+                "debt_amount": float(total_debt),
+                "total_order_amount": float(total_order),
+                "total_paid": float(total_paid),
+                "order_count": len(customer_orders),
+                "quote_count": len(customer_quotes),
                 "last_payment_date": lp.isoformat() if lp else None,
                 "orders": [
                     {
@@ -195,6 +195,16 @@ class ReportService:
                         "status": o.status,
                     }
                     for o in customer_orders
+                ],
+                "quotes": [
+                    {
+                        "id": str(q.id),
+                        "quote_no": q.quote_no,
+                        "project_name": q.project_name,
+                        "total_amount": float(q.total_amount),
+                        "status": q.status,
+                    }
+                    for q in customer_quotes
                 ],
             })
         return debts

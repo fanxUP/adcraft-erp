@@ -693,6 +693,14 @@ export interface CustomerDebtOrder {
   status: string
 }
 
+export interface CustomerDebtQuote {
+  id: string
+  quote_no: string
+  project_name: string
+  total_amount: number
+  status: string
+}
+
 export interface CustomerDebtItem {
   customer_id: string
   customer_name: string
@@ -700,8 +708,10 @@ export interface CustomerDebtItem {
   total_order_amount: number
   total_paid: number
   order_count: number
+  quote_count: number
   last_payment_date: string | null
   orders: CustomerDebtOrder[]
+  quotes: CustomerDebtQuote[]
 }
 
 export interface DashboardData {
