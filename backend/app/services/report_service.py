@@ -7,7 +7,7 @@ from app.models.payment import Payment
 from app.models.task import DesignTask, ProductionTask, InstallationTask
 from app.models.customer import Customer
 from app.models.quote import Quote
-from app.models.contract import Contract
+from app.models.contract import Contract, ContractOrder
 
 
 class ReportService:
@@ -169,6 +169,25 @@ class ReportService:
         )
         last_payments = {r.customer_id: r.last_payment for r in lp_result.all()}
 
+        # Batch-fetch paid_amount per contract from actual payments on linked orders
+        contract_ids = [ct.id for ct in all_contracts]
+        paid_map: dict[UUID, float] = {}
+        if contract_ids:
+            paid_result = await self.db.execute(
+                select(
+                    ContractOrder.contract_id,
+                    func.coalesce(func.sum(Payment.amount), 0),
+                )
+                .select_from(Payment)
+                .join(ContractOrder, ContractOrder.order_id == Payment.order_id)
+                .where(
+                    ContractOrder.contract_id.in_(contract_ids),
+                    Payment.is_voided == False,
+                )
+                .group_by(ContractOrder.contract_id)
+            )
+            paid_map = {row[0]: float(row[1]) for row in paid_result.all()}
+
         # Build response
         debts = []
         for c in customers:
@@ -180,10 +199,10 @@ class ReportService:
             if not customer_contracts and not customer_orders and not customer_quotes:
                 continue
 
-            # Stats from contracts
+            # Stats from contracts (paid_amount from actual payments, not stored value)
             total_contract = sum(ct.total_amount for ct in customer_contracts)
-            total_paid = sum(ct.paid_amount for ct in customer_contracts)
-            total_debt = sum(ct.unpaid_amount for ct in customer_contracts)
+            total_paid = sum(paid_map.get(ct.id, 0.0) for ct in customer_contracts)
+            total_debt = max(0, total_contract - total_paid)
             lp = last_payments.get(c.id)
 
             debts.append({
@@ -202,8 +221,8 @@ class ReportService:
                         "contract_no": ct.contract_no,
                         "project_name": ct.project_name,
                         "total_amount": float(ct.total_amount),
-                        "paid_amount": float(ct.paid_amount),
-                        "unpaid_amount": float(ct.unpaid_amount),
+                        "paid_amount": paid_map.get(ct.id, 0.0),
+                        "unpaid_amount": max(0, float(ct.total_amount) - paid_map.get(ct.id, 0.0)),
                         "status": ct.status,
                         "contract_type": ct.contract_type,
                     }
