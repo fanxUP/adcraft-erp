@@ -331,8 +331,8 @@ const formRules = {
   project_name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
 }
 const customerOptions = ref<Array<{ id: string; name: string }>>([])
-const orderOptions = ref<Array<{ id: string; order_no: string; project_name: string; customer_name?: string }>>([])
-const quoteOptions = ref<Array<{ id: string; quote_no: string; project_name: string; customer_name?: string }>>([])
+const orderOptions = ref<Array<{ id: string; order_no: string; project_name: string; customer_id?: string; customer_name?: string }>>([])
+const quoteOptions = ref<Array<{ id: string; quote_no: string; project_name: string; customer_id?: string; customer_name?: string }>>([])
 
 function resetForm() {
   form.customer_id = ''
@@ -369,6 +369,7 @@ function onOrderChange(ids: string[]) {
   if (ids.length > 0) {
     const selected = orderOptions.value.find(o => o.id === ids[0])
     if (selected) {
+      if (!form.customer_id && selected.customer_id) form.customer_id = selected.customer_id
       if (!form.customer_name && selected.customer_name) form.customer_name = selected.customer_name
       if (!form.project_name) form.project_name = selected.project_name || ''
     }
@@ -379,6 +380,7 @@ function onQuoteChange(ids: string[]) {
   if (ids.length > 0) {
     const selected = quoteOptions.value.find(q => q.id === ids[0])
     if (selected) {
+      if (!form.customer_id && selected.customer_id) form.customer_id = selected.customer_id
       if (!form.customer_name && selected.customer_name) form.customer_name = selected.customer_name
       if (!form.project_name) form.project_name = selected.project_name || ''
     }
@@ -388,8 +390,8 @@ function onQuoteChange(ids: string[]) {
 async function loadOrderOptions() {
   try {
     const data = await getOrders({ page_size: 200 })
-    orderOptions.value = data.items.map((o: { id: string; order_no: string; project_name: string; customer_name?: string }) => ({
-      id: o.id, order_no: o.order_no, project_name: o.project_name, customer_name: o.customer_name,
+    orderOptions.value = data.items.map((o: { id: string; order_no: string; project_name: string; customer_id?: string; customer_name?: string }) => ({
+      id: o.id, order_no: o.order_no, project_name: o.project_name, customer_id: o.customer_id, customer_name: o.customer_name,
     }))
   } catch { /* ignore */ }
 }
@@ -397,8 +399,8 @@ async function loadOrderOptions() {
 async function loadQuoteOptions() {
   try {
     const data = await getQuotes({ page_size: 200 })
-    quoteOptions.value = data.items.map((q: { id: string; quote_no: string; project_name: string; customer_name?: string }) => ({
-      id: q.id, quote_no: q.quote_no, project_name: q.project_name, customer_name: q.customer_name,
+    quoteOptions.value = data.items.map((q: { id: string; quote_no: string; project_name: string; customer_id?: string; customer_name?: string }) => ({
+      id: q.id, quote_no: q.quote_no, project_name: q.project_name, customer_id: q.customer_id, customer_name: q.customer_name,
     }))
   } catch { /* ignore */ }
 }
