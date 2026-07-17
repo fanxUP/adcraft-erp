@@ -89,20 +89,11 @@
       @close="resetForm"
     >
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px" v-loading="formLoading">
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="客户" prop="customer_id">
-              <el-select v-model="form.customer_id" filterable remote :remote-method="searchCustomers" placeholder="搜索选择客户" style="width: 100%" @change="onCustomerChange">
-                <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="客户名称" prop="customer_name">
-              <el-input v-model="form.customer_name" placeholder="客户名称" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <el-form-item label="客户" prop="customer_id">
+          <el-select v-model="form.customer_id" filterable remote :remote-method="searchCustomers" placeholder="搜索选择客户" style="width: 100%" @change="onCustomerChange">
+            <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="项目名称" prop="project_name">
           <el-input v-model="form.project_name" placeholder="项目名称" />
         </el-form-item>
@@ -327,7 +318,7 @@ const form = reactive({
   quote_ids: [] as string[],
 })
 const formRules = {
-  customer_name: [{ required: true, message: '请选择或输入客户名称', trigger: 'blur' }],
+  customer_id: [{ required: true, message: '请选择客户', trigger: 'change' }],
   project_name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
 }
 const customerOptions = ref<Array<{ id: string; name: string }>>([])
@@ -369,7 +360,12 @@ function onOrderChange(ids: string[]) {
   if (ids.length > 0) {
     const selected = orderOptions.value.find(o => o.id === ids[0])
     if (selected) {
-      if (!form.customer_id && selected.customer_id) form.customer_id = selected.customer_id
+      if (!form.customer_id && selected.customer_id) {
+        form.customer_id = selected.customer_id
+        if (selected.customer_name) {
+          customerOptions.value = [{ id: selected.customer_id, name: selected.customer_name }]
+        }
+      }
       if (!form.customer_name && selected.customer_name) form.customer_name = selected.customer_name
       if (!form.project_name) form.project_name = selected.project_name || ''
     }
@@ -380,7 +376,12 @@ function onQuoteChange(ids: string[]) {
   if (ids.length > 0) {
     const selected = quoteOptions.value.find(q => q.id === ids[0])
     if (selected) {
-      if (!form.customer_id && selected.customer_id) form.customer_id = selected.customer_id
+      if (!form.customer_id && selected.customer_id) {
+        form.customer_id = selected.customer_id
+        if (selected.customer_name) {
+          customerOptions.value = [{ id: selected.customer_id, name: selected.customer_name }]
+        }
+      }
       if (!form.customer_name && selected.customer_name) form.customer_name = selected.customer_name
       if (!form.project_name) form.project_name = selected.project_name || ''
     }
