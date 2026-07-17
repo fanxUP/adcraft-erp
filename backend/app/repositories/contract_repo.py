@@ -1,4 +1,4 @@
-from uuid import UUID
+from uuid import UUID, uuid4
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -50,6 +50,8 @@ class ContractRepository:
         order_ids = data.pop("order_ids", [])
         quote_ids = data.pop("quote_ids", [])
         contract = Contract(**data)
+        if contract.id is None:
+            contract.id = uuid4()
         self.db.add(contract)
 
         for oid in order_ids:
