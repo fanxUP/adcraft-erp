@@ -84,6 +84,13 @@
             </template>
           </template>
         </el-table-column>
+        <el-table-column label="件数" width="70">
+          <template #default="{ row }">
+            <template v-if="row.type === 'item'">
+              <el-input-number v-model="row.item.pieces" :precision="0" :min="1" :disabled="isReadonly" size="small" :controls="false" @change="syncAreaQuantity(row.item)" />
+            </template>
+          </template>
+        </el-table-column>
         <el-table-column label="长" width="140">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
@@ -126,13 +133,6 @@
                   <el-option label="mm" value="mm" />
                 </el-select>
               </div>
-            </template>
-          </template>
-        </el-table-column>
-        <el-table-column label="件数" width="70">
-          <template #default="{ row }">
-            <template v-if="row.type === 'item'">
-              <el-input-number v-model="row.item.pieces" :precision="0" :min="1" :disabled="isReadonly" size="small" :controls="false" @change="syncAreaQuantity(row.item)" />
             </template>
           </template>
         </el-table-column>
