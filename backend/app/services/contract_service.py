@@ -6,13 +6,10 @@ from app.repositories.contract_repo import ContractRepository
 from app.services.number_generator import generate_contract_no
 
 
-# 状态流转映射
+# 状态流转映射（仅草稿和生效）
 CONTRACT_TRANSITIONS = {
-    "draft": ["pending_sign"],
-    "pending_sign": ["active", "draft"],
-    "active": ["completed", "terminated"],
-    "completed": [],
-    "terminated": [],
+    "draft": ["active"],
+    "active": ["draft"],
 }
 
 
