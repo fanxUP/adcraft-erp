@@ -44,6 +44,17 @@
           <div style="display: flex; gap: 8px;">
             <el-button v-if="!isReadonly" size="small" @click="addGroup">添加分项</el-button>
             <el-button v-if="!isReadonly" type="danger" size="small" @click="addItem()">添加行</el-button>
+            <el-upload
+              v-if="!isReadonly && isEdit"
+              :auto-upload="false"
+              :show-file-list="false"
+              accept=".xlsx,.xls"
+              :on-change="onImportItems"
+            >
+              <el-button size="small" type="success" :loading="importingItems">
+                <el-icon><Upload /></el-icon> 导入明细
+              </el-button>
+            </el-upload>
           </div>
         </div>
       </template>
@@ -289,7 +300,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import QuoteWorkflow from './QuoteWorkflow.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { onBeforeRouteLeave } from 'vue-router'
-import { createQuote, getQuote, updateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft } from '@/api/quotes'
+import { createQuote, getQuote, updateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft, importQuoteItems } from '@/api/quotes'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { uploadAttachment } from '@/api/tasks'
@@ -302,6 +313,7 @@ const isEdit = computed(() => !!route.params.id)
 const saving = ref(false)
 const converting = ref(false)
 const reverting = ref(false)
+const importingItems = ref(false)
 const customerSelectRef = ref()
 const quote = ref<QuoteDetailResponse | null>(null)
 const customerOptions = ref<CustomerResponse[]>([])
@@ -638,6 +650,29 @@ async function handleImageUpload(opt: { file: File }, item: QuoteItemResponse) {
     ElMessage.success('上传成功')
   } catch {
     ElMessage.error('上传失败')
+  }
+}
+
+async function onImportItems(uploadFile: unknown) {
+  const file = (uploadFile as { raw?: File }).raw || uploadFile as File
+  if (!file) return
+  importingItems.value = true
+  try {
+    const detail = await importQuoteItems(quoteId.value, file)
+    if (detail?.items) {
+      const existing = items.value
+      // Append imported items preserving existing ones
+      const imported = detail.items.map((i: QuoteItemResponse) => ({
+        ...i,
+        _groupTotal: false,
+        _groupName: i.group_name || undefined,
+      }))
+      // Refresh items from response to get proper IDs
+      items.value = [...existing.filter((i: QuoteItemResponse) => i.item_name), ...imported]
+    }
+    ElMessage.success(`导入成功`)
+  } catch { /* handled by interceptor */ } finally {
+    importingItems.value = false
   }
 }
 

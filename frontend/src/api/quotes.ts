@@ -41,6 +41,14 @@ export function importQuotes(file: File) {
   })
 }
 
+export function importQuoteItems(quoteId: string, file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return post<QuoteDetailResponse>(`/quotes/${quoteId}/import-items`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
 export async function downloadQuoteTemplate() {
   const response = await apiClient.get('/quotes/template', { responseType: 'blob' })
   const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
