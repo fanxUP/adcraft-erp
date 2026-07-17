@@ -683,10 +683,25 @@ export interface ImportBackupResponse {
 
 // ---- Reports ----
 
+export interface CustomerDebtOrder {
+  id: string
+  order_no: string
+  project_name: string
+  total_amount: number
+  paid_amount: number
+  unpaid_amount: number
+  status: string
+}
+
 export interface CustomerDebtItem {
   customer_id: string
   customer_name: string
   debt_amount: number
+  total_order_amount: number
+  total_paid: number
+  order_count: number
+  last_payment_date: string | null
+  orders: CustomerDebtOrder[]
 }
 
 export interface DashboardData {
