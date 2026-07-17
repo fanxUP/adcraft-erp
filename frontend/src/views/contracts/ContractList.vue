@@ -427,6 +427,10 @@ async function handleEdit(row: ContractListResponse) {
     const detail = await getContract(row.id)
     form.customer_id = detail.customer_id
     form.customer_name = detail.customer_name
+    // Populate customerOptions so el-select shows the name, not UUID
+    if (detail.customer_id && detail.customer_name) {
+      customerOptions.value = [{ id: detail.customer_id, name: detail.customer_name }]
+    }
     form.project_name = detail.project_name
     form.contract_type = detail.contract_type || ''
     form.total_amount = detail.total_amount
