@@ -16,6 +16,7 @@
           <el-select v-model="filters.status" clearable placeholder="全部" style="width: 120px">
             <el-option label="草稿" value="draft" />
             <el-option label="已生效" value="active" />
+            <el-option label="已完成" value="completed" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -282,10 +283,12 @@ import type { FormInstance } from 'element-plus'
 const statusMap: Record<string, string> = {
   draft: '草稿',
   active: '已生效',
+  completed: '已完成',
 }
 const statusColorMap: Record<string, string> = {
   draft: 'info',
   active: 'success',
+  completed: '',
 }
 function statusLabel(s: string) { return statusMap[s] || s }
 function statusColor(s: string) { return statusColorMap[s] || 'info' }
@@ -568,8 +571,9 @@ const statusForm = reactive({
 })
 const availableTransitions = computed(() => {
   const map: Record<string, string[]> = {
-    draft: ['active'],
-    active: ['draft'],
+    draft: ['active', 'completed'],
+    active: ['draft', 'completed'],
+    completed: ['draft'],
   }
   return map[statusForm.current_status] || []
 })
@@ -579,8 +583,9 @@ function canChangeStatus(row: ContractListResponse) {
 }
 function availableTransitionsForStatus(s: string) {
   const map: Record<string, string[]> = {
-    draft: ['active'],
-    active: ['draft'],
+    draft: ['active', 'completed'],
+    active: ['draft', 'completed'],
+    completed: ['draft'],
   }
   return map[s] || []
 }
