@@ -80,6 +80,8 @@ class ContractDetailResponse(ContractListResponse):
     customer_id: str
     our_signatory: str | None = None
     customer_signatory: str | None = None
+    attachment_path: str | None = None
+    attachment_name: str | None = None
     content: str | None = None
     remark: str | None = None
     created_by: str | None = None

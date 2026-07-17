@@ -46,6 +46,8 @@ class ContractService:
             "customer_signatory": contract.customer_signatory,
             "content": contract.content,
             "remark": contract.remark,
+            "attachment_path": contract.attachment_path,
+            "attachment_name": contract.attachment_name,
             "created_by": str(contract.created_by) if contract.created_by else None,
             "orders": [
                 {
@@ -131,6 +133,15 @@ class ContractService:
         contract = await self.repo.update(contract, data)
         # Re-fetch to load secondary relationships after updates
         contract = await self.repo.get_by_id(contract.id)
+        return self._to_detail(contract)
+
+    async def update_attachment(self, contract_id: UUID, path: str | None, name: str | None) -> dict:
+        contract = await self.repo.get_by_id(contract_id)
+        if not contract:
+            raise ValueError("合同不存在")
+        contract.attachment_path = path
+        contract.attachment_name = name
+        await self.db.flush()
         return self._to_detail(contract)
 
     async def delete_contract(self, contract_id: UUID) -> bool:

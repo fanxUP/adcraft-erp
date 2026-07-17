@@ -47,6 +47,10 @@ class Contract(Base, TimestampMixin, SoftDeleteMixin):
     content: Mapped[str | None] = mapped_column(Text, nullable=True, comment="合同条款内容")
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # 合同原件
+    attachment_path: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="合同原件存储路径")
+    attachment_name: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="合同原件文件名")
+
     # 创建人
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
