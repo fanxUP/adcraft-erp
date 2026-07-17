@@ -21,6 +21,46 @@ class ContractService:
         self.db = db
         self.repo = ContractRepository(db)
 
+    async def _calc_paid_amount(self, contract_id: UUID) -> float:
+        """计算合同已收金额 = 关联订单的收款总和（不含已作废）"""
+        from sqlalchemy import select, func
+        from app.models.payment import Payment
+        from app.models.contract import ContractOrder
+
+        result = await self.db.execute(
+            select(func.coalesce(func.sum(Payment.amount), 0))
+            .select_from(Payment)
+            .join(ContractOrder, ContractOrder.order_id == Payment.order_id)
+            .where(
+                ContractOrder.contract_id == contract_id,
+                Payment.is_voided == False,
+            )
+        )
+        return float(result.scalar())
+
+    async def _batch_paid_amounts(self, contract_ids: list[UUID]) -> dict[UUID, float]:
+        """批量计算多个合同的已收金额"""
+        if not contract_ids:
+            return {}
+        from sqlalchemy import select, func
+        from app.models.payment import Payment
+        from app.models.contract import ContractOrder
+
+        result = await self.db.execute(
+            select(
+                ContractOrder.contract_id,
+                func.coalesce(func.sum(Payment.amount), 0),
+            )
+            .select_from(Payment)
+            .join(ContractOrder, ContractOrder.order_id == Payment.order_id)
+            .where(
+                ContractOrder.contract_id.in_(contract_ids),
+                Payment.is_voided == False,
+            )
+            .group_by(ContractOrder.contract_id)
+        )
+        return {row[0]: float(row[1]) for row in result.all()}
+
     def _to_response(self, contract) -> dict:
         return {
             "id": str(contract.id),
@@ -40,6 +80,8 @@ class ContractService:
 
     def _to_detail(self, contract) -> dict:
         base = self._to_response(contract)
+        # Override paid_amount with dynamic calculation
+        # (requires caller to call async after construction, handled in get_contract)
         base.update({
             "customer_id": str(contract.customer_id),
             "our_signatory": contract.our_signatory,
@@ -78,13 +120,27 @@ class ContractService:
         contracts, total = await self.repo.list_contracts(
             skip=skip, limit=page_size, status=status, keyword=keyword, customer_id=customer_id
         )
-        return [self._to_response(c) for c in contracts], total
+        # Batch-calculate paid_amount for all contracts in this page
+        cids = [c.id for c in contracts]
+        paid_map = await self._batch_paid_amounts(cids)
+        result = []
+        for c in contracts:
+            resp = self._to_response(c)
+            paid = paid_map.get(c.id, 0.0)
+            resp["paid_amount"] = paid
+            resp["unpaid_amount"] = max(0, resp["total_amount"] - paid)
+            result.append(resp)
+        return result, total
 
     async def get_contract(self, contract_id: UUID) -> dict | None:
         contract = await self.repo.get_by_id(contract_id)
         if not contract:
             return None
-        return self._to_detail(contract)
+        result = self._to_detail(contract)
+        # Override paid_amount with actual payments on linked orders
+        result["paid_amount"] = await self._calc_paid_amount(contract_id)
+        result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
+        return result
 
     async def create_contract(self, data: dict) -> dict:
         data["contract_no"] = await generate_contract_no(self.db)
@@ -107,7 +163,10 @@ class ContractService:
         contract = await self.repo.create(data)
         # Re-fetch to load secondary relationships (orders/quotes)
         contract = await self.repo.get_by_id(contract.id)
-        return self._to_detail(contract)
+        result = self._to_detail(contract)
+        result["paid_amount"] = await self._calc_paid_amount(contract.id)
+        result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
+        return result
 
     async def update_contract(self, contract_id: UUID, data: dict) -> dict:
         contract = await self.repo.get_by_id(contract_id)
@@ -133,7 +192,10 @@ class ContractService:
         contract = await self.repo.update(contract, data)
         # Re-fetch to load secondary relationships after updates
         contract = await self.repo.get_by_id(contract.id)
-        return self._to_detail(contract)
+        result = self._to_detail(contract)
+        result["paid_amount"] = await self._calc_paid_amount(contract_id)
+        result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
+        return result
 
     async def update_attachment(self, contract_id: UUID, path: str | None, name: str | None) -> dict:
         contract = await self.repo.get_by_id(contract_id)

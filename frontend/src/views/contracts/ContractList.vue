@@ -121,7 +121,8 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="已收金额">
-              <el-input-number v-model="form.paid_amount" :min="0" :precision="2" style="width: 100%" />
+              <el-input-number v-model="form.paid_amount" :min="0" :precision="2" :disabled="true" style="width: 100%" />
+              <div style="font-size: 12px; color: #999; margin-top: 2px;">自动从关联订单的收款计算，不可编辑</div>
             </el-form-item>
           </el-col>
         </el-row>
