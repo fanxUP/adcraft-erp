@@ -11,7 +11,7 @@
         <el-row :gutter="16" style="margin-bottom: 16px">
           <el-col :span="6">
             <el-card shadow="never" class="stat-card">
-              <div class="stat-label">总应收金额</div>
+              <div class="stat-label">合同总金额</div>
               <div class="stat-value">¥ {{ stats.totalOrder.toFixed(2) }}</div>
             </el-card>
           </el-col>
@@ -29,7 +29,7 @@
           </el-col>
           <el-col :span="6">
             <el-card shadow="never" class="stat-card">
-              <div class="stat-label">欠款客户</div>
+              <div class="stat-label">客户总数</div>
               <div class="stat-value">{{ debtList.length }} 个</div>
             </el-card>
           </el-col>
@@ -45,10 +45,35 @@
         >
           <el-table-column type="expand">
             <template #default="{ row }">
+              <!-- 合同（主要） -->
+              <template v-if="row.contracts?.length">
+                <div style="margin: 8px 0 4px 48px; font-weight: 600; color: var(--ad-text);">合同</div>
+                <el-table :data="row.contracts" size="small" stripe style="margin: 4px 0 12px 48px; width: calc(100% - 48px)">
+                  <el-table-column prop="contract_no" label="合同编号" width="180" />
+                  <el-table-column prop="project_name" label="项目名称" min-width="180" />
+                  <el-table-column label="合同金额" width="130">
+                    <template #default="{ row: ct }">¥ {{ ct.total_amount?.toFixed(2) }}</template>
+                  </el-table-column>
+                  <el-table-column label="已收" width="130">
+                    <template #default="{ row: ct }">¥ {{ ct.paid_amount?.toFixed(2) }}</template>
+                  </el-table-column>
+                  <el-table-column label="欠款" width="130">
+                    <template #default="{ row: ct }">
+                      <span style="color: #e63946; font-weight: 600">¥ {{ ct.unpaid_amount?.toFixed(2) }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="contract_type" label="类型" width="100" />
+                  <el-table-column label="状态" width="100">
+                    <template #default="{ row: ct }">
+                      <el-tag size="small" :type="contractStatusTag(ct.status)">{{ contractStatusLabel(ct.status) }}</el-tag>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </template>
               <!-- 订单 -->
               <template v-if="row.orders?.length">
-                <div style="margin: 8px 0 4px 48px; font-weight: 600; color: var(--ad-text);">订单</div>
-                <el-table :data="row.orders" size="small" stripe style="margin: 4px 0 12px 48px; width: calc(100% - 48px)">
+                <div style="margin: 4px 0 4px 48px; font-weight: 600; color: var(--ad-text-secondary);">订单</div>
+                <el-table :data="row.orders" size="small" stripe style="margin: 4px 0 8px 48px; width: calc(100% - 48px)">
                   <el-table-column prop="order_no" label="订单编号" width="180" />
                   <el-table-column prop="project_name" label="项目名称" min-width="180" />
                   <el-table-column label="订单金额" width="130">
@@ -62,28 +87,23 @@
                       <span style="color: #e63946; font-weight: 600">¥ {{ o.unpaid_amount?.toFixed(2) }}</span>
                     </template>
                   </el-table-column>
-                  <el-table-column prop="status" label="状态" width="100">
+                  <el-table-column label="状态" width="100">
                     <template #default="{ row: o }">
                       <el-tag size="small" :type="orderStatusTag(o.status)">{{ orderStatusLabel(o.status) }}</el-tag>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="操作" width="100">
-                    <template #default="{ row: o }">
-                      <el-button text type="danger" size="small" @click="openPaymentDialog(o)">登记收款</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
               </template>
               <!-- 报价单 -->
               <template v-if="row.quotes?.length">
-                <div style="margin: 4px 0 4px 48px; font-weight: 600; color: var(--ad-text);">报价单</div>
+                <div style="margin: 4px 0 4px 48px; font-weight: 600; color: var(--ad-text-secondary);">报价单</div>
                 <el-table :data="row.quotes" size="small" stripe style="margin: 4px 0 8px 48px; width: calc(100% - 48px)">
                   <el-table-column prop="quote_no" label="报价编号" width="180" />
                   <el-table-column prop="project_name" label="项目名称" min-width="180" />
                   <el-table-column label="金额" width="130">
                     <template #default="{ row: q }">¥ {{ q.total_amount?.toFixed(2) }}</template>
                   </el-table-column>
-                  <el-table-column prop="status" label="状态" width="100">
+                  <el-table-column label="状态" width="100">
                     <template #default="{ row: q }">
                       <el-tag size="small" :type="quoteStatusTag(q.status)">{{ quoteStatusLabel(q.status) }}</el-tag>
                     </template>
@@ -93,13 +113,16 @@
             </template>
           </el-table-column>
           <el-table-column prop="customer_name" label="客户名称" min-width="180" />
+          <el-table-column label="合同" width="60" align="center">
+            <template #default="{ row }">{{ row.contract_count }}</template>
+          </el-table-column>
           <el-table-column label="订单" width="60" align="center">
             <template #default="{ row }">{{ row.order_count }}</template>
           </el-table-column>
           <el-table-column label="报价" width="60" align="center">
             <template #default="{ row }">{{ row.quote_count }}</template>
           </el-table-column>
-          <el-table-column label="订单总额" width="140">
+          <el-table-column label="合同总额" width="140">
             <template #default="{ row }">¥ {{ row.total_order_amount?.toFixed(2) }}</template>
           </el-table-column>
           <el-table-column label="已收金额" width="140">
@@ -224,6 +247,20 @@ const stats = computed(() => {
   const totalDebt = debtList.value.reduce((s, c) => s + c.debt_amount, 0)
   return { totalOrder, totalPaid, totalDebt }
 })
+
+function contractStatusTag(status: string): "" | "success" | "warning" | "info" | "danger" | "primary" {
+  const map: Record<string, "" | "success" | "warning" | "info" | "danger" | "primary"> = {
+    draft: 'info', pending_sign: 'warning', active: 'success', completed: 'success', terminated: 'danger',
+  }
+  return map[status] || 'info'
+}
+
+function contractStatusLabel(status: string) {
+  const map: Record<string, string> = {
+    draft: '草稿', pending_sign: '待签约', active: '执行中', completed: '已完成', terminated: '已终止',
+  }
+  return map[status] || status
+}
 
 function orderStatusTag(status: string) {
   const map: Record<string, string> = {

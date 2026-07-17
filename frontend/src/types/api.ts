@@ -683,6 +683,17 @@ export interface ImportBackupResponse {
 
 // ---- Reports ----
 
+export interface CustomerDebtContract {
+  id: string
+  contract_no: string
+  project_name: string
+  total_amount: number
+  paid_amount: number
+  unpaid_amount: number
+  status: string
+  contract_type?: string
+}
+
 export interface CustomerDebtOrder {
   id: string
   order_no: string
@@ -707,9 +718,11 @@ export interface CustomerDebtItem {
   debt_amount: number
   total_order_amount: number
   total_paid: number
+  contract_count: number
   order_count: number
   quote_count: number
   last_payment_date: string | null
+  contracts: CustomerDebtContract[]
   orders: CustomerDebtOrder[]
   quotes: CustomerDebtQuote[]
 }
