@@ -37,6 +37,14 @@ class QuoteService:
         # Convert customer_id from string to UUID if provided
         if data.get("customer_id"):
             data["customer_id"] = UUID(data["customer_id"])
+            # Auto-fill customer_name if empty
+            if not data.get("customer_name"):
+                from app.models.customer import Customer
+                from sqlalchemy import select
+                c_result = await self.db.execute(select(Customer.name).where(Customer.id == data["customer_id"]))
+                c_name = c_result.scalar_one_or_none()
+                if c_name:
+                    data["customer_name"] = c_name
         else:
             data.pop("customer_id", None)  # Remove None so model default (None) is used
 
@@ -60,6 +68,15 @@ class QuoteService:
 
         # Extract items before updating quote fields
         items_data = data.pop("items", None)
+
+        # Auto-fill customer_name when customer_id is set but name is missing
+        if data.get("customer_id") and not data.get("customer_name"):
+            from app.models.customer import Customer
+            from sqlalchemy import select
+            c_result = await self.db.execute(select(Customer.name).where(Customer.id == UUID(data["customer_id"])))
+            c_name = c_result.scalar_one_or_none()
+            if c_name:
+                data["customer_name"] = c_name
 
         if "discount_amount" in data and data["discount_amount"] is not None:
             data["discount_amount"] = Decimal(str(data["discount_amount"]))
@@ -362,7 +379,7 @@ class QuoteService:
         return {
             "id": str(q.id), "quote_no": q.quote_no,
             "customer_id": str(q.customer_id) if q.customer_id else None,
-            "customer_name": q.customer_name,
+            "customer_name": q.customer_name or "",
             "project_name": q.project_name,
             "status": q.status, "total_amount": float(q.total_amount),
             "valid_until": q.valid_until.isoformat() if q.valid_until else None,
@@ -376,7 +393,7 @@ class QuoteService:
         return {
             "id": str(q.id), "quote_no": q.quote_no,
             "customer_id": str(q.customer_id) if q.customer_id else None,
-            "customer_name": q.customer_name,
+            "customer_name": q.customer_name or "",
             "project_name": q.project_name,
             "sales_user_id": str(q.sales_user_id) if q.sales_user_id else None,
             "status": q.status,
