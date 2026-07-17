@@ -649,11 +649,27 @@ export interface ContractDetailResponse extends ContractListResponse {
   customer_id: string
   our_signatory?: string
   customer_signatory?: string
+  attachment_path?: string
+  attachment_name?: string
   content?: string
   remark?: string
   created_by?: string
   orders: SimpleOrderRef[]
   quotes: SimpleQuoteRef[]
+}
+
+export interface ContractResourceItem {
+  id: string
+  order_no?: string
+  quote_no?: string
+  project_name: string
+  customer_id?: string
+  customer_name?: string
+}
+
+export interface ContractAvailableResources {
+  orders: ContractResourceItem[]
+  quotes: ContractResourceItem[]
 }
 
 // ---- Backup ----
