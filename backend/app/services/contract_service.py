@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -95,8 +95,12 @@ class ContractService:
             data["customer_id"] = UUID(data["customer_id"])
         # Convert date strings to date objects
         for field in ("sign_date", "start_date", "end_date"):
-            if isinstance(data.get(field), str):
-                data[field] = date.fromisoformat(data[field])
+            val = data.get(field)
+            if isinstance(val, str):
+                try:
+                    data[field] = date.fromisoformat(val)
+                except ValueError:
+                    data[field] = datetime.fromisoformat(val).date()
 
         contract = await self.repo.create(data)
         # Re-fetch to load secondary relationships (orders/quotes)
@@ -117,8 +121,12 @@ class ContractService:
             data["customer_id"] = UUID(data["customer_id"])
         # Convert date strings to date objects
         for field in ("sign_date", "start_date", "end_date"):
-            if isinstance(data.get(field), str):
-                data[field] = date.fromisoformat(data[field])
+            val = data.get(field)
+            if isinstance(val, str):
+                try:
+                    data[field] = date.fromisoformat(val)
+                except ValueError:
+                    data[field] = datetime.fromisoformat(val).date()
 
         contract = await self.repo.update(contract, data)
         # Re-fetch to load secondary relationships after updates
