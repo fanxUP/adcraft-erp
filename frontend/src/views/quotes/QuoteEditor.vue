@@ -658,18 +658,8 @@ async function onImportItems(uploadFile: unknown) {
   if (!file) return
   importingItems.value = true
   try {
-    const detail = await importQuoteItems(quoteId.value, file)
-    if (detail?.items) {
-      const existing = items.value
-      // Append imported items preserving existing ones
-      const imported = detail.items.map((i: QuoteItemResponse) => ({
-        ...i,
-        _groupTotal: false,
-        _groupName: i.group_name || undefined,
-      }))
-      // Refresh items from response to get proper IDs
-      items.value = [...existing.filter((i: QuoteItemResponse) => i.item_name), ...imported]
-    }
+    await importQuoteItems(quoteId.value, file)
+    await fetchQuote()
     ElMessage.success(`导入成功`)
   } catch { /* handled by interceptor */ } finally {
     importingItems.value = false
