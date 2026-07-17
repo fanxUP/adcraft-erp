@@ -362,10 +362,17 @@ class OrderService:
 
         # 转报价后删除原订单（硬删除，不进回收站）
         from app.models.acceptance import AcceptanceForm
+        from app.models.contract import ContractOrder, ContractQuote
+        # 清理验收单
         for af in (await self.db.execute(
             select(AcceptanceForm).where(AcceptanceForm.order_id == order_id)
         )).scalars().all():
             await self.db.delete(af)
+        # 清理合同关联
+        for co in (await self.db.execute(
+            select(ContractOrder).where(ContractOrder.order_id == order_id)
+        )).scalars().all():
+            await self.db.delete(co)
         await self.db.flush()
         await self.db.delete(order)
 
