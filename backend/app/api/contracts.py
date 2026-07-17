@@ -160,6 +160,76 @@ async def upload_contract_attachment(
     return success(updated)
 
 
+@router.get("/available-resources")
+async def get_available_resources(
+    contract_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return orders and quotes not yet linked to any contract.
+    If contract_id is provided (editing), also include resources already linked to that contract."""
+    from sqlalchemy import select, not_, exists
+    from app.models.order import Order as OrderModel
+    from app.models.quote import Quote as QuoteModel
+    from app.models.contract import ContractOrder, ContractQuote
+
+    # Build subquery: order_ids that are in any contract (excluding current one if editing)
+    co_sub = select(ContractOrder.order_id)
+    if contract_id:
+        co_sub = co_sub.where(ContractOrder.contract_id != UUID(contract_id))
+
+    # Available orders: not deleted AND not in any other contract
+    orders_result = await db.execute(
+        select(OrderModel)
+        .where(
+            OrderModel.deleted_at.is_(None),
+            not_(OrderModel.id.in_(co_sub)),
+        )
+        .order_by(OrderModel.created_at.desc())
+        .limit(500)
+    )
+    orders = orders_result.scalars().all()
+
+    # Same for quotes
+    cq_sub = select(ContractQuote.quote_id)
+    if contract_id:
+        cq_sub = cq_sub.where(ContractQuote.contract_id != UUID(contract_id))
+
+    quotes_result = await db.execute(
+        select(QuoteModel)
+        .where(
+            QuoteModel.deleted_at.is_(None),
+            not_(QuoteModel.id.in_(cq_sub)),
+        )
+        .order_by(QuoteModel.created_at.desc())
+        .limit(500)
+    )
+    quotes = quotes_result.scalars().all()
+
+    return success({
+        "orders": [
+            {
+                "id": str(o.id),
+                "order_no": o.order_no,
+                "project_name": o.project_name,
+                "customer_id": str(o.customer_id) if o.customer_id else None,
+                "customer_name": o.customer.name if o.customer else None,
+            }
+            for o in orders
+        ],
+        "quotes": [
+            {
+                "id": str(q.id),
+                "quote_no": q.quote_no,
+                "project_name": q.project_name,
+                "customer_id": str(q.customer_id) if q.customer_id else None,
+                "customer_name": q.customer_name,
+            }
+            for q in quotes
+        ],
+    })
+
+
 @router.get("/{contract_id}/attachment")
 async def download_contract_attachment(
     contract_id: str,

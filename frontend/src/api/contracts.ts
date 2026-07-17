@@ -1,5 +1,5 @@
 import { get, post, put, del } from './index'
-import type { PaginatedData, ContractListResponse, ContractDetailResponse, SuccessResponse } from '@/types/api'
+import type { PaginatedData, ContractListResponse, ContractDetailResponse, ContractAvailableResources, SuccessResponse } from '@/types/api'
 
 export function getContracts(params: {
   page?: number
@@ -45,4 +45,10 @@ export function deleteContractAttachment(contractId: string) {
 
 export function getContractAttachmentUrl(contractId: string) {
   return `/api/v1/contracts/${contractId}/attachment`
+}
+
+export function getContractAvailableResources(contractId?: string) {
+  const params: Record<string, string> = {}
+  if (contractId) params.contract_id = contractId
+  return get<ContractAvailableResources>('/contracts/available-resources', { params })
 }

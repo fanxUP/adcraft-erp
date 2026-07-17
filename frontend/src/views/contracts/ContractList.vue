@@ -90,14 +90,16 @@
     >
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px" v-loading="formLoading">
         <el-form-item label="客户" prop="customer_id">
-          <el-select v-model="form.customer_id" filterable remote :remote-method="searchCustomers" placeholder="搜索选择客户" style="width: 100%" @change="onCustomerChange">
+          <el-select v-model="form.customer_id" filterable placeholder="搜索选择客户" style="width: 100%" @change="onCustomerChange">
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="项目名称" prop="project_name">
-              <el-input v-model="form.project_name" placeholder="项目名称" />
+              <el-select v-model="form.project_name" allow-create filterable placeholder="输入或选择项目名称" style="width: 100%">
+                <el-option v-for="p in projectOptions" :key="p" :label="p" :value="p" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -272,12 +274,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { getContracts, getContract, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment } from '@/api/contracts'
+import { getContracts, getContract, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment, getContractAvailableResources } from '@/api/contracts'
 import { getCustomers } from '@/api/customers'
-import { getOrders } from '@/api/orders'
-import { getQuotes } from '@/api/quotes'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { ContractListResponse, ContractDetailResponse } from '@/types/api'
+import type { ContractListResponse, ContractDetailResponse, ContractResourceItem } from '@/types/api'
 import type { FormInstance } from 'element-plus'
 
 // ── Status helpers ──
@@ -353,8 +353,9 @@ const formRules = {
   project_name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
 }
 const customerOptions = ref<Array<{ id: string; name: string }>>([])
-const orderOptions = ref<Array<{ id: string; order_no: string; project_name: string; customer_id?: string; customer_name?: string }>>([])
-const quoteOptions = ref<Array<{ id: string; quote_no: string; project_name: string; customer_id?: string; customer_name?: string }>>([])
+const orderOptions = ref<ContractResourceItem[]>([])
+const quoteOptions = ref<ContractResourceItem[]>([])
+const projectOptions = ref<string[]>([])
 
 // Attachment
 const attFileName = ref('')
@@ -419,10 +420,28 @@ function resetForm() {
   editingId.value = ''
 }
 
-async function searchCustomers(query: string) {
-  if (!query) return
-  const data = await getCustomers({ keyword: query, page_size: 50 })
-  customerOptions.value = data.items.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }))
+async function loadAllCustomers() {
+  try {
+    const data = await getCustomers({ page_size: 9999 })
+    customerOptions.value = data.items.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }))
+  } catch { /* ignore */ }
+}
+
+async function loadResources(contractId?: string) {
+  try {
+    const data = await getContractAvailableResources(contractId)
+    orderOptions.value = data.orders || []
+    quoteOptions.value = data.quotes || []
+    // 从可用订单/报价中提取项目名称列表
+    const names = new Set<string>()
+    for (const o of data.orders || []) {
+      if (o.project_name) names.add(o.project_name)
+    }
+    for (const q of data.quotes || []) {
+      if (q.project_name) names.add(q.project_name)
+    }
+    projectOptions.value = Array.from(names).sort()
+  } catch { /* ignore */ }
 }
 
 function onCustomerChange(val: string) {
@@ -431,60 +450,26 @@ function onCustomerChange(val: string) {
 }
 
 function onOrderChange(ids: string[]) {
-  if (ids.length > 0) {
+  if (ids.length > 0 && !form.project_name) {
     const selected = orderOptions.value.find(o => o.id === ids[0])
-    if (selected) {
-      if (!form.customer_id && selected.customer_id) {
-        form.customer_id = selected.customer_id
-        if (selected.customer_name) {
-          customerOptions.value = [{ id: selected.customer_id, name: selected.customer_name }]
-        }
-      }
-      if (!form.customer_name && selected.customer_name) form.customer_name = selected.customer_name
-      if (!form.project_name) form.project_name = selected.project_name || ''
-    }
+    if (selected?.project_name) form.project_name = selected.project_name
   }
 }
 
 function onQuoteChange(ids: string[]) {
-  if (ids.length > 0) {
+  if (ids.length > 0 && !form.project_name) {
     const selected = quoteOptions.value.find(q => q.id === ids[0])
-    if (selected) {
-      if (!form.customer_id && selected.customer_id) {
-        form.customer_id = selected.customer_id
-        if (selected.customer_name) {
-          customerOptions.value = [{ id: selected.customer_id, name: selected.customer_name }]
-        }
-      }
-      if (!form.customer_name && selected.customer_name) form.customer_name = selected.customer_name
-      if (!form.project_name) form.project_name = selected.project_name || ''
-    }
+    if (selected?.project_name) form.project_name = selected.project_name
   }
-}
-
-async function loadOrderOptions() {
-  try {
-    const data = await getOrders({ page_size: 200 })
-    orderOptions.value = data.items.map((o: { id: string; order_no: string; project_name: string; customer_id?: string; customer_name?: string }) => ({
-      id: o.id, order_no: o.order_no, project_name: o.project_name, customer_id: o.customer_id, customer_name: o.customer_name,
-    }))
-  } catch { /* ignore */ }
-}
-
-async function loadQuoteOptions() {
-  try {
-    const data = await getQuotes({ page_size: 200 })
-    quoteOptions.value = data.items.map((q: { id: string; quote_no: string; project_name: string; customer_id?: string; customer_name?: string }) => ({
-      id: q.id, quote_no: q.quote_no, project_name: q.project_name, customer_id: q.customer_id, customer_name: q.customer_name,
-    }))
-  } catch { /* ignore */ }
 }
 
 async function handleCreate() {
   resetForm()
   isEditing.value = false
-  await loadOrderOptions()
-  await loadQuoteOptions()
+  await Promise.all([
+    loadAllCustomers(),
+    loadResources(),
+  ])
   formVisible.value = true
 }
 
@@ -515,13 +500,10 @@ async function handleEdit(row: ContractListResponse) {
     form.order_ids = detail.orders.map(o => o.id)
     form.quote_ids = detail.quotes.map(q => q.id)
     attFileName.value = detail.attachment_name || ''
-    await loadOrderOptions()
-    await loadQuoteOptions()
-    // Set customer name if customer_id is set
-    if (detail.customer_id && !form.customer_name) {
-      const data = await getCustomers({ page_size: 1 })
-      customerOptions.value = data.items.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }))
-    }
+    await Promise.all([
+      loadAllCustomers(),
+      loadResources(editingId.value),
+    ])
   } finally {
     formLoading.value = false
   }
