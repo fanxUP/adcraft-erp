@@ -132,6 +132,17 @@ class OrderService:
             for af in result.scalars().all():
                 af.deleted_at = datetime.now()
 
+            # 订单取消时同步取消关联外协任务
+            tasks = (await self.db.execute(
+                select(OutsourceTask).where(
+                    (OutsourceTask.order_id == order_id) |
+                    ((OutsourceTask.related_doc_id == order_id) & (OutsourceTask.related_doc_type == "order"))
+                )
+            )).scalars().all()
+            for task in tasks:
+                if task.status not in ("completed", "settled", "cancelled"):
+                    task.status = "cancelled"
+
         # Send notification to sales user
         if order.sales_user_id and order.sales_user_id != operated_by:
             from app.services.notification_service import NotificationService

@@ -350,6 +350,23 @@ class QuoteService:
         if outsource_tasks:
             await self.db.flush()
 
+        # 如果报价已关联合同，将新订单也关联到同一合同
+        from app.models.contract import ContractQuote as ContractQuoteLink, ContractOrder as ContractOrderLink
+        contract_links = (await self.db.execute(
+            select(ContractQuoteLink).where(ContractQuoteLink.quote_id == quote_id)
+        )).scalars().all()
+        for cl in contract_links:
+            existing = await self.db.execute(
+                select(ContractOrderLink).where(
+                    ContractOrderLink.contract_id == cl.contract_id,
+                    ContractOrderLink.order_id == order.id,
+                )
+            )
+            if not existing.scalar_one_or_none():
+                self.db.add(ContractOrderLink(contract_id=cl.contract_id, order_id=order.id))
+        if contract_links:
+            await self.db.flush()
+
         return {
             "id": str(order.id),
             "order_no": order.order_no,
