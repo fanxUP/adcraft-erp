@@ -17,26 +17,25 @@
       </div>
 
       <!-- 箭头1 -->
-      <div class="ow-conn" :class="{ 'conn-done': isPast('in_progress') }">
+      <div class="ow-conn" :class="{ 'conn-done': isPast('designing') }">
         <div class="ow-line"></div>
         <div class="ow-point">▶</div>
       </div>
 
-      <!-- 列2: 进行中 / 生产中 / 安装中（竖排） -->
+      <!-- 列2: 设计中 / 生产中 / 安装中 + 已完成（互通） -->
       <div class="ow-col ow-col-stack">
-        <div class="ow-card" :class="cardClass('in_progress')" @click="tryChange('in_progress')">
-          <div class="ow-icon" :class="iconClass('in_progress')">
-            <el-icon v-if="isPast('in_progress')" :size="16"><Check /></el-icon>
+        <div class="ow-card" :class="cardClass('designing')" @click="tryChange('designing')">
+          <div class="ow-icon" :class="iconClass('designing')">
+            <el-icon v-if="isPast('designing')" :size="16"><Check /></el-icon>
             <span v-else>2</span>
           </div>
           <div class="ow-text">
-            <div class="ow-label">进行中</div>
-            <div v-if="'in_progress' === currentStatus" class="ow-tag cur-tag">当前</div>
-            <div v-else-if="isReachable('in_progress')" class="ow-tag ready-tag">可点击</div>
+            <div class="ow-label">设计中</div>
+            <div v-if="'designing' === currentStatus" class="ow-tag cur-tag">当前</div>
+            <div v-else-if="isReachable('designing')" class="ow-tag ready-tag">可点击</div>
           </div>
         </div>
 
-        <!-- 竖排连接线 -->
         <div class="stack-line" :class="{ 'stack-done': isPast('in_production') || currentStatus === 'in_production' }"></div>
 
         <div class="ow-card" :class="cardClass('in_production')" @click="tryChange('in_production')">
@@ -124,22 +123,41 @@ const emit = defineEmits<{
   change: [status: string]
 }>()
 
-const allStatuses = ['pending_confirm', 'confirmed', 'in_progress', 'in_production', 'in_installation', 'completed', 'cancelled']
+/** 线性前置状态（确认订单 → 设计中 → …… 已完成 → 取消） */
+const linearStatuses = ['pending_confirm', 'confirmed', 'designing', 'in_production', 'in_installation', 'completed', 'cancelled']
+
+/** 四个可自由切换的状态 */
+const freeStates = ['designing', 'in_production', 'in_installation', 'completed']
 
 const currentIdx = computed(() => {
-  const idx = allStatuses.indexOf(props.currentStatus)
+  const idx = linearStatuses.indexOf(props.currentStatus)
   return idx >= 0 ? idx : -1
 })
 
 const reachableTargets = computed(() => {
   const cur = props.currentStatus
-  const idx = currentIdx.value
-  if (idx < 0 || cur === 'cancelled') return []
-  return allStatuses.slice(idx + 1)
+  if (cur === 'cancelled') return []
+
+  // 自由状态组内互相切换
+  if (freeStates.includes(cur)) {
+    return freeStates.filter(s => s !== cur)
+  }
+
+  // 线性递进
+  const idx = linearStatuses.indexOf(cur)
+  if (idx < 0) return []
+  // confirmed → 第一个自由状态
+  if (cur === 'confirmed') return ['designing', 'cancelled']
+  if (cur === 'pending_confirm') return ['confirmed', 'cancelled']
+  return []
 })
 
 function isPast(status: string): boolean {
-  const idx = allStatuses.indexOf(status)
+  // 自由状态组内的"已完成"判断：如果当前在组内且目标在前面
+  if (freeStates.includes(status) && freeStates.includes(props.currentStatus)) {
+    return false // 所有自由状态平级，无前后关系
+  }
+  const idx = linearStatuses.indexOf(status)
   return idx >= 0 && idx < currentIdx.value
 }
 
