@@ -427,13 +427,14 @@ async function loadResources(contractId?: string) {
     const data = await getContractAvailableResources(contractId)
     orderOptions.value = data.orders || []
     quoteOptions.value = data.quotes || []
-    // 从可用订单/报价中提取项目名称列表
+    // 从可用订单/报价中提取项目名称列表，排除已被其他合同使用的
+    const used = new Set(data.used_project_names || [])
     const names = new Set<string>()
     for (const o of data.orders || []) {
-      if (o.project_name) names.add(o.project_name)
+      if (o.project_name && !used.has(o.project_name)) names.add(o.project_name)
     }
     for (const q of data.quotes || []) {
-      if (q.project_name) names.add(q.project_name)
+      if (q.project_name && !used.has(q.project_name)) names.add(q.project_name)
     }
     projectOptions.value = Array.from(names).sort()
   } catch { /* ignore */ }

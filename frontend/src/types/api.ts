@@ -670,6 +670,7 @@ export interface ContractResourceItem {
 export interface ContractAvailableResources {
   orders: ContractResourceItem[]
   quotes: ContractResourceItem[]
+  used_project_names: string[]
 }
 
 // ---- Backup ----
