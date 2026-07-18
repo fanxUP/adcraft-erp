@@ -102,6 +102,18 @@ async def get_available_resources(
     )
     quotes = quotes_result.scalars().all()
 
+    # Query project_names already used by other contracts
+    from app.models.contract import Contract as ContractModel
+    used_q = select(ContractModel.project_name).where(
+        ContractModel.deleted_at.is_(None),
+        ContractModel.project_name.isnot(None),
+        ContractModel.project_name != "",
+    )
+    if contract_id:
+        used_q = used_q.where(ContractModel.id != UUID(contract_id))
+    used_result = await db.execute(used_q)
+    used_project_names = list({row[0] for row in used_result.all()})
+
     return success({
         "orders": [
             {
@@ -123,6 +135,7 @@ async def get_available_resources(
             }
             for q in quotes
         ],
+        "used_project_names": used_project_names,
     })
 
 
