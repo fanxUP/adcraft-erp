@@ -95,6 +95,7 @@ async def get_available_resources(
         select(QuoteModel)
         .where(
             QuoteModel.deleted_at.is_(None),
+            QuoteModel.status != "converted",
             not_(QuoteModel.id.in_(cq_sub)),
         )
         .order_by(QuoteModel.created_at.desc())
