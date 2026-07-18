@@ -95,11 +95,11 @@ class OrderService:
 
     ORDER_TRANSITIONS = {
         "pending_confirm": ["confirmed", "cancelled"],
-        "confirmed": ["in_progress", "cancelled"],
-        "in_progress": ["in_production", "in_installation", "completed", "cancelled"],
-        "in_production": ["in_installation", "completed", "cancelled"],
-        "in_installation": ["completed", "cancelled"],
-        "completed": ["cancelled"],
+        "confirmed": ["designing", "cancelled"],
+        "designing": ["in_production", "in_installation", "completed", "cancelled"],
+        "in_production": ["designing", "in_installation", "completed", "cancelled"],
+        "in_installation": ["designing", "in_production", "completed", "cancelled"],
+        "completed": ["designing", "in_production", "in_installation", "cancelled"],
         "cancelled": [],
     }
 
@@ -137,7 +137,7 @@ class OrderService:
             from app.services.notification_service import NotificationService
             notif_svc = NotificationService(self.db)
             status_labels = {
-                "pending_confirm": "待确认", "confirmed": "已确认", "in_progress": "进行中",
+                "pending_confirm": "待确认", "confirmed": "已确认", "designing": "设计中",
                 "in_production": "生产中", "in_installation": "安装中", "completed": "已完成", "cancelled": "已取消",
             }
             from_label = status_labels.get(from_status, from_status)

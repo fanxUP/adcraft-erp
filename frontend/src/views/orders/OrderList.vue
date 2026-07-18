@@ -16,7 +16,7 @@
           <el-select v-model="filters.status" clearable placeholder="全部" style="width: 120px">
             <el-option label="待确认" value="pending_confirm" />
             <el-option label="已确认" value="confirmed" />
-            <el-option label="进行中" value="in_progress" />
+            <el-option label="设计中" value="designing" />
             <el-option label="生产中" value="in_production" />
             <el-option label="安装中" value="in_installation" />
             <el-option label="已完成" value="completed" />
@@ -102,13 +102,13 @@ const filters = reactive({ keyword: '', status: '' })
 
 function statusLabel(s: string) {
   const map: Record<string, string> = {
-    pending_confirm: '待确认', confirmed: '已确认', in_progress: '进行中',
+    pending_confirm: '待确认', confirmed: '已确认', designing: '设计中',
     in_production: '生产中', in_installation: '安装中', completed: '已完成', cancelled: '已取消',
   }
   return map[s] || s
 }
 function statusColor(s: string) {
-  const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', in_progress: '', in_production: '', in_installation: '', completed: 'success', cancelled: 'danger' }
+  const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', designing: '', in_production: '', in_installation: '', completed: 'success', cancelled: 'danger' }
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
