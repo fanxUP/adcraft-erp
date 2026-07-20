@@ -4,9 +4,11 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
-from app.models.acceptance import AcceptanceForm
+from app.models.acceptance import AcceptanceForm, AcceptanceItem
 from app.models.order import Order
+from app.models.order import OrderItem
 from app.repositories.acceptance_repo import AcceptanceRepository
 from app.services.number_generator import generate_acceptance_no
 
@@ -57,7 +59,45 @@ class AcceptanceService:
             data["our_acceptor_id"] = UUID(data["our_acceptor_id"])
 
         form = await self.repo.create({**data, "items": items_data})
-        return self._to_detail_dict(form)
+
+        # 未传入明细时，自动从订单复制明细
+        if not items_data:
+            await self._copy_order_items(form.id, order_id)
+
+        return self._to_detail_dict(await self.repo.get_by_id(form.id))
+
+    async def _copy_order_items(self, acceptance_id: UUID, order_id: UUID) -> None:
+        """Copy order items as acceptance items."""
+        result = await self.db.execute(
+            select(Order).where(Order.id == order_id).options(selectinload(Order.items))
+        )
+        order = result.scalar_one_or_none()
+        if not order or not order.items:
+            return
+
+        from app.services.order_service import _build_spec
+
+        for oi in order.items:
+            spec = _build_spec(oi)
+            item = AcceptanceItem(
+                acceptance_id=acceptance_id,
+                order_item_id=oi.id,
+                item_name=oi.item_name,
+                material_process=oi.material_process,
+                specification=spec,
+                quantity=float(oi.quantity) if oi.quantity else None,
+                unit=oi.unit,
+                area=float(oi.area) if oi.area else None,
+                unit_price=float(oi.unit_price) if oi.unit_price else None,
+                subtotal=float(oi.subtotal_amount) if oi.subtotal_amount else None,
+                item_status="pending",
+                group_name=oi.group_name,
+                remark=oi.remark,
+                image_url=oi.image_url,
+            )
+            self.db.add(item)
+
+        await self.db.flush()
 
     # ── 更新 ──────────────────────────────────────────────
     async def update_acceptance(self, acceptance_id: UUID, data: dict):
