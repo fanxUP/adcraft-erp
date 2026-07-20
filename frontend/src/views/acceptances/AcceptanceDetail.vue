@@ -41,7 +41,8 @@
         </el-card>
 
         <el-card style="margin-top: 16px;">
-          <el-form :model="form" label-width="140px" :disabled="!canEdit">
+          <!-- 编辑模式：显示表单 -->
+          <el-form v-if="canEdit" :model="form" label-width="140px">
             <el-form-item label="验收人/联系电话：">
               <el-input v-model="form.accepted_by" placeholder="验收人姓名/联系电话" />
             </el-form-item>
@@ -66,8 +67,8 @@
             </el-form-item>
           </el-form>
 
-          <!-- 只读详情 -->
-          <el-descriptions v-if="!canEdit" :column="1" border style="margin-top: 16px;">
+          <!-- 详细信息（编辑/查看模式均显示） -->
+          <el-descriptions :column="1" border :style="canEdit ? 'margin-top: 16px;' : ''">
             <el-descriptions-item label="状态：">
               <el-tag :type="statusColor(form.status)">{{ statusLabel(form.status) }}</el-tag>
             </el-descriptions-item>
