@@ -26,7 +26,21 @@
     <el-tabs v-model="activeTab">
       <!-- 基本信息 -->
       <el-tab-pane label="基本信息" name="info">
-        <el-card>
+        <!-- 订单信息头 — 编辑和只读模式均显示 -->
+        <el-card class="order-info-card">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="订单编号">{{ form.order_no || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="客户名称">{{ form.customer_name || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="项目名称" :span="2">{{ form.project_name || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="联系人">{{ form.contact_person || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="联系电话">{{ form.contact_phone || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="客户地址" :span="2">{{ form.customer_address || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="部门/科室">{{ form.department || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="下单日期">{{ form.order_date?.slice(0, 10) || '-' }}</el-descriptions-item>
+          </el-descriptions>
+        </el-card>
+
+        <el-card style="margin-top: 16px;">
           <el-form :model="form" label-width="140px" :disabled="!canEdit">
             <el-form-item label="验收人/联系电话：">
               <el-input v-model="form.accepted_by" placeholder="验收人姓名/联系电话" />
@@ -259,7 +273,7 @@
       </template>
     </el-dialog>
 
-    <div v-if="form.status === 'accepted' || form.status === 'rejected'" style="text-align: left; margin-top: 24px;">
+    <div v-if="form.status === 'accepted' || form.status === 'rejected' || form.status === 'draft' || form.status === 'pending'" style="text-align: left; margin-top: 24px;">
       <el-button type="primary" @click="showPrint = true">
         <el-icon><Printer /></el-icon> 打印预览
       </el-button>
@@ -567,6 +581,8 @@ watch(() => route.params.id, async (newId) => {
 .page-header h2 { margin: 0; color: var(--ad-text); flex: 1; }
 .header-actions { display: flex; gap: 8px; }
 .save-bar { margin-top: 20px; display: flex; gap: 12px; }
+.order-info-card { margin-bottom: 0; }
+.order-info-card :deep(.el-descriptions__title) { font-size: 14px; font-weight: 600; }
 :deep(.group-header-row) { background: var(--ad-bg-secondary, #f5f7fa) !important; }
 :deep(.group-header-row td) { border-bottom: 2px solid var(--ad-primary, #409eff) !important; }
 :deep(.group-total-row) { background: var(--ad-bg-secondary, #fafafa) !important; }
