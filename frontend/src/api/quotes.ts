@@ -55,7 +55,7 @@ export async function downloadQuoteTemplate() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = '报价导入模版.xlsx'
+  a.download = '报价明细导入模版.xlsx'
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
