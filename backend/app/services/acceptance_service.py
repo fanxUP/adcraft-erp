@@ -3,7 +3,10 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import select
+
 from app.models.acceptance import AcceptanceForm
+from app.models.order import Order
 from app.repositories.acceptance_repo import AcceptanceRepository
 from app.services.number_generator import generate_acceptance_no
 
@@ -17,6 +20,23 @@ class AcceptanceService:
     async def list_acceptances(self, page: int, page_size: int, **filters):
         items, total = await self.repo.list_all(page, page_size, **filters)
         return [self._to_list_dict(i) for i in items], total
+
+    # ── 可用订单（未建验收单） ────────────────────────────
+    async def list_available_orders(self) -> list[dict]:
+        items = await self.repo.list_available_orders()
+        return [
+            {
+                "id": str(o.id),
+                "order_no": o.order_no,
+                "customer_name": o.customer.name if o.customer else None,
+                "project_name": o.project_name,
+                "total_amount": float(o.total_amount),
+                "status": o.status,
+                "department": o.department,
+                "created_at": o.created_at.isoformat() if o.created_at else None,
+            }
+            for o in items
+        ]
 
     # ── 详情 ──────────────────────────────────────────────
     async def get_detail(self, acceptance_id: UUID):

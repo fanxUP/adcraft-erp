@@ -40,6 +40,17 @@ class StatusChange(BaseModel):
     accepted_by: str | None = None
 
 
+@router.get("/available-orders")
+async def list_available_orders(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return orders that don't have an acceptance yet."""
+    service = AcceptanceService(db)
+    items = await service.list_available_orders()
+    return success(items)
+
+
 @router.get("/")
 async def list_acceptances(
     page: int = 1,
