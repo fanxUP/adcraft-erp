@@ -89,30 +89,34 @@ HEADER_LABELS = list(QUOTE_COLUMN_MAP.keys())
 
 @router.get("/template")
 async def download_quote_template():
-    """Download Excel template for quote import."""
+    """Download Excel template for importing quote items (明细 only)."""
     wb = Workbook()
     ws = wb.active
-    ws.title = "报价导入模版"
+    ws.title = "报价明细导入模版"
 
-    ws.append(HEADER_LABELS)
+    ws.append(ITEM_TEMPLATE_HEADERS)
 
-    # Sample row 1 — item in 分项1 with full specs (面积开关=是)
+    # Sample row 1 — 分项1, full specs, 面积开关=是
     ws.append([
-        "示例公司", "XX广告牌制作", "宣传部", "2026-12-31", "0.13", "",
-        "", "分项1", "不锈钢烤漆字", "1.2mm不锈钢+烤漆",
-        "2", "个", "350", "0.5", "m", "0.5", "m", "", "m", "1",
-        "0", "50", "80", "0", "0", "是", "红色",
+        "分项1", "不锈钢烤漆字", "1.2mm不锈钢+烤漆",
+        "0.5", "m", "0.5", "m", "", "m",
+        "1", "是",
+        "2", "个", "350",
+        "0", "50", "80", "0",
+        "红色",
     ])
-    # Sample row 2 — another item in same quote, different group (不计面积)
+    # Sample row 2 — 分项2, simple item, no area
     ws.append([
-        "示例公司", "XX广告牌制作", "", "", "", "",
-        "", "分项2", "安装人工费", "",
-        "1", "项", "2000", "", "", "", "", "", "", "1",
-        "0", "0", "0", "0", "0", "", "",
+        "分项2", "安装人工费", "",
+        "", "", "", "", "", "",
+        "1", "",
+        "1", "项", "2000",
+        "0", "0", "0", "0",
+        "",
     ])
 
     # Auto-width
-    for col_idx, label in enumerate(HEADER_LABELS, start=1):
+    for col_idx, label in enumerate(ITEM_TEMPLATE_HEADERS, start=1):
         col_letter = ws.cell(row=1, column=col_idx).column_letter if col_idx <= 26 else "ZZ"
         ws.column_dimensions[col_letter].width = max(14, len(label) * 2 + 2)
 
@@ -120,7 +124,7 @@ async def download_quote_template():
     wb.save(buf)
     buf.seek(0)
 
-    filename = "报价导入模版.xlsx"
+    filename = "报价明细导入模版.xlsx"
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -365,16 +369,39 @@ async def convert_quote_to_order(
     return success(order)
 
 
-# Item-only columns (skip header info)
-QUOTE_ITEM_COLUMNS = [
-    "明细分组", "项目名称(明细)", "材质工艺", "数量", "单位", "单价",
-    "长", "长单位", "宽", "宽单位", "高", "高单位", "件数",
-    "加工费", "安装费", "设计费", "运输费", "其他费用",
-    "面积开关", "明细备注",
+# Item-only columns for import template (ordered as user specified)
+ITEM_TEMPLATE_HEADERS = [
+    "明细分组", "项目内容", "材质工艺",
+    "长", "长单位", "宽", "宽单位", "高", "高单位",
+    "件数", "面积开关",
+    "数量", "单位", "单价",
+    "工艺费", "安装费", "设计费", "运输费",
+    "备注",
 ]
 
-QUOTE_ITEM_REQUIRED = ["项目名称(明细)", "数量"]
-QUOTE_ITEM_MAP = {k: QUOTE_COLUMN_MAP[k] for k in QUOTE_ITEM_COLUMNS if k in QUOTE_COLUMN_MAP}
+QUOTE_ITEM_TEMPLATE_MAP = {
+    "明细分组": "group_name",
+    "项目内容": "item_name",
+    "材质工艺": "material_process",
+    "长": "length",
+    "长单位": "length_unit",
+    "宽": "width",
+    "宽单位": "width_unit",
+    "高": "height",
+    "高单位": "height_unit",
+    "件数": "pieces",
+    "面积开关": "use_area",
+    "数量": "quantity",
+    "单位": "unit",
+    "单价": "unit_price",
+    "工艺费": "process_fee",
+    "安装费": "installation_fee",
+    "设计费": "design_fee",
+    "运输费": "transport_fee",
+    "备注": "remark",
+}
+
+QUOTE_ITEM_REQUIRED = ["项目内容", "数量"]
 
 
 @router.post("/{quote_id}/import-items")
@@ -395,7 +422,7 @@ async def import_quote_items(
         return {"code": 40401, "message": "报价不存在", "data": None}
 
     content = await file.read()
-    rows, header_errors = parse_excel(content, QUOTE_ITEM_REQUIRED, QUOTE_ITEM_MAP)
+    rows, header_errors = parse_excel(content, QUOTE_ITEM_REQUIRED, QUOTE_ITEM_TEMPLATE_MAP)
     if header_errors:
         return {"code": 40002, "message": "文件格式错误", "data": {"errors": header_errors}}
 
@@ -424,8 +451,8 @@ async def import_quote_items(
             "installation_fee": parse_number(row.get("installation_fee")) or 0,
             "design_fee": parse_number(row.get("design_fee")) or 0,
             "transport_fee": parse_number(row.get("transport_fee")) or 0,
-            "other_fee": parse_number(row.get("other_fee")) or 0,
-            "remark": format_value(row.get("item_remark")),
+            "other_fee": 0,
+            "remark": format_value(row.get("remark")),
         }
         area_raw = format_value(row.get("use_area"))
         if area_raw:
