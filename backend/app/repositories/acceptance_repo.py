@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, not_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -38,6 +38,22 @@ class AcceptanceRepository:
         result = await self.db.execute(q)
         items = list(result.scalars().all())
         return items, total
+
+    async def list_available_orders(self) -> list[Order]:
+        """Return orders not yet linked to any acceptance (exclude cancelled)."""
+        ac_sub = select(AcceptanceForm.order_id).where(AcceptanceForm.deleted_at.is_(None))
+        result = await self.db.execute(
+            select(Order)
+            .options(selectinload(Order.customer))
+            .where(
+                Order.deleted_at.is_(None),
+                Order.status != "cancelled",
+                not_(Order.id.in_(ac_sub)),
+            )
+            .order_by(Order.created_at.desc())
+            .limit(500)
+        )
+        return list(result.scalars().all())
 
     async def get_by_id(self, acceptance_id: UUID) -> AcceptanceForm | None:
         q = (

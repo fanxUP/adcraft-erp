@@ -2,6 +2,7 @@
   <div class="page">
     <div class="page-header">
       <h2>验收管理</h2>
+      <el-button type="primary" @click="showCreateDialog = true">新建验收单</el-button>
     </div>
 
     <el-card class="filter-card">
@@ -68,14 +69,41 @@
         @change="fetchData"
       />
     </el-card>
+
+    <!-- 新建验收单 → 选择订单 -->
+    <el-dialog v-model="showCreateDialog" title="选择订单创建验收单" width="700px" :close-on-click-modal="false">
+      <el-table :data="availableOrders" v-loading="loadingOrders" border stripe highlight-current-row @row-dblclick="handleCreate">
+        <el-table-column prop="order_no" label="订单号" min-width="130" />
+        <el-table-column prop="customer_name" label="客户" min-width="120" />
+        <el-table-column prop="project_name" label="项目名称" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="total_amount" label="金额" width="100" align="right">
+          <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="90" fixed="right">
+          <template #default="{ row }">
+            <el-button text type="primary" size="small" @click="handleCreate(row)">选择</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div v-if="!availableOrders.length && !loadingOrders" style="text-align:center;color:#999;padding:32px 0;">
+        暂无可用的订单（所有已有验收单的订单已被排除）
+      </div>
+      <template #footer>
+        <el-button @click="showCreateDialog = false">取消</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAcceptances, deleteAcceptance } from '@/api/acceptances'
+import { getAcceptances, deleteAcceptance, getAvailableOrders, createAcceptance } from '@/api/acceptances'
+import type { AvailableOrder } from '@/api/acceptances'
 import type { AcceptanceListResponse } from '@/types/api'
+
+const router = useRouter()
 
 const loading = ref(false)
 const list = ref<AcceptanceListResponse[]>([])
@@ -83,6 +111,30 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const filters = reactive({ keyword: '', status: '' })
+
+// 新建验收单弹窗
+const showCreateDialog = ref(false)
+const availableOrders = ref<AvailableOrder[]>([])
+const loadingOrders = ref(false)
+
+async function loadAvailableOrders() {
+  loadingOrders.value = true
+  try {
+    availableOrders.value = await getAvailableOrders()
+  } catch { /* ignore */ }
+  finally { loadingOrders.value = false }
+}
+
+async function handleCreate(row: AvailableOrder) {
+  try {
+    const data = await createAcceptance({ order_id: row.id })
+    ElMessage.success('验收单创建成功')
+    showCreateDialog.value = false
+    router.push(`/acceptances/${data.id}`)
+  } catch (e: unknown) {
+    ElMessage.error(e instanceof Error ? e.message : '创建失败')
+  }
+}
 
 const statusLabel = (s: string) => {
   const map: Record<string, string> = {
@@ -127,6 +179,10 @@ async function handleDelete(row: AcceptanceListResponse) {
   ElMessage.success('已删除')
   fetchData()
 }
+
+watch(showCreateDialog, (v) => {
+  if (v) loadAvailableOrders()
+})
 
 onMounted(fetchData)
 </script>

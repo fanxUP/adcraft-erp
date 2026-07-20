@@ -1,6 +1,21 @@
 import { get, post, put, del } from './index'
 import type { PaginatedData, AcceptanceListResponse, AcceptanceDetailResponse } from '@/types/api'
 
+export interface AvailableOrder {
+  id: string
+  order_no: string
+  customer_name?: string
+  project_name: string
+  total_amount: number
+  status: string
+  department?: string
+  created_at: string
+}
+
+export function getAvailableOrders() {
+  return get<AvailableOrder[]>('/acceptances/available-orders')
+}
+
 export function getAcceptances(params: {
   page?: number
   page_size?: number
