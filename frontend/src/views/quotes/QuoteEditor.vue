@@ -44,8 +44,9 @@
           <div style="display: flex; gap: 8px;">
             <el-button v-if="!isReadonly" size="small" @click="addGroup">添加分项</el-button>
             <el-button v-if="!isReadonly" type="danger" size="small" @click="addItem()">添加行</el-button>
+            <el-button v-if="!isReadonly" size="small" @click="downloadQuoteTemplate">📥 下载导入模板</el-button>
             <el-upload
-              v-if="!isReadonly && isEdit"
+              v-if="!isReadonly"
               :auto-upload="false"
               :show-file-list="false"
               accept=".xlsx,.xls"
@@ -300,7 +301,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import QuoteWorkflow from './QuoteWorkflow.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { onBeforeRouteLeave } from 'vue-router'
-import { createQuote, getQuote, updateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft, importQuoteItems } from '@/api/quotes'
+import { createQuote, getQuote, updateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft, importQuoteItems, downloadQuoteTemplate } from '@/api/quotes'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { uploadAttachment } from '@/api/tasks'
@@ -658,12 +659,69 @@ async function onImportItems(uploadFile: unknown) {
   if (!file) return
   importingItems.value = true
   try {
-    await importQuoteItems(quoteId.value, file)
+    let targetId = quoteId.value
+    if (!isEdit.value) {
+      // 新建模式：先保存报价获取 ID
+      if (!form.customer_id && !form.project_name) {
+        ElMessage.warning('请先填写客户和项目名称')
+        importingItems.value = false
+        return
+      }
+      targetId = await saveNewAndGetId()
+    }
+    await importQuoteItems(targetId, file)
+    if (!isEdit.value) {
+      await router.replace(`/quotes/${targetId}/edit`)
+    }
     await fetchQuote()
-    ElMessage.success(`导入成功`)
+    dirty.value = false
+    captureCleanSnapshot()
+    ElMessage.success('导入成功')
   } catch { /* handled by interceptor */ } finally {
     importingItems.value = false
   }
+}
+
+async function saveNewAndGetId(): Promise<string> {
+  items.value.forEach(item => calcItemSubtotal(item))
+  const cleanItems = items.value.map((item, idx) => ({
+    ...(item.id ? { id: item.id } : {}),
+    item_name: item.item_name || '待填写',
+    length: item.length || undefined,
+    length_unit: item.length_unit || undefined,
+    width: item.width || undefined,
+    width_unit: item.width_unit || undefined,
+    height: item.height || undefined,
+    height_unit: item.height_unit || undefined,
+    quantity: item.quantity || 1,
+    unit: item.unit || null,
+    use_area: item.use_area || false,
+    pieces: item.pieces || 1,
+    unit_price: item.unit_price || 0,
+    process_fee: item.process_fee || 0,
+    installation_fee: item.installation_fee || 0,
+    design_fee: item.design_fee || 0,
+    transport_fee: item.transport_fee || 0,
+    other_fee: item.other_fee || 0,
+    remark: item.remark || undefined,
+    sort_order: idx,
+    group_name: item.group_name || null,
+    material_process: item.material_process || undefined,
+  }))
+  const payload: Record<string, unknown> = { ...form, items: cleanItems }
+  if (!payload.valid_until) delete payload.valid_until
+  if (!payload.remark) delete payload.remark
+  if (!payload.contact_person) delete payload.contact_person
+  if (!payload.contact_phone) delete payload.contact_phone
+  delete payload.discount_amount
+  if (form.customer_id && !isExistingCustomer(form.customer_id)) {
+    payload.customer_name = form.customer_id
+    delete payload.customer_id
+  } else if (!form.customer_id) {
+    delete payload.customer_id
+  }
+  const result = await createQuote(payload)
+  return result.id
 }
 
 async function handleSave() {
