@@ -470,7 +470,7 @@ function handlePrint() {
 .signature-label {
   font-size: 14px;
   font-weight: bold;
-  line-height: 2;
+  line-height: normal;
 }
 .signature-line {
   border-bottom: 3px solid #333;
