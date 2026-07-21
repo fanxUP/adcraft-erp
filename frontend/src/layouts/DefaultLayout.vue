@@ -31,10 +31,14 @@
             <el-icon><Document /></el-icon>
             <span>报价管理</span>
           </el-menu-item>
-          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/contracts">
-            <el-icon><DocumentChecked /></el-icon>
-            <span>合同管理</span>
-          </el-menu-item>
+          <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/contracts-group">
+            <template #title>
+              <el-icon><DocumentChecked /></el-icon>
+              <span>合同管理</span>
+            </template>
+            <el-menu-item index="/contracts">常规合同</el-menu-item>
+            <el-menu-item index="/framework-contracts">框架合同</el-menu-item>
+          </el-sub-menu>
           <el-menu-item v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/orders">
             <el-icon><Tickets /></el-icon>
             <span>订单管理</span>

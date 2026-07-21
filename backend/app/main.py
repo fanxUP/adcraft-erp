@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
-from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup, admin, notifications, conversations, acceptances, contracts
+from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup, admin, notifications, conversations, acceptances, contracts, framework_contracts
 # AI module routes
 from app.ai.api import ai_anomalies, ai_knowledge, ai_quote, ai_reports, ai_site_photo, ai_payment_ocr
 
@@ -66,6 +66,7 @@ app.include_router(products.proc_router, prefix="/api/v1")
 app.include_router(quotes.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(contracts.router, prefix="/api/v1")
+app.include_router(framework_contracts.router, prefix="/api/v1")
 app.include_router(tasks.design_router, prefix="/api/v1")
 app.include_router(tasks.prod_router, prefix="/api/v1")
 app.include_router(tasks.inst_router, prefix="/api/v1")

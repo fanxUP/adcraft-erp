@@ -673,6 +673,32 @@ export interface ContractAvailableResources {
   used_project_names: string[]
 }
 
+// ---- Framework Contract ----
+
+export interface FrameworkContractProjectResponse {
+  id: string
+  contract_id: string
+  customer_id: string
+  customer_name: string
+  project_name: string
+  project_amount: number
+  remark?: string
+  attachment_path?: string
+  attachment_name?: string
+  created_at?: string
+}
+
+export interface FrameworkContractProjectDetailResponse extends FrameworkContractProjectResponse {
+  orders: SimpleOrderRef[]
+  quotes: SimpleQuoteRef[]
+}
+
+export interface FrameworkContractAvailableResources {
+  orders: ContractResourceItem[]
+  quotes: ContractResourceItem[]
+  project_names: string[]
+}
+
 // ---- Backup ----
 
 export interface BackupItem {

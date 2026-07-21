@@ -26,6 +26,7 @@ class ContractRepository:
         status: str | None = None,
         keyword: str | None = None,
         customer_id: str | None = None,
+        contract_type: str | None = None,
     ) -> tuple[list[Contract], int]:
         q = select(Contract).where(Contract.deleted_at.is_(None))
         if status:
@@ -38,6 +39,8 @@ class ContractRepository:
             )
         if customer_id:
             q = q.where(Contract.customer_id == customer_id)
+        if contract_type:
+            q = q.where(Contract.contract_type == contract_type)
 
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
