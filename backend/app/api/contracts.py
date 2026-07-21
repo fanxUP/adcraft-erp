@@ -33,11 +33,12 @@ async def list_contracts(
     keyword: str | None = None,
     customer_id: str | None = None,
     contract_type: str | None = None,
+    exclude_contract_type: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = ContractService(db)
-    contracts, total = await service.list_contracts(page, page_size, status, keyword, customer_id, contract_type)
+    contracts, total = await service.list_contracts(page, page_size, status, keyword, customer_id, contract_type, exclude_contract_type)
     return success_paginated(contracts, total, page, page_size)
 
 
