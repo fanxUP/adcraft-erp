@@ -181,25 +181,32 @@ async def update_settings(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    # admin.py is at backend/app/api/admin.py — go up 4 levels to project root
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), ".env")
+    # admin.py is at backend/app/api/admin.py — go up 4 levels to project root (local dev).
+    # In Docker the file is at /app/app/api/admin.py, so 4 levels hits / which is not writable.
+    # Fall back to /app/.env in that case.
+    _file_dir = os.path.dirname(os.path.abspath(__file__))
+    _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(_file_dir))))
+    if _project_root in ("/", ""):
+        _project_root = "/app"
+    env_path = os.path.join(_project_root, ".env")
+
+    # In Docker, the .env file may not exist (env vars come from compose).
+    # If missing, create from current settings so it can be managed going forward.
     if not os.path.exists(env_path):
-        return error(40001, ".env 文件不存在")
+        lines = []
+        env_lines = {}
+    else:
+        with open(env_path, "r") as f:
+            lines = f.readlines()
+        env_lines = {}
+        for line in lines:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                key = stripped.split("=", 1)[0]
+                env_lines[key] = line
 
     allowed_keys = {"APP_NAME", "COMPANY_NAME", "JWT_EXPIRE_MINUTES", "AI_ENABLED", "AI_PROVIDER", "AI_MODEL", "AI_API_KEY", "AI_API_BASE_URL"}
     updated = {}
-
-    # Read current .env
-    with open(env_path, "r") as f:
-        lines = f.readlines()
-
-    # Update existing keys or append new ones
-    env_lines = {}
-    for line in lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in stripped:
-            key = stripped.split("=", 1)[0]
-            env_lines[key] = line
 
     for key, value in data.model_dump(exclude_none=True).items():
         if key not in allowed_keys:
