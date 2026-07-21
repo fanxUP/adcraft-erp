@@ -122,9 +122,12 @@
           <div class="signature-date">日期：________年____月____日</div>
         </div>
         <div class="signature-block">
-          <div class="signature-label">乙方（{{ companyName || '制作安装方' }}）签字 / 盖章：</div>
-          <div style="height: 50px;"></div>
-          <div class="signature-date">日期：________年____月____日</div>
+          <div class="signature-label">乙方：{{ companyName || '制作安装方' }}（盖章）</div>
+          <div class="signature-line"></div>
+          <div class="signature-label">签字：</div>
+          <div class="signature-line"></div>
+          <div class="signature-label">联系电话：</div>
+          <div style="height: 24px;"></div>
         </div>
       </div>
     </div>
