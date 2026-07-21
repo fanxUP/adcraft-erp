@@ -32,6 +32,9 @@ class FrameworkContractProjectRepository:
         q = select(FrameworkContractProject).where(
             FrameworkContractProject.contract_id == contract_id,
             FrameworkContractProject.deleted_at.is_(None),
+        ).options(
+            selectinload(FrameworkContractProject.orders),
+            selectinload(FrameworkContractProject.quotes),
         )
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()

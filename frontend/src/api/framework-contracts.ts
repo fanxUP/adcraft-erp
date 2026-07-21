@@ -2,7 +2,6 @@ import { get, post, put, del } from './index'
 import type {
   PaginatedData,
   ContractListResponse,
-  FrameworkContractProjectResponse,
   FrameworkContractProjectDetailResponse,
   FrameworkContractAvailableResources,
   SuccessResponse,
@@ -27,7 +26,7 @@ export function getFrameworkContracts(params: {
 // ── 框架合同项目 CRUD ──
 
 export function getContractProjects(contractId: string, params?: { page?: number; page_size?: number }) {
-  return get<PaginatedData<FrameworkContractProjectResponse>>(
+  return get<PaginatedData<FrameworkContractProjectDetailResponse>>(
     `/framework-contracts/${contractId}/projects`,
     { params }
   )
