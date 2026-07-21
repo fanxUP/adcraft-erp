@@ -30,6 +30,7 @@
         <el-table-column prop="acceptance_no" label="验收单号" min-width="140" />
         <el-table-column prop="order_no" label="关联订单" min-width="140" />
         <el-table-column prop="customer_name" label="客户" min-width="120" />
+        <el-table-column prop="department" label="部门/科室" min-width="120" />
         <el-table-column prop="project_name" label="项目名称" min-width="150" show-overflow-tooltip />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
