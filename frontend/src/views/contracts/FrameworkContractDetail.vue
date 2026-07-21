@@ -1,6 +1,5 @@
 <template>
   <div class="page">
-    <!-- 顶部 -->
     <div class="page-header">
       <div class="header-left">
         <el-button @click="$router.back()">
@@ -8,18 +7,18 @@
         </el-button>
         <h2>框架合同详情</h2>
       </div>
-      <el-button type="primary" @click="openEditDialog">编辑合同</el-button>
+      <el-button type="primary" @click="openEditContract">编辑合同</el-button>
     </div>
 
     <!-- 合同信息 -->
     <el-card class="info-card">
       <template #header><span>合同信息</span></template>
       <el-descriptions :column="2" border v-loading="loadingContract">
-        <el-descriptions-item label="合同编号">{{ contract?.contract_no }}</el-descriptions-item>
-        <el-descriptions-item label="客户名称">{{ contract?.customer_name }}</el-descriptions-item>
+        <el-descriptions-item label="合同编号">{{ contract?.contract_no || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="客户名称">{{ contract?.customer_name || '-' }}</el-descriptions-item>
         <el-descriptions-item label="合同类型">框架合同</el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag :type="statusColor(contract?.status || '')">{{ statusLabel(contract?.status || '') }}</el-tag>
+          <el-tag v-if="contract" :type="statusColor(contract.status)">{{ statusLabel(contract.status) }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="合同金额">¥ {{ totalProjectAmount.toFixed(2) }}</el-descriptions-item>
         <el-descriptions-item label="已收金额">¥ {{ (contract?.paid_amount || 0).toFixed(2) }}</el-descriptions-item>
@@ -36,9 +35,7 @@
           <span v-else>-</span>
         </el-descriptions-item>
         <el-descriptions-item label="合同原件" :span="2">
-          <a v-if="contract?.attachment_name" :href="getContractAttachmentUrl(contract.id)" target="_blank">
-            {{ contract.attachment_name }}
-          </a>
+          <a v-if="contract?.attachment_name && contract" :href="getContractAttachmentUrl(contract.id)" target="_blank">{{ contract.attachment_name }}</a>
           <span v-else>-</span>
         </el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">{{ contract?.remark || '-' }}</el-descriptions-item>
@@ -61,13 +58,13 @@
         </el-table-column>
         <el-table-column label="关联订单" min-width="180">
           <template #default="{ row }">
-            <el-tag v-for="o in row.orders" :key="o.id" size="small" style="margin: 2px">{{ o.order_no }}</el-tag>
+            <el-tag v-for="o in row.orders" :key="o.id" size="small" style="margin:2px">{{ o.order_no }}</el-tag>
             <span v-if="!row.orders?.length" style="color:#999">-</span>
           </template>
         </el-table-column>
         <el-table-column label="关联报价" min-width="180">
           <template #default="{ row }">
-            <el-tag v-for="q in row.quotes" :key="q.id" size="small" style="margin: 2px">{{ q.quote_no }}</el-tag>
+            <el-tag v-for="q in row.quotes" :key="q.id" size="small" style="margin:2px">{{ q.quote_no }}</el-tag>
             <span v-if="!row.quotes?.length" style="color:#999">-</span>
           </template>
         </el-table-column>
@@ -93,7 +90,7 @@
         :page-sizes="[10, 20, 50]"
         :total="projectTotal"
         layout="total, sizes, prev, pager, next"
-        style="margin-top: 16px; justify-content: flex-end"
+        style="margin-top:16px; justify-content:flex-end"
         @change="fetchProjects"
       />
     </el-card>
@@ -102,7 +99,7 @@
     <el-dialog v-model="editVisible" title="编辑框架合同" width="650px" :close-on-click-modal="false" @closed="resetEditForm">
       <el-form :model="editForm" label-width="100px">
         <el-form-item label="客户" required>
-          <el-select v-model="editForm.customer_id" placeholder="请选择客户" filterable style="width: 100%">
+          <el-select v-model="editForm.customer_id" placeholder="请选择客户" filterable style="width:100%">
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
@@ -110,25 +107,25 @@
           <el-input v-model="editForm.project_name" placeholder="框架合同名称" />
         </el-form-item>
         <el-form-item label="签约日期">
-          <el-date-picker v-model="editForm.sign_date" type="date" placeholder="选择日期" style="width: 100%" value-format="YYYY-MM-DD" />
+          <el-date-picker v-model="editForm.sign_date" type="date" style="width:100%" value-format="YYYY-MM-DD" />
         </el-form-item>
         <el-form-item label="生效日期">
-          <el-date-picker v-model="editForm.start_date" type="date" placeholder="选择日期" style="width: 100%" value-format="YYYY-MM-DD" />
+          <el-date-picker v-model="editForm.start_date" type="date" style="width:100%" value-format="YYYY-MM-DD" />
         </el-form-item>
         <el-form-item label="结束日期">
-          <el-date-picker v-model="editForm.end_date" type="date" placeholder="选择日期" style="width: 100%" value-format="YYYY-MM-DD" />
+          <el-date-picker v-model="editForm.end_date" type="date" style="width:100%" value-format="YYYY-MM-DD" />
         </el-form-item>
         <el-form-item label="我方签约人">
-          <el-input v-model="editForm.our_signatory" placeholder="我方签约人" />
+          <el-input v-model="editForm.our_signatory" />
         </el-form-item>
         <el-form-item label="客户签约人">
-          <el-input v-model="editForm.customer_signatory" placeholder="客户签约人" />
+          <el-input v-model="editForm.customer_signatory" />
         </el-form-item>
         <el-form-item label="条款内容">
-          <el-input v-model="editForm.content" type="textarea" :rows="3" placeholder="合同条款内容" />
+          <el-input v-model="editForm.content" type="textarea" :rows="3" />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="editForm.remark" type="textarea" :rows="2" placeholder="备注" />
+          <el-input v-model="editForm.remark" type="textarea" :rows="2" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -137,45 +134,39 @@
       </template>
     </el-dialog>
 
-    <!-- 添加 / 编辑项目对话框 -->
-    <el-dialog v-model="projectVisible" :title="editingProject ? '编辑项目' : '添加项目'" width="600px" :close-on-click-modal="false" @closed="resetProjectForm">
+    <!-- 添加/编辑项目对话框 -->
+    <el-dialog v-model="projectVisible" :title="projectEditingId ? '编辑项目' : '添加项目'" width="600px" :close-on-click-modal="false" @closed="resetProjectForm">
       <el-form :model="projectForm" label-width="100px">
         <el-form-item label="客户">
           <el-input :model-value="contract?.customer_name" disabled />
         </el-form-item>
         <el-form-item label="项目名称" required>
-          <el-select
-            v-model="projectForm.project_name"
-            placeholder="选择或输入项目名称"
-            filterable
-            allow-create
-            style="width: 100%"
-          >
+          <el-select v-model="projectForm.project_name" placeholder="选择或输入项目名称" filterable allow-create style="width:100%">
             <el-option v-for="n in availableProjectNames" :key="n" :label="n" :value="n" />
           </el-select>
         </el-form-item>
         <el-form-item label="项目金额">
-          <el-input-number v-model="projectForm.project_amount" :min="0" :precision="2" style="width: 100%" />
+          <el-input-number v-model="projectForm.project_amount" :min="0" :precision="2" style="width:100%" />
         </el-form-item>
         <el-form-item label="关联订单">
-          <el-select v-model="projectForm.order_ids" multiple filterable placeholder="选择关联订单" style="width: 100%">
+          <el-select v-model="projectForm.order_ids" multiple filterable style="width:100%">
             <el-option v-for="o in availableOrders" :key="o.id" :label="`${o.order_no} — ${o.project_name}`" :value="o.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="关联报价">
-          <el-select v-model="projectForm.quote_ids" multiple filterable placeholder="选择关联报价" style="width: 100%">
+          <el-select v-model="projectForm.quote_ids" multiple filterable style="width:100%">
             <el-option v-for="q in availableQuotes" :key="q.id" :label="`${q.quote_no} — ${q.project_name}`" :value="q.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="projectForm.remark" type="textarea" :rows="2" placeholder="备注" />
+          <el-input v-model="projectForm.remark" type="textarea" :rows="2" />
         </el-form-item>
         <el-form-item label="附件">
           <el-upload
             :auto-upload="false"
             :limit="1"
             :on-change="onProjectAttChange"
-            :on-remove="handleRemoveProjectAtt"
+            :on-remove="onProjectAttRemove"
             :file-list="projectAttFileList"
             accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
           >
@@ -205,29 +196,23 @@ import {
 import { getCustomers } from '@/api/customers'
 import type {
   ContractDetailResponse,
-  FrameworkContractProjectResponse,
   FrameworkContractProjectDetailResponse,
   ContractResourceItem,
 } from '@/types/api'
 
 const route = useRoute()
-void router // used in template via $router
 const contractId = route.params.id as string
+
+const STATUS_MAP: Record<string, string> = { draft: '草稿', active: '已生效', completed: '已完成', terminated: '已终止' }
+const STATUS_COLOR: Record<string, '' | 'success' | 'warning' | 'info' | 'danger'> = {
+  draft: 'info', active: 'success', completed: '', terminated: 'danger',
+}
+function statusLabel(s: string) { return STATUS_MAP[s] || s }
+function statusColor(s: string): '' | 'success' | 'warning' | 'info' | 'danger' { return STATUS_COLOR[s] || '' }
 
 // ── 合同信息 ──
 const loadingContract = ref(false)
 const contract = ref<ContractDetailResponse | null>(null)
-
-const statusLabel = (s: string) => {
-  const map: Record<string, string> = { draft: '草稿', active: '已生效', completed: '已完成', terminated: '已终止' }
-  return map[s] || s
-}
-const statusColor = (s: string): '' | 'success' | 'warning' | 'info' | 'danger' => {
-  const map: Record<string, '' | 'success' | 'warning' | 'info' | 'danger'> = {
-    draft: 'info', active: 'success', completed: '', terminated: 'danger',
-  }
-  return map[s] || ''
-}
 
 async function loadContract() {
   loadingContract.value = true
@@ -251,23 +236,25 @@ async function fetchProjects() {
   loadingProjects.value = true
   try {
     const data = await getContractProjects(contractId, { page: projectPage.value, page_size: projectPageSize.value })
-    // 每个项目加载详情以获取 orders/quotes
-    const detailResults = await Promise.all(
-      data.items.map(p => getContractProject(p.id).catch(() => p as FrameworkContractProjectDetailResponse))
+    const details = await Promise.all(
+      data.items.map(p => getContractProject(p.id).catch(() => ({ ...p, orders: [], quotes: [] } as FrameworkContractProjectDetailResponse)))
     )
-    projects.value = detailResults.filter(Boolean) as FrameworkContractProjectDetailResponse[]
+    projects.value = details
     projectTotal.value = data.total
   } finally { loadingProjects.value = false }
 }
 
-async function handleDeleteProject(row: FrameworkContractProjectResponse) {
-  await ElMessageBox.confirm('确定删除该项目？', '提示', { type: 'warning' })
-  await deleteContractProject(row.id)
-  ElMessage.success('已删除')
-  fetchProjects()
+async function handleDeleteProject(row: FrameworkContractProjectDetailResponse) {
+  try {
+    await ElMessageBox.confirm('确定删除该项目？', '提示', { type: 'warning' })
+    await deleteContractProject(row.id)
+    ElMessage.success('已删除')
+    fetchProjects()
+    loadContract()
+  } catch { /* canceled */ }
 }
 
-// ── 编辑合同对话框 ──
+// ── 编辑合同 ──
 const editVisible = ref(false)
 const editSaving = ref(false)
 const customerOptions = ref<{ id: string; name: string }[]>([])
@@ -294,11 +281,11 @@ function resetEditForm() {
 async function loadCustomersForEdit() {
   try {
     const data = await getCustomers({ page_size: 500 })
-    customerOptions.value = data.items.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }))
+    customerOptions.value = (data.items as { id: string; name: string }[]).map(c => ({ id: c.id, name: c.name }))
   } catch { /* ignore */ }
 }
 
-function openEditDialog() {
+function openEditContract() {
   if (!contract.value) return
   editForm.customer_id = contract.value.customer_id
   editForm.project_name = contract.value.project_name || ''
@@ -317,9 +304,10 @@ async function saveEdit() {
   if (!editForm.customer_id) { ElMessage.warning('请选择客户'); return }
   editSaving.value = true
   try {
-    const payload: Record<string, unknown> = {
+    const customer = customerOptions.value.find(c => c.id === editForm.customer_id)
+    await updateContract(contractId, {
       customer_id: editForm.customer_id,
-      customer_name: customerOptions.value.find(c => c.id === editForm.customer_id)?.name || '',
+      customer_name: customer?.name || '',
       project_name: editForm.project_name || null,
       sign_date: editForm.sign_date || null,
       start_date: editForm.start_date || null,
@@ -328,18 +316,17 @@ async function saveEdit() {
       customer_signatory: editForm.customer_signatory || null,
       content: editForm.content || null,
       remark: editForm.remark || null,
-    }
-    await updateContract(contractId, payload)
+    })
     ElMessage.success('已更新')
     editVisible.value = false
     loadContract()
   } catch { /* handled */ } finally { editSaving.value = false }
 }
 
-// ── 添加 / 编辑项目对话框 ──
+// ── 添加/编辑项目 ──
 const projectVisible = ref(false)
 const projectSaving = ref(false)
-const editingProject = ref<FrameworkContractProjectDetailResponse | null>(null)
+const projectEditingId = ref('')
 
 const projectForm = reactive({
   project_name: '',
@@ -356,15 +343,15 @@ const pendingProjectAtt = ref<File | null>(null)
 const projectAttFileList = ref<{ name: string; url?: string }[]>([])
 const existingProjectAtt = ref<{ path?: string; name?: string }>({})
 
-function onProjectAttChange(file: { raw: File }) { pendingProjectAtt.value = file.raw }
-function handleRemoveProjectAtt() { pendingProjectAtt.value = null }
+function onProjectAttChange(file: { raw?: File }) { pendingProjectAtt.value = file.raw ?? null }
+function onProjectAttRemove() { pendingProjectAtt.value = null }
 
 function resetProjectForm() {
   Object.assign(projectForm, { project_name: '', project_amount: 0, order_ids: [], quote_ids: [], remark: '' })
   pendingProjectAtt.value = null
   projectAttFileList.value = []
   existingProjectAtt.value = {}
-  editingProject.value = null
+  projectEditingId.value = ''
 }
 
 async function loadAvailableResources() {
@@ -385,42 +372,42 @@ async function openAddProject() {
 
 async function openEditProject(row: FrameworkContractProjectDetailResponse) {
   resetProjectForm()
-  editingProject.value = row
-  try {
-    const detail = await getContractProject(row.id)
-    projectForm.project_name = detail.project_name
-    projectForm.project_amount = detail.project_amount
-    projectForm.order_ids = detail.orders?.map(o => o.id) || []
-    projectForm.quote_ids = detail.quotes?.map(q => q.id) || []
-    projectForm.remark = detail.remark || ''
-    existingProjectAtt.value = { path: detail.attachment_path, name: detail.attachment_name }
-    if (detail.attachment_name) {
-      projectAttFileList.value = [{ name: detail.attachment_name }]
-    }
-  } catch { /* ignore */ }
+  projectEditingId.value = row.id
+  const detail = await getContractProject(row.id).catch(() => null)
+  if (!detail) return
+  projectForm.project_name = detail.project_name
+  projectForm.project_amount = detail.project_amount
+  projectForm.order_ids = detail.orders?.map(o => o.id) || []
+  projectForm.quote_ids = detail.quotes?.map(q => q.id) || []
+  projectForm.remark = detail.remark || ''
+  existingProjectAtt.value = { path: detail.attachment_path, name: detail.attachment_name }
+  if (detail.attachment_name) {
+    projectAttFileList.value = [{ name: detail.attachment_name }]
+  }
   await loadAvailableResources()
-  // 编辑时也把当前已关联的资源包含进去（v-model 会自动选中）
-  if (editingProject.value) {
-    availableOrders.value = [
-      ...availableOrders.value,
-      ...(editingProject.value.orders?.map(o => ({ id: o.id, order_no: o.order_no, project_name: o.project_name } as ContractResourceItem)) || []),
-    ]
-    availableQuotes.value = [
-      ...availableQuotes.value,
-      ...(editingProject.value.quotes?.map(q => ({ id: q.id, quote_no: q.quote_no, project_name: q.project_name } as ContractResourceItem)) || []),
-    ]
+  // 编辑时把已关联但不在 available 中的资源加回来
+  if (detail.orders) {
+    availableOrders.value = [...availableOrders.value, ...detail.orders.map(o => ({
+      id: o.id, order_no: o.order_no, project_name: o.project_name,
+    } as ContractResourceItem))]
+  }
+  if (detail.quotes) {
+    availableQuotes.value = [...availableQuotes.value, ...detail.quotes.map(q => ({
+      id: q.id, quote_no: q.quote_no, project_name: q.project_name,
+    } as ContractResourceItem))]
   }
   projectVisible.value = true
 }
 
 async function saveProject() {
   if (!projectForm.project_name) { ElMessage.warning('请输入项目名称'); return }
+  if (!contract.value) return
   projectSaving.value = true
   try {
-    const payload: Record<string, unknown> = {
+    const payload = {
       contract_id: contractId,
-      customer_id: contract.value!.customer_id,
-      customer_name: contract.value!.customer_name,
+      customer_id: contract.value.customer_id,
+      customer_name: contract.value.customer_name,
       project_name: projectForm.project_name,
       project_amount: projectForm.project_amount || 0,
       order_ids: projectForm.order_ids,
@@ -428,15 +415,14 @@ async function saveProject() {
       remark: projectForm.remark || null,
     }
     let project: FrameworkContractProjectDetailResponse
-    if (editingProject.value) {
-      project = await updateContractProject(editingProject.value.id, {
+    if (projectEditingId.value) {
+      project = await updateContractProject(projectEditingId.value, {
         project_name: payload.project_name,
         project_amount: payload.project_amount,
         order_ids: payload.order_ids,
         quote_ids: payload.quote_ids,
         remark: payload.remark,
       })
-      // 处理附件
       if (pendingProjectAtt.value) {
         await uploadContractProjectAttachment(project.id, pendingProjectAtt.value)
       } else if (projectAttFileList.value.length === 0 && existingProjectAtt.value.path) {
@@ -448,10 +434,10 @@ async function saveProject() {
         await uploadContractProjectAttachment(project.id, pendingProjectAtt.value)
       }
     }
-    ElMessage.success(editingProject.value ? '已更新' : '已添加')
+    ElMessage.success(projectEditingId.value ? '已更新' : '已添加')
     projectVisible.value = false
     fetchProjects()
-    loadContract() // 刷新合同信息（金额可能变化）
+    loadContract()
   } catch { /* handled */ } finally { projectSaving.value = false }
 }
 
