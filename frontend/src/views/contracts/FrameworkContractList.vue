@@ -55,9 +55,9 @@
         </el-table-column>
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
-            <el-button text type="primary" size="small" @click="$router.push(`/framework-contracts/${row.id}`)">详情</el-button>
-            <el-button text type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button text type="warning" size="small" @click="handleStatusChange(row)">状态</el-button>
+            <el-button text type="primary" size="small" @click="goDetail(row.id)">详情</el-button>
+            <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button text type="warning" size="small" @click="openStatusChange(row)">状态</el-button>
             <el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -73,11 +73,11 @@
       />
     </el-card>
 
-    <!-- 新建 / 编辑 对话框 -->
-    <el-dialog v-model="formVisible" :title="isEditing ? '编辑框架合同' : '新建框架合同'" width="650px" :close-on-click-modal="false" @closed="resetForm">
+    <!-- 新建/编辑 对话框 -->
+    <el-dialog v-model="formVisible" :title="editingId ? '编辑框架合同' : '新建框架合同'" width="650px" :close-on-click-modal="false" @closed="resetForm">
       <el-form :model="form" label-width="100px">
         <el-form-item label="客户" required>
-          <el-select v-model="form.customer_id" placeholder="请选择客户" filterable style="width: 100%" @change="onCustomerChange">
+          <el-select v-model="form.customer_id" placeholder="请选择客户" filterable style="width: 100%">
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
@@ -106,19 +106,17 @@
           <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="备注" />
         </el-form-item>
         <el-form-item label="合同原件">
-          <div>
-            <el-upload
-              :auto-upload="false"
-              :limit="1"
-              :on-change="onAttachmentChange"
-              :on-remove="handleRemoveAtt"
-              :file-list="attFileList"
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-            >
-              <el-button type="primary" plain>选择文件</el-button>
-              <template #tip><div class="el-upload__tip">PDF/Word/图片，不超过10MB</div></template>
-            </el-upload>
-          </div>
+          <el-upload
+            :auto-upload="false"
+            :limit="1"
+            :on-change="onAttChange"
+            :on-remove="onAttRemove"
+            :file-list="attFileList"
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+          >
+            <el-button type="primary" plain>选择文件</el-button>
+            <template #tip><div class="el-upload__tip">PDF/Word/图片，不超过10MB</div></template>
+          </el-upload>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -128,13 +126,13 @@
     </el-dialog>
 
     <!-- 状态变更对话框 -->
-    <el-dialog v-model="statusDialogVisible" title="合同状态变更" width="450px" :close-on-click-modal="false">
+    <el-dialog v-model="statusVisible" title="合同状态变更" width="450px" :close-on-click-modal="false">
       <el-form label-width="80px">
         <el-form-item label="当前状态">
-          <el-tag :type="statusColor(statusForm.current_status)">{{ statusLabel(statusForm.current_status) }}</el-tag>
+          <el-tag :type="statusColor(statusForm.current)">{{ statusLabel(statusForm.current) }}</el-tag>
         </el-form-item>
         <el-form-item label="目标状态">
-          <el-select v-model="statusForm.to_status" style="width: 100%">
+          <el-select v-model="statusForm.to" style="width: 100%">
             <el-option v-for="s in availableTransitions" :key="s" :label="statusLabel(s)" :value="s" />
           </el-select>
         </el-form-item>
@@ -143,7 +141,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="statusDialogVisible = false">取消</el-button>
+        <el-button @click="statusVisible = false">取消</el-button>
         <el-button type="primary" :loading="statusSaving" @click="confirmStatusChange">确定</el-button>
       </template>
     </el-dialog>
@@ -151,7 +149,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getFrameworkContracts } from '@/api/framework-contracts'
 import {
@@ -162,6 +161,8 @@ import {
 import { getCustomers } from '@/api/customers'
 import type { ContractListResponse, ContractDetailResponse } from '@/types/api'
 
+const router = useRouter()
+
 // ── 列表 ──
 const loading = ref(false)
 const list = ref<ContractListResponse[]>([])
@@ -170,17 +171,15 @@ const page = ref(1)
 const pageSize = ref(20)
 const filters = reactive({ keyword: '', status: '' })
 
-const statusLabel = (s: string) => {
-  const map: Record<string, string> = { draft: '草稿', active: '已生效', completed: '已完成', terminated: '已终止' }
-  return map[s] || s
+const STATUS_MAP: Record<string, string> = { draft: '草稿', active: '已生效', completed: '已完成', terminated: '已终止' }
+const STATUS_COLOR: Record<string, '' | 'success' | 'warning' | 'info' | 'danger'> = {
+  draft: 'info', active: 'success', completed: '', terminated: 'danger',
 }
 
-const statusColor = (s: string): '' | 'success' | 'warning' | 'info' | 'danger' => {
-  const map: Record<string, '' | 'success' | 'warning' | 'info' | 'danger'> = {
-    draft: 'info', active: 'success', completed: '', terminated: 'danger',
-  }
-  return map[s] || ''
-}
+function statusLabel(s: string) { return STATUS_MAP[s] || s }
+function statusColor(s: string): '' | 'success' | 'warning' | 'info' | 'danger' { return STATUS_COLOR[s] || '' }
+
+function goDetail(id: string) { router.push(`/framework-contracts/${id}`) }
 
 async function fetchData() {
   loading.value = true
@@ -188,28 +187,34 @@ async function fetchData() {
     const data = await getFrameworkContracts({ page: page.value, page_size: pageSize.value, ...filters })
     list.value = data.items
     total.value = data.total
-  } finally { loading.value = false }
+  } finally {
+    loading.value = false
+  }
 }
 
 function handleSearch() { page.value = 1; fetchData() }
 function handleReset() { filters.keyword = ''; filters.status = ''; page.value = 1; fetchData() }
 
 async function handleDelete(row: ContractListResponse) {
-  await ElMessageBox.confirm('确定删除该框架合同？', '提示', { type: 'warning' })
-  await deleteContract(row.id)
-  ElMessage.success('已删除')
-  fetchData()
+  try {
+    await ElMessageBox.confirm('确定删除该框架合同？', '提示', { type: 'warning' })
+    await deleteContract(row.id)
+    ElMessage.success('已删除')
+    fetchData()
+  } catch { /* canceled */ }
 }
 
-// ── 新建 / 编辑表单 ──
+// ── 新建/编辑表单 ──
 const formVisible = ref(false)
-const isEditing = ref(false)
 const editingId = ref('')
 const saving = ref(false)
 const customerOptions = ref<{ id: string; name: string }[]>([])
+const pendingAttFile = ref<File | null>(null)
+const attFileList = ref<{ name: string; url?: string }[]>([])
+const existingAtt = ref<{ path?: string; name?: string }>({})
 
 const form = reactive({
-  customer_id: '' as string,
+  customer_id: '',
   project_name: '',
   sign_date: null as string | null,
   start_date: null as string | null,
@@ -220,20 +225,8 @@ const form = reactive({
   remark: '',
 })
 
-function onCustomerChange() {
-  // 客户已选，无需额外操作
-}
-
-const pendingAttFile = ref<File | null>(null)
-const attFileList = ref<{ name: string; url?: string }[]>([])
-const existingAtt = ref<{ path?: string; name?: string }>({})
-
-function onAttachmentChange(file: { raw: File }) {
-  pendingAttFile.value = file.raw
-}
-function handleRemoveAtt() {
-  pendingAttFile.value = null
-}
+function onAttChange(file: { raw?: File }) { pendingAttFile.value = file.raw ?? null }
+function onAttRemove() { pendingAttFile.value = null }
 
 function resetForm() {
   Object.assign(form, {
@@ -243,28 +236,26 @@ function resetForm() {
   pendingAttFile.value = null
   attFileList.value = []
   existingAtt.value = {}
-  isEditing.value = false
   editingId.value = ''
 }
 
 async function loadCustomers() {
   try {
     const data = await getCustomers({ page_size: 500 })
-    customerOptions.value = data.items.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }))
+    customerOptions.value = (data.items as { id: string; name: string }[]).map(c => ({ id: c.id, name: c.name }))
   } catch { /* ignore */ }
 }
 
-async function handleCreate() {
+function handleCreate() {
   resetForm()
   formVisible.value = true
-  await loadCustomers()
+  loadCustomers()
 }
 
-async function handleEdit(row: ContractListResponse) {
-  isEditing.value = true
+async function openEdit(row: ContractListResponse) {
   editingId.value = row.id
   try {
-    const detail: ContractDetailResponse = await getContract(row.id)
+    const detail = await getContract(row.id)
     form.customer_id = detail.customer_id
     form.project_name = detail.project_name || ''
     form.sign_date = detail.sign_date || null
@@ -287,9 +278,10 @@ async function saveForm() {
   if (!form.customer_id) { ElMessage.warning('请选择客户'); return }
   saving.value = true
   try {
+    const customer = customerOptions.value.find(c => c.id === form.customer_id)
     const payload: Record<string, unknown> = {
       customer_id: form.customer_id,
-      customer_name: customerOptions.value.find(c => c.id === form.customer_id)?.name || '',
+      customer_name: customer?.name || '',
       project_name: form.project_name || null,
       contract_type: '框架合同',
       sign_date: form.sign_date || null,
@@ -301,57 +293,55 @@ async function saveForm() {
       remark: form.remark || null,
     }
     let contract: ContractDetailResponse
-    if (isEditing.value) {
+    if (editingId.value) {
       contract = await updateContract(editingId.value, payload)
     } else {
       contract = await createContract(payload)
     }
-    // 上传附件
     if (pendingAttFile.value) {
       await uploadContractAttachment(contract.id, pendingAttFile.value)
     }
-    if (isEditing.value && !pendingAttFile.value && attFileList.value.length === 0 && existingAtt.value.path) {
+    if (editingId.value && !pendingAttFile.value && attFileList.value.length === 0 && existingAtt.value.path) {
       await deleteContractAttachment(contract.id)
     }
-    ElMessage.success(isEditing.value ? '已更新' : '已创建')
+    ElMessage.success(editingId.value ? '已更新' : '已创建')
     formVisible.value = false
     fetchData()
-  } catch { /* handled by interceptor */ } finally { saving.value = false }
+  } catch { /* handled */ } finally { saving.value = false }
 }
 
 // ── 状态变更 ──
-const statusDialogVisible = ref(false)
+const statusVisible = ref(false)
 const statusSaving = ref(false)
-const statusForm = reactive({ current_status: '', to_status: '', reason: '' })
 const statusContractId = ref('')
-
+const statusForm = reactive({ current: '', to: '', reason: '' })
 const TRANSITIONS: Record<string, string[]> = {
   draft: ['active', 'completed'],
   active: ['draft', 'completed'],
   completed: ['draft'],
 }
-const availableTransitions = computed(() => TRANSITIONS[statusForm.current_status] || [])
+const availableTransitions = computed(() => TRANSITIONS[statusForm.current] || [])
 
-function handleStatusChange(row: ContractListResponse) {
+function openStatusChange(row: ContractListResponse) {
   statusContractId.value = row.id
-  statusForm.current_status = row.status
-  statusForm.to_status = ''
+  statusForm.current = row.status
+  statusForm.to = ''
   statusForm.reason = ''
-  statusDialogVisible.value = true
+  statusVisible.value = true
 }
 
 async function confirmStatusChange() {
-  if (!statusForm.to_status) { ElMessage.warning('请选择目标状态'); return }
+  if (!statusForm.to) { ElMessage.warning('请选择目标状态'); return }
   statusSaving.value = true
   try {
-    await changeContractStatus(statusContractId.value, { to_status: statusForm.to_status, reason: statusForm.reason || undefined })
+    await changeContractStatus(statusContractId.value, { to_status: statusForm.to, reason: statusForm.reason || undefined })
     ElMessage.success('状态已变更')
-    statusDialogVisible.value = false
+    statusVisible.value = false
     fetchData()
-  } catch { /* handled by interceptor */ } finally { statusSaving.value = false }
+  } catch { /* handled */ } finally { statusSaving.value = false }
 }
 
-onMounted(fetchData)
+onMounted(() => { fetchData() })
 </script>
 
 <style scoped>
