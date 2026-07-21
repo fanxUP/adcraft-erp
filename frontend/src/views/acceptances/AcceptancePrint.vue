@@ -118,20 +118,20 @@
       <div class="preview-signatures">
         <div class="signature-block">
           <div class="signature-label">甲方：{{ form.customer_name || '客户' }}（盖章）</div>
-          <div style="height: 50px;"></div>
+          <div class="signature-blank"></div>
           <div class="signature-label">验收签字：</div>
-          <div style="height: 50px;"></div>
+          <div class="signature-blank"></div>
           <div class="signature-label">联系电话：</div>
-          <div style="height: 30px;"></div>
+          <div class="signature-blank"></div>
           <div class="signature-date">日期：________年____月____日</div>
         </div>
         <div class="signature-block">
           <div class="signature-label">乙方：{{ companyName || '制作安装方' }}（盖章）</div>
-          <div style="height: 50px;"></div>
+          <div class="signature-blank"></div>
           <div class="signature-label">签字：</div>
-          <div style="height: 50px;"></div>
+          <div class="signature-blank"></div>
           <div class="signature-label">联系电话：</div>
-          <div style="height: 30px;"></div>
+          <div class="signature-blank"></div>
           <div class="signature-date">日期：________年____月____日</div>
         </div>
       </div>
@@ -472,10 +472,8 @@ function handlePrint() {
   font-weight: bold;
   line-height: normal;
 }
-.signature-line {
-  border-bottom: 3px solid #333;
-  height: 50px;
-  margin-bottom: 8px;
+.signature-blank {
+  height: 1.5em;
 }
 .signature-date {
   font-size: 14px;
