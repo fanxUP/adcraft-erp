@@ -583,7 +583,8 @@ function rowClassName({ row }: { row: DisplayRow }) {
 
 // 单位相关
 const defaultUnits = ['㎡', 'm', '个', '套', '块', '件', '批', '次', '组', '台']
-const recentUnits = ref<string[]>([])
+const RECENT_UNITS_KEY = 'quoteEditor_recentUnits'
+const recentUnits = ref<string[]>(JSON.parse(localStorage.getItem(RECENT_UNITS_KEY) || '[]'))
 const allUnits = computed(() => [
   ...recentUnits.value.map(u => ({ value: u })),
   ...defaultUnits.map(u => ({ value: u })),
@@ -592,6 +593,7 @@ const allUnits = computed(() => [
 function addRecentUnit(unit: string) {
   if (!unit || defaultUnits.includes(unit)) return
   recentUnits.value = [unit, ...recentUnits.value.filter(u => u !== unit)].slice(0, 3)
+  localStorage.setItem(RECENT_UNITS_KEY, JSON.stringify(recentUnits.value))
 }
 
 function queryUnits(queryString: string, cb: (results: { value: string; disabled?: boolean }[]) => void, currentValue?: string) {
@@ -682,11 +684,14 @@ async function onImportItems(uploadFile: unknown) {
   }
 }
 
-async function saveNewAndGetId(): Promise<string> {
+async function doCreateNewQuote(): Promise<QuoteDetailResponse> {
   items.value.forEach(item => calcItemSubtotal(item))
   const cleanItems = items.value.map((item, idx) => ({
     ...(item.id ? { id: item.id } : {}),
     item_name: item.item_name || '待填写',
+    product_id: item.product_id || undefined,
+    material_id: item.material_id || undefined,
+    process_id: item.process_id || undefined,
     length: item.length || undefined,
     length_unit: item.length_unit || undefined,
     width: item.width || undefined,
@@ -704,6 +709,7 @@ async function saveNewAndGetId(): Promise<string> {
     transport_fee: item.transport_fee || 0,
     other_fee: item.other_fee || 0,
     remark: item.remark || undefined,
+    image_url: item.image_url || undefined,
     sort_order: idx,
     group_name: item.group_name || null,
     material_process: item.material_process || undefined,
@@ -720,7 +726,11 @@ async function saveNewAndGetId(): Promise<string> {
   } else if (!form.customer_id) {
     delete payload.customer_id
   }
-  const result = await createQuote(payload)
+  return createQuote(payload)
+}
+
+async function saveNewAndGetId(): Promise<string> {
+  const result = await doCreateNewQuote()
   return result.id
 }
 
@@ -775,57 +785,11 @@ async function handleSave() {
       dirty.value = false
       captureCleanSnapshot()
     } else {
-      const cleanItems = items.value.map((item, idx) => ({
-        ...(item.id ? { id: item.id } : {}),
-        item_name: item.item_name,
-        product_id: item.product_id || undefined,
-        material_id: item.material_id || undefined,
-        process_id: item.process_id || undefined,
-        length: item.length || undefined,
-        length_unit: item.length_unit || undefined,
-        width: item.width || undefined,
-        width_unit: item.width_unit || undefined,
-        height: item.height || undefined,
-        height_unit: item.height_unit || undefined,
-        quantity: item.quantity,
-        unit: item.unit || null,
-        use_area: item.use_area || false,
-        pieces: item.pieces || 1,
-        unit_price: item.unit_price || 0,
-        process_fee: item.process_fee || 0,
-        installation_fee: item.installation_fee || 0,
-        design_fee: item.design_fee || 0,
-        transport_fee: item.transport_fee || 0,
-        other_fee: item.other_fee || 0,
-        remark: item.remark || undefined,
-        image_url: item.image_url || undefined,
-        sort_order: idx,
-        group_name: item.group_name || null,
-        material_process: item.material_process || undefined,
-      }))
-      const payload: Record<string, unknown> = { ...form, items: cleanItems }
-      // Clean empty optional fields that Pydantic would reject
-      if (!payload.valid_until) delete payload.valid_until
-      if (!payload.remark) delete payload.remark
-      if (!payload.contact_person) delete payload.contact_person
-      if (!payload.contact_phone) delete payload.contact_phone
-      // discount_amount is not a field on QuoteCreate — remove it
-      delete payload.discount_amount
-      if (form.customer_id && !isExistingCustomer(form.customer_id)) {
-        // Typed a new customer name — send as customer_name
-        payload.customer_name = form.customer_id
-        delete payload.customer_id
-      } else if (!form.customer_id) {
-        // No customer selected — remove empty field
-        delete payload.customer_id
-      }
-      // else: existing customer UUID stays as customer_id
-      const result = await createQuote(payload)
+      const result = await doCreateNewQuote()
       ElMessage.success('创建成功')
       dirty.value = false
       captureCleanSnapshot()
-      const quoteId = result.id
-      await router.replace(`/quotes/${quoteId}/edit`)
+      await router.replace(`/quotes/${result.id}/edit`)
     }
   } finally { saving.value = false }
 }
@@ -852,7 +816,7 @@ async function handleConvert() {
   try {
     const order = await convertQuoteToOrder(route.params.id as string)
     ElMessage.success('已转为订单')
-    router.push(`/orders/${order.order_id || order.id}`)
+    router.push(`/orders/${order.id}`)
   } finally { converting.value = false }
 }
 

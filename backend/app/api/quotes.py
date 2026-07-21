@@ -14,7 +14,7 @@ from app.core.deps import get_current_user
 from app.core.permissions import require_role
 from app.models.user import User
 from app.schemas.quote import QuoteCreate, QuoteUpdate, QuoteItemCreate, QuoteItemUpdate
-from app.schemas.common import success, success_paginated
+from app.schemas.common import success, success_paginated, error
 from app.services.quote_service import QuoteService
 from app.utils.excel_import import ExcelImportResult, parse_excel, format_value, parse_number
 
@@ -85,6 +85,40 @@ QUOTE_COLUMN_MAP = {
 }
 QUOTE_REQUIRED = ["客户名称", "项目名称", "项目名称(明细)", "数量"]
 HEADER_LABELS = list(QUOTE_COLUMN_MAP.keys())
+
+# Item-only columns for import template (ordered as user specified)
+ITEM_TEMPLATE_HEADERS = [
+    "明细分组", "项目内容", "材质工艺",
+    "长", "长单位", "宽", "宽单位", "高", "高单位",
+    "件数", "面积开关",
+    "数量", "单位", "单价",
+    "工艺费", "安装费", "设计费", "运输费",
+    "备注",
+]
+
+QUOTE_ITEM_TEMPLATE_MAP = {
+    "明细分组": "group_name",
+    "项目内容": "item_name",
+    "材质工艺": "material_process",
+    "长": "length",
+    "长单位": "length_unit",
+    "宽": "width",
+    "宽单位": "width_unit",
+    "高": "height",
+    "高单位": "height_unit",
+    "件数": "pieces",
+    "面积开关": "use_area",
+    "数量": "quantity",
+    "单位": "unit",
+    "单价": "unit_price",
+    "工艺费": "process_fee",
+    "安装费": "installation_fee",
+    "设计费": "design_fee",
+    "运输费": "transport_fee",
+    "备注": "remark",
+}
+
+QUOTE_ITEM_REQUIRED = ["项目内容", "数量"]
 
 
 @router.get("/template")
@@ -242,7 +276,7 @@ async def import_quotes(
             result.succeeded += 1
 
         except Exception as e:
-            logger.exception("Quote import failed for group %s: %s", (customer_name, project_name), e)
+            logger.exception("Quote import failed for group (%s, %s): %s", customer_name, project_name, e)
             for r in item_rows:
                 result.failed += 1
                 result.errors.append({"row": r.get("_excel_row", "?"), "message": str(e)})
@@ -367,41 +401,6 @@ async def convert_quote_to_order(
     service = QuoteService(db)
     order = await service.convert_to_order(UUID(quote_id), current_user.id)
     return success(order)
-
-
-# Item-only columns for import template (ordered as user specified)
-ITEM_TEMPLATE_HEADERS = [
-    "明细分组", "项目内容", "材质工艺",
-    "长", "长单位", "宽", "宽单位", "高", "高单位",
-    "件数", "面积开关",
-    "数量", "单位", "单价",
-    "工艺费", "安装费", "设计费", "运输费",
-    "备注",
-]
-
-QUOTE_ITEM_TEMPLATE_MAP = {
-    "明细分组": "group_name",
-    "项目内容": "item_name",
-    "材质工艺": "material_process",
-    "长": "length",
-    "长单位": "length_unit",
-    "宽": "width",
-    "宽单位": "width_unit",
-    "高": "height",
-    "高单位": "height_unit",
-    "件数": "pieces",
-    "面积开关": "use_area",
-    "数量": "quantity",
-    "单位": "unit",
-    "单价": "unit_price",
-    "工艺费": "process_fee",
-    "安装费": "installation_fee",
-    "设计费": "design_fee",
-    "运输费": "transport_fee",
-    "备注": "remark",
-}
-
-QUOTE_ITEM_REQUIRED = ["项目内容", "数量"]
 
 
 @router.post("/{quote_id}/import-items")

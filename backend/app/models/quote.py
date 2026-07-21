@@ -1,5 +1,6 @@
 import uuid
 
+from datetime import date
 from sqlalchemy import Date, DateTime, Integer, Numeric, String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -22,7 +23,7 @@ class Quote(Base, TimestampMixin, SoftDeleteMixin):
     tax_rate: Mapped[float] = mapped_column(Numeric(8, 4), default=0)
     tax_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     total_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    valid_until: Mapped[str | None] = mapped_column(Date, nullable=True)
+    valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     department: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="部门/科室")
     contact_person: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="联系人")
