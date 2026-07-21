@@ -63,7 +63,7 @@
             :disabled="!canChangeStatus(row)"
             @click="handleStatusChange(row)"
           >状态</el-button>
-          <el-button text type="danger" @click="handleDelete(row as ContractListResponse)">删除</el-button>
+          <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -422,9 +422,9 @@ async function loadAllCustomers() {
   } catch { /* ignore */ }
 }
 
-async function loadResources(contractId?: string) {
+async function loadResources(customerId?: string, contractId?: string) {
   try {
-    const data = await getContractAvailableResources(contractId)
+    const data = await getContractAvailableResources(customerId, contractId)
     orderOptions.value = data.orders || []
     quoteOptions.value = data.quotes || []
     // 从可用订单/报价中提取项目名称列表，排除已被其他合同使用的
@@ -440,24 +440,46 @@ async function loadResources(contractId?: string) {
   } catch { /* ignore */ }
 }
 
-function onCustomerChange(val: string) {
+async function onCustomerChange(val: string) {
   const c = customerOptions.value.find(c => c.id === val)
   if (c) form.customer_name = c.name
+  if (val) {
+    await loadResources(val, isEditing.value ? editingId.value : undefined)
+    // 清除不在新客户下的已选项
+    if (form.order_id && !orderOptions.value.find(o => o.id === form.order_id)) {
+      form.order_id = ''
+    }
+    if (form.quote_id && !quoteOptions.value.find(q => q.id === form.quote_id)) {
+      form.quote_id = ''
+    }
+  }
 }
 
-function onOrderChange(val: string) {
+async function onOrderChange(val: string) {
   if (!val) return
   const selected = orderOptions.value.find(o => o.id === val)
   if (selected) {
+    // 未选客户时，从订单自动填充客户
+    if (!form.customer_id && selected.customer_id) {
+      form.customer_id = selected.customer_id
+      form.customer_name = selected.customer_name || ''
+      await loadResources(selected.customer_id, isEditing.value ? editingId.value : undefined)
+    }
     if (!form.project_name) form.project_name = selected.project_name
     if (!form.total_amount) form.total_amount = selected.total_amount || 0
   }
 }
 
-function onQuoteChange(val: string) {
+async function onQuoteChange(val: string) {
   if (!val) return
   const selected = quoteOptions.value.find(q => q.id === val)
   if (selected) {
+    // 未选客户时，从报价自动填充客户
+    if (!form.customer_id && selected.customer_id) {
+      form.customer_id = selected.customer_id
+      form.customer_name = selected.customer_name || ''
+      await loadResources(selected.customer_id, isEditing.value ? editingId.value : undefined)
+    }
     if (!form.project_name) form.project_name = selected.project_name
     if (!form.total_amount) form.total_amount = selected.total_amount || 0
   }
@@ -502,7 +524,7 @@ async function handleEdit(row: ContractListResponse) {
     attFileName.value = detail.attachment_name || ''
     await Promise.all([
       loadAllCustomers(),
-      loadResources(editingId.value),
+      loadResources(form.customer_id, editingId.value),
     ])
   } finally {
     formLoading.value = false
@@ -624,11 +646,13 @@ async function confirmStatusChange() {
 
 // ── Delete ──
 async function handleDelete(row: ContractListResponse) {
-  await ElMessageBox.confirm(`确定将合同「${row.contract_no}」删除？`, '删除合同', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
+  try {
+    await ElMessageBox.confirm(`确定将合同「${row.contract_no}」删除？`, '删除合同', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch { return }
   await deleteContract(row.id)
   ElMessage.success('合同已删除')
   fetchData()

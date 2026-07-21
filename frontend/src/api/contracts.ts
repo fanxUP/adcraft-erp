@@ -47,8 +47,9 @@ export function getContractAttachmentUrl(contractId: string) {
   return `/api/v1/contracts/${contractId}/attachment`
 }
 
-export function getContractAvailableResources(contractId?: string) {
+export function getContractAvailableResources(customerId?: string, contractId?: string) {
   const params: Record<string, string> = {}
+  if (customerId) params.customer_id = customerId
   if (contractId) params.contract_id = contractId
   return get<ContractAvailableResources>('/contracts/available-resources', { params })
 }

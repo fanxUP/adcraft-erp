@@ -115,7 +115,7 @@ class FrameworkContractService:
         contract = await self.db.get(Contract, contract_id)
         if contract:
             contract.total_amount = total
-            contract.unpaid_amount = max(0, total - (float(contract.paid_amount) if contract.paid_amount else 0))
+            # 不更新 paid_amount/unpaid_amount，API 响应中会动态计算
             await self.db.flush()
 
     async def update_attachment(self, project_id: UUID, path: str | None, name: str | None) -> dict:

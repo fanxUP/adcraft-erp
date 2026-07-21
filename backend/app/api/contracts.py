@@ -60,12 +60,14 @@ async def create_contract(
 
 @router.get("/available-resources")
 async def get_available_resources(
+    customer_id: str | None = None,
     contract_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return orders and quotes not yet linked to any contract (including framework contract projects).
-    If contract_id is provided (editing), also include resources already linked to that contract."""
+    If contract_id is provided (editing), also include resources already linked to that contract.
+    If customer_id is provided, only return resources for that customer."""
     from sqlalchemy import select, not_
     from app.models.order import Order as OrderModel
     from app.models.quote import Quote as QuoteModel
@@ -84,15 +86,15 @@ async def get_available_resources(
     fw_co_sub = select(FrameworkContractProjectOrder.order_id)
 
     # Available orders: not deleted AND not in any other contract
+    q_order = select(OrderModel).where(
+        OrderModel.deleted_at.is_(None),
+        not_(OrderModel.id.in_(co_sub)),
+        not_(OrderModel.id.in_(fw_co_sub)),
+    )
+    if customer_id:
+        q_order = q_order.where(OrderModel.customer_id == UUID(customer_id))
     orders_result = await db.execute(
-        select(OrderModel)
-        .where(
-            OrderModel.deleted_at.is_(None),
-            not_(OrderModel.id.in_(co_sub)),
-            not_(OrderModel.id.in_(fw_co_sub)),
-        )
-        .order_by(OrderModel.created_at.desc())
-        .limit(500)
+        q_order.order_by(OrderModel.created_at.desc()).limit(500)
     )
     orders = orders_result.scalars().all()
 
@@ -104,20 +106,20 @@ async def get_available_resources(
     # Also exclude quotes already linked to framework contract projects
     fw_cq_sub = select(FrameworkContractProjectQuote.quote_id)
 
+    q_quote = select(QuoteModel).where(
+        QuoteModel.deleted_at.is_(None),
+        QuoteModel.status != "converted",
+        not_(QuoteModel.id.in_(cq_sub)),
+        not_(QuoteModel.id.in_(fw_cq_sub)),
+    )
+    if customer_id:
+        q_quote = q_quote.where(QuoteModel.customer_id == UUID(customer_id))
     quotes_result = await db.execute(
-        select(QuoteModel)
-        .where(
-            QuoteModel.deleted_at.is_(None),
-            QuoteModel.status != "converted",
-            not_(QuoteModel.id.in_(cq_sub)),
-            not_(QuoteModel.id.in_(fw_cq_sub)),
-        )
-        .order_by(QuoteModel.created_at.desc())
-        .limit(500)
+        q_quote.order_by(QuoteModel.created_at.desc()).limit(500)
     )
     quotes = quotes_result.scalars().all()
 
-    # Query project_names already used by other contracts
+    # Query project_names already used by other contracts (same customer)
     from app.models.contract import Contract as ContractModel
     used_q = select(ContractModel.project_name).where(
         ContractModel.deleted_at.is_(None),
@@ -126,6 +128,8 @@ async def get_available_resources(
     )
     if contract_id:
         used_q = used_q.where(ContractModel.id != UUID(contract_id))
+    if customer_id:
+        used_q = used_q.where(ContractModel.customer_id == UUID(customer_id))
     used_result = await db.execute(used_q)
     used_project_names = list({row[0] for row in used_result.all()})
 

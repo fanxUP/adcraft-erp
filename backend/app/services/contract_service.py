@@ -73,6 +73,26 @@ class ContractService:
         )
         return float(result.scalar())
 
+    async def _batch_framework_totals(self, contract_ids: list[UUID]) -> dict[UUID, float]:
+        """批量计算多个框架合同的金额"""
+        if not contract_ids:
+            return {}
+        from sqlalchemy import select, func
+        from app.models.framework_contract import FrameworkContractProject
+
+        result = await self.db.execute(
+            select(
+                FrameworkContractProject.contract_id,
+                func.coalesce(func.sum(FrameworkContractProject.project_amount), 0),
+            )
+            .where(
+                FrameworkContractProject.contract_id.in_(contract_ids),
+                FrameworkContractProject.deleted_at.is_(None),
+            )
+            .group_by(FrameworkContractProject.contract_id)
+        )
+        return {row[0]: float(row[1]) for row in result.all()}
+
     async def _auto_complete_if_paid(self, contracts: list) -> None:
         """已收金额>=合同金额时自动将状态改为已完成"""
         cids = [c.id for c in contracts]
@@ -153,17 +173,18 @@ class ContractService:
         # Auto-complete contracts that are fully paid
         await self._auto_complete_if_paid(contracts)
 
-        # Batch-calculate paid_amount for all contracts in this page
+        # Batch-calculate paid_amount and framework totals for all contracts in this page
         cids = [c.id for c in contracts]
         paid_map = await self._batch_paid_amounts(cids)
+        fw_ids = [c.id for c in contracts if c.contract_type == "框架合同"]
+        fw_total_map = await self._batch_framework_totals(fw_ids) if fw_ids else {}
         result = []
         for c in contracts:
             resp = self._to_response(c)
             paid = paid_map.get(c.id, 0.0)
             # 框架合同：金额 = 子项目合计
             if c.contract_type == "框架合同":
-                fw_total = await self._calc_framework_total(c.id)
-                resp["total_amount"] = fw_total
+                resp["total_amount"] = fw_total_map.get(c.id, 0.0)
             resp["paid_amount"] = paid
             resp["unpaid_amount"] = max(0, resp["total_amount"] - paid)
             result.append(resp)
