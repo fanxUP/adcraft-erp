@@ -7,7 +7,7 @@
 
     <div class="search-bar">
       <el-select v-model="filterOrderId" placeholder="筛选订单" clearable filterable style="width: 240px" @change="fetchData">
-        <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} ${o.project_name}`" :value="o.id" />
+        <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
       </el-select>
       <el-select v-model="filterCustomerId" placeholder="筛选客户" clearable filterable style="width: 200px; margin-left: 12px" @change="fetchData">
         <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
@@ -46,7 +46,7 @@
       <el-form :model="form" label-width="100px">
         <el-form-item label="订单">
           <el-select v-model="form.order_id" placeholder="选择订单" filterable style="width: 100%" @change="onOrderSelect">
-            <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} ${o.project_name}`" :value="o.id" />
+            <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="收款金额">
