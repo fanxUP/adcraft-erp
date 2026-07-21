@@ -20,7 +20,7 @@
         <el-descriptions-item label="状态">
           <el-tag v-if="contract" :type="statusColor(contract.status)">{{ statusLabel(contract.status) }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="合同金额">¥ {{ totalProjectAmount.toFixed(2) }}</el-descriptions-item>
+        <el-descriptions-item label="合同金额">¥ {{ (contract?.total_amount || 0).toFixed(2) }}</el-descriptions-item>
         <el-descriptions-item label="已收金额">¥ {{ (contract?.paid_amount || 0).toFixed(2) }}</el-descriptions-item>
         <el-descriptions-item label="未收金额">
           <span :class="{ 'text-danger': (contract?.unpaid_amount || 0) > 0 }">¥ {{ (contract?.unpaid_amount || 0).toFixed(2) }}</span>
@@ -187,7 +187,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getContract, updateContract, getContractAttachmentUrl } from '@/api/contracts'
@@ -231,10 +231,6 @@ const projects = ref<FrameworkContractProjectDetailResponse[]>([])
 const projectTotal = ref(0)
 const projectPage = ref(1)
 const projectPageSize = ref(20)
-
-const totalProjectAmount = computed(() =>
-  projects.value.reduce((sum, p) => sum + (p.project_amount || 0), 0)
-)
 
 async function fetchProjects() {
   loadingProjects.value = true

@@ -70,6 +70,7 @@ class FrameworkContractService:
 
         project = await self.repo.create(data)
         project = await self.repo.get_by_id(project.id)
+        await self._sync_contract_total(project.contract_id)
         return self._to_detail(project)
 
     async def update_project(self, project_id: UUID, data: dict) -> dict:
@@ -84,14 +85,38 @@ class FrameworkContractService:
 
         project = await self.repo.update(project, data)
         project = await self.repo.get_by_id(project.id)
+        await self._sync_contract_total(project.contract_id)
         return self._to_detail(project)
 
     async def delete_project(self, project_id: UUID) -> bool:
         project = await self.repo.get_by_id(project_id)
         if not project:
             return False
+        cid = project.contract_id
         await self.repo.soft_delete(project)
+        await self._sync_contract_total(cid)
         return True
+
+    async def _sync_contract_total(self, contract_id: UUID) -> None:
+        """同步合同总金额 = 所有项目金额之和"""
+        from sqlalchemy import select, func
+        from app.models.framework_contract import FrameworkContractProject
+        from app.models.contract import Contract
+
+        result = await self.db.execute(
+            select(func.coalesce(func.sum(FrameworkContractProject.project_amount), 0))
+            .where(
+                FrameworkContractProject.contract_id == contract_id,
+                FrameworkContractProject.deleted_at.is_(None),
+            )
+        )
+        total = float(result.scalar())
+
+        contract = await self.db.get(Contract, contract_id)
+        if contract:
+            contract.total_amount = total
+            contract.unpaid_amount = max(0, total - (float(contract.paid_amount) if contract.paid_amount else 0))
+            await self.db.flush()
 
     async def update_attachment(self, project_id: UUID, path: str | None, name: str | None) -> dict:
         project = await self.repo.get_by_id(project_id)
