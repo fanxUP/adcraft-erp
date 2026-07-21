@@ -14,6 +14,7 @@ class FrameworkContractProject(Base, TimestampMixin, SoftDeleteMixin):
     contract_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("contracts.id"), nullable=False)
     customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False)
     customer_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    department: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="部门/科室")
     project_name: Mapped[str] = mapped_column(String(255), nullable=False)
     project_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)

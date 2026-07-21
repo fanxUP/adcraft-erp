@@ -7,6 +7,7 @@ class FrameworkContractProjectCreate(BaseModel):
     customer_name: str
     project_name: str
     project_amount: float = 0
+    department: str | None = None
     remark: str | None = None
     order_ids: list[str] = []
     quote_ids: list[str] = []
@@ -15,6 +16,7 @@ class FrameworkContractProjectCreate(BaseModel):
 class FrameworkContractProjectUpdate(BaseModel):
     project_name: str | None = None
     project_amount: float | None = None
+    department: str | None = None
     remark: str | None = None
     order_ids: list[str] | None = None
     quote_ids: list[str] | None = None
@@ -25,6 +27,7 @@ class FrameworkContractProjectResponse(BaseModel):
     contract_id: str
     customer_id: str
     customer_name: str
+    department: str | None = None
     project_name: str
     project_amount: float
     remark: str | None = None

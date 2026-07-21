@@ -682,6 +682,7 @@ export interface FrameworkContractProjectResponse {
   contract_id: string
   customer_id: string
   customer_name: string
+  department?: string
   project_name: string
   project_amount: number
   remark?: string
