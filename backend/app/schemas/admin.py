@@ -17,6 +17,7 @@ class RolePermissionUpdate(BaseModel):
 
 class SettingsUpdate(BaseModel):
     APP_NAME: str | None = None
+    COMPANY_NAME: str | None = None
     JWT_EXPIRE_MINUTES: int | None = None
     AI_ENABLED: bool | None = None
     AI_PROVIDER: str | None = None

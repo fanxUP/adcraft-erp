@@ -117,12 +117,12 @@
       <!-- 签字栏 -->
       <div class="preview-signatures">
         <div class="signature-block">
-          <div class="signature-label">甲方（客户）验收签字 / 盖章：</div>
+          <div class="signature-label">甲方（{{ form.customer_name || '客户' }}）验收签字 / 盖章：</div>
           <div style="height: 50px;"></div>
           <div class="signature-date">日期：________年____月____日</div>
         </div>
         <div class="signature-block">
-          <div class="signature-label">乙方（制作安装方）签字 / 盖章：</div>
+          <div class="signature-label">乙方（{{ companyName || '制作安装方' }}）签字 / 盖章：</div>
           <div style="height: 50px;"></div>
           <div class="signature-date">日期：________年____月____日</div>
         </div>
@@ -143,6 +143,7 @@ import { ref, computed, watch } from 'vue'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import { getAcceptance } from '@/api/acceptances'
+import { getSystemSettings } from '@/api/admin'
 import { downloadBlob } from '@/utils/download'
 
 interface AcceptancePrintItem {
@@ -194,6 +195,7 @@ defineEmits<{
 
 const loading = ref(false)
 const form = ref<AcceptancePrintData | null>(null)
+const companyName = ref('')
 
 type PrintDisplayRow =
   | { type: 'group-header'; groupName: string }
@@ -272,7 +274,11 @@ watch(() => props.visible, async (val) => {
   if (!val || !props.acceptanceId) return
   loading.value = true
   try {
-    const data = await getAcceptance(props.acceptanceId)
+    const [data, settings] = await Promise.all([
+      getAcceptance(props.acceptanceId),
+      getSystemSettings().catch(() => null),
+    ])
+    companyName.value = settings?.COMPANY_NAME || ''
     form.value = {
       acceptance_no: data.acceptance_no,
       status: data.status,
