@@ -15,6 +15,7 @@ class FrameworkContractService:
             "contract_id": str(project.contract_id),
             "customer_id": str(project.customer_id),
             "customer_name": project.customer_name,
+            "department": project.department,
             "project_name": project.project_name,
             "project_amount": float(project.project_amount) if project.project_amount else 0,
             "remark": project.remark,

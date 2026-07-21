@@ -52,6 +52,7 @@
       </template>
 
       <el-table :data="projects" v-loading="loadingProjects" stripe>
+        <el-table-column prop="department" label="部门/科室" width="130" />
         <el-table-column prop="project_name" label="项目名称" min-width="160" />
         <el-table-column label="项目金额" width="130" align="right">
           <template #default="{ row }">¥ {{ row.project_amount?.toFixed(2) }}</template>
@@ -139,6 +140,9 @@
       <el-form :model="projectForm" label-width="100px">
         <el-form-item label="客户">
           <el-input :model-value="contract?.customer_name" disabled />
+        </el-form-item>
+        <el-form-item label="部门/科室">
+          <el-input v-model="projectForm.department" placeholder="部门/科室" />
         </el-form-item>
         <el-form-item label="项目名称" required>
           <el-select v-model="projectForm.project_name" placeholder="选择或输入项目名称" filterable allow-create style="width:100%">
@@ -329,6 +333,7 @@ const projectSaving = ref(false)
 const projectEditingId = ref('')
 
 const projectForm = reactive({
+  department: '',
   project_name: '',
   project_amount: 0,
   order_ids: [] as string[],
@@ -347,7 +352,7 @@ function onProjectAttChange(file: { raw?: File }) { pendingProjectAtt.value = fi
 function onProjectAttRemove() { pendingProjectAtt.value = null }
 
 function resetProjectForm() {
-  Object.assign(projectForm, { project_name: '', project_amount: 0, order_ids: [], quote_ids: [], remark: '' })
+  Object.assign(projectForm, { department: '', project_name: '', project_amount: 0, order_ids: [], quote_ids: [], remark: '' })
   pendingProjectAtt.value = null
   projectAttFileList.value = []
   existingProjectAtt.value = {}
@@ -375,6 +380,7 @@ async function openEditProject(row: FrameworkContractProjectDetailResponse) {
   projectEditingId.value = row.id
   const detail = await getContractProject(row.id).catch(() => null)
   if (!detail) return
+  projectForm.department = detail.department || ''
   projectForm.project_name = detail.project_name
   projectForm.project_amount = detail.project_amount
   projectForm.order_ids = detail.orders?.map(o => o.id) || []
@@ -408,6 +414,7 @@ async function saveProject() {
       contract_id: contractId,
       customer_id: contract.value.customer_id,
       customer_name: contract.value.customer_name,
+      department: projectForm.department || null,
       project_name: projectForm.project_name,
       project_amount: projectForm.project_amount || 0,
       order_ids: projectForm.order_ids,
@@ -417,6 +424,7 @@ async function saveProject() {
     let project: FrameworkContractProjectDetailResponse
     if (projectEditingId.value) {
       project = await updateContractProject(projectEditingId.value, {
+        department: payload.department,
         project_name: payload.project_name,
         project_amount: payload.project_amount,
         order_ids: payload.order_ids,
