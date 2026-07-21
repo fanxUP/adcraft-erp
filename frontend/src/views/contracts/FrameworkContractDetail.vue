@@ -153,12 +153,12 @@
           <el-input-number v-model="projectForm.project_amount" :min="0" :precision="2" style="width:100%" />
         </el-form-item>
         <el-form-item label="关联订单">
-          <el-select v-model="projectForm.order_id" filterable clearable style="width:100%">
+          <el-select v-model="projectForm.order_id" filterable clearable style="width:100%" @change="onOrderSelect">
             <el-option v-for="o in availableOrders" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="关联报价">
-          <el-select v-model="projectForm.quote_id" filterable clearable style="width:100%">
+          <el-select v-model="projectForm.quote_id" filterable clearable style="width:100%" @change="onQuoteSelect">
             <el-option v-for="q in availableQuotes" :key="q.id" :label="`${q.quote_no} — ${q.department || '-'} — ${q.project_name} — ¥${(q.total_amount || 0).toFixed(2)}`" :value="q.id" />
           </el-select>
         </el-form-item>
@@ -346,6 +346,26 @@ const existingProjectAtt = ref<{ path?: string; name?: string }>({})
 
 function onProjectAttChange(file: { raw?: File }) { pendingProjectAtt.value = file.raw ?? null }
 function onProjectAttRemove() { pendingProjectAtt.value = null }
+
+function onOrderSelect(val: string) {
+  if (!val) return
+  const o = availableOrders.value.find(o => o.id === val)
+  if (o) {
+    if (!projectForm.project_name) projectForm.project_name = o.project_name
+    if (!projectForm.project_amount) projectForm.project_amount = o.total_amount || 0
+    if (!projectForm.department) projectForm.department = o.department || ''
+  }
+}
+
+function onQuoteSelect(val: string) {
+  if (!val) return
+  const q = availableQuotes.value.find(q => q.id === val)
+  if (q) {
+    if (!projectForm.project_name) projectForm.project_name = q.project_name
+    if (!projectForm.project_amount) projectForm.project_amount = q.total_amount || 0
+    if (!projectForm.department) projectForm.department = q.department || ''
+  }
+}
 
 function resetProjectForm() {
   Object.assign(projectForm, { department: '', project_name: '', project_amount: 0, order_id: '', quote_id: '', remark: '' })
