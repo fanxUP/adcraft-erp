@@ -451,9 +451,9 @@ async function handleSave() {
   saving.value = true
   try {
     const payload = {
-      accepted_by: form.accepted_by || undefined,
-      our_acceptor_id: form.our_acceptor_id || undefined,
-      remark: form.remark || undefined,
+      accepted_by: form.accepted_by || null,
+      our_acceptor_id: form.our_acceptor_id || null,
+      remark: form.remark || null,
       discount_amount: form.discount_amount || 0,
       advance_amount: form.advance_amount || 0,
       items: form.items.map((item) => ({
