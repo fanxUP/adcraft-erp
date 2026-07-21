@@ -36,7 +36,7 @@ class UserRepository:
 
     async def update(self, user: User, update_data: dict) -> User:
         for key, value in update_data.items():
-            if value is not None and key != "role_ids":
+            if key != "role_ids":
                 setattr(user, key, value)
         await self.db.flush()
         return user

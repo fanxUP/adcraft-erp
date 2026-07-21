@@ -67,8 +67,7 @@ class ContractRepository:
         quote_ids = data.pop("quote_ids", None)
 
         for key, value in data.items():
-            if value is not None:
-                setattr(contract, key, value)
+            setattr(contract, key, value)
 
         if order_ids is not None:
             result = await self.db.execute(
