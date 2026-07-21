@@ -123,6 +123,8 @@ async def get_available_resources(
                 "id": str(o.id),
                 "order_no": o.order_no,
                 "project_name": o.project_name,
+                "total_amount": float(o.total_amount) if o.total_amount else 0,
+                "department": o.department or "",
                 "customer_id": str(o.customer_id) if o.customer_id else None,
                 "customer_name": o.customer.name if o.customer else None,
             }
@@ -133,6 +135,8 @@ async def get_available_resources(
                 "id": str(q.id),
                 "quote_no": q.quote_no,
                 "project_name": q.project_name,
+                "total_amount": float(q.total_amount) if q.total_amount else 0,
+                "department": q.department or "",
                 "customer_id": str(q.customer_id) if q.customer_id else None,
                 "customer_name": q.customer_name,
             }

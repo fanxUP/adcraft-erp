@@ -155,12 +155,12 @@
         </el-row>
         <el-form-item label="关联订单">
           <el-select v-model="form.order_ids" multiple filterable placeholder="选择关联订单" style="width: 100%" @change="onOrderChange">
-            <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} - ${o.project_name}`" :value="o.id" />
+            <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="关联报价">
           <el-select v-model="form.quote_ids" multiple filterable placeholder="选择关联报价" style="width: 100%" @change="onQuoteChange">
-            <el-option v-for="q in quoteOptions" :key="q.id" :label="`${q.quote_no} - ${q.project_name}`" :value="q.id" />
+            <el-option v-for="q in quoteOptions" :key="q.id" :label="`${q.quote_no} — ${q.department || '-'} — ${q.project_name} — ¥${(q.total_amount || 0).toFixed(2)}`" :value="q.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="条款内容">
