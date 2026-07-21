@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     APP_NAME: str = "AdCraft ERP"
+    COMPANY_NAME: str = ""
     APP_ENV: str = "development"
     SECRET_KEY: str = ""  # MUST be set via .env for production — generate with: openssl rand -hex 32
 

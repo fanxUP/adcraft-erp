@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.core.permissions import require_role
 from app.models.user import User
 from app.schemas.admin import RoleCreate, RoleUpdate, RolePermissionUpdate, SettingsUpdate
@@ -155,12 +156,13 @@ async def list_permissions(
 
 @router.get("/settings")
 async def get_settings(
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(get_current_user),
 ):
     api_key = settings.AI_API_KEY
     masked_key = api_key[:8] + "****" + api_key[-4:] if api_key and len(api_key) > 12 else "未配置"
     return success({
         "APP_NAME": settings.APP_NAME,
+        "COMPANY_NAME": settings.COMPANY_NAME,
         "JWT_EXPIRE_MINUTES": settings.JWT_EXPIRE_MINUTES,
         "UPLOAD_STORAGE": settings.UPLOAD_STORAGE,
         "LOCAL_UPLOAD_DIR": settings.LOCAL_UPLOAD_DIR,
@@ -184,7 +186,7 @@ async def update_settings(
     if not os.path.exists(env_path):
         return error(40001, ".env 文件不存在")
 
-    allowed_keys = {"APP_NAME", "JWT_EXPIRE_MINUTES", "AI_ENABLED", "AI_PROVIDER", "AI_MODEL", "AI_API_KEY", "AI_API_BASE_URL"}
+    allowed_keys = {"APP_NAME", "COMPANY_NAME", "JWT_EXPIRE_MINUTES", "AI_ENABLED", "AI_PROVIDER", "AI_MODEL", "AI_API_KEY", "AI_API_BASE_URL"}
     updated = {}
 
     # Read current .env

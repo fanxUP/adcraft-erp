@@ -93,6 +93,9 @@
         <el-form-item label="系统名称">
           <el-input v-model="form.APP_NAME" />
         </el-form-item>
+        <el-form-item label="公司名称（乙方）">
+          <el-input v-model="form.COMPANY_NAME" placeholder="用于打印验收单等处乙方名称" />
+        </el-form-item>
         <el-form-item label="JWT过期时间(分钟)">
           <el-input-number v-model="form.JWT_EXPIRE_MINUTES" :min="60" :max="10080" style="width: 100%" />
         </el-form-item>
@@ -162,6 +165,7 @@ const settings = ref<SystemSettings | null>(null)
 
 const form = reactive({
   APP_NAME: '',
+  COMPANY_NAME: '',
   JWT_EXPIRE_MINUTES: 1440,
   UPLOAD_STORAGE: '',
   LOCAL_UPLOAD_DIR: '',
@@ -179,6 +183,7 @@ async function fetchSettings() {
     settings.value = data
     Object.assign(form, {
       APP_NAME: data.APP_NAME,
+      COMPANY_NAME: data.COMPANY_NAME || '',
       JWT_EXPIRE_MINUTES: data.JWT_EXPIRE_MINUTES,
       UPLOAD_STORAGE: data.UPLOAD_STORAGE,
       LOCAL_UPLOAD_DIR: data.LOCAL_UPLOAD_DIR,
@@ -212,6 +217,7 @@ async function handleSave() {
   try {
     const payload: Record<string, unknown> = {
       APP_NAME: form.APP_NAME,
+      COMPANY_NAME: form.COMPANY_NAME,
       JWT_EXPIRE_MINUTES: form.JWT_EXPIRE_MINUTES,
       AI_ENABLED: form.AI_ENABLED,
       AI_PROVIDER: form.AI_PROVIDER,
