@@ -128,10 +128,12 @@ class ContractService:
     async def list_contracts(
         self, page: int, page_size: int, status: str | None = None,
         keyword: str | None = None, customer_id: str | None = None,
+        contract_type: str | None = None,
     ) -> tuple[list, int]:
         skip = (page - 1) * page_size
         contracts, total = await self.repo.list_contracts(
-            skip=skip, limit=page_size, status=status, keyword=keyword, customer_id=customer_id
+            skip=skip, limit=page_size, status=status, keyword=keyword, customer_id=customer_id,
+            contract_type=contract_type,
         )
         # Auto-complete contracts that are fully paid
         await self._auto_complete_if_paid(contracts)
