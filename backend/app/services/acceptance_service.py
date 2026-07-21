@@ -213,7 +213,7 @@ class AcceptanceService:
             "accepted_at": form.accepted_at.isoformat() if form.accepted_at else None,
             "accepted_by": form.accepted_by,
             "our_acceptor_id": str(form.our_acceptor_id) if form.our_acceptor_id else None,
-            "our_acceptor_name": form.our_acceptor.name if form.our_acceptor else None,
+            "our_acceptor_name": form.our_acceptor.real_name if form.our_acceptor else None,
             "remark": form.remark,
             "reject_reason": form.reject_reason,
             "discount_amount": float(form.discount_amount),
