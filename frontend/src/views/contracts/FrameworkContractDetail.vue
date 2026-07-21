@@ -153,12 +153,12 @@
           <el-input-number v-model="projectForm.project_amount" :min="0" :precision="2" style="width:100%" />
         </el-form-item>
         <el-form-item label="关联订单">
-          <el-select v-model="projectForm.order_ids" multiple filterable style="width:100%">
+          <el-select v-model="projectForm.order_id" filterable clearable style="width:100%">
             <el-option v-for="o in availableOrders" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="关联报价">
-          <el-select v-model="projectForm.quote_ids" multiple filterable style="width:100%">
+          <el-select v-model="projectForm.quote_id" filterable clearable style="width:100%">
             <el-option v-for="q in availableQuotes" :key="q.id" :label="`${q.quote_no} — ${q.department || '-'} — ${q.project_name} — ¥${(q.total_amount || 0).toFixed(2)}`" :value="q.id" />
           </el-select>
         </el-form-item>
@@ -332,8 +332,8 @@ const projectForm = reactive({
   department: '',
   project_name: '',
   project_amount: 0,
-  order_ids: [] as string[],
-  quote_ids: [] as string[],
+  order_id: '' as string,
+  quote_id: '' as string,
   remark: '',
 })
 
@@ -348,7 +348,7 @@ function onProjectAttChange(file: { raw?: File }) { pendingProjectAtt.value = fi
 function onProjectAttRemove() { pendingProjectAtt.value = null }
 
 function resetProjectForm() {
-  Object.assign(projectForm, { department: '', project_name: '', project_amount: 0, order_ids: [], quote_ids: [], remark: '' })
+  Object.assign(projectForm, { department: '', project_name: '', project_amount: 0, order_id: '', quote_id: '', remark: '' })
   pendingProjectAtt.value = null
   projectAttFileList.value = []
   existingProjectAtt.value = {}
@@ -379,8 +379,8 @@ async function openEditProject(row: FrameworkContractProjectDetailResponse) {
   projectForm.department = detail.department || ''
   projectForm.project_name = detail.project_name
   projectForm.project_amount = detail.project_amount
-  projectForm.order_ids = detail.orders?.map(o => o.id) || []
-  projectForm.quote_ids = detail.quotes?.map(q => q.id) || []
+  projectForm.order_id = detail.orders?.[0]?.id || ''
+  projectForm.quote_id = detail.quotes?.[0]?.id || ''
   projectForm.remark = detail.remark || ''
   existingProjectAtt.value = { path: detail.attachment_path, name: detail.attachment_name }
   if (detail.attachment_name) {
@@ -413,8 +413,8 @@ async function saveProject() {
       department: projectForm.department || null,
       project_name: projectForm.project_name,
       project_amount: projectForm.project_amount || 0,
-      order_ids: projectForm.order_ids,
-      quote_ids: projectForm.quote_ids,
+      order_ids: projectForm.order_id ? [projectForm.order_id] : [],
+      quote_ids: projectForm.quote_id ? [projectForm.quote_id] : [],
       remark: projectForm.remark || null,
     }
     let project: FrameworkContractProjectDetailResponse
@@ -423,8 +423,8 @@ async function saveProject() {
         department: payload.department,
         project_name: payload.project_name,
         project_amount: payload.project_amount,
-        order_ids: payload.order_ids,
-        quote_ids: payload.quote_ids,
+        order_ids: projectForm.order_id ? [projectForm.order_id] : [],
+        quote_ids: projectForm.quote_id ? [projectForm.quote_id] : [],
         remark: payload.remark,
       })
       if (pendingProjectAtt.value) {
