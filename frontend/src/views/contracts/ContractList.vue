@@ -446,16 +446,22 @@ function onCustomerChange(val: string) {
 }
 
 function onOrderChange(ids: string[]) {
-  if (ids.length > 0 && !form.project_name) {
+  if (ids.length > 0) {
     const selected = orderOptions.value.find(o => o.id === ids[0])
-    if (selected?.project_name) form.project_name = selected.project_name
+    if (selected) {
+      if (!form.project_name) form.project_name = selected.project_name
+      if (!form.total_amount) form.total_amount = selected.total_amount || 0
+    }
   }
 }
 
 function onQuoteChange(ids: string[]) {
-  if (ids.length > 0 && !form.project_name) {
+  if (ids.length > 0) {
     const selected = quoteOptions.value.find(q => q.id === ids[0])
-    if (selected?.project_name) form.project_name = selected.project_name
+    if (selected) {
+      if (!form.project_name) form.project_name = selected.project_name
+      if (!form.total_amount) form.total_amount = selected.total_amount || 0
+    }
   }
 }
 
