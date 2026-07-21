@@ -59,6 +59,20 @@ class ContractService:
         )
         return {row[0]: float(row[1]) for row in result.all()}
 
+    async def _calc_framework_total(self, contract_id: UUID) -> float:
+        """计算框架合同的金额 = 所有子项目金额之和"""
+        from sqlalchemy import select, func
+        from app.models.framework_contract import FrameworkContractProject
+
+        result = await self.db.execute(
+            select(func.coalesce(func.sum(FrameworkContractProject.project_amount), 0))
+            .where(
+                FrameworkContractProject.contract_id == contract_id,
+                FrameworkContractProject.deleted_at.is_(None),
+            )
+        )
+        return float(result.scalar())
+
     async def _auto_complete_if_paid(self, contracts: list) -> None:
         """已收金额>=合同金额时自动将状态改为已完成"""
         cids = [c.id for c in contracts]
@@ -146,6 +160,10 @@ class ContractService:
         for c in contracts:
             resp = self._to_response(c)
             paid = paid_map.get(c.id, 0.0)
+            # 框架合同：金额 = 子项目合计
+            if c.contract_type == "框架合同":
+                fw_total = await self._calc_framework_total(c.id)
+                resp["total_amount"] = fw_total
             resp["paid_amount"] = paid
             resp["unpaid_amount"] = max(0, resp["total_amount"] - paid)
             result.append(resp)
@@ -158,6 +176,9 @@ class ContractService:
         # Auto-complete if fully paid
         await self._auto_complete_if_paid([contract])
         result = self._to_detail(contract)
+        # 框架合同：金额 = 子项目合计
+        if contract.contract_type == "框架合同":
+            result["total_amount"] = await self._calc_framework_total(contract_id)
         # Override paid_amount with actual payments on linked orders
         result["paid_amount"] = await self._calc_paid_amount(contract_id)
         result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
