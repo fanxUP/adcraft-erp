@@ -663,6 +663,7 @@ export interface ContractResourceItem {
   order_no?: string
   quote_no?: string
   project_name: string
+  total_amount?: number
   customer_id?: string
   customer_name?: string
 }
