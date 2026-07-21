@@ -128,7 +128,7 @@
         <div class="signature-block">
           <div class="signature-label">乙方：{{ companyName || '制作安装方' }}（盖章）</div>
           <div class="signature-blank"></div>
-          <div class="signature-label">签字：</div>
+          <div class="signature-label">负责人签字：</div>
           <div class="signature-blank"></div>
           <div class="signature-label">联系电话：</div>
           <div class="signature-blank"></div>
