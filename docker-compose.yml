@@ -45,6 +45,7 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./logs:/app/logs
+      - ./.env:/app/.env
     depends_on:
       postgres:
         condition: service_healthy
