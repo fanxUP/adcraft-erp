@@ -48,7 +48,7 @@
       <el-form :model="form" label-width="100px">
         <el-form-item label="订单">
           <el-select v-model="form.order_id" placeholder="选择订单" filterable style="width: 100%">
-            <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} ${o.project_name}`" :value="o.id" />
+            <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="项目名称">
