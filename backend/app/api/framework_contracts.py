@@ -73,8 +73,9 @@ async def get_available_projects(
         FrameworkContractProjectOrder,
         FrameworkContractProjectQuote,
     )
+    from app.models.contract import ContractOrder, ContractQuote
 
-    # 已被其他项目关联的订单 ID（排除当前合同的项目）
+    # 已被其他框架合同项目关联的订单 ID（排除当前合同的项目）
     used_orders_sub = select(FrameworkContractProjectOrder.order_id).join(
         FrameworkContractProject,
         FrameworkContractProjectOrder.project_id == FrameworkContractProject.id,
@@ -84,7 +85,10 @@ async def get_available_projects(
             FrameworkContractProject.contract_id != UUID(contract_id)
         )
 
-    # 已被其他项目关联的报价 ID（排除当前合同的项目）
+    # 已被常规合同关联的订单 ID
+    co_sub = select(ContractOrder.order_id)
+
+    # 已被其他框架合同项目关联的报价 ID（排除当前合同的项目）
     used_quotes_sub = select(FrameworkContractProjectQuote.quote_id).join(
         FrameworkContractProject,
         FrameworkContractProjectQuote.project_id == FrameworkContractProject.id,
@@ -94,20 +98,24 @@ async def get_available_projects(
             FrameworkContractProject.contract_id != UUID(contract_id)
         )
 
-    # 客户下未关联的订单
+    # 已被常规合同关联的报价 ID
+    cq_sub = select(ContractQuote.quote_id)
+
+    # 客户下未关联的订单（排除已关联到任何常规合同或其他框架项目）
     orders_result = await db.execute(
         select(OrderModel)
         .where(
             OrderModel.deleted_at.is_(None),
             OrderModel.customer_id == UUID(customer_id),
             not_(OrderModel.id.in_(used_orders_sub)),
+            not_(OrderModel.id.in_(co_sub)),
         )
         .order_by(OrderModel.created_at.desc())
         .limit(500)
     )
     orders = orders_result.scalars().all()
 
-    # 客户下未关联的报价
+    # 客户下未关联的报价（排除已关联到任何常规合同或其他框架项目）
     quotes_result = await db.execute(
         select(QuoteModel)
         .where(
@@ -115,6 +123,7 @@ async def get_available_projects(
             QuoteModel.customer_id == UUID(customer_id),
             QuoteModel.status != "converted",
             not_(QuoteModel.id.in_(used_quotes_sub)),
+            not_(QuoteModel.id.in_(cq_sub)),
         )
         .order_by(QuoteModel.created_at.desc())
         .limit(500)
