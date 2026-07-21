@@ -596,25 +596,18 @@ const statusForm = reactive({
   reason: '',
   contract_id: '',
 })
+const STATUS_TRANSITIONS: Record<string, string[]> = {
+  draft: ['active', 'completed'],
+  active: ['draft', 'completed'],
+  completed: ['draft'],
+}
+
 const availableTransitions = computed(() => {
-  const map: Record<string, string[]> = {
-    draft: ['active', 'completed'],
-    active: ['draft', 'completed'],
-    completed: ['draft'],
-  }
-  return map[statusForm.current_status] || []
+  return STATUS_TRANSITIONS[statusForm.current_status] || []
 })
 
 function canChangeStatus(row: ContractListResponse) {
-  return availableTransitionsForStatus(row.status).length > 0
-}
-function availableTransitionsForStatus(s: string) {
-  const map: Record<string, string[]> = {
-    draft: ['active', 'completed'],
-    active: ['draft', 'completed'],
-    completed: ['draft'],
-  }
-  return map[s] || []
+  return (STATUS_TRANSITIONS[row.status] || []).length > 0
 }
 
 function handleStatusChange(row: ContractListResponse) {
