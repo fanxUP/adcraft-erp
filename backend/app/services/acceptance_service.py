@@ -109,9 +109,11 @@ class AcceptanceService:
 
         if data.get("our_acceptor_id"):
             data["our_acceptor_id"] = UUID(data["our_acceptor_id"])
-        if data.get("accepted_by") is not None:
+        elif "our_acceptor_id" in data and data["our_acceptor_id"] is None:
+            data["our_acceptor_id"] = None  # allow clearing
+        if "accepted_by" in data:
             data["accepted_by"] = data["accepted_by"]
-        if data.get("remark") is not None:
+        if "remark" in data:
             data["remark"] = data["remark"]
 
         items_data = data.pop("items", None)
