@@ -51,7 +51,7 @@ class FrameworkContractService:
     async def list_projects(self, contract_id: UUID, page: int, page_size: int) -> tuple[list, int]:
         skip = (page - 1) * page_size
         projects, total = await self.repo.list_by_contract(contract_id, skip=skip, limit=page_size)
-        result = [self._to_response(p) for p in projects]
+        result = [self._to_detail(p) for p in projects]
         return result, total
 
     async def get_project(self, project_id: UUID) -> dict | None:

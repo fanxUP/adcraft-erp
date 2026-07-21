@@ -1,5 +1,6 @@
 import uuid
 
+from datetime import datetime
 from sqlalchemy import DateTime, Numeric, String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -29,9 +30,9 @@ class Contract(Base, TimestampMixin, SoftDeleteMixin):
     unpaid_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
 
     # 日期
-    sign_date: Mapped[str | None] = mapped_column(DateTime, nullable=True)
-    start_date: Mapped[str | None] = mapped_column(DateTime, nullable=True)
-    end_date: Mapped[str | None] = mapped_column(DateTime, nullable=True)
+    sign_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    start_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    end_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # 签约方
     our_signatory: Mapped[str | None] = mapped_column(String(128), nullable=True, comment="我方签约人")

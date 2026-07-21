@@ -64,17 +64,24 @@ async def get_available_resources(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return orders and quotes not yet linked to any contract.
+    """Return orders and quotes not yet linked to any contract (including framework contract projects).
     If contract_id is provided (editing), also include resources already linked to that contract."""
     from sqlalchemy import select, not_
     from app.models.order import Order as OrderModel
     from app.models.quote import Quote as QuoteModel
     from app.models.contract import ContractOrder, ContractQuote
+    from app.models.framework_contract import (
+        FrameworkContractProjectOrder,
+        FrameworkContractProjectQuote,
+    )
 
     # Build subquery: order_ids that are in any contract (excluding current one if editing)
     co_sub = select(ContractOrder.order_id)
     if contract_id:
         co_sub = co_sub.where(ContractOrder.contract_id != UUID(contract_id))
+
+    # Also exclude orders already linked to framework contract projects
+    fw_co_sub = select(FrameworkContractProjectOrder.order_id)
 
     # Available orders: not deleted AND not in any other contract
     orders_result = await db.execute(
@@ -82,6 +89,7 @@ async def get_available_resources(
         .where(
             OrderModel.deleted_at.is_(None),
             not_(OrderModel.id.in_(co_sub)),
+            not_(OrderModel.id.in_(fw_co_sub)),
         )
         .order_by(OrderModel.created_at.desc())
         .limit(500)
@@ -93,12 +101,16 @@ async def get_available_resources(
     if contract_id:
         cq_sub = cq_sub.where(ContractQuote.contract_id != UUID(contract_id))
 
+    # Also exclude quotes already linked to framework contract projects
+    fw_cq_sub = select(FrameworkContractProjectQuote.quote_id)
+
     quotes_result = await db.execute(
         select(QuoteModel)
         .where(
             QuoteModel.deleted_at.is_(None),
             QuoteModel.status != "converted",
             not_(QuoteModel.id.in_(cq_sub)),
+            not_(QuoteModel.id.in_(fw_cq_sub)),
         )
         .order_by(QuoteModel.created_at.desc())
         .limit(500)

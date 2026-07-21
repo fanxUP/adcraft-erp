@@ -62,19 +62,37 @@ async def get_available_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """返回该客户下未被任何框架合同项目关联的订单和报价"""
+    """返回该客户下未被任何框架合同项目关联的订单和报价。
+    如果指定了 contract_id，则该合同下已关联的资源也会包含。
+    """
     from sqlalchemy import select, not_
     from app.models.order import Order as OrderModel
     from app.models.quote import Quote as QuoteModel
     from app.models.framework_contract import (
+        FrameworkContractProject,
         FrameworkContractProjectOrder,
         FrameworkContractProjectQuote,
     )
 
-    # 已被任何项目关联的订单 ID
-    used_orders_sub = select(FrameworkContractProjectOrder.order_id)
-    # 已被任何项目关联的报价 ID
-    used_quotes_sub = select(FrameworkContractProjectQuote.quote_id)
+    # 已被其他项目关联的订单 ID（排除当前合同的项目）
+    used_orders_sub = select(FrameworkContractProjectOrder.order_id).join(
+        FrameworkContractProject,
+        FrameworkContractProjectOrder.project_id == FrameworkContractProject.id,
+    )
+    if contract_id:
+        used_orders_sub = used_orders_sub.where(
+            FrameworkContractProject.contract_id != UUID(contract_id)
+        )
+
+    # 已被其他项目关联的报价 ID（排除当前合同的项目）
+    used_quotes_sub = select(FrameworkContractProjectQuote.quote_id).join(
+        FrameworkContractProject,
+        FrameworkContractProjectQuote.project_id == FrameworkContractProject.id,
+    )
+    if contract_id:
+        used_quotes_sub = used_quotes_sub.where(
+            FrameworkContractProject.contract_id != UUID(contract_id)
+        )
 
     # 客户下未关联的订单
     orders_result = await db.execute(

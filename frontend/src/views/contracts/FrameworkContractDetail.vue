@@ -192,7 +192,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getContract, updateContract, getContractAttachmentUrl } from '@/api/contracts'
 import {
-  getContractProjects, getContractProject,
+  getContractProjects,
   createContractProject, updateContractProject, deleteContractProject,
   uploadContractProjectAttachment, deleteContractProjectAttachment,
   getContractProjectAttachmentUrl, getAvailableResources,
@@ -236,10 +236,7 @@ async function fetchProjects() {
   loadingProjects.value = true
   try {
     const data = await getContractProjects(contractId, { page: projectPage.value, page_size: projectPageSize.value })
-    const details = await Promise.all(
-      data.items.map(p => getContractProject(p.id).catch(() => ({ ...p, orders: [], quotes: [] } as FrameworkContractProjectDetailResponse)))
-    )
-    projects.value = details
+    projects.value = data.items
     projectTotal.value = data.total
   } finally { loadingProjects.value = false }
 }
@@ -407,16 +404,22 @@ async function openEditProject(row: FrameworkContractProjectDetailResponse) {
     projectAttFileList.value = [{ name: detail.attachment_name }]
   }
   await loadAvailableResources()
-  // 编辑时把已关联但不在 available 中的资源加回来
+  // 编辑时把已关联但不在 available 中的资源加回来（去重）
+  const existingOrderIds = new Set(availableOrders.value.map(o => o.id))
   if (detail.orders) {
-    availableOrders.value = [...availableOrders.value, ...detail.orders.map(o => ({
-      id: o.id, order_no: o.order_no, project_name: o.project_name,
-    } as ContractResourceItem))]
+    for (const o of detail.orders) {
+      if (!existingOrderIds.has(o.id)) {
+        availableOrders.value.push(o as ContractResourceItem)
+      }
+    }
   }
+  const existingQuoteIds = new Set(availableQuotes.value.map(q => q.id))
   if (detail.quotes) {
-    availableQuotes.value = [...availableQuotes.value, ...detail.quotes.map(q => ({
-      id: q.id, quote_no: q.quote_no, project_name: q.project_name,
-    } as ContractResourceItem))]
+    for (const q of detail.quotes) {
+      if (!existingQuoteIds.has(q.id)) {
+        availableQuotes.value.push(q as ContractResourceItem)
+      }
+    }
   }
   projectVisible.value = true
 }
