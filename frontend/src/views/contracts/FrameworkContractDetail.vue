@@ -150,12 +150,12 @@
         </el-form-item>
         <el-form-item label="关联订单">
           <el-select v-model="projectForm.order_ids" multiple filterable style="width:100%">
-            <el-option v-for="o in availableOrders" :key="o.id" :label="`${o.order_no} — ${o.project_name}`" :value="o.id" />
+            <el-option v-for="o in availableOrders" :key="o.id" :label="`${o.order_no} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="关联报价">
           <el-select v-model="projectForm.quote_ids" multiple filterable style="width:100%">
-            <el-option v-for="q in availableQuotes" :key="q.id" :label="`${q.quote_no} — ${q.project_name}`" :value="q.id" />
+            <el-option v-for="q in availableQuotes" :key="q.id" :label="`${q.quote_no} — ${q.project_name} — ¥${(q.total_amount || 0).toFixed(2)}`" :value="q.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="备注">
