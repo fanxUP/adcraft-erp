@@ -304,7 +304,7 @@ const filters = reactive({ keyword: '', status: '' })
 async function fetchData() {
   loading.value = true
   try {
-    const params: Record<string, unknown> = { page: page.value, page_size: pageSize.value }
+    const params: Record<string, unknown> = { page: page.value, page_size: pageSize.value, exclude_contract_type: '框架合同' }
     if (filters.keyword) params.keyword = filters.keyword
     if (filters.status) params.status = filters.status
     const data = await getContracts(params)
