@@ -173,7 +173,6 @@ class ReportService:
         contract_ids = [ct.id for ct in all_contracts]
         paid_map: dict[UUID, float] = {}
         if contract_ids:
-            from decimal import Decimal
             paid_result = await self.db.execute(
                 select(
                     ContractOrder.contract_id,
@@ -189,6 +188,24 @@ class ReportService:
             )
             paid_map = {row[0]: float(row[1]) for row in paid_result.all()}
 
+        # Batch-fetch framework contract project totals (框架合同金额 = 子项目合计)
+        from app.models.framework_contract import FrameworkContractProject
+        fw_total_map: dict[UUID, float] = {}
+        fw_contract_ids = [ct.id for ct in all_contracts if ct.contract_type == "框架合同"]
+        if fw_contract_ids:
+            fw_result = await self.db.execute(
+                select(
+                    FrameworkContractProject.contract_id,
+                    func.coalesce(func.sum(FrameworkContractProject.project_amount), 0),
+                )
+                .where(
+                    FrameworkContractProject.contract_id.in_(fw_contract_ids),
+                    FrameworkContractProject.deleted_at.is_(None),
+                )
+                .group_by(FrameworkContractProject.contract_id)
+            )
+            fw_total_map = {row[0]: float(row[1]) for row in fw_result.all()}
+
         # Build response
         debts = []
         for c in customers:
@@ -201,10 +218,21 @@ class ReportService:
                 continue
 
             # Stats from contracts (paid_amount from actual payments, not stored value)
-            total_contract = float(sum(ct.total_amount for ct in customer_contracts))
+            # 框架合同金额 = 子项目合计
+            total_contract = 0.0
+            for ct in customer_contracts:
+                if ct.contract_type == "框架合同":
+                    total_contract += fw_total_map.get(ct.id, 0.0)
+                else:
+                    total_contract += float(ct.total_amount)
             total_paid = sum(paid_map.get(ct.id, 0.0) for ct in customer_contracts)
             total_debt = max(0.0, total_contract - total_paid)
             lp = last_payments.get(c.id)
+
+            def _ct_amount(ct):
+                if ct.contract_type == "框架合同":
+                    return fw_total_map.get(ct.id, 0.0)
+                return float(ct.total_amount)
 
             debts.append({
                 "customer_id": str(c.id),
@@ -221,9 +249,9 @@ class ReportService:
                         "id": str(ct.id),
                         "contract_no": ct.contract_no,
                         "project_name": ct.project_name,
-                        "total_amount": float(ct.total_amount),
+                        "total_amount": _ct_amount(ct),
                         "paid_amount": paid_map.get(ct.id, 0.0),
-                        "unpaid_amount": max(0, float(ct.total_amount) - paid_map.get(ct.id, 0.0)),
+                        "unpaid_amount": max(0, _ct_amount(ct) - paid_map.get(ct.id, 0.0)),
                         "status": ct.status,
                         "contract_type": ct.contract_type,
                     }
