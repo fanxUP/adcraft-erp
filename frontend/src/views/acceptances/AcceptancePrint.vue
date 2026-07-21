@@ -117,9 +117,9 @@
       <!-- 签字栏 -->
       <div class="preview-signatures">
         <div class="signature-block">
-          <div class="signature-label">甲方（{{ form.customer_name || '客户' }}）验收签字 / 盖章：</div>
+          <div class="signature-label">甲方：{{ form.customer_name || '客户' }}（盖章）</div>
           <div style="height: 50px;"></div>
-          <div class="signature-label">签字：</div>
+          <div class="signature-label">验收签字：</div>
           <div style="height: 50px;"></div>
           <div class="signature-label">联系电话：</div>
           <div style="height: 30px;"></div>
