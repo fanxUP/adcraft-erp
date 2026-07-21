@@ -43,8 +43,7 @@ class CustomerRepository:
     async def update(self, customer: Customer, data: dict) -> Customer:
         contacts_data = data.pop("contacts", None)
         for key, value in data.items():
-            if value is not None:
-                setattr(customer, key, value)
+            setattr(customer, key, value)
         if contacts_data is not None:
             # Delete all existing contacts
             result = await self.db.execute(

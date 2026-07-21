@@ -512,20 +512,20 @@ async function saveForm() {
   formLoading.value = true
   try {
     const payload = {
-      customer_id: form.customer_id || undefined,
+      customer_id: form.customer_id || null,
       customer_name: form.customer_name,
       project_name: form.project_name,
-      contract_type: form.contract_type || undefined,
+      contract_type: form.contract_type || null,
       total_amount: form.total_amount,
       paid_amount: form.paid_amount,
       unpaid_amount: form.total_amount - form.paid_amount,
-      sign_date: form.sign_date || undefined,
-      start_date: form.start_date || undefined,
-      end_date: form.end_date || undefined,
-      our_signatory: form.our_signatory || undefined,
-      customer_signatory: form.customer_signatory || undefined,
-      content: form.content || undefined,
-      remark: form.remark || undefined,
+      sign_date: form.sign_date || null,
+      start_date: form.start_date || null,
+      end_date: form.end_date || null,
+      our_signatory: form.our_signatory || null,
+      customer_signatory: form.customer_signatory || null,
+      content: form.content || null,
+      remark: form.remark || null,
       order_ids: form.order_ids,
       quote_ids: form.quote_ids,
     }
@@ -608,7 +608,7 @@ async function confirmStatusChange() {
   try {
     await changeContractStatus(statusForm.contract_id, {
       to_status: statusForm.to_status,
-      reason: statusForm.reason || undefined,
+      reason: statusForm.reason || null,
     })
     ElMessage.success('状态变更成功')
     statusDialogVisible.value = false

@@ -44,8 +44,7 @@ class DesignTaskRepository:
 
     async def update(self, task: DesignTask, data: dict) -> DesignTask:
         for key, value in data.items():
-            if value is not None:
-                setattr(task, key, value)
+            setattr(task, key, value)
         await self.db.flush()
         return task
 
@@ -83,8 +82,7 @@ class ProductionTaskRepository:
 
     async def update(self, task: ProductionTask, data: dict) -> ProductionTask:
         for key, value in data.items():
-            if value is not None:
-                setattr(task, key, value)
+            setattr(task, key, value)
         await self.db.flush()
         return task
 
@@ -126,8 +124,7 @@ class InstallationTaskRepository:
 
     async def update(self, task: InstallationTask, data: dict) -> InstallationTask:
         for key, value in data.items():
-            if value is not None:
-                setattr(task, key, value)
+            setattr(task, key, value)
         await self.db.flush()
         return task
 

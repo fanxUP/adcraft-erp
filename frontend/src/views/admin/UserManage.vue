@@ -145,9 +145,9 @@ async function handleSave() {
   try {
     if (isEditing.value) {
       const payload: Record<string, unknown> = {}
-      if (form.real_name) payload.real_name = form.real_name
-      if (form.phone) payload.phone = form.phone
-      if (form.email) payload.email = form.email
+      payload.real_name = form.real_name || null
+      payload.phone = form.phone || null
+      payload.email = form.email || null
       payload.is_active = form.is_active
       payload.role_ids = form.role_ids
       await updateUser(editingId.value, payload)
@@ -159,8 +159,8 @@ async function handleSave() {
       }
       await createUser({
         username: form.username, password: form.password,
-        real_name: form.real_name || undefined, phone: form.phone || undefined,
-        email: form.email || undefined, role_ids: form.role_ids,
+        real_name: form.real_name || null, phone: form.phone || null,
+        email: form.email || null, role_ids: form.role_ids,
       } as unknown)
       ElMessage.success('用户已创建')
     }

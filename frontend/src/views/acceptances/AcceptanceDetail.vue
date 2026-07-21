@@ -458,18 +458,18 @@ async function handleSave() {
       advance_amount: form.advance_amount || 0,
       items: form.items.map((item) => ({
         item_name: item.item_name,
-        material_process: item.material_process || undefined,
-        specification: item.specification || undefined,
-        area: item.area ?? undefined,
-        quantity: item.quantity || undefined,
-        unit: item.unit || undefined,
-        unit_price: item.unit_price ?? undefined,
-        subtotal: item.subtotal ?? undefined,
-        image_url: item.image_url || undefined,
-        order_item_id: item.order_item_id || undefined,
-        remark: item.remark || undefined,
+        material_process: item.material_process || null,
+        specification: item.specification || null,
+        area: item.area ?? null,
+        quantity: item.quantity || null,
+        unit: item.unit || null,
+        unit_price: item.unit_price ?? null,
+        subtotal: item.subtotal ?? null,
+        image_url: item.image_url || null,
+        order_item_id: item.order_item_id || null,
+        remark: item.remark || null,
         item_status: item.item_status,
-        group_name: item.group_name || undefined,
+        group_name: item.group_name || null,
       })),
     }
     await updateAcceptance(form.id, payload)
@@ -496,7 +496,7 @@ async function handleAccept() {
     cancelButtonText: '取消',
     inputValue: form.accepted_by || '',
   })
-  await changeAcceptanceStatus(form.id, { to_status: 'accepted', accepted_by: value || undefined })
+  await changeAcceptanceStatus(form.id, { to_status: 'accepted', accepted_by: value || null })
   ElMessage.success('已确认验收')
   loadDetail(form.id)
 }
