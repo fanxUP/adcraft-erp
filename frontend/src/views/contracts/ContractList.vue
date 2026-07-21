@@ -154,12 +154,12 @@
           </el-col>
         </el-row>
         <el-form-item label="关联订单">
-          <el-select v-model="form.order_ids" multiple filterable placeholder="选择关联订单" style="width: 100%" @change="onOrderChange">
+          <el-select v-model="form.order_id" filterable clearable placeholder="选择关联订单" style="width: 100%" @change="onOrderChange">
             <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="关联报价">
-          <el-select v-model="form.quote_ids" multiple filterable placeholder="选择关联报价" style="width: 100%" @change="onQuoteChange">
+          <el-select v-model="form.quote_id" filterable clearable placeholder="选择关联报价" style="width: 100%" @change="onQuoteChange">
             <el-option v-for="q in quoteOptions" :key="q.id" :label="`${q.quote_no} — ${q.department || '-'} — ${q.project_name} — ¥${(q.total_amount || 0).toFixed(2)}`" :value="q.id" />
           </el-select>
         </el-form-item>
@@ -340,8 +340,8 @@ const form = reactive({
   customer_signatory: '',
   content: '',
   remark: '',
-  order_ids: [] as string[],
-  quote_ids: [] as string[],
+  order_id: '' as string,
+  quote_id: '' as string,
 })
 const formRules = {
   customer_id: [{ required: true, message: '请选择客户', trigger: 'change' }],
@@ -407,8 +407,8 @@ function resetForm() {
   form.customer_signatory = ''
   form.content = ''
   form.remark = ''
-  form.order_ids = []
-  form.quote_ids = []
+  form.order_id = ''
+  form.quote_id = ''
   attFileName.value = ''
   ;pendingContractFile = null
   isEditing.value = false
@@ -445,23 +445,21 @@ function onCustomerChange(val: string) {
   if (c) form.customer_name = c.name
 }
 
-function onOrderChange(ids: string[]) {
-  if (ids.length > 0) {
-    const selected = orderOptions.value.find(o => o.id === ids[0])
-    if (selected) {
-      if (!form.project_name) form.project_name = selected.project_name
-      if (!form.total_amount) form.total_amount = selected.total_amount || 0
-    }
+function onOrderChange(val: string) {
+  if (!val) return
+  const selected = orderOptions.value.find(o => o.id === val)
+  if (selected) {
+    if (!form.project_name) form.project_name = selected.project_name
+    if (!form.total_amount) form.total_amount = selected.total_amount || 0
   }
 }
 
-function onQuoteChange(ids: string[]) {
-  if (ids.length > 0) {
-    const selected = quoteOptions.value.find(q => q.id === ids[0])
-    if (selected) {
-      if (!form.project_name) form.project_name = selected.project_name
-      if (!form.total_amount) form.total_amount = selected.total_amount || 0
-    }
+function onQuoteChange(val: string) {
+  if (!val) return
+  const selected = quoteOptions.value.find(q => q.id === val)
+  if (selected) {
+    if (!form.project_name) form.project_name = selected.project_name
+    if (!form.total_amount) form.total_amount = selected.total_amount || 0
   }
 }
 
@@ -499,8 +497,8 @@ async function handleEdit(row: ContractListResponse) {
     form.customer_signatory = detail.customer_signatory || ''
     form.content = detail.content || ''
     form.remark = detail.remark || ''
-    form.order_ids = detail.orders.map(o => o.id)
-    form.quote_ids = detail.quotes.map(q => q.id)
+    form.order_id = detail.orders?.[0]?.id || ''
+    form.quote_id = detail.quotes?.[0]?.id || ''
     attFileName.value = detail.attachment_name || ''
     await Promise.all([
       loadAllCustomers(),
@@ -532,8 +530,8 @@ async function saveForm() {
       customer_signatory: form.customer_signatory || null,
       content: form.content || null,
       remark: form.remark || null,
-      order_ids: form.order_ids,
-      quote_ids: form.quote_ids,
+      order_ids: form.order_id ? [form.order_id] : [],
+      quote_ids: form.quote_id ? [form.quote_id] : [],
     }
     if (isEditing.value) {
       await updateContract(editingId.value, payload)
