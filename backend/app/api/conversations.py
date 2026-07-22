@@ -93,8 +93,7 @@ async def search_business_objects(
     current_user: User = Depends(get_current_user),
 ):
     """搜索业务对象（用于名片分享）"""
-    from app.models.order import Order
-    from app.models.quote import Quote
+    from app.models.business_document import BusinessDocument
     from app.models.task import DesignTask, ProductionTask, InstallationTask
     from app.models.customer import Customer
 
@@ -103,20 +102,23 @@ async def search_business_objects(
 
     if type == "order":
         from sqlalchemy.orm import joinedload
-        query = select(Order).options(joinedload(Order.customer)).where(Order.deleted_at.is_(None))
+        query = select(BusinessDocument).options(joinedload(BusinessDocument.customer)).where(
+            BusinessDocument.doc_type == "order",
+            BusinessDocument.deleted_at.is_(None),
+        )
         if keyword:
-            query = query.join(Customer, Order.customer_id == Customer.id).where(
+            query = query.join(Customer, BusinessDocument.customer_id == Customer.id).where(
                 or_(
-                    Order.order_no.ilike(f"%{keyword}%"),
+                    BusinessDocument.doc_no.ilike(f"%{keyword}%"),
                     Customer.name.ilike(f"%{keyword}%"),
                 )
             )
-        query = query.order_by(Order.created_at.desc()).limit(limit)
+        query = query.order_by(BusinessDocument.created_at.desc()).limit(limit)
         rows = (await db.execute(query)).unique().scalars().all()
         results = [
             {
                 "id": str(o.id),
-                "title": f"订单 #{o.order_no}",
+                "title": f"订单 #{o.doc_no}",
                 "subtitle": f"客户: {o.customer.name if o.customer else '-'}",
                 "status": o.status,
                 "amount": float(o.total_amount) if o.total_amount else None,
@@ -125,20 +127,23 @@ async def search_business_objects(
         ]
 
     elif type == "quote":
-        query = select(Quote).where(Quote.deleted_at.is_(None))
+        query = select(BusinessDocument).where(
+            BusinessDocument.doc_type == "quote",
+            BusinessDocument.deleted_at.is_(None),
+        )
         if keyword:
             query = query.where(
                 or_(
-                    Quote.quote_no.ilike(f"%{keyword}%"),
-                    Quote.customer_name.ilike(f"%{keyword}%"),
+                    BusinessDocument.doc_no.ilike(f"%{keyword}%"),
+                    BusinessDocument.customer_name.ilike(f"%{keyword}%"),
                 )
             )
-        query = query.order_by(Quote.created_at.desc()).limit(limit)
+        query = query.order_by(BusinessDocument.created_at.desc()).limit(limit)
         rows = (await db.execute(query)).scalars().all()
         results = [
             {
                 "id": str(q.id),
-                "title": f"报价单 #{q.quote_no}",
+                "title": f"报价单 #{q.doc_no}",
                 "subtitle": f"客户: {q.customer_name or '-'}",
                 "status": q.status,
                 "amount": float(q.total_amount) if q.total_amount else None,
@@ -246,8 +251,7 @@ async def get_my_recent_objects(
     current_user: User = Depends(get_current_user),
 ):
     """获取用户最近创建/关联的业务对象"""
-    from app.models.order import Order
-    from app.models.quote import Quote
+    from app.models.business_document import BusinessDocument
     from app.models.task import DesignTask, ProductionTask, InstallationTask
     from app.models.customer import Customer, CustomerContact
     from sqlalchemy.orm import joinedload
@@ -256,34 +260,36 @@ async def get_my_recent_objects(
 
     if type == "order":
         query = (
-            select(Order)
-            .options(joinedload(Order.customer))
+            select(BusinessDocument)
+            .options(joinedload(BusinessDocument.customer))
             .where(
-                Order.deleted_at.is_(None),
-                Order.sales_user_id == current_user.id,
+                BusinessDocument.doc_type == "order",
+                BusinessDocument.deleted_at.is_(None),
+                BusinessDocument.sales_user_id == current_user.id,
             )
-            .order_by(Order.created_at.desc())
+            .order_by(BusinessDocument.created_at.desc())
             .limit(limit)
         )
         rows = (await db.execute(query)).unique().scalars().all()
         results = [
-            {"id": str(o.id), "title": f"订单 #{o.order_no}", "subtitle": f"客户: {o.customer.name if o.customer else '-'}", "status": o.status}
+            {"id": str(o.id), "title": f"订单 #{o.doc_no}", "subtitle": f"客户: {o.customer.name if o.customer else '-'}", "status": o.status}
             for o in rows
         ]
 
     elif type == "quote":
         query = (
-            select(Quote)
+            select(BusinessDocument)
             .where(
-                Quote.deleted_at.is_(None),
-                Quote.created_by == current_user.id,
+                BusinessDocument.doc_type == "quote",
+                BusinessDocument.deleted_at.is_(None),
+                BusinessDocument.created_by == current_user.id,
             )
-            .order_by(Quote.created_at.desc())
+            .order_by(BusinessDocument.created_at.desc())
             .limit(limit)
         )
         rows = (await db.execute(query)).scalars().all()
         results = [
-            {"id": str(q.id), "title": f"报价单 #{q.quote_no}", "subtitle": f"客户: {q.customer_name or '-'}", "status": q.status}
+            {"id": str(q.id), "title": f"报价单 #{q.doc_no}", "subtitle": f"客户: {q.customer_name or '-'}", "status": q.status}
             for q in rows
         ]
 
@@ -545,8 +551,7 @@ async def get_recommendations(
     db: AsyncSession = Depends(get_db),
 ):
     """根据聊天上下文智能推荐相关业务对象"""
-    from app.models.order import Order
-    from app.models.quote import Quote
+    from app.models.business_document import BusinessDocument
     from app.models.customer import Customer
     from sqlalchemy.orm import joinedload
     from collections import Counter
@@ -621,16 +626,17 @@ async def get_recommendations(
     try:
         for kw in top_keywords:
             query = (
-                select(Order)
-                .options(joinedload(Order.customer))
+                select(BusinessDocument)
+                .options(joinedload(BusinessDocument.customer))
                 .where(
-                    Order.deleted_at.is_(None),
+                    BusinessDocument.doc_type == "order",
+                    BusinessDocument.deleted_at.is_(None),
                     or_(
-                        Order.order_no.ilike(f"%{kw}%"),
-                        Order.project_name.ilike(f"%{kw}%"),
+                        BusinessDocument.doc_no.ilike(f"%{kw}%"),
+                        BusinessDocument.project_name.ilike(f"%{kw}%"),
                     ),
                 )
-                .order_by(Order.updated_at.desc())
+                .order_by(BusinessDocument.updated_at.desc())
                 .limit(3)
             )
             rows = (await db.execute(query)).unique().scalars().all()
@@ -641,7 +647,7 @@ async def get_recommendations(
                     results.append({
                         "id": oid,
                         "type": "order",
-                        "title": f"订单 #{o.order_no}",
+                        "title": f"订单 #{o.doc_no}",
                         "subtitle": f"客户: {o.customer.name if o.customer else '-'}",
                         "status": o.status,
                         "amount": float(o.total_amount) if o.total_amount else None,
@@ -653,16 +659,17 @@ async def get_recommendations(
     try:
         for kw in top_keywords:
             query = (
-                select(Quote)
+                select(BusinessDocument)
                 .where(
-                    Quote.deleted_at.is_(None),
+                    BusinessDocument.doc_type == "quote",
+                    BusinessDocument.deleted_at.is_(None),
                     or_(
-                        Quote.quote_no.ilike(f"%{kw}%"),
-                        Quote.customer_name.ilike(f"%{kw}%"),
-                        Quote.project_name.ilike(f"%{kw}%"),
+                        BusinessDocument.doc_no.ilike(f"%{kw}%"),
+                        BusinessDocument.customer_name.ilike(f"%{kw}%"),
+                        BusinessDocument.project_name.ilike(f"%{kw}%"),
                     ),
                 )
-                .order_by(Quote.updated_at.desc())
+                .order_by(BusinessDocument.updated_at.desc())
                 .limit(3)
             )
             rows = (await db.execute(query)).scalars().all()
@@ -673,7 +680,7 @@ async def get_recommendations(
                     results.append({
                         "id": qid,
                         "type": "quote",
-                        "title": f"报价单 #{q.quote_no}",
+                        "title": f"报价单 #{q.doc_no}",
                         "subtitle": f"客户: {q.customer_name or '-'}",
                         "status": q.status,
                         "amount": float(q.total_amount) if q.total_amount else None,
@@ -819,29 +826,28 @@ async def share_business_card(
 
 async def _get_card_data(db: AsyncSession, card_type: str, card_id: uuid.UUID) -> Optional[dict]:
     """获取业务卡片数据"""
-    from app.models.order import Order
-    from app.models.quote import Quote
+    from app.models.business_document import BusinessDocument
     from app.models.task import DesignTask, ProductionTask, InstallationTask
     from app.models.customer import Customer, CustomerContact
 
     if card_type == "order":
-        obj = await db.get(Order, card_id)
+        obj = await db.get(BusinessDocument, card_id)
         if obj:
             # 加载关联客户
             await db.refresh(obj, ["customer"])
             customer_name = obj.customer.name if obj.customer else "-"
             return {
-                "title": f"订单 #{obj.order_no}",
+                "title": f"订单 #{obj.doc_no}",
                 "subtitle": f"客户: {customer_name}",
                 "status": obj.status,
                 "amount": float(obj.total_amount) if obj.total_amount else None,
                 "customer_id": str(obj.customer_id) if obj.customer_id else None,
             }
     elif card_type == "quote":
-        obj = await db.get(Quote, card_id)
+        obj = await db.get(BusinessDocument, card_id)
         if obj:
             return {
-                "title": f"报价单 #{obj.quote_no}",
+                "title": f"报价单 #{obj.doc_no}",
                 "subtitle": f"客户: {obj.customer_name or '-'}",
                 "status": obj.status,
                 "amount": float(obj.total_amount) if obj.total_amount else None,

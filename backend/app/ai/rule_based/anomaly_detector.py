@@ -11,8 +11,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.order import Order
-from app.models.quote import Quote
+from app.models.business_document import BusinessDocument
 from app.models.customer import Customer
 from app.models.task import InstallationTask
 from app.models.outsource import OutsourceTask
@@ -82,9 +81,10 @@ class AnomalyDetector:
         alerts: list[dict] = []
 
         result = await self.db.execute(
-            select(Quote).where(
-                Quote.status.in_(["confirmed"]),
-                Quote.deleted_at.is_(None),
+            select(BusinessDocument).where(
+                BusinessDocument.doc_type == "quote",
+                BusinessDocument.status.in_(["confirmed"]),
+                BusinessDocument.deleted_at.is_(None),
             )
         )
         quotes = result.scalars().all()
@@ -104,7 +104,7 @@ class AnomalyDetector:
                     "severity": "warning",
                     "object_type": "quote",
                     "object_id": str(quote.id),
-                    "title": f"报价 {quote.quote_no} 可能低于成本",
+                    "title": f"报价 {quote.doc_no} 可能低于成本",
                     "detail": f"总价 ¥{float(quote.total_amount):,.2f}，估算成本 ¥{estimated_cost:,.2f}，差距 ¥{gap:,.2f}（{gap / estimated_cost * 100:.1f}%）",
                     "created_at": quote.created_at.isoformat() if quote.created_at else "",
                 })
@@ -118,11 +118,12 @@ class AnomalyDetector:
         alerts: list[dict] = []
 
         result = await self.db.execute(
-            select(Order).where(
-                Order.status.notin_(ORDER_TERMINAL_STATES),
-                Order.delivery_deadline.isnot(None),
-                Order.delivery_deadline < now,
-                Order.deleted_at.is_(None),
+            select(BusinessDocument).where(
+                BusinessDocument.doc_type == "order",
+                BusinessDocument.status.notin_(ORDER_TERMINAL_STATES),
+                BusinessDocument.delivery_deadline.isnot(None),
+                BusinessDocument.delivery_deadline < now,
+                BusinessDocument.deleted_at.is_(None),
             )
         )
         orders = result.scalars().all()
@@ -139,7 +140,7 @@ class AnomalyDetector:
                 "severity": severity,
                 "object_type": "order",
                 "object_id": str(order.id),
-                "title": f"订单 {order.order_no} 已逾期 {days_overdue} 天",
+                "title": f"订单 {order.doc_no} 已逾期 {days_overdue} 天",
                 "detail": f"项目「{order.project_name}」，状态「{order.status}」，交付截止 {deadline.strftime('%Y-%m-%d') if deadline else '未知'}",
                 "created_at": now.isoformat(),
             })
@@ -161,10 +162,10 @@ class AnomalyDetector:
 
         for task in install_tasks:
             order_result = await self.db.execute(
-                select(Order).where(
-                    Order.id == task.order_id,
-                    Order.unpaid_amount > 0,
-                    Order.deleted_at.is_(None),
+                select(BusinessDocument).where(
+                    BusinessDocument.id == task.document_id,
+                    BusinessDocument.unpaid_amount > 0,
+                    BusinessDocument.deleted_at.is_(None),
                 )
             )
             order = order_result.scalar_one_or_none()
@@ -174,7 +175,7 @@ class AnomalyDetector:
                     "severity": "warning",
                     "object_type": "order",
                     "object_id": str(order.id),
-                    "title": f"安装完成但未收款 — 订单 {order.order_no}",
+                    "title": f"安装完成但未收款 — 订单 {order.doc_no}",
                     "detail": f"项目「{order.project_name}」安装已完成，但仍未收款 ¥{float(order.unpaid_amount):,.2f}",
                     "created_at": task.completed_at.isoformat() if task.completed_at else "",
                 })
@@ -188,9 +189,10 @@ class AnomalyDetector:
         alerts: list[dict] = []
 
         result = await self.db.execute(
-            select(Order).where(
-                Order.unpaid_amount > 0,
-                Order.deleted_at.is_(None),
+            select(BusinessDocument).where(
+                BusinessDocument.doc_type == "order",
+                BusinessDocument.unpaid_amount > 0,
+                BusinessDocument.deleted_at.is_(None),
             )
         )
         orders = result.scalars().all()
@@ -218,7 +220,7 @@ class AnomalyDetector:
                     "object_type": "order",
                     "object_id": str(order.id),
                     "title": f"客户「{customer.name}」欠款超账期",
-                    "detail": f"订单 {order.order_no} 欠款 ¥{float(order.unpaid_amount):,.2f}，已超出账期 {days_past} 天（账期 {customer.default_payment_days} 天）",
+                    "detail": f"订单 {order.doc_no} 欠款 ¥{float(order.unpaid_amount):,.2f}，已超出账期 {days_past} 天（账期 {customer.default_payment_days} 天）",
                     "created_at": now.isoformat(),
                 })
 

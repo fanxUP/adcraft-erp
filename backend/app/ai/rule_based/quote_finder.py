@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.quote import Quote, QuoteItem
+from app.models.business_document import BusinessDocument, BusinessDocumentItem
 from app.models.product import Product, Material, Process
 
 
@@ -50,10 +50,11 @@ class QuoteFinder:
         """
         # Build base query
         query = (
-            select(Quote)
+            select(BusinessDocument)
             .where(
-                Quote.status.in_(["confirmed", "converted"]),
-                Quote.deleted_at.is_(None),
+                BusinessDocument.doc_type == "quote",
+                BusinessDocument.status.in_(["confirmed", "converted"]),
+                BusinessDocument.deleted_at.is_(None),
             )
         )
 
@@ -62,16 +63,16 @@ class QuoteFinder:
             pattern = f"%{keyword}%"
             query = query.where(
                 or_(
-                    Quote.project_name.ilike(pattern),
-                    Quote.id.in_(
-                        select(QuoteItem.quote_id).where(
-                            QuoteItem.item_name.ilike(pattern)
+                    BusinessDocument.project_name.ilike(pattern),
+                    BusinessDocument.id.in_(
+                        select(BusinessDocumentItem.document_id).where(
+                            BusinessDocumentItem.item_name.ilike(pattern)
                         )
                     ),
                 )
             )
 
-        query = query.order_by(Quote.created_at.desc()).limit(limit * 3)
+        query = query.order_by(BusinessDocument.created_at.desc()).limit(limit * 3)
 
         result = await self.db.execute(query)
         quotes = result.scalars().all()
@@ -106,7 +107,7 @@ class QuoteFinder:
 
             items_data.append({
                 "quote_id": str(quote.id),
-                "quote_no": quote.quote_no,
+                "quote_no": quote.doc_no,
                 "project_name": quote.project_name,
                 "total_area": round(total_area, 2),
                 "items_summary": "，".join(items_summary_parts[:5]),
