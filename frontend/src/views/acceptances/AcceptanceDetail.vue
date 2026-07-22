@@ -288,7 +288,7 @@
       </template>
     </el-dialog>
 
-    <div v-if="form.status === 'accepted' || form.status === 'rejected' || form.status === 'draft' || form.status === 'pending'" style="text-align: left; margin-top: 24px;">
+    <div style="text-align: left; margin-top: 24px;">
       <el-button type="primary" @click="showPrint = true">
         <el-icon><Printer /></el-icon> 打印预览
       </el-button>

@@ -174,11 +174,6 @@ class AcceptanceService:
             data["our_acceptor_id"] = UUID(data["our_acceptor_id"])
         elif "our_acceptor_id" in data and data["our_acceptor_id"] is None:
             data["our_acceptor_id"] = None  # allow clearing
-        if "accepted_by" in data:
-            data["accepted_by"] = data["accepted_by"]
-        if "remark" in data:
-            data["remark"] = data["remark"]
-
         items_data = data.pop("items", None)
         update_dict = {k: v for k, v in data.items() if k not in ("id", "acceptance_no", "order_id", "status")}
         if items_data is not None:
@@ -244,7 +239,7 @@ class AcceptanceService:
             "id": str(form.id),
             "acceptance_no": form.acceptance_no,
             "order_id": str(form.order_id) if form.order_id else None,
-            "order_no": form.order.order_no if form.order else (form.quote.quote_no if form.quote else None),
+            "order_no": form.order.order_no if form.order else None,
             "quote_id": str(form.quote_id) if form.quote_id else None,
             "quote_no": form.quote.quote_no if form.quote else None,
             "customer_name": (
@@ -310,7 +305,7 @@ class AcceptanceService:
             "id": str(form.id),
             "acceptance_no": form.acceptance_no,
             "order_id": str(form.order_id) if form.order_id else None,
-            "order_no": form.order.order_no if form.order else (form.quote.quote_no if form.quote else None),
+            "order_no": form.order.order_no if form.order else None,
             "quote_id": str(form.quote_id) if form.quote_id else None,
             "quote_no": form.quote.quote_no if form.quote else None,
             "customer_name": _customer_name,

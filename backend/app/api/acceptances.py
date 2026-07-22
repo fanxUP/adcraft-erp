@@ -11,6 +11,7 @@ from app.core.deps import get_current_user
 from app.core.permissions import require_any_role
 from app.models.user import User
 from app.schemas.common import success, success_paginated, error
+from app.repositories.acceptance_repo import AcceptanceRepository
 from app.services.acceptance_service import AcceptanceService
 
 router = APIRouter(prefix="/acceptances", tags=["验收单"])
@@ -162,8 +163,6 @@ async def upload_attachment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_any_role("admin", "sales")),
 ):
-    from app.repositories.acceptance_repo import AcceptanceRepository
-
     repo = AcceptanceRepository(db)
     form = await repo.get_by_id(uuid.UUID(acceptance_id))
     if not form:
@@ -199,8 +198,6 @@ async def delete_attachment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_any_role("admin", "sales")),
 ):
-    from app.repositories.acceptance_repo import AcceptanceRepository
-
     repo = AcceptanceRepository(db)
     att = await repo.get_attachment_by_id(uuid.UUID(att_id))
     if not att or str(att.acceptance_id) != acceptance_id:
