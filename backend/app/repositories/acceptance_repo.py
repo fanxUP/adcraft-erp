@@ -60,7 +60,10 @@ class AcceptanceRepository:
 
     async def list_available_orders(self) -> list[Order]:
         """Return orders not yet linked to any acceptance (exclude cancelled)."""
-        ac_sub = select(AcceptanceForm.order_id).where(AcceptanceForm.deleted_at.is_(None))
+        ac_sub = select(AcceptanceForm.order_id).where(
+            AcceptanceForm.deleted_at.is_(None),
+            AcceptanceForm.order_id.isnot(None),
+        )
         result = await self.db.execute(
             select(Order)
             .options(selectinload(Order.customer))
