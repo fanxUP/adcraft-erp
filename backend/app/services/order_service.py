@@ -332,6 +332,21 @@ class OrderService:
                 task.unit_price = float(quote["total_amount"])
                 task.total_amount = float(quote["total_amount"])
 
+        # 同步更新关联验收单：订单转报价后，验收单来源切换为报价
+        from app.models.acceptance import AcceptanceForm
+        acceptances = (await self.db.execute(
+            select(AcceptanceForm).where(
+                AcceptanceForm.order_id == order_id,
+                AcceptanceForm.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        quote_uuid = UUID(quote["id"]) if isinstance(quote["id"], str) else quote["id"]
+        for acc in acceptances:
+            acc.quote_id = quote_uuid
+            acc.order_id = None
+        if acceptances:
+            await self.db.flush()
+
         # 转报价后订单保留在回收站（不硬删除，不清理关联数据）
         await self.db.flush()
 
