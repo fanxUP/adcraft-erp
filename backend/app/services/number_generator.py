@@ -7,12 +7,12 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     pattern = f"{prefix}{today}-%"
 
-    if prefix == "Q":
+    if prefix == "O":
         from app.models.quote import Quote
         result = await db.execute(
             select(Quote.quote_no).where(Quote.quote_no.like(pattern)).order_by(Quote.quote_no.desc()).limit(1)
         )
-    elif prefix == "O":
+    elif prefix == "S":
         from app.models.order import Order
         result = await db.execute(
             select(Order.order_no).where(Order.order_no.like(pattern)).order_by(Order.order_no.desc()).limit(1)
@@ -52,23 +52,31 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
         result = await db.execute(
             select(Expense.expense_no).where(Expense.expense_no.like(pattern)).order_by(Expense.expense_no.desc()).limit(1)
         )
-    elif prefix == "SO":
+    elif prefix in ("SO", "Q"):
+        # 兼容旧编号格式，统一映射到新前缀
         from app.models.quote import Quote
         from app.models.order import Order
-        result1 = await db.execute(
-            select(Quote.quote_no).where(Quote.quote_no.like(pattern)).order_by(Quote.quote_no.desc()).limit(1)
+        q_result = await db.execute(
+            select(Quote.quote_no).where(Quote.quote_no.like(f"O{today}-%")).order_by(Quote.quote_no.desc()).limit(1)
         )
-        result2 = await db.execute(
-            select(Order.order_no).where(Order.order_no.like(pattern)).order_by(Order.order_no.desc()).limit(1)
+        o_result = await db.execute(
+            select(Order.order_no).where(Order.order_no.like(f"S{today}-%")).order_by(Order.order_no.desc()).limit(1)
         )
-        last1 = result1.scalar_one_or_none()
-        last2 = result2.scalar_one_or_none()
-        last = last1 if (last1 and last1 >= (last2 or '')) else last2
-        if last:
-            seq = int(last.split("-")[1]) + 1
-        else:
-            seq = 1
-        return f"SO{today}-{seq:04d}"
+        old_q = await db.execute(
+            select(Quote.quote_no).where(Quote.quote_no.like(f"{prefix}{today}-%")).order_by(Quote.quote_no.desc()).limit(1)
+        )
+        old_o = await db.execute(
+            select(Order.order_no).where(Order.order_no.like(f"{prefix}{today}-%")).order_by(Order.order_no.desc()).limit(1)
+        )
+        candidates = []
+        for r in [q_result, o_result, old_q, old_o]:
+            v = r.scalar_one_or_none()
+            if v:
+                candidates.append(int(v.split("-")[1]))
+        seq = max(candidates) + 1 if candidates else 1
+        if prefix == "Q":
+            return f"O{today}-{seq:04d}"
+        return f"S{today}-{seq:04d}"
     elif prefix == "V":
         from app.models.outsource import OutsourceVendor
         result = await db.execute(
@@ -120,11 +128,11 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
 
 
 async def generate_quote_no(db: AsyncSession) -> str:
-    return await _generate_no(db, "Q")
+    return await _generate_no(db, "O")
 
 
 async def generate_order_no(db: AsyncSession) -> str:
-    return await _generate_no(db, "SO")
+    return await _generate_no(db, "S")
 
 
 async def generate_customer_no(db: AsyncSession) -> str:
