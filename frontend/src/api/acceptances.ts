@@ -3,7 +3,8 @@ import type { PaginatedData, AcceptanceListResponse, AcceptanceDetailResponse } 
 
 export interface AvailableOrder {
   id: string
-  order_no: string
+  order_no?: string
+  quote_no?: string
   customer_name?: string
   project_name: string
   total_amount: number
@@ -14,6 +15,10 @@ export interface AvailableOrder {
 
 export function getAvailableOrders() {
   return get<AvailableOrder[]>('/acceptances/available-orders')
+}
+
+export function getAvailableQuotes() {
+  return get<AvailableOrder[]>('/acceptances/available-quotes')
 }
 
 export function getAcceptances(params: {
@@ -32,6 +37,7 @@ export function getAcceptance(id: string) {
 
 export function createAcceptance(data: {
   order_id?: string
+  quote_id?: string
   accepted_by?: string
   our_acceptor_id?: string
   remark?: string

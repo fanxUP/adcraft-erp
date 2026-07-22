@@ -26,22 +26,24 @@
     <el-tabs v-model="activeTab">
       <!-- 基本信息 -->
       <el-tab-pane label="基本信息" name="info">
-        <!-- 订单信息头 — 编辑和只读模式均显示 -->
-        <el-card class="order-info-card" v-if="form.order_id">
+        <!-- 关联信息头 — 编辑和只读模式均显示 -->
+        <el-card class="order-info-card" v-if="form.order_id || form.quote_id">
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="订单编号">{{ form.order_no || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="form.order_id ? '订单编号' : '报价单号'">
+              {{ form.order_no || form.quote_no || '-' }}
+            </el-descriptions-item>
             <el-descriptions-item label="客户名称">{{ form.customer_name || '-' }}</el-descriptions-item>
             <el-descriptions-item label="项目名称" :span="2">{{ form.project_name || '-' }}</el-descriptions-item>
             <el-descriptions-item label="联系人">{{ form.contact_person || '-' }}</el-descriptions-item>
             <el-descriptions-item label="联系电话">{{ form.contact_phone || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="客户地址" :span="2">{{ form.customer_address || '-' }}</el-descriptions-item>
+            <el-descriptions-item v-if="form.order_id" label="客户地址" :span="2">{{ form.customer_address || '-' }}</el-descriptions-item>
             <el-descriptions-item label="部门/科室">{{ form.department || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="下单日期">{{ form.order_date?.slice(0, 10) || '-' }}</el-descriptions-item>
+            <el-descriptions-item v-if="form.order_id" label="下单日期">{{ form.order_date?.slice(0, 10) || '-' }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
         <el-card class="order-info-card" v-else>
           <div style="color: var(--ad-text-secondary); text-align: center; padding: 16px;">
-            独立验收单（未关联订单）
+            独立验收单（未关联订单或报价单）
           </div>
         </el-card>
 
@@ -432,6 +434,8 @@ const form = reactive<AcceptanceDetailResponse>({
   acceptance_no: '',
   order_id: '',
   order_no: '',
+  quote_id: '',
+  quote_no: '',
   customer_name: '',
   project_name: '',
   contact_person: '',

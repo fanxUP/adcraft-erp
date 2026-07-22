@@ -21,6 +21,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 class AcceptanceCreate(BaseModel):
     order_id: str | None = None
+    quote_id: str | None = None
     accepted_by: str | None = None
     our_acceptor_id: str | None = None
     remark: str | None = None
@@ -48,6 +49,17 @@ async def list_available_orders(
     """Return orders that don't have an acceptance yet."""
     service = AcceptanceService(db)
     items = await service.list_available_orders()
+    return success(items)
+
+
+@router.get("/available-quotes")
+async def list_available_quotes(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return confirmed quotes that don't have an acceptance yet."""
+    service = AcceptanceService(db)
+    items = await service.list_available_quotes()
     return success(items)
 
 

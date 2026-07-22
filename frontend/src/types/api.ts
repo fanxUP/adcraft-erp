@@ -1053,6 +1053,8 @@ export interface AcceptanceListResponse {
   acceptance_no: string
   order_id?: string
   order_no?: string
+  quote_id?: string
+  quote_no?: string
   customer_name?: string
   project_name?: string
   department?: string

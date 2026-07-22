@@ -37,6 +37,8 @@ class AcceptanceListResponse(BaseModel):
     acceptance_no: str
     order_id: Optional[str] = None
     order_no: Optional[str] = None
+    quote_id: Optional[str] = None
+    quote_no: Optional[str] = None
     customer_name: Optional[str] = None
     status: str
     accepted_at: Optional[str] = None
@@ -50,6 +52,8 @@ class AcceptanceDetailResponse(BaseModel):
     id: str
     acceptance_no: str
     order_id: Optional[str] = None
+    quote_id: Optional[str] = None
+    quote_no: Optional[str] = None
     order_no: Optional[str] = None
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
