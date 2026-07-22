@@ -101,7 +101,10 @@ async def change_order_status(
 ):
     service = OrderService(db)
     oid = UUID(order_id)
-    order = await service.change_status(oid, data.to_status, data.reason, current_user.id)
+    try:
+        order = await service.change_status(oid, data.to_status, data.reason, current_user.id)
+    except ValueError as e:
+        return error(40001, str(e))
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_ORDER, oid, ACTION_STATUS_CHANGE,
                         ip_address=request.client.host if request.client else None,
