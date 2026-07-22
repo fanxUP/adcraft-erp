@@ -7,9 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from app.models.order import Order
+from app.models.business_document import BusinessDocument
 from app.models.project_cost import ProjectCost
-from app.models.quote import Quote
 from app.models.task import Attachment
 from app.repositories.project_cost_repo import ProjectCostRepository
 from app.repositories.task_repo import AttachmentRepository
@@ -23,13 +22,19 @@ class ProjectCostService:
         self.repo = ProjectCostRepository(db)
         self.attachment_repo = AttachmentRepository(db)
 
-    async def _sync_order_cost(self, order_id: UUID | None) -> None:
-        """Re-calculate order cost from all sources (outsource + material stock + project costs)."""
-        if not order_id:
+    async def _sync_document_cost(self, document_id: UUID | None) -> None:
+        """Re-calculate order cost when the associated document is an order."""
+        if not document_id:
+            return
+        result = await self.db.execute(
+            select(BusinessDocument.doc_type).where(BusinessDocument.id == document_id)
+        )
+        doc_type = result.scalar_one_or_none()
+        if doc_type != "order":
             return
         from app.services.order_service import OrderService
         order_svc = OrderService(self.db)
-        await order_svc.auto_calculate_cost(order_id)
+        await order_svc.auto_calculate_cost(document_id)
 
     async def list_costs(
         self,
@@ -76,36 +81,40 @@ class ProjectCostService:
         return d
 
     async def create_cost(self, data: dict, created_by: UUID) -> dict:
-        source_type = data.get("source_type", "order")
+        # Resolve document_id from backward-compat params
+        document_id = None
+        if data.get("document_id"):
+            document_id = UUID(data["document_id"])
+        elif data.get("order_id"):
+            document_id = UUID(data["order_id"])
+        elif data.get("quote_id"):
+            document_id = UUID(data["quote_id"])
+
         customer_id_val = None
         project_name_val = None
-        order_id_val = None
-        quote_id_val = None
-        quote_no_val = None
+        doc_no_val = None
+        doc_type_val = None
 
-        if source_type == "quote":
-            quote_id = UUID(data["quote_id"])
+        if document_id:
             result = await self.db.execute(
-                select(Quote.id, Quote.customer_id, Quote.project_name, Quote.quote_no).where(Quote.id == quote_id)
+                select(BusinessDocument).where(BusinessDocument.id == document_id)
             )
-            quote_row = result.one_or_none()
-            if not quote_row:
-                raise ValueError("报价单不存在")
-            quote_id_val = quote_row[0]
-            customer_id_val = quote_row[1]
-            project_name_val = quote_row[2]
-            quote_no_val = quote_row[3]
-        else:
-            order_id = UUID(data["order_id"])
-            result = await self.db.execute(
-                select(Order.id, Order.customer_id, Order.project_name).where(Order.id == order_id)
-            )
-            order_row = result.one_or_none()
-            if not order_row:
-                raise ValueError("订单不存在")
-            order_id_val = order_row[0]
-            customer_id_val = order_row[1]
-            project_name_val = order_row[2]
+            doc = result.scalar_one_or_none()
+            if not doc:
+                raise ValueError("业务单据不存在")
+            customer_id_val = doc.customer_id
+            project_name_val = doc.project_name
+            doc_no_val = doc.doc_no
+            doc_type_val = doc.doc_type
+
+        # Resolve document_item_id from backward-compat params
+        document_item_id = None
+        if data.get("document_item_id"):
+            document_item_id = UUID(data["document_item_id"])
+        elif data.get("order_item_id"):
+            document_item_id = UUID(data["order_item_id"])
+        elif data.get("quote_item_id"):
+            document_item_id = UUID(data["quote_item_id"])
 
         debt_amount = data.get("debt_amount")
         if debt_amount is not None:
@@ -115,9 +124,7 @@ class ProjectCostService:
 
         cost = ProjectCost(
             cost_no=await generate_project_cost_no(self.db),
-            source_type=source_type,
-            order_id=order_id_val,
-            quote_id=quote_id_val,
+            document_id=document_id,
             customer_id=customer_id_val,
             category=data["category"],
             amount=data["amount"],
@@ -130,8 +137,7 @@ class ProjectCostService:
             unit=data.get("unit"),
             unit_price=data.get("unit_price"),
             remark=data.get("remark"),
-            order_item_id=UUID(data["order_item_id"]) if data.get("order_item_id") else None,
-            quote_item_id=UUID(data["quote_item_id"]) if data.get("quote_item_id") else None,
+            document_item_id=document_item_id,
             payment_method=data.get("payment_method"),
             payee_company_name=data.get("payee_company_name"),
             debt_amount=debt_amount,
@@ -143,19 +149,23 @@ class ProjectCostService:
         if data.get("group_name"):
             cost.group_name = data["group_name"]
         await self.repo.create(cost)
-        if order_id_val:
-            await self._sync_order_cost(order_id_val)
+        if document_id:
+            await self._sync_document_cost(document_id)
         return {
             "id": str(cost.id),
             "cost_no": cost.cost_no,
-            "source_type": cost.source_type,
-            "order_id": str(cost.order_id) if cost.order_id else None,
-            "quote_id": str(cost.quote_id) if cost.quote_id else None,
-            "quote_no": quote_no_val,  # use locally fetched value
-            "order_item_id": str(cost.order_item_id) if cost.order_item_id else None,
-            "quote_item_id": str(cost.quote_item_id) if cost.quote_item_id else None,
+            "source_type": doc_type_val,
+            "document_id": str(cost.document_id) if cost.document_id else None,
+            "doc_no": doc_no_val,
+            "order_id": str(cost.document_id) if cost.document_id else None,
+            "quote_id": str(cost.document_id) if cost.document_id and doc_type_val == "quote" else None,
+            "order_no": doc_no_val if doc_type_val == "order" else None,
+            "quote_no": doc_no_val if doc_type_val == "quote" else None,
+            "document_item_id": str(cost.document_item_id) if cost.document_item_id else None,
+            "order_item_id": str(cost.document_item_id) if cost.document_item_id and doc_type_val == "order" else None,
+            "quote_item_id": str(cost.document_item_id) if cost.document_item_id and doc_type_val == "quote" else None,
             "group_name": cost.group_name,
-            "order_item_name": None,  # avoid lazy load in import context
+            "order_item_name": None,  # populated via document_item relationship on read
             "quote_item_name": None,
             "customer_id": str(cost.customer_id) if cost.customer_id else None,
             "customer_name": None,  # populated by list query via relationship
@@ -188,7 +198,7 @@ class ProjectCostService:
         if "cost_date" in data and data["cost_date"] is not None:
             data = {**data, "cost_date": datetime.fromisoformat(data["cost_date"])}
         await self.repo.update(c, data)
-        await self._sync_order_cost(c.order_id)
+        await self._sync_document_cost(c.document_id)
         # Re-fetch with relationships loaded for response
         c = await self.repo.get_by_id(cost_id)
         return self._to_dict(c)
@@ -197,29 +207,28 @@ class ProjectCostService:
         c = await self.repo.get_by_id(cost_id)
         if not c:
             raise ValueError("项目成本记录不存在")
-        order_id = c.order_id
+        document_id = c.document_id
         await self.repo.soft_delete(c)
-        if order_id:
-            await self._sync_order_cost(order_id)
+        if document_id:
+            await self._sync_document_cost(document_id)
 
     async def batch_delete_costs(self, cost_ids: list[UUID]) -> int:
-        from app.models.order import Order
         from app.models.project_cost import ProjectCost
         from sqlalchemy import select
-        # Collect order_ids before deletion for cost sync
+        # Collect document_ids before deletion for cost sync
         result = await self.db.execute(
-            select(ProjectCost.order_id)
+            select(ProjectCost.document_id)
             .where(ProjectCost.id.in_(cost_ids), ProjectCost.deleted_at.is_(None))
         )
-        order_ids = {row[0] for row in result.all() if row[0]}
+        document_ids = {row[0] for row in result.all() if row[0]}
         deleted = await self.repo.batch_soft_delete(cost_ids)
-        for oid in order_ids:
-            await self._sync_order_cost(oid)
+        for did in document_ids:
+            await self._sync_document_cost(did)
         return deleted
 
-    async def get_costs_summary(self, order_ids: list[UUID]) -> dict[str, float]:
-        """Return {order_id: total_cost} for a batch of orders."""
-        return await self.repo.get_costs_summary(order_ids)
+    async def get_costs_summary(self, document_ids: list[UUID]) -> dict[str, float]:
+        """Return {document_id: total_cost} for a batch of documents."""
+        return await self.repo.get_costs_summary(document_ids)
 
     async def list_debts(
         self,
@@ -230,12 +239,11 @@ class ProjectCostService:
     ) -> tuple[list, int]:
         """List all cost debts."""
         from sqlalchemy import or_
-        from app.models.order import Order as OrderModel
         from app.models.customer import Customer as CustomerModel
 
         skip = (page - 1) * page_size
         q = select(ProjectCost).options(
-            selectinload(ProjectCost.order),
+            selectinload(ProjectCost.document),
             selectinload(ProjectCost.customer),
         ).where(
             ProjectCost.deleted_at.is_(None),
@@ -245,10 +253,10 @@ class ProjectCostService:
             q = q.where(ProjectCost.is_settled == is_settled)
         if keyword:
             fuzzy = f"%{keyword}%"
-            q = q.join(ProjectCost.order).join(ProjectCost.customer, isouter=True).where(
+            q = q.join(ProjectCost.document).join(ProjectCost.customer, isouter=True).where(
                 or_(
-                    OrderModel.order_no.ilike(fuzzy),
-                    OrderModel.project_name.ilike(fuzzy),
+                    BusinessDocument.doc_no.ilike(fuzzy),
+                    BusinessDocument.project_name.ilike(fuzzy),
                     CustomerModel.name.ilike(fuzzy),
                 )
             )
@@ -264,13 +272,6 @@ class ProjectCostService:
         result_list = []
         for c in costs:
             d = self._to_dict(c)
-            if c.source_type == "quote" and c.quote:
-                d["quote_no"] = c.quote.quote_no
-                d["order_no"] = None
-            elif c.order:
-                d["order_no"] = c.order.order_no
-                d["quote_no"] = None
-            d["customer_name"] = c.customer.name if c.customer else None
             result_list.append(d)
         return result_list, total
 
@@ -296,7 +297,7 @@ class ProjectCostService:
         # Also create a formal cost entry for the settled debt amount
         settle_cost = ProjectCost(
             cost_no=await generate_project_cost_no(self.db),
-            order_id=c.order_id,
+            document_id=c.document_id,
             customer_id=c.customer_id,
             category=c.category,
             amount=settle_data.get("settle_amount", float(c.debt_amount or 0)),
@@ -310,7 +311,7 @@ class ProjectCostService:
             created_by=c.created_by,
         )
         await self.repo.create(settle_cost)
-        await self._sync_order_cost(c.order_id)
+        await self._sync_document_cost(c.document_id)
 
         return self._to_dict(c)
 
@@ -324,7 +325,7 @@ class ProjectCostService:
 
         wb = openpyxl.load_workbook(file, read_only=True)
         ws = wb.active
-        # Read header row to build column name → index mapping
+        # Read header row to build column name -> index mapping
         headers = list(ws.iter_rows(min_row=1, max_row=1, values_only=True))
         if not headers or not headers[0]:
             return {"created": 0, "errors": [{"row": 1, "error": "Excel 文件缺少表头行"}]}
@@ -352,8 +353,7 @@ class ProjectCostService:
                 continue
             try:
                 if order_id or quote_id:
-                    # Import within order context — order_id pre-set
-                    order_item_name = str(get("分项") or "").strip() or None
+                    # Import within document context — document_id pre-set
                     category = str(get("成本类别") or "").strip()
                     payment_method = str(get("付款方式") or "").strip() or None
                     payee_company_name = str(get("收款公司") or "").strip() or None
@@ -403,10 +403,9 @@ class ProjectCostService:
                     }, created_by)
                 else:
                     # Standalone import — Excel must include order_no/报价单编号
-                    order_no = str(get("订单编号") or get("报价单编号") or "").strip()
-                    if not order_no:
+                    doc_no = str(get("订单编号") or get("报价单编号") or "").strip()
+                    if not doc_no:
                         continue
-                    order_item_name = str(get("分项") or "").strip() or None
                     category = str(get("成本类别") or "").strip()
                     payment_method = str(get("付款方式") or "").strip() or None
                     payee_company_name = str(get("收款公司") or "").strip() or None
@@ -425,15 +424,17 @@ class ProjectCostService:
                     summary = str(get("成本摘要") or "").strip() or None
                     remark = str(get("备注") or "").strip() or None
 
-                    if not order_no or not category or amount <= 0:
-                        errors.append({"row": i, "error": "订单编号、成本类别和金额(>0)为必填项"})
+                    if not doc_no or not category or amount <= 0:
+                        errors.append({"row": i, "error": "单据编号、成本类别和金额(>0)为必填项"})
                         continue
 
-                    # Look up order by order_no
-                    order_result = await self.db.execute(select(Order).where(Order.order_no == order_no))
-                    order_obj = order_result.scalar_one_or_none()
-                    if not order_obj:
-                        errors.append({"row": i, "error": f"订单编号「{order_no}」不存在"})
+                    # Look up document by doc_no
+                    doc_result = await self.db.execute(
+                        select(BusinessDocument).where(BusinessDocument.doc_no == doc_no)
+                    )
+                    doc_obj = doc_result.scalar_one_or_none()
+                    if not doc_obj:
+                        errors.append({"row": i, "error": f"单据编号「{doc_no}」不存在"})
                         continue
 
                     cost_date = None
@@ -444,8 +445,8 @@ class ProjectCostService:
                             cost_date = datetime.strptime(cost_date_str, "%Y-%m-%d")
 
                     await self.create_cost({
-                        "source_type": source_type,
-                        "order_id": str(order_obj.id) if order_obj else None,
+                        "source_type": doc_obj.doc_type,
+                        "order_id": str(doc_obj.id),
                         "category": category,
                         "amount": amount,
                         "payment_method": payment_method,
@@ -483,22 +484,39 @@ class ProjectCostService:
 
     def _to_dict(self, c: ProjectCost) -> dict:
         project_name = None
-        if c.source_type == "quote" and c.quote:
-            project_name = c.quote.project_name
-        elif c.order:
-            project_name = c.order.project_name
+        doc_no = None
+        doc_type = None
+        document_id_str = str(c.document_id) if c.document_id else None
+        document_item_id_str = str(c.document_item_id) if c.document_item_id else None
+
+        if c.document:
+            project_name = c.document.project_name
+            doc_no = c.document.doc_no
+            doc_type = c.document.doc_type
+
+        # Backward-compat: derive item_name from document_item
+        item_name = c.document_item.item_name if c.document_item else None
+
         return {
             "id": str(c.id),
             "cost_no": c.cost_no,
-            "source_type": c.source_type,
-            "order_id": str(c.order_id) if c.order_id else None,
-            "quote_id": str(c.quote_id) if c.quote_id else None,
-            "quote_no": c.quote.quote_no if c.quote else None,
-            "order_item_id": str(c.order_item_id) if c.order_item_id else None,
-            "quote_item_id": str(c.quote_item_id) if c.quote_item_id else None,
+            # New unified fields
+            "document_id": document_id_str,
+            "doc_no": doc_no,
+            "doc_type": doc_type,
+            "document_item_id": document_item_id_str,
+            # Backward-compat aliases
+            "source_type": doc_type,
+            "order_id": document_id_str,
+            "quote_id": document_id_str if doc_type == "quote" else None,
+            "order_no": doc_no if doc_type == "order" else None,
+            "quote_no": doc_no if doc_type == "quote" else None,
+            "order_item_id": document_item_id_str if doc_type == "order" else None,
+            "quote_item_id": document_item_id_str if doc_type == "quote" else None,
             "group_name": c.group_name,
-            "order_item_name": c.order_item.item_name if c.order_item else None,
-            "quote_item_name": c.quote_item.item_name if c.quote_item else None,
+            "order_item_name": item_name if doc_type == "order" else None,
+            "quote_item_name": item_name if doc_type == "quote" else None,
+            "document_item_name": item_name,
             "customer_id": str(c.customer_id) if c.customer_id else None,
             "customer_name": c.customer.name if c.customer else None,
             "project_name": project_name,

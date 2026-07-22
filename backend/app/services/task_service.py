@@ -41,7 +41,8 @@ class DesignTaskService:
         return {
             "id": str(task.id),
             "design_no": task.design_no,
-            "order_id": str(task.order_id),
+            "document_id": str(task.document_id),
+            "order_id": str(task.document_id),  # backward-compat alias
             "customer_id": str(task.customer_id),
             "project_name": task.project_name,
             "status": task.status,
@@ -134,7 +135,8 @@ class ProductionTaskService:
         return {
             "id": str(task.id),
             "production_no": task.production_no,
-            "order_id": str(task.order_id),
+            "document_id": str(task.document_id),
+            "order_id": str(task.document_id),  # backward-compat alias
             "customer_id": str(task.customer_id),
             "project_name": task.project_name,
             "status": task.status,
@@ -233,7 +235,8 @@ class InstallationTaskService:
         return {
             "id": str(task.id),
             "installation_no": task.installation_no,
-            "order_id": str(task.order_id),
+            "document_id": str(task.document_id),
+            "order_id": str(task.document_id),  # backward-compat alias
             "customer_id": str(task.customer_id),
             "project_name": task.project_name,
             "status": task.status,

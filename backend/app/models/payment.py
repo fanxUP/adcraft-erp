@@ -25,7 +25,7 @@ class Payment(Base, TimestampMixin):
     receipt_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
-    order: Mapped["Order"] = relationship(lazy="selectin")
+    document: Mapped["BusinessDocument"] = relationship(lazy="selectin")
 
 
 class CustomerStatement(Base, TimestampMixin):

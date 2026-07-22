@@ -25,7 +25,7 @@ class DesignTaskRepository:
             else:
                 q = q.where(DesignTask.status.in_(status_list))
         if order_id:
-            q = q.where(DesignTask.order_id == UUID(order_id))
+            q = q.where(DesignTask.document_id == UUID(order_id))
         if assigned_to:
             q = q.where(DesignTask.assigned_to == UUID(assigned_to))
 
@@ -63,7 +63,7 @@ class ProductionTaskRepository:
         if status:
             q = q.where(ProductionTask.status == status)
         if order_id:
-            q = q.where(ProductionTask.order_id == UUID(order_id))
+            q = q.where(ProductionTask.document_id == UUID(order_id))
         if assigned_to:
             q = q.where(ProductionTask.assigned_to == UUID(assigned_to))
 
@@ -105,7 +105,7 @@ class InstallationTaskRepository:
             else:
                 q = q.where(InstallationTask.status.in_(status_list))
         if order_id:
-            q = q.where(InstallationTask.order_id == UUID(order_id))
+            q = q.where(InstallationTask.document_id == UUID(order_id))
         if assigned_to:
             q = q.where(InstallationTask.assigned_to == UUID(assigned_to))
 

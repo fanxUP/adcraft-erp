@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.payment import Payment, CustomerStatement, Expense
+from app.models.business_document import BusinessDocument
 from app.repositories.payment_repo import PaymentRepository, StatementRepository, ExpenseRepository
 from app.services.number_generator import generate_payment_no, generate_statement_no, generate_expense_no
 
@@ -23,15 +24,18 @@ class PaymentService:
         return self._to_dict(p) if p else None
 
     async def create_payment(self, data: dict, created_by: UUID) -> dict:
-        from app.repositories.order_repo import OrderRepository
-        order_repo = OrderRepository(self.db)
-        order = await order_repo.get_by_id(data["order_id"])
-        if not order:
-            raise ValueError("订单不存在")
+        # Support backward-compat: accept order_id from schema, map to document_id
+        document_id = data.get("order_id") or data.get("document_id")
+        if not document_id:
+            raise ValueError("缺少关联单据ID")
+
+        doc = await self.db.get(BusinessDocument, document_id)
+        if not doc:
+            raise ValueError("单据不存在")
 
         payment = Payment(
             payment_no=await generate_payment_no(self.db),
-            order_id=data["order_id"],
+            document_id=document_id,
             customer_id=data["customer_id"],
             amount=data["amount"],
             payment_method=data.get("payment_method"),
@@ -45,19 +49,20 @@ class PaymentService:
         # Notify admin/finance about payment
         from app.services.notification_service import NotificationService
         notif_svc = NotificationService(self.db)
-        # Notify all admin users (simplified - in production, query users with finance/admin roles)
-        if order.sales_user_id:
+        if doc.sales_user_id:
             await notif_svc.create_system_notification(
-                user_id=order.sales_user_id,
+                user_id=doc.sales_user_id,
                 type_="payment_received",
                 title=f"收款到账: {payment.payment_no}",
-                content=f"订单 {order.order_no} 收到 {data['amount']} 元",
+                content=f"单据 {doc.doc_no} 收到 {data['amount']} 元",
                 link=f"/payments",
             )
 
-        paid = await self.repo.get_order_paid_sum(data["order_id"])
-        unpaid = max(0, float(order.total_amount) - paid)
-        await order_repo.update(order, {"paid_amount": paid, "unpaid_amount": unpaid})
+        paid = await self.repo.get_document_paid_sum(document_id)
+        unpaid = max(0, float(doc.total_amount) - paid)
+        doc.paid_amount = paid
+        doc.unpaid_amount = unpaid
+        await self.db.flush()
 
         return self._to_dict(payment)
 
@@ -70,25 +75,28 @@ class PaymentService:
 
         await self.repo.void(p, reason)
 
-        from app.repositories.order_repo import OrderRepository
-        order_repo = OrderRepository(self.db)
-        order = await order_repo.get_by_id(p.order_id)
-        if order:
-            paid = await self.repo.get_order_paid_sum(p.order_id)
-            unpaid = max(0, float(order.total_amount) - paid)
-            await order_repo.update(order, {"paid_amount": paid, "unpaid_amount": unpaid})
+        doc = await self.db.get(BusinessDocument, p.document_id)
+        if doc:
+            paid = await self.repo.get_document_paid_sum(p.document_id)
+            unpaid = max(0, float(doc.total_amount) - paid)
+            doc.paid_amount = paid
+            doc.unpaid_amount = unpaid
+            await self.db.flush()
 
         return self._to_dict(p)
 
     def _to_dict(self, p: Payment) -> dict:
+        doc = p.document
         return {
             "id": str(p.id),
             "payment_no": p.payment_no,
-            "order_id": str(p.order_id),
-            "order_no": p.order.order_no if p.order else None,
+            "document_id": str(p.document_id),
+            "order_id": str(p.document_id),  # backward-compat alias
+            "doc_no": doc.doc_no if doc else None,
+            "order_no": doc.doc_no if doc else None,  # backward-compat alias
             "customer_id": str(p.customer_id),
-            "customer_name": p.order.customer.name if p.order and p.order.customer else None,
-            "project_name": p.order.project_name if p.order else None,
+            "customer_name": doc.customer.name if doc and doc.customer else None,
+            "project_name": doc.project_name if doc else None,
             "amount": float(p.amount),
             "payment_method": p.payment_method,
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
@@ -122,10 +130,10 @@ class StatementService:
         start = datetime.fromisoformat(data["start_date"])
         end = datetime.fromisoformat(data["end_date"])
 
-        orders = await self.repo.get_orders_in_range(data["customer_id"], start, end)
+        documents = await self.repo.get_documents_in_range(data["customer_id"], start, end)
         payments = await self.repo.get_payments_in_range(data["customer_id"], start, end)
 
-        total_order = sum(float(o.total_amount) for o in orders)
+        total_order = sum(float(d.total_amount) for d in documents)
         total_paid = sum(float(p.amount) for p in payments)
         total_unpaid = total_order - total_paid
 
@@ -165,16 +173,16 @@ class StatementService:
         }
 
     async def _to_detail(self, s: CustomerStatement) -> dict:
-        orders = await self.repo.get_orders_in_range(s.customer_id, s.start_date, s.end_date)
+        documents = await self.repo.get_documents_in_range(s.customer_id, s.start_date, s.end_date)
         payments = await self.repo.get_payments_in_range(s.customer_id, s.start_date, s.end_date)
         base = self._to_summary(s)
         base["orders"] = [
             {
-                "id": str(o.id), "order_no": o.order_no, "project_name": o.project_name,
-                "status": o.status, "total_amount": float(o.total_amount),
-                "paid_amount": float(o.paid_amount), "unpaid_amount": float(o.unpaid_amount),
+                "id": str(d.id), "order_no": d.doc_no, "project_name": d.project_name,
+                "status": d.status, "total_amount": float(d.total_amount),
+                "paid_amount": float(d.paid_amount), "unpaid_amount": float(d.unpaid_amount),
             }
-            for o in orders
+            for d in documents
         ]
         base["payments"] = [
             {

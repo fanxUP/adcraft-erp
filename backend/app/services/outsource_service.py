@@ -51,9 +51,9 @@ class OutsourceService:
     # ── Task ──
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
-                         vendor_id: UUID | None = None, order_id: UUID | None = None) -> tuple[list, int]:
+                         vendor_id: UUID | None = None, related_doc_id: UUID | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        tasks, total = await self.task_repo.list_tasks(skip, page_size, status, vendor_id, order_id)
+        tasks, total = await self.task_repo.list_tasks(skip, page_size, status, vendor_id, related_doc_id)
         result = []
         for t in tasks:
             vname = await self._task_vendor_name(t)
@@ -77,10 +77,14 @@ class OutsourceService:
         data["task_no"] = await generate_outsource_task_no(self.db)
         # 移除前端传入的响应-only 字段，避免 ORM 报错
         data.pop("related_project_name", None)
+        # 向后兼容：接受 order_id 参数，映射到 related_doc_id
+        if "order_id" in data:
+            if not data.get("related_doc_id"):
+                data["related_doc_id"] = data["order_id"]
+            data.pop("order_id")
         # 空字符串转 None，避免 UUID 字段报错
-        for k in ("related_doc_id", "order_id"):
-            if k in data and not data[k]:
-                data[k] = None
+        if "related_doc_id" in data and not data["related_doc_id"]:
+            data["related_doc_id"] = None
         if "quantity" not in data:
             data["quantity"] = 1
         qty = Decimal(str(data.get("quantity", 1)))
@@ -99,10 +103,14 @@ class OutsourceService:
             raise ValueError("外协任务不存在")
         # 移除前端传入的响应-only 字段，避免 ORM 报错
         data.pop("related_project_name", None)
+        # 向后兼容：接受 order_id 参数，映射到 related_doc_id
+        if "order_id" in data:
+            if not data.get("related_doc_id"):
+                data["related_doc_id"] = data["order_id"]
+            data.pop("order_id")
         # 空字符串转 None，避免 UUID 字段报错
-        for k in ("related_doc_id", "order_id"):
-            if k in data and not data[k]:
-                data[k] = None
+        if "related_doc_id" in data and not data["related_doc_id"]:
+            data["related_doc_id"] = None
         # 编辑已取消的任务时自动恢复为待处理（重新激活）
         if task.status == "cancelled":
             data["status"] = "pending"
@@ -206,14 +214,10 @@ class OutsourceService:
     async def _related_project_name(self, doc_id: UUID | None, doc_type: str | None) -> str | None:
         if not doc_id or not doc_type:
             return None
-        if doc_type == "quote":
-            from app.models.quote import Quote
-            result = await self.db.execute(select(Quote.project_name).where(Quote.id == doc_id))
-        elif doc_type == "order":
-            from app.models.order import Order
-            result = await self.db.execute(select(Order.project_name).where(Order.id == doc_id))
-        else:
-            return None
+        from app.models.business_document import BusinessDocument
+        result = await self.db.execute(
+            select(BusinessDocument.project_name).where(BusinessDocument.id == doc_id)
+        )
         return result.scalar_one_or_none()
 
 
@@ -260,7 +264,7 @@ class OutsourceService:
             "related_doc_id": str(t.related_doc_id) if t.related_doc_id else None,
             "related_doc_type": t.related_doc_type,
             "related_project_name": related_project_name,
-            "order_id": str(t.order_id) if t.order_id else None,
+            "order_id": str(t.related_doc_id) if t.related_doc_id else None,
             "task_type": t.task_type,
             "description": t.description,
             "quantity": t.quantity,

@@ -20,17 +20,17 @@ class ContractService:
         self.repo = ContractRepository(db)
 
     async def _calc_paid_amount(self, contract_id: UUID) -> float:
-        """计算合同已收金额 = 关联订单的收款总和（不含已作废）"""
+        """计算合同已收金额 = 关联单据的收款总和（不含已作废）"""
         from sqlalchemy import select, func
         from app.models.payment import Payment
-        from app.models.contract import ContractOrder
+        from app.models.contract import ContractDocument
 
         result = await self.db.execute(
             select(func.coalesce(func.sum(Payment.amount), 0))
             .select_from(Payment)
-            .join(ContractOrder, ContractOrder.order_id == Payment.order_id)
+            .join(ContractDocument, ContractDocument.document_id == Payment.document_id)
             .where(
-                ContractOrder.contract_id == contract_id,
+                ContractDocument.contract_id == contract_id,
                 Payment.is_voided == False,
             )
         )
@@ -42,20 +42,20 @@ class ContractService:
             return {}
         from sqlalchemy import select, func
         from app.models.payment import Payment
-        from app.models.contract import ContractOrder
+        from app.models.contract import ContractDocument
 
         result = await self.db.execute(
             select(
-                ContractOrder.contract_id,
+                ContractDocument.contract_id,
                 func.coalesce(func.sum(Payment.amount), 0),
             )
             .select_from(Payment)
-            .join(ContractOrder, ContractOrder.order_id == Payment.order_id)
+            .join(ContractDocument, ContractDocument.document_id == Payment.document_id)
             .where(
-                ContractOrder.contract_id.in_(contract_ids),
+                ContractDocument.contract_id.in_(contract_ids),
                 Payment.is_voided == False,
             )
-            .group_by(ContractOrder.contract_id)
+            .group_by(ContractDocument.contract_id)
         )
         return {row[0]: float(row[1]) for row in result.all()}
 
@@ -129,6 +129,7 @@ class ContractService:
         base = self._to_response(contract)
         # Override paid_amount with dynamic calculation
         # (requires caller to call async after construction, handled in get_contract)
+        all_docs = contract.documents or []
         base.update({
             "customer_id": str(contract.customer_id),
             "our_signatory": contract.our_signatory,
@@ -138,23 +139,34 @@ class ContractService:
             "attachment_path": contract.attachment_path,
             "attachment_name": contract.attachment_name,
             "created_by": str(contract.created_by) if contract.created_by else None,
+            "documents": [
+                {
+                    "id": str(d.id),
+                    "doc_no": d.doc_no,
+                    "doc_type": d.doc_type,
+                    "project_name": d.project_name,
+                    "total_amount": float(d.total_amount) if d.total_amount else 0,
+                }
+                for d in all_docs
+            ],
+            # Backward-compat: keep orders/quotes split for frontend
             "orders": [
                 {
-                    "id": str(o.id),
-                    "order_no": o.order_no,
-                    "project_name": o.project_name,
-                    "total_amount": float(o.total_amount) if o.total_amount else 0,
+                    "id": str(d.id),
+                    "order_no": d.doc_no,
+                    "project_name": d.project_name,
+                    "total_amount": float(d.total_amount) if d.total_amount else 0,
                 }
-                for o in (contract.orders or [])
+                for d in all_docs if d.doc_type == "order"
             ],
             "quotes": [
                 {
-                    "id": str(q.id),
-                    "quote_no": q.quote_no,
-                    "project_name": q.project_name,
-                    "total_amount": float(q.total_amount) if q.total_amount else 0,
+                    "id": str(d.id),
+                    "quote_no": d.doc_no,
+                    "project_name": d.project_name,
+                    "total_amount": float(d.total_amount) if d.total_amount else 0,
                 }
-                for q in (contract.quotes or [])
+                for d in all_docs if d.doc_type == "quote"
             ],
         })
         return base
@@ -200,18 +212,25 @@ class ContractService:
         # 框架合同：金额 = 子项目合计
         if contract.contract_type == "框架合同":
             result["total_amount"] = await self._calc_framework_total(contract_id)
-        # Override paid_amount with actual payments on linked orders
+        # Override paid_amount with actual payments on linked documents
         result["paid_amount"] = await self._calc_paid_amount(contract_id)
         result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
         return result
 
+    def _combine_document_ids(self, data: dict) -> list[UUID]:
+        """Combine order_ids + quote_ids (backward compat) or use document_ids."""
+        # If document_ids provided directly, use it
+        if "document_ids" in data:
+            raw = data.pop("document_ids", [])
+            return [UUID(did) for did in (raw or [])]
+        # Fallback: combine order_ids + quote_ids
+        order_ids = data.pop("order_ids", [])
+        quote_ids = data.pop("quote_ids", [])
+        return [UUID(oid) for oid in (order_ids or [])] + [UUID(qid) for qid in (quote_ids or [])]
+
     async def create_contract(self, data: dict) -> dict:
         data["contract_no"] = await generate_contract_no(self.db)
-        order_ids = data.get("order_ids", [])
-        quote_ids = data.get("quote_ids", [])
-        # Convert string UUIDs to actual UUIDs for the repo
-        data["order_ids"] = [UUID(oid) for oid in (order_ids or [])]
-        data["quote_ids"] = [UUID(qid) for qid in (quote_ids or [])]
+        data["document_ids"] = self._combine_document_ids(data)
         if data.get("customer_id"):
             data["customer_id"] = UUID(data["customer_id"])
         # Convert date strings to date objects
@@ -224,7 +243,7 @@ class ContractService:
                     data[field] = datetime.fromisoformat(val).date()
 
         contract = await self.repo.create(data)
-        # Re-fetch to load secondary relationships (orders/quotes)
+        # Re-fetch to load secondary relationships (documents)
         contract = await self.repo.get_by_id(contract.id)
         # Auto-complete if fully paid
         await self._auto_complete_if_paid([contract])
@@ -238,11 +257,11 @@ class ContractService:
         if not contract:
             raise ValueError("合同不存在")
 
-        # Convert string UUIDs
-        if data.get("order_ids") is not None:
-            data["order_ids"] = [UUID(oid) for oid in data["order_ids"]]
-        if data.get("quote_ids") is not None:
-            data["quote_ids"] = [UUID(qid) for qid in data["quote_ids"]]
+        # Handle document_ids update (also support backward-compat order_ids/quote_ids)
+        has_doc_update = any(k in data for k in ("document_ids", "order_ids", "quote_ids"))
+        if has_doc_update:
+            data["document_ids"] = self._combine_document_ids(data)
+
         if data.get("customer_id"):
             data["customer_id"] = UUID(data["customer_id"])
         # Convert date strings to date objects
