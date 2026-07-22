@@ -40,6 +40,13 @@
           </el-descriptions>
         </el-card>
 
+        <!-- 验收审批流程图 -->
+        <AcceptanceWorkflow
+          :current-status="form.status"
+          :changing="statusChanging"
+          @change="handleWorkflowChange"
+        />
+
         <el-card style="margin-top: 16px;">
           <!-- 编辑模式：显示表单 -->
           <el-form v-if="canEdit" :model="form" label-width="140px">
@@ -304,6 +311,7 @@ import type {
   AcceptanceItemResponse, UserResponse
 } from '@/types/api'
 import AcceptancePrint from './AcceptancePrint.vue'
+import AcceptanceWorkflow from './AcceptanceWorkflow.vue'
 
 const route = useRoute()
 const activeTab = ref('info')
@@ -487,6 +495,42 @@ async function handleSubmit() {
   await changeAcceptanceStatus(form.id, { to_status: 'pending' })
   ElMessage.success('已提交验收')
   loadDetail(form.id)
+}
+
+async function handleWorkflowChange(toStatus: string) {
+  if (toStatus === 'pending') {
+    await ElMessageBox.confirm('确定提交验收？提交后将无法编辑。', '提示')
+    statusChanging.value = true
+    try {
+      await changeAcceptanceStatus(form.id, { to_status: 'pending' })
+      ElMessage.success('已提交验收')
+      loadDetail(form.id)
+    } finally { statusChanging.value = false }
+  } else if (toStatus === 'accepted') {
+    const { value } = await ElMessageBox.prompt('请输入客户签收人（可选）', '确认验收', {
+      inputPlaceholder: '签收人姓名',
+      confirmButtonText: '确认验收',
+      cancelButtonText: '取消',
+      inputValue: form.accepted_by || '',
+    })
+    statusChanging.value = true
+    try {
+      await changeAcceptanceStatus(form.id, { to_status: 'accepted', accepted_by: value || null })
+      ElMessage.success('已确认验收')
+      loadDetail(form.id)
+    } finally { statusChanging.value = false }
+  } else if (toStatus === 'rejected') {
+    rejectReason.value = ''
+    rejectDialogVisible.value = true
+  } else if (toStatus === 'draft') {
+    await ElMessageBox.confirm('确定退回草稿？退回后可重新编辑。', '提示')
+    statusChanging.value = true
+    try {
+      await changeAcceptanceStatus(form.id, { to_status: 'draft' })
+      ElMessage.success('已退回草稿')
+      loadDetail(form.id)
+    } finally { statusChanging.value = false }
+  }
 }
 
 async function handleAccept() {
