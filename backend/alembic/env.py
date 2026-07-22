@@ -8,8 +8,7 @@ from app.models.base import Base
 from app.models.user import User, Role, Permission
 from app.models.customer import Customer, CustomerContact
 from app.models.product import ProductCategory, Product, Material, Process, PriceRule
-from app.models.quote import Quote, QuoteItem, QuoteVersion
-from app.models.order import Order, OrderItem, OrderStatusLog
+from app.models.business_document import BusinessDocument, BusinessDocumentItem, BusinessDocumentStatusLog, BusinessDocumentVersion
 from app.models.operation_log import OperationLog
 from app.models.task import DesignTask, ProductionTask, InstallationTask, Attachment
 from app.models.payment import Payment, CustomerStatement, Expense
@@ -19,7 +18,8 @@ from app.models.project_cost import ProjectCost
 from app.models.chat import Conversation, ConversationMember, Message, MessageReadReceipt, UserPresence
 from app.models.notification import Notification
 from app.models.acceptance import AcceptanceForm, AcceptanceItem, AcceptanceAttachment
-from app.models.contract import Contract, ContractOrder, ContractQuote
+from app.models.contract import Contract, ContractDocument
+from app.models.framework_contract import FrameworkContractProject, FrameworkContractProjectDocument
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
