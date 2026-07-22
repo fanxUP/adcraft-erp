@@ -120,7 +120,7 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
 
 
 async def generate_quote_no(db: AsyncSession) -> str:
-    return await _generate_no(db, "SO")
+    return await _generate_no(db, "Q")
 
 
 async def generate_order_no(db: AsyncSession) -> str:
