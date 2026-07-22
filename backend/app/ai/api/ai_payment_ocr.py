@@ -14,7 +14,7 @@ from app.core.deps import get_current_user
 from app.core.config import settings
 from app.schemas.common import success
 from app.models.user import User
-from app.models.order import Order
+from app.models.business_document import BusinessDocument
 from app.models.customer import Customer
 from app.ai.core.resolver import FeatureResolver
 
@@ -54,7 +54,11 @@ async def recognize_payment_screenshot(
     order_context = None
     if order_id:
         o_result = await db.execute(
-            select(Order).where(Order.id == UUID(order_id), Order.deleted_at.is_(None))
+            select(BusinessDocument).where(
+                BusinessDocument.doc_type == "order",
+                BusinessDocument.id == UUID(order_id),
+                BusinessDocument.deleted_at.is_(None),
+            )
         )
         order = o_result.scalar_one_or_none()
         if order:
@@ -65,7 +69,7 @@ async def recognize_payment_screenshot(
             order_context = {
                 "customer_name": customer.name if customer else "未知",
                 "unpaid_amount": float(order.unpaid_amount or 0),
-                "order_no": order.order_no,
+                "order_no": order.doc_no,
             }
 
     # 3. Rule-based: empty fields
