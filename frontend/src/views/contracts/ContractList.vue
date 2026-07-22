@@ -32,7 +32,14 @@
       <el-table-column prop="customer_name" label="客户名称" width="160" />
       <el-table-column prop="department" label="部门/科室" width="120" />
       <el-table-column prop="project_name" label="项目名称" min-width="200" />
-      <el-table-column prop="source" label="来源" width="100" />
+      <el-table-column prop="source" label="来源" width="100">
+        <template #default="{ row }">
+          <el-tag v-if="row.source === '订单'" type="primary" size="small">订单</el-tag>
+          <el-tag v-else-if="row.source === '报价'" type="success" size="small">报价</el-tag>
+          <el-tag v-else-if="row.source === '订单+报价'" type="warning" size="small">订单+报价</el-tag>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
       <el-table-column label="合同金额" width="140">
         <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
