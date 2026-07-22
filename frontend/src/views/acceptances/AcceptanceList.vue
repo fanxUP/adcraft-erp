@@ -124,8 +124,8 @@
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAcceptances, deleteAcceptance, getAvailableOrders, getAvailableQuotes, createAcceptance } from '@/api/acceptances'
-import type { AvailableOrder } from '@/api/acceptances'
+import { getAcceptances, deleteAcceptance, getAvailableItems, getAvailableQuotes, createAcceptance } from '@/api/acceptances'
+import type { AvailableItem } from '@/api/acceptances'
 import type { AcceptanceListResponse } from '@/types/api'
 
 const router = useRouter()
@@ -139,19 +139,19 @@ const filters = reactive({ keyword: '', status: '' })
 
 // 新建验收单弹窗（统一合并订单+报价单）
 const showCreateDialog = ref(false)
-const availableItems = ref<AvailableOrder[]>([])
+const availableItems = ref<AvailableItem[]>([])
 const loadingItems = ref(false)
 
 async function loadAvailableItems() {
   loadingItems.value = true
   try {
-    const [orders, quotes] = await Promise.all([getAvailableOrders(), getAvailableQuotes()])
+    const [orders, quotes] = await Promise.all([getAvailableItems(), getAvailableQuotes()])
     availableItems.value = [...orders, ...quotes]
   } catch { /* ignore */ }
   finally { loadingItems.value = false }
 }
 
-async function handleCreateFromItem(row: AvailableOrder) {
+async function handleCreateFromItem(row: AvailableItem) {
   try {
     const payload = row.order_no ? { order_id: row.id } : { quote_id: row.id }
     const data = await createAcceptance(payload)
