@@ -7,15 +7,12 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     pattern = f"{prefix}{today}-%"
 
-    if prefix == "O":
-        from app.models.quote import Quote
+    if prefix in ("O", "S"):
+        from app.models.business_document import BusinessDocument
         result = await db.execute(
-            select(Quote.quote_no).where(Quote.quote_no.like(pattern)).order_by(Quote.quote_no.desc()).limit(1)
-        )
-    elif prefix == "S":
-        from app.models.order import Order
-        result = await db.execute(
-            select(Order.order_no).where(Order.order_no.like(pattern)).order_by(Order.order_no.desc()).limit(1)
+            select(BusinessDocument.doc_no).where(
+                BusinessDocument.doc_no.like(pattern)
+            ).order_by(BusinessDocument.doc_no.desc()).limit(1)
         )
     elif prefix == "C":
         from app.models.customer import Customer
@@ -53,27 +50,18 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
             select(Expense.expense_no).where(Expense.expense_no.like(pattern)).order_by(Expense.expense_no.desc()).limit(1)
         )
     elif prefix in ("SO", "Q"):
-        # 兼容旧编号格式，统一映射到新前缀
-        from app.models.quote import Quote
-        from app.models.order import Order
-        q_result = await db.execute(
-            select(Quote.quote_no).where(Quote.quote_no.like(f"O{today}-%")).order_by(Quote.quote_no.desc()).limit(1)
+        # 兼容旧编号格式 — 统一查询 business_documents
+        from app.models.business_document import BusinessDocument
+        result = await db.execute(
+            select(BusinessDocument.doc_no).where(
+                BusinessDocument.doc_no.like(f"%{today}-%")
+            ).order_by(BusinessDocument.doc_no.desc()).limit(1)
         )
-        o_result = await db.execute(
-            select(Order.order_no).where(Order.order_no.like(f"S{today}-%")).order_by(Order.order_no.desc()).limit(1)
-        )
-        old_q = await db.execute(
-            select(Quote.quote_no).where(Quote.quote_no.like(f"{prefix}{today}-%")).order_by(Quote.quote_no.desc()).limit(1)
-        )
-        old_o = await db.execute(
-            select(Order.order_no).where(Order.order_no.like(f"{prefix}{today}-%")).order_by(Order.order_no.desc()).limit(1)
-        )
-        candidates = []
-        for r in [q_result, o_result, old_q, old_o]:
-            v = r.scalar_one_or_none()
-            if v:
-                candidates.append(int(v.split("-")[1]))
-        seq = max(candidates) + 1 if candidates else 1
+        last = result.scalar_one_or_none()
+        if last:
+            seq = int(last.split("-")[1]) + 1
+        else:
+            seq = 1
         if prefix == "Q":
             return f"O{today}-{seq:04d}"
         return f"S{today}-{seq:04d}"

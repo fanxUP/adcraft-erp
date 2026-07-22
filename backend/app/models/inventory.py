@@ -34,7 +34,7 @@ class StockRecord(Base, TimestampMixin):
     quantity: Mapped[float] = mapped_column(Numeric(14, 3), nullable=False)
     unit_cost: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     total_cost: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=True)
     operator: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     operated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

@@ -36,8 +36,9 @@ export function getAcceptance(id: string) {
 }
 
 export function createAcceptance(data: {
-  order_id?: string
-  quote_id?: string
+  document_id?: string
+  order_id?: string   // backward compat
+  quote_id?: string   // backward compat
   accepted_by?: string
   our_acceptor_id?: string
   remark?: string

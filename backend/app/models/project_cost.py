@@ -13,11 +13,12 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     cost_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    source_type: Mapped[str] = mapped_column(String(16), default="order", comment="来源类型：order/quote")
-    order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
-    quote_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("quotes.id"), nullable=True)
-    order_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("order_items.id", ondelete="SET NULL"), nullable=True)
-    quote_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("quote_items.id", ondelete="SET NULL"), nullable=True)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=True
+    )
+    document_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("business_document_items.id", ondelete="SET NULL"), nullable=True
+    )
     group_name: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="分项名（1级分组）")
     customer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
     category: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -39,8 +40,6 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
-    order: Mapped["Order"] = relationship(lazy="selectin")
-    quote: Mapped["Quote"] = relationship(lazy="selectin")
-    order_item: Mapped["OrderItem | None"] = relationship(lazy="selectin")
-    quote_item: Mapped["QuoteItem | None"] = relationship(lazy="selectin")
+    document: Mapped["BusinessDocument | None"] = relationship(foreign_keys=[document_id], lazy="selectin")
+    document_item: Mapped["BusinessDocumentItem | None"] = relationship(foreign_keys=[document_item_id], lazy="selectin")
     customer: Mapped["Customer"] = relationship(lazy="selectin")

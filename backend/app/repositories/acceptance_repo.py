@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.acceptance import AcceptanceForm, AcceptanceItem, AcceptanceAttachment
-from app.models.order import Order
+from app.models.business_document import BusinessDocument
 
 
 class AcceptanceRepository:
@@ -14,11 +14,13 @@ class AcceptanceRepository:
         self.db = db
 
     async def list_all(self, page: int, page_size: int, keyword: str = "",
-                       status: str = "", order_id: str = "") -> tuple[list[AcceptanceForm], int]:
+                       status: str = "", document_id: str = "",
+                       # backward compat
+                       order_id: str = "") -> tuple[list[AcceptanceForm], int]:
+        doc_id = document_id or order_id
         q = select(AcceptanceForm).where(AcceptanceForm.deleted_at.is_(None))
         q = q.options(
-            selectinload(AcceptanceForm.order).selectinload(Order.customer),
-            selectinload(AcceptanceForm.quote),
+            selectinload(AcceptanceForm.document).selectinload(BusinessDocument.customer),
             selectinload(AcceptanceForm.items),
         )
         count_q = select(func.count()).select_from(AcceptanceForm).where(AcceptanceForm.deleted_at.is_(None))
@@ -30,9 +32,9 @@ class AcceptanceRepository:
         if status:
             q = q.where(AcceptanceForm.status == status)
             count_q = count_q.where(AcceptanceForm.status == status)
-        if order_id:
-            q = q.where(AcceptanceForm.order_id == UUID(order_id))
-            count_q = count_q.where(AcceptanceForm.order_id == UUID(order_id))
+        if doc_id:
+            q = q.where(AcceptanceForm.document_id == UUID(doc_id))
+            count_q = count_q.where(AcceptanceForm.document_id == UUID(doc_id))
 
         total_result = await self.db.execute(count_q)
         total = total_result.scalar()
@@ -43,40 +45,41 @@ class AcceptanceRepository:
         items = list(result.scalars().all())
         return items, total
 
-    async def list_available_quotes(self) -> list:
+    async def list_available_quotes(self) -> list[BusinessDocument]:
         """Return quotes not yet linked to any acceptance (exclude cancelled/converted)."""
-        from app.models.quote import Quote
-        ac_sub = select(AcceptanceForm.quote_id).where(
+        ac_sub = select(AcceptanceForm.document_id).where(
             AcceptanceForm.deleted_at.is_(None),
-            AcceptanceForm.quote_id.isnot(None),
+            AcceptanceForm.document_id.isnot(None),
         )
         result = await self.db.execute(
-            select(Quote)
+            select(BusinessDocument)
             .where(
-                Quote.deleted_at.is_(None),
-                Quote.status.notin_(["cancelled", "converted"]),
-                not_(Quote.id.in_(ac_sub)),
+                BusinessDocument.deleted_at.is_(None),
+                BusinessDocument.doc_type == "quote",
+                BusinessDocument.status.notin_(["cancelled", "converted"]),
+                not_(BusinessDocument.id.in_(ac_sub)),
             )
-            .order_by(Quote.created_at.desc())
+            .order_by(BusinessDocument.created_at.desc())
             .limit(500)
         )
         return list(result.scalars().all())
 
-    async def list_available_orders(self) -> list[Order]:
+    async def list_available_orders(self) -> list[BusinessDocument]:
         """Return orders not yet linked to any acceptance (exclude cancelled)."""
-        ac_sub = select(AcceptanceForm.order_id).where(
+        ac_sub = select(AcceptanceForm.document_id).where(
             AcceptanceForm.deleted_at.is_(None),
-            AcceptanceForm.order_id.isnot(None),
+            AcceptanceForm.document_id.isnot(None),
         )
         result = await self.db.execute(
-            select(Order)
-            .options(selectinload(Order.customer))
+            select(BusinessDocument)
+            .options(selectinload(BusinessDocument.customer))
             .where(
-                Order.deleted_at.is_(None),
-                Order.status != "cancelled",
-                not_(Order.id.in_(ac_sub)),
+                BusinessDocument.deleted_at.is_(None),
+                BusinessDocument.doc_type == "order",
+                BusinessDocument.status != "cancelled",
+                not_(BusinessDocument.id.in_(ac_sub)),
             )
-            .order_by(Order.created_at.desc())
+            .order_by(BusinessDocument.created_at.desc())
             .limit(500)
         )
         return list(result.scalars().all())
@@ -88,8 +91,7 @@ class AcceptanceRepository:
             .options(
                 selectinload(AcceptanceForm.items),
                 selectinload(AcceptanceForm.attachments),
-                selectinload(AcceptanceForm.order).selectinload(Order.customer),
-                selectinload(AcceptanceForm.quote),
+                selectinload(AcceptanceForm.document).selectinload(BusinessDocument.customer),
                 selectinload(AcceptanceForm.our_acceptor),
             )
         )
@@ -131,11 +133,11 @@ class AcceptanceRepository:
         form.deleted_at = datetime.now()
         await self.db.flush()
 
-    async def count_by_order(self, order_id: UUID) -> int:
+    async def count_by_document(self, document_id: UUID) -> int:
         result = await self.db.execute(
             select(func.count())
             .select_from(AcceptanceForm)
-            .where(AcceptanceForm.order_id == order_id, AcceptanceForm.deleted_at.is_(None))
+            .where(AcceptanceForm.document_id == document_id, AcceptanceForm.deleted_at.is_(None))
         )
         return result.scalar()
 

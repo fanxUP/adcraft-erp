@@ -33,9 +33,10 @@ class OutsourceTask(Base, TimestampMixin, SoftDeleteMixin):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     task_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     vendor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("outsource_vendors.id"), nullable=False)
-    related_doc_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    related_doc_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=True
+    )
     related_doc_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
     order_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     task_type: Mapped[str] = mapped_column(String(32), nullable=False)  # production, installation, design, transport
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

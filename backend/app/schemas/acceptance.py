@@ -35,9 +35,10 @@ class AcceptanceListResponse(BaseModel):
     model_config = {"from_attributes": True}
     id: str
     acceptance_no: str
-    order_id: Optional[str] = None
+    document_id: Optional[str] = None
+    order_id: Optional[str] = None   # backward compat
     order_no: Optional[str] = None
-    quote_id: Optional[str] = None
+    quote_id: Optional[str] = None   # backward compat
     quote_no: Optional[str] = None
     customer_name: Optional[str] = None
     project_name: Optional[str] = None
@@ -53,8 +54,9 @@ class AcceptanceDetailResponse(BaseModel):
     model_config = {"from_attributes": True}
     id: str
     acceptance_no: str
-    order_id: Optional[str] = None
-    quote_id: Optional[str] = None
+    document_id: Optional[str] = None
+    order_id: Optional[str] = None   # backward compat
+    quote_id: Optional[str] = None   # backward compat
     quote_no: Optional[str] = None
     order_no: Optional[str] = None
     customer_name: Optional[str] = None

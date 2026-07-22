@@ -21,8 +21,9 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 class AcceptanceCreate(BaseModel):
-    order_id: str | None = None
-    quote_id: str | None = None
+    document_id: str | None = None
+    order_id: str | None = None   # backward compat
+    quote_id: str | None = None   # backward compat
     accepted_by: str | None = None
     our_acceptor_id: str | None = None
     remark: str | None = None
