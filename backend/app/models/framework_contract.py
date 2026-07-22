@@ -24,33 +24,19 @@ class FrameworkContractProject(Base, TimestampMixin, SoftDeleteMixin):
     # 关系
     contract: Mapped["Contract"] = relationship(lazy="selectin")
     customer: Mapped["Customer"] = relationship(lazy="selectin")
-    orders: Mapped[list["Order"]] = relationship(
-        secondary="framework_contract_project_orders", lazy="selectin"
-    )
-    quotes: Mapped[list["Quote"]] = relationship(
-        secondary="framework_contract_project_quotes", lazy="selectin"
+    documents: Mapped[list["BusinessDocument"]] = relationship(
+        secondary="framework_contract_project_documents", lazy="selectin"
     )
 
 
-class FrameworkContractProjectOrder(Base, TimestampMixin):
-    __tablename__ = "framework_contract_project_orders"
+class FrameworkContractProjectDocument(Base, TimestampMixin):
+    """统一框架合同项目-单据关联表（合并 _orders + _quotes）。"""
+    __tablename__ = "framework_contract_project_documents"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("framework_contract_projects.id"), nullable=False
     )
-    order_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("orders.id"), nullable=False
-    )
-
-
-class FrameworkContractProjectQuote(Base, TimestampMixin):
-    __tablename__ = "framework_contract_project_quotes"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("framework_contract_projects.id"), nullable=False
-    )
-    quote_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("quotes.id"), nullable=False
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=False
     )

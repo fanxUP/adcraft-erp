@@ -7,8 +7,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, SoftDeleteMixin
 from app.models.customer import Customer
-from app.models.order import Order
-from app.models.quote import Quote
 
 
 class Contract(Base, TimestampMixin, SoftDeleteMixin):
@@ -57,33 +55,19 @@ class Contract(Base, TimestampMixin, SoftDeleteMixin):
 
     # 关系
     customer: Mapped["Customer"] = relationship(lazy="selectin")
-    orders: Mapped[list["Order"]] = relationship(
-        secondary="contract_orders", lazy="selectin"
-    )
-    quotes: Mapped[list["Quote"]] = relationship(
-        secondary="contract_quotes", lazy="selectin"
+    documents: Mapped[list["BusinessDocument"]] = relationship(
+        secondary="contract_documents", lazy="selectin"
     )
 
 
-class ContractOrder(Base, TimestampMixin):
-    __tablename__ = "contract_orders"
+class ContractDocument(Base, TimestampMixin):
+    """统一合同-单据关联表（合并 contract_orders + contract_quotes）。"""
+    __tablename__ = "contract_documents"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     contract_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("contracts.id"), nullable=False
     )
-    order_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("orders.id"), nullable=False
-    )
-
-
-class ContractQuote(Base, TimestampMixin):
-    __tablename__ = "contract_quotes"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    contract_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("contracts.id"), nullable=False
-    )
-    quote_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("quotes.id"), nullable=False
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=False
     )

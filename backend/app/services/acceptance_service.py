@@ -2,15 +2,14 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.models.acceptance import AcceptanceForm, AcceptanceItem
-from app.models.order import Order
-from app.models.order import OrderItem
+from app.models.business_document import BusinessDocument
 from app.repositories.acceptance_repo import AcceptanceRepository
 from app.services.number_generator import generate_acceptance_no
+from app.services.business_document_service import _build_spec
 
 
 class AcceptanceService:
@@ -23,59 +22,56 @@ class AcceptanceService:
         items, total = await self.repo.list_all(page, page_size, **filters)
         return [self._to_list_dict(i) for i in items], total
 
-    # ── 可用订单（未建验收单） ────────────────────────────
+    # ── 可用订单 ──
     async def list_available_orders(self) -> list[dict]:
         items = await self.repo.list_available_orders()
         return [
             {
-                "id": str(o.id),
-                "order_no": o.order_no,
-                "customer_name": o.customer.name if o.customer else None,
-                "project_name": o.project_name,
-                "total_amount": float(o.total_amount),
-                "status": o.status,
-                "department": o.department,
-                "created_at": o.created_at.isoformat() if o.created_at else None,
+                "id": str(d.id), "order_no": d.doc_no,
+                "customer_name": d.customer.name if d.customer else (d.customer_name or None),
+                "project_name": d.project_name,
+                "total_amount": float(d.total_amount),
+                "status": d.status, "department": d.department,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
             }
-            for o in items
+            for d in items
         ]
 
-    # ── 可用报价单（未建验收单） ──────────────────────────
+    # ── 可用报价 ──
     async def list_available_quotes(self) -> list[dict]:
         items = await self.repo.list_available_quotes()
         return [
             {
-                "id": str(q.id),
-                "quote_no": q.quote_no,
-                "customer_name": q.customer_name,
-                "project_name": q.project_name,
-                "total_amount": float(q.total_amount),
-                "status": q.status,
-                "department": q.department,
-                "created_at": q.created_at.isoformat() if q.created_at else None,
+                "id": str(d.id), "quote_no": d.doc_no,
+                "customer_name": d.customer_name,
+                "project_name": d.project_name,
+                "total_amount": float(d.total_amount),
+                "status": d.status, "department": d.department,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
             }
-            for q in items
+            for d in items
         ]
 
-    # ── 详情 ──────────────────────────────────────────────
+    # ── 详情 ──
     async def get_detail(self, acceptance_id: UUID):
         form = await self.repo.get_by_id(acceptance_id)
         if not form:
             raise ValueError("验收单不存在")
         return self._to_detail_dict(form)
 
-    # ── 创建 ──────────────────────────────────────────────
+    # ── 创建 ──
     async def create_acceptance(self, data: dict):
-        order_id = UUID(data["order_id"]) if data.get("order_id") else None
-        quote_id = UUID(data["quote_id"]) if data.get("quote_id") else None
-        if order_id:
-            data["order_id"] = order_id
-        else:
-            data.pop("order_id", None)
-        if quote_id:
-            data["quote_id"] = quote_id
-        else:
-            data.pop("quote_id", None)
+        doc_id = UUID(data["document_id"]) if data.get("document_id") else None
+        # backward compat: accept order_id or quote_id
+        if not doc_id:
+            if data.get("order_id"):
+                doc_id = UUID(data["order_id"])
+            elif data.get("quote_id"):
+                doc_id = UUID(data["quote_id"])
+
+        data["document_id"] = doc_id
+        data.pop("order_id", None)
+        data.pop("quote_id", None)
         data["acceptance_no"] = await generate_acceptance_no(self.db)
         data["status"] = "draft"
 
@@ -85,84 +81,45 @@ class AcceptanceService:
 
         form = await self.repo.create({**data, "items": items_data})
 
-        # 未传入明细时，自动从订单/报价复制明细
-        if not items_data:
-            if order_id:
-                await self._copy_order_items(form.id, order_id)
-            elif quote_id:
-                await self._copy_quote_items(form.id, quote_id)
+        # 未传入明细时，自动从单据复制明细
+        if not items_data and doc_id:
+            await self._copy_doc_items(form.id, doc_id)
 
         return self._to_detail_dict(await self.repo.get_by_id(form.id))
 
-    async def _copy_order_items(self, acceptance_id: UUID, order_id: UUID) -> None:
-        """Copy order items as acceptance items."""
+    async def _copy_doc_items(self, acceptance_id: UUID, doc_id: UUID) -> None:
+        """统一从 business_document 复制明细（取代 _copy_order_items + _copy_quote_items）。"""
         result = await self.db.execute(
-            select(Order).where(Order.id == order_id).options(selectinload(Order.items))
+            select(BusinessDocument).where(BusinessDocument.id == doc_id)
+            .options(selectinload(BusinessDocument.items))
         )
-        order = result.scalar_one_or_none()
-        if not order or not order.items:
+        doc = result.scalar_one_or_none()
+        if not doc or not doc.items:
             return
 
-        from app.services.order_service import _build_spec
-
-        for oi in order.items:
-            spec = _build_spec(oi)
-            item = AcceptanceItem(
+        for item in doc.items:
+            spec = _build_spec(item)
+            ai = AcceptanceItem(
                 acceptance_id=acceptance_id,
-                order_item_id=oi.id,
-                item_name=oi.item_name,
-                material_process=oi.material_process,
+                document_item_id=item.id,
+                item_name=item.item_name,
+                material_process=item.material_process,
                 specification=spec,
-                quantity=float(oi.quantity) if oi.quantity else None,
-                unit=oi.unit,
-                area=float(oi.area) if oi.area else None,
-                unit_price=float(oi.unit_price) if oi.unit_price else None,
-                subtotal=float(oi.subtotal_amount) if oi.subtotal_amount else None,
+                quantity=float(item.quantity) if item.quantity else None,
+                unit=item.unit,
+                area=float(item.area) if item.area else None,
+                unit_price=float(item.unit_price) if item.unit_price else None,
+                subtotal=float(item.subtotal_amount) if item.subtotal_amount else None,
                 item_status="pending",
-                group_name=oi.group_name,
-                remark=oi.remark,
-                image_url=oi.image_url,
+                group_name=item.group_name,
+                remark=item.remark,
+                image_url=item.image_url,
             )
-            self.db.add(item)
+            self.db.add(ai)
 
         await self.db.flush()
 
-    async def _copy_quote_items(self, acceptance_id: UUID, quote_id: UUID) -> None:
-        """Copy quote items as acceptance items."""
-        from app.models.quote import Quote
-        from sqlalchemy.orm import selectinload
-
-        result = await self.db.execute(
-            select(Quote).where(Quote.id == quote_id).options(selectinload(Quote.items))
-        )
-        quote = result.scalar_one_or_none()
-        if not quote or not quote.items:
-            return
-
-        from app.services.order_service import _build_spec
-
-        for qi in quote.items:
-            spec = _build_spec(qi)
-            item = AcceptanceItem(
-                acceptance_id=acceptance_id,
-                item_name=qi.item_name,
-                material_process=qi.material_process,
-                specification=spec,
-                quantity=float(qi.quantity) if qi.quantity else None,
-                unit=qi.unit,
-                area=float(qi.area) if qi.area is not None else None,
-                unit_price=float(qi.unit_price) if qi.unit_price is not None else None,
-                subtotal=float(qi.subtotal_amount) if qi.subtotal_amount is not None else None,
-                item_status="pending",
-                group_name=qi.group_name,
-                remark=qi.remark,
-                image_url=qi.image_url,
-            )
-            self.db.add(item)
-
-        await self.db.flush()
-
-    # ── 更新 ──────────────────────────────────────────────
+    # ── 更新 ──
     async def update_acceptance(self, acceptance_id: UUID, data: dict):
         form = await self.repo.get_by_id(acceptance_id)
         if not form:
@@ -173,16 +130,18 @@ class AcceptanceService:
         if data.get("our_acceptor_id"):
             data["our_acceptor_id"] = UUID(data["our_acceptor_id"])
         elif "our_acceptor_id" in data and data["our_acceptor_id"] is None:
-            data["our_acceptor_id"] = None  # allow clearing
+            data["our_acceptor_id"] = None
+
         items_data = data.pop("items", None)
-        update_dict = {k: v for k, v in data.items() if k not in ("id", "acceptance_no", "order_id", "status")}
+        update_dict = {k: v for k, v in data.items()
+                       if k not in ("id", "acceptance_no", "document_id", "status")}
         if items_data is not None:
             update_dict["items"] = items_data
 
         form = await self.repo.update(form, update_dict)
         return self._to_detail_dict(form)
 
-    # ── 删除 ──────────────────────────────────────────────
+    # ── 删除 ──
     async def delete_acceptance(self, acceptance_id: UUID):
         form = await self.repo.get_by_id(acceptance_id)
         if not form:
@@ -191,7 +150,7 @@ class AcceptanceService:
             raise ValueError("仅草稿状态可删除")
         await self.repo.soft_delete(form)
 
-    # ── 状态变更 ──────────────────────────────────────────
+    # ── 状态变更 ──
     VALID_TRANSITIONS = {
         "draft": ["pending"],
         "pending": ["accepted", "rejected"],
@@ -211,20 +170,17 @@ class AcceptanceService:
             if not form.items:
                 raise ValueError("请先添加验收明细再提交")
             form.status = "pending"
-
         elif to_status == "accepted":
             form.status = "accepted"
             form.accepted_at = datetime.now()
             if kwargs.get("accepted_by"):
                 form.accepted_by = kwargs["accepted_by"]
-
         elif to_status == "rejected":
             reason = kwargs.get("reason", "")
             if not reason:
                 raise ValueError("驳回时请填写驳回原因")
             form.status = "rejected"
             form.reject_reason = reason
-
         elif to_status == "draft":
             form.status = "draft"
             form.reject_reason = None
@@ -233,89 +189,91 @@ class AcceptanceService:
         form = await self.repo.get_by_id(acceptance_id)
         return self._to_detail_dict(form)
 
-    # ── 序列化 ──────────────────────────────────────────────
+    # ── 序列化（统一访问 form.document） ──
+    @staticmethod
+    def _doc_info(form: AcceptanceForm):
+        """从统一 document 关系中提取显示信息。"""
+        d = form.document
+        if not d:
+            return {
+                "source_type": "独立",
+                "doc_no": None,
+                "doc_type": None,
+                "customer_name": None,
+                "customer_phone": None,
+                "customer_address": None,
+                "contact_person": None,
+                "contact_phone": None,
+                "project_name": None,
+                "department": None,
+                "order_date": None,
+            }
+        is_order = d.doc_type == "order"
+        return {
+            "source_type": "订单" if is_order else "报价",
+            "doc_no": d.doc_no,
+            "doc_type": d.doc_type,
+            "customer_name": (
+                d.customer.name if (is_order and d.customer) else (d.customer_name or None)
+            ),
+            "customer_phone": d.customer.phone if (is_order and d.customer) else None,
+            "customer_address": d.customer.address if (is_order and d.customer) else None,
+            "contact_person": d.contact_person or (
+                AcceptanceService._primary_contact(d.customer) if (is_order and d.customer) else None
+            ),
+            "contact_phone": d.contact_phone,
+            "project_name": d.project_name,
+            "department": d.department,
+            "order_date": d.created_at.isoformat() if (is_order and d.created_at) else None,
+        }
+
+    @staticmethod
+    def _primary_contact(customer) -> str | None:
+        if not customer or not customer.contacts:
+            return None
+        primary = next((c for c in customer.contacts if c.is_primary), None)
+        return primary.name if primary else (customer.contacts[0].name if customer.contacts else None)
+
     def _to_list_dict(self, form: AcceptanceForm) -> dict:
+        info = self._doc_info(form)
         return {
             "id": str(form.id),
             "acceptance_no": form.acceptance_no,
-            "order_id": str(form.order_id) if form.order_id else None,
-            "order_no": form.order.order_no if form.order else None,
-            "quote_id": str(form.quote_id) if form.quote_id else None,
-            "quote_no": form.quote.quote_no if form.quote else None,
-            "customer_name": (
-                (form.order.customer.name if form.order.customer else None) if form.order
-                else (form.quote.customer_name if form.quote else None)
-            ),
-            "project_name": (
-                form.order.project_name if form.order
-                else (form.quote.project_name if form.quote else None)
-            ),
-            "department": (
-                form.order.department if form.order
-                else (form.quote.department if form.quote else None)
-            ),
-            "total_amount": sum(
-                float(i.subtotal or 0) for i in (form.items or [])
-            ),
+            "document_id": str(form.document_id) if form.document_id else None,
+            # Backward-compat aliases
+            "order_id": str(form.document_id) if (info["doc_type"] == "order") else None,
+            "quote_id": str(form.document_id) if (info["doc_type"] == "quote") else None,
+            "order_no": info["doc_no"] if info["doc_type"] == "order" else None,
+            "quote_no": info["doc_no"] if info["doc_type"] == "quote" else None,
+            "customer_name": info["customer_name"],
+            "project_name": info["project_name"],
+            "department": info["department"],
+            "total_amount": sum(float(i.subtotal or 0) for i in (form.items or [])),
             "status": form.status,
             "accepted_at": form.accepted_at.isoformat() if form.accepted_at else None,
             "accepted_by": form.accepted_by,
             "created_at": form.created_at.isoformat() if form.created_at else None,
         }
 
-    @staticmethod
-    def _get_primary_contact(customer) -> str | None:
-        if not customer or not customer.contacts:
-            return None
-        primary = next((c for c in customer.contacts if c.is_primary), None)
-        return primary.name if primary else (customer.contacts[0].name if customer.contacts else None)
     def _to_detail_dict(self, form: AcceptanceForm) -> dict:
-        # Resolve display fields: prefer order, fall back to quote
-        _customer_name = (
-            (form.order.customer.name if form.order.customer else None) if form.order
-            else (form.quote.customer_name if form.quote else None)
-        )
-        _customer_phone = (
-            form.order.customer.phone if form.order and form.order.customer
-            else None
-        )
-        _customer_address = (
-            form.order.customer.address if form.order and form.order.customer
-            else None
-        )
-        _contact_person = (
-            form.order.contact_person if form.order and form.order.contact_person
-            else (self._get_primary_contact(form.order.customer) if form.order and form.order.customer
-            else (form.quote.contact_person if form.quote else None))
-        )
-        _contact_phone = (
-            form.order.contact_phone if form.order
-            else (form.quote.contact_phone if form.quote else None)
-        )
-        _project_name = (
-            form.order.project_name if form.order
-            else (form.quote.project_name if form.quote else None)
-        )
-        _department = (
-            form.order.department if form.order
-            else (form.quote.department if form.quote else None)
-        )
-
+        info = self._doc_info(form)
         return {
             "id": str(form.id),
             "acceptance_no": form.acceptance_no,
-            "order_id": str(form.order_id) if form.order_id else None,
-            "order_no": form.order.order_no if form.order else None,
-            "quote_id": str(form.quote_id) if form.quote_id else None,
-            "quote_no": form.quote.quote_no if form.quote else None,
-            "customer_name": _customer_name,
-            "customer_phone": _customer_phone,
-            "customer_address": _customer_address,
-            "contact_person": _contact_person,
-            "contact_phone": _contact_phone,
-            "order_date": form.order.created_at.isoformat() if form.order and form.order.created_at else None,
-            "project_name": _project_name,
-            "department": _department,
+            "document_id": str(form.document_id) if form.document_id else None,
+            # Backward-compat aliases
+            "order_id": str(form.document_id) if (info["doc_type"] == "order") else None,
+            "quote_id": str(form.document_id) if (info["doc_type"] == "quote") else None,
+            "order_no": info["doc_no"] if info["doc_type"] == "order" else None,
+            "quote_no": info["doc_no"] if info["doc_type"] == "quote" else None,
+            "customer_name": info["customer_name"],
+            "customer_phone": info["customer_phone"],
+            "customer_address": info["customer_address"],
+            "contact_person": info["contact_person"],
+            "contact_phone": info["contact_phone"],
+            "order_date": info["order_date"],
+            "project_name": info["project_name"],
+            "department": info["department"],
             "status": form.status,
             "accepted_at": form.accepted_at.isoformat() if form.accepted_at else None,
             "accepted_by": form.accepted_by,
@@ -331,7 +289,8 @@ class AcceptanceService:
                 {
                     "id": str(item.id),
                     "acceptance_id": str(item.acceptance_id),
-                    "order_item_id": str(item.order_item_id) if item.order_item_id else None,
+                    "document_item_id": str(item.document_item_id) if item.document_item_id else None,
+                    "order_item_id": str(item.document_item_id) if item.document_item_id else None,  # backward compat
                     "item_name": item.item_name,
                     "material_process": item.material_process,
                     "specification": item.specification,

@@ -13,8 +13,9 @@ class AcceptanceForm(Base, TimestampMixin, SoftDeleteMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     acceptance_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
-    quote_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("quotes.id"), nullable=True)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=True
+    )
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     accepted_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -24,8 +25,7 @@ class AcceptanceForm(Base, TimestampMixin, SoftDeleteMixin):
     discount_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     advance_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
 
-    order: Mapped["Order"] = relationship(foreign_keys=[order_id], lazy="selectin")
-    quote: Mapped["Quote"] = relationship(foreign_keys=[quote_id], lazy="selectin")
+    document: Mapped["BusinessDocument | None"] = relationship(foreign_keys=[document_id], lazy="selectin")
     our_acceptor: Mapped["User"] = relationship(foreign_keys=[our_acceptor_id], lazy="selectin")
     items: Mapped[list["AcceptanceItem"]] = relationship(back_populates="acceptance", cascade="all, delete-orphan", lazy="selectin")
     attachments: Mapped[list["AcceptanceAttachment"]] = relationship(back_populates="acceptance", cascade="all, delete-orphan", lazy="selectin")
@@ -36,7 +36,9 @@ class AcceptanceItem(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     acceptance_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("acceptance_forms.id"), nullable=False)
-    order_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("order_items.id"), nullable=True)
+    document_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("business_document_items.id"), nullable=True
+    )
     item_name: Mapped[str] = mapped_column(String(255), nullable=False)
     material_process: Mapped[str | None] = mapped_column(String(255), nullable=True)
     specification: Mapped[str | None] = mapped_column(String(500), nullable=True)
