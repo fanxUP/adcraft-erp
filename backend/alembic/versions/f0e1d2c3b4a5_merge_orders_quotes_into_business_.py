@@ -291,14 +291,17 @@ def upgrade() -> None:
     # STEP 8: Update all referencing tables
     # ══════════════════════════════════════════════════
 
-    # acceptance_forms: order_id + quote_id → document_id (has TWO old columns)
+    # acceptance_forms: order_id + quote_id → document_id (handle missing quote_id)
     op.execute(sa.text("""
-        ALTER TABLE acceptance_forms ADD COLUMN document_id UUID;
-        UPDATE acceptance_forms SET document_id = COALESCE(order_id, quote_id);
-        ALTER TABLE acceptance_forms ADD CONSTRAINT fk_acceptance_forms_document
-            FOREIGN KEY (document_id) REFERENCES business_documents(id);
-        ALTER TABLE acceptance_forms DROP COLUMN order_id;
-        ALTER TABLE acceptance_forms DROP COLUMN quote_id;
+        DO $$
+        BEGIN
+            ALTER TABLE acceptance_forms ADD COLUMN IF NOT EXISTS document_id UUID;
+            UPDATE acceptance_forms SET document_id = order_id WHERE document_id IS NULL;
+            ALTER TABLE acceptance_forms ADD CONSTRAINT fk_acceptance_forms_document
+                FOREIGN KEY (document_id) REFERENCES business_documents(id);
+            ALTER TABLE acceptance_forms DROP COLUMN IF EXISTS order_id;
+            ALTER TABLE acceptance_forms DROP COLUMN IF EXISTS quote_id;
+        END $$;
     """))
 
     # acceptance_items: order_item_id → document_item_id
