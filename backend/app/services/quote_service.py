@@ -180,7 +180,19 @@ class QuoteService:
         for link in fw_links:
             await self.db.delete(link)
 
-        # 4. 硬删除报价单（QuoteItem / QuoteVersion 由 ORM cascade 自动处理）
+        # 4. 级联软删除关联的验收单
+        from app.models.acceptance import AcceptanceForm
+        from datetime import datetime
+        acceptances = (await self.db.execute(
+            select(AcceptanceForm).where(
+                AcceptanceForm.quote_id == quote_id,
+                AcceptanceForm.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        for acc in acceptances:
+            acc.deleted_at = datetime.now()
+
+        # 5. 硬删除报价单（QuoteItem / QuoteVersion 由 ORM cascade 自动处理）
         await self.db.delete(quote)
         await self.db.flush()
         return True
