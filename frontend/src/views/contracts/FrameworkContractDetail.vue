@@ -52,21 +52,23 @@
       </template>
 
       <el-table :data="projects" v-loading="loadingProjects" stripe>
+        <el-table-column prop="customer_name" label="客户名称" width="160" />
         <el-table-column prop="department" label="部门/科室" width="130" />
         <el-table-column prop="project_name" label="项目名称" min-width="160" />
-        <el-table-column label="项目金额" width="130" align="right">
-          <template #default="{ row }">¥ {{ row.project_amount?.toFixed(2) }}</template>
-        </el-table-column>
-        <el-table-column label="关联订单" min-width="180">
+        <el-table-column label="来源" width="100">
           <template #default="{ row }">
-            <el-tag v-for="o in row.orders" :key="o.id" size="small" style="margin:2px">{{ o.order_no }}</el-tag>
-            <span v-if="!row.orders?.length" style="color:#999">-</span>
+            <el-tag v-if="row.source === '订单'" type="primary" size="small">订单</el-tag>
+            <el-tag v-else-if="row.source === '报价'" type="success" size="small">报价</el-tag>
+            <el-tag v-else-if="row.source === '订单+报价'" type="warning" size="small">订单+报价</el-tag>
+            <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="关联报价" min-width="180">
+        <el-table-column label="已收金额" width="120" align="right">
+          <template #default="{ row }">¥ {{ (row.paid_amount || 0).toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column label="未收金额" width="120" align="right">
           <template #default="{ row }">
-            <el-tag v-for="q in row.quotes" :key="q.id" size="small" style="margin:2px">{{ q.quote_no }}</el-tag>
-            <span v-if="!row.quotes?.length" style="color:#999">-</span>
+            <span :class="{ 'text-danger': (row.unpaid_amount || 0) > 0 }">¥ {{ (row.unpaid_amount || 0).toFixed(2) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
