@@ -95,8 +95,9 @@
           <template #default="{ row }">{{ row.order_no || row.quote_no }}</template>
         </el-table-column>
         <el-table-column prop="customer_name" label="客户" min-width="120" />
+        <el-table-column prop="department" label="科室/部门" min-width="100" />
         <el-table-column prop="project_name" label="项目名称" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="total_amount" label="金额" width="100" align="right">
+        <el-table-column prop="total_amount" label="金额" width="130" align="right">
           <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right">
