@@ -509,7 +509,7 @@ async function handleChangeStatus(to_status: string) {
   }
   const label = labels[to_status] || to_status
   const msg = to_status === 'cancelled'
-    ? '确定取消此订单？此操作不可撤销。'
+    ? '确定取消此订单？订单将移入回收站，可在回收站中恢复或转为报价单。'
     : `确定将订单状态变更为「${label}」？`
   await ElMessageBox.confirm(msg, '变更状态', {
     confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',

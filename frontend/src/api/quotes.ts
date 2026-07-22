@@ -33,6 +33,10 @@ export function revertQuoteToDraft(id: string) {
   return post<QuoteDetailResponse>(`/quotes/${id}/revert-to-draft`)
 }
 
+export function cancelQuote(id: string) {
+  return post<QuoteDetailResponse>(`/quotes/${id}/cancel`)
+}
+
 export function importQuotes(file: File) {
   const formData = new FormData()
   formData.append('file', file)
