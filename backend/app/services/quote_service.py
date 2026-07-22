@@ -192,7 +192,18 @@ class QuoteService:
         for acc in acceptances:
             acc.deleted_at = datetime.now()
 
-        # 5. 硬删除报价单（QuoteItem / QuoteVersion 由 ORM cascade 自动处理）
+        # 5. 清除项目成本对报价的引用（避免FK约束阻止删除）
+        from app.models.project_cost import ProjectCost
+        costs = (await self.db.execute(
+            select(ProjectCost).where(ProjectCost.quote_id == quote_id)
+        )).scalars().all()
+        for cost in costs:
+            cost.quote_id = None
+            cost.quote_item_id = None
+        if costs:
+            await self.db.flush()
+
+        # 6. 硬删除报价单（QuoteItem / QuoteVersion 由 ORM cascade 自动处理）
         await self.db.delete(quote)
         await self.db.flush()
         return True
