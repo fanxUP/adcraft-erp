@@ -138,9 +138,9 @@ const reachableTargets = computed(() => {
   const cur = props.currentStatus
   if (cur === 'cancelled') return []
 
-  // 自由状态组内互相切换
+  // 自由状态组内互相切换，同时都可取消
   if (freeStates.includes(cur)) {
-    return freeStates.filter(s => s !== cur)
+    return [...freeStates.filter(s => s !== cur), 'cancelled']
   }
 
   // 线性递进
