@@ -28,7 +28,11 @@
     <el-card>
       <el-table :data="list" v-loading="loading" stripe>
         <el-table-column prop="acceptance_no" label="验收单号" min-width="140" />
-        <el-table-column prop="order_no" label="关联订单" min-width="140" />
+        <el-table-column label="关联单据" min-width="140">
+          <template #default="{ row }">
+            {{ row.order_no || row.quote_no || '-' }}
+          </template>
+        </el-table-column>
         <el-table-column prop="customer_name" label="客户" min-width="120" />
         <el-table-column prop="department" label="部门/科室" min-width="120" />
         <el-table-column prop="project_name" label="项目名称" min-width="150" show-overflow-tooltip />
@@ -71,24 +75,46 @@
       />
     </el-card>
 
-    <!-- 新建验收单 → 选择订单 -->
-    <el-dialog v-model="showCreateDialog" title="选择订单创建验收单" width="700px" :close-on-click-modal="false">
-      <el-table :data="availableOrders" v-loading="loadingOrders" border stripe highlight-current-row @row-dblclick="handleCreate">
-        <el-table-column prop="order_no" label="订单号" min-width="130" />
-        <el-table-column prop="customer_name" label="客户" min-width="120" />
-        <el-table-column prop="project_name" label="项目名称" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="total_amount" label="金额" width="100" align="right">
-          <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="90" fixed="right">
-          <template #default="{ row }">
-            <el-button text type="primary" size="small" @click="handleCreate(row)">选择</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div v-if="!availableOrders.length && !loadingOrders" style="text-align:center;color:#999;padding:32px 0;">
-        暂无可用的订单（所有已有验收单的订单已被排除）
-      </div>
+    <!-- 新建验收单 → 选择订单/报价单 -->
+    <el-dialog v-model="showCreateDialog" title="选择订单或报价单创建验收单" width="750px" :close-on-click-modal="false">
+      <el-tabs v-model="createSourceTab" @tab-change="handleTabChange">
+        <el-tab-pane label="从订单创建" name="orders">
+          <el-table :data="availableOrders" v-loading="loadingOrders" border stripe highlight-current-row @row-dblclick="handleCreateFromOrder">
+            <el-table-column prop="order_no" label="订单号" min-width="130" />
+            <el-table-column prop="customer_name" label="客户" min-width="120" />
+            <el-table-column prop="project_name" label="项目名称" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="total_amount" label="金额" width="100" align="right">
+              <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="90" fixed="right">
+              <template #default="{ row }">
+                <el-button text type="primary" size="small" @click="handleCreateFromOrder(row)">选择</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div v-if="!availableOrders.length && !loadingOrders" style="text-align:center;color:#999;padding:32px 0;">
+            暂无可用的订单
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="从报价单创建" name="quotes">
+          <el-table :data="availableQuotes" v-loading="loadingQuotes" border stripe highlight-current-row @row-dblclick="handleCreateFromQuote">
+            <el-table-column prop="quote_no" label="报价单号" min-width="130" />
+            <el-table-column prop="customer_name" label="客户" min-width="120" />
+            <el-table-column prop="project_name" label="项目名称" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="total_amount" label="金额" width="100" align="right">
+              <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="90" fixed="right">
+              <template #default="{ row }">
+                <el-button text type="primary" size="small" @click="handleCreateFromQuote(row)">选择</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div v-if="!availableQuotes.length && !loadingQuotes" style="text-align:center;color:#999;padding:32px 0;">
+            暂无可用的报价单
+          </div>
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button type="primary" @click="handleCreateBlank">创建空白验收单</el-button>
         <el-button @click="showCreateDialog = false">取消</el-button>
@@ -101,7 +127,7 @@
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAcceptances, deleteAcceptance, getAvailableOrders, createAcceptance } from '@/api/acceptances'
+import { getAcceptances, deleteAcceptance, getAvailableOrders, getAvailableQuotes, createAcceptance } from '@/api/acceptances'
 import type { AvailableOrder } from '@/api/acceptances'
 import type { AcceptanceListResponse } from '@/types/api'
 
@@ -116,8 +142,11 @@ const filters = reactive({ keyword: '', status: '' })
 
 // 新建验收单弹窗
 const showCreateDialog = ref(false)
+const createSourceTab = ref('orders')
 const availableOrders = ref<AvailableOrder[]>([])
+const availableQuotes = ref<AvailableOrder[]>([])
 const loadingOrders = ref(false)
+const loadingQuotes = ref(false)
 
 async function loadAvailableOrders() {
   loadingOrders.value = true
@@ -127,9 +156,34 @@ async function loadAvailableOrders() {
   finally { loadingOrders.value = false }
 }
 
-async function handleCreate(row: AvailableOrder) {
+async function loadAvailableQuotes() {
+  loadingQuotes.value = true
+  try {
+    availableQuotes.value = await getAvailableQuotes()
+  } catch { /* ignore */ }
+  finally { loadingQuotes.value = false }
+}
+
+function handleTabChange(tab: string) {
+  if (tab === 'quotes' && !availableQuotes.value.length && !loadingQuotes.value) {
+    loadAvailableQuotes()
+  }
+}
+
+async function handleCreateFromOrder(row: AvailableOrder) {
   try {
     const data = await createAcceptance({ order_id: row.id })
+    ElMessage.success('验收单创建成功')
+    showCreateDialog.value = false
+    router.push(`/acceptances/${data.id}`)
+  } catch (e: unknown) {
+    ElMessage.error(e instanceof Error ? e.message : '创建失败')
+  }
+}
+
+async function handleCreateFromQuote(row: AvailableOrder) {
+  try {
+    const data = await createAcceptance({ quote_id: row.id })
     ElMessage.success('验收单创建成功')
     showCreateDialog.value = false
     router.push(`/acceptances/${data.id}`)

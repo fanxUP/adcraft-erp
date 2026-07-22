@@ -39,6 +39,25 @@ class AcceptanceRepository:
         items = list(result.scalars().all())
         return items, total
 
+    async def list_available_quotes(self) -> list:
+        """Return quotes not yet linked to any acceptance (confirmed, not cancelled/converted)."""
+        from app.models.quote import Quote
+        ac_sub = select(AcceptanceForm.quote_id).where(
+            AcceptanceForm.deleted_at.is_(None),
+            AcceptanceForm.quote_id.isnot(None),
+        )
+        result = await self.db.execute(
+            select(Quote)
+            .where(
+                Quote.deleted_at.is_(None),
+                Quote.status == "confirmed",
+                not_(Quote.id.in_(ac_sub)),
+            )
+            .order_by(Quote.created_at.desc())
+            .limit(500)
+        )
+        return list(result.scalars().all())
+
     async def list_available_orders(self) -> list[Order]:
         """Return orders not yet linked to any acceptance (exclude cancelled)."""
         ac_sub = select(AcceptanceForm.order_id).where(AcceptanceForm.deleted_at.is_(None))
@@ -63,6 +82,7 @@ class AcceptanceRepository:
                 selectinload(AcceptanceForm.items),
                 selectinload(AcceptanceForm.attachments),
                 selectinload(AcceptanceForm.order).selectinload(Order.customer),
+                selectinload(AcceptanceForm.quote),
                 selectinload(AcceptanceForm.our_acceptor),
             )
         )
