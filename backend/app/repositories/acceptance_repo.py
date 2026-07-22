@@ -18,6 +18,7 @@ class AcceptanceRepository:
         q = select(AcceptanceForm).where(AcceptanceForm.deleted_at.is_(None))
         q = q.options(
             selectinload(AcceptanceForm.order).selectinload(Order.customer),
+            selectinload(AcceptanceForm.quote),
             selectinload(AcceptanceForm.items),
         )
         count_q = select(func.count()).select_from(AcceptanceForm).where(AcceptanceForm.deleted_at.is_(None))
