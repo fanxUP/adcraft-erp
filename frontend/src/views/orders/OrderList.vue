@@ -59,12 +59,10 @@
       <el-table-column label="创建时间" width="120">
         <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="280">
+      <el-table-column label="操作" width="220">
         <template #default="{ row }">
           <div style="display: flex; gap: 8px; justify-content: center;">
             <el-button text type="primary" @click="$router.push(`/orders/${row.id}`)">详情</el-button>
-            <el-button v-if="row.status !== 'cancelled'" text type="danger" @click="handleCancel(row as OrderListResponse)">取消</el-button>
-            <el-button v-if="row.status === 'cancelled'" text type="warning" @click="handleConvertToQuote(row as OrderListResponse)">转报价</el-button>
           </div>
         </template>
       </el-table-column>
@@ -84,13 +82,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { getOrders, changeOrderStatus, convertOrderToQuote } from '@/api/orders'
+import { getOrders } from '@/api/orders'
 import { useAuthStore } from '@/stores/auth'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import type { OrderListResponse } from '@/types/api'
 
-const router = useRouter()
 const authStore = useAuthStore()
 
 const loading = ref(false)
@@ -137,28 +132,6 @@ function handleReset() {
   filters.status = ''
   page.value = 1
   fetchData()
-}
-
-async function handleCancel(row: OrderListResponse) {
-  await ElMessageBox.confirm(`确定取消订单「${row.order_no}」？订单将移入回收站。`, '取消订单', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
-  await changeOrderStatus(row.id, { to_status: 'cancelled' })
-  ElMessage.success('订单已取消，已移入回收站')
-  fetchData()
-}
-
-async function handleConvertToQuote(row: OrderListResponse) {
-  await ElMessageBox.confirm(`确定将订单「${row.order_no}」转为报价单？`, '转报价', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
-  await convertOrderToQuote(row.id)
-  ElMessage.success('订单已转为报价单')
-  router.push('/quotes')
 }
 
 onMounted(fetchData)
