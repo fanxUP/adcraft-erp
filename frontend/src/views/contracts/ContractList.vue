@@ -28,9 +28,11 @@
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
       <el-table-column prop="contract_no" label="合同编号" width="180" />
-      <el-table-column prop="customer_name" label="客户名称" width="160" />
       <el-table-column prop="contract_type" label="合同类型" width="100" />
+      <el-table-column prop="customer_name" label="客户名称" width="160" />
+      <el-table-column prop="department" label="部门/科室" width="120" />
       <el-table-column prop="project_name" label="项目名称" min-width="200" />
+      <el-table-column prop="source" label="来源" width="100" />
       <el-table-column label="合同金额" width="140">
         <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
