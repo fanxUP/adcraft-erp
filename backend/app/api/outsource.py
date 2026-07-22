@@ -330,16 +330,18 @@ async def list_quotes_for_dropdown(
 ):
     """返回所有报价单供下拉选择（精简字段）"""
     from sqlalchemy import select
-    from app.models.quote import Quote
-    # 已转订单的报价单不再显示（避免下拉中与订单重复）
+    from app.models.business_document import BusinessDocument
     result = await db.execute(
-        select(Quote.id, Quote.quote_no, Quote.project_name, Quote.customer_name, Quote.department, Quote.total_amount)
-        .where(Quote.deleted_at.is_(None), Quote.status != "converted")
-        .order_by(Quote.created_at.desc())
+        select(BusinessDocument.id, BusinessDocument.doc_no, BusinessDocument.project_name,
+               BusinessDocument.customer_name, BusinessDocument.department, BusinessDocument.total_amount)
+        .where(BusinessDocument.deleted_at.is_(None), BusinessDocument.doc_type == "quote",
+               BusinessDocument.status != "converted")
+        .order_by(BusinessDocument.created_at.desc())
     )
     rows = result.all()
     return success([
-        {"id": str(r.id), "label": f"{r.quote_no} — {(r.department or '-')} — {r.project_name} — ¥{(float(r.total_amount) if r.total_amount else 0):.2f}", "quote_no": r.quote_no, "project_name": r.project_name, "customer_name": r.customer_name}
+        {"id": str(r.id), "label": f"{r.doc_no} — {(r.department or '-')} — {r.project_name} — ¥{(float(r.total_amount) if r.total_amount else 0):.2f}",
+         "quote_no": r.doc_no, "project_name": r.project_name, "customer_name": r.customer_name}
         for r in rows
     ])
 
@@ -351,14 +353,16 @@ async def list_orders_for_dropdown(
 ):
     """返回所有订单供下拉选择（精简字段）"""
     from sqlalchemy import select
-    from app.models.order import Order
+    from app.models.business_document import BusinessDocument
     result = await db.execute(
-        select(Order.id, Order.order_no, Order.project_name, Order.department, Order.total_amount)
-        .where(Order.deleted_at.is_(None))
-        .order_by(Order.created_at.desc())
+        select(BusinessDocument.id, BusinessDocument.doc_no, BusinessDocument.project_name,
+               BusinessDocument.department, BusinessDocument.total_amount)
+        .where(BusinessDocument.deleted_at.is_(None), BusinessDocument.doc_type == "order")
+        .order_by(BusinessDocument.created_at.desc())
     )
     rows = result.all()
     return success([
-        {"id": str(r.id), "label": f"{r.order_no} — {(r.department or '-')} — {r.project_name} — ¥{(float(r.total_amount) if r.total_amount else 0):.2f}", "order_no": r.order_no, "project_name": r.project_name}
+        {"id": str(r.id), "label": f"{r.doc_no} — {(r.department or '-')} — {r.project_name} — ¥{(float(r.total_amount) if r.total_amount else 0):.2f}",
+         "order_no": r.doc_no, "project_name": r.project_name}
         for r in rows
     ])

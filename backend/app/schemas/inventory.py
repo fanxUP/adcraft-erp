@@ -45,7 +45,8 @@ class StockRecordCreate(BaseModel):
     record_type: str = Field(...)  # in, out
     quantity: Decimal = Field(...)
     unit_cost: Decimal = Decimal("0")
-    order_id: str | None = None
+    document_id: str | None = None
+    order_id: str | None = None  # 向后兼容，映射到 document_id
     remark: str | None = None
 
 
@@ -57,7 +58,8 @@ class StockRecordResponse(BaseModel):
     quantity: float
     unit_cost: float
     total_cost: float
-    order_id: str | None = None
+    document_id: str | None = None
+    order_id: str | None = None  # 向后兼容
     remark: str | None = None
     operated_at: str | None = None
     created_at: str | None = None

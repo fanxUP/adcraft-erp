@@ -362,55 +362,49 @@ async def list_quotes_for_cost(
     current_user: User = Depends(get_current_user),
 ):
     """获取可登记成本的报价单列表"""
-    from app.models.quote import Quote as QuoteModel
+    from app.models.business_document import BusinessDocument
     from app.repositories.project_cost_repo import ProjectCostRepository
 
-    from sqlalchemy import or_, select, func, not_
-    from app.models.order import Order as OrderModel
+    from sqlalchemy import or_, select, func
 
-    # Exclude quotes that have already been converted to orders
-    converted = select(OrderModel.quote_id).where(
-        OrderModel.quote_id.isnot(None),
-        OrderModel.deleted_at.is_(None),
-    )
-
-    q = select(QuoteModel).where(
-        QuoteModel.deleted_at.is_(None),
-        not_(QuoteModel.id.in_(converted)),
+    q = select(BusinessDocument).where(
+        BusinessDocument.deleted_at.is_(None),
+        BusinessDocument.doc_type == "quote",
+        BusinessDocument.status != "converted",
     )
     if keyword:
         fuzzy = f"%{keyword}%"
         q = q.where(
             or_(
-                QuoteModel.quote_no.ilike(fuzzy),
-                QuoteModel.project_name.ilike(fuzzy),
-                QuoteModel.customer_name.ilike(fuzzy),
+                BusinessDocument.doc_no.ilike(fuzzy),
+                BusinessDocument.project_name.ilike(fuzzy),
+                BusinessDocument.customer_name.ilike(fuzzy),
             )
         )
     count_q = select(func.count()).select_from(q.subquery())
     total = (await db.execute(count_q)).scalar()
-    q = q.order_by(QuoteModel.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+    q = q.order_by(BusinessDocument.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(q)
-    quotes = result.scalars().all()
+    docs = result.scalars().all()
 
-    # Get cost summaries for these quotes
+    # Get cost summaries
     repo = ProjectCostRepository(db)
-    quote_ids = [q.id for q in quotes]
+    doc_ids = [d.id for d in docs]
     cost_map = {}
-    if quote_ids:
-        cost_map = await repo.get_quote_costs_summary(quote_ids)
+    if doc_ids:
+        cost_map = await repo.get_costs_summary(doc_ids)
 
     items = []
-    for q in quotes:
+    for d in docs:
         items.append({
-            "id": str(q.id),
-            "quote_no": q.quote_no,
-            "project_name": q.project_name,
-            "customer_name": q.customer_name,
-            "status": q.status,
-            "total_amount": float(q.total_amount),
-            "cost_amount": float(cost_map.get(str(q.id), 0)),
-            "created_at": q.created_at.isoformat() if q.created_at else None,
+            "id": str(d.id),
+            "quote_no": d.doc_no,
+            "project_name": d.project_name,
+            "customer_name": d.customer_name,
+            "status": d.status,
+            "total_amount": float(d.total_amount),
+            "cost_amount": float(cost_map.get(str(d.id), 0)),
+            "created_at": d.created_at.isoformat() if d.created_at else None,
         })
     return success_paginated(items, total, page, page_size)
 

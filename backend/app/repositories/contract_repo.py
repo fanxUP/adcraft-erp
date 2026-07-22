@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from app.models.contract import Contract, ContractOrder, ContractQuote
+from app.models.contract import Contract, ContractDocument
 
 
 class ContractRepository:
@@ -15,7 +15,7 @@ class ContractRepository:
         result = await self.db.execute(
             select(Contract)
             .where(Contract.id == contract_id, Contract.deleted_at.is_(None))
-            .options(selectinload(Contract.orders), selectinload(Contract.quotes))
+            .options(selectinload(Contract.documents))
         )
         return result.scalar_one_or_none()
 
@@ -53,45 +53,32 @@ class ContractRepository:
         return list(result.scalars().all()), total
 
     async def create(self, data: dict) -> Contract:
-        order_ids = data.pop("order_ids", [])
-        quote_ids = data.pop("quote_ids", [])
+        document_ids = data.pop("document_ids", [])
         contract = Contract(**data)
         if contract.id is None:
             contract.id = uuid4()
         self.db.add(contract)
 
-        for oid in order_ids:
-            self.db.add(ContractOrder(contract_id=contract.id, order_id=oid))
-        for qid in quote_ids:
-            self.db.add(ContractQuote(contract_id=contract.id, quote_id=qid))
+        for did in document_ids:
+            self.db.add(ContractDocument(contract_id=contract.id, document_id=did))
 
         await self.db.flush()
         return contract
 
     async def update(self, contract: Contract, data: dict) -> Contract:
-        order_ids = data.pop("order_ids", None)
-        quote_ids = data.pop("quote_ids", None)
+        document_ids = data.pop("document_ids", None)
 
         for key, value in data.items():
             setattr(contract, key, value)
 
-        if order_ids is not None:
+        if document_ids is not None:
             result = await self.db.execute(
-                select(ContractOrder).where(ContractOrder.contract_id == contract.id)
+                select(ContractDocument).where(ContractDocument.contract_id == contract.id)
             )
             for row in result.scalars().all():
                 await self.db.delete(row)
-            for oid in order_ids:
-                self.db.add(ContractOrder(contract_id=contract.id, order_id=oid))
-
-        if quote_ids is not None:
-            result = await self.db.execute(
-                select(ContractQuote).where(ContractQuote.contract_id == contract.id)
-            )
-            for row in result.scalars().all():
-                await self.db.delete(row)
-            for qid in quote_ids:
-                self.db.add(ContractQuote(contract_id=contract.id, quote_id=qid))
+            for did in document_ids:
+                self.db.add(ContractDocument(contract_id=contract.id, document_id=did))
 
         await self.db.flush()
         return contract

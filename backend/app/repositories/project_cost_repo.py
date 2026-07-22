@@ -7,6 +7,7 @@ from sqlalchemy import select, func, and_, update
 from sqlalchemy.orm import selectinload
 
 from app.models.project_cost import ProjectCost
+from app.models.business_document import BusinessDocument
 
 
 class ProjectCostRepository:
@@ -17,10 +18,8 @@ class ProjectCostRepository:
         result = await self.db.execute(
             select(ProjectCost)
             .options(
-                selectinload(ProjectCost.order),
-                selectinload(ProjectCost.quote),
-                selectinload(ProjectCost.order_item),
-                selectinload(ProjectCost.quote_item),
+                selectinload(ProjectCost.document),
+                selectinload(ProjectCost.document_item),
                 selectinload(ProjectCost.customer),
             )
             .where(ProjectCost.id == cost_id, ProjectCost.deleted_at.is_(None))
@@ -39,18 +38,17 @@ class ProjectCostRepository:
         date_to: str | None = None,
     ) -> tuple[list[ProjectCost], int]:
         q = select(ProjectCost).options(
-            selectinload(ProjectCost.order),
-            selectinload(ProjectCost.quote),
-            selectinload(ProjectCost.order_item),
-            selectinload(ProjectCost.quote_item),
+            selectinload(ProjectCost.document),
+            selectinload(ProjectCost.document_item),
             selectinload(ProjectCost.customer),
         ).where(ProjectCost.deleted_at.is_(None))
+
         if source_type:
-            q = q.where(ProjectCost.source_type == source_type)
+            q = q.join(ProjectCost.document).where(BusinessDocument.doc_type == source_type)
         if order_id:
-            q = q.where(ProjectCost.order_id == order_id)
+            q = q.where(ProjectCost.document_id == order_id)
         if quote_id:
-            q = q.where(ProjectCost.quote_id == quote_id)
+            q = q.where(ProjectCost.document_id == quote_id)
         if category:
             q = q.where(ProjectCost.category == category)
         if date_from:
@@ -93,38 +91,23 @@ class ProjectCostRepository:
         await self.db.flush()
         return result.rowcount
 
-    async def get_order_cost_sum(self, order_id: UUID) -> Decimal:
+    async def get_document_cost_sum(self, document_id: UUID) -> Decimal:
         result = await self.db.execute(
             select(func.coalesce(func.sum(ProjectCost.amount), 0))
-            .where(ProjectCost.order_id == order_id, ProjectCost.deleted_at.is_(None))
+            .where(ProjectCost.document_id == document_id, ProjectCost.deleted_at.is_(None))
         )
         return Decimal(str(result.scalar()))
 
-    async def get_costs_summary(self, order_ids: list[UUID]) -> dict[str, float]:
-        """Return {order_id: total_cost} for a batch of orders."""
-        if not order_ids:
+    async def get_costs_summary(self, document_ids: list[UUID]) -> dict[str, float]:
+        """Return {document_id: total_cost} for a batch of documents."""
+        if not document_ids:
             return {}
         result = await self.db.execute(
-            select(ProjectCost.order_id, func.coalesce(func.sum(ProjectCost.amount), 0))
+            select(ProjectCost.document_id, func.coalesce(func.sum(ProjectCost.amount), 0))
             .where(
-                ProjectCost.order_id.in_(order_ids),
+                ProjectCost.document_id.in_(document_ids),
                 ProjectCost.deleted_at.is_(None),
             )
-            .group_by(ProjectCost.order_id)
-        )
-        return {str(row[0]): float(row[1]) for row in result.all()}
-
-    async def get_quote_costs_summary(self, quote_ids: list[UUID]) -> dict[str, float]:
-        """Return {quote_id: total_cost} for a batch of quotes."""
-        if not quote_ids:
-            return {}
-        result = await self.db.execute(
-            select(ProjectCost.quote_id, func.coalesce(func.sum(ProjectCost.amount), 0))
-            .where(
-                ProjectCost.quote_id.in_(quote_ids),
-                ProjectCost.deleted_at.is_(None),
-                ProjectCost.source_type == "quote",
-            )
-            .group_by(ProjectCost.quote_id)
+            .group_by(ProjectCost.document_id)
         )
         return {str(row[0]): float(row[1]) for row in result.all()}

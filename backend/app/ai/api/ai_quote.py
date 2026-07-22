@@ -65,12 +65,10 @@ async def save_assisted_quote(
     }
     quote = await service.create_quote(quote_data)
 
-    # Add items via repository
+    # Add items via service
     from uuid import UUID as _UUID
-    from app.repositories.quote_repo import QuoteRepository
-    repo = QuoteRepository(db)
-    for item_data in draft.get("items", []):
-        create_data = {
+    items_data = [
+        {
             "item_name": item_data.get("item_name", ""),
             "product_id": item_data.get("product_id"),
             "material_id": item_data.get("material_id"),
@@ -88,9 +86,9 @@ async def save_assisted_quote(
             "other_fee": item_data.get("other_fee", 0),
             "remark": item_data.get("remark", ""),
         }
-        await repo.create_item(_UUID(quote["id"]), {k: v for k, v in create_data.items() if v is not None})
-
-    # Recalculate totals
-    quote = await service.calculate_quote(str(quote["id"]))
+        for item_data in draft.get("items", [])
+    ]
+    if items_data:
+        quote = await service.add_items(str(quote["id"]), items_data)
 
     return success(quote)

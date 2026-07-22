@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 
 from app.models.payment import Payment, CustomerStatement, Expense
-from app.models.order import Order
+from app.models.business_document import BusinessDocument
 
 
 class PaymentRepository:
@@ -19,7 +19,7 @@ class PaymentRepository:
                             customer_id: UUID | None = None, is_voided: bool | None = None) -> tuple[list[Payment], int]:
         q = select(Payment)
         if order_id:
-            q = q.where(Payment.order_id == order_id)
+            q = q.where(Payment.document_id == order_id)
         if customer_id:
             q = q.where(Payment.customer_id == customer_id)
         if is_voided is not None:
@@ -42,10 +42,10 @@ class PaymentRepository:
         await self.db.flush()
         return payment
 
-    async def get_order_paid_sum(self, order_id: UUID) -> float:
+    async def get_document_paid_sum(self, document_id: UUID) -> float:
         result = await self.db.execute(
             select(func.coalesce(func.sum(Payment.amount), 0))
-            .where(Payment.order_id == order_id, Payment.is_voided == False)
+            .where(Payment.document_id == document_id, Payment.is_voided == False)
         )
         return float(result.scalar() or 0)
 
@@ -80,16 +80,16 @@ class StatementRepository:
         await self.db.flush()
         return statement
 
-    async def get_orders_in_range(self, customer_id: UUID, start: datetime, end: datetime) -> list[Order]:
+    async def get_documents_in_range(self, customer_id: UUID, start: datetime, end: datetime) -> list[BusinessDocument]:
         result = await self.db.execute(
-            select(Order).where(
+            select(BusinessDocument).where(
                 and_(
-                    Order.customer_id == customer_id,
-                    Order.deleted_at.is_(None),
-                    Order.created_at >= start,
-                    Order.created_at <= end,
+                    BusinessDocument.customer_id == customer_id,
+                    BusinessDocument.deleted_at.is_(None),
+                    BusinessDocument.created_at >= start,
+                    BusinessDocument.created_at <= end,
                 )
-            ).order_by(Order.created_at.asc())
+            ).order_by(BusinessDocument.created_at.asc())
         )
         return list(result.scalars().all())
 
@@ -106,15 +106,15 @@ class StatementRepository:
         )
         return list(result.scalars().all())
 
-    async def get_all_orders_unpaid(self, customer_id: UUID) -> list[Order]:
+    async def get_all_documents_unpaid(self, customer_id: UUID) -> list[BusinessDocument]:
         result = await self.db.execute(
-            select(Order).where(
+            select(BusinessDocument).where(
                 and_(
-                    Order.customer_id == customer_id,
-                    Order.deleted_at.is_(None),
-                    Order.unpaid_amount > 0,
+                    BusinessDocument.customer_id == customer_id,
+                    BusinessDocument.deleted_at.is_(None),
+                    BusinessDocument.unpaid_amount > 0,
                 )
-            ).order_by(Order.created_at.asc())
+            ).order_by(BusinessDocument.created_at.asc())
         )
         return list(result.scalars().all())
 

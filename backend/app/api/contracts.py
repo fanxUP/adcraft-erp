@@ -69,58 +69,53 @@ async def get_available_resources(
     If contract_id is provided (editing), also include resources already linked to that contract.
     If customer_id is provided, only return resources for that customer."""
     from sqlalchemy import select, not_
-    from app.models.order import Order as OrderModel
-    from app.models.quote import Quote as QuoteModel
-    from app.models.contract import ContractOrder, ContractQuote
-    from app.models.framework_contract import (
-        FrameworkContractProjectOrder,
-        FrameworkContractProjectQuote,
-    )
+    from app.models.business_document import BusinessDocument
+    from app.models.contract import ContractDocument
+    from app.models.framework_contract import FrameworkContractProjectDocument
 
-    # Build subquery: order_ids that are in any contract (excluding current one if editing)
-    co_sub = select(ContractOrder.order_id)
+    # Documents already in any contract (exclude current if editing)
+    used_sub = select(ContractDocument.document_id)
     if contract_id:
-        co_sub = co_sub.where(ContractOrder.contract_id != UUID(contract_id))
+        used_sub = used_sub.where(ContractDocument.contract_id != UUID(contract_id))
 
-    # Also exclude orders already linked to framework contract projects
-    fw_co_sub = select(FrameworkContractProjectOrder.order_id)
+    # Also exclude docs in framework contract projects
+    fw_sub = select(FrameworkContractProjectDocument.document_id)
 
-    # Available orders: not deleted AND not in any other contract
-    q_order = select(OrderModel).where(
-        OrderModel.deleted_at.is_(None),
-        not_(OrderModel.id.in_(co_sub)),
-        not_(OrderModel.id.in_(fw_co_sub)),
+    # Single unified query
+    q = select(BusinessDocument).where(
+        BusinessDocument.deleted_at.is_(None),
+        BusinessDocument.doc_type.in_(["order", "quote"]),
+        not_(BusinessDocument.id.in_(used_sub)),
+        not_(BusinessDocument.id.in_(fw_sub)),
+    )
+    # Exclude cancelled/converted quotes
+    q = q.where(
+        ~((BusinessDocument.doc_type == "quote") & BusinessDocument.status.in_(["converted", "cancelled"]))
     )
     if customer_id:
-        q_order = q_order.where(OrderModel.customer_id == UUID(customer_id))
-    orders_result = await db.execute(
-        q_order.order_by(OrderModel.created_at.desc()).limit(500)
-    )
-    orders = orders_result.scalars().all()
+        q = q.where(BusinessDocument.customer_id == UUID(customer_id))
+    result = await db.execute(q.order_by(BusinessDocument.created_at.desc()).limit(500))
+    docs = result.scalars().all()
 
-    # Same for quotes
-    cq_sub = select(ContractQuote.quote_id)
-    if contract_id:
-        cq_sub = cq_sub.where(ContractQuote.contract_id != UUID(contract_id))
+    # Split into orders/quotes for frontend compatibility
+    orders_list, quotes_list = [], []
+    for d in docs:
+        item = {
+            "id": str(d.id),
+            "project_name": d.project_name,
+            "total_amount": float(d.total_amount) if d.total_amount else 0,
+            "department": d.department or "",
+            "customer_id": str(d.customer_id) if d.customer_id else None,
+            "customer_name": d.customer_name or (d.customer.name if d.customer else None),
+        }
+        if d.doc_type == "order":
+            item["order_no"] = d.doc_no
+            orders_list.append(item)
+        else:
+            item["quote_no"] = d.doc_no
+            quotes_list.append(item)
 
-    # Also exclude quotes already linked to framework contract projects
-    fw_cq_sub = select(FrameworkContractProjectQuote.quote_id)
-
-    q_quote = select(QuoteModel).where(
-        QuoteModel.deleted_at.is_(None),
-        QuoteModel.status != "converted",
-        QuoteModel.status != "cancelled",
-        not_(QuoteModel.id.in_(cq_sub)),
-        not_(QuoteModel.id.in_(fw_cq_sub)),
-    )
-    if customer_id:
-        q_quote = q_quote.where(QuoteModel.customer_id == UUID(customer_id))
-    quotes_result = await db.execute(
-        q_quote.order_by(QuoteModel.created_at.desc()).limit(500)
-    )
-    quotes = quotes_result.scalars().all()
-
-    # Query project_names already used by other contracts (same customer)
+    # Used project names
     from app.models.contract import Contract as ContractModel
     used_q = select(ContractModel.project_name).where(
         ContractModel.deleted_at.is_(None),
@@ -135,30 +130,8 @@ async def get_available_resources(
     used_project_names = list({row[0] for row in used_result.all()})
 
     return success({
-        "orders": [
-            {
-                "id": str(o.id),
-                "order_no": o.order_no,
-                "project_name": o.project_name,
-                "total_amount": float(o.total_amount) if o.total_amount else 0,
-                "department": o.department or "",
-                "customer_id": str(o.customer_id) if o.customer_id else None,
-                "customer_name": o.customer.name if o.customer else None,
-            }
-            for o in orders
-        ],
-        "quotes": [
-            {
-                "id": str(q.id),
-                "quote_no": q.quote_no,
-                "project_name": q.project_name,
-                "total_amount": float(q.total_amount) if q.total_amount else 0,
-                "department": q.department or "",
-                "customer_id": str(q.customer_id) if q.customer_id else None,
-                "customer_name": q.customer_name,
-            }
-            for q in quotes
-        ],
+        "orders": orders_list,
+        "quotes": quotes_list,
         "used_project_names": used_project_names,
     })
 

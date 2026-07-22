@@ -66,120 +66,76 @@ async def get_available_projects(
     如果指定了 contract_id，则该合同下已关联的资源也会包含。
     """
     from sqlalchemy import select, not_
-    from app.models.order import Order as OrderModel
-    from app.models.quote import Quote as QuoteModel
+    from app.models.business_document import BusinessDocument
     from app.models.framework_contract import (
         FrameworkContractProject,
-        FrameworkContractProjectOrder,
-        FrameworkContractProjectQuote,
+        FrameworkContractProjectDocument,
     )
-    from app.models.contract import ContractOrder, ContractQuote
+    from app.models.contract import ContractDocument
 
-    # 已被其他框架合同项目关联的订单 ID（排除当前合同的项目）
-    used_orders_sub = select(FrameworkContractProjectOrder.order_id).join(
+    # 已被其他框架合同项目关联的 document ID
+    used_sub = select(FrameworkContractProjectDocument.document_id).join(
         FrameworkContractProject,
-        FrameworkContractProjectOrder.project_id == FrameworkContractProject.id,
+        FrameworkContractProjectDocument.project_id == FrameworkContractProject.id,
     )
     if contract_id:
-        used_orders_sub = used_orders_sub.where(
+        used_sub = used_sub.where(
             FrameworkContractProject.contract_id != UUID(contract_id)
         )
 
-    # 已被常规合同关联的订单 ID
-    co_sub = select(ContractOrder.order_id)
+    # 已被常规合同关联的 document ID
+    contract_used_sub = select(ContractDocument.document_id)
 
-    # 已被其他框架合同项目关联的报价 ID（排除当前合同的项目）
-    used_quotes_sub = select(FrameworkContractProjectQuote.quote_id).join(
-        FrameworkContractProject,
-        FrameworkContractProjectQuote.project_id == FrameworkContractProject.id,
-    )
-    if contract_id:
-        used_quotes_sub = used_quotes_sub.where(
-            FrameworkContractProject.contract_id != UUID(contract_id)
-        )
-
-    # 已被常规合同关联的报价 ID
-    cq_sub = select(ContractQuote.quote_id)
-
-    # 客户下未关联的订单（排除已关联到任何常规合同或其他框架项目）
-    orders_result = await db.execute(
-        select(OrderModel)
+    # 统一查询：客户下未关联的活跃单据（订单+报价）
+    result = await db.execute(
+        select(BusinessDocument)
         .where(
-            OrderModel.deleted_at.is_(None),
-            OrderModel.customer_id == UUID(customer_id),
-            not_(OrderModel.id.in_(used_orders_sub)),
-            not_(OrderModel.id.in_(co_sub)),
+            BusinessDocument.deleted_at.is_(None),
+            BusinessDocument.customer_id == UUID(customer_id),
+            BusinessDocument.doc_type.in_(["order", "quote"]),
+            not_(BusinessDocument.id.in_(used_sub)),
+            not_(BusinessDocument.id.in_(contract_used_sub)),
         )
-        .order_by(OrderModel.created_at.desc())
+        .order_by(BusinessDocument.created_at.desc())
         .limit(500)
     )
-    orders = orders_result.scalars().all()
+    docs = result.scalars().all()
 
-    # 客户下未关联的报价（排除已关联到任何常规合同或其他框架项目）
-    quotes_result = await db.execute(
-        select(QuoteModel)
-        .where(
-            QuoteModel.deleted_at.is_(None),
-            QuoteModel.customer_id == UUID(customer_id),
-            QuoteModel.status != "converted",
-            not_(QuoteModel.id.in_(used_quotes_sub)),
-            not_(QuoteModel.id.in_(cq_sub)),
-        )
-        .order_by(QuoteModel.created_at.desc())
-        .limit(500)
-    )
-    quotes = quotes_result.scalars().all()
+    # 拆分为 orders 和 quotes（保持前端兼容）
+    orders_list, quotes_list = [], []
+    for d in docs:
+        item = {
+            "id": str(d.id),
+            "project_name": d.project_name,
+            "total_amount": float(d.total_amount) if d.total_amount else 0,
+            "department": d.department or "",
+            "customer_id": str(d.customer_id) if d.customer_id else None,
+            "customer_name": d.customer_name or (d.customer.name if d.customer else None),
+        }
+        if d.doc_type == "order":
+            item["order_no"] = d.doc_no
+            orders_list.append(item)
+        else:
+            item["quote_no"] = d.doc_no
+            quotes_list.append(item)
 
-    # 客户下已存在的 project_name 列表（用于项目名称下拉）
+    # 项目名称下拉
     from sqlalchemy import func as sa_func
-    projects_result = await db.execute(
-        select(sa_func.distinct(OrderModel.project_name))
+    pnames_result = await db.execute(
+        select(sa_func.distinct(BusinessDocument.project_name))
         .where(
-            OrderModel.deleted_at.is_(None),
-            OrderModel.customer_id == UUID(customer_id),
-            OrderModel.project_name.isnot(None),
-            OrderModel.project_name != "",
+            BusinessDocument.deleted_at.is_(None),
+            BusinessDocument.customer_id == UUID(customer_id),
+            BusinessDocument.project_name.isnot(None),
+            BusinessDocument.project_name != "",
         )
     )
-    order_project_names = [row[0] for row in projects_result.all()]
-
-    quotes_projects_result = await db.execute(
-        select(sa_func.distinct(QuoteModel.project_name))
-        .where(
-            QuoteModel.deleted_at.is_(None),
-            QuoteModel.customer_id == UUID(customer_id),
-            QuoteModel.project_name.isnot(None),
-            QuoteModel.project_name != "",
-        )
-    )
-    quote_project_names = [row[0] for row in quotes_projects_result.all()]
+    project_names = sorted([row[0] for row in pnames_result.all()])
 
     return success({
-        "orders": [
-            {
-                "id": str(o.id),
-                "order_no": o.order_no,
-                "project_name": o.project_name,
-                "total_amount": float(o.total_amount) if o.total_amount else 0,
-                "department": o.department or "",
-                "customer_id": str(o.customer_id) if o.customer_id else None,
-                "customer_name": o.customer.name if o.customer else None,
-            }
-            for o in orders
-        ],
-        "quotes": [
-            {
-                "id": str(q.id),
-                "quote_no": q.quote_no,
-                "project_name": q.project_name,
-                "total_amount": float(q.total_amount) if q.total_amount else 0,
-                "department": q.department or "",
-                "customer_id": str(q.customer_id) if q.customer_id else None,
-                "customer_name": q.customer_name,
-            }
-            for q in quotes
-        ],
-        "project_names": sorted(list(set(order_project_names + quote_project_names))),
+        "orders": orders_list,
+        "quotes": quotes_list,
+        "project_names": project_names,
     })
 
 

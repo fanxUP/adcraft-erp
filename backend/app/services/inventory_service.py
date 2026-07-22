@@ -53,11 +53,14 @@ class InventoryService:
         unit_cost = Decimal(str(data.get("unit_cost", 0)))
         total_cost = qty * unit_cost
 
+        # 向后兼容：接受 order_id 参数，映射到 document_id
+        doc_id = data.get("document_id") or data.get("order_id")
+
         record_data = {
             "item_id": item_id, "record_type": "in",
             "quantity": float(qty), "unit_cost": float(unit_cost),
             "total_cost": float(total_cost),
-            "order_id": UUID(data["order_id"]) if data.get("order_id") else None,
+            "document_id": UUID(doc_id) if doc_id else None,
             "remark": data.get("remark"),
             "operated_at": datetime.now(),
         }
@@ -88,11 +91,14 @@ class InventoryService:
         unit_cost = Decimal(str(item.unit_cost))
         total_cost = qty * unit_cost
 
+        # 向后兼容：接受 order_id 参数，映射到 document_id
+        doc_id = data.get("document_id") or data.get("order_id")
+
         record_data = {
             "item_id": item_id, "record_type": "out",
             "quantity": float(qty), "unit_cost": float(unit_cost),
             "total_cost": float(total_cost),
-            "order_id": UUID(data["order_id"]) if data.get("order_id") else None,
+            "document_id": UUID(doc_id) if doc_id else None,
             "remark": data.get("remark"),
             "operated_at": datetime.now(),
         }
@@ -127,7 +133,8 @@ class InventoryService:
             "quantity": float(r.quantity),
             "unit_cost": float(r.unit_cost),
             "total_cost": float(r.total_cost),
-            "order_id": str(r.order_id) if r.order_id else None,
+            "document_id": str(r.document_id) if r.document_id else None,
+            "order_id": str(r.document_id) if r.document_id else None,  # 向后兼容
             "remark": r.remark,
             "operated_at": r.operated_at.isoformat() if r.operated_at else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,

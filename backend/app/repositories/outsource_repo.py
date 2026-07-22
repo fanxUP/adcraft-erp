@@ -60,14 +60,14 @@ class OutsourceTaskRepository:
         return result.scalar_one_or_none()
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
-                         vendor_id: UUID | None = None, order_id: UUID | None = None) -> tuple[list[OutsourceTask], int]:
+                         vendor_id: UUID | None = None, related_doc_id: UUID | None = None) -> tuple[list[OutsourceTask], int]:
         q = select(OutsourceTask).where(OutsourceTask.deleted_at.is_(None))
         if status:
             q = q.where(OutsourceTask.status == status)
         if vendor_id:
             q = q.where(OutsourceTask.vendor_id == vendor_id)
-        if order_id:
-            q = q.where(OutsourceTask.order_id == order_id)
+        if related_doc_id:
+            q = q.where(OutsourceTask.related_doc_id == related_doc_id)
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
         q = q.order_by(OutsourceTask.created_at.desc()).offset(skip).limit(limit)

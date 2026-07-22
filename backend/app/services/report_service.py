@@ -2,12 +2,11 @@ from datetime import datetime, date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 
-from app.models.order import Order
+from app.models.business_document import BusinessDocument
 from app.models.payment import Payment
 from app.models.task import DesignTask, ProductionTask, InstallationTask
 from app.models.customer import Customer
-from app.models.quote import Quote
-from app.models.contract import Contract, ContractOrder
+from app.models.contract import Contract, ContractDocument
 
 
 class ReportService:
@@ -72,7 +71,7 @@ class ReportService:
             "payment_amount": float(sum(p.amount for p in payments)),
             "new_customer_count": new_customers,
             "orders": [
-                {"id": str(o.id), "order_no": o.order_no, "project_name": o.project_name,
+                {"id": str(o.id), "order_no": o.doc_no, "project_name": o.project_name,
                  "total_amount": float(o.total_amount), "status": o.status}
                 for o in orders
             ],
@@ -114,7 +113,7 @@ class ReportService:
             "unpaid_amount": order_amount - payment_amount,
             "status_breakdown": status_breakdown,
             "orders": [
-                {"id": str(o.id), "order_no": o.order_no, "project_name": o.project_name,
+                {"id": str(o.id), "order_no": o.doc_no, "project_name": o.project_name,
                  "total_amount": float(o.total_amount), "paid_amount": float(o.paid_amount),
                  "unpaid_amount": float(o.unpaid_amount), "status": o.status}
                 for o in orders
@@ -144,17 +143,19 @@ class ReportService:
 
         # Batch-fetch all orders grouped by customer
         orders_result = await self.db.execute(
-            select(Order)
-            .where(Order.deleted_at.is_(None), Order.customer_id.in_(customer_ids))
-            .order_by(Order.created_at.desc())
+            select(BusinessDocument)
+            .where(BusinessDocument.deleted_at.is_(None), BusinessDocument.doc_type == "order",
+                   BusinessDocument.customer_id.in_(customer_ids))
+            .order_by(BusinessDocument.created_at.desc())
         )
         all_orders = orders_result.scalars().all()
 
         # Batch-fetch all quotes grouped by customer (exclude converted ones)
         quotes_result = await self.db.execute(
-            select(Quote)
-            .where(Quote.deleted_at.is_(None), Quote.customer_id.in_(customer_ids), Quote.status != "converted")
-            .order_by(Quote.created_at.desc())
+            select(BusinessDocument)
+            .where(BusinessDocument.deleted_at.is_(None), BusinessDocument.doc_type == "quote",
+                   BusinessDocument.customer_id.in_(customer_ids), BusinessDocument.status != "converted")
+            .order_by(BusinessDocument.created_at.desc())
         )
         all_quotes = quotes_result.scalars().all()
 
@@ -175,16 +176,16 @@ class ReportService:
         if contract_ids:
             paid_result = await self.db.execute(
                 select(
-                    ContractOrder.contract_id,
+                    ContractDocument.contract_id,
                     func.coalesce(func.sum(Payment.amount), 0),
                 )
                 .select_from(Payment)
-                .join(ContractOrder, ContractOrder.order_id == Payment.order_id)
+                .join(ContractDocument, ContractDocument.document_id == Payment.document_id)
                 .where(
-                    ContractOrder.contract_id.in_(contract_ids),
+                    ContractDocument.contract_id.in_(contract_ids),
                     Payment.is_voided == False,
                 )
-                .group_by(ContractOrder.contract_id)
+                .group_by(ContractDocument.contract_id)
             )
             paid_map = {row[0]: float(row[1]) for row in paid_result.all()}
 
@@ -260,7 +261,7 @@ class ReportService:
                 "orders": [
                     {
                         "id": str(o.id),
-                        "order_no": o.order_no,
+                        "order_no": o.doc_no,
                         "project_name": o.project_name,
                         "total_amount": float(o.total_amount),
                         "paid_amount": float(o.paid_amount),
@@ -272,7 +273,7 @@ class ReportService:
                 "quotes": [
                     {
                         "id": str(q.id),
-                        "quote_no": q.quote_no,
+                        "quote_no": q.doc_no,
                         "project_name": q.project_name,
                         "total_amount": float(q.total_amount),
                         "status": q.status,
@@ -284,8 +285,8 @@ class ReportService:
 
     async def _sum_orders(self, start: datetime, end: datetime) -> float:
         result = await self.db.execute(
-            select(func.coalesce(func.sum(Order.total_amount), 0))
-            .where(and_(Order.deleted_at.is_(None), Order.created_at >= start, Order.created_at <= end))
+            select(func.coalesce(func.sum(BusinessDocument.total_amount), 0))
+            .where(and_(BusinessDocument.deleted_at.is_(None), BusinessDocument.created_at >= start, BusinessDocument.created_at <= end))
         )
         return result.scalar() or 0
 
@@ -298,8 +299,8 @@ class ReportService:
 
     async def _calc_month_unpaid(self, start: datetime, end: datetime) -> float:
         result = await self.db.execute(
-            select(func.coalesce(func.sum(Order.unpaid_amount), 0))
-            .where(and_(Order.deleted_at.is_(None), Order.created_at >= start, Order.created_at <= end))
+            select(func.coalesce(func.sum(BusinessDocument.unpaid_amount), 0))
+            .where(and_(BusinessDocument.deleted_at.is_(None), BusinessDocument.created_at >= start, BusinessDocument.created_at <= end))
         )
         return result.scalar() or 0
 
@@ -312,11 +313,11 @@ class ReportService:
     async def _count_overdue_orders(self) -> int:
         now = datetime.now()
         result = await self.db.execute(
-            select(func.count()).select_from(Order).where(
+            select(func.count()).select_from(BusinessDocument).where(
                 and_(
-                    Order.deleted_at.is_(None),
-                    Order.status.in_(["confirmed", "in_progress", "in_production", "in_installation"]),
-                    Order.delivery_deadline < now,
+                    BusinessDocument.deleted_at.is_(None),
+                    BusinessDocument.status.in_(["confirmed", "in_progress", "in_production", "in_installation"]),
+                    BusinessDocument.delivery_deadline < now,
                 )
             )
         )
@@ -324,10 +325,10 @@ class ReportService:
 
     async def _customer_debt_ranking(self, limit: int = 10) -> list:
         result = await self.db.execute(
-            select(Order.customer_id, func.sum(Order.unpaid_amount).label("debt"))
-            .where(Order.deleted_at.is_(None), Order.unpaid_amount > 0)
-            .group_by(Order.customer_id)
-            .order_by(func.sum(Order.unpaid_amount).desc())
+            select(BusinessDocument.customer_id, func.sum(BusinessDocument.unpaid_amount).label("debt"))
+            .where(BusinessDocument.deleted_at.is_(None), BusinessDocument.unpaid_amount > 0)
+            .group_by(BusinessDocument.customer_id)
+            .order_by(func.sum(BusinessDocument.unpaid_amount).desc())
             .limit(limit)
         )
         rows = result.all()
@@ -342,11 +343,11 @@ class ReportService:
             })
         return ranking
 
-    async def _list_orders_in_range(self, start: datetime, end: datetime) -> list[Order]:
+    async def _list_orders_in_range(self, start: datetime, end: datetime) -> list[BusinessDocument]:
         result = await self.db.execute(
-            select(Order).where(
-                and_(Order.deleted_at.is_(None), Order.created_at >= start, Order.created_at <= end)
-            ).order_by(Order.created_at.desc())
+            select(BusinessDocument).where(
+                and_(BusinessDocument.deleted_at.is_(None), BusinessDocument.created_at >= start, BusinessDocument.created_at <= end)
+            ).order_by(BusinessDocument.created_at.desc())
         )
         return list(result.scalars().all())
 

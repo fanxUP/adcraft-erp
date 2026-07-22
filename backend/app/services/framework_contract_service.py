@@ -26,27 +26,48 @@ class FrameworkContractService:
 
     def _to_detail(self, project) -> dict:
         base = self._to_response(project)
+        all_docs = project.documents or []
         base.update({
+            "documents": [
+                {
+                    "id": str(d.id),
+                    "doc_no": d.doc_no,
+                    "doc_type": d.doc_type,
+                    "project_name": d.project_name,
+                    "total_amount": float(d.total_amount) if d.total_amount else 0,
+                }
+                for d in all_docs
+            ],
+            # Backward-compat: keep orders/quotes split for frontend
             "orders": [
                 {
-                    "id": str(o.id),
-                    "order_no": o.order_no,
-                    "project_name": o.project_name,
-                    "total_amount": float(o.total_amount) if o.total_amount else 0,
+                    "id": str(d.id),
+                    "order_no": d.doc_no,
+                    "project_name": d.project_name,
+                    "total_amount": float(d.total_amount) if d.total_amount else 0,
                 }
-                for o in (project.orders or [])
+                for d in all_docs if d.doc_type == "order"
             ],
             "quotes": [
                 {
-                    "id": str(q.id),
-                    "quote_no": q.quote_no,
-                    "project_name": q.project_name,
-                    "total_amount": float(q.total_amount) if q.total_amount else 0,
+                    "id": str(d.id),
+                    "quote_no": d.doc_no,
+                    "project_name": d.project_name,
+                    "total_amount": float(d.total_amount) if d.total_amount else 0,
                 }
-                for q in (project.quotes or [])
+                for d in all_docs if d.doc_type == "quote"
             ],
         })
         return base
+
+    def _combine_document_ids(self, data: dict) -> list[UUID]:
+        """Combine order_ids + quote_ids (backward compat) or use document_ids."""
+        if "document_ids" in data:
+            raw = data.pop("document_ids", [])
+            return [UUID(did) for did in (raw or [])]
+        order_ids = data.pop("order_ids", [])
+        quote_ids = data.pop("quote_ids", [])
+        return [UUID(oid) for oid in (order_ids or [])] + [UUID(qid) for qid in (quote_ids or [])]
 
     async def list_projects(self, contract_id: UUID, page: int, page_size: int) -> tuple[list, int]:
         skip = (page - 1) * page_size
@@ -63,10 +84,7 @@ class FrameworkContractService:
     async def create_project(self, data: dict) -> dict:
         data["contract_id"] = UUID(data["contract_id"])
         data["customer_id"] = UUID(data["customer_id"])
-        order_ids = data.get("order_ids", [])
-        quote_ids = data.get("quote_ids", [])
-        data["order_ids"] = [UUID(oid) for oid in (order_ids or [])]
-        data["quote_ids"] = [UUID(qid) for qid in (quote_ids or [])]
+        data["document_ids"] = self._combine_document_ids(data)
 
         project = await self.repo.create(data)
         project = await self.repo.get_by_id(project.id)
@@ -78,10 +96,9 @@ class FrameworkContractService:
         if not project:
             raise ValueError("框架合同项目不存在")
 
-        if data.get("order_ids") is not None:
-            data["order_ids"] = [UUID(oid) for oid in data["order_ids"]]
-        if data.get("quote_ids") is not None:
-            data["quote_ids"] = [UUID(qid) for qid in data["quote_ids"]]
+        has_doc_update = any(k in data for k in ("document_ids", "order_ids", "quote_ids"))
+        if has_doc_update:
+            data["document_ids"] = self._combine_document_ids(data)
 
         project = await self.repo.update(project, data)
         project = await self.repo.get_by_id(project.id)
