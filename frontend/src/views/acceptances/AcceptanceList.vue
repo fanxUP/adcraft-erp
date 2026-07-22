@@ -83,7 +83,7 @@
     </el-card>
 
     <!-- 新建验收单 → 选择订单/报价单（合并列表） -->
-    <el-dialog v-model="showCreateDialog" title="选择订单或报价单创建验收单" width="750px" :close-on-click-modal="false">
+    <el-dialog v-model="showCreateDialog" title="选择订单或报价单创建验收单" width="900px" :close-on-click-modal="false">
       <el-table :data="availableItems" v-loading="loadingItems" border stripe highlight-current-row @row-dblclick="handleCreateFromItem">
         <el-table-column label="来源" width="70">
           <template #default="{ row }">
