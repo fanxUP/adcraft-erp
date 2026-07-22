@@ -409,6 +409,20 @@ class QuoteService:
         if contract_links:
             await self.db.flush()
 
+        # 同步更新关联验收单：报价转订单后，验收单来源切换为订单
+        from app.models.acceptance import AcceptanceForm
+        acceptances = (await self.db.execute(
+            select(AcceptanceForm).where(
+                AcceptanceForm.quote_id == quote_id,
+                AcceptanceForm.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        for acc in acceptances:
+            acc.order_id = order.id
+            acc.quote_id = None
+        if acceptances:
+            await self.db.flush()
+
         return {
             "id": str(order.id),
             "order_no": order.order_no,
