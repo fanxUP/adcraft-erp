@@ -13,7 +13,7 @@ class AcceptanceForm(Base, TimestampMixin, SoftDeleteMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     acceptance_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=False)
+    order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     accepted_by: Mapped[str | None] = mapped_column(String(128), nullable=True)

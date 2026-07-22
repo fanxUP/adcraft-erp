@@ -35,7 +35,7 @@ class AcceptanceListResponse(BaseModel):
     model_config = {"from_attributes": True}
     id: str
     acceptance_no: str
-    order_id: str
+    order_id: Optional[str] = None
     order_no: Optional[str] = None
     customer_name: Optional[str] = None
     status: str
@@ -49,7 +49,7 @@ class AcceptanceDetailResponse(BaseModel):
     model_config = {"from_attributes": True}
     id: str
     acceptance_no: str
-    order_id: str
+    order_id: Optional[str] = None
     order_no: Optional[str] = None
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None

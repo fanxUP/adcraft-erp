@@ -27,7 +27,7 @@
       <!-- 基本信息 -->
       <el-tab-pane label="基本信息" name="info">
         <!-- 订单信息头 — 编辑和只读模式均显示 -->
-        <el-card class="order-info-card">
+        <el-card class="order-info-card" v-if="form.order_id">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="订单编号">{{ form.order_no || '-' }}</el-descriptions-item>
             <el-descriptions-item label="客户名称">{{ form.customer_name || '-' }}</el-descriptions-item>
@@ -38,6 +38,11 @@
             <el-descriptions-item label="部门/科室">{{ form.department || '-' }}</el-descriptions-item>
             <el-descriptions-item label="下单日期">{{ form.order_date?.slice(0, 10) || '-' }}</el-descriptions-item>
           </el-descriptions>
+        </el-card>
+        <el-card class="order-info-card" v-else>
+          <div style="color: var(--ad-text-secondary); text-align: center; padding: 16px;">
+            独立验收单（未关联订单）
+          </div>
         </el-card>
 
         <!-- 验收审批流程图 -->

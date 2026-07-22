@@ -20,7 +20,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 class AcceptanceCreate(BaseModel):
-    order_id: str
+    order_id: str | None = None
     accepted_by: str | None = None
     our_acceptor_id: str | None = None
     remark: str | None = None
