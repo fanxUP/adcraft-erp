@@ -124,7 +124,7 @@
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAcceptances, deleteAcceptance, getAvailableItems, getAvailableQuotes, createAcceptance } from '@/api/acceptances'
+import { getAcceptances, deleteAcceptance, getAvailableOrders, getAvailableQuotes, createAcceptance } from '@/api/acceptances'
 import type { AvailableItem } from '@/api/acceptances'
 import type { AcceptanceListResponse } from '@/types/api'
 
@@ -145,7 +145,7 @@ const loadingItems = ref(false)
 async function loadAvailableItems() {
   loadingItems.value = true
   try {
-    const [orders, quotes] = await Promise.all([getAvailableItems(), getAvailableQuotes()])
+    const [orders, quotes] = await Promise.all([getAvailableOrders(), getAvailableQuotes()])
     availableItems.value = [...orders, ...quotes]
   } catch { /* ignore */ }
   finally { loadingItems.value = false }
