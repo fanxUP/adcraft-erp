@@ -1,7 +1,7 @@
 """merge orders & quotes into business_documents
 
 Revision ID: f0e1d2c3b4a5
-Revises: feedc0de0001
+Revises: c4d5e6f7a8b9
 Create Date: 2026-07-22 20:12:39.000000
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision: str = 'f0e1d2c3b4a5'
-down_revision: Union[str, None] = 'feedc0de0001'
+down_revision: Union[str, None] = 'c4d5e6f7a8b9'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
