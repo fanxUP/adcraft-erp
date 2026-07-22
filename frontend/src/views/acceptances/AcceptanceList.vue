@@ -28,7 +28,14 @@
     <el-card>
       <el-table :data="list" v-loading="loading" stripe>
         <el-table-column prop="acceptance_no" label="验收单号" min-width="140" />
-        <el-table-column label="关联单据" min-width="140">
+        <el-table-column label="来源" width="80">
+          <template #default="{ row }">
+            <el-tag v-if="row.order_id" type="primary" size="small">订单</el-tag>
+            <el-tag v-else-if="row.quote_id" type="success" size="small">报价</el-tag>
+            <el-tag v-else type="info" size="small">独立</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="关联编号" min-width="150">
           <template #default="{ row }">
             {{ row.order_no || row.quote_no || '-' }}
           </template>
