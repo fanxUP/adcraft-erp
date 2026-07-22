@@ -57,10 +57,12 @@
       <el-table-column label="创建时间" width="180">
         <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="240">
+      <el-table-column label="操作" width="300">
         <template #default="{ row }">
           <el-button text type="primary" @click="$router.push(`/quotes/${row.id}/edit`)">编辑</el-button>
           <el-button text type="success" @click="handlePreview(row)">预览</el-button>
+          <el-button v-if="row.status === 'draft' || row.status === 'confirmed'" text type="warning" @click="handleCancel(row as QuoteListResponse)">作废</el-button>
+          <el-button v-if="row.status === 'cancelled'" text @click="handleRevert(row as QuoteListResponse)">转草稿</el-button>
           <el-button text type="danger" @click="handleDelete(row as QuoteListResponse)">删除</el-button>
         </template>
       </el-table-column>
@@ -83,7 +85,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { getQuotes, deleteQuote } from '@/api/quotes'
+import { getQuotes, deleteQuote, cancelQuote, revertQuoteToDraft } from '@/api/quotes'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { QuoteListResponse } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
@@ -143,10 +145,36 @@ function handleReset() {
   fetchData()
 }
 
+async function handleCancel(row: QuoteListResponse) {
+  await ElMessageBox.confirm(`确定作废报价「${row.quote_no}」？作废后可从列表筛选查看。`, '作废报价', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
+  await cancelQuote(row.id)
+  ElMessage.success('报价已作废')
+  fetchData()
+}
+
+async function handleRevert(row: QuoteListResponse) {
+  await ElMessageBox.confirm(`确定将报价「${row.quote_no}」转回草稿？转回后可重新编辑。`, '转草稿', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
+  await revertQuoteToDraft(row.id)
+  ElMessage.success('已转回草稿')
+  fetchData()
+}
+
 async function handleDelete(row: QuoteListResponse) {
-  await ElMessageBox.confirm(`确认删除报价 "${row.quote_no}"？`, '确认', { type: 'warning' })
+  await ElMessageBox.confirm(
+    `此操作将彻底删除报价「${row.quote_no}」及所有关联数据，不可恢复！确定继续？`,
+    '删除报价',
+    { confirmButtonText: '彻底删除', cancelButtonText: '取消', type: 'error' },
+  )
   await deleteQuote(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success('已彻底删除')
   fetchData()
 }
 

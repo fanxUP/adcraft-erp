@@ -59,12 +59,12 @@
       <el-table-column label="创建时间" width="120">
         <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="220">
+      <el-table-column label="操作" width="280">
         <template #default="{ row }">
           <div style="display: flex; gap: 8px; justify-content: center;">
             <el-button text type="primary" @click="$router.push(`/orders/${row.id}`)">详情</el-button>
-            <el-button v-if="authStore.isAdmin && row.status === 'cancelled'" text type="warning" @click="handleConvertToQuote(row as OrderListResponse)">转报价</el-button>
-            <el-button v-if="authStore.isAdmin && row.status === 'cancelled'" text type="danger" @click="handleDelete(row as OrderListResponse)">删除</el-button>
+            <el-button v-if="row.status !== 'cancelled'" text type="danger" @click="handleCancel(row as OrderListResponse)">取消</el-button>
+            <el-button v-if="row.status === 'cancelled'" text type="warning" @click="handleConvertToQuote(row as OrderListResponse)">转报价</el-button>
           </div>
         </template>
       </el-table-column>
@@ -85,7 +85,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getOrders, deleteOrder, convertOrderToQuote } from '@/api/orders'
+import { getOrders, changeOrderStatus, convertOrderToQuote } from '@/api/orders'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { OrderListResponse } from '@/types/api'
@@ -139,6 +139,17 @@ function handleReset() {
   fetchData()
 }
 
+async function handleCancel(row: OrderListResponse) {
+  await ElMessageBox.confirm(`确定取消订单「${row.order_no}」？订单将移入回收站。`, '取消订单', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
+  await changeOrderStatus(row.id, { to_status: 'cancelled' })
+  ElMessage.success('订单已取消，已移入回收站')
+  fetchData()
+}
+
 async function handleConvertToQuote(row: OrderListResponse) {
   await ElMessageBox.confirm(`确定将订单「${row.order_no}」转为报价单？`, '转报价', {
     confirmButtonText: '确定',
@@ -148,17 +159,6 @@ async function handleConvertToQuote(row: OrderListResponse) {
   await convertOrderToQuote(row.id)
   ElMessage.success('订单已转为报价单')
   router.push('/quotes')
-}
-
-async function handleDelete(row: OrderListResponse) {
-  await ElMessageBox.confirm(`确定将订单「${row.order_no}」移入回收站？`, '删除订单', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
-  await deleteOrder(row.id)
-  ElMessage.success('订单已移入回收站')
-  fetchData()
 }
 
 onMounted(fetchData)

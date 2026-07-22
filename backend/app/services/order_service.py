@@ -119,29 +119,10 @@ class OrderService:
         if to_status == "completed":
             await self._auto_create_acceptance(order)
 
-        # 订单取消时同步删除关联验收单
+        # 订单取消时直接进回收站，关联数据（验收单、外协任务）保留不动
         if to_status == "cancelled":
-            from app.models.acceptance import AcceptanceForm
             from datetime import datetime
-            result = await self.db.execute(
-                select(AcceptanceForm).where(
-                    AcceptanceForm.order_id == order_id,
-                    AcceptanceForm.deleted_at.is_(None),
-                )
-            )
-            for af in result.scalars().all():
-                af.deleted_at = datetime.now()
-
-            # 订单取消时同步取消关联外协任务
-            tasks = (await self.db.execute(
-                select(OutsourceTask).where(
-                    (OutsourceTask.order_id == order_id) |
-                    ((OutsourceTask.related_doc_id == order_id) & (OutsourceTask.related_doc_type == "order"))
-                )
-            )).scalars().all()
-            for task in tasks:
-                if task.status not in ("completed", "settled", "cancelled"):
-                    task.status = "cancelled"
+            order.deleted_at = datetime.now()
 
         # Send notification to sales user
         if order.sales_user_id and order.sales_user_id != operated_by:
@@ -251,39 +232,19 @@ class OrderService:
         return await self.set_cost(order_id, float(total_cost))
 
     async def delete_order(self, order_id: UUID) -> None:
-        """软删除订单，同时级联删除关联的外协任务"""
+        """软删除订单（取消时已进回收站，此方法为备用入口）"""
         order = await self.repo.get_by_id(order_id)
         if not order:
             raise ValueError("订单不存在")
         if order.status != "cancelled":
             raise ValueError("只有已取消的订单可以删除")
-        # 级联删除关联的外协任务（通过 order_id 或 related_doc_id）
-        from app.models.outsource import OutsourceTask
-        from sqlalchemy import select
-        tasks = (await self.db.execute(
-            select(OutsourceTask).where(
-                (OutsourceTask.order_id == order_id) |
-                ((OutsourceTask.related_doc_id == order_id) & (OutsourceTask.related_doc_type == "order"))
-            )
-        )).scalars().all()
-        for task in tasks:
-            # 先级联删除关联的外协付款，再删除任务
-            from app.models.outsource import OutsourcePayment
-            payments = (await self.db.execute(
-                select(OutsourcePayment).where(OutsourcePayment.task_id == task.id)
-            )).scalars().all()
-            for p in payments:
-                await self.db.delete(p)
-            await self.db.delete(task)
         await self.repo.soft_delete(order)
 
     async def convert_to_quote(self, order_id: UUID, created_by: UUID) -> dict:
         """已取消订单转报价单"""
-        order = await self.repo.get_by_id(order_id)
+        order = await self.repo.get_deleted_by_id(order_id)
         if not order:
             raise ValueError("订单不存在")
-        if order.status != "cancelled":
-            raise ValueError("只有已取消的订单可以转报价")
 
         # 创建报价单（优先恢复原报价，否则新建）
         from app.models.quote import Quote, QuoteItem
@@ -371,21 +332,8 @@ class OrderService:
                 task.unit_price = float(quote["total_amount"])
                 task.total_amount = float(quote["total_amount"])
 
-        # 转报价后删除原订单（硬删除，不进回收站）
-        from app.models.acceptance import AcceptanceForm
-        from app.models.contract import ContractOrder, ContractQuote
-        # 清理验收单
-        for af in (await self.db.execute(
-            select(AcceptanceForm).where(AcceptanceForm.order_id == order_id)
-        )).scalars().all():
-            await self.db.delete(af)
-        # 清理合同关联
-        for co in (await self.db.execute(
-            select(ContractOrder).where(ContractOrder.order_id == order_id)
-        )).scalars().all():
-            await self.db.delete(co)
+        # 转报价后订单保留在回收站（不硬删除，不清理关联数据）
         await self.db.flush()
-        await self.db.delete(order)
 
         return quote
 

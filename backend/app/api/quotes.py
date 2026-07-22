@@ -392,6 +392,20 @@ async def revert_quote_to_draft(
         return error(40001, str(e))
 
 
+@router.post("/{quote_id}/cancel")
+async def cancel_quote(
+    quote_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = QuoteService(db)
+    try:
+        quote = await service.cancel_quote(UUID(quote_id))
+        return success(quote)
+    except ValueError as e:
+        return error(40001, str(e))
+
+
 @router.post("/{quote_id}/convert-to-order")
 async def convert_quote_to_order(
     quote_id: str,

@@ -142,28 +142,47 @@ class QuoteService:
         return self._quote_to_detail(quote)
 
     async def delete_quote(self, quote_id: UUID) -> bool:
-        """软删除报价单，同时级联删除关联的外协任务"""
+        """硬删除报价单，级联清理所有关联数据"""
         quote = await self.repo.get_by_id(quote_id)
         if not quote:
             return False
-        # 级联删除关联的外协任务（通过 related_doc_id）
-        from app.models.outsource import OutsourceTask
+
+        from app.models.outsource import OutsourceTask, OutsourcePayment
+        from app.models.contract import ContractQuote as ContractQuoteLink
+        from app.models.framework_contract import FrameworkContractProjectQuote
         from sqlalchemy import select
+
+        # 1. 级联删除关联的外协任务 + 付款
         tasks = (await self.db.execute(
             select(OutsourceTask).where(
                 (OutsourceTask.related_doc_id == quote_id) & (OutsourceTask.related_doc_type == "quote")
             )
         )).scalars().all()
         for task in tasks:
-            # 先级联删除关联的外协付款，再删除任务
-            from app.models.outsource import OutsourcePayment
             payments = (await self.db.execute(
                 select(OutsourcePayment).where(OutsourcePayment.task_id == task.id)
             )).scalars().all()
             for p in payments:
                 await self.db.delete(p)
             await self.db.delete(task)
-        await self.repo.soft_delete(quote)
+
+        # 2. 清除常规合同关联
+        cq_links = (await self.db.execute(
+            select(ContractQuoteLink).where(ContractQuoteLink.quote_id == quote_id)
+        )).scalars().all()
+        for link in cq_links:
+            await self.db.delete(link)
+
+        # 3. 清除框架合同项目关联
+        fw_links = (await self.db.execute(
+            select(FrameworkContractProjectQuote).where(FrameworkContractProjectQuote.quote_id == quote_id)
+        )).scalars().all()
+        for link in fw_links:
+            await self.db.delete(link)
+
+        # 4. 硬删除报价单（QuoteItem / QuoteVersion 由 ORM cascade 自动处理）
+        await self.db.delete(quote)
+        await self.db.flush()
         return True
 
     async def calculate_quote(self, quote_id: UUID) -> dict:
@@ -236,9 +255,20 @@ class QuoteService:
         quote = await self.repo.get_by_id(quote_id)
         if not quote:
             raise ValueError("报价单不存在")
-        if quote.status != "confirmed":
-            raise ValueError("只有已确认的报价单可以撤回")
+        if quote.status not in ("confirmed", "cancelled"):
+            raise ValueError("只有已确认或已作废的报价单可以撤回")
         quote.status = "draft"
+        await self.db.flush()
+        return self._quote_to_detail(quote)
+
+    async def cancel_quote(self, quote_id: UUID) -> dict:
+        """作废报价单（软操作，仅变更状态）"""
+        quote = await self.repo.get_by_id(quote_id)
+        if not quote:
+            raise ValueError("报价单不存在")
+        if quote.status not in ("draft", "confirmed"):
+            raise ValueError("只有草稿或已确认的报价单可以作废")
+        quote.status = "cancelled"
         await self.db.flush()
         return self._quote_to_detail(quote)
 
