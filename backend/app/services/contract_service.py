@@ -109,6 +109,19 @@ class ContractService:
             await self.db.flush()
 
     def _to_response(self, contract) -> dict:
+        # 从关联单据提取部门和来源
+        docs = contract.documents or []
+        departments = list({d.department for d in docs if d.department})
+        department = "、".join(departments) if departments else ""
+        doc_types = {d.doc_type for d in docs}
+        if "order" in doc_types and "quote" in doc_types:
+            source = "订单+报价"
+        elif "order" in doc_types:
+            source = "订单"
+        elif "quote" in doc_types:
+            source = "报价"
+        else:
+            source = ""
         return {
             "id": str(contract.id),
             "contract_no": contract.contract_no,
@@ -123,6 +136,8 @@ class ContractService:
             "start_date": contract.start_date.isoformat() if contract.start_date else None,
             "end_date": contract.end_date.isoformat() if contract.end_date else None,
             "created_at": contract.created_at.isoformat() if contract.created_at else None,
+            "department": department,
+            "source": source,
         }
 
     def _to_detail(self, contract) -> dict:
