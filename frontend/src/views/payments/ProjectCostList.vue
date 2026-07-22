@@ -7,10 +7,10 @@
     <!-- Unified filter -->
     <el-card shadow="never" class="filter-card">
       <el-form inline>
-        <el-form-item label="类型">
+        <el-form-item label="来源">
           <el-select v-model="filterType" clearable placeholder="全部" style="width: 120px" @change="handleSearch">
             <el-option label="订单" value="order" />
-            <el-option label="报价单" value="quote" />
+            <el-option label="报价" value="quote" />
           </el-select>
         </el-form-item>
         <el-form-item label="关键词">
@@ -36,10 +36,10 @@
 
     <!-- Unified table -->
     <el-table :data="combinedList" v-loading="loading" stripe style="margin-top: 16px" row-key="id">
-      <el-table-column label="类型" width="90" fixed>
+      <el-table-column label="来源" width="90" fixed>
         <template #default="{ row }">
           <el-tag v-if="row._type === 'order'" type="primary" size="small">订单</el-tag>
-          <el-tag v-else type="success" size="small">报价单</el-tag>
+          <el-tag v-else type="success" size="small">报价</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="编号" width="180">
