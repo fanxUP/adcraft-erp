@@ -1058,6 +1058,7 @@ export interface AcceptanceListResponse {
   customer_name?: string
   project_name?: string
   department?: string
+  total_amount: number
   status: string
   accepted_at?: string
   accepted_by?: string

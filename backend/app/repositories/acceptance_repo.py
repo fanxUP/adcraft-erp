@@ -16,7 +16,10 @@ class AcceptanceRepository:
     async def list_all(self, page: int, page_size: int, keyword: str = "",
                        status: str = "", order_id: str = "") -> tuple[list[AcceptanceForm], int]:
         q = select(AcceptanceForm).where(AcceptanceForm.deleted_at.is_(None))
-        q = q.options(selectinload(AcceptanceForm.order).selectinload(Order.customer))
+        q = q.options(
+            selectinload(AcceptanceForm.order).selectinload(Order.customer),
+            selectinload(AcceptanceForm.items),
+        )
         count_q = select(func.count()).select_from(AcceptanceForm).where(AcceptanceForm.deleted_at.is_(None))
 
         if keyword:

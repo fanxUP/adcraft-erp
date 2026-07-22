@@ -43,6 +43,9 @@
         <el-table-column prop="customer_name" label="客户" min-width="120" />
         <el-table-column prop="department" label="部门/科室" min-width="120" />
         <el-table-column prop="project_name" label="项目名称" min-width="150" show-overflow-tooltip />
+        <el-table-column label="金额" width="120" align="right">
+          <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
+        </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="statusColor(row.status)">{{ statusLabel(row.status) }}</el-tag>

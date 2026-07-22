@@ -259,6 +259,9 @@ class AcceptanceService:
                 form.order.department if form.order
                 else (form.quote.department if form.quote else None)
             ),
+            "total_amount": sum(
+                float(i.subtotal or 0) for i in (form.items or [])
+            ),
             "status": form.status,
             "accepted_at": form.accepted_at.isoformat() if form.accepted_at else None,
             "accepted_by": form.accepted_by,
