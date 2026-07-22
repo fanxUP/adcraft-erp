@@ -27,7 +27,17 @@ class FrameworkContractService:
     def _to_detail(self, project) -> dict:
         base = self._to_response(project)
         all_docs = project.documents or []
+        doc_types = {d.doc_type for d in all_docs}
+        if "order" in doc_types and "quote" in doc_types:
+            source = "订单+报价"
+        elif "order" in doc_types:
+            source = "订单"
+        elif "quote" in doc_types:
+            source = "报价"
+        else:
+            source = ""
         base.update({
+            "source": source,
             "documents": [
                 {
                     "id": str(d.id),
@@ -73,13 +83,51 @@ class FrameworkContractService:
         skip = (page - 1) * page_size
         projects, total = await self.repo.list_by_contract(contract_id, skip=skip, limit=page_size)
         result = [self._to_detail(p) for p in projects]
+
+        # 批量计算已收/未收金额
+        pids = [p.id for p in projects]
+        paid_map = await self._batch_project_paid_amounts(pids) if pids else {}
+        for item in result:
+            paid = paid_map.get(item["id"], 0.0)
+            item["paid_amount"] = paid
+            item["unpaid_amount"] = max(0, item["project_amount"] - paid)
+
         return result, total
+
+    async def _batch_project_paid_amounts(self, project_ids: list[UUID]) -> dict[UUID, float]:
+        """批量计算框架合同项目的已收金额（来自关联单据的收款）"""
+        if not project_ids:
+            return {}
+        from sqlalchemy import select, func
+        from app.models.payment import Payment
+        from app.models.framework_contract import FrameworkContractProjectDocument
+
+        result = await self.db.execute(
+            select(
+                FrameworkContractProjectDocument.project_id,
+                func.coalesce(func.sum(Payment.amount), 0),
+            )
+            .select_from(Payment)
+            .join(FrameworkContractProjectDocument,
+                  FrameworkContractProjectDocument.document_id == Payment.document_id)
+            .where(
+                FrameworkContractProjectDocument.project_id.in_(project_ids),
+                Payment.is_voided == False,
+            )
+            .group_by(FrameworkContractProjectDocument.project_id)
+        )
+        return {row[0]: float(row[1]) for row in result.all()}
 
     async def get_project(self, project_id: UUID) -> dict | None:
         project = await self.repo.get_by_id(project_id)
         if not project:
             return None
-        return self._to_detail(project)
+        result = self._to_detail(project)
+        paid_map = await self._batch_project_paid_amounts([project_id])
+        paid = paid_map.get(result["id"], 0.0)
+        result["paid_amount"] = paid
+        result["unpaid_amount"] = max(0, result["project_amount"] - paid)
+        return result
 
     async def create_project(self, data: dict) -> dict:
         data["contract_id"] = UUID(data["contract_id"])
@@ -89,7 +137,10 @@ class FrameworkContractService:
         project = await self.repo.create(data)
         project = await self.repo.get_by_id(project.id)
         await self._sync_contract_total(project.contract_id)
-        return self._to_detail(project)
+        result = self._to_detail(project)
+        result["paid_amount"] = 0.0
+        result["unpaid_amount"] = result["project_amount"]
+        return result
 
     async def update_project(self, project_id: UUID, data: dict) -> dict:
         project = await self.repo.get_by_id(project_id)
@@ -103,7 +154,12 @@ class FrameworkContractService:
         project = await self.repo.update(project, data)
         project = await self.repo.get_by_id(project.id)
         await self._sync_contract_total(project.contract_id)
-        return self._to_detail(project)
+        result = self._to_detail(project)
+        paid_map = await self._batch_project_paid_amounts([project_id])
+        paid = paid_map.get(result["id"], 0.0)
+        result["paid_amount"] = paid
+        result["unpaid_amount"] = max(0, result["project_amount"] - paid)
+        return result
 
     async def delete_project(self, project_id: UUID) -> bool:
         project = await self.repo.get_by_id(project_id)
