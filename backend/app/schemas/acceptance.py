@@ -40,6 +40,7 @@ class AcceptanceListResponse(BaseModel):
     quote_id: Optional[str] = None
     quote_no: Optional[str] = None
     customer_name: Optional[str] = None
+    total_amount: float = 0
     status: str
     accepted_at: Optional[str] = None
     accepted_by: Optional[str] = None
