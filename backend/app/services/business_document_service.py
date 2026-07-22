@@ -153,7 +153,11 @@ class BusinessDocumentService:
     # ═══════════════════════════════════════════
 
     async def delete(self, doc_id: UUID) -> bool:
-        doc = await self.repo.get_by_id(doc_id)
+        # 直接查询（不过滤 deleted_at），因为取消操作已标记软删除
+        from app.models.business_document import BusinessDocument
+        q = select(BusinessDocument).where(BusinessDocument.id == doc_id)
+        result = await self.db.execute(q)
+        doc = result.scalar_one_or_none()
         if not doc:
             return False
 
@@ -170,8 +174,8 @@ class BusinessDocumentService:
 
     async def _hard_delete_quote(self, doc) -> bool:
         """硬删除报价 — 清理所有关联 FK 引用（集成自 quote_service.delete_quote）。"""
-        from app.models.contract import ContractQuote
-        from app.models.framework_contract import FrameworkContractProjectQuote
+        from app.models.contract import ContractDocument
+        from app.models.framework_contract import FrameworkContractProjectDocument
         from app.models.acceptance import AcceptanceForm
 
         # 1. 删除外协任务及付款
@@ -192,15 +196,15 @@ class BusinessDocumentService:
 
         # 2. 清理合同关联
         links = (await self.db.execute(
-            select(ContractQuote).where(ContractQuote.quote_id == doc.id)
+            select(ContractDocument).where(ContractDocument.document_id == doc.id)
         )).scalars().all()
         for l in links:
             await self.db.delete(l)
 
         # 3. 清理框架合同关联
         fw_links = (await self.db.execute(
-            select(FrameworkContractProjectQuote).where(
-                FrameworkContractProjectQuote.quote_id == doc.id
+            select(FrameworkContractProjectDocument).where(
+                FrameworkContractProjectDocument.document_id == doc.id
             )
         )).scalars().all()
         for l in fw_links:
