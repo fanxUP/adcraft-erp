@@ -96,10 +96,10 @@ class OrderService:
     ORDER_TRANSITIONS = {
         "pending_confirm": ["confirmed", "cancelled"],
         "confirmed": ["designing", "cancelled"],
-        "designing": ["in_production", "in_installation", "completed", "cancelled"],
-        "in_production": ["designing", "in_installation", "completed", "cancelled"],
-        "in_installation": ["designing", "in_production", "completed", "cancelled"],
-        "completed": ["designing", "in_production", "in_installation", "cancelled"],
+        "designing": ["in_production", "in_installation", "completed"],
+        "in_production": ["designing", "in_installation", "completed"],
+        "in_installation": ["designing", "in_production", "completed"],
+        "completed": ["designing", "in_production", "in_installation"],
         "cancelled": [],
     }
 
