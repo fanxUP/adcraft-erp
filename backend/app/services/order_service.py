@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,8 +122,7 @@ class OrderService:
 
         # 订单取消时直接进回收站，关联数据（验收单、外协任务）保留不动
         if to_status == "cancelled":
-            from datetime import datetime
-            order.deleted_at = datetime.now()
+            await self.repo.update(order, {"deleted_at": datetime.now()})
 
         # Send notification to sales user
         if order.sales_user_id and order.sales_user_id != operated_by:
@@ -176,11 +176,11 @@ class OrderService:
                 item_name=oi.item_name,
                 material_process=oi.material_process,
                 specification=spec,
-                quantity=float(oi.quantity) if oi.quantity else None,
+                quantity=float(oi.quantity) if oi.quantity is not None else None,
                 unit=oi.unit,
-                area=float(oi.area) if oi.area else None,
-                unit_price=float(oi.unit_price) if oi.unit_price else None,
-                subtotal=float(oi.subtotal_amount) if oi.subtotal_amount else None,
+                area=float(oi.area) if oi.area is not None else None,
+                unit_price=float(oi.unit_price) if oi.unit_price is not None else None,
+                subtotal=float(oi.subtotal_amount) if oi.subtotal_amount is not None else None,
                 item_status="pending",
                 group_name=oi.group_name,
                 remark=oi.remark,
@@ -365,6 +365,7 @@ class OrderService:
             "cost_amount": float(o.cost_amount),
             "gross_profit": float(o.gross_profit),
             "created_at": o.created_at.isoformat() if o.created_at else None,
+            "deleted_at": o.deleted_at.isoformat() if o.deleted_at else None,
         }
 
     def _order_to_detail(self, o) -> dict:
