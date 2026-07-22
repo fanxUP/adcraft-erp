@@ -401,7 +401,11 @@ class BusinessDocumentService:
     async def convert_doc_type(self, doc_id: UUID, new_type: str,
                                 created_by: UUID) -> dict:
         """统一转换方法 — 只改 doc_type + 编号，ID 不变，所有 FK 自动跟随。"""
-        doc = await self.repo.get_by_id(doc_id)
+        # 直接查询（不过滤 deleted_at），因为已取消的订单已被软删除
+        from app.models.business_document import BusinessDocument
+        q = select(BusinessDocument).where(BusinessDocument.id == doc_id)
+        result = await self.db.execute(q)
+        doc = result.scalar_one_or_none()
         if not doc:
             raise ValueError("单据不存在")
 
@@ -442,6 +446,8 @@ class BusinessDocumentService:
             # 重置订单专有字段
             doc.paid_amount = 0
             doc.unpaid_amount = 0
+            # 取消软删除（已取消订单被标记了 deleted_at）
+            doc.deleted_at = None
 
         await self.db.flush()
 
