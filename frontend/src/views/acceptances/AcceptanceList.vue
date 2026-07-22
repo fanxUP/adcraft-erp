@@ -90,6 +90,7 @@
         暂无可用的订单（所有已有验收单的订单已被排除）
       </div>
       <template #footer>
+        <el-button type="primary" @click="handleCreateBlank">创建空白验收单</el-button>
         <el-button @click="showCreateDialog = false">取消</el-button>
       </template>
     </el-dialog>
@@ -130,6 +131,17 @@ async function handleCreate(row: AvailableOrder) {
   try {
     const data = await createAcceptance({ order_id: row.id })
     ElMessage.success('验收单创建成功')
+    showCreateDialog.value = false
+    router.push(`/acceptances/${data.id}`)
+  } catch (e: unknown) {
+    ElMessage.error(e instanceof Error ? e.message : '创建失败')
+  }
+}
+
+async function handleCreateBlank() {
+  try {
+    const data = await createAcceptance({})
+    ElMessage.success('空白验收单已创建')
     showCreateDialog.value = false
     router.push(`/acceptances/${data.id}`)
   } catch (e: unknown) {

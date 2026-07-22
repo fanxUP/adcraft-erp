@@ -31,7 +31,7 @@ export function getAcceptance(id: string) {
 }
 
 export function createAcceptance(data: {
-  order_id: string
+  order_id?: string
   accepted_by?: string
   our_acceptor_id?: string
   remark?: string

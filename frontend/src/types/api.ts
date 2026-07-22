@@ -1051,7 +1051,7 @@ export interface AcceptanceAttachmentResponse {
 export interface AcceptanceListResponse {
   id: string
   acceptance_no: string
-  order_id: string
+  order_id?: string
   order_no?: string
   customer_name?: string
   project_name?: string

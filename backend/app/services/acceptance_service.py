@@ -49,8 +49,11 @@ class AcceptanceService:
 
     # ── 创建 ──────────────────────────────────────────────
     async def create_acceptance(self, data: dict):
-        order_id = UUID(data["order_id"])
-        data["order_id"] = order_id
+        order_id = UUID(data["order_id"]) if data.get("order_id") else None
+        if order_id:
+            data["order_id"] = order_id
+        else:
+            data.pop("order_id", None)
         data["acceptance_no"] = await generate_acceptance_no(self.db)
         data["status"] = "draft"
 
@@ -61,7 +64,7 @@ class AcceptanceService:
         form = await self.repo.create({**data, "items": items_data})
 
         # 未传入明细时，自动从订单复制明细
-        if not items_data:
+        if not items_data and order_id:
             await self._copy_order_items(form.id, order_id)
 
         return self._to_detail_dict(await self.repo.get_by_id(form.id))
@@ -180,7 +183,7 @@ class AcceptanceService:
         return {
             "id": str(form.id),
             "acceptance_no": form.acceptance_no,
-            "order_id": str(form.order_id),
+            "order_id": str(form.order_id) if form.order_id else None,
             "order_no": form.order.order_no if form.order else None,
             "customer_name": form.order.customer.name if form.order and form.order.customer else None,
             "project_name": form.order.project_name if form.order else None,
@@ -201,7 +204,7 @@ class AcceptanceService:
         return {
             "id": str(form.id),
             "acceptance_no": form.acceptance_no,
-            "order_id": str(form.order_id),
+            "order_id": str(form.order_id) if form.order_id else None,
             "order_no": form.order.order_no if form.order else None,
             "customer_name": form.order.customer.name if form.order and form.order.customer else None,
             "customer_phone": form.order.customer.phone if form.order and form.order.customer else None,
