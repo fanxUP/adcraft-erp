@@ -29,6 +29,7 @@ OBJ_VEHICLE_FUEL_RECORD = "vehicle_fuel_record"
 OBJ_VEHICLE_MAINTENANCE_RECORD = "vehicle_maintenance_record"
 OBJ_VEHICLE_COST_ALLOCATION = "vehicle_cost_allocation"
 OBJ_VEHICLE_CERTIFICATE = "vehicle_certificate"
+OBJ_VEHICLE_INCIDENT = "vehicle_incident"
 
 # Actions
 ACTION_CREATE = "create"
