@@ -20,6 +20,11 @@ from app.models.notification import Notification
 from app.models.acceptance import AcceptanceForm, AcceptanceItem, AcceptanceAttachment
 from app.models.contract import Contract, ContractDocument
 from app.models.framework_contract import FrameworkContractProject, FrameworkContractProjectDocument
+from app.models.vehicle import (
+    Vehicle, VehicleDriver, VehicleUseRequest, VehicleDispatch, VehicleTripRecord,
+    VehicleFuelRecord, VehicleMaintenanceRecord, VehicleCertificate, VehicleIncident,
+    VehicleCostAllocation,
+)
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)

@@ -110,6 +110,10 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "outsource:delete", "name": "删除外协", "description": "删除外协记录"},
     # Report
     {"code": "report:read", "name": "查看报表", "description": "查看销售报表"},
+    # Vehicle
+    {"code": "vehicle:read", "name": "查看车辆", "description": "查看车辆和司机档案"},
+    {"code": "vehicle:create", "name": "创建车辆", "description": "新增车辆和司机"},
+    {"code": "vehicle:update", "name": "编辑车辆", "description": "编辑车辆和司机信息、停用/启用/报废"},
     # AI Features
     {"code": "ai_quote:read", "name": "AI报价助手", "description": "使用AI智能报价功能"},
     {"code": "ai_anomaly:read", "name": "智能异常提醒", "description": "查看AI异常检测结果"},
@@ -156,6 +160,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
     "installer": [
         "customer:read",
         "installation_task:read", "installation_task:create", "installation_task:update", "installation_task:change_status",
+        "vehicle:read",
     ],
     "finance": [
         "customer:read",

@@ -65,6 +65,9 @@ export async function put<T>(url: string, data?: unknown, config?: AxiosRequestC
 export async function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   return apiClient.delete(url, config) as unknown as Promise<T>
 }
+export async function patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  return apiClient.patch(url, data, config) as unknown as Promise<T>
+}
 
 /**
  * Raw axios client – only needed when the interceptor's unwrapping is
