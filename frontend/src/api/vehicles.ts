@@ -383,3 +383,107 @@ export function resolveIncident(id: string, data: { resolution: string; status?:
 export function deleteIncident(id: string) {
   return del(`/vehicle-incidents/${id}`)
 }
+
+// ── 车辆报表 ─────────────────────────────────────────────────────────────────
+
+export interface VehicleReportOverview {
+  total_vehicles: number
+  available_vehicles: number
+  month_dispatches: number
+  month_mileage: number
+  month_fuel_cost: number
+  month_maintenance_cost: number
+  month_insurance_cost: number
+  month_incident_cost: number
+  month_allocation_cost: number
+  month_total_cost: number
+  avg_cost_per_dispatch: number
+  avg_cost_per_km: number
+  year: number
+  month: number
+}
+
+export interface VehicleCostItem {
+  vehicle_id: string
+  vehicle_name?: string
+  plate_number?: string
+  fuel_cost: number
+  maintenance_cost: number
+  insurance_cost: number
+  incident_cost: number
+  allocation_cost: number
+  total_cost: number
+  total_mileage: number
+  dispatch_count: number
+  avg_cost_per_km: number
+  avg_cost_per_dispatch: number
+}
+
+export interface DriverStatItem {
+  driver_id?: string
+  driver_name?: string
+  phone?: string
+  dispatch_count: number
+  total_mileage: number
+}
+
+export interface MileageStatItem {
+  month: number
+  total_mileage: number
+  dispatch_count: number
+}
+
+export interface DispatchStats {
+  by_status: { status: string; count: number }[]
+  by_reason: { reason: string; count: number }[]
+}
+
+export interface OrderCostItem {
+  order_id: string
+  dispatch_count: number
+  total_mileage: number
+  allocated_cost: number
+}
+
+export interface CostTypeItem {
+  cost_type: string
+  amount: number
+}
+
+export function getVehicleReportOverview(params: { year?: number; month?: number } = {}) {
+  return get<VehicleReportOverview>('/vehicle-reports/overview', { params })
+}
+
+export function getVehicleCosts(params: {
+  year?: number; month?: number; start_date?: string; end_date?: string
+} = {}) {
+  return get<VehicleCostItem[]>('/vehicle-reports/costs', { params })
+}
+
+export function getDriverStats(params: {
+  year?: number; month?: number; start_date?: string; end_date?: string
+} = {}) {
+  return get<DriverStatItem[]>('/vehicle-reports/drivers', { params })
+}
+
+export function getMileageStats(params: { year?: number; vehicle_id?: string } = {}) {
+  return get<MileageStatItem[]>('/vehicle-reports/mileage', { params })
+}
+
+export function getDispatchReportStats(params: {
+  year?: number; month?: number; start_date?: string; end_date?: string
+} = {}) {
+  return get<DispatchStats>('/vehicle-reports/dispatches', { params })
+}
+
+export function getOrderVehicleCosts(params: {
+  year?: number; month?: number; start_date?: string; end_date?: string
+} = {}) {
+  return get<OrderCostItem[]>('/vehicle-reports/order-costs', { params })
+}
+
+export function getCostByType(params: {
+  year?: number; month?: number; start_date?: string; end_date?: string
+} = {}) {
+  return get<CostTypeItem[]>('/vehicle-reports/cost-types', { params })
+}

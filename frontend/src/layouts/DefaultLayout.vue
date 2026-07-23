@@ -100,6 +100,7 @@
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer', 'finance'])" index="/vehicle-expenses">车辆费用</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'finance'])" index="/vehicle-insurance">保险年检</el-menu-item>
             <el-menu-item index="/vehicle-incidents">违章事故</el-menu-item>
+            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'finance', 'production'])" index="/vehicle-reports">车辆报表</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicles">车辆档案</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicle-drivers">司机管理</el-menu-item>
           </el-sub-menu>

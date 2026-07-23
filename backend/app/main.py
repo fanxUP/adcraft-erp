@@ -94,6 +94,7 @@ app.include_router(vehicles.maintenance_router, prefix="/api/v1")
 app.include_router(vehicles.cost_router, prefix="/api/v1")
 app.include_router(vehicles.certificate_router, prefix="/api/v1")
 app.include_router(vehicles.incident_router, prefix="/api/v1")
+app.include_router(vehicles.report_router, prefix="/api/v1")
 
 # WebSocket endpoints
 app.add_api_websocket_route("/ws/notifications", notifications.websocket_notifications)

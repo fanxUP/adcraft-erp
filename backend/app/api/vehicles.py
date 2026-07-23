@@ -21,6 +21,7 @@ from app.schemas.vehicle_expense import (
 )
 from app.schemas.common import success, success_paginated
 from app.services.vehicle_service import VehicleService
+from app.services.vehicle_report_service import VehicleReportService
 
 logger = logging.getLogger(__name__)
 
@@ -866,3 +867,117 @@ async def delete_incident(
     service = _get_service(db, current_user, request)
     await service.delete_incident(UUID(incident_id))
     return success(None)
+
+
+# ── 车辆报表 ──────────────────────────────────────────────────────────────────
+
+report_router = APIRouter(prefix="/vehicle-reports", tags=["Vehicle Reports"])
+
+
+@report_router.get("/overview")
+async def get_report_overview(
+    request: Request,
+    year: int | None = None,
+    month: int | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    svc = VehicleReportService(db, current_user)
+    data = await svc.get_overview(year, month)
+    return success(data)
+
+
+@report_router.get("/costs")
+async def get_costs_by_vehicle(
+    request: Request,
+    year: int | None = None,
+    month: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    svc = VehicleReportService(db, current_user)
+    data = await svc.get_costs_by_vehicle(year, month, start_date, end_date)
+    return success(data)
+
+
+@report_router.get("/drivers")
+async def get_costs_by_driver(
+    request: Request,
+    year: int | None = None,
+    month: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    svc = VehicleReportService(db, current_user)
+    data = await svc.get_costs_by_driver(year, month, start_date, end_date)
+    return success(data)
+
+
+@report_router.get("/mileage")
+async def get_mileage_stats(
+    request: Request,
+    year: int | None = None,
+    vehicle_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    svc = VehicleReportService(db, current_user)
+    vid = UUID(vehicle_id) if vehicle_id else None
+    data = await svc.get_mileage_stats(year, vid)
+    return success(data)
+
+
+@report_router.get("/dispatches")
+async def get_dispatch_stats(
+    request: Request,
+    year: int | None = None,
+    month: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    svc = VehicleReportService(db, current_user)
+    data = await svc.get_dispatch_stats(year, month, start_date, end_date)
+    return success(data)
+
+
+@report_router.get("/order-costs")
+async def get_order_costs(
+    request: Request,
+    year: int | None = None,
+    month: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    svc = VehicleReportService(db, current_user)
+    data = await svc.get_order_costs(year, month, start_date, end_date)
+    return success(data)
+
+
+@report_router.get("/cost-types")
+async def get_cost_by_type(
+    request: Request,
+    year: int | None = None,
+    month: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    svc = VehicleReportService(db, current_user)
+    data = await svc.get_cost_by_type(year, month, start_date, end_date)
+    return success(data)
