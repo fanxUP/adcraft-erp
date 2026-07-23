@@ -1,4 +1,4 @@
-import { get, post, patch } from './index'
+import { get, post, patch, del } from './index'
 import { PaginatedData } from '@/types/api'
 
 export interface VehicleResponse {
@@ -272,4 +272,57 @@ export function getCostAllocations(params: {
 
 export function createCostAllocation(data: Partial<CostAllocationResponse>) {
   return post<CostAllocationResponse>('/vehicle-cost-records/', data)
+}
+
+// ── 保险/年检/证件 ──────────────────────────────────────────────────────
+
+export interface CertificateResponse {
+  id: string
+  vehicle_id?: string
+  vehicle_name?: string
+  plate_number?: string
+  driver_id?: string
+  driver_name?: string
+  certificate_type: string
+  certificate_no?: string
+  start_date?: string
+  expire_date?: string
+  amount: number
+  file_url?: string
+  reminder_days: number
+  status: string
+  remark?: string
+  urgency?: string
+  days_left?: number
+  created_at?: string
+  updated_at?: string
+}
+
+export function getCertificates(params: {
+  page?: number
+  page_size?: number
+  vehicle_id?: string
+  certificate_type?: string
+  status?: string
+}) {
+  return get<PaginatedData<CertificateResponse>>('/vehicle-certificates/', { params })
+}
+
+export function getExpiringCertificates(params?: {
+  days?: number
+  vehicle_id?: string
+}) {
+  return get<CertificateResponse[]>('/vehicle-certificates/expiring', { params })
+}
+
+export function createCertificate(data: Partial<CertificateResponse>) {
+  return post<CertificateResponse>('/vehicle-certificates/', data)
+}
+
+export function updateCertificate(id: string, data: Partial<CertificateResponse>) {
+  return patch<CertificateResponse>(`/vehicle-certificates/${id}`, data)
+}
+
+export function deleteCertificate(id: string) {
+  return del(`/vehicle-certificates/${id}`)
 }
