@@ -7,6 +7,7 @@ from app.models.payment import Payment
 from app.models.task import DesignTask, ProductionTask, InstallationTask
 from app.models.customer import Customer
 from app.models.contract import Contract, ContractDocument
+from app.services.business_document_service import BusinessDocumentService
 
 
 class ReportService:
@@ -70,11 +71,7 @@ class ReportService:
             "payment_count": len(payments),
             "payment_amount": float(sum(p.amount for p in payments)),
             "new_customer_count": new_customers,
-            "orders": [
-                {"id": str(o.id), "order_no": o.doc_no, "project_name": o.project_name,
-                 "total_amount": float(o.total_amount), "status": o.status}
-                for o in orders
-            ],
+            "orders": [BusinessDocumentService._to_ref(o) for o in orders],
             "payments": [
                 {"id": str(p.id), "payment_no": p.payment_no, "amount": float(p.amount),
                  "payment_method": p.payment_method, "is_voided": p.is_voided}
@@ -112,12 +109,7 @@ class ReportService:
             "payment_amount": payment_amount,
             "unpaid_amount": order_amount - payment_amount,
             "status_breakdown": status_breakdown,
-            "orders": [
-                {"id": str(o.id), "order_no": o.doc_no, "project_name": o.project_name,
-                 "total_amount": float(o.total_amount), "paid_amount": float(o.paid_amount),
-                 "unpaid_amount": float(o.unpaid_amount), "status": o.status}
-                for o in orders
-            ],
+            "orders": [BusinessDocumentService._to_ref(o) for o in orders],
         }
 
     async def get_customer_debt(self) -> list:
@@ -256,52 +248,18 @@ class ReportService:
                         "status": ct.status,
                         "contract_type": ct.contract_type,
                         "orders": [
-                            {
-                                "id": str(d.id),
-                                "order_no": d.doc_no,
-                                "project_name": d.project_name,
-                                "total_amount": float(d.total_amount),
-                                "paid_amount": float(d.paid_amount),
-                                "unpaid_amount": float(d.unpaid_amount),
-                                "status": d.status,
-                            }
+                            BusinessDocumentService._to_ref(d)
                             for d in (ct.documents or []) if d.doc_type == "order"
                         ],
                         "quotes": [
-                            {
-                                "id": str(d.id),
-                                "quote_no": d.doc_no,
-                                "project_name": d.project_name,
-                                "total_amount": float(d.total_amount),
-                                "status": d.status,
-                            }
+                            BusinessDocumentService._to_ref(d)
                             for d in (ct.documents or []) if d.doc_type == "quote"
                         ],
                     }
                     for ct in customer_contracts
                 ],
-                "orders": [
-                    {
-                        "id": str(o.id),
-                        "order_no": o.doc_no,
-                        "project_name": o.project_name,
-                        "total_amount": float(o.total_amount),
-                        "paid_amount": float(o.paid_amount),
-                        "unpaid_amount": float(o.unpaid_amount),
-                        "status": o.status,
-                    }
-                    for o in customer_orders
-                ],
-                "quotes": [
-                    {
-                        "id": str(q.id),
-                        "quote_no": q.doc_no,
-                        "project_name": q.project_name,
-                        "total_amount": float(q.total_amount),
-                        "status": q.status,
-                    }
-                    for q in customer_quotes
-                ],
+                "orders": [BusinessDocumentService._to_ref(o) for o in customer_orders],
+                "quotes": [BusinessDocumentService._to_ref(q) for q in customer_quotes],
             })
         return debts
 

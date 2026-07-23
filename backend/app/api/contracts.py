@@ -97,22 +97,17 @@ async def get_available_resources(
     result = await db.execute(q.order_by(BusinessDocument.created_at.desc()).limit(500))
     docs = result.scalars().all()
 
+    from app.services.business_document_service import BusinessDocumentService
+
     # Split into orders/quotes for frontend compatibility
     orders_list, quotes_list = [], []
     for d in docs:
-        item = {
-            "id": str(d.id),
-            "project_name": d.project_name,
-            "total_amount": float(d.total_amount) if d.total_amount else 0,
-            "department": d.department or "",
-            "customer_id": str(d.customer_id) if d.customer_id else None,
-            "customer_name": d.customer_name or (d.customer.name if d.customer else None),
-        }
+        item = BusinessDocumentService._to_ref(d)
+        # available-resources 额外携带 customer_id
+        item["customer_id"] = str(d.customer_id) if d.customer_id else None
         if d.doc_type == "order":
-            item["order_no"] = d.doc_no
             orders_list.append(item)
         else:
-            item["quote_no"] = d.doc_no
             quotes_list.append(item)
 
     # Used project names

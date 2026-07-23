@@ -394,18 +394,15 @@ async def list_quotes_for_cost(
     if doc_ids:
         cost_map = await repo.get_costs_summary(doc_ids)
 
+    from app.services.business_document_service import BusinessDocumentService
+
     items = []
     for d in docs:
-        items.append({
-            "id": str(d.id),
-            "quote_no": d.doc_no,
-            "project_name": d.project_name,
-            "customer_name": d.customer_name,
-            "status": d.status,
-            "total_amount": float(d.total_amount),
-            "cost_amount": float(cost_map.get(str(d.id), 0)),
-            "created_at": d.created_at.isoformat() if d.created_at else None,
-        })
+        item = BusinessDocumentService._to_ref(d)
+        # 项目成本额外携带 cost_amount + created_at
+        item["cost_amount"] = float(cost_map.get(str(d.id), 0))
+        item["created_at"] = d.created_at.isoformat() if d.created_at else None
+        items.append(item)
     return success_paginated(items, total, page, page_size)
 
 

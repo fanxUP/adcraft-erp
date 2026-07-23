@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.payment import Payment, CustomerStatement, Expense
 from app.models.business_document import BusinessDocument
+from app.services.business_document_service import BusinessDocumentService
 from app.repositories.payment_repo import PaymentRepository, StatementRepository, ExpenseRepository
 from app.services.number_generator import generate_payment_no, generate_statement_no, generate_expense_no
 
@@ -97,6 +98,7 @@ class PaymentService:
             "customer_id": str(p.customer_id),
             "customer_name": doc.customer.name if doc and doc.customer else None,
             "project_name": doc.project_name if doc else None,
+            "department": doc.department if doc else None,
             "amount": float(p.amount),
             "payment_method": p.payment_method,
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
@@ -176,14 +178,7 @@ class StatementService:
         documents = await self.repo.get_documents_in_range(s.customer_id, s.start_date, s.end_date)
         payments = await self.repo.get_payments_in_range(s.customer_id, s.start_date, s.end_date)
         base = self._to_summary(s)
-        base["orders"] = [
-            {
-                "id": str(d.id), "order_no": d.doc_no, "project_name": d.project_name,
-                "status": d.status, "total_amount": float(d.total_amount),
-                "paid_amount": float(d.paid_amount), "unpaid_amount": float(d.unpaid_amount),
-            }
-            for d in documents
-        ]
+        base["orders"] = [BusinessDocumentService._to_ref(d) for d in documents]
         base["payments"] = [
             {
                 "id": str(p.id), "payment_no": p.payment_no, "amount": float(p.amount),

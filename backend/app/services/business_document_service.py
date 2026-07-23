@@ -499,6 +499,31 @@ class BusinessDocumentService:
     # 序列化
     # ═══════════════════════════════════════════
 
+    @staticmethod
+    def _to_ref(d) -> dict:
+        """标准单据引用 — 项目中所有嵌套/列表场景统一使用此方法。
+        返回字段：id, doc_type, doc_no, project_name, customer_name,
+        department, status, total_amount (+ order 专有 paid/unpaid)。
+        调用方如需额外字段，在返回 dict 上叠加即可。
+        """
+        base = {
+            "id": str(d.id),
+            "doc_type": d.doc_type,
+            "doc_no": d.doc_no,
+            "project_name": d.project_name or "",
+            "customer_name": d.customer_name or (d.customer.name if d.customer else None),
+            "department": d.department or "",
+            "status": d.status or "",
+            "total_amount": float(d.total_amount) if d.total_amount else 0,
+        }
+        if d.doc_type == "order":
+            base["order_no"] = d.doc_no
+            base["paid_amount"] = float(d.paid_amount) if d.paid_amount else 0
+            base["unpaid_amount"] = float(d.unpaid_amount) if d.unpaid_amount else 0
+        else:
+            base["quote_no"] = d.doc_no
+        return base
+
     def _to_summary(self, d) -> dict:
         base = {
             "id": str(d.id),

@@ -635,14 +635,20 @@ export interface SimpleOrderRef {
   id: string
   order_no: string
   project_name: string
+  department?: string
   total_amount: number
+  paid_amount?: number
+  unpaid_amount?: number
+  status?: string
 }
 
 export interface SimpleQuoteRef {
   id: string
   quote_no: string
   project_name: string
+  department?: string
   total_amount: number
+  status?: string
 }
 
 export interface ContractDetailResponse extends ContractListResponse {
@@ -665,6 +671,7 @@ export interface ContractResourceItem {
   project_name: string
   total_amount?: number
   department?: string
+  status?: string
   customer_id?: string
   customer_name?: string
 }
@@ -738,12 +745,16 @@ export interface CustomerDebtContract {
   unpaid_amount: number
   status: string
   contract_type?: string
+  department?: string
+  orders?: CustomerDebtOrder[]
+  quotes?: CustomerDebtQuote[]
 }
 
 export interface CustomerDebtOrder {
   id: string
   order_no: string
   project_name: string
+  department?: string
   total_amount: number
   paid_amount: number
   unpaid_amount: number
@@ -754,6 +765,7 @@ export interface CustomerDebtQuote {
   id: string
   quote_no: string
   project_name: string
+  department?: string
   total_amount: number
   status: string
 }
@@ -787,11 +799,11 @@ export interface DashboardData {
 }
 
 export interface DailyReportOrder {
+  id: string
   order_no: string
   project_name: string
+  department?: string
   total_amount: number
-  paid_amount: number
-  unpaid_amount: number
   status: string
 }
 
@@ -814,8 +826,10 @@ export interface DailyReportData {
 }
 
 export interface MonthlyReportOrder {
+  id: string
   order_no: string
   project_name: string
+  department?: string
   total_amount: number
   paid_amount: number
   unpaid_amount: number

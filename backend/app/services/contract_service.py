@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.contract_repo import ContractRepository
 from app.services.number_generator import generate_contract_no
+from app.services.business_document_service import BusinessDocumentService
 
 
 # 状态流转映射
@@ -154,35 +155,10 @@ class ContractService:
             "attachment_path": contract.attachment_path,
             "attachment_name": contract.attachment_name,
             "created_by": str(contract.created_by) if contract.created_by else None,
-            "documents": [
-                {
-                    "id": str(d.id),
-                    "doc_no": d.doc_no,
-                    "doc_type": d.doc_type,
-                    "project_name": d.project_name,
-                    "total_amount": float(d.total_amount) if d.total_amount else 0,
-                }
-                for d in all_docs
-            ],
+            "documents": [BusinessDocumentService._to_ref(d) for d in all_docs],
             # Backward-compat: keep orders/quotes split for frontend
-            "orders": [
-                {
-                    "id": str(d.id),
-                    "order_no": d.doc_no,
-                    "project_name": d.project_name,
-                    "total_amount": float(d.total_amount) if d.total_amount else 0,
-                }
-                for d in all_docs if d.doc_type == "order"
-            ],
-            "quotes": [
-                {
-                    "id": str(d.id),
-                    "quote_no": d.doc_no,
-                    "project_name": d.project_name,
-                    "total_amount": float(d.total_amount) if d.total_amount else 0,
-                }
-                for d in all_docs if d.doc_type == "quote"
-            ],
+            "orders": [BusinessDocumentService._to_ref(d) for d in all_docs if d.doc_type == "order"],
+            "quotes": [BusinessDocumentService._to_ref(d) for d in all_docs if d.doc_type == "quote"],
         })
         return base
 
