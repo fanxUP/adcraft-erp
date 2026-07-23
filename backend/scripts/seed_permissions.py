@@ -114,6 +114,7 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "vehicle:read", "name": "查看车辆", "description": "查看车辆和司机档案"},
     {"code": "vehicle:create", "name": "创建车辆", "description": "新增车辆和司机"},
     {"code": "vehicle:update", "name": "编辑车辆", "description": "编辑车辆和司机信息、停用/启用/报废"},
+    {"code": "finance:review", "name": "财务审核", "description": "审核油费、维修保养等车辆费用"},
     # AI Features
     {"code": "ai_quote:read", "name": "AI报价助手", "description": "使用AI智能报价功能"},
     {"code": "ai_anomaly:read", "name": "智能异常提醒", "description": "查看AI异常检测结果"},
@@ -139,6 +140,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "expense:read",
         "report:read",
         "ai_quote:read", "ai_anomaly:read", "ai_knowledge:read", "ai_report:read",
+        "vehicle:read",
     ],
     "designer": [
         "customer:read",
@@ -156,11 +158,12 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "process:read", "process:create", "process:update", "process:delete",
         "production_task:read", "production_task:create", "production_task:update", "production_task:change_status",
         "inventory:read", "inventory:create", "inventory:update", "inventory:stock_in", "inventory:stock_out",
+        "vehicle:read", "vehicle:create", "vehicle:update",
     ],
     "installer": [
         "customer:read",
         "installation_task:read", "installation_task:create", "installation_task:update", "installation_task:change_status",
-        "vehicle:read",
+        "vehicle:read", "vehicle:update",
     ],
     "finance": [
         "customer:read",
@@ -170,6 +173,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "expense:read", "expense:create", "expense:update", "expense:delete",
         "report:read",
         "ai_quote:read", "ai_anomaly:read", "ai_knowledge:read", "ai_report:read",
+        "vehicle:read", "finance:review",
     ],
 }
 

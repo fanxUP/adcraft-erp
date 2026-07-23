@@ -157,6 +157,14 @@ PERM_ACCEPTANCE_UPDATE = "acceptance:update"
 PERM_ACCEPTANCE_DELETE = "acceptance:delete"
 PERM_ACCEPTANCE_CHANGE_STATUS = "acceptance:change_status"
 
+# Vehicle
+PERM_VEHICLE_READ = "vehicle:read"
+PERM_VEHICLE_CREATE = "vehicle:create"
+PERM_VEHICLE_UPDATE = "vehicle:update"
+
+# Finance review (for fuel/maintenance expense review)
+PERM_FINANCE_REVIEW = "finance:review"
+
 
 # ── Role name constants ───────────────────────────────────────────────────
 
