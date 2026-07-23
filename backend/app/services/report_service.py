@@ -162,8 +162,31 @@ class ReportService:
         )
         last_payments = {r.customer_id: r.last_payment for r in lp_result.all()}
 
+        # Batch-fetch all contract-document links to know which docs are contract-linked
+        # Two tables: contract_documents (常规合同) + framework_contract_project_documents (框架合同)
+        from app.models.contract import ContractDocument as CD
+        from app.models.framework_contract import FrameworkContractProject, FrameworkContractProjectDocument as FCPD
+        all_contract_ids = [ct.id for ct in all_contracts]
+        linked_doc_ids: set[UUID] = set()
+        if all_contract_ids:
+            # 常规合同关联的单据
+            cd_result = await self.db.execute(
+                select(CD.document_id).where(CD.contract_id.in_(all_contract_ids))
+            )
+            linked_doc_ids = {row[0] for row in cd_result.all()}
+            # 框架合同项目关联的单据
+            fw_contract_ids = [ct.id for ct in all_contracts if ct.contract_type == "框架合同"]
+            if fw_contract_ids:
+                fcpd_result = await self.db.execute(
+                    select(FCPD.document_id)
+                    .select_from(FCPD)
+                    .join(FrameworkContractProject, FCPD.project_id == FrameworkContractProject.id)
+                    .where(FrameworkContractProject.contract_id.in_(fw_contract_ids))
+                )
+                linked_doc_ids.update(row[0] for row in fcpd_result.all())
+
         # Batch-fetch paid_amount per contract from actual payments on linked orders
-        contract_ids = [ct.id for ct in all_contracts]
+        contract_ids = all_contract_ids
         paid_map: dict[UUID, float] = {}
         if contract_ids:
             paid_result = await self.db.execute(
@@ -206,8 +229,12 @@ class ReportService:
             customer_orders = [o for o in all_orders if o.customer_id == c.id]
             customer_quotes = [q for q in all_quotes if q.customer_id == c.id]
 
-            # Skip customers with no contracts, orders and no quotes
-            if not customer_contracts and not customer_orders and not customer_quotes:
+            # Separate standalone orders/quotes (not linked to any contract)
+            standalone_orders = [o for o in customer_orders if o.id not in linked_doc_ids]
+            standalone_quotes = [q for q in customer_quotes if q.id not in linked_doc_ids]
+
+            # Skip customers with no contracts and no standalone orders/quotes
+            if not customer_contracts and not standalone_orders and not standalone_quotes:
                 continue
 
             # Stats from contracts (paid_amount from actual payments, not stored value)
@@ -234,8 +261,8 @@ class ReportService:
                 "total_order_amount": float(total_contract),
                 "total_paid": float(total_paid),
                 "contract_count": len(customer_contracts),
-                "order_count": len(customer_orders),
-                "quote_count": len(customer_quotes),
+                "order_count": len(standalone_orders),
+                "quote_count": len(standalone_quotes),
                 "last_payment_date": lp.isoformat() if lp else None,
                 "contracts": [
                     {
@@ -258,8 +285,8 @@ class ReportService:
                     }
                     for ct in customer_contracts
                 ],
-                "orders": [BusinessDocumentService._to_ref(o) for o in customer_orders],
-                "quotes": [BusinessDocumentService._to_ref(q) for q in customer_quotes],
+                "orders": [BusinessDocumentService._to_ref(o) for o in standalone_orders],
+                "quotes": [BusinessDocumentService._to_ref(q) for q in standalone_quotes],
             })
         return debts
 
