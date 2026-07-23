@@ -502,7 +502,7 @@ class VehicleDashboardService:
             select(func.count()).select_from(VehicleDispatch).where(
                 VehicleDispatch.created_at >= day_start,
                 VehicleDispatch.created_at <= day_end,
-                VehicleDispatch.related_task_type == "installation",
+                VehicleDispatch.related_install_task_id.isnot(None),
                 VehicleDispatch.status.notin_(["cancelled"]),
             )
         )).scalar() or 0
