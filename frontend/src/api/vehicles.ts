@@ -326,3 +326,60 @@ export function updateCertificate(id: string, data: Partial<CertificateResponse>
 export function deleteCertificate(id: string) {
   return del(`/vehicle-certificates/${id}`)
 }
+
+// ── 违章/事故/异常 ──────────────────────────────────────────────────────────
+
+export interface IncidentResponse {
+  id: string
+  vehicle_id?: string
+  vehicle_name?: string
+  plate_number?: string
+  driver_id?: string
+  driver_name?: string
+  dispatch_id?: string
+  dispatch_no?: string
+  related_order_id?: string
+  related_install_task_id?: string
+  incident_type: string
+  incident_time?: string
+  location?: string
+  description?: string
+  fine_amount: number
+  points_deducted: number
+  repair_amount: number
+  responsible_user_id?: string
+  responsible_user_name?: string
+  status: string
+  resolution?: string
+  evidence_url?: string
+  remark?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export function getIncidents(params: {
+  page?: number
+  page_size?: number
+  vehicle_id?: string
+  incident_type?: string
+  status?: string
+  driver_id?: string
+}) {
+  return get<PaginatedData<IncidentResponse>>('/vehicle-incidents/', { params })
+}
+
+export function createIncident(data: Partial<IncidentResponse>) {
+  return post<IncidentResponse>('/vehicle-incidents/', data)
+}
+
+export function updateIncident(id: string, data: Partial<IncidentResponse>) {
+  return patch<IncidentResponse>(`/vehicle-incidents/${id}`, data)
+}
+
+export function resolveIncident(id: string, data: { resolution: string; status?: string }) {
+  return post<IncidentResponse>(`/vehicle-incidents/${id}/resolve`, data)
+}
+
+export function deleteIncident(id: string) {
+  return del(`/vehicle-incidents/${id}`)
+}

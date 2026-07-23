@@ -17,6 +17,7 @@ from app.schemas.vehicle_expense import (
     MaintenanceRecordCreate, MaintenanceRecordUpdate, MaintenanceRecordReview,
     CostAllocationCreate,
     CertificateCreate, CertificateUpdate,
+    IncidentCreate, IncidentUpdate, IncidentResolve,
 )
 from app.schemas.common import success, success_paginated
 from app.services.vehicle_service import VehicleService
@@ -776,4 +777,92 @@ async def delete_certificate(
 ):
     service = _get_service(db, current_user, request)
     await service.delete_certificate(UUID(cert_id))
+    return success(None)
+
+
+# ── 违章/事故/异常 ──────────────────────────────────────────────────────────
+
+incident_router = APIRouter(prefix="/vehicle-incidents", tags=["Vehicle Incidents"])
+
+
+@incident_router.get("/")
+async def list_incidents(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    vehicle_id: str | None = None,
+    incident_type: str | None = None,
+    status: str | None = None,
+    driver_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    vid = UUID(vehicle_id) if vehicle_id else None
+    did = UUID(driver_id) if driver_id else None
+    records, total = await service.list_incidents(page, page_size, vid, incident_type, status, did)
+    return success_paginated(records, total, page, page_size)
+
+
+@incident_router.post("/")
+async def create_incident(
+    data: IncidentCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.create_incident(data.model_dump(exclude_none=True))
+    return success(r)
+
+
+@incident_router.get("/{incident_id}")
+async def get_incident(
+    incident_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.get_incident(UUID(incident_id))
+    if not r:
+        return {"code": 40401, "message": "异常记录不存在", "data": None}
+    return success(r)
+
+
+@incident_router.patch("/{incident_id}")
+async def update_incident(
+    incident_id: str,
+    data: IncidentUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vehicle:update")),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.update_incident(UUID(incident_id), data.model_dump(exclude_none=True))
+    return success(r)
+
+
+@incident_router.post("/{incident_id}/resolve")
+async def resolve_incident(
+    incident_id: str,
+    data: IncidentResolve,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vehicle:update")),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.resolve_incident(UUID(incident_id), data.resolution, data.status)
+    return success(r)
+
+
+@incident_router.delete("/{incident_id}")
+async def delete_incident(
+    incident_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vehicle:update")),
+):
+    service = _get_service(db, current_user, request)
+    await service.delete_incident(UUID(incident_id))
     return success(None)

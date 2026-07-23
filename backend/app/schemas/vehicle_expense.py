@@ -126,3 +126,46 @@ class CertificateUpdate(BaseModel):
     reminder_days: int | None = None
     status: str | None = None
     remark: str | None = None
+
+
+# ── 违章/事故/异常 ──────────────────────────────────────────────────────────
+
+class IncidentCreate(BaseModel):
+    vehicle_id: str
+    driver_id: str | None = None
+    dispatch_id: str | None = None
+    related_order_id: str | None = None
+    related_install_task_id: str | None = None
+    incident_type: str  # traffic_violation/accident/scratch/vehicle_damage/customer_complaint/traffic_penalty/site_issue/other
+    incident_time: str | None = None
+    location: str | None = None
+    description: str | None = None
+    fine_amount: float = 0
+    points_deducted: int = 0
+    repair_amount: float = 0
+    responsible_user_id: str | None = None
+    evidence_url: str | None = None
+    remark: str | None = None
+
+
+class IncidentUpdate(BaseModel):
+    vehicle_id: str | None = None
+    driver_id: str | None = None
+    dispatch_id: str | None = None
+    related_order_id: str | None = None
+    related_install_task_id: str | None = None
+    incident_type: str | None = None
+    incident_time: str | None = None
+    location: str | None = None
+    description: str | None = None
+    fine_amount: float | None = None
+    points_deducted: int | None = None
+    repair_amount: float | None = None
+    responsible_user_id: str | None = None
+    evidence_url: str | None = None
+    remark: str | None = None
+
+
+class IncidentResolve(BaseModel):
+    resolution: str
+    status: str = "resolved"  # resolved / closed / disputed

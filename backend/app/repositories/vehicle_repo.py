@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from app.models.vehicle import (
     Vehicle, VehicleDriver, VehicleUseRequest, VehicleDispatch, VehicleTripRecord,
     VehicleFuelRecord, VehicleMaintenanceRecord, VehicleCostAllocation,
-    VehicleCertificate,
+    VehicleCertificate, VehicleIncident,
 )
 
 
@@ -454,4 +454,51 @@ class VehicleRepository:
 
     async def delete_certificate(self, c: VehicleCertificate) -> None:
         await self.db.delete(c)
+        await self.db.flush()
+
+    # ── 违章/事故/异常 ──────────────────────────────────────────────────────────
+
+    async def get_incident_by_id(self, incident_id: UUID) -> VehicleIncident | None:
+        result = await self.db.execute(select(VehicleIncident).where(VehicleIncident.id == incident_id))
+        return result.scalar_one_or_none()
+
+    async def list_incidents(
+        self, skip: int = 0, limit: int = 20,
+        vehicle_id: UUID | None = None,
+        incident_type: str | None = None,
+        status: str | None = None,
+        driver_id: UUID | None = None,
+    ) -> tuple[list[VehicleIncident], int]:
+        q = select(VehicleIncident)
+        if vehicle_id:
+            q = q.where(VehicleIncident.vehicle_id == vehicle_id)
+        if incident_type:
+            q = q.where(VehicleIncident.incident_type == incident_type)
+        if status:
+            q = q.where(VehicleIncident.status == status)
+        if driver_id:
+            q = q.where(VehicleIncident.driver_id == driver_id)
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self.db.execute(count_q)).scalar()
+        q = q.order_by(VehicleIncident.created_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all()), total
+
+    async def create_incident(self, data: dict) -> VehicleIncident:
+        i = VehicleIncident(**data)
+        self.db.add(i)
+        await self.db.flush()
+        await self.db.refresh(i)
+        return i
+
+    async def update_incident(self, i: VehicleIncident, data: dict) -> VehicleIncident:
+        for k, v in data.items():
+            if v is not None:
+                setattr(i, k, v)
+        await self.db.flush()
+        await self.db.refresh(i)
+        return i
+
+    async def delete_incident(self, i: VehicleIncident) -> None:
+        await self.db.delete(i)
         await self.db.flush()
