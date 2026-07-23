@@ -47,6 +47,7 @@ class VehicleService:
         return self._vehicle_to_dict(v) if v else None
 
     async def create_vehicle(self, data: dict) -> dict:
+        from datetime import datetime
         # 校验车牌号唯一
         existing = await self.repo.get_by_plate(data["plate_number"])
         if existing:
@@ -55,6 +56,14 @@ class VehicleService:
         existing_code = await self.repo.get_by_code(data["vehicle_code"])
         if existing_code:
             raise ValueError(f"车辆编号 {data['vehicle_code']} 已存在")
+
+        # 日期字段转换
+        for date_field in ["purchase_date"]:
+            if date_field in data and isinstance(data[date_field], str):
+                try:
+                    data[date_field] = datetime.fromisoformat(data[date_field])
+                except ValueError:
+                    data[date_field] = None
 
         data.setdefault("status", "available")
         v = await self.repo.create_vehicle(data)
@@ -72,6 +81,7 @@ class VehicleService:
         return self._vehicle_to_dict(v)
 
     async def update_vehicle(self, vehicle_id: UUID, data: dict) -> dict:
+        from datetime import datetime
         v = await self.repo.get_by_id(vehicle_id)
         if not v:
             raise ValueError("车辆不存在")
@@ -89,6 +99,14 @@ class VehicleService:
             existing_code = await self.repo.get_by_code(data["vehicle_code"])
             if existing_code:
                 raise ValueError(f"车辆编号 {data['vehicle_code']} 已存在")
+
+        # 日期字段转换
+        for date_field in ["purchase_date"]:
+            if date_field in data and isinstance(data[date_field], str):
+                try:
+                    data[date_field] = datetime.fromisoformat(data[date_field])
+                except ValueError:
+                    data[date_field] = None
 
         v = await self.repo.update_vehicle(v, data)
 
@@ -188,7 +206,14 @@ class VehicleService:
         return self._driver_to_dict(d) if d else None
 
     async def create_driver(self, data: dict) -> dict:
+        from datetime import datetime
         data.setdefault("status", "active")
+        # 日期字段转换
+        if "license_expire_date" in data and isinstance(data["license_expire_date"], str):
+            try:
+                data["license_expire_date"] = datetime.fromisoformat(data["license_expire_date"])
+            except ValueError:
+                data["license_expire_date"] = None
         d = await self.repo.create_driver(data)
 
         await log_operation(
@@ -204,9 +229,17 @@ class VehicleService:
         return self._driver_to_dict(d)
 
     async def update_driver(self, driver_id: UUID, data: dict) -> dict:
+        from datetime import datetime
         d = await self.repo.get_driver_by_id(driver_id)
         if not d:
             raise ValueError("司机不存在")
+
+        # 日期字段转换
+        if "license_expire_date" in data and isinstance(data["license_expire_date"], str):
+            try:
+                data["license_expire_date"] = datetime.fromisoformat(data["license_expire_date"])
+            except ValueError:
+                data["license_expire_date"] = None
 
         before = self._driver_to_dict(d)
         d = await self.repo.update_driver(d, data)
