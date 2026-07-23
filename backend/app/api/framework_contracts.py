@@ -139,6 +139,19 @@ async def get_available_projects(
     })
 
 
+# ── 框架合同关联订单 ──
+
+@router.get("/{contract_id}/orders")
+async def list_contract_orders(
+    contract_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = FrameworkContractService(db)
+    orders = await service.list_contract_orders(UUID(contract_id))
+    return success(orders)
+
+
 # ── 框架合同项目 CRUD ──
 
 @router.get("/{contract_id}/projects")

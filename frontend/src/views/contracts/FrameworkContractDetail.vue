@@ -42,60 +42,35 @@
       </el-descriptions>
     </el-card>
 
-    <!-- 项目列表 -->
+    <!-- 订单列表 -->
     <el-card class="project-card">
       <template #header>
         <div class="card-header">
-          <span>项目列表</span>
+          <span>订单列表</span>
           <el-button type="primary" size="small" @click="openAddProject">添加项目</el-button>
         </div>
       </template>
 
-      <el-table :data="projects" v-loading="loadingProjects" stripe>
-        <el-table-column prop="customer_name" label="客户名称" width="160" />
-        <el-table-column prop="department" label="部门/科室" width="130" />
-        <el-table-column prop="project_name" label="项目名称" min-width="160" />
-        <el-table-column label="来源" width="100">
+      <el-table :data="orders" v-loading="loadingOrders" stripe empty-text="暂无关联订单">
+        <el-table-column prop="order_no" label="订单编号" width="180" />
+        <el-table-column prop="project_name" label="项目名称" min-width="200" />
+        <el-table-column label="订单金额" width="140" align="right">
+          <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column label="已收" width="120" align="right">
+          <template #default="{ row }">¥ {{ row.paid_amount?.toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column label="欠款" width="120" align="right">
           <template #default="{ row }">
-            <el-tag v-if="row.source === '订单'" type="primary" size="small">订单</el-tag>
-            <el-tag v-else-if="row.source === '报价'" type="success" size="small">报价</el-tag>
-            <el-tag v-else-if="row.source === '订单+报价'" type="warning" size="small">订单+报价</el-tag>
-            <span v-else>-</span>
+            <span :class="{ 'text-danger': row.unpaid_amount > 0 }">¥ {{ row.unpaid_amount?.toFixed(2) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="已收金额" width="120" align="right">
-          <template #default="{ row }">¥ {{ (row.paid_amount || 0).toFixed(2) }}</template>
-        </el-table-column>
-        <el-table-column label="未收金额" width="120" align="right">
+        <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <span :class="{ 'text-danger': (row.unpaid_amount || 0) > 0 }">¥ {{ (row.unpaid_amount || 0).toFixed(2) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
-        <el-table-column label="附件" width="100">
-          <template #default="{ row }">
-            <a v-if="row.attachment_name" :href="getContractProjectAttachmentUrl(row.id)" target="_blank">下载</a>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
-          <template #default="{ row }">
-            <el-button text type="primary" size="small" @click="openEditProject(row)">编辑</el-button>
-            <el-button text type="danger" size="small" @click="handleDeleteProject(row)">删除</el-button>
+            <el-tag size="small" :type="orderStatusTag(row.status)">{{ orderStatusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
       </el-table>
-
-      <el-pagination
-        v-if="projectTotal > 0"
-        v-model:current-page="projectPage"
-        v-model:page-size="projectPageSize"
-        :page-sizes="[10, 20, 50]"
-        :total="projectTotal"
-        layout="total, sizes, prev, pager, next"
-        style="margin-top:16px; justify-content:flex-end"
-        @change="fetchProjects"
-      />
     </el-card>
 
     <!-- 编辑合同对话框 -->
@@ -191,14 +166,15 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { getContract, updateContract, getContractAttachmentUrl } from '@/api/contracts'
 import {
-  getContractProjects,
-  createContractProject, updateContractProject, deleteContractProject,
+  getContractOrders,
+  createContractProject, updateContractProject,
   uploadContractProjectAttachment, deleteContractProjectAttachment,
-  getContractProjectAttachmentUrl, getAvailableResources,
+  getAvailableResources,
 } from '@/api/framework-contracts'
+import type { ContractOrderItem } from '@/api/framework-contracts'
 import { getCustomers } from '@/api/customers'
 import type {
   ContractDetailResponse,
@@ -216,6 +192,17 @@ const STATUS_COLOR: Record<string, '' | 'success' | 'warning' | 'info' | 'danger
 function statusLabel(s: string) { return STATUS_MAP[s] || s }
 function statusColor(s: string): '' | 'success' | 'warning' | 'info' | 'danger' { return STATUS_COLOR[s] || '' }
 
+const ORDER_STATUS_MAP: Record<string, string> = {
+  pending_confirm: '待确认', confirmed: '已确认', designing: '设计中',
+  in_production: '生产中', in_installation: '安装中', completed: '已完成', cancelled: '已取消',
+}
+const ORDER_STATUS_COLOR: Record<string, string> = {
+  pending_confirm: 'warning', confirmed: 'primary', designing: 'info',
+  in_production: '', in_installation: '', completed: 'success', cancelled: 'danger',
+}
+function orderStatusLabel(s: string) { return ORDER_STATUS_MAP[s] || s }
+function orderStatusTag(s: string) { return ORDER_STATUS_COLOR[s] || 'info' }
+
 // ── 合同信息 ──
 const loadingContract = ref(false)
 const contract = ref<ContractDetailResponse | null>(null)
@@ -227,30 +214,15 @@ async function loadContract() {
   } finally { loadingContract.value = false }
 }
 
-// ── 项目列表 ──
-const loadingProjects = ref(false)
-const projects = ref<FrameworkContractProjectDetailResponse[]>([])
-const projectTotal = ref(0)
-const projectPage = ref(1)
-const projectPageSize = ref(20)
+// ── 订单列表 ──
+const loadingOrders = ref(false)
+const orders = ref<ContractOrderItem[]>([])
 
-async function fetchProjects() {
-  loadingProjects.value = true
+async function fetchOrders() {
+  loadingOrders.value = true
   try {
-    const data = await getContractProjects(contractId, { page: projectPage.value, page_size: projectPageSize.value })
-    projects.value = data.items
-    projectTotal.value = data.total
-  } finally { loadingProjects.value = false }
-}
-
-async function handleDeleteProject(row: FrameworkContractProjectDetailResponse) {
-  try {
-    await ElMessageBox.confirm('确定删除该项目？', '提示', { type: 'warning' })
-    await deleteContractProject(row.id)
-    ElMessage.success('已删除')
-    fetchProjects()
-    loadContract()
-  } catch { /* canceled */ }
+    orders.value = await getContractOrders(contractId)
+  } finally { loadingOrders.value = false }
 }
 
 // ── 编辑合同 ──
@@ -390,42 +362,6 @@ async function openAddProject() {
   projectVisible.value = true
 }
 
-async function openEditProject(row: FrameworkContractProjectDetailResponse) {
-  resetProjectForm()
-  projectEditingId.value = row.id
-  const detail = await getContractProject(row.id).catch(() => null)
-  if (!detail) return
-  projectForm.department = detail.department || ''
-  projectForm.project_name = detail.project_name
-  projectForm.project_amount = detail.project_amount
-  projectForm.order_id = detail.orders?.[0]?.id || ''
-  projectForm.quote_id = detail.quotes?.[0]?.id || ''
-  projectForm.remark = detail.remark || ''
-  existingProjectAtt.value = { path: detail.attachment_path, name: detail.attachment_name }
-  if (detail.attachment_name) {
-    projectAttFileList.value = [{ name: detail.attachment_name }]
-  }
-  await loadAvailableResources()
-  // 编辑时把已关联但不在 available 中的资源加回来（去重）
-  const existingOrderIds = new Set(availableOrders.value.map(o => o.id))
-  if (detail.orders) {
-    for (const o of detail.orders) {
-      if (!existingOrderIds.has(o.id)) {
-        availableOrders.value.push(o as ContractResourceItem)
-      }
-    }
-  }
-  const existingQuoteIds = new Set(availableQuotes.value.map(q => q.id))
-  if (detail.quotes) {
-    for (const q of detail.quotes) {
-      if (!existingQuoteIds.has(q.id)) {
-        availableQuotes.value.push(q as ContractResourceItem)
-      }
-    }
-  }
-  projectVisible.value = true
-}
-
 async function saveProject() {
   if (!projectForm.project_name) { ElMessage.warning('请输入项目名称'); return }
   if (!contract.value) return
@@ -465,14 +401,14 @@ async function saveProject() {
     }
     ElMessage.success(projectEditingId.value ? '已更新' : '已添加')
     projectVisible.value = false
-    fetchProjects()
+    fetchOrders()
     loadContract()
   } catch { /* handled */ } finally { projectSaving.value = false }
 }
 
 onMounted(() => {
   loadContract()
-  fetchProjects()
+  fetchOrders()
 })
 </script>
 

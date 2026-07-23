@@ -48,6 +48,22 @@ export function deleteContractProject(projectId: string) {
   return del<SuccessResponse>(`/framework-contracts/projects/${projectId}`)
 }
 
+// ── 框架合同关联订单 ──
+
+export interface ContractOrderItem {
+  id: string
+  order_no: string
+  project_name: string
+  total_amount: number
+  paid_amount: number
+  unpaid_amount: number
+  status: string
+}
+
+export function getContractOrders(contractId: string) {
+  return get<ContractOrderItem[]>(`/framework-contracts/${contractId}/orders`)
+}
+
 // ── 项目附件 ──
 
 export function uploadContractProjectAttachment(projectId: string, file: File) {
