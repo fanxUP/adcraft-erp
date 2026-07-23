@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-from app.models.vehicle import Vehicle, VehicleDriver, VehicleUseRequest, VehicleDispatch
+from app.models.vehicle import Vehicle, VehicleDriver, VehicleUseRequest, VehicleDispatch, VehicleTripRecord
 
 
 class VehicleRepository:
@@ -218,7 +218,6 @@ class VehicleRepository:
         exclude_id: UUID | None = None,
     ) -> bool:
         """Check if vehicle has time conflict with existing dispatches."""
-        from datetime import datetime as dt
         q = select(VehicleDispatch).where(
             VehicleDispatch.vehicle_id == vehicle_id,
             VehicleDispatch.status.notin_(["cancelled"]),
@@ -231,3 +230,48 @@ class VehicleRepository:
             q = q.where(VehicleDispatch.id != exclude_id)
         result = await self.db.execute(q)
         return result.scalar_one_or_none() is not None
+
+    # ── 出车/收车台账 ──────────────────────────────────────────────────────────
+
+    async def get_trip_record_by_id(self, trip_id: UUID) -> VehicleTripRecord | None:
+        result = await self.db.execute(select(VehicleTripRecord).where(VehicleTripRecord.id == trip_id))
+        return result.scalar_one_or_none()
+
+    async def get_trip_by_dispatch_id(self, dispatch_id: UUID) -> VehicleTripRecord | None:
+        result = await self.db.execute(select(VehicleTripRecord).where(VehicleTripRecord.dispatch_id == dispatch_id))
+        return result.scalar_one_or_none()
+
+    async def list_trip_records(
+        self,
+        skip: int = 0,
+        limit: int = 20,
+        vehicle_id: UUID | None = None,
+        driver_id: UUID | None = None,
+    ) -> tuple[list[VehicleTripRecord], int]:
+        q = select(VehicleTripRecord)
+        if vehicle_id:
+            q = q.where(VehicleTripRecord.vehicle_id == vehicle_id)
+        if driver_id:
+            q = q.where(VehicleTripRecord.driver_id == driver_id)
+
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self.db.execute(count_q)).scalar()
+
+        q = q.order_by(VehicleTripRecord.created_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all()), total
+
+    async def create_trip_record(self, data: dict) -> VehicleTripRecord:
+        t = VehicleTripRecord(**data)
+        self.db.add(t)
+        await self.db.flush()
+        await self.db.refresh(t)
+        return t
+
+    async def update_trip_record(self, t: VehicleTripRecord, data: dict) -> VehicleTripRecord:
+        for k, v in data.items():
+            if v is not None:
+                setattr(t, k, v)
+        await self.db.flush()
+        await self.db.refresh(t)
+        return t
