@@ -110,6 +110,7 @@ class VehicleDispatch(Base, TimestampMixin):
     request_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("vehicle_use_requests.id"), nullable=True, comment="用车申请")
     vehicle_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("vehicles.id"), nullable=False, comment="车辆")
     driver_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("vehicle_drivers.id"), nullable=True, comment="司机")
+    companions: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="随车人员")
     related_customer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True, comment="关联客户")
     related_order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=True, comment="关联订单")
     related_install_task_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("installation_tasks.id"), nullable=True, comment="关联安装任务")

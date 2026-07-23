@@ -1,8 +1,9 @@
 from uuid import UUID
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-from app.models.vehicle import Vehicle, VehicleDriver, VehicleUseRequest
+from app.models.vehicle import Vehicle, VehicleDriver, VehicleUseRequest, VehicleDispatch
 
 
 class VehicleRepository:
@@ -158,3 +159,75 @@ class VehicleRepository:
         await self.db.flush()
         await self.db.refresh(req)
         return req
+
+    # ── 派车单 ──────────────────────────────────────────────────────────────────
+
+    async def get_dispatch_by_id(self, dispatch_id: UUID) -> VehicleDispatch | None:
+        result = await self.db.execute(select(VehicleDispatch).where(VehicleDispatch.id == dispatch_id))
+        return result.scalar_one_or_none()
+
+    async def list_dispatches(
+        self,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: str | None = None,
+        status: str | None = None,
+        vehicle_id: UUID | None = None,
+        driver_id: UUID | None = None,
+    ) -> tuple[list[VehicleDispatch], int]:
+        q = select(VehicleDispatch)
+        if keyword:
+            q = q.where(
+                VehicleDispatch.dispatch_no.ilike(f"%{keyword}%")
+                | VehicleDispatch.destination.ilike(f"%{keyword}%")
+            )
+        if status:
+            q = q.where(VehicleDispatch.status == status)
+        if vehicle_id:
+            q = q.where(VehicleDispatch.vehicle_id == vehicle_id)
+        if driver_id:
+            q = q.where(VehicleDispatch.driver_id == driver_id)
+
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self.db.execute(count_q)).scalar()
+
+        q = q.order_by(VehicleDispatch.created_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all()), total
+
+    async def create_dispatch(self, data: dict) -> VehicleDispatch:
+        d = VehicleDispatch(**data)
+        self.db.add(d)
+        await self.db.flush()
+        await self.db.refresh(d)
+        return d
+
+    async def update_dispatch(self, d: VehicleDispatch, data: dict) -> VehicleDispatch:
+        for k, v in data.items():
+            if v is not None:
+                setattr(d, k, v)
+        await self.db.flush()
+        await self.db.refresh(d)
+        return d
+
+    async def check_vehicle_conflict(
+        self,
+        vehicle_id: UUID,
+        planned_start: datetime,
+        planned_return: datetime,
+        exclude_id: UUID | None = None,
+    ) -> bool:
+        """Check if vehicle has time conflict with existing dispatches."""
+        from datetime import datetime as dt
+        q = select(VehicleDispatch).where(
+            VehicleDispatch.vehicle_id == vehicle_id,
+            VehicleDispatch.status.notin_(["cancelled"]),
+            VehicleDispatch.planned_start_time.isnot(None),
+            VehicleDispatch.planned_return_time.isnot(None),
+            VehicleDispatch.planned_start_time < planned_return,
+            VehicleDispatch.planned_return_time > planned_start,
+        )
+        if exclude_id:
+            q = q.where(VehicleDispatch.id != exclude_id)
+        result = await self.db.execute(q)
+        return result.scalar_one_or_none() is not None

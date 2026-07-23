@@ -10,6 +10,7 @@ from app.core.permissions import require_permission
 from app.models.user import User
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate
 from app.schemas.vehicle_use_request import VehicleUseRequestCreate, VehicleUseRequestUpdate, VehicleUseRequestReject
+from app.schemas.vehicle_dispatch import VehicleDispatchCreate, VehicleDispatchUpdate
 from app.schemas.common import success, success_paginated
 from app.services.vehicle_service import VehicleService
 
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 driver_router = APIRouter(prefix="/vehicle-drivers", tags=["Vehicle Drivers"])
 request_router = APIRouter(prefix="/vehicle-use-requests", tags=["Vehicle Use Requests"])
+dispatch_router = APIRouter(prefix="/vehicle-dispatches", tags=["Vehicle Dispatches"])
 
 
 def _get_service(db: AsyncSession, current_user: User, request: Request) -> VehicleService:
@@ -26,6 +28,17 @@ def _get_service(db: AsyncSession, current_user: User, request: Request) -> Vehi
 
 
 # ── 车辆档案 ──────────────────────────────────────────────────────────────────
+
+@router.get("/available")
+async def list_available_vehicles(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    vehicles, _ = await service.list_vehicles(1, 100, status="available")
+    return success(vehicles)
+
 
 @router.get("/")
 async def list_vehicles(
@@ -121,6 +134,17 @@ async def scrap_vehicle(
 
 
 # ── 司机档案 ──────────────────────────────────────────────────────────────────
+
+@driver_router.get("/available")
+async def list_available_drivers(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    drivers, _ = await service.list_drivers(1, 100, status="active")
+    return success(drivers)
+
 
 @driver_router.get("/")
 async def list_drivers(
@@ -305,3 +329,75 @@ async def cancel_request(
     service = _get_service(db, current_user, request)
     req = await service.cancel_request(UUID(request_id))
     return success(req)
+
+
+# ── 派车管理 ──────────────────────────────────────────────────────────────────
+
+@dispatch_router.get("/")
+async def list_dispatches(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = None,
+    status: str | None = None,
+    vehicle_id: str | None = None,
+    driver_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    vid = UUID(vehicle_id) if vehicle_id else None
+    did = UUID(driver_id) if driver_id else None
+    dispatches, total = await service.list_dispatches(page, page_size, keyword, status, vid, did)
+    return success_paginated(dispatches, total, page, page_size)
+
+
+@dispatch_router.post("/")
+async def create_dispatch(
+    data: VehicleDispatchCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vehicle:update")),
+):
+    service = _get_service(db, current_user, request)
+    d = await service.create_dispatch(data.model_dump(exclude_none=True))
+    return success(d)
+
+
+@dispatch_router.get("/{dispatch_id}")
+async def get_dispatch(
+    dispatch_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    d = await service.get_dispatch(UUID(dispatch_id))
+    if not d:
+        return {"code": 40401, "message": "派车单不存在", "data": None}
+    return success(d)
+
+
+@dispatch_router.patch("/{dispatch_id}")
+async def update_dispatch(
+    dispatch_id: str,
+    data: VehicleDispatchUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vehicle:update")),
+):
+    service = _get_service(db, current_user, request)
+    d = await service.update_dispatch(UUID(dispatch_id), data.model_dump(exclude_none=True))
+    return success(d)
+
+
+@dispatch_router.post("/{dispatch_id}/cancel")
+async def cancel_dispatch(
+    dispatch_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vehicle:update")),
+):
+    service = _get_service(db, current_user, request)
+    d = await service.cancel_dispatch(UUID(dispatch_id))
+    return success(d)
