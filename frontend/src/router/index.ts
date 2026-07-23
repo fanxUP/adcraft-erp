@@ -64,6 +64,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'vehicles', name: 'VehicleList', component: () => import('@/views/vehicles/VehicleList.vue') },
       { path: 'vehicle-drivers', name: 'DriverList', component: () => import('@/views/vehicles/DriverList.vue') },
       { path: 'vehicle-use-requests', name: 'VehicleUseRequestList', component: () => import('@/views/vehicles/VehicleUseRequestList.vue') },
+      { path: 'vehicle-agent-drafts', name: 'VehicleAgentDrafts', component: () => import('@/views/vehicles/VehicleAgentDrafts.vue') },
       { path: 'vehicle-dispatches', name: 'VehicleDispatchList', component: () => import('@/views/vehicles/VehicleDispatchList.vue') },
       { path: 'vehicle-trip-records', name: 'VehicleTripRecordList', component: () => import('@/views/vehicles/VehicleTripRecordList.vue') },
       { path: 'vehicle-expenses', name: 'VehicleExpenseList', component: () => import('@/views/vehicles/VehicleExpenseList.vue') },

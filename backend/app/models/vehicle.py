@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import (
     Boolean, DateTime, Integer, Numeric, String, Text, ForeignKey, Index, func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, SoftDeleteMixin
@@ -333,4 +333,40 @@ class VehicleCostAllocation(Base, TimestampMixin):
         Index("ix_vehicle_cost_allocations_vehicle_id", "vehicle_id"),
         Index("ix_vehicle_cost_allocations_related_order_id", "related_order_id"),
         Index("ix_vehicle_cost_allocations_source_type_id", "source_type", "source_id"),
+    )
+
+
+# ── Agent 消息识别草稿 ─────────────────────────────────────────────────────────
+
+class VehicleAgentDraft(Base, TimestampMixin):
+    __tablename__ = "vehicle_agent_drafts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    intent: Mapped[str] = mapped_column(String(64), nullable=False, comment="识别意图: vehicle_use_request/vehicle_dispatch/vehicle_start/vehicle_arrival/vehicle_return/fuel_expense/vehicle_issue/maintenance_request/vehicle_query")
+    confidence: Mapped[float] = mapped_column(Numeric(4, 2), default=0, nullable=False, comment="置信度 0.00-1.00")
+    risk_level: Mapped[str] = mapped_column(String(16), default="medium", nullable=False, comment="风险等级: low/medium/high")
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, comment="状态: pending/confirmed/rejected/expired")
+    platform: Mapped[str] = mapped_column(String(32), default="manual", nullable=False, comment="消息来源: workbuddy_wechat/feishu/wechat/manual/other")
+    conversation_id: Mapped[str | None] = mapped_column(String(128), nullable=True, comment="会话ID")
+    message_id: Mapped[str | None] = mapped_column(String(128), nullable=True, comment="消息ID")
+    sender_name: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="发送者姓名")
+    sender_id: Mapped[str | None] = mapped_column(String(128), nullable=True, comment="发送者ID")
+    original_content: Mapped[str] = mapped_column(Text, nullable=False, comment="原始消息文本")
+    extracted_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True, comment="提取的结构化数据")
+    suggested_action: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="建议操作")
+    requires_confirmation: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, comment="是否需要人工确认")
+    requires_finance_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否需要财务审核")
+    confirmed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, comment="确认人")
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="确认时间")
+    reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True, comment="驳回原因")
+    created_draft_id: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="确认后创建的正式记录ID")
+    created_draft_type: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="确认后创建的记录类型: fuel/maintenance/dispatch/request/incident")
+
+    # relationships
+    confirmed_by_user: Mapped["User | None"] = relationship("User", foreign_keys=[confirmed_by], lazy="selectin")
+
+    __table_args__ = (
+        Index("ix_vehicle_agent_drafts_status", "status"),
+        Index("ix_vehicle_agent_drafts_intent", "intent"),
+        Index("ix_vehicle_agent_drafts_platform", "platform"),
     )
