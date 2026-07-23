@@ -2,10 +2,10 @@ from uuid import UUID
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.vehicle import VehicleUseRequest
+from app.models.vehicle import VehicleUseRequest, VehicleDispatch
 from app.repositories.vehicle_repo import VehicleRepository
 from app.services.operation_log_service import (
-    log_operation, OBJ_VEHICLE, OBJ_VEHICLE_DRIVER, OBJ_VEHICLE_USE_REQUEST,
+    log_operation, OBJ_VEHICLE, OBJ_VEHICLE_DRIVER, OBJ_VEHICLE_USE_REQUEST, OBJ_VEHICLE_DISPATCH,
     ACTION_CREATE, ACTION_UPDATE, ACTION_STATUS_CHANGE,
 )
 
@@ -469,4 +469,218 @@ class VehicleService:
             "remark": r.remark,
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+        }
+
+    # ── 派车管理 ──────────────────────────────────────────────────────────────
+
+    async def list_dispatches(self, page=1, page_size=20, keyword=None, status=None, vehicle_id=None, driver_id=None):
+        skip = (page - 1) * page_size
+        return await self.repo.list_dispatches(skip, page_size, keyword, status, vehicle_id, driver_id)
+
+    async def get_dispatch(self, dispatch_id: UUID) -> dict | None:
+        d = await self.repo.get_dispatch_by_id(dispatch_id)
+        if not d:
+            return None
+        return self._dispatch_to_dict(d)
+
+    async def create_dispatch(self, data: dict) -> dict:
+        # Validate request exists and is approved
+        if data.get("request_id"):
+            req = await self.repo.get_request_by_id(UUID(data["request_id"]))
+            if not req:
+                raise ValueError("用车申请不存在")
+            if req.status != "approved":
+                raise ValueError("只有已审批的申请可以派车")
+            # Copy related info from request if not provided
+            for field in ("related_customer_id", "related_order_id", "related_install_task_id", "destination"):
+                if not data.get(field) and getattr(req, field, None):
+                    data[field] = str(getattr(req, field))
+            if not data.get("planned_start_time") and req.start_time:
+                data["planned_start_time"] = req.start_time.isoformat()
+            if not data.get("planned_return_time") and req.expected_return_time:
+                data["planned_return_time"] = req.expected_return_time.isoformat()
+
+        # Validate vehicle
+        vehicle = await self.repo.get_by_id(UUID(data["vehicle_id"]))
+        if not vehicle:
+            raise ValueError("车辆不存在")
+        if vehicle.status not in ("available",):
+            raise ValueError(f"车辆当前状态({vehicle.status})不可派车")
+
+        # Validate driver if provided
+        if data.get("driver_id"):
+            driver = await self.repo.get_driver_by_id(UUID(data["driver_id"]))
+            if not driver:
+                raise ValueError("司机不存在")
+            if driver.status != "active":
+                raise ValueError(f"司机当前状态({driver.status})不可派车")
+
+        # Check time conflict
+        from datetime import datetime as dt
+        planned_start = data.get("planned_start_time")
+        planned_return = data.get("planned_return_time")
+        if planned_start and planned_return:
+            if isinstance(planned_start, str):
+                planned_start = dt.fromisoformat(planned_start)
+            if isinstance(planned_return, str):
+                planned_return = dt.fromisoformat(planned_return)
+            conflict = await self.repo.check_vehicle_conflict(
+                UUID(data["vehicle_id"]), planned_start, planned_return
+            )
+            if conflict:
+                raise ValueError("该车辆在指定时间段已有派车安排")
+
+        # Generate dispatch_no
+        from datetime import datetime
+        now = datetime.utcnow()
+        count = (await self.db.execute(
+            select(func.count()).select_from(VehicleDispatch).where(
+                VehicleDispatch.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
+            )
+        )).scalar() or 0
+        data["dispatch_no"] = f"PC{now.strftime('%Y%m%d')}{count + 1:03d}"
+        data["status"] = "assigned"
+        data["created_by"] = self.current_user.id if self.current_user else None
+
+        # Convert string IDs
+        for field in ("request_id", "vehicle_id", "driver_id", "related_customer_id", "related_order_id", "related_install_task_id"):
+            if data.get(field) and isinstance(data[field], str):
+                data[field] = UUID(data[field])
+
+        d = await self.repo.create_dispatch(data)
+
+        # Update request status to dispatched
+        if d.request_id:
+            req = await self.repo.get_request_by_id(d.request_id)
+            if req:
+                req.status = "dispatched"
+                await self.db.flush()
+
+        # Update vehicle status to assigned
+        vehicle.status = "assigned"
+        await self.db.flush()
+        await self.db.refresh(d)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_DISPATCH,
+            object_id=d.id,
+            action=ACTION_CREATE,
+            ip_address=self.ip_address,
+            after_data=self._dispatch_to_dict(d),
+        )
+        return self._dispatch_to_dict(d)
+
+    async def update_dispatch(self, dispatch_id: UUID, data: dict) -> dict:
+        d = await self.repo.get_dispatch_by_id(dispatch_id)
+        if not d:
+            raise ValueError("派车单不存在")
+        if d.status not in ("assigned",):
+            raise ValueError("只有待出车的派车单可以编辑")
+
+        # Check vehicle conflict if time or vehicle changed
+        vehicle_id = UUID(data["vehicle_id"]) if data.get("vehicle_id") else d.vehicle_id
+        planned_start = data.get("planned_start_time") or d.planned_start_time
+        planned_return = data.get("planned_return_time") or d.planned_return_time
+        if planned_start and planned_return:
+            if isinstance(planned_start, str):
+                from datetime import datetime as dt
+                planned_start = dt.fromisoformat(planned_start)
+            if isinstance(planned_return, str):
+                from datetime import datetime as dt
+                planned_return = dt.fromisoformat(planned_return)
+            conflict = await self.repo.check_vehicle_conflict(
+                vehicle_id, planned_start, planned_return, exclude_id=d.id
+            )
+            if conflict:
+                raise ValueError("该车辆在指定时间段已有派车安排")
+
+        before = self._dispatch_to_dict(d)
+
+        for field in ("vehicle_id", "driver_id", "related_customer_id", "related_order_id", "related_install_task_id"):
+            if data.get(field) and isinstance(data[field], str):
+                data[field] = UUID(data[field])
+
+        d = await self.repo.update_dispatch(d, data)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_DISPATCH,
+            object_id=d.id,
+            action=ACTION_UPDATE,
+            ip_address=self.ip_address,
+            before_data=before,
+            after_data=self._dispatch_to_dict(d),
+        )
+        return self._dispatch_to_dict(d)
+
+    async def cancel_dispatch(self, dispatch_id: UUID) -> dict:
+        d = await self.repo.get_dispatch_by_id(dispatch_id)
+        if not d:
+            raise ValueError("派车单不存在")
+        if d.status in ("cancelled", "completed"):
+            raise ValueError(f"当前状态({d.status})不可取消")
+
+        before = self._dispatch_to_dict(d)
+        d.status = "cancelled"
+        await self.db.flush()
+
+        # Restore request status
+        if d.request_id:
+            req = await self.repo.get_request_by_id(d.request_id)
+            if req:
+                req.status = "approved"
+                await self.db.flush()
+
+        # Restore vehicle status
+        vehicle = await self.repo.get_by_id(d.vehicle_id)
+        if vehicle and vehicle.status == "assigned":
+            vehicle.status = "available"
+            await self.db.flush()
+
+        await self.db.refresh(d)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_DISPATCH,
+            object_id=d.id,
+            action=ACTION_STATUS_CHANGE,
+            ip_address=self.ip_address,
+            before_data=before,
+            after_data=self._dispatch_to_dict(d),
+        )
+        return self._dispatch_to_dict(d)
+
+    def _dispatch_to_dict(self, d) -> dict:
+        return {
+            "id": str(d.id),
+            "dispatch_no": d.dispatch_no,
+            "request_id": str(d.request_id) if d.request_id else None,
+            "request_no": d.request.request_no if d.request else None,
+            "vehicle_id": str(d.vehicle_id) if d.vehicle_id else None,
+            "vehicle_name": d.vehicle.vehicle_name if d.vehicle else None,
+            "plate_number": d.vehicle.plate_number if d.vehicle else None,
+            "driver_id": str(d.driver_id) if d.driver_id else None,
+            "driver_name": d.driver.driver_name if d.driver else None,
+            "companions": d.companions,
+            "related_customer_id": str(d.related_customer_id) if d.related_customer_id else None,
+            "related_order_id": str(d.related_order_id) if d.related_order_id else None,
+            "related_install_task_id": str(d.related_install_task_id) if d.related_install_task_id else None,
+            "start_location": d.start_location,
+            "destination": d.destination,
+            "planned_start_time": d.planned_start_time.isoformat() if d.planned_start_time else None,
+            "planned_return_time": d.planned_return_time.isoformat() if d.planned_return_time else None,
+            "actual_start_time": d.actual_start_time.isoformat() if d.actual_start_time else None,
+            "actual_return_time": d.actual_return_time.isoformat() if d.actual_return_time else None,
+            "status": d.status,
+            "remark": d.remark,
+            "created_by": str(d.created_by) if d.created_by else None,
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+            "updated_at": d.updated_at.isoformat() if d.updated_at else None,
         }
