@@ -94,6 +94,7 @@
               <el-icon><Van /></el-icon>
               <span>车辆管理</span>
             </template>
+            <el-menu-item index="/vehicle-dashboard">车辆看板</el-menu-item>
             <el-menu-item index="/vehicle-use-requests">用车申请</el-menu-item>
             <el-menu-item index="/vehicle-agent-drafts">消息识别</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicle-dispatches">派车管理</el-menu-item>

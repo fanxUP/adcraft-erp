@@ -61,6 +61,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'admin/users', name: 'AdminUserManage', meta: { roles: ['admin'] }, component: () => import('@/views/admin/UserManage.vue') },
       { path: 'admin/roles', name: 'AdminRoleManage', meta: { roles: ['admin'] }, component: () => import('@/views/admin/RoleManage.vue') },
       { path: 'admin/settings', name: 'AdminSettings', meta: { roles: ['admin'] }, component: () => import('@/views/admin/SystemSettings.vue') },
+      { path: 'vehicle-dashboard', name: 'VehicleDashboard', component: () => import('@/views/vehicles/VehicleDashboard.vue') },
       { path: 'vehicles', name: 'VehicleList', component: () => import('@/views/vehicles/VehicleList.vue') },
       { path: 'vehicle-drivers', name: 'DriverList', component: () => import('@/views/vehicles/DriverList.vue') },
       { path: 'vehicle-use-requests', name: 'VehicleUseRequestList', component: () => import('@/views/vehicles/VehicleUseRequestList.vue') },
