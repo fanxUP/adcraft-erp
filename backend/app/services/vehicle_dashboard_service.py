@@ -33,7 +33,7 @@ class VehicleDashboardService:
         # 1. 车辆总数（未删除、未报废）
         total_vehicles = (await self.db.execute(
             select(func.count()).select_from(Vehicle).where(
-                Vehicle.is_deleted == False,
+                Vehicle.deleted_at.is_(None),
                 Vehicle.status != "scrapped",
             )
         )).scalar() or 0
@@ -41,7 +41,7 @@ class VehicleDashboardService:
         # 2. 可用车辆
         available_vehicles = (await self.db.execute(
             select(func.count()).select_from(Vehicle).where(
-                Vehicle.is_deleted == False,
+                Vehicle.deleted_at.is_(None),
                 Vehicle.status == "available",
             )
         )).scalar() or 0
@@ -49,7 +49,7 @@ class VehicleDashboardService:
         # 3. 使用中车辆（assigned + in_use）
         in_use_vehicles = (await self.db.execute(
             select(func.count()).select_from(Vehicle).where(
-                Vehicle.is_deleted == False,
+                Vehicle.deleted_at.is_(None),
                 Vehicle.status.in_(["assigned", "in_use"]),
             )
         )).scalar() or 0
@@ -57,7 +57,7 @@ class VehicleDashboardService:
         # 4. 维修中车辆
         maintenance_vehicles = (await self.db.execute(
             select(func.count()).select_from(Vehicle).where(
-                Vehicle.is_deleted == False,
+                Vehicle.deleted_at.is_(None),
                 Vehicle.status == "maintenance",
             )
         )).scalar() or 0
@@ -65,7 +65,7 @@ class VehicleDashboardService:
         # 5. 停用车辆
         disabled_vehicles = (await self.db.execute(
             select(func.count()).select_from(Vehicle).where(
-                Vehicle.is_deleted == False,
+                Vehicle.deleted_at.is_(None),
                 Vehicle.status == "disabled",
             )
         )).scalar() or 0
@@ -164,7 +164,7 @@ class VehicleDashboardService:
         # 14. 驾驶证即将到期（30 天内）
         expiring_license = (await self.db.execute(
             select(func.count()).select_from(VehicleDriver).where(
-                VehicleDriver.is_deleted == False,
+                VehicleDriver.deleted_at.is_(None),
                 VehicleDriver.license_expire_date.isnot(None),
                 VehicleDriver.license_expire_date <= soon,
                 VehicleDriver.license_expire_date >= now,
@@ -264,7 +264,7 @@ class VehicleDashboardService:
         )).scalar() or 0
         license_reminders = (await self.db.execute(
             select(func.count()).select_from(VehicleDriver).where(
-                VehicleDriver.is_deleted == False,
+                VehicleDriver.deleted_at.is_(None),
                 VehicleDriver.license_expire_date.isnot(None),
                 VehicleDriver.license_expire_date <= soon,
                 VehicleDriver.license_expire_date >= now,
@@ -408,7 +408,7 @@ class VehicleDashboardService:
                 VehicleCertificate.certificate_type.in_(["compulsory_insurance", "commercial_insurance"]),
                 VehicleCertificate.expire_date.isnot(None),
                 VehicleCertificate.expire_date <= far,
-                Vehicle.is_deleted == False,
+                Vehicle.deleted_at.is_(None),
             )
             .order_by(VehicleCertificate.expire_date.asc())
         )
@@ -422,7 +422,7 @@ class VehicleDashboardService:
                 VehicleCertificate.certificate_type == "annual_inspection",
                 VehicleCertificate.expire_date.isnot(None),
                 VehicleCertificate.expire_date <= far,
-                Vehicle.is_deleted == False,
+                Vehicle.deleted_at.is_(None),
             )
             .order_by(VehicleCertificate.expire_date.asc())
         )
@@ -431,7 +431,7 @@ class VehicleDashboardService:
         # 驾驶证到期
         license_q = (
             select(VehicleDriver).where(
-                VehicleDriver.is_deleted == False,
+                VehicleDriver.deleted_at.is_(None),
                 VehicleDriver.license_expire_date.isnot(None),
                 VehicleDriver.license_expire_date <= far,
             ).order_by(VehicleDriver.license_expire_date.asc())
@@ -560,7 +560,7 @@ class VehicleDashboardService:
         )).scalar() or 0
         license_reminders = (await self.db.execute(
             select(func.count()).select_from(VehicleDriver).where(
-                VehicleDriver.is_deleted == False,
+                VehicleDriver.deleted_at.is_(None),
                 VehicleDriver.license_expire_date.isnot(None),
                 VehicleDriver.license_expire_date <= soon,
                 VehicleDriver.license_expire_date >= now,
