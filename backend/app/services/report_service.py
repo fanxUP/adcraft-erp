@@ -8,6 +8,7 @@ from app.models.task import DesignTask, ProductionTask, InstallationTask
 from app.models.customer import Customer
 from app.models.contract import Contract, ContractDocument
 from app.services.business_document_service import BusinessDocumentService
+from app.services.vehicle_dashboard_service import VehicleDashboardService
 
 
 class ReportService:
@@ -64,6 +65,10 @@ class ReportService:
         payments = await self._list_payments_in_range(day_start, day_end)
         new_customers = await self._count_new_customers(day_start, day_end)
 
+        # 车辆与安装运输部分
+        vehicle_svc = VehicleDashboardService(self.db)
+        vehicle_report = await vehicle_svc.get_daily_report(report_date)
+
         return {
             "date": d.strftime("%Y-%m-%d"),
             "order_count": len(orders),
@@ -77,6 +82,7 @@ class ReportService:
                  "payment_method": p.payment_method, "is_voided": p.is_voided}
                 for p in payments
             ],
+            "vehicle": vehicle_report,
         }
 
     async def get_monthly_report(self, year: int | None = None, month: int | None = None) -> dict:

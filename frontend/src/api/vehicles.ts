@@ -548,3 +548,110 @@ export function confirmAgentDraft(id: string) {
 export function rejectAgentDraft(id: string, rejectReason?: string) {
   return post<AgentDraftResponse>(`/vehicle-agent/drafts/${id}/reject`, { reject_reason: rejectReason })
 }
+
+// ── 车辆看板 ──────────────────────────────────────────────────────────────────
+
+export interface VehicleOverviewData {
+  total_vehicles: number
+  available_vehicles: number
+  in_use_vehicles: number
+  maintenance_vehicles: number
+  disabled_vehicles: number
+  today_dispatches: number
+  pending_return: number
+  today_incidents: number
+  month_fuel_cost: number
+  month_maintenance_cost: number
+  month_total_cost: number
+  expiring_insurance: number
+  expiring_inspection: number
+  expiring_license: number
+}
+
+export interface TodayStatsData {
+  today_dispatches_count: number
+  pending_return_count: number
+  today_incidents_count: number
+  today_fuel_cost: number
+  today_other_cost: number
+  tomorrow_dispatches: number
+  reminders_count: number
+  dispatches: Array<{
+    id: string; vehicle_id?: string; driver_id?: string; status: string
+    purpose?: string; destination?: string
+    planned_start_time?: string; planned_return_time?: string; created_at?: string
+  }>
+  pending_returns: Array<{
+    id: string; vehicle_id?: string; driver_id?: string; status: string
+    purpose?: string; destination?: string
+    planned_start_time?: string; planned_return_time?: string; created_at?: string
+  }>
+  incidents: Array<{
+    id: string; vehicle_id?: string; incident_type: string
+    description?: string; severity: string; status: string; incident_time?: string
+  }>
+}
+
+export interface MonthlyCostsData {
+  year: number; month: number
+  fuel_cost: number; maintenance_cost: number; insurance_cost: number
+  incident_cost: number; allocation_cost: number; total_cost: number
+  dispatch_count: number; total_mileage: number; avg_cost_per_dispatch: number
+}
+
+export interface ReminderItem {
+  id: string; urgency: string; expiry_date?: string
+  plate_number?: string; vehicle_name?: string; certificate_type?: string; certificate_no?: string
+  driver_name?: string; phone?: string; license_no?: string; license_expiry?: string
+}
+
+export interface RemindersData {
+  insurance: ReminderItem[]
+  inspection: ReminderItem[]
+  license: ReminderItem[]
+}
+
+export interface DailyReportData {
+  date: string
+  today_dispatches: number; install_dispatches: number; pending_return: number
+  today_incidents: number; today_fuel_cost: number; today_other_cost: number
+  tomorrow_dispatches: number; reminders_count: number
+}
+
+export interface ExpenseRankingItem {
+  vehicle_id: string; plate_number?: string; vehicle_name?: string
+  fuel_cost: number; maintenance_cost: number; total_cost: number
+}
+
+export interface DriverRankingItem {
+  driver_id: string; driver_name?: string; phone?: string
+  dispatch_count: number; total_mileage: number
+}
+
+export function getVehicleOverview() {
+  return get<VehicleOverviewData>('/vehicle-dashboard/overview')
+}
+
+export function getVehicleTodayStats() {
+  return get<TodayStatsData>('/vehicle-dashboard/today')
+}
+
+export function getVehicleMonthlyCosts() {
+  return get<MonthlyCostsData>('/vehicle-dashboard/monthly')
+}
+
+export function getVehicleReminders() {
+  return get<RemindersData>('/vehicle-dashboard/reminders')
+}
+
+export function getVehicleDailyReport(date?: string) {
+  return get<DailyReportData>('/vehicle-dashboard/daily-report', { params: { date } })
+}
+
+export function getVehicleExpenseRanking(params: { year?: number; month?: number } = {}) {
+  return get<ExpenseRankingItem[]>('/vehicle-dashboard/expense-ranking', { params })
+}
+
+export function getVehicleDriverRanking(params: { year?: number; month?: number } = {}) {
+  return get<DriverRankingItem[]>('/vehicle-dashboard/driver-ranking', { params })
+}
