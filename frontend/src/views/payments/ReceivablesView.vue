@@ -50,7 +50,8 @@
                 <div style="margin: 8px 0 4px 48px; font-weight: 600; color: var(--ad-text);">合同</div>
                 <el-table :data="row.contracts" size="small" stripe style="margin: 4px 0 12px 48px; width: calc(100% - 48px)">
                   <el-table-column prop="contract_no" label="合同编号" width="180" />
-                  <el-table-column prop="project_name" label="项目名称" min-width="180" />
+                  <el-table-column prop="project_name" label="合同名称" min-width="180" />
+                  <el-table-column prop="contract_type" label="合同类型" width="100" />
                   <el-table-column label="合同金额" width="130">
                     <template #default="{ row: ct }">¥ {{ ct.total_amount?.toFixed(2) }}</template>
                   </el-table-column>
@@ -62,8 +63,13 @@
                       <span style="color: #e63946; font-weight: 600">¥ {{ ct.unpaid_amount?.toFixed(2) }}</span>
                     </template>
                   </el-table-column>
-                  <el-table-column prop="contract_type" label="类型" width="100" />
-                  <el-table-column label="状态" width="100">
+                  <el-table-column label="类型" width="80">
+                    <template #default="{ row: ct }">
+                      <el-tag v-if="ct.contract_type === '框架合同'" type="warning" size="small">框架</el-tag>
+                      <el-tag v-else type="primary" size="small">常规</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="状态" width="80">
                     <template #default="{ row: ct }">
                       <el-tag size="small" :type="contractStatusTag(ct.status)">{{ contractStatusLabel(ct.status) }}</el-tag>
                     </template>
