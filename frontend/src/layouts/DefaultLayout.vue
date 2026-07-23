@@ -89,13 +89,14 @@
             <el-menu-item index="/cost-debts">成本欠款</el-menu-item>
             <el-menu-item index="/statements">对账单</el-menu-item>
           </el-sub-menu>
-          <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicles-group">
+          <el-sub-menu index="/vehicles-group">
             <template #title>
               <el-icon><Van /></el-icon>
               <span>车辆管理</span>
             </template>
-            <el-menu-item index="/vehicles">车辆档案</el-menu-item>
-            <el-menu-item index="/vehicle-drivers">司机管理</el-menu-item>
+            <el-menu-item index="/vehicle-use-requests">用车申请</el-menu-item>
+            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicles">车辆档案</el-menu-item>
+            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicle-drivers">司机管理</el-menu-item>
           </el-sub-menu>
           <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'sales', 'finance'])" index="/reports">
             <template #title>

@@ -9,6 +9,7 @@ from app.core.deps import get_current_user
 from app.core.permissions import require_permission
 from app.models.user import User
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate
+from app.schemas.vehicle_use_request import VehicleUseRequestCreate, VehicleUseRequestUpdate, VehicleUseRequestReject
 from app.schemas.common import success, success_paginated
 from app.services.vehicle_service import VehicleService
 
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 driver_router = APIRouter(prefix="/vehicle-drivers", tags=["Vehicle Drivers"])
+request_router = APIRouter(prefix="/vehicle-use-requests", tags=["Vehicle Use Requests"])
 
 
 def _get_service(db: AsyncSession, current_user: User, request: Request) -> VehicleService:
@@ -196,3 +198,110 @@ async def enable_driver(
     service = _get_service(db, current_user, request)
     driver = await service.enable_driver(UUID(driver_id))
     return success(driver)
+
+
+# ── 用车申请 ──────────────────────────────────────────────────────────────────
+
+@request_router.get("/")
+async def list_requests(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = None,
+    status: str | None = None,
+    requester_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    rid = UUID(requester_id) if requester_id else None
+    requests, total = await service.list_requests(page, page_size, keyword, status, rid)
+    return success_paginated(requests, total, page, page_size)
+
+
+@request_router.post("/")
+async def create_request(
+    data: VehicleUseRequestCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    req = await service.create_request(data.model_dump(exclude_none=True))
+    return success(req)
+
+
+@request_router.get("/{request_id}")
+async def get_request(
+    request_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    req = await service.get_request(UUID(request_id))
+    if not req:
+        return {"code": 40401, "message": "用车申请不存在", "data": None}
+    return success(req)
+
+
+@request_router.patch("/{request_id}")
+async def update_request(
+    request_id: str,
+    data: VehicleUseRequestUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    req = await service.update_request(UUID(request_id), data.model_dump(exclude_none=True))
+    return success(req)
+
+
+@request_router.post("/{request_id}/submit")
+async def submit_request(
+    request_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    req = await service.submit_request(UUID(request_id))
+    return success(req)
+
+
+@request_router.post("/{request_id}/approve")
+async def approve_request(
+    request_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vehicle:update")),
+):
+    service = _get_service(db, current_user, request)
+    req = await service.approve_request(UUID(request_id))
+    return success(req)
+
+
+@request_router.post("/{request_id}/reject")
+async def reject_request(
+    request_id: str,
+    data: VehicleUseRequestReject,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vehicle:update")),
+):
+    service = _get_service(db, current_user, request)
+    req = await service.reject_request(UUID(request_id), data.reject_reason)
+    return success(req)
+
+
+@request_router.post("/{request_id}/cancel")
+async def cancel_request(
+    request_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    req = await service.cancel_request(UUID(request_id))
+    return success(req)
