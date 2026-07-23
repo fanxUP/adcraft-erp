@@ -96,6 +96,8 @@ async def get_available_projects(
             BusinessDocument.doc_type.in_(["order", "quote"]),
             not_(BusinessDocument.id.in_(used_sub)),
             not_(BusinessDocument.id.in_(contract_used_sub)),
+            # 排除已转换/已取消的报价
+            ~((BusinessDocument.doc_type == "quote") & BusinessDocument.status.in_(["converted", "cancelled"])),
         )
         .order_by(BusinessDocument.created_at.desc())
         .limit(500)
