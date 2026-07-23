@@ -833,9 +833,9 @@ class VehicleService:
 
         # 计算实际公里数
         if d.start_mileage and d.end_mileage:
-            if d.end_mileage < d.start_mileage:
+            if float(d.end_mileage) < float(d.start_mileage):
                 raise ValueError("收车里程不能小于出车里程")
-            d.actual_distance_km = round(d.end_mileage - d.start_mileage, 2)
+            d.actual_distance_km = round(float(d.end_mileage) - float(d.start_mileage), 2)
 
         # 异常处理
         abnormal = data.get("abnormal_flag", False)
