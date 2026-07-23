@@ -381,7 +381,11 @@ function resetProjectForm() {
 async function loadAvailableResources() {
   if (!contract.value) return
   try {
-    const data = await getAvailableResources(contract.value.customer_id, contractId)
+    const data = await getAvailableResources(
+      contract.value.customer_id,
+      contractId,
+      projectEditingId.value || undefined  // 编辑时传递当前项目ID
+    )
     availableOrders.value = data.orders
     availableQuotes.value = data.quotes
     availableProjectNames.value = data.project_names || []
