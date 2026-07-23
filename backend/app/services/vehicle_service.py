@@ -715,8 +715,13 @@ class VehicleService:
         d.start_mileage = data.get("start_mileage")
         d.status = "started"
 
-        # 创建出车台账
+        # 创建出车台账（先生成编号，避免 NOT NULL 约束）
+        import uuid as _uuid
+        trip_id = _uuid.uuid4()
+        trip_no = f"TC{now.strftime('%Y%m%d')}{str(trip_id)[:8]}"
         trip = await self.repo.create_trip_record({
+            "id": trip_id,
+            "trip_no": trip_no,
             "dispatch_id": d.id,
             "vehicle_id": d.vehicle_id,
             "driver_id": d.driver_id,
@@ -726,8 +731,6 @@ class VehicleService:
             "start_photo_url": data.get("start_photo_url"),
             "start_remark": data.get("start_remark"),
         })
-        # 生成台账编号
-        trip.trip_no = f"TC{now.strftime('%Y%m%d')}{str(trip.id)[:8]}"
 
         # 更新车辆状态
         vehicle = await self.repo.get_by_id(d.vehicle_id)
