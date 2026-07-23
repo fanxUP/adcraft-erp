@@ -255,6 +255,28 @@ class ReportService:
                         "unpaid_amount": max(0, _ct_amount(ct) - paid_map.get(ct.id, 0.0)),
                         "status": ct.status,
                         "contract_type": ct.contract_type,
+                        "orders": [
+                            {
+                                "id": str(d.id),
+                                "order_no": d.doc_no,
+                                "project_name": d.project_name,
+                                "total_amount": float(d.total_amount),
+                                "paid_amount": float(d.paid_amount),
+                                "unpaid_amount": float(d.unpaid_amount),
+                                "status": d.status,
+                            }
+                            for d in (ct.documents or []) if d.doc_type == "order"
+                        ],
+                        "quotes": [
+                            {
+                                "id": str(d.id),
+                                "quote_no": d.doc_no,
+                                "project_name": d.project_name,
+                                "total_amount": float(d.total_amount),
+                                "status": d.status,
+                            }
+                            for d in (ct.documents or []) if d.doc_type == "quote"
+                        ],
                     }
                     for ct in customer_contracts
                 ],
