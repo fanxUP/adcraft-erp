@@ -97,3 +97,32 @@ class CostAllocationCreate(BaseModel):
     allocation_method: str = "manual"  # manual/auto_dispatch/auto_order
     allocation_date: str | None = None
     remark: str | None = None
+
+
+# ── 保险/年检/证件 ──────────────────────────────────────────────────────────
+
+class CertificateCreate(BaseModel):
+    vehicle_id: str
+    driver_id: str | None = None
+    certificate_type: str  # compulsory_insurance/commercial_insurance/annual_inspection/driving_license/transport_license/driver_license/maintenance/other
+    certificate_no: str | None = None
+    start_date: str | None = None
+    expire_date: str | None = None
+    amount: float = 0
+    file_url: str | None = None
+    reminder_days: int = 30
+    remark: str | None = None
+
+
+class CertificateUpdate(BaseModel):
+    vehicle_id: str | None = None
+    driver_id: str | None = None
+    certificate_type: str | None = None
+    certificate_no: str | None = None
+    start_date: str | None = None
+    expire_date: str | None = None
+    amount: float | None = None
+    file_url: str | None = None
+    reminder_days: int | None = None
+    status: str | None = None
+    remark: str | None = None

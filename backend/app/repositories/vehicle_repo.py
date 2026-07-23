@@ -6,6 +6,7 @@ from sqlalchemy import select, func
 from app.models.vehicle import (
     Vehicle, VehicleDriver, VehicleUseRequest, VehicleDispatch, VehicleTripRecord,
     VehicleFuelRecord, VehicleMaintenanceRecord, VehicleCostAllocation,
+    VehicleCertificate,
 )
 
 
@@ -392,3 +393,65 @@ class VehicleRepository:
         await self.db.flush()
         await self.db.refresh(c)
         return c
+
+    # ── 保险/年检/证件 ──────────────────────────────────────────────────────────
+
+    async def get_certificate_by_id(self, cert_id: UUID) -> VehicleCertificate | None:
+        result = await self.db.execute(select(VehicleCertificate).where(VehicleCertificate.id == cert_id))
+        return result.scalar_one_or_none()
+
+    async def list_certificates(
+        self, skip: int = 0, limit: int = 20,
+        vehicle_id: UUID | None = None,
+        certificate_type: str | None = None,
+        status: str | None = None,
+    ) -> tuple[list[VehicleCertificate], int]:
+        q = select(VehicleCertificate)
+        if vehicle_id:
+            q = q.where(VehicleCertificate.vehicle_id == vehicle_id)
+        if certificate_type:
+            q = q.where(VehicleCertificate.certificate_type == certificate_type)
+        if status:
+            q = q.where(VehicleCertificate.status == status)
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self.db.execute(count_q)).scalar()
+        q = q.order_by(VehicleCertificate.expire_date.asc().nullslast()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all()), total
+
+    async def list_expiring_certificates(
+        self, days: int = 30, vehicle_id: UUID | None = None,
+    ) -> list[VehicleCertificate]:
+        """List certificates expiring within N days."""
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        deadline = now + timedelta(days=days)
+        q = select(VehicleCertificate).where(
+            VehicleCertificate.status == "active",
+            VehicleCertificate.expire_date.isnot(None),
+            VehicleCertificate.expire_date <= deadline,
+        )
+        if vehicle_id:
+            q = q.where(VehicleCertificate.vehicle_id == vehicle_id)
+        q = q.order_by(VehicleCertificate.expire_date.asc())
+        result = await self.db.execute(q)
+        return list(result.scalars().all())
+
+    async def create_certificate(self, data: dict) -> VehicleCertificate:
+        c = VehicleCertificate(**data)
+        self.db.add(c)
+        await self.db.flush()
+        await self.db.refresh(c)
+        return c
+
+    async def update_certificate(self, c: VehicleCertificate, data: dict) -> VehicleCertificate:
+        for k, v in data.items():
+            if v is not None:
+                setattr(c, k, v)
+        await self.db.flush()
+        await self.db.refresh(c)
+        return c
+
+    async def delete_certificate(self, c: VehicleCertificate) -> None:
+        await self.db.delete(c)
+        await self.db.flush()

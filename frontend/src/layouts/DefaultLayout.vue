@@ -98,6 +98,7 @@
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicle-dispatches">派车管理</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicle-trip-records">出车收车台账</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer', 'finance'])" index="/vehicle-expenses">车辆费用</el-menu-item>
+            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'finance'])" index="/vehicle-insurance">保险年检</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicles">车辆档案</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicle-drivers">司机管理</el-menu-item>
           </el-sub-menu>

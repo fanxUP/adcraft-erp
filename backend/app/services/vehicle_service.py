@@ -5,12 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.vehicle import (
     VehicleUseRequest, VehicleDispatch, VehicleTripRecord,
     VehicleFuelRecord, VehicleMaintenanceRecord, VehicleCostAllocation,
+    VehicleCertificate,
 )
 from app.repositories.vehicle_repo import VehicleRepository
 from app.services.operation_log_service import (
     log_operation, OBJ_VEHICLE, OBJ_VEHICLE_DRIVER, OBJ_VEHICLE_USE_REQUEST, OBJ_VEHICLE_DISPATCH,
     OBJ_VEHICLE_TRIP_RECORD, OBJ_VEHICLE_FUEL_RECORD, OBJ_VEHICLE_MAINTENANCE_RECORD,
-    OBJ_VEHICLE_COST_ALLOCATION, ACTION_CREATE, ACTION_UPDATE, ACTION_STATUS_CHANGE,
+    OBJ_VEHICLE_COST_ALLOCATION, OBJ_VEHICLE_CERTIFICATE, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE,
+    ACTION_STATUS_CHANGE,
 )
 
 
@@ -1139,6 +1141,105 @@ class VehicleService:
             "amount": float(r.amount) if r.amount else 0,
             "allocation_method": r.allocation_method,
             "allocation_date": r.allocation_date.isoformat() if r.allocation_date else None,
+            "remark": r.remark,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+        }
+
+    # ── 保险/年检/证件 ──────────────────────────────────────────────────────────
+
+    async def list_certificates(self, page=1, page_size=20, vehicle_id=None, certificate_type=None, status=None):
+        skip = (page - 1) * page_size
+        records, total = await self.repo.list_certificates(skip, page_size, vehicle_id, certificate_type, status)
+        return [self._certificate_to_dict(r) for r in records], total
+
+    async def get_certificate(self, cert_id: UUID) -> dict | None:
+        r = await self.repo.get_certificate_by_id(cert_id)
+        return self._certificate_to_dict(r) if r else None
+
+    async def list_expiring_certificates(self, days=30, vehicle_id=None) -> list[dict]:
+        records = await self.repo.list_expiring_certificates(days, vehicle_id)
+        result = []
+        from datetime import datetime
+        now = datetime.utcnow()
+        for r in records:
+            d = self._certificate_to_dict(r)
+            # Calculate urgency
+            if r.expire_date:
+                days_left = (r.expire_date - now).days
+                if days_left < 0:
+                    d["urgency"] = "expired"
+                elif days_left <= 7:
+                    d["urgency"] = "urgent"
+                else:
+                    d["urgency"] = "warning"
+                d["days_left"] = days_left
+            result.append(d)
+        return result
+
+    async def create_certificate(self, data: dict) -> dict:
+        for field in ("vehicle_id", "driver_id"):
+            if data.get(field) and isinstance(data[field], str):
+                data[field] = UUID(data[field])
+        data.setdefault("status", "active")
+        r = await self.repo.create_certificate(data)
+        await log_operation(
+            db=self.db, user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_CERTIFICATE, object_id=r.id,
+            action=ACTION_CREATE, ip_address=self.ip_address,
+            after_data=self._certificate_to_dict(r),
+        )
+        return self._certificate_to_dict(r)
+
+    async def update_certificate(self, cert_id: UUID, data: dict) -> dict:
+        r = await self.repo.get_certificate_by_id(cert_id)
+        if not r:
+            raise ValueError("证件记录不存在")
+        before = self._certificate_to_dict(r)
+        for field in ("vehicle_id", "driver_id"):
+            if data.get(field) and isinstance(data[field], str):
+                data[field] = UUID(data[field])
+        r = await self.repo.update_certificate(r, data)
+        await log_operation(
+            db=self.db, user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_CERTIFICATE, object_id=r.id,
+            action=ACTION_UPDATE, ip_address=self.ip_address,
+            before_data=before, after_data=self._certificate_to_dict(r),
+        )
+        return self._certificate_to_dict(r)
+
+    async def delete_certificate(self, cert_id: UUID) -> None:
+        r = await self.repo.get_certificate_by_id(cert_id)
+        if not r:
+            raise ValueError("证件记录不存在")
+        before = self._certificate_to_dict(r)
+        await self.repo.delete_certificate(r)
+        await log_operation(
+            db=self.db, user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_CERTIFICATE, object_id=cert_id,
+            action=ACTION_DELETE, ip_address=self.ip_address,
+            before_data=before,
+        )
+
+    def _certificate_to_dict(self, r) -> dict:
+        return {
+            "id": str(r.id),
+            "vehicle_id": str(r.vehicle_id) if r.vehicle_id else None,
+            "vehicle_name": r.vehicle.vehicle_name if r.vehicle else None,
+            "plate_number": r.vehicle.plate_number if r.vehicle else None,
+            "driver_id": str(r.driver_id) if r.driver_id else None,
+            "driver_name": r.driver.driver_name if r.driver else None,
+            "certificate_type": r.certificate_type,
+            "certificate_no": r.certificate_no,
+            "start_date": r.start_date.isoformat() if r.start_date else None,
+            "expire_date": r.expire_date.isoformat() if r.expire_date else None,
+            "amount": float(r.amount) if r.amount else 0,
+            "file_url": r.file_url,
+            "reminder_days": r.reminder_days,
+            "status": r.status,
             "remark": r.remark,
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "updated_at": r.updated_at.isoformat() if r.updated_at else None,

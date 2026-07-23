@@ -16,6 +16,7 @@ from app.schemas.vehicle_expense import (
     FuelRecordCreate, FuelRecordUpdate, FuelRecordReview,
     MaintenanceRecordCreate, MaintenanceRecordUpdate, MaintenanceRecordReview,
     CostAllocationCreate,
+    CertificateCreate, CertificateUpdate,
 )
 from app.schemas.common import success, success_paginated
 from app.services.vehicle_service import VehicleService
@@ -689,3 +690,90 @@ async def get_cost_allocation(
     if not r:
         return {"code": 40401, "message": "费用记录不存在", "data": None}
     return success(r)
+
+
+# ── 保险/年检/证件 ──────────────────────────────────────────────────────────
+
+certificate_router = APIRouter(prefix="/vehicle-certificates", tags=["Vehicle Certificates"])
+
+
+@certificate_router.get("/")
+async def list_certificates(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    vehicle_id: str | None = None,
+    certificate_type: str | None = None,
+    status: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    vid = UUID(vehicle_id) if vehicle_id else None
+    records, total = await service.list_certificates(page, page_size, vid, certificate_type, status)
+    return success_paginated(records, total, page, page_size)
+
+
+@certificate_router.get("/expiring")
+async def list_expiring_certificates(
+    request: Request,
+    days: int = Query(30, ge=1, le=365),
+    vehicle_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    vid = UUID(vehicle_id) if vehicle_id else None
+    records = await service.list_expiring_certificates(days, vid)
+    return success(records)
+
+
+@certificate_router.post("/")
+async def create_certificate(
+    data: CertificateCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vehicle:update")),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.create_certificate(data.model_dump(exclude_none=True))
+    return success(r)
+
+
+@certificate_router.get("/{cert_id}")
+async def get_certificate(
+    cert_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.get_certificate(UUID(cert_id))
+    if not r:
+        return {"code": 40401, "message": "证件记录不存在", "data": None}
+    return success(r)
+
+
+@certificate_router.patch("/{cert_id}")
+async def update_certificate(
+    cert_id: str,
+    data: CertificateUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vehicle:update")),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.update_certificate(UUID(cert_id), data.model_dump(exclude_none=True))
+    return success(r)
+
+
+@certificate_router.delete("/{cert_id}")
+async def delete_certificate(
+    cert_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("vehicle:update")),
+):
+    service = _get_service(db, current_user, request)
+    await service.delete_certificate(UUID(cert_id))
+    return success(None)
