@@ -487,3 +487,64 @@ export function getCostByType(params: {
 } = {}) {
   return get<CostTypeItem[]>('/vehicle-reports/cost-types', { params })
 }
+
+// ── Agent 消息识别草稿 ──────────────────────────────────────────────────────
+
+export interface AgentDraftResponse {
+  id: string
+  intent: string
+  confidence: number
+  risk_level: string
+  status: string
+  platform: string
+  conversation_id?: string
+  message_id?: string
+  sender_name?: string
+  sender_id?: string
+  original_content: string
+  extracted_data?: Record<string, string | number | boolean | null>
+  suggested_action?: string
+  requires_confirmation: boolean
+  requires_finance_review: boolean
+  confirmed_by?: string
+  confirmed_by_name?: string
+  confirmed_at?: string
+  reject_reason?: string
+  created_draft_id?: string
+  created_draft_type?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export function analyzeAgentMessage(data: {
+  content: string
+  platform?: string
+  conversation_id?: string
+  message_id?: string
+  sender_name?: string
+  sender_id?: string
+}) {
+  return post<AgentDraftResponse>('/vehicle-agent/messages/analyze', data)
+}
+
+export function getAgentDrafts(params: {
+  page?: number
+  page_size?: number
+  status?: string
+  intent?: string
+  platform?: string
+}) {
+  return get<PaginatedData<AgentDraftResponse>>('/vehicle-agent/drafts', { params })
+}
+
+export function getAgentDraft(id: string) {
+  return get<AgentDraftResponse>(`/vehicle-agent/drafts/${id}`)
+}
+
+export function confirmAgentDraft(id: string) {
+  return post<AgentDraftResponse>(`/vehicle-agent/drafts/${id}/confirm`, {})
+}
+
+export function rejectAgentDraft(id: string, rejectReason?: string) {
+  return post<AgentDraftResponse>(`/vehicle-agent/drafts/${id}/reject`, { reject_reason: rejectReason })
+}
