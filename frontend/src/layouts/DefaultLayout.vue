@@ -97,6 +97,7 @@
             <el-menu-item index="/vehicle-use-requests">用车申请</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicle-dispatches">派车管理</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicle-trip-records">出车收车台账</el-menu-item>
+            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer', 'finance'])" index="/vehicle-expenses">车辆费用</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicles">车辆档案</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production', 'installer'])" index="/vehicle-drivers">司机管理</el-menu-item>
           </el-sub-menu>

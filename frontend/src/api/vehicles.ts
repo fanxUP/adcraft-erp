@@ -140,3 +140,136 @@ export function disableDriver(id: string) {
 export function enableDriver(id: string) {
   return post<VehicleDriverResponse>(`/vehicle-drivers/${id}/enable`)
 }
+
+// ── 油费记录 ──────────────────────────────────────────────────────────────────
+
+export interface FuelRecordResponse {
+  id: string
+  vehicle_id: string
+  vehicle_name?: string
+  plate_number?: string
+  driver_id?: string
+  driver_name?: string
+  dispatch_id?: string
+  dispatch_no?: string
+  fuel_time?: string
+  amount: number
+  liters?: number
+  unit_price?: number
+  gas_station?: string
+  mileage?: number
+  payment_method?: string
+  payer_id?: string
+  payer_name?: string
+  is_driver_advance: boolean
+  receipt_url?: string
+  status: string
+  remark?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export function getFuelRecords(params: {
+  page?: number
+  page_size?: number
+  vehicle_id?: string
+  driver_id?: string
+  status?: string
+}) {
+  return get<PaginatedData<FuelRecordResponse>>('/vehicle-fuel-records/', { params })
+}
+
+export function createFuelRecord(data: Partial<FuelRecordResponse>) {
+  return post<FuelRecordResponse>('/vehicle-fuel-records/', data)
+}
+
+export function updateFuelRecord(id: string, data: Partial<FuelRecordResponse>) {
+  return patch<FuelRecordResponse>(`/vehicle-fuel-records/${id}`, data)
+}
+
+export function reviewFuelRecord(id: string, data: { status: string; remark?: string }) {
+  return post<FuelRecordResponse>(`/vehicle-fuel-records/${id}/review`, data)
+}
+
+// ── 维修保养记录 ──────────────────────────────────────────────────────────────
+
+export interface MaintenanceRecordResponse {
+  id: string
+  vehicle_id: string
+  vehicle_name?: string
+  plate_number?: string
+  maintenance_type: string
+  maintenance_date?: string
+  maintenance_item?: string
+  repair_shop?: string
+  amount: number
+  mileage?: number
+  next_maintenance_mileage?: number
+  next_maintenance_date?: string
+  handler_id?: string
+  handler_name?: string
+  invoice_url?: string
+  before_photo_url?: string
+  after_photo_url?: string
+  status: string
+  remark?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export function getMaintenanceRecords(params: {
+  page?: number
+  page_size?: number
+  vehicle_id?: string
+  maintenance_type?: string
+  status?: string
+}) {
+  return get<PaginatedData<MaintenanceRecordResponse>>('/vehicle-maintenance-records/', { params })
+}
+
+export function createMaintenanceRecord(data: Partial<MaintenanceRecordResponse>) {
+  return post<MaintenanceRecordResponse>('/vehicle-maintenance-records/', data)
+}
+
+export function updateMaintenanceRecord(id: string, data: Partial<MaintenanceRecordResponse>) {
+  return patch<MaintenanceRecordResponse>(`/vehicle-maintenance-records/${id}`, data)
+}
+
+export function reviewMaintenanceRecord(id: string, data: { status: string; remark?: string }) {
+  return post<MaintenanceRecordResponse>(`/vehicle-maintenance-records/${id}/review`, data)
+}
+
+// ── 通用费用 ──────────────────────────────────────────────────────────────────
+
+export interface CostAllocationResponse {
+  id: string
+  source_type: string
+  source_id?: string
+  vehicle_id: string
+  vehicle_name?: string
+  plate_number?: string
+  dispatch_id?: string
+  related_order_id?: string
+  related_install_task_id?: string
+  cost_type: string
+  amount: number
+  allocation_method: string
+  allocation_date?: string
+  remark?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export function getCostAllocations(params: {
+  page?: number
+  page_size?: number
+  vehicle_id?: string
+  cost_type?: string
+  source_type?: string
+}) {
+  return get<PaginatedData<CostAllocationResponse>>('/vehicle-cost-records/', { params })
+}
+
+export function createCostAllocation(data: Partial<CostAllocationResponse>) {
+  return post<CostAllocationResponse>('/vehicle-cost-records/', data)
+}
