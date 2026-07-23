@@ -174,16 +174,19 @@ class ReportService:
                 select(CD.document_id).where(CD.contract_id.in_(all_contract_ids))
             )
             linked_doc_ids = {row[0] for row in cd_result.all()}
-            # 框架合同项目关联的单据
+            # 框架合同项目关联的单据（同时记录 contract_id → document_ids 映射，用于填充合同下的 orders/quotes）
             fw_contract_ids = [ct.id for ct in all_contracts if ct.contract_type == "框架合同"]
+            fw_doc_ids_by_contract: dict[UUID, set[UUID]] = {}
             if fw_contract_ids:
                 fcpd_result = await self.db.execute(
-                    select(FCPD.document_id)
+                    select(FrameworkContractProject.contract_id, FCPD.document_id)
                     .select_from(FCPD)
                     .join(FrameworkContractProject, FCPD.project_id == FrameworkContractProject.id)
                     .where(FrameworkContractProject.contract_id.in_(fw_contract_ids))
                 )
-                linked_doc_ids.update(row[0] for row in fcpd_result.all())
+                for contract_id, doc_id in fcpd_result.all():
+                    linked_doc_ids.add(doc_id)
+                    fw_doc_ids_by_contract.setdefault(contract_id, set()).add(doc_id)
 
         # Batch-fetch paid_amount per contract from actual payments on linked orders
         contract_ids = all_contract_ids
@@ -203,6 +206,25 @@ class ReportService:
                 .group_by(ContractDocument.contract_id)
             )
             paid_map = {row[0]: float(row[1]) for row in paid_result.all()}
+            # 框架合同：通过项目关联计算已收金额
+            fw_contract_ids_paid = [ct.id for ct in all_contracts if ct.contract_type == "框架合同"]
+            if fw_contract_ids_paid:
+                fw_paid_result = await self.db.execute(
+                    select(
+                        FrameworkContractProject.contract_id,
+                        func.coalesce(func.sum(Payment.amount), 0),
+                    )
+                    .select_from(Payment)
+                    .join(FCPD, FCPD.document_id == Payment.document_id)
+                    .join(FrameworkContractProject, FCPD.project_id == FrameworkContractProject.id)
+                    .where(
+                        FrameworkContractProject.contract_id.in_(fw_contract_ids_paid),
+                        Payment.is_voided == False,
+                    )
+                    .group_by(FrameworkContractProject.contract_id)
+                )
+                for row in fw_paid_result.all():
+                    paid_map[row[0]] = paid_map.get(row[0], 0.0) + float(row[1])
 
         # Batch-fetch framework contract project totals (框架合同金额 = 子项目合计)
         from app.models.framework_contract import FrameworkContractProject
@@ -223,6 +245,11 @@ class ReportService:
             fw_total_map = {row[0]: float(row[1]) for row in fw_result.all()}
 
         # Build response
+        # 构建 document ID → 对象 映射（用于框架合同项目关联的单据查找）
+        all_docs_by_id: dict[UUID, BusinessDocument] = {}
+        for doc in all_orders + all_quotes:
+            all_docs_by_id[doc.id] = doc
+
         debts = []
         for c in customers:
             customer_contracts = [ct for ct in all_contracts if ct.customer_id == c.id]
@@ -254,6 +281,14 @@ class ReportService:
                     return fw_total_map.get(ct.id, 0.0)
                 return float(ct.total_amount)
 
+            # 获取某合同关联的单据（框架合同从项目关联获取，常规合同从 contract_documents 获取）
+            def _get_ct_docs(ct, doc_type: str) -> list:
+                if ct.contract_type == "框架合同":
+                    dids = fw_doc_ids_by_contract.get(ct.id, set())
+                    return [all_docs_by_id[did] for did in dids
+                            if did in all_docs_by_id and all_docs_by_id[did].doc_type == doc_type]
+                return [d for d in (ct.documents or []) if d.doc_type == doc_type]
+
             debts.append({
                 "customer_id": str(c.id),
                 "customer_name": c.name,
@@ -274,14 +309,8 @@ class ReportService:
                         "unpaid_amount": max(0, _ct_amount(ct) - paid_map.get(ct.id, 0.0)),
                         "status": ct.status,
                         "contract_type": ct.contract_type,
-                        "orders": [
-                            BusinessDocumentService._to_ref(d)
-                            for d in (ct.documents or []) if d.doc_type == "order"
-                        ],
-                        "quotes": [
-                            BusinessDocumentService._to_ref(d)
-                            for d in (ct.documents or []) if d.doc_type == "quote"
-                        ],
+                        "orders": [BusinessDocumentService._to_ref(d) for d in _get_ct_docs(ct, "order")],
+                        "quotes": [BusinessDocumentService._to_ref(d) for d in _get_ct_docs(ct, "quote")],
                     }
                     for ct in customer_contracts
                 ],
