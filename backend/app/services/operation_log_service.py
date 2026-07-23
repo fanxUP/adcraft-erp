@@ -20,6 +20,8 @@ OBJ_DESIGN_TASK = "design_task"
 OBJ_INSTALLATION_TASK = "installation_task"
 OBJ_PROJECT_COST = "project_cost"
 OBJ_CONTRACT = "contract"
+OBJ_VEHICLE = "vehicle"
+OBJ_VEHICLE_DRIVER = "vehicle_driver"
 
 # Actions
 ACTION_CREATE = "create"

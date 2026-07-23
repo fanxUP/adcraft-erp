@@ -4,7 +4,7 @@ from sqlalchemy import DateTime, Integer, Numeric, String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, TimestampMixin, gen_uuid
 
 
 class DesignTask(Base, TimestampMixin):
@@ -104,5 +104,10 @@ class Attachment(Base, TimestampMixin):
     installation_task: Mapped["InstallationTask | None"] = relationship(
         back_populates="attachments", foreign_keys=[related_id],
         primaryjoin="and_(Attachment.related_type=='installation_task', foreign(Attachment.related_id)==InstallationTask.id)",
+        viewonly=True,
+    )
+    vehicle: Mapped["Vehicle | None"] = relationship(
+        "Vehicle", foreign_keys=[related_id],
+        primaryjoin="and_(Attachment.related_type=='vehicle', foreign(Attachment.related_id)==Vehicle.id)",
         viewonly=True,
     )
