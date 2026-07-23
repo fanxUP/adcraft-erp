@@ -9,7 +9,7 @@ from app.models.acceptance import AcceptanceForm, AcceptanceItem
 from app.models.business_document import BusinessDocument
 from app.repositories.acceptance_repo import AcceptanceRepository
 from app.services.number_generator import generate_acceptance_no
-from app.services.business_document_service import _build_spec
+from app.services.business_document_service import _build_spec, BusinessDocumentService
 
 
 class AcceptanceService:
@@ -25,32 +25,22 @@ class AcceptanceService:
     # ── 可用订单 ──
     async def list_available_orders(self) -> list[dict]:
         items = await self.repo.list_available_orders()
-        return [
-            {
-                "id": str(d.id), "order_no": d.doc_no,
-                "customer_name": d.customer.name if d.customer else (d.customer_name or None),
-                "project_name": d.project_name,
-                "total_amount": float(d.total_amount),
-                "status": d.status, "department": d.department,
-                "created_at": d.created_at.isoformat() if d.created_at else None,
-            }
-            for d in items
-        ]
+        result = []
+        for d in items:
+            item = BusinessDocumentService._to_ref(d)
+            item["created_at"] = d.created_at.isoformat() if d.created_at else None
+            result.append(item)
+        return result
 
     # ── 可用报价 ──
     async def list_available_quotes(self) -> list[dict]:
         items = await self.repo.list_available_quotes()
-        return [
-            {
-                "id": str(d.id), "quote_no": d.doc_no,
-                "customer_name": d.customer_name,
-                "project_name": d.project_name,
-                "total_amount": float(d.total_amount),
-                "status": d.status, "department": d.department,
-                "created_at": d.created_at.isoformat() if d.created_at else None,
-            }
-            for d in items
-        ]
+        result = []
+        for d in items:
+            item = BusinessDocumentService._to_ref(d)
+            item["created_at"] = d.created_at.isoformat() if d.created_at else None
+            result.append(item)
+        return result
 
     # ── 详情 ──
     async def get_detail(self, acceptance_id: UUID):

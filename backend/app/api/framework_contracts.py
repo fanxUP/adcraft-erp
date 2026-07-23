@@ -104,22 +104,17 @@ async def get_available_projects(
     )
     docs = result.scalars().all()
 
+    from app.services.business_document_service import BusinessDocumentService
+
     # 拆分为 orders 和 quotes（保持前端兼容）
     orders_list, quotes_list = [], []
     for d in docs:
-        item = {
-            "id": str(d.id),
-            "project_name": d.project_name,
-            "total_amount": float(d.total_amount) if d.total_amount else 0,
-            "department": d.department or "",
-            "customer_id": str(d.customer_id) if d.customer_id else None,
-            "customer_name": d.customer_name or (d.customer.name if d.customer else None),
-        }
+        item = BusinessDocumentService._to_ref(d)
+        # available-projects 额外携带 customer_id
+        item["customer_id"] = str(d.customer_id) if d.customer_id else None
         if d.doc_type == "order":
-            item["order_no"] = d.doc_no
             orders_list.append(item)
         else:
-            item["quote_no"] = d.doc_no
             quotes_list.append(item)
 
     # 项目名称下拉

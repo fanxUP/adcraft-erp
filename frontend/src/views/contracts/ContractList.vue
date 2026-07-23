@@ -239,6 +239,9 @@
       <h4 style="margin: 20px 0 10px">关联订单</h4>
       <el-table v-if="currentDetail?.orders?.length" :data="currentDetail.orders" size="small">
         <el-table-column prop="order_no" label="订单编号" width="180" />
+        <el-table-column label="部门/科室" width="120">
+          <template #default="{ row }">{{ row.department || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="project_name" label="项目名称" min-width="150" />
         <el-table-column label="金额" width="120">
           <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
@@ -249,6 +252,9 @@
       <h4 style="margin: 16px 0 10px">关联报价</h4>
       <el-table v-if="currentDetail?.quotes?.length" :data="currentDetail.quotes" size="small">
         <el-table-column prop="quote_no" label="报价编号" width="180" />
+        <el-table-column label="部门/科室" width="120">
+          <template #default="{ row }">{{ row.department || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="project_name" label="项目名称" min-width="150" />
         <el-table-column label="金额" width="120">
           <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>

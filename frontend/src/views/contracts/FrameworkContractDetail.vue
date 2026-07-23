@@ -57,7 +57,11 @@
             {{ row.orders?.[0]?.order_no || row.quotes?.[0]?.quote_no || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="department" label="部门/科室" width="130" />
+        <el-table-column label="部门/科室" width="130">
+          <template #default="{ row }">
+            {{ row.department || row.orders?.[0]?.department || row.quotes?.[0]?.department || '-' }}
+          </template>
+        </el-table-column>
         <el-table-column prop="project_name" label="项目名称" min-width="160" />
         <el-table-column label="来源" width="100">
           <template #default="{ row }">
