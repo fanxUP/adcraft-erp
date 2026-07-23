@@ -3,7 +3,10 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-from app.models.vehicle import Vehicle, VehicleDriver, VehicleUseRequest, VehicleDispatch, VehicleTripRecord
+from app.models.vehicle import (
+    Vehicle, VehicleDriver, VehicleUseRequest, VehicleDispatch, VehicleTripRecord,
+    VehicleFuelRecord, VehicleMaintenanceRecord, VehicleCostAllocation,
+)
 
 
 class VehicleRepository:
@@ -275,3 +278,117 @@ class VehicleRepository:
         await self.db.flush()
         await self.db.refresh(t)
         return t
+
+    # ── 油费记录 ──────────────────────────────────────────────────────────────────
+
+    async def get_fuel_record_by_id(self, record_id: UUID) -> VehicleFuelRecord | None:
+        result = await self.db.execute(select(VehicleFuelRecord).where(VehicleFuelRecord.id == record_id))
+        return result.scalar_one_or_none()
+
+    async def list_fuel_records(
+        self, skip: int = 0, limit: int = 20, vehicle_id: UUID | None = None,
+        driver_id: UUID | None = None, status: str | None = None,
+    ) -> tuple[list[VehicleFuelRecord], int]:
+        q = select(VehicleFuelRecord)
+        if vehicle_id:
+            q = q.where(VehicleFuelRecord.vehicle_id == vehicle_id)
+        if driver_id:
+            q = q.where(VehicleFuelRecord.driver_id == driver_id)
+        if status:
+            q = q.where(VehicleFuelRecord.status == status)
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self.db.execute(count_q)).scalar()
+        q = q.order_by(VehicleFuelRecord.created_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all()), total
+
+    async def create_fuel_record(self, data: dict) -> VehicleFuelRecord:
+        r = VehicleFuelRecord(**data)
+        self.db.add(r)
+        await self.db.flush()
+        await self.db.refresh(r)
+        return r
+
+    async def update_fuel_record(self, r: VehicleFuelRecord, data: dict) -> VehicleFuelRecord:
+        for k, v in data.items():
+            if v is not None:
+                setattr(r, k, v)
+        await self.db.flush()
+        await self.db.refresh(r)
+        return r
+
+    # ── 维修保养记录 ──────────────────────────────────────────────────────────────
+
+    async def get_maintenance_record_by_id(self, record_id: UUID) -> VehicleMaintenanceRecord | None:
+        result = await self.db.execute(select(VehicleMaintenanceRecord).where(VehicleMaintenanceRecord.id == record_id))
+        return result.scalar_one_or_none()
+
+    async def list_maintenance_records(
+        self, skip: int = 0, limit: int = 20, vehicle_id: UUID | None = None,
+        maintenance_type: str | None = None, status: str | None = None,
+    ) -> tuple[list[VehicleMaintenanceRecord], int]:
+        q = select(VehicleMaintenanceRecord)
+        if vehicle_id:
+            q = q.where(VehicleMaintenanceRecord.vehicle_id == vehicle_id)
+        if maintenance_type:
+            q = q.where(VehicleMaintenanceRecord.maintenance_type == maintenance_type)
+        if status:
+            q = q.where(VehicleMaintenanceRecord.status == status)
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self.db.execute(count_q)).scalar()
+        q = q.order_by(VehicleMaintenanceRecord.created_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all()), total
+
+    async def create_maintenance_record(self, data: dict) -> VehicleMaintenanceRecord:
+        r = VehicleMaintenanceRecord(**data)
+        self.db.add(r)
+        await self.db.flush()
+        await self.db.refresh(r)
+        return r
+
+    async def update_maintenance_record(self, r: VehicleMaintenanceRecord, data: dict) -> VehicleMaintenanceRecord:
+        for k, v in data.items():
+            if v is not None:
+                setattr(r, k, v)
+        await self.db.flush()
+        await self.db.refresh(r)
+        return r
+
+    # ── 通用费用记录 ──────────────────────────────────────────────────────────────
+
+    async def get_cost_allocation_by_id(self, cost_id: UUID) -> VehicleCostAllocation | None:
+        result = await self.db.execute(select(VehicleCostAllocation).where(VehicleCostAllocation.id == cost_id))
+        return result.scalar_one_or_none()
+
+    async def list_cost_allocations(
+        self, skip: int = 0, limit: int = 20, vehicle_id: UUID | None = None,
+        cost_type: str | None = None, source_type: str | None = None,
+    ) -> tuple[list[VehicleCostAllocation], int]:
+        q = select(VehicleCostAllocation)
+        if vehicle_id:
+            q = q.where(VehicleCostAllocation.vehicle_id == vehicle_id)
+        if cost_type:
+            q = q.where(VehicleCostAllocation.cost_type == cost_type)
+        if source_type:
+            q = q.where(VehicleCostAllocation.source_type == source_type)
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self.db.execute(count_q)).scalar()
+        q = q.order_by(VehicleCostAllocation.created_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all()), total
+
+    async def create_cost_allocation(self, data: dict) -> VehicleCostAllocation:
+        c = VehicleCostAllocation(**data)
+        self.db.add(c)
+        await self.db.flush()
+        await self.db.refresh(c)
+        return c
+
+    async def update_cost_allocation(self, c: VehicleCostAllocation, data: dict) -> VehicleCostAllocation:
+        for k, v in data.items():
+            if v is not None:
+                setattr(c, k, v)
+        await self.db.flush()
+        await self.db.refresh(c)
+        return c

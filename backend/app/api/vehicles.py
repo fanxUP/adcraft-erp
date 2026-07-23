@@ -12,6 +12,11 @@ from app.schemas.vehicle import VehicleCreate, VehicleUpdate
 from app.schemas.vehicle_use_request import VehicleUseRequestCreate, VehicleUseRequestUpdate, VehicleUseRequestReject
 from app.schemas.vehicle_dispatch import VehicleDispatchCreate, VehicleDispatchUpdate
 from app.schemas.vehicle_trip import DispatchStart, DispatchArrive, DispatchReturn
+from app.schemas.vehicle_expense import (
+    FuelRecordCreate, FuelRecordUpdate, FuelRecordReview,
+    MaintenanceRecordCreate, MaintenanceRecordUpdate, MaintenanceRecordReview,
+    CostAllocationCreate,
+)
 from app.schemas.common import success, success_paginated
 from app.services.vehicle_service import VehicleService
 
@@ -486,4 +491,201 @@ async def get_trip_record(
     r = await service.get_trip_record(UUID(trip_id))
     if not r:
         return {"code": 40401, "message": "台账记录不存在", "data": None}
+    return success(r)
+
+
+# ── 油费记录 ──────────────────────────────────────────────────────────────────
+
+fuel_router = APIRouter(prefix="/vehicle-fuel-records", tags=["Vehicle Fuel Records"])
+
+
+@fuel_router.get("/")
+async def list_fuel_records(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    vehicle_id: str | None = None,
+    driver_id: str | None = None,
+    status: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    vid = UUID(vehicle_id) if vehicle_id else None
+    did = UUID(driver_id) if driver_id else None
+    records, total = await service.list_fuel_records(page, page_size, vid, did, status)
+    return success_paginated(records, total, page, page_size)
+
+
+@fuel_router.post("/")
+async def create_fuel_record(
+    data: FuelRecordCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.create_fuel_record(data.model_dump(exclude_none=True))
+    return success(r)
+
+
+@fuel_router.get("/{record_id}")
+async def get_fuel_record(
+    record_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.get_fuel_record(UUID(record_id))
+    if not r:
+        return {"code": 40401, "message": "油费记录不存在", "data": None}
+    return success(r)
+
+
+@fuel_router.patch("/{record_id}")
+async def update_fuel_record(
+    record_id: str,
+    data: FuelRecordUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.update_fuel_record(UUID(record_id), data.model_dump(exclude_none=True))
+    return success(r)
+
+
+@fuel_router.post("/{record_id}/review")
+async def review_fuel_record(
+    record_id: str,
+    data: FuelRecordReview,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance:review")),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.review_fuel_record(UUID(record_id), data.status, data.remark)
+    return success(r)
+
+
+# ── 维修保养记录 ──────────────────────────────────────────────────────────────
+
+maintenance_router = APIRouter(prefix="/vehicle-maintenance-records", tags=["Vehicle Maintenance Records"])
+
+
+@maintenance_router.get("/")
+async def list_maintenance_records(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    vehicle_id: str | None = None,
+    maintenance_type: str | None = None,
+    status: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    vid = UUID(vehicle_id) if vehicle_id else None
+    records, total = await service.list_maintenance_records(page, page_size, vid, maintenance_type, status)
+    return success_paginated(records, total, page, page_size)
+
+
+@maintenance_router.post("/")
+async def create_maintenance_record(
+    data: MaintenanceRecordCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.create_maintenance_record(data.model_dump(exclude_none=True))
+    return success(r)
+
+
+@maintenance_router.get("/{record_id}")
+async def get_maintenance_record(
+    record_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.get_maintenance_record(UUID(record_id))
+    if not r:
+        return {"code": 40401, "message": "维修保养记录不存在", "data": None}
+    return success(r)
+
+
+@maintenance_router.patch("/{record_id}")
+async def update_maintenance_record(
+    record_id: str,
+    data: MaintenanceRecordUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.update_maintenance_record(UUID(record_id), data.model_dump(exclude_none=True))
+    return success(r)
+
+
+@maintenance_router.post("/{record_id}/review")
+async def review_maintenance_record(
+    record_id: str,
+    data: MaintenanceRecordReview,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance:review")),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.review_maintenance_record(UUID(record_id), data.status, data.remark)
+    return success(r)
+
+
+# ── 通用费用 ──────────────────────────────────────────────────────────────────
+
+cost_router = APIRouter(prefix="/vehicle-cost-records", tags=["Vehicle Cost Records"])
+
+
+@cost_router.get("/")
+async def list_cost_allocations(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    vehicle_id: str | None = None,
+    cost_type: str | None = None,
+    source_type: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    vid = UUID(vehicle_id) if vehicle_id else None
+    records, total = await service.list_cost_allocations(page, page_size, vid, cost_type, source_type)
+    return success_paginated(records, total, page, page_size)
+
+
+@cost_router.post("/")
+async def create_cost_allocation(
+    data: CostAllocationCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.create_cost_allocation(data.model_dump(exclude_none=True))
+    return success(r)
+
+
+@cost_router.get("/{cost_id}")
+async def get_cost_allocation(
+    cost_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.get_cost_allocation(UUID(cost_id))
+    if not r:
+        return {"code": 40401, "message": "费用记录不存在", "data": None}
     return success(r)

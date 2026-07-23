@@ -25,6 +25,9 @@ OBJ_VEHICLE_DRIVER = "vehicle_driver"
 OBJ_VEHICLE_USE_REQUEST = "vehicle_use_request"
 OBJ_VEHICLE_DISPATCH = "vehicle_dispatch"
 OBJ_VEHICLE_TRIP_RECORD = "vehicle_trip_record"
+OBJ_VEHICLE_FUEL_RECORD = "vehicle_fuel_record"
+OBJ_VEHICLE_MAINTENANCE_RECORD = "vehicle_maintenance_record"
+OBJ_VEHICLE_COST_ALLOCATION = "vehicle_cost_allocation"
 
 # Actions
 ACTION_CREATE = "create"
