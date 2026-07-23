@@ -2,11 +2,11 @@ from uuid import UUID
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.vehicle import VehicleUseRequest, VehicleDispatch
+from app.models.vehicle import VehicleUseRequest, VehicleDispatch, VehicleTripRecord
 from app.repositories.vehicle_repo import VehicleRepository
 from app.services.operation_log_service import (
     log_operation, OBJ_VEHICLE, OBJ_VEHICLE_DRIVER, OBJ_VEHICLE_USE_REQUEST, OBJ_VEHICLE_DISPATCH,
-    ACTION_CREATE, ACTION_UPDATE, ACTION_STATUS_CHANGE,
+    OBJ_VEHICLE_TRIP_RECORD, ACTION_CREATE, ACTION_UPDATE, ACTION_STATUS_CHANGE,
 )
 
 
@@ -656,6 +656,226 @@ class VehicleService:
             after_data=self._dispatch_to_dict(d),
         )
         return self._dispatch_to_dict(d)
+
+    # ── 出车/收车操作 ──────────────────────────────────────────────────────────
+
+    async def start_dispatch(self, dispatch_id: UUID, data: dict) -> dict:
+        """出车：记录出车时间和里程"""
+        d = await self.repo.get_dispatch_by_id(dispatch_id)
+        if not d:
+            raise ValueError("派车单不存在")
+        if d.status != "assigned":
+            raise ValueError("只有待出车状态的派车单可以出车")
+
+        before = self._dispatch_to_dict(d)
+
+        # 更新派车单实际出车时间
+        from datetime import datetime as dt
+        now = dt.utcnow()
+        d.actual_start_time = data.get("start_time") or now
+        d.start_mileage = data.get("start_mileage")
+        d.status = "started"
+
+        # 创建出车台账
+        trip = await self.repo.create_trip_record({
+            "dispatch_id": d.id,
+            "vehicle_id": d.vehicle_id,
+            "driver_id": d.driver_id,
+            "trip_date": d.actual_start_time,
+            "start_time": d.actual_start_time,
+            "start_mileage": data.get("start_mileage"),
+            "start_photo_url": data.get("start_photo_url"),
+            "start_remark": data.get("start_remark"),
+        })
+        # 生成台账编号
+        trip.trip_no = f"TC{now.strftime('%Y%m%d')}{str(trip.id)[:8]}"
+
+        # 更新车辆状态
+        vehicle = await self.repo.get_by_id(d.vehicle_id)
+        if vehicle:
+            vehicle.status = "in_use"
+            await self.db.flush()
+
+        await self.db.flush()
+        await self.db.refresh(d)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_DISPATCH,
+            object_id=d.id,
+            action=ACTION_STATUS_CHANGE,
+            ip_address=self.ip_address,
+            before_data=before,
+            after_data=self._dispatch_to_dict(d),
+        )
+        return self._dispatch_to_dict(d)
+
+    async def arrive_dispatch(self, dispatch_id: UUID, data: dict) -> dict:
+        """到达现场"""
+        d = await self.repo.get_dispatch_by_id(dispatch_id)
+        if not d:
+            raise ValueError("派车单不存在")
+        if d.status != "started":
+            raise ValueError("只有已出车状态可以标记到达")
+
+        before = self._dispatch_to_dict(d)
+        from datetime import datetime as dt
+        d.status = "arrived"
+
+        # 更新台账
+        trip = await self.repo.get_trip_by_dispatch_id(d.id)
+        if trip:
+            await self.repo.update_trip_record(trip, {
+                "return_remark": data.get("arrive_remark"),
+            })
+
+        await self.db.flush()
+        await self.db.refresh(d)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_DISPATCH,
+            object_id=d.id,
+            action=ACTION_STATUS_CHANGE,
+            ip_address=self.ip_address,
+            before_data=before,
+            after_data=self._dispatch_to_dict(d),
+        )
+        return self._dispatch_to_dict(d)
+
+    async def finish_dispatch(self, dispatch_id: UUID, data: dict) -> dict:
+        """完工"""
+        d = await self.repo.get_dispatch_by_id(dispatch_id)
+        if not d:
+            raise ValueError("派车单不存在")
+        if d.status != "arrived":
+            raise ValueError("只有已到达状态可以标记完工")
+
+        before = self._dispatch_to_dict(d)
+        d.status = "completed"
+
+        await self.db.flush()
+        await self.db.refresh(d)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_DISPATCH,
+            object_id=d.id,
+            action=ACTION_STATUS_CHANGE,
+            ip_address=self.ip_address,
+            before_data=before,
+            after_data=self._dispatch_to_dict(d),
+        )
+        return self._dispatch_to_dict(d)
+
+    async def return_dispatch(self, dispatch_id: UUID, data: dict) -> dict:
+        """收车：记录收车时间和里程"""
+        d = await self.repo.get_dispatch_by_id(dispatch_id)
+        if not d:
+            raise ValueError("派车单不存在")
+        if d.status not in ("completed", "arrived", "started"):
+            raise ValueError(f"当前状态({d.status})不可收车")
+
+        before = self._dispatch_to_dict(d)
+
+        from datetime import datetime as dt
+        now = dt.utcnow()
+        d.actual_return_time = data.get("return_time") or now
+        d.end_mileage = data.get("end_mileage")
+
+        # 计算实际公里数
+        if d.start_mileage and d.end_mileage:
+            if d.end_mileage < d.start_mileage:
+                raise ValueError("收车里程不能小于出车里程")
+            d.actual_distance_km = round(d.end_mileage - d.start_mileage, 2)
+
+        # 异常处理
+        abnormal = data.get("abnormal_flag", False)
+        d.abnormal_flag = abnormal
+        d.abnormal_description = data.get("abnormal_description")
+        d.status = "returned"
+
+        # 更新台账
+        trip = await self.repo.get_trip_by_dispatch_id(d.id)
+        if trip:
+            update_data = {
+                "return_time": d.actual_return_time,
+                "end_mileage": data.get("end_mileage"),
+                "distance_km": d.actual_distance_km,
+                "return_photo_url": data.get("return_photo_url"),
+                "return_remark": data.get("return_remark"),
+                "abnormal_flag": abnormal,
+                "abnormal_description": data.get("abnormal_description"),
+            }
+            await self.repo.update_trip_record(trip, update_data)
+
+        # 更新车辆状态
+        vehicle = await self.repo.get_by_id(d.vehicle_id)
+        if vehicle:
+            if abnormal:
+                vehicle.status = "maintenance"
+            else:
+                vehicle.status = "available"
+
+        await self.db.flush()
+        await self.db.refresh(d)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_DISPATCH,
+            object_id=d.id,
+            action=ACTION_STATUS_CHANGE,
+            ip_address=self.ip_address,
+            before_data=before,
+            after_data=self._dispatch_to_dict(d),
+        )
+        return self._dispatch_to_dict(d)
+
+    # ── 出车/收车台账 ──────────────────────────────────────────────────────────
+
+    async def list_trip_records(self, page=1, page_size=20, vehicle_id=None, driver_id=None):
+        skip = (page - 1) * page_size
+        records, total = await self.repo.list_trip_records(skip, page_size, vehicle_id, driver_id)
+        return [self._trip_to_dict(r) for r in records], total
+
+    async def get_trip_record(self, trip_id: UUID) -> dict | None:
+        r = await self.repo.get_trip_record_by_id(trip_id)
+        return self._trip_to_dict(r) if r else None
+
+    def _trip_to_dict(self, t) -> dict:
+        return {
+            "id": str(t.id),
+            "trip_no": t.trip_no,
+            "dispatch_id": str(t.dispatch_id) if t.dispatch_id else None,
+            "dispatch_no": t.dispatch.dispatch_no if t.dispatch else None,
+            "vehicle_id": str(t.vehicle_id) if t.vehicle_id else None,
+            "vehicle_name": t.vehicle.vehicle_name if t.vehicle else None,
+            "plate_number": t.vehicle.plate_number if t.vehicle else None,
+            "driver_id": str(t.driver_id) if t.driver_id else None,
+            "driver_name": t.driver.driver_name if t.driver else None,
+            "trip_date": t.trip_date.isoformat() if t.trip_date else None,
+            "start_time": t.start_time.isoformat() if t.start_time else None,
+            "return_time": t.return_time.isoformat() if t.return_time else None,
+            "start_mileage": float(t.start_mileage) if t.start_mileage else None,
+            "end_mileage": float(t.end_mileage) if t.end_mileage else None,
+            "distance_km": float(t.distance_km) if t.distance_km else None,
+            "start_photo_url": t.start_photo_url,
+            "return_photo_url": t.return_photo_url,
+            "start_remark": t.start_remark,
+            "return_remark": t.return_remark,
+            "abnormal_flag": t.abnormal_flag,
+            "abnormal_description": t.abnormal_description,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+            "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+        }
 
     def _dispatch_to_dict(self, d) -> dict:
         return {

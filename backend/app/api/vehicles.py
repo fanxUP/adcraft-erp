@@ -11,6 +11,7 @@ from app.models.user import User
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate
 from app.schemas.vehicle_use_request import VehicleUseRequestCreate, VehicleUseRequestUpdate, VehicleUseRequestReject
 from app.schemas.vehicle_dispatch import VehicleDispatchCreate, VehicleDispatchUpdate
+from app.schemas.vehicle_trip import DispatchStart, DispatchArrive, DispatchReturn
 from app.schemas.common import success, success_paginated
 from app.services.vehicle_service import VehicleService
 
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 driver_router = APIRouter(prefix="/vehicle-drivers", tags=["Vehicle Drivers"])
 request_router = APIRouter(prefix="/vehicle-use-requests", tags=["Vehicle Use Requests"])
 dispatch_router = APIRouter(prefix="/vehicle-dispatches", tags=["Vehicle Dispatches"])
+trip_router = APIRouter(prefix="/vehicle-trip-records", tags=["Vehicle Trip Records"])
 
 
 def _get_service(db: AsyncSession, current_user: User, request: Request) -> VehicleService:
@@ -401,3 +403,87 @@ async def cancel_dispatch(
     service = _get_service(db, current_user, request)
     d = await service.cancel_dispatch(UUID(dispatch_id))
     return success(d)
+
+
+@dispatch_router.post("/{dispatch_id}/start")
+async def start_dispatch(
+    dispatch_id: str,
+    data: DispatchStart,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    d = await service.start_dispatch(UUID(dispatch_id), data.model_dump(exclude_none=True))
+    return success(d)
+
+
+@dispatch_router.post("/{dispatch_id}/arrive")
+async def arrive_dispatch(
+    dispatch_id: str,
+    data: DispatchArrive,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    d = await service.arrive_dispatch(UUID(dispatch_id), data.model_dump(exclude_none=True))
+    return success(d)
+
+
+@dispatch_router.post("/{dispatch_id}/finish")
+async def finish_dispatch(
+    dispatch_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    d = await service.finish_dispatch(UUID(dispatch_id), {})
+    return success(d)
+
+
+@dispatch_router.post("/{dispatch_id}/return")
+async def return_dispatch(
+    dispatch_id: str,
+    data: DispatchReturn,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    d = await service.return_dispatch(UUID(dispatch_id), data.model_dump(exclude_none=True))
+    return success(d)
+
+
+# ── 出车/收车台账 ──────────────────────────────────────────────────────────
+
+@trip_router.get("/")
+async def list_trip_records(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    vehicle_id: str | None = None,
+    driver_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    vid = UUID(vehicle_id) if vehicle_id else None
+    did = UUID(driver_id) if driver_id else None
+    records, total = await service.list_trip_records(page, page_size, vid, did)
+    return success_paginated(records, total, page, page_size)
+
+
+@trip_router.get("/{trip_id}")
+async def get_trip_record(
+    trip_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = _get_service(db, current_user, request)
+    r = await service.get_trip_record(UUID(trip_id))
+    if not r:
+        return {"code": 40401, "message": "台账记录不存在", "data": None}
+    return success(r)
