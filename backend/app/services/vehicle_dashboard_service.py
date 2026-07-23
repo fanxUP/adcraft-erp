@@ -145,9 +145,9 @@ class VehicleDashboardService:
         expiring_insurance = (await self.db.execute(
             select(func.count()).select_from(VehicleCertificate).where(
                 VehicleCertificate.certificate_type.in_(["compulsory_insurance", "commercial_insurance"]),
-                VehicleCertificate.expiry_date.isnot(None),
-                VehicleCertificate.expiry_date <= soon,
-                VehicleCertificate.expiry_date >= now,
+                VehicleCertificate.expire_date.isnot(None),
+                VehicleCertificate.expire_date <= soon,
+                VehicleCertificate.expire_date >= now,
             )
         )).scalar() or 0
 
@@ -155,9 +155,9 @@ class VehicleDashboardService:
         expiring_inspection = (await self.db.execute(
             select(func.count()).select_from(VehicleCertificate).where(
                 VehicleCertificate.certificate_type == "annual_inspection",
-                VehicleCertificate.expiry_date.isnot(None),
-                VehicleCertificate.expiry_date <= soon,
-                VehicleCertificate.expiry_date >= now,
+                VehicleCertificate.expire_date.isnot(None),
+                VehicleCertificate.expire_date <= soon,
+                VehicleCertificate.expire_date >= now,
             )
         )).scalar() or 0
 
@@ -165,9 +165,9 @@ class VehicleDashboardService:
         expiring_license = (await self.db.execute(
             select(func.count()).select_from(VehicleDriver).where(
                 VehicleDriver.is_deleted == False,
-                VehicleDriver.license_expiry.isnot(None),
-                VehicleDriver.license_expiry <= soon,
-                VehicleDriver.license_expiry >= now,
+                VehicleDriver.license_expire_date.isnot(None),
+                VehicleDriver.license_expire_date <= soon,
+                VehicleDriver.license_expire_date >= now,
             )
         )).scalar() or 0
 
@@ -257,17 +257,17 @@ class VehicleDashboardService:
         soon = now + timedelta(days=30)
         reminders_count = (await self.db.execute(
             select(func.count()).select_from(VehicleCertificate).where(
-                VehicleCertificate.expiry_date.isnot(None),
-                VehicleCertificate.expiry_date <= soon,
-                VehicleCertificate.expiry_date >= now,
+                VehicleCertificate.expire_date.isnot(None),
+                VehicleCertificate.expire_date <= soon,
+                VehicleCertificate.expire_date >= now,
             )
         )).scalar() or 0
         license_reminders = (await self.db.execute(
             select(func.count()).select_from(VehicleDriver).where(
                 VehicleDriver.is_deleted == False,
-                VehicleDriver.license_expiry.isnot(None),
-                VehicleDriver.license_expiry <= soon,
-                VehicleDriver.license_expiry >= now,
+                VehicleDriver.license_expire_date.isnot(None),
+                VehicleDriver.license_expire_date <= soon,
+                VehicleDriver.license_expire_date >= now,
             )
         )).scalar() or 0
 
@@ -406,11 +406,11 @@ class VehicleDashboardService:
             .join(Vehicle, VehicleCertificate.vehicle_id == Vehicle.id)
             .where(
                 VehicleCertificate.certificate_type.in_(["compulsory_insurance", "commercial_insurance"]),
-                VehicleCertificate.expiry_date.isnot(None),
-                VehicleCertificate.expiry_date <= far,
+                VehicleCertificate.expire_date.isnot(None),
+                VehicleCertificate.expire_date <= far,
                 Vehicle.is_deleted == False,
             )
-            .order_by(VehicleCertificate.expiry_date.asc())
+            .order_by(VehicleCertificate.expire_date.asc())
         )
         insurance_rows = (await self.db.execute(insurance_q)).all()
 
@@ -420,11 +420,11 @@ class VehicleDashboardService:
             .join(Vehicle, VehicleCertificate.vehicle_id == Vehicle.id)
             .where(
                 VehicleCertificate.certificate_type == "annual_inspection",
-                VehicleCertificate.expiry_date.isnot(None),
-                VehicleCertificate.expiry_date <= far,
+                VehicleCertificate.expire_date.isnot(None),
+                VehicleCertificate.expire_date <= far,
                 Vehicle.is_deleted == False,
             )
-            .order_by(VehicleCertificate.expiry_date.asc())
+            .order_by(VehicleCertificate.expire_date.asc())
         )
         inspection_rows = (await self.db.execute(inspection_q)).all()
 
@@ -432,9 +432,9 @@ class VehicleDashboardService:
         license_q = (
             select(VehicleDriver).where(
                 VehicleDriver.is_deleted == False,
-                VehicleDriver.license_expiry.isnot(None),
-                VehicleDriver.license_expiry <= far,
-            ).order_by(VehicleDriver.license_expiry.asc())
+                VehicleDriver.license_expire_date.isnot(None),
+                VehicleDriver.license_expire_date <= far,
+            ).order_by(VehicleDriver.license_expire_date.asc())
         )
         license_rows = (await self.db.execute(license_q)).scalars().all()
 
@@ -454,8 +454,8 @@ class VehicleDashboardService:
                 "vehicle_name": row[2],
                 "certificate_type": cert.certificate_type,
                 "certificate_no": cert.certificate_no,
-                "expiry_date": cert.expiry_date.isoformat() if cert.expiry_date else None,
-                "urgency": _urgency(cert.expiry_date) if cert.expiry_date else "unknown",
+                "expiry_date": cert.expire_date.isoformat() if cert.expire_date else None,
+                "urgency": _urgency(cert.expire_date) if cert.expire_date else "unknown",
             }
 
         return {
@@ -467,8 +467,8 @@ class VehicleDashboardService:
                     "driver_name": d.driver_name,
                     "phone": d.phone,
                     "license_no": d.license_no,
-                    "license_expiry": d.license_expiry.isoformat() if d.license_expiry else None,
-                    "urgency": _urgency(d.license_expiry) if d.license_expiry else "unknown",
+                    "license_expiry": d.license_expire_date.isoformat() if d.license_expire_date else None,
+                    "urgency": _urgency(d.license_expire_date) if d.license_expire_date else "unknown",
                 }
                 for d in license_rows
             ],
@@ -553,17 +553,17 @@ class VehicleDashboardService:
         soon = now + timedelta(days=30)
         cert_reminders = (await self.db.execute(
             select(func.count()).select_from(VehicleCertificate).where(
-                VehicleCertificate.expiry_date.isnot(None),
-                VehicleCertificate.expiry_date <= soon,
-                VehicleCertificate.expiry_date >= now,
+                VehicleCertificate.expire_date.isnot(None),
+                VehicleCertificate.expire_date <= soon,
+                VehicleCertificate.expire_date >= now,
             )
         )).scalar() or 0
         license_reminders = (await self.db.execute(
             select(func.count()).select_from(VehicleDriver).where(
                 VehicleDriver.is_deleted == False,
-                VehicleDriver.license_expiry.isnot(None),
-                VehicleDriver.license_expiry <= soon,
-                VehicleDriver.license_expiry >= now,
+                VehicleDriver.license_expire_date.isnot(None),
+                VehicleDriver.license_expire_date <= soon,
+                VehicleDriver.license_expire_date >= now,
             )
         )).scalar() or 0
 
