@@ -118,40 +118,6 @@ class FrameworkContractService:
         )
         return {row[0]: float(row[1]) for row in result.all()}
 
-    async def list_contract_orders(self, contract_id: UUID) -> list[dict]:
-        """获取框架合同下所有项目关联的订单列表"""
-        from sqlalchemy import select
-        from app.models.business_document import BusinessDocument
-        from app.models.framework_contract import FrameworkContractProject, FrameworkContractProjectDocument
-
-        result = await self.db.execute(
-            select(BusinessDocument)
-            .distinct()
-            .join(FrameworkContractProjectDocument,
-                  FrameworkContractProjectDocument.document_id == BusinessDocument.id)
-            .join(FrameworkContractProject,
-                  FrameworkContractProjectDocument.project_id == FrameworkContractProject.id)
-            .where(
-                FrameworkContractProject.contract_id == contract_id,
-                BusinessDocument.doc_type == "order",
-                BusinessDocument.deleted_at.is_(None),
-            )
-            .order_by(BusinessDocument.created_at.desc())
-        )
-        orders = result.scalars().all()
-        return [
-            {
-                "id": str(o.id),
-                "order_no": o.doc_no,
-                "project_name": o.project_name,
-                "total_amount": float(o.total_amount),
-                "paid_amount": float(o.paid_amount),
-                "unpaid_amount": float(o.unpaid_amount),
-                "status": o.status,
-            }
-            for o in orders
-        ]
-
     async def get_project(self, project_id: UUID) -> dict | None:
         project = await self.repo.get_by_id(project_id)
         if not project:
