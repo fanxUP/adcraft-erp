@@ -1,6 +1,8 @@
 from uuid import UUID
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.vehicle import VehicleUseRequest
 from app.repositories.vehicle_repo import VehicleRepository
 from app.services.operation_log_service import (
     log_operation, OBJ_VEHICLE, OBJ_VEHICLE_DRIVER, OBJ_VEHICLE_USE_REQUEST,
@@ -285,6 +287,15 @@ class VehicleService:
     async def create_request(self, data: dict) -> dict:
         data.setdefault("requester_id", self.current_user.id if self.current_user else None)
         data.setdefault("status", "draft")
+        # 生成申请单号
+        from datetime import datetime
+        now = datetime.utcnow()
+        count = (await self.db.execute(
+            select(func.count()).select_from(VehicleUseRequest).where(
+                VehicleUseRequest.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
+            )
+        )).scalar() or 0
+        data["request_no"] = f"YC{now.strftime('%Y%m%d')}{count + 1:03d}"
         r = await self.repo.create_request(data)
 
         await log_operation(
