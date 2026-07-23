@@ -70,8 +70,9 @@ export function getContractProjectAttachmentUrl(projectId: string) {
 
 // ── 可用资源 ──
 
-export function getAvailableResources(customerId: string, contractId?: string) {
+export function getAvailableResources(customerId: string, contractId?: string, projectId?: string) {
   const params: Record<string, string> = { customer_id: customerId }
   if (contractId) params.contract_id = contractId
+  if (projectId) params.project_id = projectId
   return get<FrameworkContractAvailableResources>('/framework-contracts/available-projects', { params })
 }

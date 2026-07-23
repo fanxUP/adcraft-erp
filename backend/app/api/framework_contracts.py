@@ -59,11 +59,13 @@ async def list_framework_contracts(
 async def get_available_projects(
     customer_id: str,
     contract_id: str | None = None,
+    project_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """返回该客户下未被任何框架合同项目关联的订单和报价。
-    如果指定了 contract_id，则该合同下已关联的资源也会包含。
+    如果指定了 project_id（编辑项目），则该项目的已关联资源也会包含。
+    如果只指定 contract_id（添加项目），则排除该合同下所有项目已关联的资源。
     """
     from sqlalchemy import select, not_
     from app.models.business_document import BusinessDocument
@@ -73,15 +75,14 @@ async def get_available_projects(
     )
     from app.models.contract import ContractDocument
 
-    # 已被其他框架合同项目关联的 document ID
-    used_sub = select(FrameworkContractProjectDocument.document_id).join(
-        FrameworkContractProject,
-        FrameworkContractProjectDocument.project_id == FrameworkContractProject.id,
-    )
-    if contract_id:
+    # 已被框架合同项目关联的 document ID
+    used_sub = select(FrameworkContractProjectDocument.document_id)
+    if project_id:
+        # 编辑项目：保留当前项目的已关联资源
         used_sub = used_sub.where(
-            FrameworkContractProject.contract_id != UUID(contract_id)
+            FrameworkContractProjectDocument.project_id != UUID(project_id)
         )
+    # 添加项目时不排除任何 — 所有已关联的都过滤掉
 
     # 已被常规合同关联的 document ID
     contract_used_sub = select(ContractDocument.document_id)
