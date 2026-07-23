@@ -277,7 +277,6 @@ class VehicleDashboardService:
                 "vehicle_id": str(d.vehicle_id) if d.vehicle_id else None,
                 "driver_id": str(d.driver_id) if d.driver_id else None,
                 "status": d.status,
-                "purpose": d.purpose,
                 "destination": d.destination,
                 "planned_start_time": d.planned_start_time.isoformat() if d.planned_start_time else None,
                 "planned_return_time": d.planned_return_time.isoformat() if d.planned_return_time else None,
@@ -290,7 +289,6 @@ class VehicleDashboardService:
                 "vehicle_id": str(i.vehicle_id) if i.vehicle_id else None,
                 "incident_type": i.incident_type,
                 "description": i.description,
-                "severity": i.severity,
                 "status": i.status,
                 "incident_time": i.incident_time.isoformat() if i.incident_time else None,
             }

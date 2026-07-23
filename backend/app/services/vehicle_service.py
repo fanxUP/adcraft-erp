@@ -959,9 +959,16 @@ class VehicleService:
         return self._fuel_to_dict(r) if r else None
 
     async def create_fuel_record(self, data: dict) -> dict:
+        from datetime import datetime
         for field in ("vehicle_id", "driver_id", "dispatch_id", "payer_id"):
             if data.get(field) and isinstance(data[field], str):
                 data[field] = UUID(data[field])
+        for date_field in ["fuel_time"]:
+            if date_field in data and isinstance(data[date_field], str):
+                try:
+                    data[date_field] = datetime.fromisoformat(data[date_field])
+                except ValueError:
+                    data[date_field] = None
         data.setdefault("status", "pending_review")
         r = await self.repo.create_fuel_record(data)
         await log_operation(
@@ -974,6 +981,7 @@ class VehicleService:
         return self._fuel_to_dict(r)
 
     async def update_fuel_record(self, record_id: UUID, data: dict) -> dict:
+        from datetime import datetime
         r = await self.repo.get_fuel_record_by_id(record_id)
         if not r:
             raise ValueError("油费记录不存在")
@@ -983,6 +991,12 @@ class VehicleService:
         for field in ("vehicle_id", "driver_id", "dispatch_id", "payer_id"):
             if data.get(field) and isinstance(data[field], str):
                 data[field] = UUID(data[field])
+        for date_field in ["fuel_time"]:
+            if date_field in data and isinstance(data[date_field], str):
+                try:
+                    data[date_field] = datetime.fromisoformat(data[date_field])
+                except ValueError:
+                    data[date_field] = None
         r = await self.repo.update_fuel_record(r, data)
         await log_operation(
             db=self.db, user_id=self.current_user.id if self.current_user else None,
@@ -1055,9 +1069,16 @@ class VehicleService:
         return self._maintenance_to_dict(r) if r else None
 
     async def create_maintenance_record(self, data: dict) -> dict:
+        from datetime import datetime
         for field in ("vehicle_id", "handler_id"):
             if data.get(field) and isinstance(data[field], str):
                 data[field] = UUID(data[field])
+        for date_field in ["maintenance_date", "next_maintenance_date"]:
+            if date_field in data and isinstance(data[date_field], str):
+                try:
+                    data[date_field] = datetime.fromisoformat(data[date_field])
+                except ValueError:
+                    data[date_field] = None
         data.setdefault("status", "pending_review")
         r = await self.repo.create_maintenance_record(data)
         await log_operation(
@@ -1070,6 +1091,7 @@ class VehicleService:
         return self._maintenance_to_dict(r)
 
     async def update_maintenance_record(self, record_id: UUID, data: dict) -> dict:
+        from datetime import datetime
         r = await self.repo.get_maintenance_record_by_id(record_id)
         if not r:
             raise ValueError("维修保养记录不存在")
@@ -1079,6 +1101,12 @@ class VehicleService:
         for field in ("vehicle_id", "handler_id"):
             if data.get(field) and isinstance(data[field], str):
                 data[field] = UUID(data[field])
+        for date_field in ["maintenance_date", "next_maintenance_date"]:
+            if date_field in data and isinstance(data[date_field], str):
+                try:
+                    data[date_field] = datetime.fromisoformat(data[date_field])
+                except ValueError:
+                    data[date_field] = None
         r = await self.repo.update_maintenance_record(r, data)
         await log_operation(
             db=self.db, user_id=self.current_user.id if self.current_user else None,
@@ -1214,9 +1242,16 @@ class VehicleService:
         return result
 
     async def create_certificate(self, data: dict) -> dict:
+        from datetime import datetime
         for field in ("vehicle_id", "driver_id"):
             if data.get(field) and isinstance(data[field], str):
                 data[field] = UUID(data[field])
+        for date_field in ["start_date", "expire_date"]:
+            if date_field in data and isinstance(data[date_field], str):
+                try:
+                    data[date_field] = datetime.fromisoformat(data[date_field])
+                except ValueError:
+                    data[date_field] = None
         data.setdefault("status", "active")
         r = await self.repo.create_certificate(data)
         await log_operation(
@@ -1229,6 +1264,7 @@ class VehicleService:
         return self._certificate_to_dict(r)
 
     async def update_certificate(self, cert_id: UUID, data: dict) -> dict:
+        from datetime import datetime
         r = await self.repo.get_certificate_by_id(cert_id)
         if not r:
             raise ValueError("证件记录不存在")
@@ -1236,6 +1272,12 @@ class VehicleService:
         for field in ("vehicle_id", "driver_id"):
             if data.get(field) and isinstance(data[field], str):
                 data[field] = UUID(data[field])
+        for date_field in ["start_date", "expire_date"]:
+            if date_field in data and isinstance(data[date_field], str):
+                try:
+                    data[date_field] = datetime.fromisoformat(data[date_field])
+                except ValueError:
+                    data[date_field] = None
         r = await self.repo.update_certificate(r, data)
         await log_operation(
             db=self.db, user_id=self.current_user.id if self.current_user else None,
@@ -1293,9 +1335,16 @@ class VehicleService:
         return self._incident_to_dict(r) if r else None
 
     async def create_incident(self, data: dict) -> dict:
+        from datetime import datetime
         for field in ("vehicle_id", "driver_id", "dispatch_id", "related_order_id", "related_install_task_id", "responsible_user_id"):
             if data.get(field) and isinstance(data[field], str):
                 data[field] = UUID(data[field])
+        for date_field in ["incident_time"]:
+            if date_field in data and isinstance(data[date_field], str):
+                try:
+                    data[date_field] = datetime.fromisoformat(data[date_field])
+                except ValueError:
+                    data[date_field] = None
         data.setdefault("status", "pending")
         r = await self.repo.create_incident(data)
         await log_operation(
@@ -1308,6 +1357,7 @@ class VehicleService:
         return self._incident_to_dict(r)
 
     async def update_incident(self, incident_id: UUID, data: dict) -> dict:
+        from datetime import datetime
         r = await self.repo.get_incident_by_id(incident_id)
         if not r:
             raise ValueError("异常记录不存在")
@@ -1315,6 +1365,12 @@ class VehicleService:
         for field in ("vehicle_id", "driver_id", "dispatch_id", "related_order_id", "related_install_task_id", "responsible_user_id"):
             if data.get(field) and isinstance(data[field], str):
                 data[field] = UUID(data[field])
+        for date_field in ["incident_time"]:
+            if date_field in data and isinstance(data[date_field], str):
+                try:
+                    data[date_field] = datetime.fromisoformat(data[date_field])
+                except ValueError:
+                    data[date_field] = None
         r = await self.repo.update_incident(r, data)
         await log_operation(
             db=self.db, user_id=self.current_user.id if self.current_user else None,
