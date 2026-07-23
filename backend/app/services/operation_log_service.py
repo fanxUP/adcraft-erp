@@ -22,6 +22,7 @@ OBJ_PROJECT_COST = "project_cost"
 OBJ_CONTRACT = "contract"
 OBJ_VEHICLE = "vehicle"
 OBJ_VEHICLE_DRIVER = "vehicle_driver"
+OBJ_VEHICLE_USE_REQUEST = "vehicle_use_request"
 
 # Actions
 ACTION_CREATE = "create"

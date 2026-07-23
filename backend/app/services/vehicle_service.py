@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.vehicle_repo import VehicleRepository
 from app.services.operation_log_service import (
-    log_operation, OBJ_VEHICLE, OBJ_VEHICLE_DRIVER,
+    log_operation, OBJ_VEHICLE, OBJ_VEHICLE_DRIVER, OBJ_VEHICLE_USE_REQUEST,
     ACTION_CREATE, ACTION_UPDATE, ACTION_STATUS_CHANGE,
 )
 
@@ -260,4 +260,202 @@ class VehicleService:
             "remark": d.remark,
             "created_at": d.created_at.isoformat() if d.created_at else None,
             "updated_at": d.updated_at.isoformat() if d.updated_at else None,
+        }
+
+    # ── 用车申请 ──────────────────────────────────────────────────────────────
+
+    async def list_requests(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        keyword: str | None = None,
+        status: str | None = None,
+        requester_id: UUID | None = None,
+    ) -> tuple[list[dict], int]:
+        skip = (page - 1) * page_size
+        requests, total = await self.repo.list_requests(
+            skip=skip, limit=page_size, keyword=keyword, status=status, requester_id=requester_id
+        )
+        return [self._request_to_dict(r) for r in requests], total
+
+    async def get_request(self, request_id: UUID) -> dict | None:
+        r = await self.repo.get_request_by_id(request_id)
+        return self._request_to_dict(r) if r else None
+
+    async def create_request(self, data: dict) -> dict:
+        data.setdefault("requester_id", self.current_user.id if self.current_user else None)
+        data.setdefault("status", "draft")
+        r = await self.repo.create_request(data)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_USE_REQUEST,
+            object_id=r.id,
+            action=ACTION_CREATE,
+            ip_address=self.ip_address,
+            after_data=self._request_to_dict(r),
+        )
+        return self._request_to_dict(r)
+
+    async def update_request(self, request_id: UUID, data: dict) -> dict:
+        r = await self.repo.get_request_by_id(request_id)
+        if not r:
+            raise ValueError("用车申请不存在")
+        if r.status not in ("draft", "rejected"):
+            raise ValueError("只有草稿或被驳回的申请可以编辑")
+
+        before = self._request_to_dict(r)
+        r = await self.repo.update_request(r, data)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_USE_REQUEST,
+            object_id=r.id,
+            action=ACTION_UPDATE,
+            ip_address=self.ip_address,
+            before_data=before,
+            after_data=self._request_to_dict(r),
+        )
+        return self._request_to_dict(r)
+
+    async def submit_request(self, request_id: UUID) -> dict:
+        r = await self.repo.get_request_by_id(request_id)
+        if not r:
+            raise ValueError("用车申请不存在")
+        if r.status not in ("draft", "rejected"):
+            raise ValueError("只有草稿或被驳回的申请可以提交")
+
+        before = self._request_to_dict(r)
+        r.status = "pending"
+        r.approver_id = None
+        r.approved_at = None
+        r.reject_reason = None
+        await self.db.flush()
+        await self.db.refresh(r)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_USE_REQUEST,
+            object_id=r.id,
+            action=ACTION_STATUS_CHANGE,
+            ip_address=self.ip_address,
+            before_data=before,
+            after_data=self._request_to_dict(r),
+        )
+        return self._request_to_dict(r)
+
+    async def approve_request(self, request_id: UUID) -> dict:
+        r = await self.repo.get_request_by_id(request_id)
+        if not r:
+            raise ValueError("用车申请不存在")
+        if r.status != "pending":
+            raise ValueError("只有待审批的申请可以审批")
+
+        from datetime import datetime
+        before = self._request_to_dict(r)
+        r.status = "approved"
+        r.approver_id = self.current_user.id if self.current_user else None
+        r.approved_at = datetime.utcnow()
+        await self.db.flush()
+        await self.db.refresh(r)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_USE_REQUEST,
+            object_id=r.id,
+            action=ACTION_STATUS_CHANGE,
+            ip_address=self.ip_address,
+            before_data=before,
+            after_data=self._request_to_dict(r),
+        )
+        return self._request_to_dict(r)
+
+    async def reject_request(self, request_id: UUID, reject_reason: str) -> dict:
+        r = await self.repo.get_request_by_id(request_id)
+        if not r:
+            raise ValueError("用车申请不存在")
+        if r.status != "pending":
+            raise ValueError("只有待审批的申请可以驳回")
+
+        from datetime import datetime
+        before = self._request_to_dict(r)
+        r.status = "rejected"
+        r.approver_id = self.current_user.id if self.current_user else None
+        r.approved_at = datetime.utcnow()
+        r.reject_reason = reject_reason
+        await self.db.flush()
+        await self.db.refresh(r)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_USE_REQUEST,
+            object_id=r.id,
+            action=ACTION_STATUS_CHANGE,
+            ip_address=self.ip_address,
+            before_data=before,
+            after_data=self._request_to_dict(r),
+        )
+        return self._request_to_dict(r)
+
+    async def cancel_request(self, request_id: UUID) -> dict:
+        r = await self.repo.get_request_by_id(request_id)
+        if not r:
+            raise ValueError("用车申请不存在")
+        if r.status in ("cancelled", "completed", "dispatched"):
+            raise ValueError(f"当前状态({r.status})不可取消")
+
+        before = self._request_to_dict(r)
+        r.status = "cancelled"
+        await self.db.flush()
+        await self.db.refresh(r)
+
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_USE_REQUEST,
+            object_id=r.id,
+            action=ACTION_STATUS_CHANGE,
+            ip_address=self.ip_address,
+            before_data=before,
+            after_data=self._request_to_dict(r),
+        )
+        return self._request_to_dict(r)
+
+    def _request_to_dict(self, r) -> dict:
+        return {
+            "id": str(r.id),
+            "request_no": r.request_no,
+            "requester_id": str(r.requester_id) if r.requester_id else None,
+            "requester_name": r.requester.real_name if r.requester else None,
+            "reason": r.reason,
+            "related_customer_id": str(r.related_customer_id) if r.related_customer_id else None,
+            "customer_name": r.customer.name if r.customer else None,
+            "related_order_id": str(r.related_order_id) if r.related_order_id else None,
+            "related_install_task_id": str(r.related_install_task_id) if r.related_install_task_id else None,
+            "start_time": r.start_time.isoformat() if r.start_time else None,
+            "expected_return_time": r.expected_return_time.isoformat() if r.expected_return_time else None,
+            "destination": r.destination,
+            "need_driver": r.need_driver,
+            "need_cargo": r.need_cargo,
+            "cargo_description": r.cargo_description,
+            "estimated_distance_km": float(r.estimated_distance_km) if r.estimated_distance_km else None,
+            "status": r.status,
+            "approver_id": str(r.approver_id) if r.approver_id else None,
+            "approver_name": r.approver.real_name if r.approver else None,
+            "approved_at": r.approved_at.isoformat() if r.approved_at else None,
+            "reject_reason": r.reject_reason,
+            "remark": r.remark,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
         }

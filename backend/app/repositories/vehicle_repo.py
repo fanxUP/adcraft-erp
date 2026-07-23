@@ -2,7 +2,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-from app.models.vehicle import Vehicle, VehicleDriver
+from app.models.vehicle import Vehicle, VehicleDriver, VehicleUseRequest
 
 
 class VehicleRepository:
@@ -111,3 +111,50 @@ class VehicleRepository:
         await self.db.flush()
         await self.db.refresh(driver)
         return driver
+
+    # ── 用车申请 ──────────────────────────────────────────────────────────────
+
+    async def get_request_by_id(self, request_id: UUID) -> VehicleUseRequest | None:
+        result = await self.db.execute(select(VehicleUseRequest).where(VehicleUseRequest.id == request_id))
+        return result.scalar_one_or_none()
+
+    async def list_requests(
+        self,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: str | None = None,
+        status: str | None = None,
+        requester_id: UUID | None = None,
+    ) -> tuple[list[VehicleUseRequest], int]:
+        q = select(VehicleUseRequest)
+        if keyword:
+            q = q.where(
+                VehicleUseRequest.reason.ilike(f"%{keyword}%")
+                | VehicleUseRequest.destination.ilike(f"%{keyword}%")
+            )
+        if status:
+            q = q.where(VehicleUseRequest.status == status)
+        if requester_id:
+            q = q.where(VehicleUseRequest.requester_id == requester_id)
+
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self.db.execute(count_q)).scalar()
+
+        q = q.order_by(VehicleUseRequest.created_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all()), total
+
+    async def create_request(self, data: dict) -> VehicleUseRequest:
+        req = VehicleUseRequest(**data)
+        self.db.add(req)
+        await self.db.flush()
+        await self.db.refresh(req)
+        return req
+
+    async def update_request(self, req: VehicleUseRequest, data: dict) -> VehicleUseRequest:
+        for k, v in data.items():
+            if v is not None:
+                setattr(req, k, v)
+        await self.db.flush()
+        await self.db.refresh(req)
+        return req

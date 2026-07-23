@@ -63,6 +63,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'admin/settings', name: 'AdminSettings', meta: { roles: ['admin'] }, component: () => import('@/views/admin/SystemSettings.vue') },
       { path: 'vehicles', name: 'VehicleList', component: () => import('@/views/vehicles/VehicleList.vue') },
       { path: 'vehicle-drivers', name: 'DriverList', component: () => import('@/views/vehicles/DriverList.vue') },
+      { path: 'vehicle-use-requests', name: 'VehicleUseRequestList', component: () => import('@/views/vehicles/VehicleUseRequestList.vue') },
       { path: 'ai/anomalies', name: 'AnomalyDashboard', component: () => import('@/views/ai/AnomalyDashboard.vue') },
       { path: 'ai/quotes', name: 'AIQuoteAssistant', component: () => import('@/views/ai/AIQuoteAssistant.vue') },
       { path: 'ai/knowledge', name: 'QuoteKnowledgeBase', component: () => import('@/views/ai/QuoteKnowledgeBase.vue') },
