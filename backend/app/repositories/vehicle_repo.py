@@ -17,15 +17,15 @@ class VehicleRepository:
     # ── 车辆档案 ──────────────────────────────────────────────────────────────
 
     async def get_by_id(self, vehicle_id: UUID) -> Vehicle | None:
-        result = await self.db.execute(select(Vehicle).where(Vehicle.id == vehicle_id))
+        result = await self.db.execute(select(Vehicle).where(Vehicle.id == vehicle_id, Vehicle.deleted_at.is_(None)))
         return result.scalar_one_or_none()
 
     async def get_by_plate(self, plate_number: str) -> Vehicle | None:
-        result = await self.db.execute(select(Vehicle).where(Vehicle.plate_number == plate_number))
+        result = await self.db.execute(select(Vehicle).where(Vehicle.plate_number == plate_number, Vehicle.deleted_at.is_(None)))
         return result.scalar_one_or_none()
 
     async def get_by_code(self, vehicle_code: str) -> Vehicle | None:
-        result = await self.db.execute(select(Vehicle).where(Vehicle.vehicle_code == vehicle_code))
+        result = await self.db.execute(select(Vehicle).where(Vehicle.vehicle_code == vehicle_code, Vehicle.deleted_at.is_(None)))
         return result.scalar_one_or_none()
 
     async def list_vehicles(
@@ -37,7 +37,7 @@ class VehicleRepository:
         status: str | None = None,
         driver_id: UUID | None = None,
     ) -> tuple[list[Vehicle], int]:
-        q = select(Vehicle)
+        q = select(Vehicle).where(Vehicle.deleted_at.is_(None))
         if keyword:
             q = q.where(
                 Vehicle.plate_number.ilike(f"%{keyword}%")
@@ -73,10 +73,15 @@ class VehicleRepository:
         await self.db.refresh(vehicle)
         return vehicle
 
+    async def soft_delete_vehicle(self, vehicle: Vehicle) -> Vehicle:
+        vehicle.deleted_at = datetime.now()
+        await self.db.flush()
+        return vehicle
+
     # ── 司机档案 ──────────────────────────────────────────────────────────────
 
     async def get_driver_by_id(self, driver_id: UUID) -> VehicleDriver | None:
-        result = await self.db.execute(select(VehicleDriver).where(VehicleDriver.id == driver_id))
+        result = await self.db.execute(select(VehicleDriver).where(VehicleDriver.id == driver_id, VehicleDriver.deleted_at.is_(None)))
         return result.scalar_one_or_none()
 
     async def list_drivers(
@@ -86,7 +91,7 @@ class VehicleRepository:
         keyword: str | None = None,
         status: str | None = None,
     ) -> tuple[list[VehicleDriver], int]:
-        q = select(VehicleDriver)
+        q = select(VehicleDriver).where(VehicleDriver.deleted_at.is_(None))
         if keyword:
             q = q.where(
                 VehicleDriver.driver_name.ilike(f"%{keyword}%")
@@ -115,6 +120,11 @@ class VehicleRepository:
                 setattr(driver, k, v)
         await self.db.flush()
         await self.db.refresh(driver)
+        return driver
+
+    async def soft_delete_driver(self, driver: VehicleDriver) -> VehicleDriver:
+        driver.deleted_at = datetime.now()
+        await self.db.flush()
         return driver
 
     # ── 用车申请 ──────────────────────────────────────────────────────────────

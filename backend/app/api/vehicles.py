@@ -1,14 +1,14 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.permissions import (
     require_permission,
-    PERM_VEHICLE_READ, PERM_VEHICLE_CREATE, PERM_VEHICLE_UPDATE,
+    PERM_VEHICLE_READ, PERM_VEHICLE_CREATE, PERM_VEHICLE_UPDATE, PERM_VEHICLE_DELETE,
     PERM_FINANCE_REVIEW,
 )
 from app.models.user import User
@@ -135,6 +135,21 @@ async def enable_vehicle(
     return success(vehicle)
 
 
+@router.delete("/{vehicle_id}")
+async def delete_vehicle(
+    vehicle_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_DELETE)),
+):
+    service = _get_service(db, current_user, request)
+    try:
+        result = await service.delete_vehicle(UUID(vehicle_id))
+        return success(result)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.post("/{vehicle_id}/scrap")
 async def scrap_vehicle(
     vehicle_id: str,
@@ -212,6 +227,21 @@ async def update_driver(
     service = _get_service(db, current_user, request)
     driver = await service.update_driver(UUID(driver_id), data)
     return success(driver)
+
+
+@driver_router.delete("/{driver_id}")
+async def delete_driver(
+    driver_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_DELETE)),
+):
+    service = _get_service(db, current_user, request)
+    try:
+        result = await service.delete_driver(UUID(driver_id))
+        return success(result)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @driver_router.post("/{driver_id}/disable")

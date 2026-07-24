@@ -36,6 +36,11 @@
           <el-button v-if="row.status === 'available'" text type="warning" @click="handleDisable(row)">停用</el-button>
           <el-button v-if="row.status === 'disabled'" text type="success" @click="handleEnable(row)">启用</el-button>
           <el-button v-if="row.status !== 'scrapped'" text type="danger" @click="handleScrap(row)">报废</el-button>
+          <el-popconfirm title="确定删除该车辆？" @confirm="handleDelete(row)">
+            <template #reference>
+              <el-button text type="danger">删除</el-button>
+            </template>
+          </el-popconfirm>
         </template>
       </el-table-column>
     </el-table>
@@ -132,7 +137,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getVehicles, createVehicle, updateVehicle,
-  disableVehicle, enableVehicle, scrapVehicle,
+  disableVehicle, enableVehicle, scrapVehicle, deleteVehicle,
 } from '@/api/vehicles'
 import type { VehicleResponse } from '@/api/vehicles'
 import { getErrorMessage } from '@/utils/error'
@@ -296,6 +301,10 @@ async function handleScrap(row: VehicleResponse) {
   await scrapVehicle(row.id)
   ElMessage.success('已报废')
   fetchData()
+}
+
+async function handleDelete(row: VehicleResponse) {
+  try { await deleteVehicle(row.id); ElMessage.success('删除成功'); fetchData() } catch (e: any) { ElMessage.error(getErrorMessage(e)) }
 }
 
 onMounted(fetchData)

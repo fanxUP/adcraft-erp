@@ -114,6 +114,7 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "vehicle:read", "name": "查看车辆", "description": "查看车辆和司机档案"},
     {"code": "vehicle:create", "name": "创建车辆", "description": "新增车辆和司机"},
     {"code": "vehicle:update", "name": "编辑车辆", "description": "编辑车辆和司机信息、停用/启用/报废"},
+    {"code": "vehicle:delete", "name": "删除车辆", "description": "删除车辆和司机（软删除）"},
     {"code": "finance:review", "name": "财务审核", "description": "审核油费、维修保养等车辆费用"},
     # Aerial work platform (高空作业车台账)
     {"code": "aerial:read", "name": "查看高空车台账", "description": "查看高空作业车档案、台账、驾驶员、费用等信息"},
@@ -167,7 +168,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "process:read", "process:create", "process:update", "process:delete",
         "production_task:read", "production_task:create", "production_task:update", "production_task:change_status",
         "inventory:read", "inventory:create", "inventory:update", "inventory:stock_in", "inventory:stock_out",
-        "vehicle:read", "vehicle:create", "vehicle:update",
+        "vehicle:read", "vehicle:create", "vehicle:update", "vehicle:delete",
         "aerial:read", "aerial:create", "aerial:update", "aerial:wage",
     ],
     "installer": [

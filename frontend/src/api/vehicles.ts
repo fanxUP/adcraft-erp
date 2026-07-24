@@ -110,6 +110,10 @@ export function scrapVehicle(id: string) {
   return post<VehicleResponse>(`/vehicles/${id}/scrap`)
 }
 
+export function deleteVehicle(id: string) {
+  return del(`/vehicles/${id}`)
+}
+
 // ── 司机 ──────────────────────────────────────────────────────────────────
 
 export function getDrivers(params: {
@@ -139,6 +143,10 @@ export function disableDriver(id: string) {
 
 export function enableDriver(id: string) {
   return post<VehicleDriverResponse>(`/vehicle-drivers/${id}/enable`)
+}
+
+export function deleteDriver(id: string) {
+  return del(`/vehicle-drivers/${id}`)
 }
 
 // ── 油费记录 ──────────────────────────────────────────────────────────────────

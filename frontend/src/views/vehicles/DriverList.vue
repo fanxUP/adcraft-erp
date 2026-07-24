@@ -40,6 +40,11 @@
           <el-button text type="primary" @click="handleEdit(row)">编辑</el-button>
           <el-button v-if="row.status === 'active'" text type="warning" @click="handleDisable(row)">停用</el-button>
           <el-button v-if="row.status === 'disabled'" text type="success" @click="handleEnable(row)">启用</el-button>
+          <el-popconfirm title="确定删除该司机？" @confirm="handleDelete(row)">
+            <template #reference>
+              <el-button text type="danger">删除</el-button>
+            </template>
+          </el-popconfirm>
         </template>
       </el-table-column>
     </el-table>
@@ -100,7 +105,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getDrivers, createDriver, updateDriver, disableDriver, enableDriver } from '@/api/vehicles'
+import { getDrivers, createDriver, updateDriver, disableDriver, enableDriver, deleteDriver } from '@/api/vehicles'
 import type { VehicleDriverResponse } from '@/api/vehicles'
 import { getErrorMessage } from '@/utils/error'
 
@@ -202,6 +207,10 @@ async function handleEnable(row: VehicleDriverResponse) {
   await enableDriver(row.id)
   ElMessage.success('已启用')
   fetchData()
+}
+
+async function handleDelete(row: VehicleDriverResponse) {
+  try { await deleteDriver(row.id); ElMessage.success('删除成功'); fetchData() } catch (e: any) { ElMessage.error(getErrorMessage(e)) }
 }
 
 onMounted(fetchData)
