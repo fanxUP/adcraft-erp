@@ -193,13 +193,13 @@ class TestAerialPermissionMapping:
     def test_read_permissions_for_query_endpoints(self):
         """GET endpoints should use PERM_AERIAL_READ."""
         read_endpoints = [
-            "list_vehicles", "get_vehicle", "list_drivers", "get_driver",
+            "list_vehicles", "get_vehicle", "list_personnel", "get_personnel",
             "list_ledgers", "get_ledger", "list_expenses", "list_wages",
             "list_costs", "list_safety_checks", "list_attachments",
             "list_audit_logs", "dashboard_overview", "dashboard_today",
             "dashboard_reminders", "report_daily", "report_monthly",
             "report_receivables", "report_reimbursements", "report_costs",
-            "report_driver_summary", "agent_list_drafts", "agent_get_draft",
+            "report_personnel_summary", "agent_list_drafts", "agent_get_draft",
         ]
         # This is a documentation test - verifies the mapping exists
         assert len(read_endpoints) == 23
@@ -207,7 +207,7 @@ class TestAerialPermissionMapping:
     def test_create_permissions_for_mutating_endpoints(self):
         """POST create endpoints should use PERM_AERIAL_CREATE."""
         create_endpoints = [
-            "create_vehicle", "create_driver", "create_ledger",
+            "create_vehicle", "create_personnel", "create_ledger",
             "create_expense", "create_wage", "create_cost",
             "create_safety_check", "create_attachment",
             "agent_ingest_message",
@@ -217,7 +217,7 @@ class TestAerialPermissionMapping:
     def test_update_permissions_for_update_endpoints(self):
         """PATCH/POST update endpoints should use PERM_AERIAL_UPDATE."""
         update_endpoints = [
-            "update_vehicle", "update_driver", "update_ledger",
+            "update_vehicle", "update_personnel", "update_ledger",
             "review_expense", "review_cost",
             "agent_confirm_draft", "agent_reject_draft",
         ]

@@ -9,8 +9,8 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.aerial import (
-    AerialAgentDraft, AerialDailyLedger, AerialDriverExpense,
-    AerialVehicleCost, AerialDriver, AerialVehicle, AerialLedgerAuditLog,
+    AerialAgentDraft, AerialDailyLedger, AerialPersonnelExpense,
+    AerialVehicleCost, AerialPersonnel, AerialVehicle, AerialLedgerAuditLog,
 )
 from app.services.aerial_service import AerialService
 
@@ -23,7 +23,7 @@ INTENT_PATTERNS = {
         "amount_patterns": [r"收(\d+)", r"收费(\d+)", r"高空车收(\d+)", r"应收(\d+)"],
         "location_patterns": [r"去(.+?)(?:装|拆|干|施工|挂|喷)", r"在(.+?)(?:装|拆|干|施工|挂|喷)"],
     },
-    "aerial_driver_expense": {
+    "aerial_personnel_expense": {
         "keywords": ["垫付", "垫了", "油费", "加油", "停车费", "过路费", "高速费", "餐费", "饭钱"],
         "amount_patterns": [r"油费.*?(\d+)", r"停车.*?(\d+)", r"过路费.*?(\d+)", r"高速.*?(\d+)", r"餐费.*?(\d+)", r"饭钱.*?(\d+)", r"垫了.*?(\d+)"],
     },
@@ -78,7 +78,7 @@ class AerialAgentService:
             "aerial_payment_claim",
             "aerial_query_report",
             "aerial_reimbursement_claim",
-            "aerial_driver_expense",
+            "aerial_personnel_expense",
             "aerial_work_ledger",
         ]
         best_intent = max(scores, key=lambda i: (scores[i], -priority_order.index(i) if i in priority_order else 0))
@@ -87,7 +87,7 @@ class AerialAgentService:
 
         risk_map = {
             "aerial_work_ledger": "medium",
-            "aerial_driver_expense": "medium",
+            "aerial_personnel_expense": "medium",
             "aerial_payment_claim": "high",
             "aerial_vehicle_issue": "medium",
             "aerial_query_report": "low",
@@ -128,7 +128,7 @@ class AerialAgentService:
                 extracted["work_date"] = today.isoformat()
 
         # 提取发送人
-        extracted["driver_name_hint"] = None
+        extracted["name_hint"] = None
 
         if intent == "aerial_work_ledger":
             # 地点
@@ -160,10 +160,10 @@ class AerialAgentService:
             # 垫付费用（如果同时提到了）
             expenses = self._extract_expenses(text)
             if expenses:
-                extracted["driver_expenses"] = expenses
+                extracted["personnel_expenses"] = expenses
 
-        elif intent == "aerial_driver_expense":
-            extracted["driver_expenses"] = self._extract_expenses(text)
+        elif intent == "aerial_personnel_expense":
+            extracted["personnel_expenses"] = self._extract_expenses(text)
 
         elif intent == "aerial_vehicle_issue":
             # 提取问题描述
@@ -206,7 +206,7 @@ class AerialAgentService:
         """根据意图确定建议动作"""
         action_map = {
             "aerial_work_ledger": "create_aerial_ledger_draft",
-            "aerial_driver_expense": "create_aerial_expense_draft",
+            "aerial_personnel_expense": "create_aerial_expense_draft",
             "aerial_payment_claim": "create_payment_reminder",
             "aerial_vehicle_issue": "create_vehicle_issue_draft",
             "aerial_query_report": "query_report",
@@ -245,13 +245,13 @@ class AerialAgentService:
         # 3. 提取字段
         extracted = self._extract_fields(text, intent)
 
-        # 4. 匹配驾驶员
+        # 4. 匹配人员
         sender_name = data.get("sender_name", "")
         if sender_name:
-            driver = await self._match_driver(sender_name)
-            if driver:
-                extracted["driver_id"] = str(driver.id)
-                extracted["driver_name"] = driver.driver_name
+            person = await self._match_personnel(sender_name)
+            if person:
+                extracted["personnel_id"] = str(person.id)
+                extracted["name"] = person.name
 
         # 5. 保存草稿
         draft = await self._save_draft(data, recognition, extracted)
@@ -287,14 +287,14 @@ class AerialAgentService:
         await self.db.refresh(draft)
         return draft
 
-    async def _match_driver(self, name: str) -> Optional[AerialDriver]:
-        """匹配驾驶员"""
+    async def _match_personnel(self, name: str) -> Optional[AerialPersonnel]:
+        """匹配人员"""
         if not name:
             return None
         result = await self.db.execute(
-            select(AerialDriver).where(
-                AerialDriver.driver_name.ilike(f"%{name}%"),
-                AerialDriver.status == "active",
+            select(AerialPersonnel).where(
+                AerialPersonnel.name.ilike(f"%{name}%"),
+                AerialPersonnel.status == "active",
             )
         )
         return result.scalar_one_or_none()
@@ -365,41 +365,41 @@ class AerialAgentService:
                     result_ids["ledger_id"] = str(ledger_uuid)
 
                     # 如果有垫付费用，同时创建
-                    for exp in extracted.get("driver_expenses", []):
-                        if ledger_uuid and extracted.get("driver_id"):
+                    for exp in extracted.get("personnel_expenses", []):
+                        if ledger_uuid and extracted.get("personnel_id"):
                             expense_data = {
                                 "ledger_id": str(ledger_uuid),
-                                "driver_id": extracted.get("driver_id"),
+                                "personnel_id": extracted.get("personnel_id"),
                                 "expense_type": exp.get("expense_type", "other"),
                                 "expense_date": extracted.get("work_date", date.today().isoformat()),
                                 "amount": exp.get("amount", 0),
-                                "paid_by_driver": True,
+                                "paid_by_personnel": True,
                             }
                             await self.aerial_svc.create_expense(expense_data)
                             result_ids.setdefault("expenses_created", 0)
                             result_ids["expenses_created"] = result_ids.get("expenses_created", 0) + 1
 
-            elif intent == "aerial_driver_expense":
+            elif intent == "aerial_personnel_expense":
                 # 匹配当天台账
-                driver_id = extracted.get("driver_id")
+                personnel_id = extracted.get("personnel_id")
                 work_date = extracted.get("work_date")
                 ledger_id = None
-                if driver_id and work_date:
-                    ledger = await self._find_ledger_for_expense(driver_id, work_date)
+                if personnel_id and work_date:
+                    ledger = await self._find_ledger_for_expense(personnel_id, work_date)
                     if ledger:
                         ledger_id = str(ledger.id)
 
-                for exp in extracted.get("driver_expenses", []):
-                    if not ledger_id or not driver_id:
+                for exp in extracted.get("personnel_expenses", []):
+                    if not ledger_id or not personnel_id:
                         result_ids["warning"] = "未找到匹配的台账，请手动关联垫付费用"
                         continue
                     expense_data = {
                         "ledger_id": ledger_id,
-                        "driver_id": driver_id,
+                        "personnel_id": personnel_id,
                         "expense_type": exp.get("expense_type", "other"),
                         "expense_date": extracted.get("work_date", date.today().isoformat()),
                         "amount": exp.get("amount", 0),
-                        "paid_by_driver": True,
+                        "paid_by_personnel": True,
                     }
                     await self.aerial_svc.create_expense(expense_data)
                     result_ids.setdefault("expenses_created", 0)
@@ -467,15 +467,15 @@ class AerialAgentService:
 
     async def _create_ledger_from_draft(self, extracted: dict) -> Optional[AerialDailyLedger]:
         """从草稿创建正式台账"""
-        driver_id = extracted.get("driver_id")
+        personnel_id = extracted.get("personnel_id")
         vehicle_id = extracted.get("vehicle_id")
 
-        # 如果没有匹配到驾驶员和车辆，尝试用第一个活跃的
-        if not driver_id:
-            r = await self.db.execute(select(AerialDriver).where(AerialDriver.status == "active").limit(1))
-            driver = r.scalar_one_or_none()
-            if driver:
-                driver_id = str(driver.id)
+        # 如果没有匹配到人员和车辆，尝试用第一个活跃的
+        if not personnel_id:
+            r = await self.db.execute(select(AerialPersonnel).where(AerialPersonnel.status == "active").limit(1))
+            person = r.scalar_one_or_none()
+            if person:
+                personnel_id = str(person.id)
 
         if not vehicle_id:
             r = await self.db.execute(select(AerialVehicle).where(AerialVehicle.status.in_(["active", "available"])).limit(1))
@@ -483,12 +483,12 @@ class AerialAgentService:
             if vehicle:
                 vehicle_id = str(vehicle.id)
 
-        if not driver_id or not vehicle_id:
+        if not personnel_id or not vehicle_id:
             return None
 
         ledger_data = {
             "aerial_vehicle_id": vehicle_id,
-            "driver_id": driver_id,
+            "personnel_id": personnel_id,
             "work_date": extracted.get("work_date", date.today().isoformat()),
             "work_location": extracted.get("work_location", ""),
             "customer_name": extracted.get("customer_name", ""),
@@ -500,15 +500,15 @@ class AerialAgentService:
         }
         return await self.aerial_svc.create_ledger(ledger_data)
 
-    async def _find_ledger_for_expense(self, driver_id: str, work_date: str) -> Optional[AerialDailyLedger]:
-        """查找驾驶员当天的台账，用于关联垫付"""
+    async def _find_ledger_for_expense(self, personnel_id: str, work_date: str) -> Optional[AerialDailyLedger]:
+        """查找人员当天的台账，用于关联垫付"""
         try:
             dt = date.fromisoformat(work_date)
         except (ValueError, TypeError):
             return None
         result = await self.db.execute(
             select(AerialDailyLedger).where(
-                AerialDailyLedger.driver_id == uuid.UUID(driver_id),
+                AerialDailyLedger.personnel_id == uuid.UUID(personnel_id),
                 func.date(AerialDailyLedger.work_date) == dt,
             ).limit(1)
         )

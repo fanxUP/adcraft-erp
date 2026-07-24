@@ -29,28 +29,29 @@ class AerialVehicle(Base, TimestampMixin):
     platform_capacity: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="平台承重")
     purchase_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="购买日期")
     status: Mapped[str] = mapped_column(String(32), default="available", nullable=False, comment="状态: available/in_use/maintenance/disabled/scrapped")
-    default_driver_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_drivers.id"), nullable=True, comment="默认驾驶员")
+    default_personnel_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_personnel.id"), nullable=True, comment="默认人员")
     insurance_expire_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="保险到期日")
     inspection_expire_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="年检到期日")
     maintenance_due_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="下次保养日期")
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
 
-    default_driver: Mapped["AerialDriver | None"] = relationship("AerialDriver", foreign_keys=[default_driver_id], lazy="selectin")
+    default_personnel: Mapped["AerialPersonnel | None"] = relationship("AerialPersonnel", foreign_keys=[default_personnel_id], lazy="selectin")
 
 
-# ── 高空车驾驶员 ────────────────────────────────────────────────────────────
+# ── 高空车人员 ──────────────────────────────────────────────────────────────
 
-class AerialDriver(Base, TimestampMixin):
-    __tablename__ = "aerial_drivers"
+class AerialPersonnel(Base, TimestampMixin):
+    __tablename__ = "aerial_personnel"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    driver_name: Mapped[str] = mapped_column(String(64), nullable=False, comment="驾驶员姓名")
+    name: Mapped[str] = mapped_column(String(64), nullable=False, comment="人员姓名")
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="手机号")
     license_no: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="驾驶证号")
     license_type: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="驾驶证类型")
     license_expire_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="驾驶证到期日")
     is_external: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否外协")
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False, comment="状态: active/disabled")
+    personnel_type: Mapped[str] = mapped_column(String(32), default="driver", nullable=False, comment="人员类型: driver/assistant/operator")
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
 
 
@@ -60,7 +61,7 @@ class AerialDailyLedger(Base, TimestampMixin):
     __tablename__ = "aerial_daily_ledgers"
     __table_args__ = (
         Index("ix_aerial_ledger_work_date", "work_date"),
-        Index("ix_aerial_ledger_driver_id", "driver_id"),
+        Index("ix_aerial_ledger_personnel_id", "personnel_id"),
         Index("ix_aerial_ledger_customer_name", "customer_name"),
         Index("ix_aerial_ledger_status", "status"),
         Index("ix_aerial_ledger_payment_status", "payment_status"),
@@ -71,7 +72,7 @@ class AerialDailyLedger(Base, TimestampMixin):
     work_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, comment="出车日期")
     aerial_vehicle_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_vehicles.id"), nullable=False, comment="高空车ID")
     plate_number: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="冗余车牌号")
-    driver_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_drivers.id"), nullable=False, comment="驾驶员ID")
+    personnel_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_personnel.id"), nullable=False, comment="人员ID")
     assistant_names: Mapped[str | None] = mapped_column(Text, nullable=True, comment="随车人员，逗号分隔")
 
     # 客户与项目
@@ -112,7 +113,7 @@ class AerialDailyLedger(Base, TimestampMixin):
     distance_km: Mapped[float | None] = mapped_column(Numeric(10, 1), nullable=True, comment="实际公里数")
 
     # 成本与利润
-    driver_wage_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="驾驶员工资")
+    personnel_wage_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="人员工资")
     reimbursement_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="已审核报销金额")
     vehicle_direct_cost: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="车辆直接费用")
     gross_profit: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="毛利润(已收)")
@@ -137,32 +138,32 @@ class AerialDailyLedger(Base, TimestampMixin):
 
     # relationships
     aerial_vehicle: Mapped["AerialVehicle"] = relationship("AerialVehicle", foreign_keys=[aerial_vehicle_id], lazy="selectin")
-    driver: Mapped["AerialDriver"] = relationship("AerialDriver", foreign_keys=[driver_id], lazy="selectin")
-    expenses: Mapped[list["AerialDriverExpense"]] = relationship("AerialDriverExpense", back_populates="ledger", lazy="selectin")
-    wages: Mapped[list["AerialDriverWage"]] = relationship("AerialDriverWage", back_populates="ledger", lazy="selectin")
+    personnel: Mapped["AerialPersonnel"] = relationship("AerialPersonnel", foreign_keys=[personnel_id], lazy="selectin")
+    expenses: Mapped[list["AerialPersonnelExpense"]] = relationship("AerialPersonnelExpense", back_populates="ledger", lazy="selectin")
+    wages: Mapped[list["AerialPersonnelWage"]] = relationship("AerialPersonnelWage", back_populates="ledger", lazy="selectin")
     vehicle_costs: Mapped[list["AerialVehicleCost"]] = relationship("AerialVehicleCost", back_populates="ledger", lazy="selectin")
     safety_checks: Mapped[list["AerialSafetyCheck"]] = relationship("AerialSafetyCheck", back_populates="ledger", lazy="selectin")
     attachments: Mapped[list["AerialLedgerAttachment"]] = relationship("AerialLedgerAttachment", back_populates="ledger", lazy="selectin")
     audit_logs: Mapped[list["AerialLedgerAuditLog"]] = relationship("AerialLedgerAuditLog", back_populates="ledger", lazy="selectin")
 
 
-# ── 驾驶员垫付/报销 ────────────────────────────────────────────────────────
+# ── 人员垫付/报销 ────────────────────────────────────────────────────────────
 
-class AerialDriverExpense(Base, TimestampMixin):
-    __tablename__ = "aerial_driver_expenses"
+class AerialPersonnelExpense(Base, TimestampMixin):
+    __tablename__ = "aerial_personnel_expenses"
     __table_args__ = (
-        Index("ix_aerial_expense_driver_id", "driver_id"),
+        Index("ix_aerial_expense_personnel_id", "personnel_id"),
         Index("ix_aerial_expense_expense_date", "expense_date"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     ledger_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_daily_ledgers.id"), nullable=False, comment="关联台账")
     expense_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, comment="费用日期")
-    driver_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_drivers.id"), nullable=False, comment="驾驶员")
+    personnel_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_personnel.id"), nullable=False, comment="人员")
     expense_type: Mapped[str] = mapped_column(String(32), nullable=False, comment="费用类型: fuel/toll/parking/meal/temporary_repair/material/other")
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, comment="金额")
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="支付方式")
-    paid_by_driver: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, comment="是否司机垫付")
+    paid_by_personnel: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, comment="是否人员垫付")
     receipt_url: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="票据照片")
     description: Mapped[str | None] = mapped_column(Text, nullable=True, comment="费用说明")
     review_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, comment="审核状态: pending/approved/rejected")
@@ -173,22 +174,22 @@ class AerialDriverExpense(Base, TimestampMixin):
     reimbursed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="报销确认人")
 
     ledger: Mapped["AerialDailyLedger"] = relationship("AerialDailyLedger", back_populates="expenses", lazy="selectin")
-    driver: Mapped["AerialDriver"] = relationship("AerialDriver", foreign_keys=[driver_id], lazy="selectin")
+    personnel: Mapped["AerialPersonnel"] = relationship("AerialPersonnel", foreign_keys=[personnel_id], lazy="selectin")
 
 
-# ── 驾驶员工资 ──────────────────────────────────────────────────────────────
+# ── 人员工资 ──────────────────────────────────────────────────────────────────
 
-class AerialDriverWage(Base, TimestampMixin):
-    __tablename__ = "aerial_driver_wages"
+class AerialPersonnelWage(Base, TimestampMixin):
+    __tablename__ = "aerial_personnel_wages"
     __table_args__ = (
-        Index("ix_aerial_wage_driver_id", "driver_id"),
+        Index("ix_aerial_wage_personnel_id", "personnel_id"),
         Index("ix_aerial_wage_wage_month", "wage_month"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     ledger_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_daily_ledgers.id"), nullable=True, comment="关联台账，月度汇总时可为空")
     wage_month: Mapped[str | None] = mapped_column(String(7), nullable=True, comment="工资月份 YYYY-MM")
-    driver_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_drivers.id"), nullable=False, comment="驾驶员")
+    personnel_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_personnel.id"), nullable=False, comment="人员")
     wage_type: Mapped[str] = mapped_column(String(32), default="daily", nullable=False, comment="工资类型: daily/trip/hourly/commission/base_plus_commission")
     base_wage: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="基础工资")
     trip_wage: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="趟次工资")
@@ -203,7 +204,7 @@ class AerialDriverWage(Base, TimestampMixin):
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
 
     ledger: Mapped["AerialDailyLedger | None"] = relationship("AerialDailyLedger", back_populates="wages", lazy="selectin")
-    driver: Mapped["AerialDriver"] = relationship("AerialDriver", foreign_keys=[driver_id], lazy="selectin")
+    personnel: Mapped["AerialPersonnel"] = relationship("AerialPersonnel", foreign_keys=[personnel_id], lazy="selectin")
 
 
 # ── 车辆费用 ────────────────────────────────────────────────────────────────
@@ -225,7 +226,7 @@ class AerialVehicleCost(Base, TimestampMixin):
     handler_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="经办人")
     payer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="付款人")
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="支付方式")
-    is_driver_advance: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否司机垫付")
+    is_personnel_advance: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否人员垫付")
     need_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否需要报销")
     receipt_url: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="票据照片")
     allocation_type: Mapped[str] = mapped_column(String(32), default="none", nullable=False, comment="分摊方式: per_trip/daily/monthly/annual/none")
@@ -237,7 +238,7 @@ class AerialVehicleCost(Base, TimestampMixin):
 
     aerial_vehicle: Mapped["AerialVehicle"] = relationship("AerialVehicle", foreign_keys=[aerial_vehicle_id], lazy="selectin")
     ledger: Mapped["AerialDailyLedger | None"] = relationship("AerialDailyLedger", back_populates="vehicle_costs", lazy="selectin")
-    payer: Mapped["AerialDriver | None"] = relationship("AerialDriver", foreign_keys=[payer_id], lazy="selectin")
+    payer: Mapped["AerialPersonnel | None"] = relationship("AerialPersonnel", foreign_keys=[payer_id], lazy="selectin")
 
 
 # ── 安全检查 ────────────────────────────────────────────────────────────────
@@ -335,7 +336,7 @@ class AerialAgentDraft(Base):
     reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True, comment="拒绝原因")
     # 执行结果
     created_ledger_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_daily_ledgers.id"), nullable=True, comment="生成的台账ID")
-    created_expense_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_driver_expenses.id"), nullable=True, comment="生成的垫付ID")
+    created_expense_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_personnel_expenses.id"), nullable=True, comment="生成的垫付ID")
     created_cost_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_vehicle_costs.id"), nullable=True, comment="生成的车辆费用ID")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)

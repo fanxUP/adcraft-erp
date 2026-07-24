@@ -68,8 +68,8 @@ class AerialService:
         existing = await self.repo.get_vehicle_by_plate(plate)
         if existing:
             raise ValueError(f"车牌号 {plate} 已存在")
-        if data.get("default_driver_id"):
-            data["default_driver_id"] = uuid.UUID(data["default_driver_id"])
+        if data.get("default_personnel_id"):
+            data["default_personnel_id"] = uuid.UUID(data["default_personnel_id"])
         if data.get("purchase_date"):
             data["purchase_date"] = datetime.fromisoformat(data["purchase_date"])
         if data.get("insurance_expire_date"):
@@ -92,7 +92,7 @@ class AerialService:
             existing = await self.repo.get_vehicle_by_plate(data["plate_number"])
             if existing:
                 raise ValueError(f"车牌号 {data['plate_number']} 已存在")
-        for k in ["default_driver_id"]:
+        for k in ["default_personnel_id"]:
             if data.get(k):
                 data[k] = uuid.UUID(data[k])
         for k in ["purchase_date", "insurance_expire_date", "inspection_expire_date", "maintenance_due_date"]:
@@ -113,8 +113,8 @@ class AerialService:
             "platform_capacity": v.platform_capacity,
             "purchase_date": v.purchase_date.isoformat() if v.purchase_date else None,
             "status": v.status,
-            "default_driver_id": str(v.default_driver_id) if v.default_driver_id else None,
-            "default_driver_name": v.default_driver.driver_name if v.default_driver else None,
+            "default_personnel_id": str(v.default_personnel_id) if v.default_personnel_id else None,
+            "default_personnel_name": v.default_personnel.name if v.default_personnel else None,
             "insurance_expire_date": v.insurance_expire_date.isoformat() if v.insurance_expire_date else None,
             "inspection_expire_date": v.inspection_expire_date.isoformat() if v.inspection_expire_date else None,
             "maintenance_due_date": v.maintenance_due_date.isoformat() if v.maintenance_due_date else None,
@@ -123,45 +123,45 @@ class AerialService:
             "updated_at": v.updated_at.isoformat() if v.updated_at else None,
         }
 
-    # ── 驾驶员 ──────────────────────────────────────────────────────────────
+    # ── 人员 ──────────────────────────────────────────────────────────────
 
-    async def list_drivers(self, keyword="", status="", page=1, page_size=20):
+    async def list_personnel(self, keyword="", status="", page=1, page_size=20):
         skip = (page - 1) * page_size
-        items, total = await self.repo.list_drivers(keyword, status, skip, page_size)
-        return [self._driver_to_dict(d) for d in items], total
+        items, total = await self.repo.list_personnel(keyword, status, skip, page_size)
+        return [self._personnel_to_dict(d) for d in items], total
 
-    async def get_driver(self, driver_id: str):
-        obj = await self.repo.get_driver(uuid.UUID(driver_id))
+    async def get_personnel(self, personnel_id: str):
+        obj = await self.repo.get_personnel(uuid.UUID(personnel_id))
         if not obj:
-            raise ValueError("驾驶员不存在")
-        return self._driver_to_dict(obj)
+            raise ValueError("人员不存在")
+        return self._personnel_to_dict(obj)
 
-    async def create_driver(self, data: dict):
-        if not data.get("driver_name", "").strip():
-            raise ValueError("驾驶员姓名不能为空")
+    async def create_personnel(self, data: dict):
+        if not data.get("name", "").strip():
+            raise ValueError("人员姓名不能为空")
         if data.get("license_expire_date"):
             data["license_expire_date"] = datetime.fromisoformat(data["license_expire_date"])
-        obj = await self.repo.create_driver(data)
-        result = self._driver_to_dict(obj)
-        await self._log(None, ACTION_CREATE, target_type="driver", target_id=obj.id, after=result)
+        obj = await self.repo.create_personnel(data)
+        result = self._personnel_to_dict(obj)
+        await self._log(None, ACTION_CREATE, target_type="personnel", target_id=obj.id, after=result)
         return result
 
-    async def update_driver(self, driver_id: str, data: dict):
-        obj = await self.repo.get_driver(uuid.UUID(driver_id))
+    async def update_personnel(self, personnel_id: str, data: dict):
+        obj = await self.repo.get_personnel(uuid.UUID(personnel_id))
         if not obj:
-            raise ValueError("驾驶员不存在")
-        before = self._driver_to_dict(obj)
+            raise ValueError("人员不存在")
+        before = self._personnel_to_dict(obj)
         if data.get("license_expire_date"):
             data["license_expire_date"] = datetime.fromisoformat(data["license_expire_date"])
-        obj = await self.repo.update_driver(obj, data)
-        after = self._driver_to_dict(obj)
-        await self._log(None, ACTION_UPDATE, target_type="driver", target_id=obj.id, before=before, after=after)
+        obj = await self.repo.update_personnel(obj, data)
+        after = self._personnel_to_dict(obj)
+        await self._log(None, ACTION_UPDATE, target_type="personnel", target_id=obj.id, before=before, after=after)
         return after
 
-    def _driver_to_dict(self, d):
+    def _personnel_to_dict(self, d):
         return {
             "id": str(d.id),
-            "driver_name": d.driver_name,
+            "name": d.name,
             "phone": d.phone,
             "license_no": d.license_no,
             "license_type": d.license_type,
@@ -192,14 +192,14 @@ class AerialService:
             raise ValueError("出车日期不能为空")
         if not data.get("aerial_vehicle_id"):
             raise ValueError("高空车不能为空")
-        if not data.get("driver_id"):
-            raise ValueError("驾驶员不能为空")
+        if not data.get("personnel_id"):
+            raise ValueError("人员不能为空")
         if not data.get("work_location", "").strip():
             raise ValueError("作业地点不能为空")
 
         # 转换类型
         data["aerial_vehicle_id"] = uuid.UUID(data["aerial_vehicle_id"])
-        data["driver_id"] = uuid.UUID(data["driver_id"])
+        data["personnel_id"] = uuid.UUID(data["personnel_id"])
         data["work_date"] = datetime.fromisoformat(data["work_date"]) if isinstance(data["work_date"], str) else data["work_date"]
 
         for k in ["planned_start_time", "planned_end_time", "actual_start_time", "actual_end_time", "payment_time"]:
@@ -250,7 +250,7 @@ class AerialService:
             raise ValueError("已作废台账不能编辑")
 
         # 转换类型
-        for k in ["aerial_vehicle_id", "driver_id"]:
+        for k in ["aerial_vehicle_id", "personnel_id"]:
             if data.get(k):
                 data[k] = uuid.UUID(data[k])
         for k in ["work_date", "planned_start_time", "planned_end_time", "actual_start_time", "actual_end_time", "payment_time"]:
@@ -331,7 +331,7 @@ class AerialService:
             final = float(final)
         received = float(data.get("received_amount", 0) or 0)
         unpaid = final - received
-        wage = float(data.get("driver_wage_amount", 0) or 0)
+        wage = float(data.get("personnel_wage_amount", 0) or 0)
         reimbursement = float(data.get("reimbursement_amount", 0) or 0)
         vehicle_cost = float(data.get("vehicle_direct_cost", 0) or 0)
 
@@ -366,8 +366,8 @@ class AerialService:
             "work_date": l.work_date.strftime("%Y-%m-%d") if l.work_date else None,
             "aerial_vehicle_id": str(l.aerial_vehicle_id),
             "plate_number": l.plate_number,
-            "driver_id": str(l.driver_id),
-            "driver_name": l.driver.driver_name if l.driver else None,
+            "personnel_id": str(l.personnel_id),
+            "name": l.personnel.name if l.personnel else None,
             "assistant_names": l.assistant_names,
             "customer_name": l.customer_name,
             "contact_name": l.contact_name,
@@ -389,7 +389,7 @@ class AerialService:
             "payment_status": l.payment_status,
             "payment_method": l.payment_method,
             "payment_time": l.payment_time.isoformat() if l.payment_time else None,
-            "driver_wage_amount": float(l.driver_wage_amount),
+            "personnel_wage_amount": float(l.personnel_wage_amount),
             "reimbursement_amount": float(l.reimbursement_amount),
             "vehicle_direct_cost": float(l.vehicle_direct_cost),
             "gross_profit": float(l.gross_profit),
@@ -423,7 +423,7 @@ class AerialService:
         })
         return d
 
-    # ── 驾驶员垫付 ──────────────────────────────────────────────────────────
+    # ── 人员垫付 ──────────────────────────────────────────────────────────
 
     async def list_expenses(self, page=1, page_size=20, **filters):
         skip = (page - 1) * page_size
@@ -437,7 +437,7 @@ class AerialService:
             raise ValueError("金额必须大于 0")
 
         data["ledger_id"] = uuid.UUID(data["ledger_id"])
-        data["driver_id"] = uuid.UUID(data["driver_id"])
+        data["personnel_id"] = uuid.UUID(data["personnel_id"])
         data["expense_date"] = datetime.fromisoformat(data["expense_date"]) if isinstance(data.get("expense_date"), str) else data.get("expense_date", datetime.now())
 
         # 校验台账存在
@@ -498,12 +498,12 @@ class AerialService:
             "id": str(e.id),
             "ledger_id": str(e.ledger_id),
             "expense_date": e.expense_date.strftime("%Y-%m-%d") if e.expense_date else None,
-            "driver_id": str(e.driver_id),
-            "driver_name": e.driver.driver_name if e.driver else None,
+            "personnel_id": str(e.personnel_id),
+            "name": e.personnel.name if e.personnel else None,
             "expense_type": e.expense_type,
             "amount": float(e.amount),
             "payment_method": e.payment_method,
-            "paid_by_driver": e.paid_by_driver,
+            "paid_by_personnel": e.paid_by_personnel,
             "receipt_url": e.receipt_url,
             "description": e.description,
             "review_status": e.review_status,
@@ -515,10 +515,10 @@ class AerialService:
     async def _sum_expenses_for_ledger(self, ledger_id) -> float:
         """汇总台账下所有已审核通过的费用金额"""
         from sqlalchemy import select, func
-        from app.models.aerial import AerialDriverExpense
-        q = select(func.coalesce(func.sum(AerialDriverExpense.amount), 0)).where(
-            AerialDriverExpense.ledger_id == ledger_id,
-            AerialDriverExpense.review_status == "approved",
+        from app.models.aerial import AerialPersonnelExpense
+        q = select(func.coalesce(func.sum(AerialPersonnelExpense.amount), 0)).where(
+            AerialPersonnelExpense.ledger_id == ledger_id,
+            AerialPersonnelExpense.review_status == "approved",
         )
         result = (await self.db.execute(q)).scalar()
         return float(result)
@@ -526,14 +526,14 @@ class AerialService:
     async def _sum_wages_for_ledger(self, ledger_id) -> float:
         """汇总台账下所有工资金额"""
         from sqlalchemy import select, func
-        from app.models.aerial import AerialDriverWage
-        q = select(func.coalesce(func.sum(AerialDriverWage.final_wage_amount), 0)).where(
-            AerialDriverWage.ledger_id == ledger_id,
+        from app.models.aerial import AerialPersonnelWage
+        q = select(func.coalesce(func.sum(AerialPersonnelWage.final_wage_amount), 0)).where(
+            AerialPersonnelWage.ledger_id == ledger_id,
         )
         result = (await self.db.execute(q)).scalar()
         return float(result)
 
-    # ── 驾驶员工资 ──────────────────────────────────────────────────────────
+    # ── 人员工资 ──────────────────────────────────────────────────────────
 
     async def list_wages(self, page=1, page_size=20, **filters):
         skip = (page - 1) * page_size
@@ -541,9 +541,9 @@ class AerialService:
         return [self._wage_to_dict(w) for w in items], total
 
     async def create_wage(self, data: dict):
-        if not data.get("driver_id"):
-            raise ValueError("驾驶员不能为空")
-        data["driver_id"] = uuid.UUID(data["driver_id"])
+        if not data.get("personnel_id"):
+            raise ValueError("人员不能为空")
+        data["personnel_id"] = uuid.UUID(data["personnel_id"])
         if data.get("ledger_id"):
             data["ledger_id"] = uuid.UUID(data["ledger_id"])
 
@@ -566,7 +566,7 @@ class AerialService:
             ledger = await self.repo.get_ledger(obj.ledger_id)
             if ledger:
                 total_wages = await self._sum_wages_for_ledger(obj.ledger_id)
-                await self.repo.update_ledger(ledger, {"driver_wage_amount": total_wages})
+                await self.repo.update_ledger(ledger, {"personnel_wage_amount": total_wages})
 
         return self._wage_to_dict(obj)
 
@@ -589,8 +589,8 @@ class AerialService:
             "id": str(w.id),
             "ledger_id": str(w.ledger_id) if w.ledger_id else None,
             "wage_month": w.wage_month,
-            "driver_id": str(w.driver_id),
-            "driver_name": w.driver.driver_name if w.driver else None,
+            "personnel_id": str(w.personnel_id),
+            "name": w.personnel.name if w.personnel else None,
             "wage_type": w.wage_type,
             "base_wage": float(w.base_wage),
             "trip_wage": float(w.trip_wage),
@@ -665,9 +665,9 @@ class AerialService:
             "amount": float(c.amount),
             "handler_id": str(c.handler_id) if c.handler_id else None,
             "payer_id": str(c.payer_id) if c.payer_id else None,
-            "payer_name": c.payer.driver_name if c.payer else None,
+            "payer_name": c.payer.name if c.payer else None,
             "payment_method": c.payment_method,
-            "is_driver_advance": c.is_driver_advance,
+            "is_personnel_advance": c.is_personnel_advance,
             "need_reimbursement": c.need_reimbursement,
             "receipt_url": c.receipt_url,
             "allocation_type": c.allocation_type,
@@ -865,5 +865,5 @@ class AerialService:
     async def get_report_costs(self, year_month: str = None):
         return await self.repo.get_cost_by_type(year_month)
 
-    async def get_report_driver_summary(self, year_month: str):
-        return await self.repo.get_driver_summary(year_month)
+    async def get_report_personnel_summary(self, year_month: str):
+        return await self.repo.get_personnel_summary(year_month)

@@ -22,7 +22,7 @@
           <el-table :data="todayLedgers" stripe size="small" v-loading="loading">
             <el-table-column prop="work_date" label="日期" width="100" />
             <el-table-column prop="ledger_no" label="台账编号" width="150" />
-            <el-table-column prop="driver_name" label="驾驶员" width="80" />
+            <el-table-column prop="name" label="人员" width="80" />
             <el-table-column prop="customer_name" label="客户" width="120" />
             <el-table-column prop="work_location" label="作业地点" min-width="120" />
             <el-table-column prop="receivable_amount" label="应收" width="80" align="right">

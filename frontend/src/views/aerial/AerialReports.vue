@@ -37,7 +37,7 @@
         <h4>待审核垫付</h4>
         <el-table :data="reimbursements.pending_review || []" stripe v-loading="loading" size="small" style="margin-bottom: 20px">
           <el-table-column prop="expense_date" label="日期" width="100" />
-          <el-table-column prop="driver_name" label="驾驶员" width="80" />
+          <el-table-column prop="name" label="人员" width="80" />
           <el-table-column prop="expense_type" label="类型" width="80" />
           <el-table-column prop="amount" label="金额" width="80" align="right"><template #default="{ row }">¥{{ row.amount }}</template></el-table-column>
           <el-table-column prop="description" label="说明" min-width="150" />
@@ -45,7 +45,7 @@
         <h4>待报销垫付</h4>
         <el-table :data="reimbursements.pending_reimbursement || []" stripe v-loading="loading" size="small">
           <el-table-column prop="expense_date" label="日期" width="100" />
-          <el-table-column prop="driver_name" label="驾驶员" width="80" />
+          <el-table-column prop="name" label="人员" width="80" />
           <el-table-column prop="expense_type" label="类型" width="80" />
           <el-table-column prop="amount" label="金额" width="80" align="right"><template #default="{ row }">¥{{ row.amount }}</template></el-table-column>
         </el-table>
@@ -64,13 +64,13 @@
       </el-tab-pane>
 
       <!-- 驾驶员汇总 -->
-      <el-tab-pane label="驾驶员汇总" name="drivers">
+      <el-tab-pane label="人员汇总" name="personnel">
         <el-form :inline="true" style="margin-bottom: 16px">
-          <el-form-item label="月份"><el-date-picker v-model="driverMonth" type="month" value-format="YYYY-MM" /></el-form-item>
-          <el-button type="primary" @click="loadDrivers">查询</el-button>
+          <el-form-item label="月份"><el-date-picker v-model="personnelMonth" type="month" value-format="YYYY-MM" /></el-form-item>
+          <el-button type="primary" @click="loadPersonnel">查询</el-button>
         </el-form>
-        <el-table :data="driverData" stripe v-loading="loading">
-          <el-table-column prop="driver_name" label="驾驶员" width="120" />
+        <el-table :data="personnelData" stripe v-loading="loading">
+          <el-table-column prop="name" label="人员" width="120" />
           <el-table-column prop="trip_count" label="出车趟数" width="90" />
           <el-table-column prop="receivable" label="应收" width="100" align="right"><template #default="{ row }">¥{{ row.receivable }}</template></el-table-column>
           <el-table-column prop="received" label="实收" width="100" align="right"><template #default="{ row }">¥{{ row.received }}</template></el-table-column>
@@ -86,20 +86,20 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   getAerialReportMonthly, getAerialReportReceivables, getAerialReportReimbursements,
-  getAerialReportCosts, getAerialReportDriverSummary,
+  getAerialReportCosts, getAerialReportPersonnelSummary,
 } from '@/api/aerial'
 
 const loading = ref(false)
 const activeTab = ref('monthly')
 const month = ref(new Date().toISOString().slice(0, 7))
 const costMonth = ref('')
-const driverMonth = ref(new Date().toISOString().slice(0, 7))
+const personnelMonth = ref(new Date().toISOString().slice(0, 7))
 
 const monthlyData = ref<any>(null)
 const receivables = ref<any>({})
 const reimbursements = ref<any>({})
 const costData = ref<any[]>([])
-const driverData = ref<any[]>([])
+const personnelData = ref<any[]>([])
 
 const monthlyCards = computed(() => {
   const d = monthlyData.value || {}
@@ -109,7 +109,7 @@ const monthlyCards = computed(() => {
     { label: '应收金额', value: `¥${d.receivable || 0}` },
     { label: '实收金额', value: `¥${d.received || 0}` },
     { label: '待收金额', value: `¥${d.unpaid || 0}`, color: (d.unpaid || 0) > 0 ? '#f56c6c' : '#909399' },
-    { label: '驾驶员工资', value: `¥${d.wages || 0}` },
+    { label: '人员工资', value: `¥${d.wages || 0}` },
     { label: '报 销', value: `¥${d.reimbursements || 0}` },
     { label: '车辆费用', value: `¥${d.vehicle_costs || 0}` },
     { label: '毛利润', value: `¥${d.gross_profit || 0}`, color: (d.gross_profit || 0) >= 0 ? '#67c23a' : '#f56c6c' },
@@ -143,10 +143,10 @@ async function loadCosts() {
   catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
 }
 
-async function loadDrivers() {
-  if (!driverMonth.value) return
+async function loadPersonnel() {
+  if (!personnelMonth.value) return
   loading.value = true
-  try { driverData.value = await getAerialReportDriverSummary(driverMonth.value) || [] }
+  try { personnelData.value = await getAerialReportPersonnelSummary(personnelMonth.value) || [] }
   catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
 }
 
@@ -155,7 +155,7 @@ function handleTabChange(tab: string) {
   else if (tab === 'receivables') loadReceivables()
   else if (tab === 'reimbursements') loadReimbursements()
   else if (tab === 'costs') loadCosts()
-  else if (tab === 'drivers') loadDrivers()
+  else if (tab === 'personnel') loadPersonnel()
 }
 
 function costTypeLabel(t: string) {

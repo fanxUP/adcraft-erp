@@ -167,7 +167,7 @@
       </p>
       <el-form v-if="confirmDraft?.extracted" label-width="80px" style="margin-top: 12px;">
         <template v-for="(val, key) in confirmDraft.extracted" :key="key">
-          <el-form-item :label="extractedLabel(key)" v-if="key !== 'driver_expenses'">
+          <el-form-item :label="extractedLabel(key)" v-if="key !== 'personnel_expenses'">
             <el-input v-model="confirmDraft.extracted[key]" />
           </el-form-item>
         </template>
@@ -335,7 +335,7 @@ const platformLabel = (p: string) => {
 const intentLabel = (i: string) => {
   const map: Record<string, string> = {
     aerial_work_ledger: '出车台账',
-    aerial_driver_expense: '司机垫付',
+    aerial_personnel_expense: '人员垫付',
     aerial_payment_claim: '付款声称',
     aerial_vehicle_issue: '车辆异常',
     aerial_query_report: '查询统计',
@@ -348,7 +348,7 @@ const intentLabel = (i: string) => {
 const intentTagType = (i: string) => {
   const map: Record<string, string> = {
     aerial_work_ledger: 'primary',
-    aerial_driver_expense: 'warning',
+    aerial_personnel_expense: 'warning',
     aerial_payment_claim: 'danger',
     aerial_vehicle_issue: 'danger',
     aerial_query_report: 'info',
@@ -374,12 +374,12 @@ const extractedLabel = (key: string) => {
     work_location: '作业地点',
     work_content: '作业内容',
     receivable_amount: '应收金额',
-    driver_name: '驾驶员',
-    driver_name_hint: '发送人',
-    driver_id: '驾驶员ID',
+    name: '人员',
+    name_hint: '发送人',
+    personnel_id: '人员ID',
     vehicle_id: '车辆ID',
     customer_name: '客户',
-    driver_expenses: '垫付费用',
+    personnel_expenses: '垫付费用',
     issue_description: '问题描述',
     plate_number: '车牌号',
     claim_text: '付款声明',

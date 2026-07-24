@@ -11,7 +11,7 @@
       <el-table-column prop="brand_model" label="品牌型号" width="120" />
       <el-table-column prop="max_working_height" label="最大高度" width="90" />
       <el-table-column prop="platform_capacity" label="平台承重" width="90" />
-      <el-table-column prop="default_driver_name" label="默认驾驶员" width="100" />
+      <el-table-column prop="default_personnel_name" label="默认人员" width="100" />
       <el-table-column prop="status" label="状态" width="80">
         <template #default="{ row }">
           <el-tag :type="row.status === 'available' ? 'success' : row.status === 'disabled' ? 'danger' : 'warning'" size="small">{{ statusLabel(row.status) }}</el-tag>
