@@ -11,7 +11,7 @@
     <!-- 筛选 -->
     <div class="search-bar">
       <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="width: 260px" />
-      <el-select v-model="filters.personnel_id" placeholder="驾驶员" clearable style="width: 120px">
+      <el-select v-model="filters.personnel_id" placeholder="人员" clearable style="width: 120px">
         <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
       </el-select>
       <el-input v-model="filters.customer_name" placeholder="客户名称" clearable style="width: 140px" />
@@ -103,7 +103,7 @@
         </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="驾驶员" required>
+            <el-form-item label="人员" required>
               <el-select v-model="form.personnel_id" style="width: 100%">
                 <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
               </el-select>
@@ -206,7 +206,7 @@
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="驾驶员工资">
+            <el-form-item label="人员工资">
               <el-input-number v-model="form.personnel_wage_amount" :min="0" :precision="2" style="width: 100%" />
             </el-form-item>
           </el-col>
@@ -394,7 +394,7 @@ function handleEdit(row: any) {
 async function handleSave() {
   if (!form.work_date) return ElMessage.warning('请选择出车日期')
   if (!form.aerial_vehicle_id) return ElMessage.warning('请选择高空车')
-  if (!form.personnel_id) return ElMessage.warning('请选择驾驶员')
+  if (!form.personnel_id) return ElMessage.warning('请选择人员')
   if (!form.work_location.trim()) return ElMessage.warning('请填写作业地点')
 
   saving.value = true
