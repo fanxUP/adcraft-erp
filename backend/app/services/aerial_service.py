@@ -16,6 +16,7 @@ from app.repositories.aerial_repo import AerialRepository
 # 审计日志动作常量
 ACTION_CREATE = "create"
 ACTION_UPDATE = "update"
+ACTION_DELETE = "delete"
 ACTION_VOID = "void"
 ACTION_APPROVE = "approve"
 ACTION_REJECT = "reject"
@@ -157,6 +158,15 @@ class AerialService:
         result = self._personnel_to_dict(obj)
         await self._log(None, ACTION_CREATE, target_type="personnel", target_id=obj.id, after=result)
         return result
+
+    async def delete_personnel(self, personnel_id: str) -> dict:
+        obj = await self.repo.get_personnel(uuid.UUID(personnel_id))
+        if not obj:
+            raise ValueError("人员不存在")
+        before = self._personnel_to_dict(obj)
+        await self.repo.soft_delete_personnel(obj)
+        await self._log(None, ACTION_DELETE, target_type="personnel", target_id=obj.id, before=before)
+        return before
 
     async def update_personnel(self, personnel_id: str, data: dict):
         obj = await self.repo.get_personnel(uuid.UUID(personnel_id))

@@ -13,7 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, TimestampMixin, SoftDeleteMixin
 
 
 # ── 高空车档案 ──────────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ class AerialVehicle(Base, TimestampMixin):
 
 # ── 高空车人员 ──────────────────────────────────────────────────────────────
 
-class AerialPersonnel(Base, TimestampMixin):
+class AerialPersonnel(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "aerial_personnel"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
