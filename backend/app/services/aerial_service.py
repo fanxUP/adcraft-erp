@@ -665,6 +665,7 @@ class AerialService:
             "amount": float(c.amount),
             "handler_id": str(c.handler_id) if c.handler_id else None,
             "payer_id": str(c.payer_id) if c.payer_id else None,
+            "payer_name": c.payer.driver_name if c.payer else None,
             "payment_method": c.payment_method,
             "is_driver_advance": c.is_driver_advance,
             "need_reimbursement": c.need_reimbursement,

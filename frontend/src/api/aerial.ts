@@ -142,6 +142,7 @@ export interface AerialVehicleCost {
   amount: number
   handler_id?: string
   payer_id?: string
+  payer_name?: string
   payment_method?: string
   is_driver_advance: boolean
   need_reimbursement: boolean
