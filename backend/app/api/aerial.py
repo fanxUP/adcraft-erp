@@ -163,7 +163,7 @@ async def delete_personnel(
     svc = _svc(db, current_user, request)
     try:
         result = await svc.delete_personnel(personnel_id)
-        return success(result, message="人员已删除")
+        return success(result)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
