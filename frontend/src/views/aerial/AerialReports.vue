@@ -63,7 +63,7 @@
         </el-table>
       </el-tab-pane>
 
-      <!-- 驾驶员汇总 -->
+      <!-- 人员汇总 -->
       <el-tab-pane label="人员汇总" name="personnel">
         <el-form :inline="true" style="margin-bottom: 16px">
           <el-form-item label="月份"><el-date-picker v-model="personnelMonth" type="month" value-format="YYYY-MM" /></el-form-item>
