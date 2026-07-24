@@ -72,12 +72,20 @@ class AerialService:
             data["default_personnel_id"] = uuid.UUID(data["default_personnel_id"])
         if data.get("purchase_date"):
             data["purchase_date"] = datetime.fromisoformat(data["purchase_date"])
+        else:
+            data["purchase_date"] = None
         if data.get("insurance_expire_date"):
             data["insurance_expire_date"] = datetime.fromisoformat(data["insurance_expire_date"])
+        else:
+            data["insurance_expire_date"] = None
         if data.get("inspection_expire_date"):
             data["inspection_expire_date"] = datetime.fromisoformat(data["inspection_expire_date"])
+        else:
+            data["inspection_expire_date"] = None
         if data.get("maintenance_due_date"):
             data["maintenance_due_date"] = datetime.fromisoformat(data["maintenance_due_date"])
+        else:
+            data["maintenance_due_date"] = None
         obj = await self.repo.create_vehicle(data)
         result = self._vehicle_to_dict(obj)
         await self._log(None, ACTION_CREATE, target_type="vehicle", target_id=obj.id, after=result)
@@ -98,6 +106,8 @@ class AerialService:
         for k in ["purchase_date", "insurance_expire_date", "inspection_expire_date", "maintenance_due_date"]:
             if data.get(k):
                 data[k] = datetime.fromisoformat(data[k])
+            elif k in data:
+                data[k] = None
         obj = await self.repo.update_vehicle(obj, data)
         after = self._vehicle_to_dict(obj)
         await self._log(None, ACTION_UPDATE, target_type="vehicle", target_id=obj.id, before=before, after=after)
@@ -141,6 +151,8 @@ class AerialService:
             raise ValueError("人员姓名不能为空")
         if data.get("license_expire_date"):
             data["license_expire_date"] = datetime.fromisoformat(data["license_expire_date"])
+        else:
+            data["license_expire_date"] = None
         obj = await self.repo.create_personnel(data)
         result = self._personnel_to_dict(obj)
         await self._log(None, ACTION_CREATE, target_type="personnel", target_id=obj.id, after=result)
@@ -153,6 +165,8 @@ class AerialService:
         before = self._personnel_to_dict(obj)
         if data.get("license_expire_date"):
             data["license_expire_date"] = datetime.fromisoformat(data["license_expire_date"])
+        else:
+            data["license_expire_date"] = None
         obj = await self.repo.update_personnel(obj, data)
         after = self._personnel_to_dict(obj)
         await self._log(None, ACTION_UPDATE, target_type="personnel", target_id=obj.id, before=before, after=after)
@@ -205,6 +219,8 @@ class AerialService:
         for k in ["planned_start_time", "planned_end_time", "actual_start_time", "actual_end_time", "payment_time"]:
             if data.get(k) and isinstance(data[k], str):
                 data[k] = datetime.fromisoformat(data[k])
+            elif k in data and not data.get(k):
+                data[k] = None
 
         # 冗余车牌号
         vehicle = await self.repo.get_vehicle(data["aerial_vehicle_id"])
@@ -256,6 +272,8 @@ class AerialService:
         for k in ["work_date", "planned_start_time", "planned_end_time", "actual_start_time", "actual_end_time", "payment_time"]:
             if data.get(k) and isinstance(data[k], str):
                 data[k] = datetime.fromisoformat(data[k])
+            elif k in data and not data.get(k):
+                data[k] = None
 
         # 如果改了车辆，更新冗余车牌号
         if "aerial_vehicle_id" in data:
