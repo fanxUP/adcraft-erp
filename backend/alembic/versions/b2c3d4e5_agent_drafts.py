@@ -34,7 +34,7 @@ def upgrade():
         sa.Column("confirmed_at", sa.DateTime, nullable=True, comment="确认时间"),
         sa.Column("reject_reason", sa.Text, nullable=True, comment="拒绝原因"),
         sa.Column("created_ledger_id", UUID(as_uuid=True), sa.ForeignKey("aerial_daily_ledgers.id"), nullable=True, comment="生成的台账ID"),
-        sa.Column("created_expense_id", UUID(as_uuid=True), sa.ForeignKey("aerial_driver_expenses.id"), nullable=True, comment="生成的垫付ID"),
+        sa.Column("created_expense_id", UUID(as_uuid=True), sa.ForeignKey("aerial_personnel_expenses.id"), nullable=True, comment="生成的垫付ID"),
         sa.Column("created_cost_id", UUID(as_uuid=True), sa.ForeignKey("aerial_vehicle_costs.id"), nullable=True, comment="生成的车辆费用ID"),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime, server_default=sa.func.now(), nullable=False),

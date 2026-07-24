@@ -30,6 +30,7 @@ export interface AerialPersonnel {
   license_type?: string
   license_expire_date?: string
   is_external: boolean
+  personnel_type?: string
   status: string
   remark?: string
   created_at?: string
