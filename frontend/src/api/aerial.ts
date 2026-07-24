@@ -204,6 +204,9 @@ export const createAerialVehicle = (data: any) =>
 export const updateAerialVehicle = (id: string, data: any) =>
   patch<AerialVehicle>(`/aerial/vehicles/${id}`, data)
 
+export const deleteAerialVehicle = (id: string) =>
+  del(`/aerial/vehicles/${id}`)
+
 // ── Personnel API ─────────────────────────────────────────────────────────────
 
 export const getAerialPersonnel = (params?: any) =>

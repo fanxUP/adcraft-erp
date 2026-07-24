@@ -23,8 +23,15 @@
       <el-table-column prop="inspection_expire_date" label="年检到期" width="110">
         <template #default="{ row }"><span :style="{ color: isExpiredSoon(row.inspection_expire_date) ? '#f56c6c' : '' }">{{ row.inspection_expire_date || '-' }}</span></template>
       </el-table-column>
-      <el-table-column label="操作" width="80" fixed="right">
-        <template #default="{ row }"><el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button></template>
+      <el-table-column label="操作" width="150" fixed="right">
+        <template #default="{ row }">
+          <el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
+          <el-popconfirm title="确定删除该车辆？" @confirm="handleDelete(row)">
+            <template #reference>
+              <el-button link type="danger" size="small">删除</el-button>
+            </template>
+          </el-popconfirm>
+        </template>
       </el-table-column>
     </el-table>
     <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px" @current-change="fetchData" />
@@ -57,7 +64,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getAerialVehicles, createAerialVehicle, updateAerialVehicle } from '@/api/aerial'
+import { getAerialVehicles, createAerialVehicle, updateAerialVehicle, deleteAerialVehicle } from '@/api/aerial'
 
 const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
 const list = ref<any[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
@@ -95,6 +102,10 @@ async function handleSave() {
     else { await createAerialVehicle(form); ElMessage.success('新增成功') }
     dialogVisible.value = false; fetchData()
   } catch (e: any) { ElMessage.error(e.message) } finally { saving.value = false }
+}
+
+async function handleDelete(row: any) {
+  try { await deleteAerialVehicle(row.id); ElMessage.success('删除成功'); fetchData() } catch (e: any) { ElMessage.error(e.message) }
 }
 
 function statusLabel(s: string) { return { available: '可用', in_use: '使用中', maintenance: '维修中', disabled: '已停用', scrapped: '已报废' }[s] || s }

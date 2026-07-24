@@ -21,7 +21,7 @@ class AerialRepository:
     # ── 高空车档案 ──────────────────────────────────────────────────────────
 
     async def list_vehicles(self, keyword: str = "", status: str = "", skip: int = 0, limit: int = 20):
-        q = select(AerialVehicle)
+        q = select(AerialVehicle).where(AerialVehicle.deleted_at.is_(None))
         if keyword:
             q = q.where(or_(
                 AerialVehicle.plate_number.ilike(f"%{keyword}%"),
@@ -36,7 +36,9 @@ class AerialRepository:
         return list(rows), total
 
     async def get_vehicle(self, vehicle_id: uuid.UUID):
-        return (await self.db.execute(select(AerialVehicle).where(AerialVehicle.id == vehicle_id))).scalar_one_or_none()
+        return (await self.db.execute(
+            select(AerialVehicle).where(AerialVehicle.id == vehicle_id, AerialVehicle.deleted_at.is_(None))
+        )).scalar_one_or_none()
 
     async def get_vehicle_by_plate(self, plate: str):
         return (await self.db.execute(select(AerialVehicle).where(AerialVehicle.plate_number == plate))).scalar_one_or_none()
@@ -54,6 +56,11 @@ class AerialRepository:
                 setattr(obj, k, v)
         await self.db.flush()
         await self.db.refresh(obj)
+        return obj
+
+    async def soft_delete_vehicle(self, obj: AerialVehicle) -> AerialVehicle:
+        obj.deleted_at = datetime.now()
+        await self.db.flush()
         return obj
 
     # ── 人员 ──────────────────────────────────────────────────────────────

@@ -18,7 +18,7 @@ from app.models.base import Base, TimestampMixin, SoftDeleteMixin
 
 # ── 高空车档案 ──────────────────────────────────────────────────────────────
 
-class AerialVehicle(Base, TimestampMixin):
+class AerialVehicle(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "aerial_vehicles"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
