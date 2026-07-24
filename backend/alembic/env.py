@@ -26,8 +26,8 @@ from app.models.vehicle import (
     VehicleCostAllocation, VehicleAgentDraft,
 )
 from app.models.aerial import (
-    AerialVehicle, AerialDriver, AerialDailyLedger, AerialDriverExpense,
-    AerialDriverWage, AerialVehicleCost, AerialSafetyCheck,
+    AerialVehicle, AerialPersonnel, AerialDailyLedger, AerialPersonnelExpense,
+    AerialPersonnelWage, AerialVehicleCost, AerialSafetyCheck,
     AerialLedgerAttachment, AerialLedgerAuditLog, AerialAgentDraft,
 )
 
