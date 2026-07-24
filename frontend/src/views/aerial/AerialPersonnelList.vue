@@ -19,10 +19,15 @@
       <el-table-column prop="status" label="状态" width="80">
         <template #default="{ row }"><el-tag :type="row.status === 'active' ? 'success' : 'danger'" size="small">{{ row.status === 'active' ? '在职' : '停用' }}</el-tag></template>
       </el-table-column>
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
           <el-button link :type="row.status === 'active' ? 'danger' : 'success'" size="small" @click="handleToggle(row)">{{ row.status === 'active' ? '停用' : '启用' }}</el-button>
+          <el-popconfirm title="确定删除该人员？" @confirm="handleDelete(row)">
+            <template #reference>
+              <el-button link type="danger" size="small">删除</el-button>
+            </template>
+          </el-popconfirm>
         </template>
       </el-table-column>
     </el-table>
@@ -48,7 +53,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAerialPersonnel, createAerialPersonnel, updateAerialPersonnel } from '@/api/aerial'
+import { getAerialPersonnel, createAerialPersonnel, updateAerialPersonnel, deleteAerialPersonnel } from '@/api/aerial'
 
 const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
 const list = ref<any[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
@@ -87,6 +92,10 @@ async function handleSave() {
 async function handleToggle(row: any) {
   const newStatus = row.status === 'active' ? 'disabled' : 'active'
   try { await ElMessageBox.confirm(`确定${newStatus === 'disabled' ? '停用' : '启用'} ${row.name}？`, '确认'); await updateAerialPersonnel(row.id, { status: newStatus }); ElMessage.success('操作成功'); fetchData() } catch {}
+}
+
+async function handleDelete(row: any) {
+  try { await deleteAerialPersonnel(row.id); ElMessage.success('删除成功'); fetchData() } catch (e: any) { ElMessage.error(e.message) }
 }
 
 function isExpiredSoon(d: string | null) { if (!d) return false; return new Date(d) <= new Date(Date.now() + 30 * 86400000) }

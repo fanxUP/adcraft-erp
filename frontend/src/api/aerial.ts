@@ -217,6 +217,9 @@ export const createAerialPersonnel = (data: any) =>
 export const updateAerialPersonnel = (id: string, data: any) =>
   patch<AerialPersonnel>(`/aerial/personnel/${id}`, data)
 
+export const deleteAerialPersonnel = (id: string) =>
+  del(`/aerial/personnel/${id}`)
+
 // ── Ledger API ─────────────────────────────────────────────────────────────
 
 export const getAerialLedgers = (params?: any) =>

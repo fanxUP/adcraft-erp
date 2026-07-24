@@ -153,6 +153,21 @@ async def update_personnel(
     return success(result)
 
 
+@personnel_router.delete("/{personnel_id}")
+async def delete_personnel(
+    personnel_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_DELETE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    try:
+        result = await svc.delete_personnel(personnel_id)
+        return success(result, message="人员已删除")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 # ── 每日台账 ────────────────────────────────────────────────────────────────
 
 @ledger_router.get("")

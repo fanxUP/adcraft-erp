@@ -59,7 +59,7 @@ class AerialRepository:
     # ── 人员 ──────────────────────────────────────────────────────────────
 
     async def list_personnel(self, keyword: str = "", status: str = "", skip: int = 0, limit: int = 20):
-        q = select(AerialPersonnel)
+        q = select(AerialPersonnel).where(AerialPersonnel.deleted_at.is_(None))
         if keyword:
             q = q.where(or_(
                 AerialPersonnel.name.ilike(f"%{keyword}%"),
@@ -74,13 +74,20 @@ class AerialRepository:
         return list(rows), total
 
     async def get_personnel(self, personnel_id: uuid.UUID):
-        return (await self.db.execute(select(AerialPersonnel).where(AerialPersonnel.id == personnel_id))).scalar_one_or_none()
+        return (await self.db.execute(
+            select(AerialPersonnel).where(AerialPersonnel.id == personnel_id, AerialPersonnel.deleted_at.is_(None))
+        )).scalar_one_or_none()
 
     async def create_personnel(self, data: dict):
         obj = AerialPersonnel(**data)
         self.db.add(obj)
         await self.db.flush()
         await self.db.refresh(obj)
+        return obj
+
+    async def soft_delete_personnel(self, obj: AerialPersonnel) -> AerialPersonnel:
+        obj.deleted_at = datetime.now()
+        await self.db.flush()
         return obj
 
     async def update_personnel(self, obj: AerialPersonnel, data: dict):
