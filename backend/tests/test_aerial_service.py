@@ -1,4 +1,4 @@
-"""Tests for AerialService: vehicles, drivers, ledgers, expenses, wages, costs."""
+"""Tests for AerialService: vehicles, personnel, ledgers, expenses, wages, costs."""
 
 import json
 from datetime import datetime, timezone, date
@@ -13,7 +13,7 @@ from tests.conftest import SAMPLE_USER_ID
 # ── Mock factories ──────────────────────────────────────────────────────────
 
 SAMPLE_VEHICLE_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-SAMPLE_DRIVER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+SAMPLE_PERSONNEL_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 SAMPLE_LEDGER_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc"
 SAMPLE_EXPENSE_ID = "dddddddd-dddd-dddd-dddd-dddddddddddd"
 SAMPLE_WAGE_ID = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
@@ -30,8 +30,8 @@ def make_mock_vehicle(**kwargs):
     v.platform_capacity = kwargs.get("platform_capacity", 200.0)
     v.purchase_date = kwargs.get("purchase_date", datetime(2024, 1, 1))
     v.status = kwargs.get("status", "active")
-    v.default_driver_id = kwargs.get("default_driver_id", None)
-    v.default_driver = kwargs.get("default_driver", None)
+    v.default_personnel_id = kwargs.get("default_personnel_id", None)
+    v.default_personnel = kwargs.get("default_personnel", None)
     v.insurance_expire_date = kwargs.get("insurance_expire_date", datetime(2026, 12, 31))
     v.inspection_expire_date = kwargs.get("inspection_expire_date", datetime(2026, 6, 30))
     v.maintenance_due_date = kwargs.get("maintenance_due_date", None)
@@ -41,10 +41,10 @@ def make_mock_vehicle(**kwargs):
     return v
 
 
-def make_mock_driver(**kwargs):
+def make_mock_personnel(**kwargs):
     d = MagicMock()
-    d.id = kwargs.get("id", SAMPLE_DRIVER_ID)
-    d.driver_name = kwargs.get("driver_name", "张师傅")
+    d.id = kwargs.get("id", SAMPLE_PERSONNEL_ID)
+    d.name = kwargs.get("name", "张师傅")
     d.phone = kwargs.get("phone", "13800138000")
     d.license_no = kwargs.get("license_no", "C123456789")
     d.license_type = kwargs.get("license_type", "C1")
@@ -63,7 +63,7 @@ def make_mock_ledger(**kwargs):
     l.ledger_no = kwargs.get("ledger_no", "GT-20260723-001")
     l.work_date = kwargs.get("work_date", datetime(2026, 7, 23))
     l.aerial_vehicle_id = kwargs.get("aerial_vehicle_id", SAMPLE_VEHICLE_ID)
-    l.driver_id = kwargs.get("driver_id", SAMPLE_DRIVER_ID)
+    l.personnel_id = kwargs.get("personnel_id", SAMPLE_PERSONNEL_ID)
     l.work_location = kwargs.get("work_location", "北京朝阳")
     l.customer_name = kwargs.get("customer_name", "测试客户")
     l.work_content = kwargs.get("work_content", "外墙清洗")
@@ -84,9 +84,9 @@ def make_mock_ledger(**kwargs):
     l.vehicle = MagicMock()
     l.vehicle.plate_number = "京A12345"
     l.vehicle.brand_model = "中联重科"
-    l.driver = MagicMock()
-    l.driver.driver_name = "张师傅"
-    l.driver.phone = "13800138000"
+    l.personnel = MagicMock()
+    l.personnel.name = "张师傅"
+    l.personnel.phone = "13800138000"
     l.expenses = []
     l.safety_checks = []
     l.attachments = []
@@ -98,12 +98,12 @@ def make_mock_expense(**kwargs):
     e = MagicMock()
     e.id = kwargs.get("id", SAMPLE_EXPENSE_ID)
     e.ledger_id = kwargs.get("ledger_id", SAMPLE_LEDGER_ID)
-    e.driver_id = kwargs.get("driver_id", SAMPLE_DRIVER_ID)
+    e.personnel_id = kwargs.get("personnel_id", SAMPLE_PERSONNEL_ID)
     e.expense_type = kwargs.get("expense_type", "fuel")
     e.expense_date = kwargs.get("expense_date", datetime(2026, 7, 23))
     e.amount = kwargs.get("amount", 200.0)
     e.remark = kwargs.get("remark", None)
-    e.paid_by_driver = kwargs.get("paid_by_driver", True)
+    e.paid_by_personnel = kwargs.get("paid_by_personnel", True)
     e.review_status = kwargs.get("review_status", "pending")
     e.reviewed_by = kwargs.get("reviewed_by", None)
     e.reviewed_at = kwargs.get("reviewed_at", None)
@@ -113,15 +113,15 @@ def make_mock_expense(**kwargs):
     # Relationships
     e.ledger = MagicMock()
     e.ledger.ledger_no = "GT-20260723-001"
-    e.driver = MagicMock()
-    e.driver.driver_name = "张师傅"
+    e.personnel = MagicMock()
+    e.personnel.name = "张师傅"
     return e
 
 
 def make_mock_wage(**kwargs):
     w = MagicMock()
     w.id = kwargs.get("id", SAMPLE_WAGE_ID)
-    w.driver_id = kwargs.get("driver_id", SAMPLE_DRIVER_ID)
+    w.personnel_id = kwargs.get("personnel_id", SAMPLE_PERSONNEL_ID)
     w.ledger_id = kwargs.get("ledger_id", None)
     w.wage_month = kwargs.get("wage_month", "2026-07")
     w.base_wage = kwargs.get("base_wage", 5000.0)
@@ -136,8 +136,8 @@ def make_mock_wage(**kwargs):
     w.remark = kwargs.get("remark", None)
     w.created_at = kwargs.get("created_at", datetime.now(timezone.utc))
     # Relationships
-    w.driver = MagicMock()
-    w.driver.driver_name = "张师傅"
+    w.personnel = MagicMock()
+    w.personnel.name = "张师傅"
     return w
 
 
@@ -178,10 +178,10 @@ def mock_repo():
     repo.get_vehicle_by_plate = AsyncMock(return_value=None)
     repo.create_vehicle = AsyncMock()
     repo.update_vehicle = AsyncMock()
-    repo.list_drivers = AsyncMock(return_value=([], 0))
-    repo.get_driver = AsyncMock()
-    repo.create_driver = AsyncMock()
-    repo.update_driver = AsyncMock()
+    repo.list_personnel = AsyncMock(return_value=([], 0))
+    repo.get_personnel = AsyncMock()
+    repo.create_personnel = AsyncMock()
+    repo.update_personnel = AsyncMock()
     repo.list_ledgers = AsyncMock(return_value=([], 0))
     repo.get_ledger = AsyncMock()
     repo.get_ledger_by_no = AsyncMock(return_value=None)
@@ -295,59 +295,59 @@ async def test_update_vehicle(service, mock_repo):
     mock_repo.create_audit_log.assert_called_once()
 
 
-# ── Driver tests ────────────────────────────────────────────────────────────
+# ── Personnel tests ────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_list_drivers_empty(service, mock_repo):
-    mock_repo.list_drivers.return_value = ([], 0)
-    items, total = await service.list_drivers()
+async def test_list_personnel_empty(service, mock_repo):
+    mock_repo.list_personnel.return_value = ([], 0)
+    items, total = await service.list_personnel()
     assert items == []
     assert total == 0
 
 
 @pytest.mark.asyncio
-async def test_get_driver_found(service, mock_repo):
-    d = make_mock_driver()
-    mock_repo.get_driver.return_value = d
-    result = await service.get_driver(SAMPLE_DRIVER_ID)
-    assert result["driver_name"] == "张师傅"
+async def test_get_personnel_found(service, mock_repo):
+    d = make_mock_personnel()
+    mock_repo.get_personnel.return_value = d
+    result = await service.get_personnel(SAMPLE_PERSONNEL_ID)
+    assert result["name"] == "张师傅"
 
 
 @pytest.mark.asyncio
-async def test_get_driver_not_found(service, mock_repo):
-    mock_repo.get_driver.return_value = None
-    with pytest.raises(ValueError, match="驾驶员不存在"):
-        await service.get_driver(SAMPLE_DRIVER_ID)
+async def test_get_personnel_not_found(service, mock_repo):
+    mock_repo.get_personnel.return_value = None
+    with pytest.raises(ValueError, match="人员不存在"):
+        await service.get_personnel(SAMPLE_PERSONNEL_ID)
 
 
 @pytest.mark.asyncio
-async def test_create_driver(service, mock_repo):
-    d = make_mock_driver()
-    mock_repo.create_driver.return_value = d
-    result = await service.create_driver({"driver_name": "张师傅"})
-    assert result["driver_name"] == "张师傅"
+async def test_create_personnel(service, mock_repo):
+    d = make_mock_personnel()
+    mock_repo.create_personnel.return_value = d
+    result = await service.create_personnel({"name": "张师傅"})
+    assert result["name"] == "张师傅"
     mock_repo.create_audit_log.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_create_driver_empty_name(service, mock_repo):
+async def test_create_personnel_empty_name(service, mock_repo):
     with pytest.raises(ValueError, match="姓名不能为空"):
-        await service.create_driver({"driver_name": ""})
+        await service.create_personnel({"name": ""})
 
 
 @pytest.mark.asyncio
-async def test_update_driver(service, mock_repo):
-    d = make_mock_driver()
-    mock_repo.get_driver.return_value = d
+async def test_update_personnel(service, mock_repo):
+    d = make_mock_personnel()
+    mock_repo.get_personnel.return_value = d
 
     async def update_side_effect(obj, data):
         for k, val in data.items():
             setattr(obj, k, val)
         return obj
 
-    mock_repo.update_driver.side_effect = update_side_effect
-    result = await service.update_driver(SAMPLE_DRIVER_ID, {"driver_name": "李师傅"})
-    assert result["driver_name"] == "李师傅"
+    mock_repo.update_personnel.side_effect = update_side_effect
+    result = await service.update_personnel(SAMPLE_PERSONNEL_ID, {"name": "李师傅"})
+    assert result["name"] == "李师傅"
     mock_repo.create_audit_log.assert_called_once()
 
 
@@ -383,7 +383,7 @@ async def test_create_ledger(service, mock_repo):
     mock_repo.create_ledger.return_value = l
     result = await service.create_ledger({
         "aerial_vehicle_id": SAMPLE_VEHICLE_ID,
-        "driver_id": SAMPLE_DRIVER_ID,
+        "personnel_id": SAMPLE_PERSONNEL_ID,
         "work_date": "2026-07-23",
         "work_location": "北京朝阳",
         "customer_name": "测试客户",
@@ -455,11 +455,11 @@ async def test_list_expenses_empty(service, mock_repo):
 async def test_create_expense(service, mock_repo):
     e = make_mock_expense()
     mock_repo.get_ledger.return_value = make_mock_ledger()
-    mock_repo.get_driver.return_value = make_mock_driver()
+    mock_repo.get_personnel.return_value = make_mock_personnel()
     mock_repo.create_expense.return_value = e
     result = await service.create_expense({
         "ledger_id": SAMPLE_LEDGER_ID,
-        "driver_id": SAMPLE_DRIVER_ID,
+        "personnel_id": SAMPLE_PERSONNEL_ID,
         "expense_type": "fuel",
         "amount": 200.0,
         "expense_date": "2026-07-23",
@@ -514,10 +514,10 @@ async def test_list_wages_empty(service, mock_repo):
 @pytest.mark.asyncio
 async def test_create_wage(service, mock_repo):
     w = make_mock_wage()
-    mock_repo.get_driver.return_value = make_mock_driver()
+    mock_repo.get_personnel.return_value = make_mock_personnel()
     mock_repo.create_wage.return_value = w
     result = await service.create_wage({
-        "driver_id": SAMPLE_DRIVER_ID,
+        "personnel_id": SAMPLE_PERSONNEL_ID,
         "wage_month": "2026-07",
         "base_wage": 5000.0,
         "commission_amount": 1000.0,

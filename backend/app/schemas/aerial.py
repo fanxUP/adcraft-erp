@@ -15,7 +15,7 @@ class AerialVehicleCreate(BaseModel):
     platform_capacity: Optional[str] = None
     purchase_date: Optional[datetime] = None
     status: str = "available"
-    default_driver_id: Optional[str] = None
+    default_personnel_id: Optional[str] = None
     insurance_expire_date: Optional[datetime] = None
     inspection_expire_date: Optional[datetime] = None
     maintenance_due_date: Optional[datetime] = None
@@ -30,34 +30,36 @@ class AerialVehicleUpdate(BaseModel):
     platform_capacity: Optional[str] = None
     purchase_date: Optional[datetime] = None
     status: Optional[str] = None
-    default_driver_id: Optional[str] = None
+    default_personnel_id: Optional[str] = None
     insurance_expire_date: Optional[datetime] = None
     inspection_expire_date: Optional[datetime] = None
     maintenance_due_date: Optional[datetime] = None
     remark: Optional[str] = None
 
 
-# ── 驾驶员 ──────────────────────────────────────────────────────────────────
+# ── 人员 ──────────────────────────────────────────────────────────────────
 
-class AerialDriverCreate(BaseModel):
-    driver_name: str
+class AerialPersonnelCreate(BaseModel):
+    name: str
     phone: Optional[str] = None
     license_no: Optional[str] = None
     license_type: Optional[str] = None
     license_expire_date: Optional[datetime] = None
     is_external: bool = False
     status: str = "active"
+    personnel_type: str = "driver"
     remark: Optional[str] = None
 
 
-class AerialDriverUpdate(BaseModel):
-    driver_name: Optional[str] = None
+class AerialPersonnelUpdate(BaseModel):
+    name: Optional[str] = None
     phone: Optional[str] = None
     license_no: Optional[str] = None
     license_type: Optional[str] = None
     license_expire_date: Optional[datetime] = None
     is_external: Optional[bool] = None
     status: Optional[str] = None
+    personnel_type: Optional[str] = None
     remark: Optional[str] = None
 
 
@@ -66,7 +68,7 @@ class AerialDriverUpdate(BaseModel):
 class AerialLedgerCreate(BaseModel):
     work_date: datetime
     aerial_vehicle_id: str
-    driver_id: str
+    personnel_id: str
     assistant_names: Optional[str] = None
     customer_name: Optional[str] = None
     contact_name: Optional[str] = None
@@ -95,14 +97,14 @@ class AerialLedgerCreate(BaseModel):
     invoice_status: Optional[str] = None
     start_mileage: Optional[float] = None
     end_mileage: Optional[float] = None
-    driver_wage_amount: float = 0
+    personnel_wage_amount: float = 0
     remark: Optional[str] = None
 
 
 class AerialLedgerUpdate(BaseModel):
     work_date: Optional[datetime] = None
     aerial_vehicle_id: Optional[str] = None
-    driver_id: Optional[str] = None
+    personnel_id: Optional[str] = None
     assistant_names: Optional[str] = None
     customer_name: Optional[str] = None
     contact_name: Optional[str] = None
@@ -131,33 +133,33 @@ class AerialLedgerUpdate(BaseModel):
     invoice_status: Optional[str] = None
     start_mileage: Optional[float] = None
     end_mileage: Optional[float] = None
-    driver_wage_amount: Optional[float] = None
+    personnel_wage_amount: Optional[float] = None
     abnormal_flag: Optional[bool] = None
     abnormal_description: Optional[str] = None
     status: Optional[str] = None
     remark: Optional[str] = None
 
 
-# ── 驾驶员垫付 ──────────────────────────────────────────────────────────────
+# ── 人员垫付 ──────────────────────────────────────────────────────────────
 
-class AerialDriverExpenseCreate(BaseModel):
+class AerialPersonnelExpenseCreate(BaseModel):
     ledger_id: str
     expense_date: datetime
-    driver_id: str
+    personnel_id: str
     expense_type: str
     amount: float
     payment_method: Optional[str] = None
-    paid_by_driver: bool = True
+    paid_by_personnel: bool = True
     receipt_url: Optional[str] = None
     description: Optional[str] = None
 
 
-class AerialDriverExpenseUpdate(BaseModel):
+class AerialPersonnelExpenseUpdate(BaseModel):
     expense_date: Optional[datetime] = None
     expense_type: Optional[str] = None
     amount: Optional[float] = None
     payment_method: Optional[str] = None
-    paid_by_driver: Optional[bool] = None
+    paid_by_personnel: Optional[bool] = None
     receipt_url: Optional[str] = None
     description: Optional[str] = None
 
@@ -171,12 +173,12 @@ class AerialExpenseReimburse(BaseModel):
     remark: Optional[str] = None
 
 
-# ── 驾驶员工资 ──────────────────────────────────────────────────────────────
+# ── 人员工资 ──────────────────────────────────────────────────────────────
 
-class AerialDriverWageCreate(BaseModel):
+class AerialPersonnelWageCreate(BaseModel):
     ledger_id: Optional[str] = None
     wage_month: Optional[str] = None
-    driver_id: str
+    personnel_id: str
     wage_type: str = "daily"
     base_wage: float = 0
     trip_wage: float = 0
@@ -188,7 +190,7 @@ class AerialDriverWageCreate(BaseModel):
     remark: Optional[str] = None
 
 
-class AerialDriverWageUpdate(BaseModel):
+class AerialPersonnelWageUpdate(BaseModel):
     wage_type: Optional[str] = None
     base_wage: Optional[float] = None
     trip_wage: Optional[float] = None
@@ -212,7 +214,7 @@ class AerialVehicleCostCreate(BaseModel):
     handler_id: Optional[str] = None
     payer_id: Optional[str] = None
     payment_method: Optional[str] = None
-    is_driver_advance: bool = False
+    is_personnel_advance: bool = False
     need_reimbursement: bool = False
     receipt_url: Optional[str] = None
     allocation_type: str = "none"
@@ -227,7 +229,7 @@ class AerialVehicleCostUpdate(BaseModel):
     handler_id: Optional[str] = None
     payer_id: Optional[str] = None
     payment_method: Optional[str] = None
-    is_driver_advance: Optional[bool] = None
+    is_personnel_advance: Optional[bool] = None
     need_reimbursement: Optional[bool] = None
     receipt_url: Optional[str] = None
     allocation_type: Optional[str] = None

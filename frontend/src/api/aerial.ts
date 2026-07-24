@@ -12,8 +12,8 @@ export interface AerialVehicle {
   platform_capacity?: string
   purchase_date?: string
   status: string
-  default_driver_id?: string
-  default_driver_name?: string
+  default_personnel_id?: string
+  default_personnel_name?: string
   insurance_expire_date?: string
   inspection_expire_date?: string
   maintenance_due_date?: string
@@ -22,9 +22,9 @@ export interface AerialVehicle {
   updated_at?: string
 }
 
-export interface AerialDriver {
+export interface AerialPersonnel {
   id: string
-  driver_name: string
+  name: string
   phone?: string
   license_no?: string
   license_type?: string
@@ -42,8 +42,8 @@ export interface AerialLedger {
   work_date: string
   aerial_vehicle_id: string
   plate_number?: string
-  driver_id: string
-  driver_name?: string
+  personnel_id: string
+  name?: string
   assistant_names?: string
   customer_name?: string
   contact_name?: string
@@ -65,7 +65,7 @@ export interface AerialLedger {
   payment_status: string
   payment_method?: string
   payment_time?: string
-  driver_wage_amount: number
+  personnel_wage_amount: number
   reimbursement_amount: number
   vehicle_direct_cost: number
   gross_profit: number
@@ -94,16 +94,16 @@ export interface AerialLedger {
   voided_at?: string
 }
 
-export interface AerialDriverExpense {
+export interface AerialPersonnelExpense {
   id: string
   ledger_id: string
   expense_date: string
-  driver_id: string
-  driver_name?: string
+  personnel_id: string
+  name?: string
   expense_type: string
   amount: number
   payment_method?: string
-  paid_by_driver: boolean
+  paid_by_personnel: boolean
   receipt_url?: string
   description?: string
   review_status: string
@@ -112,12 +112,12 @@ export interface AerialDriverExpense {
   created_at?: string
 }
 
-export interface AerialDriverWage {
+export interface AerialPersonnelWage {
   id: string
   ledger_id?: string
   wage_month?: string
-  driver_id: string
-  driver_name?: string
+  personnel_id: string
+  name?: string
   wage_type: string
   base_wage: number
   trip_wage: number
@@ -144,7 +144,7 @@ export interface AerialVehicleCost {
   payer_id?: string
   payer_name?: string
   payment_method?: string
-  is_driver_advance: boolean
+  is_personnel_advance: boolean
   need_reimbursement: boolean
   receipt_url?: string
   allocation_type: string
@@ -203,19 +203,19 @@ export const createAerialVehicle = (data: any) =>
 export const updateAerialVehicle = (id: string, data: any) =>
   patch<AerialVehicle>(`/aerial/vehicles/${id}`, data)
 
-// ── Driver API ─────────────────────────────────────────────────────────────
+// ── Personnel API ─────────────────────────────────────────────────────────────
 
-export const getAerialDrivers = (params?: any) =>
-  get<PaginatedData<AerialDriver>>('/aerial/drivers', { params })
+export const getAerialPersonnel = (params?: any) =>
+  get<PaginatedData<AerialPersonnel>>('/aerial/personnel', { params })
 
-export const getAerialDriver = (id: string) =>
-  get<AerialDriver>(`/aerial/drivers/${id}`)
+export const getAerialPersonnelItem = (id: string) =>
+  get<AerialPersonnel>(`/aerial/personnel/${id}`)
 
-export const createAerialDriver = (data: any) =>
-  post<AerialDriver>('/aerial/drivers', data)
+export const createAerialPersonnel = (data: any) =>
+  post<AerialPersonnel>('/aerial/personnel', data)
 
-export const updateAerialDriver = (id: string, data: any) =>
-  patch<AerialDriver>(`/aerial/drivers/${id}`, data)
+export const updateAerialPersonnel = (id: string, data: any) =>
+  patch<AerialPersonnel>(`/aerial/personnel/${id}`, data)
 
 // ── Ledger API ─────────────────────────────────────────────────────────────
 
@@ -240,30 +240,30 @@ export const approveAerialLedger = (id: string, remark?: string) =>
 export const rejectAerialLedger = (id: string, remark?: string) =>
   post<AerialLedger>(`/aerial/ledgers/${id}/reject`, { remark })
 
-// ── Driver Expense API ─────────────────────────────────────────────────────
+// ── Personnel Expense API ─────────────────────────────────────────────────────
 
-export const getAerialDriverExpenses = (params?: any) =>
-  get<PaginatedData<AerialDriverExpense>>('/aerial/driver-expenses', { params })
+export const getAerialPersonnelExpenses = (params?: any) =>
+  get<PaginatedData<AerialPersonnelExpense>>('/aerial/personnel-expenses', { params })
 
-export const createAerialDriverExpense = (data: any) =>
-  post<AerialDriverExpense>('/aerial/driver-expenses', data)
+export const createAerialPersonnelExpense = (data: any) =>
+  post<AerialPersonnelExpense>('/aerial/personnel-expenses', data)
 
-export const reviewAerialDriverExpense = (id: string, status: string, remark?: string) =>
-  post<AerialDriverExpense>(`/aerial/driver-expenses/${id}/review`, { status, remark })
+export const reviewAerialPersonnelExpense = (id: string, status: string, remark?: string) =>
+  post<AerialPersonnelExpense>(`/aerial/personnel-expenses/${id}/review`, { status, remark })
 
-export const reimburseAerialDriverExpense = (id: string, remark?: string) =>
-  post<AerialDriverExpense>(`/aerial/driver-expenses/${id}/reimburse`, { remark })
+export const reimburseAerialPersonnelExpense = (id: string, remark?: string) =>
+  post<AerialPersonnelExpense>(`/aerial/personnel-expenses/${id}/reimburse`, { remark })
 
-// ── Driver Wage API ────────────────────────────────────────────────────────
+// ── Personnel Wage API ────────────────────────────────────────────────────────
 
-export const getAerialDriverWages = (params?: any) =>
-  get<PaginatedData<AerialDriverWage>>('/aerial/driver-wages', { params })
+export const getAerialPersonnelWages = (params?: any) =>
+  get<PaginatedData<AerialPersonnelWage>>('/aerial/personnel-wages', { params })
 
-export const createAerialDriverWage = (data: any) =>
-  post<AerialDriverWage>('/aerial/driver-wages', data)
+export const createAerialPersonnelWage = (data: any) =>
+  post<AerialPersonnelWage>('/aerial/personnel-wages', data)
 
-export const payAerialDriverWage = (id: string, remark?: string) =>
-  post<AerialDriverWage>(`/aerial/driver-wages/${id}/pay`, { remark })
+export const payAerialPersonnelWage = (id: string, remark?: string) =>
+  post<AerialPersonnelWage>(`/aerial/personnel-wages/${id}/pay`, { remark })
 
 // ── Vehicle Cost API ───────────────────────────────────────────────────────
 
@@ -328,8 +328,8 @@ export const getAerialReportReimbursements = (params?: any) =>
 export const getAerialReportCosts = (month?: string) =>
   get<any[]>('/aerial/reports/costs', { params: { month } })
 
-export const getAerialReportDriverSummary = (month: string) =>
-  get<any[]>('/aerial/reports/driver-summary', { params: { month } })
+export const getAerialReportPersonnelSummary = (month: string) =>
+  get<any[]>('/aerial/reports/personnel-summary', { params: { month } })
 
 // ── Export API ───────────────────────────────────────────────────────────────
 
@@ -356,7 +356,7 @@ export async function exportAerialWages(month: string) {
   const url = window.URL.createObjectURL(new Blob([response.data]))
   const link = document.createElement('a')
   link.href = url
-  link.download = `驾驶员工资_${month}.xlsx`
+  link.download = `人员工资_${month}.xlsx`
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)

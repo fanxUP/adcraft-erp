@@ -114,13 +114,13 @@
             <el-menu-item index="/aerial-dashboard">高空车看板</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'finance', 'production'])" index="/aerial-agent-drafts">Agent草稿</el-menu-item>
             <el-menu-item index="/aerial-ledgers">出车台账</el-menu-item>
-            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'finance', 'production'])" index="/aerial-driver-expenses">垫付/报销</el-menu-item>
-            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'finance'])" index="/aerial-driver-wages">驾驶员工资</el-menu-item>
+            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'finance', 'production'])" index="/aerial-personnel-expenses">垫付/报销</el-menu-item>
+            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'finance'])" index="/aerial-personnel-wages">人员工资</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'finance', 'production'])" index="/aerial-vehicle-costs">车辆费用</el-menu-item>
             <el-menu-item index="/aerial-safety-checks">安全检查</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'finance', 'production'])" index="/aerial-reports">统计报表</el-menu-item>
             <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production'])" index="/aerial-vehicles">高空车档案</el-menu-item>
-            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production'])" index="/aerial-drivers">驾驶员管理</el-menu-item>
+            <el-menu-item v-if="authStore.hasAnyRole(['admin', 'production'])" index="/aerial-personnel">人员管理</el-menu-item>
           </el-sub-menu>
           <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'sales', 'finance'])" index="/reports">
             <template #title>

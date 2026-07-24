@@ -54,8 +54,8 @@
           <el-col :span="12"><el-form-item label="分摊方式"><el-select v-model="form.allocation_type" style="width: 100%"><el-option label="不分摊" value="none" /><el-option label="按趟" value="per_trip" /><el-option label="按日" value="daily" /><el-option label="按月" value="monthly" /><el-option label="按年" value="annual" /></el-select></el-form-item></el-col>
         </el-row>
         <el-form-item label="支付人">
-          <el-select v-model="form.payer_id" clearable placeholder="选择驾驶员" style="width: 100%">
-            <el-option v-for="d in driverOptions" :key="d.id" :label="d.driver_name" :value="d.id" />
+          <el-select v-model="form.payer_id" clearable placeholder="选择人员" style="width: 100%">
+            <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" /></el-form-item>
@@ -68,12 +68,12 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAerialVehicleCosts, createAerialVehicleCost, reviewAerialVehicleCost, getAerialVehicles, getAerialDrivers } from '@/api/aerial'
+import { getAerialVehicleCosts, createAerialVehicleCost, reviewAerialVehicleCost, getAerialVehicles, getAerialPersonnel } from '@/api/aerial'
 
 const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
 const list = ref<any[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
 const vehicleOptions = ref<any[]>([])
-const driverOptions = ref<{ id: string; driver_name: string }[]>([])
+const personnelOptions = ref<{ id: string; name: string }[]>([])
 const filters = reactive({ dateRange: [] as string[], cost_type: '', review_status: '' })
 const form = reactive({ aerial_vehicle_id: '', cost_date: '', cost_type: '', amount: 0, allocation_type: 'none', payer_id: '', remark: '' })
 
@@ -123,7 +123,7 @@ function reviewLabel(s: string) { return { pending: '待审核', approved: '已�
 onMounted(async () => {
   fetchData()
   try { const v = await getAerialVehicles({ page_size: 100 }); vehicleOptions.value = v.items || [] } catch {}
-  try { const d = await getAerialDrivers({ page_size: 100 }); driverOptions.value = d.items || [] } catch {}
+  try { const d = await getAerialPersonnel({ page_size: 100 }); personnelOptions.value = d.items || [] } catch {}
 })
 </script>
 

@@ -8,8 +8,8 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.aerial import (
-    AerialVehicle, AerialDriver, AerialDailyLedger, AerialDriverExpense,
-    AerialDriverWage, AerialVehicleCost, AerialSafetyCheck,
+    AerialVehicle, AerialPersonnel, AerialDailyLedger, AerialPersonnelExpense,
+    AerialPersonnelWage, AerialVehicleCost, AerialSafetyCheck,
     AerialLedgerAttachment, AerialLedgerAuditLog,
 )
 
@@ -56,34 +56,34 @@ class AerialRepository:
         await self.db.refresh(obj)
         return obj
 
-    # ── 驾驶员 ──────────────────────────────────────────────────────────────
+    # ── 人员 ──────────────────────────────────────────────────────────────
 
-    async def list_drivers(self, keyword: str = "", status: str = "", skip: int = 0, limit: int = 20):
-        q = select(AerialDriver)
+    async def list_personnel(self, keyword: str = "", status: str = "", skip: int = 0, limit: int = 20):
+        q = select(AerialPersonnel)
         if keyword:
             q = q.where(or_(
-                AerialDriver.driver_name.ilike(f"%{keyword}%"),
-                AerialDriver.phone.ilike(f"%{keyword}%"),
+                AerialPersonnel.name.ilike(f"%{keyword}%"),
+                AerialPersonnel.phone.ilike(f"%{keyword}%"),
             ))
         if status:
-            q = q.where(AerialDriver.status == status)
+            q = q.where(AerialPersonnel.status == status)
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar() or 0
-        q = q.order_by(AerialDriver.created_at.desc()).offset(skip).limit(limit)
+        q = q.order_by(AerialPersonnel.created_at.desc()).offset(skip).limit(limit)
         rows = (await self.db.execute(q)).scalars().all()
         return list(rows), total
 
-    async def get_driver(self, driver_id: uuid.UUID):
-        return (await self.db.execute(select(AerialDriver).where(AerialDriver.id == driver_id))).scalar_one_or_none()
+    async def get_personnel(self, personnel_id: uuid.UUID):
+        return (await self.db.execute(select(AerialPersonnel).where(AerialPersonnel.id == personnel_id))).scalar_one_or_none()
 
-    async def create_driver(self, data: dict):
-        obj = AerialDriver(**data)
+    async def create_personnel(self, data: dict):
+        obj = AerialPersonnel(**data)
         self.db.add(obj)
         await self.db.flush()
         await self.db.refresh(obj)
         return obj
 
-    async def update_driver(self, obj: AerialDriver, data: dict):
+    async def update_personnel(self, obj: AerialPersonnel, data: dict):
         for k, v in data.items():
             if v is not None and hasattr(obj, k):
                 setattr(obj, k, v)
@@ -97,7 +97,7 @@ class AerialRepository:
         self,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
-        driver_id: Optional[str] = None,
+        personnel_id: Optional[str] = None,
         customer_name: Optional[str] = None,
         work_location: Optional[str] = None,
         payment_status: Optional[str] = None,
@@ -111,8 +111,8 @@ class AerialRepository:
             q = q.where(AerialDailyLedger.work_date >= datetime.fromisoformat(date_from))
         if date_to:
             q = q.where(AerialDailyLedger.work_date <= datetime.fromisoformat(date_to + "T23:59:59"))
-        if driver_id:
-            q = q.where(AerialDailyLedger.driver_id == uuid.UUID(driver_id))
+        if personnel_id:
+            q = q.where(AerialDailyLedger.personnel_id == uuid.UUID(personnel_id))
         if customer_name:
             q = q.where(AerialDailyLedger.customer_name.ilike(f"%{customer_name}%"))
         if work_location:
@@ -158,13 +158,13 @@ class AerialRepository:
         )
         return (await self.db.execute(q)).scalar() or 0
 
-    # ── 驾驶员垫付 ──────────────────────────────────────────────────────────
+    # ── 人员垫付 ──────────────────────────────────────────────────────────
 
     async def list_expenses(
         self,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
-        driver_id: Optional[str] = None,
+        personnel_id: Optional[str] = None,
         expense_type: Optional[str] = None,
         review_status: Optional[str] = None,
         reimbursement_status: Optional[str] = None,
@@ -172,38 +172,38 @@ class AerialRepository:
         skip: int = 0,
         limit: int = 20,
     ):
-        q = select(AerialDriverExpense)
+        q = select(AerialPersonnelExpense)
         if date_from:
-            q = q.where(AerialDriverExpense.expense_date >= date_from)
+            q = q.where(AerialPersonnelExpense.expense_date >= date_from)
         if date_to:
-            q = q.where(AerialDriverExpense.expense_date <= date_to + " 23:59:59")
-        if driver_id:
-            q = q.where(AerialDriverExpense.driver_id == uuid.UUID(driver_id))
+            q = q.where(AerialPersonnelExpense.expense_date <= date_to + " 23:59:59")
+        if personnel_id:
+            q = q.where(AerialPersonnelExpense.personnel_id == uuid.UUID(personnel_id))
         if expense_type:
-            q = q.where(AerialDriverExpense.expense_type == expense_type)
+            q = q.where(AerialPersonnelExpense.expense_type == expense_type)
         if review_status:
-            q = q.where(AerialDriverExpense.review_status == review_status)
+            q = q.where(AerialPersonnelExpense.review_status == review_status)
         if reimbursement_status:
-            q = q.where(AerialDriverExpense.reimbursement_status == reimbursement_status)
+            q = q.where(AerialPersonnelExpense.reimbursement_status == reimbursement_status)
         if ledger_id:
-            q = q.where(AerialDriverExpense.ledger_id == uuid.UUID(ledger_id))
+            q = q.where(AerialPersonnelExpense.ledger_id == uuid.UUID(ledger_id))
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar() or 0
-        q = q.order_by(AerialDriverExpense.expense_date.desc()).offset(skip).limit(limit)
+        q = q.order_by(AerialPersonnelExpense.expense_date.desc()).offset(skip).limit(limit)
         rows = (await self.db.execute(q)).scalars().all()
         return list(rows), total
 
     async def get_expense(self, expense_id: uuid.UUID):
-        return (await self.db.execute(select(AerialDriverExpense).where(AerialDriverExpense.id == expense_id))).scalar_one_or_none()
+        return (await self.db.execute(select(AerialPersonnelExpense).where(AerialPersonnelExpense.id == expense_id))).scalar_one_or_none()
 
     async def create_expense(self, data: dict):
-        obj = AerialDriverExpense(**data)
+        obj = AerialPersonnelExpense(**data)
         self.db.add(obj)
         await self.db.flush()
         await self.db.refresh(obj)
         return obj
 
-    async def update_expense(self, obj: AerialDriverExpense, data: dict):
+    async def update_expense(self, obj: AerialPersonnelExpense, data: dict):
         for k, v in data.items():
             if v is not None and hasattr(obj, k):
                 setattr(obj, k, v)
@@ -211,40 +211,40 @@ class AerialRepository:
         await self.db.refresh(obj)
         return obj
 
-    # ── 驾驶员工资 ──────────────────────────────────────────────────────────
+    # ── 人员工资 ──────────────────────────────────────────────────────────
 
     async def list_wages(
         self,
         wage_month: Optional[str] = None,
-        driver_id: Optional[str] = None,
+        personnel_id: Optional[str] = None,
         payment_status: Optional[str] = None,
         skip: int = 0,
         limit: int = 20,
     ):
-        q = select(AerialDriverWage)
+        q = select(AerialPersonnelWage)
         if wage_month:
-            q = q.where(AerialDriverWage.wage_month == wage_month)
-        if driver_id:
-            q = q.where(AerialDriverWage.driver_id == uuid.UUID(driver_id))
+            q = q.where(AerialPersonnelWage.wage_month == wage_month)
+        if personnel_id:
+            q = q.where(AerialPersonnelWage.personnel_id == uuid.UUID(personnel_id))
         if payment_status:
-            q = q.where(AerialDriverWage.payment_status == payment_status)
+            q = q.where(AerialPersonnelWage.payment_status == payment_status)
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar() or 0
-        q = q.order_by(AerialDriverWage.created_at.desc()).offset(skip).limit(limit)
+        q = q.order_by(AerialPersonnelWage.created_at.desc()).offset(skip).limit(limit)
         rows = (await self.db.execute(q)).scalars().all()
         return list(rows), total
 
     async def get_wage(self, wage_id: uuid.UUID):
-        return (await self.db.execute(select(AerialDriverWage).where(AerialDriverWage.id == wage_id))).scalar_one_or_none()
+        return (await self.db.execute(select(AerialPersonnelWage).where(AerialPersonnelWage.id == wage_id))).scalar_one_or_none()
 
     async def create_wage(self, data: dict):
-        obj = AerialDriverWage(**data)
+        obj = AerialPersonnelWage(**data)
         self.db.add(obj)
         await self.db.flush()
         await self.db.refresh(obj)
         return obj
 
-    async def update_wage(self, obj: AerialDriverWage, data: dict):
+    async def update_wage(self, obj: AerialPersonnelWage, data: dict):
         for k, v in data.items():
             if v is not None and hasattr(obj, k):
                 setattr(obj, k, v)
@@ -376,7 +376,7 @@ class AerialRepository:
             func.coalesce(func.sum(AerialDailyLedger.receivable_amount), 0).label("receivable"),
             func.coalesce(func.sum(AerialDailyLedger.received_amount), 0).label("received"),
             func.coalesce(func.sum(AerialDailyLedger.unpaid_amount), 0).label("unpaid"),
-            func.coalesce(func.sum(AerialDailyLedger.driver_wage_amount), 0).label("wages"),
+            func.coalesce(func.sum(AerialDailyLedger.personnel_wage_amount), 0).label("wages"),
             func.coalesce(func.sum(AerialDailyLedger.reimbursement_amount), 0).label("reimbursements"),
             func.coalesce(func.sum(AerialDailyLedger.vehicle_direct_cost), 0).label("vehicle_costs"),
             func.coalesce(func.sum(AerialDailyLedger.gross_profit), 0).label("gross_profit"),
@@ -405,7 +405,7 @@ class AerialRepository:
             func.coalesce(func.sum(AerialDailyLedger.receivable_amount), 0).label("receivable"),
             func.coalesce(func.sum(AerialDailyLedger.received_amount), 0).label("received"),
             func.coalesce(func.sum(AerialDailyLedger.unpaid_amount), 0).label("unpaid"),
-            func.coalesce(func.sum(AerialDailyLedger.driver_wage_amount), 0).label("wages"),
+            func.coalesce(func.sum(AerialDailyLedger.personnel_wage_amount), 0).label("wages"),
             func.coalesce(func.sum(AerialDailyLedger.reimbursement_amount), 0).label("reimbursements"),
             func.coalesce(func.sum(AerialDailyLedger.vehicle_direct_cost), 0).label("vehicle_costs"),
             func.coalesce(func.sum(AerialDailyLedger.gross_profit), 0).label("gross_profit"),
@@ -440,9 +440,9 @@ class AerialRepository:
         return list(rows), total
 
     async def get_pending_expenses(self, skip: int = 0, limit: int = 20):
-        q = select(AerialDriverExpense).where(
-            AerialDriverExpense.review_status == "pending"
-        ).order_by(AerialDriverExpense.expense_date.desc())
+        q = select(AerialPersonnelExpense).where(
+            AerialPersonnelExpense.review_status == "pending"
+        ).order_by(AerialPersonnelExpense.expense_date.desc())
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar() or 0
         q = q.offset(skip).limit(limit)
@@ -450,12 +450,12 @@ class AerialRepository:
         return list(rows), total
 
     async def get_pending_reimbursements(self, skip: int = 0, limit: int = 20):
-        q = select(AerialDriverExpense).where(
+        q = select(AerialPersonnelExpense).where(
             and_(
-                AerialDriverExpense.review_status == "approved",
-                AerialDriverExpense.reimbursement_status == "pending_reimbursement",
+                AerialPersonnelExpense.review_status == "approved",
+                AerialPersonnelExpense.reimbursement_status == "pending_reimbursement",
             )
-        ).order_by(AerialDriverExpense.expense_date.desc())
+        ).order_by(AerialPersonnelExpense.expense_date.desc())
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar() or 0
         q = q.offset(skip).limit(limit)
@@ -473,29 +473,29 @@ class AerialRepository:
         rows = (await self.db.execute(q)).all()
         return [{"cost_type": r[0], "total": float(r[1])} for r in rows]
 
-    async def get_driver_summary(self, year_month: str):
-        """驾驶员工资月度汇总"""
+    async def get_personnel_summary(self, year_month: str):
+        """人员工资月度汇总"""
         base = and_(
             func.to_char(AerialDailyLedger.work_date, 'YYYY-MM') == year_month,
             AerialDailyLedger.status != "cancelled",
         )
         q = select(
-            AerialDailyLedger.driver_id,
-            AerialDriver.driver_name,
+            AerialDailyLedger.personnel_id,
+            AerialPersonnel.name,
             func.count(AerialDailyLedger.id).label("trip_count"),
             func.coalesce(func.sum(AerialDailyLedger.receivable_amount), 0).label("receivable"),
             func.coalesce(func.sum(AerialDailyLedger.received_amount), 0).label("received"),
-            func.coalesce(func.sum(AerialDailyLedger.driver_wage_amount), 0).label("wages"),
+            func.coalesce(func.sum(AerialDailyLedger.personnel_wage_amount), 0).label("wages"),
         ).join(
-            AerialDriver, AerialDailyLedger.driver_id == AerialDriver.id
+            AerialPersonnel, AerialDailyLedger.personnel_id == AerialPersonnel.id
         ).where(base).group_by(
-            AerialDailyLedger.driver_id, AerialDriver.driver_name
+            AerialDailyLedger.personnel_id, AerialPersonnel.name
         )
         rows = (await self.db.execute(q)).all()
         return [
             {
-                "driver_id": str(r[0]),
-                "driver_name": r[1],
+                "personnel_id": str(r[0]),
+                "name": r[1],
                 "trip_count": r[2],
                 "receivable": float(r[3]),
                 "received": float(r[4]),

@@ -1,13 +1,13 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <h2>驾驶员垫付/报销</h2>
+      <h2>人员垫付/报销</h2>
     </div>
 
     <div class="search-bar">
       <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="width: 260px" />
-      <el-select v-model="filters.driver_id" placeholder="驾驶员" clearable style="width: 120px">
-        <el-option v-for="d in driverOptions" :key="d.id" :label="d.driver_name" :value="d.id" />
+      <el-select v-model="filters.personnel_id" placeholder="人员" clearable style="width: 120px">
+        <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
       </el-select>
       <el-select v-model="filters.review_status" placeholder="审核状态" clearable style="width: 120px">
         <el-option label="待审核" value="pending" /><el-option label="已通过" value="approved" /><el-option label="已驳回" value="rejected" />
@@ -21,7 +21,7 @@
 
     <el-table :data="list" stripe v-loading="loading">
       <el-table-column prop="expense_date" label="日期" width="100" />
-      <el-table-column prop="driver_name" label="驾驶员" width="80" />
+      <el-table-column prop="name" label="人员" width="80" />
       <el-table-column prop="expense_type" label="费用类型" width="90">
         <template #default="{ row }">{{ expenseTypeLabel(row.expense_type) }}</template>
       </el-table-column>
@@ -59,38 +59,38 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAerialDriverExpenses, reviewAerialDriverExpense, reimburseAerialDriverExpense, getAerialDrivers } from '@/api/aerial'
+import { getAerialPersonnelExpenses, reviewAerialPersonnelExpense, reimburseAerialPersonnelExpense, getAerialPersonnel } from '@/api/aerial'
 
 const loading = ref(false)
 const list = ref<any[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
-const driverOptions = ref<any[]>([])
-const filters = reactive({ dateRange: [] as string[], driver_id: '', review_status: '', reimbursement_status: '' })
+const personnelOptions = ref<any[]>([])
+const filters = reactive({ dateRange: [] as string[], personnel_id: '', review_status: '', reimbursement_status: '' })
 
 async function fetchData() {
   loading.value = true
   try {
     const params: any = { page: page.value, page_size: pageSize.value }
     if (filters.dateRange?.length === 2) { params.date_from = filters.dateRange[0]; params.date_to = filters.dateRange[1] }
-    if (filters.driver_id) params.driver_id = filters.driver_id
+    if (filters.personnel_id) params.personnel_id = filters.personnel_id
     if (filters.review_status) params.review_status = filters.review_status
     if (filters.reimbursement_status) params.reimbursement_status = filters.reimbursement_status
-    const res = await getAerialDriverExpenses(params)
+    const res = await getAerialPersonnelExpenses(params)
     list.value = res.items || []; total.value = res.total || 0
   } catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
 }
 
 function resetFilters() {
-  filters.dateRange = []; filters.driver_id = ''; filters.review_status = ''; filters.reimbursement_status = ''
+  filters.dateRange = []; filters.personnel_id = ''; filters.review_status = ''; filters.reimbursement_status = ''
   page.value = 1; fetchData()
 }
 
 async function handleReview(row: any, status: string) {
   try {
     await ElMessageBox.confirm(`确定${status === 'approved' ? '通过' : '驳回'}此垫付记录？`, '审核')
-    await reviewAerialDriverExpense(row.id, status)
+    await reviewAerialPersonnelExpense(row.id, status)
     ElMessage.success('操作成功'); fetchData()
   } catch {}
 }
@@ -98,7 +98,7 @@ async function handleReview(row: any, status: string) {
 async function handleReimburse(row: any) {
   try {
     await ElMessageBox.confirm('确定标记此垫付已报销？', '报销确认')
-    await reimburseAerialDriverExpense(row.id)
+    await reimburseAerialPersonnelExpense(row.id)
     ElMessage.success('已标记报销'); fetchData()
   } catch {}
 }
@@ -112,7 +112,7 @@ function reimbLabel(s: string) { return { unpaid: '未报销', pending_reimburse
 
 onMounted(async () => {
   fetchData()
-  try { const d = await getAerialDrivers({ page_size: 100 }); driverOptions.value = d.items || [] } catch {}
+  try { const d = await getAerialPersonnel({ page_size: 100 }); personnelOptions.value = d.items || [] } catch {}
 })
 </script>
 

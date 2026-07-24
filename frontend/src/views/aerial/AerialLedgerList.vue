@@ -11,8 +11,8 @@
     <!-- 筛选 -->
     <div class="search-bar">
       <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="width: 260px" />
-      <el-select v-model="filters.driver_id" placeholder="驾驶员" clearable style="width: 120px">
-        <el-option v-for="d in driverOptions" :key="d.id" :label="d.driver_name" :value="d.id" />
+      <el-select v-model="filters.personnel_id" placeholder="驾驶员" clearable style="width: 120px">
+        <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
       </el-select>
       <el-input v-model="filters.customer_name" placeholder="客户名称" clearable style="width: 140px" />
       <el-select v-model="filters.payment_status" placeholder="收款状态" clearable style="width: 120px">
@@ -32,7 +32,7 @@
     <el-table :data="list" stripe v-loading="loading" style="width: 100%">
       <el-table-column prop="work_date" label="出车日期" width="100" />
       <el-table-column prop="ledger_no" label="台账编号" width="160" />
-      <el-table-column prop="driver_name" label="驾驶员" width="80" />
+      <el-table-column prop="name" label="人员" width="80" />
       <el-table-column prop="customer_name" label="客户" width="120" show-overflow-tooltip />
       <el-table-column prop="work_location" label="作业地点" width="140" show-overflow-tooltip />
       <el-table-column prop="work_content" label="作业内容" width="120" show-overflow-tooltip />
@@ -47,8 +47,8 @@
           <span :style="{ color: row.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ row.unpaid_amount }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="driver_wage_amount" label="工资" width="80" align="right">
-        <template #default="{ row }">¥{{ row.driver_wage_amount }}</template>
+      <el-table-column prop="personnel_wage_amount" label="工资" width="80" align="right">
+        <template #default="{ row }">¥{{ row.personnel_wage_amount }}</template>
       </el-table-column>
       <el-table-column prop="gross_profit" label="毛利润" width="90" align="right">
         <template #default="{ row }">
@@ -104,8 +104,8 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="驾驶员" required>
-              <el-select v-model="form.driver_id" style="width: 100%">
-                <el-option v-for="d in driverOptions" :key="d.id" :label="d.driver_name" :value="d.id" />
+              <el-select v-model="form.personnel_id" style="width: 100%">
+                <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -207,7 +207,7 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="驾驶员工资">
-              <el-input-number v-model="form.driver_wage_amount" :min="0" :precision="2" style="width: 100%" />
+              <el-input-number v-model="form.personnel_wage_amount" :min="0" :precision="2" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -231,7 +231,7 @@
             <el-descriptions-item label="台账编号">{{ detailData.ledger_no }}</el-descriptions-item>
             <el-descriptions-item label="出车日期">{{ detailData.work_date }}</el-descriptions-item>
             <el-descriptions-item label="车牌号">{{ detailData.plate_number }}</el-descriptions-item>
-            <el-descriptions-item label="驾驶员">{{ detailData.driver_name }}</el-descriptions-item>
+            <el-descriptions-item label="人员">{{ detailData.name }}</el-descriptions-item>
             <el-descriptions-item label="随车人员">{{ detailData.assistant_names || '-' }}</el-descriptions-item>
             <el-descriptions-item label="状态">
               <el-tag :type="statusTagType(detailData.status)" size="small">{{ statusLabel(detailData.status) }}</el-tag>
@@ -260,7 +260,7 @@
         </el-tab-pane>
         <el-tab-pane label="成本与利润">
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="驾驶员工资">¥{{ detailData.driver_wage_amount }}</el-descriptions-item>
+            <el-descriptions-item label="人员工资">¥{{ detailData.personnel_wage_amount }}</el-descriptions-item>
             <el-descriptions-item label="已审核报销">¥{{ detailData.reimbursement_amount }}</el-descriptions-item>
             <el-descriptions-item label="车辆直接费用">¥{{ detailData.vehicle_direct_cost }}</el-descriptions-item>
             <el-descriptions-item label="毛利润">
@@ -283,7 +283,7 @@ import { ElMessage, ElMessageBox, ElTable, ElTableColumn, ElTag, ElEmpty } from 
 import {
   getAerialLedgers, getAerialLedger, createAerialLedger, updateAerialLedger,
   voidAerialLedger, approveAerialLedger, rejectAerialLedger,
-  getAerialVehicles, getAerialDrivers, getAerialAuditLogs,
+  getAerialVehicles, getAerialPersonnel, getAerialAuditLogs,
   exportAerialLedgers,
 } from '@/api/aerial'
 
@@ -298,11 +298,11 @@ const detailVisible = ref(false)
 const editingId = ref<string | null>(null)
 const detailData = ref<any>(null)
 const vehicleOptions = ref<any[]>([])
-const driverOptions = ref<any[]>([])
+const personnelOptions = ref<any[]>([])
 
 const filters = reactive({
   dateRange: [] as string[],
-  driver_id: '',
+  personnel_id: '',
   customer_name: '',
   payment_status: '',
   status: '',
@@ -311,7 +311,7 @@ const filters = reactive({
 const form = reactive({
   work_date: '',
   aerial_vehicle_id: '',
-  driver_id: '',
+  personnel_id: '',
   assistant_names: '',
   customer_name: '',
   contact_name: '',
@@ -327,7 +327,7 @@ const form = reactive({
   discount_amount: 0,
   received_amount: 0,
   settlement_type: 'separate',
-  driver_wage_amount: 0,
+  personnel_wage_amount: 0,
   remark: '',
 })
 
@@ -339,7 +339,7 @@ async function fetchData() {
       params.date_from = filters.dateRange[0]
       params.date_to = filters.dateRange[1]
     }
-    if (filters.driver_id) params.driver_id = filters.driver_id
+    if (filters.personnel_id) params.personnel_id = filters.personnel_id
     if (filters.customer_name) params.customer_name = filters.customer_name
     if (filters.payment_status) params.payment_status = filters.payment_status
     if (filters.status) params.status = filters.status
@@ -355,7 +355,7 @@ async function fetchData() {
 
 function resetFilters() {
   filters.dateRange = []
-  filters.driver_id = ''
+  filters.personnel_id = ''
   filters.customer_name = ''
   filters.payment_status = ''
   filters.status = ''
@@ -366,11 +366,11 @@ function resetFilters() {
 function handleCreate() {
   editingId.value = null
   Object.assign(form, {
-    work_date: '', aerial_vehicle_id: '', driver_id: '', assistant_names: '',
+    work_date: '', aerial_vehicle_id: '', personnel_id: '', assistant_names: '',
     customer_name: '', contact_name: '', contact_phone: '', related_order_no: '',
     work_location: '', work_type: '', work_content: '', billing_method: 'trip',
     unit_price: 0, quantity: 1, receivable_amount: 0, discount_amount: 0,
-    received_amount: 0, settlement_type: 'separate', driver_wage_amount: 0, remark: '',
+    received_amount: 0, settlement_type: 'separate', personnel_wage_amount: 0, remark: '',
   })
   dialogVisible.value = true
 }
@@ -378,7 +378,7 @@ function handleCreate() {
 function handleEdit(row: any) {
   editingId.value = row.id
   Object.assign(form, {
-    work_date: row.work_date, aerial_vehicle_id: row.aerial_vehicle_id, driver_id: row.driver_id,
+    work_date: row.work_date, aerial_vehicle_id: row.aerial_vehicle_id, personnel_id: row.personnel_id,
     assistant_names: row.assistant_names, customer_name: row.customer_name,
     contact_name: row.contact_name, contact_phone: row.contact_phone,
     related_order_no: row.related_order_no, work_location: row.work_location,
@@ -386,7 +386,7 @@ function handleEdit(row: any) {
     billing_method: row.billing_method, unit_price: row.unit_price, quantity: row.quantity,
     receivable_amount: row.receivable_amount, discount_amount: row.discount_amount,
     received_amount: row.received_amount, settlement_type: row.settlement_type,
-    driver_wage_amount: row.driver_wage_amount, remark: row.remark,
+    personnel_wage_amount: row.personnel_wage_amount, remark: row.remark,
   })
   dialogVisible.value = true
 }
@@ -394,7 +394,7 @@ function handleEdit(row: any) {
 async function handleSave() {
   if (!form.work_date) return ElMessage.warning('请选择出车日期')
   if (!form.aerial_vehicle_id) return ElMessage.warning('请选择高空车')
-  if (!form.driver_id) return ElMessage.warning('请选择驾驶员')
+  if (!form.personnel_id) return ElMessage.warning('请选择驾驶员')
   if (!form.work_location.trim()) return ElMessage.warning('请填写作业地点')
 
   saving.value = true
@@ -517,10 +517,10 @@ async function loadOptions() {
   try {
     const [v, d] = await Promise.all([
       getAerialVehicles({ page_size: 100 }),
-      getAerialDrivers({ page_size: 100 }),
+      getAerialPersonnel({ page_size: 100 }),
     ])
     vehicleOptions.value = v.items || []
-    driverOptions.value = d.items || []
+    personnelOptions.value = d.items || []
   } catch {}
 }
 

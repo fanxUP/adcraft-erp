@@ -28,10 +28,10 @@ from app.services.aerial_service import AerialService
 # ── Routers ─────────────────────────────────────────────────────────────────
 
 router = APIRouter(prefix="/aerial/vehicles", tags=["Aerial Vehicles"])
-driver_router = APIRouter(prefix="/aerial/drivers", tags=["Aerial Drivers"])
+personnel_router = APIRouter(prefix="/aerial/personnel", tags=["Aerial Personnel"])
 ledger_router = APIRouter(prefix="/aerial/ledgers", tags=["Aerial Ledgers"])
-expense_router = APIRouter(prefix="/aerial/driver-expenses", tags=["Aerial Driver Expenses"])
-wage_router = APIRouter(prefix="/aerial/driver-wages", tags=["Aerial Driver Wages"])
+expense_router = APIRouter(prefix="/aerial/personnel-expenses", tags=["Aerial Personnel Expenses"])
+wage_router = APIRouter(prefix="/aerial/personnel-wages", tags=["Aerial Personnel Wages"])
 cost_router = APIRouter(prefix="/aerial/vehicle-costs", tags=["Aerial Vehicle Costs"])
 safety_router = APIRouter(prefix="/aerial/safety-checks", tags=["Aerial Safety Checks"])
 attachment_router = APIRouter(prefix="/aerial/attachments", tags=["Aerial Attachments"])
@@ -99,10 +99,10 @@ async def update_vehicle(
     return success(result)
 
 
-# ── 驾驶员 ──────────────────────────────────────────────────────────────────
+# ── 人员 ──────────────────────────────────────────────────────────────────
 
-@driver_router.get("")
-async def list_drivers(
+@personnel_router.get("")
+async def list_personnel(
     keyword: str = Query(""),
     status: str = Query(""),
     page: int = Query(1, ge=1),
@@ -112,44 +112,44 @@ async def list_drivers(
     request: Request = None,
 ):
     svc = _svc(db, current_user, request)
-    items, total = await svc.list_drivers(keyword, status, page, page_size)
+    items, total = await svc.list_personnel(keyword, status, page, page_size)
     return success_paginated(items, total, page, page_size)
 
 
-@driver_router.post("")
-async def create_driver(
+@personnel_router.post("")
+async def create_personnel(
     data: dict,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_AERIAL_CREATE)),
     request: Request = None,
 ):
     svc = _svc(db, current_user, request)
-    result = await svc.create_driver(data)
+    result = await svc.create_personnel(data)
     return success(result)
 
 
-@driver_router.get("/{driver_id}")
-async def get_driver(
-    driver_id: str,
+@personnel_router.get("/{personnel_id}")
+async def get_personnel(
+    personnel_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_AERIAL_READ)),
     request: Request = None,
 ):
     svc = _svc(db, current_user, request)
-    result = await svc.get_driver(driver_id)
+    result = await svc.get_personnel(personnel_id)
     return success(result)
 
 
-@driver_router.patch("/{driver_id}")
-async def update_driver(
-    driver_id: str,
+@personnel_router.patch("/{personnel_id}")
+async def update_personnel(
+    personnel_id: str,
     data: dict,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_AERIAL_UPDATE)),
     request: Request = None,
 ):
     svc = _svc(db, current_user, request)
-    result = await svc.update_driver(driver_id, data)
+    result = await svc.update_personnel(personnel_id, data)
     return success(result)
 
 
@@ -159,7 +159,7 @@ async def update_driver(
 async def list_ledgers(
     date_from: str = Query("", description="开始日期"),
     date_to: str = Query("", description="结束日期"),
-    driver_id: str = Query(""),
+    personnel_id: str = Query(""),
     customer_name: str = Query(""),
     work_location: str = Query(""),
     payment_status: str = Query(""),
@@ -174,7 +174,7 @@ async def list_ledgers(
     svc = _svc(db, current_user, request)
     items, total = await svc.list_ledgers(
         page=page, page_size=page_size,
-        date_from=date_from, date_to=date_to, driver_id=driver_id,
+        date_from=date_from, date_to=date_to, driver_id=personnel_id,
         customer_name=customer_name, work_location=work_location,
         payment_status=payment_status, audit_status=audit_status, status=status,
     )
@@ -257,13 +257,13 @@ async def reject_ledger(
     return success(result)
 
 
-# ── 驾驶员垫付 ──────────────────────────────────────────────────────────────
+# ── 人员垫付 ──────────────────────────────────────────────────────────────
 
 @expense_router.get("")
 async def list_expenses(
     date_from: str = Query(""),
     date_to: str = Query(""),
-    driver_id: str = Query(""),
+    personnel_id: str = Query(""),
     expense_type: str = Query(""),
     review_status: str = Query(""),
     reimbursement_status: str = Query(""),
@@ -277,7 +277,7 @@ async def list_expenses(
     svc = _svc(db, current_user, request)
     items, total = await svc.list_expenses(
         page=page, page_size=page_size,
-        date_from=date_from, date_to=date_to, driver_id=driver_id,
+        date_from=date_from, date_to=date_to, driver_id=personnel_id,
         expense_type=expense_type, review_status=review_status,
         reimbursement_status=reimbursement_status, ledger_id=ledger_id,
     )
@@ -322,12 +322,12 @@ async def reimburse_expense(
     return success(result)
 
 
-# ── 驾驶员工资 ──────────────────────────────────────────────────────────────
+# ── 人员工资 ──────────────────────────────────────────────────────────────
 
 @wage_router.get("")
 async def list_wages(
     wage_month: str = Query(""),
-    driver_id: str = Query(""),
+    personnel_id: str = Query(""),
     payment_status: str = Query(""),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -336,7 +336,7 @@ async def list_wages(
     request: Request = None,
 ):
     svc = _svc(db, current_user, request)
-    items, total = await svc.list_wages(page=page, page_size=page_size, wage_month=wage_month, driver_id=driver_id, payment_status=payment_status)
+    items, total = await svc.list_wages(page=page, page_size=page_size, wage_month=wage_month, driver_id=personnel_id, payment_status=payment_status)
     return success_paginated(items, total, page, page_size)
 
 
@@ -596,15 +596,15 @@ async def report_costs(
     return success(result)
 
 
-@report_router.get("/driver-summary")
-async def report_driver_summary(
+@report_router.get("/personnel-summary")
+async def report_personnel_summary(
     month: str = Query(..., description="月份 YYYY-MM"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_AERIAL_READ)),
     request: Request = None,
 ):
     svc = _svc(db, current_user, request)
-    result = await svc.get_report_driver_summary(month)
+    result = await svc.get_report_personnel_summary(month)
     return success(result)
 
 
@@ -629,7 +629,7 @@ async def export_ledgers(
     ws = wb.active
     ws.title = "出车台账"
 
-    headers = ["台账编号", "日期", "车牌号", "驾驶员", "客户", "作业地点", "作业类型",
+    headers = ["台账编号", "日期", "车牌号", "人员", "客户", "作业地点", "作业类型",
                "应收", "实收", "未收", "工资", "报销", "毛利", "状态", "收款状态"]
     ws.append(headers)
     for cell in ws[1]:
@@ -638,9 +638,9 @@ async def export_ledgers(
     for item in items:
         ws.append([
             item.get("ledger_no"), item.get("work_date"), item.get("plate_number"),
-            item.get("driver_name"), item.get("customer_name"), item.get("work_location"),
+            item.get("name"), item.get("customer_name"), item.get("work_location"),
             item.get("work_type"), item.get("receivable_amount"), item.get("received_amount"),
-            item.get("unpaid_amount"), item.get("driver_wage_amount"),
+            item.get("unpaid_amount"), item.get("personnel_wage_amount"),
             item.get("reimbursement_amount"), item.get("gross_profit"),
             item.get("status"), item.get("payment_status"),
         ])
@@ -675,9 +675,9 @@ async def export_wages(
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "驾驶员工资"
+    ws.title = "人员工资"
 
-    headers = ["工资月份", "驾驶员", "工资类型", "基本工资", "出车工资", "计时工资",
+    headers = ["工资月份", "人员", "工资类型", "基本工资", "出车工资", "计时工资",
                "提成", "补贴", "扣款", "实发工资", "发放状态"]
     ws.append(headers)
     for cell in ws[1]:
@@ -685,7 +685,7 @@ async def export_wages(
 
     for item in items:
         ws.append([
-            item.get("wage_month"), item.get("driver_name"), item.get("wage_type"),
+            item.get("wage_month"), item.get("name"), item.get("wage_type"),
             item.get("base_wage"), item.get("trip_wage"), item.get("hourly_wage"),
             item.get("commission_amount"), item.get("allowance_amount"),
             item.get("deduction_amount"), item.get("final_wage_amount"),
@@ -696,7 +696,7 @@ async def export_wages(
     wb.save(output)
     output.seek(0)
 
-    filename = f"驾驶员工资_{month}.xlsx"
+    filename = f"人员工资_{month}.xlsx"
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

@@ -1,13 +1,13 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <h2>驾驶员工资</h2>
+      <h2>人员工资</h2>
       <el-button @click="handleExport" :disabled="!month">导出 Excel</el-button>
     </div>
     <div class="search-bar">
       <el-date-picker v-model="month" type="month" value-format="YYYY-MM" placeholder="月份" style="width: 160px" />
-      <el-select v-model="filters.driver_id" placeholder="驾驶员" clearable style="width: 120px">
-        <el-option v-for="d in driverOptions" :key="d.id" :label="d.driver_name" :value="d.id" />
+      <el-select v-model="filters.personnel_id" placeholder="人员" clearable style="width: 120px">
+        <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
       </el-select>
       <el-select v-model="filters.payment_status" placeholder="支付状态" clearable style="width: 120px">
         <el-option label="待核算" value="pending" /><el-option label="已核算" value="calculated" />
@@ -17,7 +17,7 @@
     </div>
     <el-table :data="list" stripe v-loading="loading">
       <el-table-column prop="wage_month" label="月份" width="90" />
-      <el-table-column prop="driver_name" label="驾驶员" width="80" />
+      <el-table-column prop="name" label="人员" width="80" />
       <el-table-column prop="wage_type" label="工资类型" width="90">
         <template #default="{ row }">{{ wageTypeLabel(row.wage_type) }}</template>
       </el-table-column>
@@ -44,7 +44,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAerialDriverWages, payAerialDriverWage, getAerialDrivers, exportAerialWages } from '@/api/aerial'
+import { getAerialPersonnelWages, payAerialPersonnelWage, getAerialPersonnel, exportAerialWages } from '@/api/aerial'
 
 const loading = ref(false)
 const list = ref<any[]>([])
@@ -52,25 +52,25 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const month = ref('')
-const driverOptions = ref<any[]>([])
-const filters = reactive({ driver_id: '', payment_status: '' })
+const personnelOptions = ref<any[]>([])
+const filters = reactive({ personnel_id: '', payment_status: '' })
 
 async function fetchData() {
   loading.value = true
   try {
     const params: any = { page: page.value, page_size: pageSize.value }
     if (month.value) params.wage_month = month.value
-    if (filters.driver_id) params.driver_id = filters.driver_id
+    if (filters.personnel_id) params.personnel_id = filters.personnel_id
     if (filters.payment_status) params.payment_status = filters.payment_status
-    const res = await getAerialDriverWages(params)
+    const res = await getAerialPersonnelWages(params)
     list.value = res.items || []; total.value = res.total || 0
   } catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
 }
 
 async function handlePay(row: any) {
   try {
-    await ElMessageBox.confirm(`确定标记 ${row.driver_name} 的工资 ¥${row.final_wage_amount} 已发放？`, '工资发放')
-    await payAerialDriverWage(row.id)
+    await ElMessageBox.confirm(`确定标记 ${row.name} 的工资 ¥${row.final_wage_amount} 已发放？`, '工资发放')
+    await payAerialPersonnelWage(row.id)
     ElMessage.success('已标记发放'); fetchData()
   } catch {}
 }
@@ -90,7 +90,7 @@ function payLabel(s: string) { return { pending: '待核算', calculated: '已�
 
 onMounted(async () => {
   fetchData()
-  try { const d = await getAerialDrivers({ page_size: 100 }); driverOptions.value = d.items || [] } catch {}
+  try { const d = await getAerialPersonnel({ page_size: 100 }); personnelOptions.value = d.items || [] } catch {}
 })
 </script>
 

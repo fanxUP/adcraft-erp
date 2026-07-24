@@ -100,7 +100,7 @@ app.include_router(vehicle_dashboard.router, prefix="/api/v1")
 
 # Aerial work platform
 app.include_router(aerial.router, prefix="/api/v1")
-app.include_router(aerial.driver_router, prefix="/api/v1")
+app.include_router(aerial.personnel_router, prefix="/api/v1")
 app.include_router(aerial.ledger_router, prefix="/api/v1")
 app.include_router(aerial.expense_router, prefix="/api/v1")
 app.include_router(aerial.wage_router, prefix="/api/v1")
