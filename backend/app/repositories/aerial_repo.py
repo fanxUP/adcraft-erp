@@ -41,7 +41,9 @@ class AerialRepository:
         )).scalar_one_or_none()
 
     async def get_vehicle_by_plate(self, plate: str):
-        return (await self.db.execute(select(AerialVehicle).where(AerialVehicle.plate_number == plate))).scalar_one_or_none()
+        return (await self.db.execute(
+            select(AerialVehicle).where(AerialVehicle.plate_number == plate, AerialVehicle.deleted_at.is_(None))
+        )).scalar_one_or_none()
 
     async def create_vehicle(self, data: dict):
         obj = AerialVehicle(**data)

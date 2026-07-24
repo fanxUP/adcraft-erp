@@ -161,6 +161,7 @@ PERM_ACCEPTANCE_CHANGE_STATUS = "acceptance:change_status"
 PERM_VEHICLE_READ = "vehicle:read"
 PERM_VEHICLE_CREATE = "vehicle:create"
 PERM_VEHICLE_UPDATE = "vehicle:update"
+PERM_VEHICLE_DELETE = "vehicle:delete"
 
 # Finance review (for fuel/maintenance expense review)
 PERM_FINANCE_REVIEW = "finance:review"

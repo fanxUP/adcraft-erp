@@ -123,6 +123,24 @@ class VehicleService:
         )
         return self._vehicle_to_dict(v)
 
+    async def delete_vehicle(self, vehicle_id: UUID) -> dict:
+        v = await self.repo.get_by_id(vehicle_id)
+        if not v:
+            raise ValueError("车辆不存在")
+        before = self._vehicle_to_dict(v)
+        await self.repo.soft_delete_vehicle(v)
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE,
+            object_id=v.id,
+            action=ACTION_DELETE,
+            ip_address=self.ip_address,
+            before_data=before,
+        )
+        return before
+
     async def disable_vehicle(self, vehicle_id: UUID) -> dict:
         return await self._change_status(vehicle_id, "disabled", "停用")
 
@@ -256,6 +274,24 @@ class VehicleService:
             after_data=self._driver_to_dict(d),
         )
         return self._driver_to_dict(d)
+
+    async def delete_driver(self, driver_id: UUID) -> dict:
+        d = await self.repo.get_driver_by_id(driver_id)
+        if not d:
+            raise ValueError("司机不存在")
+        before = self._driver_to_dict(d)
+        await self.repo.soft_delete_driver(d)
+        await log_operation(
+            db=self.db,
+            user_id=self.current_user.id if self.current_user else None,
+            user_name=self.current_user.real_name if self.current_user else None,
+            object_type=OBJ_VEHICLE_DRIVER,
+            object_id=d.id,
+            action=ACTION_DELETE,
+            ip_address=self.ip_address,
+            before_data=before,
+        )
+        return before
 
     async def disable_driver(self, driver_id: UUID) -> dict:
         return await self._change_driver_status(driver_id, "disabled", "停用")
