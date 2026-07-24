@@ -23,7 +23,12 @@ from app.models.framework_contract import FrameworkContractProject, FrameworkCon
 from app.models.vehicle import (
     Vehicle, VehicleDriver, VehicleUseRequest, VehicleDispatch, VehicleTripRecord,
     VehicleFuelRecord, VehicleMaintenanceRecord, VehicleCertificate, VehicleIncident,
-    VehicleCostAllocation,
+    VehicleCostAllocation, VehicleAgentDraft,
+)
+from app.models.aerial import (
+    AerialVehicle, AerialDriver, AerialDailyLedger, AerialDriverExpense,
+    AerialDriverWage, AerialVehicleCost, AerialSafetyCheck,
+    AerialLedgerAttachment, AerialLedgerAuditLog, AerialAgentDraft,
 )
 
 config = context.config
