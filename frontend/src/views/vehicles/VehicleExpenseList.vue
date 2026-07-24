@@ -63,6 +63,7 @@
               {{ paymentMethodLabel(row.payment_method) }}
             </template>
           </el-table-column>
+          <el-table-column prop="payer_name" label="支付人" width="100" />
           <el-table-column prop="is_driver_advance" label="司机垫付" width="90">
             <template #default="{ row }">
               <el-tag :type="row.is_driver_advance ? 'warning' : 'info'" size="small">
@@ -271,7 +272,7 @@
           <el-input-number v-model="fuelForm.mileage" :min="0" :precision="1" style="width: 100%" />
         </el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12">
+          <el-col :span="8">
             <el-form-item label="支付方式">
               <el-select v-model="fuelForm.payment_method" clearable placeholder="选择支付方式" style="width: 100%">
                 <el-option label="现金" value="cash" />
@@ -282,7 +283,14 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="8">
+            <el-form-item label="支付人">
+              <el-select v-model="fuelForm.payer_id" clearable placeholder="选择支付人" style="width: 100%">
+                <el-option v-for="u in userOptions" :key="u.id" :label="u.real_name" :value="u.id" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
             <el-form-item label="司机垫付">
               <el-switch v-model="fuelForm.is_driver_advance" />
             </el-form-item>
@@ -433,6 +441,7 @@ import {
   type FuelRecordResponse, type MaintenanceRecordResponse, type CostAllocationResponse,
 } from '@/api/vehicles'
 import { getVehicles, getDrivers, type VehicleResponse, type VehicleDriverResponse } from '@/api/vehicles'
+import { getUsers } from '@/api/users'
 
 const authStore = useAuthStore()
 const hasFinanceRole = computed(() => authStore.hasAnyRole(['admin', 'finance']))
@@ -453,6 +462,13 @@ const loadDriverOptions = async () => {
   try {
     const res = await getDrivers({ page: 1, page_size: 100 })
     driverOptions.value = res.items || []
+  } catch { /* ignore */ }
+}
+
+const loadUserOptions = async () => {
+  try {
+    const res = await getUsers({ page: 1, page_size: 100 })
+    userOptions.value = res.items || []
   } catch { /* ignore */ }
 }
 
@@ -565,7 +581,7 @@ const detailData = ref<Record<string, unknown> | null>(null)
 const fuelForm = reactive({
   vehicle_id: '', driver_id: '', fuel_time: '', amount: 0, liters: undefined as number | undefined,
   unit_price: undefined as number | undefined, gas_station: '', mileage: undefined as number | undefined,
-  payment_method: '', is_driver_advance: false, remark: '',
+  payment_method: '', payer_id: '', is_driver_advance: false, remark: '',
 })
 
 const maintForm = reactive({
@@ -586,7 +602,7 @@ const showAddFuel = () => {
   Object.assign(fuelForm, {
     vehicle_id: '', driver_id: '', fuel_time: '', amount: 0, liters: undefined,
     unit_price: undefined, gas_station: '', mileage: undefined,
-    payment_method: '', is_driver_advance: false, remark: '',
+    payment_method: '', payer_id: '', is_driver_advance: false, remark: '',
   })
   fuelDialogVisible.value = true
 }
@@ -739,6 +755,7 @@ const costTypeLabel = (t?: string) => {
 onMounted(() => {
   loadVehicleOptions()
   loadDriverOptions()
+  loadUserOptions()
   loadFuelRecords()
 })
 </script>

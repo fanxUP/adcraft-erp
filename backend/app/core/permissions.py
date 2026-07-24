@@ -165,6 +165,15 @@ PERM_VEHICLE_UPDATE = "vehicle:update"
 # Finance review (for fuel/maintenance expense review)
 PERM_FINANCE_REVIEW = "finance:review"
 
+# Aerial work platform
+PERM_AERIAL_READ = "aerial:read"
+PERM_AERIAL_CREATE = "aerial:create"
+PERM_AERIAL_UPDATE = "aerial:update"
+PERM_AERIAL_DELETE = "aerial:delete"
+PERM_AERIAL_FINANCE = "aerial:finance"
+PERM_AERIAL_WAGE = "aerial:wage"
+PERM_AERIAL_APPROVE = "aerial:approve"
+
 
 # ── Role name constants ───────────────────────────────────────────────────
 
