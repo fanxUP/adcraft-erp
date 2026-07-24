@@ -238,7 +238,12 @@ class AerialVehicleCost(Base, TimestampMixin):
 
     aerial_vehicle: Mapped["AerialVehicle"] = relationship("AerialVehicle", foreign_keys=[aerial_vehicle_id], lazy="selectin")
     ledger: Mapped["AerialDailyLedger | None"] = relationship("AerialDailyLedger", back_populates="vehicle_costs", lazy="selectin")
-    payer: Mapped["AerialPersonnel | None"] = relationship("AerialPersonnel", foreign_keys=[payer_id], lazy="selectin")
+    payer: Mapped["AerialPersonnel | None"] = relationship(
+        "AerialPersonnel",
+        primaryjoin="AerialVehicleCost.payer_id == AerialPersonnel.id",
+        foreign_keys=[payer_id],
+        lazy="selectin",
+    )
 
 
 # ── 安全检查 ────────────────────────────────────────────────────────────────
