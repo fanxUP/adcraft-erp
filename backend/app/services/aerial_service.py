@@ -191,6 +191,7 @@ class AerialService:
             "license_type": d.license_type,
             "license_expire_date": d.license_expire_date.isoformat() if d.license_expire_date else None,
             "is_external": d.is_external,
+            "personnel_type": d.personnel_type,
             "status": d.status,
             "remark": d.remark,
             "created_at": d.created_at.isoformat() if d.created_at else None,

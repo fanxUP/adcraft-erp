@@ -50,6 +50,7 @@ def make_mock_personnel(**kwargs):
     d.license_type = kwargs.get("license_type", "C1")
     d.license_expire_date = kwargs.get("license_expire_date", datetime(2027, 12, 31))
     d.is_external = kwargs.get("is_external", False)
+    d.personnel_type = kwargs.get("personnel_type", "driver")
     d.status = kwargs.get("status", "active")
     d.remark = kwargs.get("remark", None)
     d.created_at = kwargs.get("created_at", datetime.now(timezone.utc))

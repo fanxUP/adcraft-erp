@@ -329,7 +329,7 @@ class AerialAgentDraft(Base):
     sender_name: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="发送人名称")
     raw_message: Mapped[str] = mapped_column(Text, nullable=False, comment="原始消息内容")
     # 识别结果
-    intent: Mapped[str] = mapped_column(String(64), nullable=False, comment="识别意图: aerial_work_ledger/aerial_driver_expense/aerial_payment_claim/aerial_vehicle_issue/aerial_query_report/aerial_reimbursement_claim/normal_chat")
+    intent: Mapped[str] = mapped_column(String(64), nullable=False, comment="识别意图: aerial_work_ledger/aerial_personnel_expense/aerial_payment_claim/aerial_vehicle_issue/aerial_query_report/aerial_reimbursement_claim/normal_chat")
     confidence: Mapped[float] = mapped_column(default=0.0, nullable=False, comment="置信度 0-1")
     risk_level: Mapped[str] = mapped_column(String(16), default="low", nullable=False, comment="风险等级: low/medium/high")
     extracted_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="提取的结构化数据JSON")
