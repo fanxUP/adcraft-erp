@@ -6,6 +6,7 @@
           <span v-if="!sidebarCollapsed" class="logo-text">AdCraft ERP</span>
           <span v-else class="logo-short">A</span>
         </div>
+        <div class="sidebar-menu-wrap">
         <el-menu
           :default-active="route.path"
           router
@@ -154,6 +155,7 @@
             <el-menu-item index="/ai/payment-ocr">收款截图识别</el-menu-item>
           </el-sub-menu>
         </el-menu>
+        </div>
       </el-aside>
 
       <el-container>
@@ -236,6 +238,9 @@ onUnmounted(() => {
   background-color: var(--ad-darker);
   transition: width 0.3s;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
 
   :deep(.el-menu) {
     --el-menu-bg-color: var(--ad-darker);
@@ -250,6 +255,24 @@ onUnmounted(() => {
       font-weight: 600;
     }
   }
+}
+
+.sidebar-menu-wrap {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 侧边栏滚动条样式 */
+.sidebar-menu-wrap::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-menu-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-menu-wrap::-webkit-scrollbar-thumb {
+  background: var(--ad-border);
+  border-radius: 2px;
 }
 
 .logo {
