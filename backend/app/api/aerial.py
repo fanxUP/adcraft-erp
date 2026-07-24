@@ -174,7 +174,7 @@ async def list_ledgers(
     svc = _svc(db, current_user, request)
     items, total = await svc.list_ledgers(
         page=page, page_size=page_size,
-        date_from=date_from, date_to=date_to, driver_id=personnel_id,
+        date_from=date_from, date_to=date_to, personnel_id=personnel_id,
         customer_name=customer_name, work_location=work_location,
         payment_status=payment_status, audit_status=audit_status, status=status,
     )
@@ -277,7 +277,7 @@ async def list_expenses(
     svc = _svc(db, current_user, request)
     items, total = await svc.list_expenses(
         page=page, page_size=page_size,
-        date_from=date_from, date_to=date_to, driver_id=personnel_id,
+        date_from=date_from, date_to=date_to, personnel_id=personnel_id,
         expense_type=expense_type, review_status=review_status,
         reimbursement_status=reimbursement_status, ledger_id=ledger_id,
     )
@@ -336,7 +336,7 @@ async def list_wages(
     request: Request = None,
 ):
     svc = _svc(db, current_user, request)
-    items, total = await svc.list_wages(page=page, page_size=page_size, wage_month=wage_month, driver_id=personnel_id, payment_status=payment_status)
+    items, total = await svc.list_wages(page=page, page_size=page_size, wage_month=wage_month, personnel_id=personnel_id, payment_status=payment_status)
     return success_paginated(items, total, page, page_size)
 
 
