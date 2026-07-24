@@ -114,6 +114,15 @@ class AerialService:
         await self._log(None, ACTION_UPDATE, target_type="vehicle", target_id=obj.id, before=before, after=after)
         return after
 
+    async def delete_vehicle(self, vehicle_id: str) -> dict:
+        obj = await self.repo.get_vehicle(uuid.UUID(vehicle_id))
+        if not obj:
+            raise ValueError("高空车不存在")
+        before = self._vehicle_to_dict(obj)
+        await self.repo.soft_delete_vehicle(obj)
+        await self._log(None, ACTION_DELETE, target_type="vehicle", target_id=obj.id, before=before)
+        return before
+
     def _vehicle_to_dict(self, v):
         return {
             "id": str(v.id),

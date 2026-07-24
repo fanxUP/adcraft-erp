@@ -99,6 +99,21 @@ async def update_vehicle(
     return success(result)
 
 
+@router.delete("/{vehicle_id}")
+async def delete_vehicle(
+    vehicle_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_DELETE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    try:
+        result = await svc.delete_vehicle(vehicle_id)
+        return success(result)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 # ── 人员 ──────────────────────────────────────────────────────────────────
 
 @personnel_router.get("")
