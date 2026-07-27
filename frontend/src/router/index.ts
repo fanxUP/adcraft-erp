@@ -88,6 +88,14 @@ const routes: RouteRecordRaw[] = [
       { path: 'ai/reports', name: 'BusinessNarrativeReport', component: () => import('@/views/ai/BusinessNarrativeReport.vue') },
       { path: 'ai/site-photos', name: 'SitePhotoRecognition', component: () => import('@/views/ai/SitePhotoRecognition.vue') },
       { path: 'ai/payment-ocr', name: 'PaymentOCR', component: () => import('@/views/ai/PaymentOCR.vue') },
+
+      // CDR 智能报价
+      { path: 'cdr/quotes', name: 'CDRQuoteList', component: () => import('@/views/cdr-quotes/CDRQuoteList.vue') },
+      { path: 'cdr/quotes/new', name: 'CDRQuoteCreate', component: () => import('@/views/cdr-quotes/CDRQuoteEditor.vue') },
+      { path: 'cdr/quotes/:id', name: 'CDRQuoteDetail', component: () => import('@/views/cdr-quotes/CDRQuoteDetail.vue') },
+      { path: 'cdr/quotes/:id/edit', name: 'CDRQuoteEdit', component: () => import('@/views/cdr-quotes/CDRQuoteEditor.vue') },
+      { path: 'cdr/price-rules', name: 'PriceRuleList', component: () => import('@/views/cdr-quotes/PriceRuleList.vue') },
+      { path: 'cdr/customer-agreements', name: 'CustomerAgreementList', component: () => import('@/views/cdr-quotes/CustomerAgreementList.vue') },
     ],
   },
   {

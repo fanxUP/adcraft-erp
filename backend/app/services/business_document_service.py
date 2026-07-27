@@ -111,6 +111,8 @@ class BusinessDocumentService:
             data["sales_user_id"] = UUID(data["sales_user_id"])
 
         doc = await self.repo.create(data)
+        # Eager-load relationships before serializing (avoid MissingGreenlet in async)
+        await self.db.refresh(doc, ["customer", "items", "status_logs", "versions"])
         return self._to_detail(doc)
 
     # ═══════════════════════════════════════════
@@ -511,8 +513,7 @@ class BusinessDocumentService:
             "doc_type": d.doc_type,
             "doc_no": d.doc_no,
             "project_name": d.project_name or "",
-            "customer_name": d.customer_name or (d.customer.name if d.customer else None),
-            "department": d.department or "",
+            "customer_name": d.customer_name or "",
             "status": d.status or "",
             "total_amount": float(d.total_amount) if d.total_amount else 0,
         }
@@ -530,7 +531,7 @@ class BusinessDocumentService:
             "doc_type": d.doc_type,
             "doc_no": d.doc_no,
             "customer_id": str(d.customer_id) if d.customer_id else None,
-            "customer_name": d.customer_name or (d.customer.name if d.customer else None),
+            "customer_name": d.customer_name or "",
             "project_name": d.project_name,
             "status": d.status,
             "total_amount": float(d.total_amount),
@@ -562,7 +563,7 @@ class BusinessDocumentService:
             "doc_type": d.doc_type,
             "doc_no": d.doc_no,
             "customer_id": str(d.customer_id) if d.customer_id else None,
-            "customer_name": d.customer_name or (d.customer.name if d.customer else None),
+            "customer_name": d.customer_name or "",
             "project_name": d.project_name,
             "sales_user_id": str(d.sales_user_id) if d.sales_user_id else None,
             "status": d.status,

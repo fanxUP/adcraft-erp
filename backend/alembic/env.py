@@ -7,7 +7,12 @@ from app.models.base import Base
 # Import all models so Base.metadata knows about them
 from app.models.user import User, Role, Permission
 from app.models.customer import Customer, CustomerContact
-from app.models.product import ProductCategory, Product, Material, Process, PriceRule
+from app.models.product import ProductCategory, Product, Material, Process, PriceRule, MaterialPriceVersion
+from app.models.cdr_quote import (
+    PriceRuleSet, CdrPriceRule,
+    CustomerPriceAgreement, QuoteVersion, QuoteLine, QuoteLineProcess,
+    QuoteApproval, QuoteAuditLog, CdrDevice, CdrCaptureSession, DrawingSnapshot,
+)
 from app.models.business_document import BusinessDocument, BusinessDocumentItem, BusinessDocumentStatusLog, BusinessDocumentVersion
 from app.models.operation_log import OperationLog
 from app.models.task import DesignTask, ProductionTask, InstallationTask, Attachment

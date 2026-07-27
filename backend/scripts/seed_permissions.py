@@ -129,6 +129,19 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "ai_anomaly:read", "name": "智能异常提醒", "description": "查看AI异常检测结果"},
     {"code": "ai_knowledge:read", "name": "报价知识库", "description": "使用AI报价知识库"},
     {"code": "ai_report:read", "name": "智能经营报告", "description": "查看AI生成的经营报告"},
+    # CDR 智能报价
+    {"code": "cdr_quote:read", "name": "查看智能报价", "description": "查看CDR智能报价列表和详情"},
+    {"code": "cdr_quote:create", "name": "创建智能报价", "description": "创建CDR智能报价和版本"},
+    {"code": "cdr_quote:update", "name": "编辑智能报价", "description": "编辑CDR智能报价信息"},
+    {"code": "cdr_quote:delete", "name": "删除智能报价", "description": "删除CDR智能报价"},
+    {"code": "cdr_quote:view_cost", "name": "查看报价成本", "description": "查看智能报价的预估成本"},
+    {"code": "cdr_quote:view_profit", "name": "查看报价利润", "description": "查看智能报价的预估毛利"},
+    {"code": "cdr_quote:adjust_price", "name": "调整报价价格", "description": "手工调整智能报价的单价/金额"},
+    {"code": "cdr_quote:approve", "name": "审批报价", "description": "审批/驳回智能报价"},
+    {"code": "cdr_quote:convert", "name": "转订单", "description": "将智能报价转为销售订单"},
+    {"code": "cdr_rule_set:publish", "name": "发布定价规则", "description": "发布定价规则集"},
+    {"code": "cdr_device:manage", "name": "管理CDR设备", "description": "管理CorelDRAW插件设备"},
+    {"code": "cdr_customer_agreement:manage", "name": "管理客户协议价", "description": "管理客户专项价格协议"},
 ]
 
 # ── Role-to-permission mapping ─────────────────────────────────────────────
@@ -151,6 +164,8 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "ai_quote:read", "ai_anomaly:read", "ai_knowledge:read", "ai_report:read",
         "vehicle:read",
         "aerial:read",
+        "cdr_quote:read", "cdr_quote:create", "cdr_quote:update", "cdr_quote:convert", "cdr_quote:adjust_price",
+        "cdr_customer_agreement:manage",
     ],
     "designer": [
         "customer:read",

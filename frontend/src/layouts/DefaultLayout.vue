@@ -28,10 +28,22 @@
             <el-icon><User /></el-icon>
             <span>客户管理</span>
           </el-menu-item>
-          <el-menu-item v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/quotes">
-            <el-icon><Document /></el-icon>
-            <span>报价管理</span>
-          </el-menu-item>
+          <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/quotes-group">
+            <template #title>
+              <el-icon><Document /></el-icon>
+              <span>报价管理</span>
+            </template>
+            <el-menu-item index="/quotes">常规报价</el-menu-item>
+            <el-menu-item index="/cdr/quotes">智能报价</el-menu-item>
+          </el-sub-menu>
+          <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/price-center">
+            <template #title>
+              <el-icon><Coin /></el-icon>
+              <span>价格中心</span>
+            </template>
+            <el-menu-item index="/cdr/price-rules">定价规则</el-menu-item>
+            <el-menu-item index="/cdr/customer-agreements">客户协议价</el-menu-item>
+          </el-sub-menu>
           <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'sales'])" index="/contracts-group">
             <template #title>
               <el-icon><DocumentChecked /></el-icon>

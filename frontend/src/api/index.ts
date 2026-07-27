@@ -74,3 +74,7 @@ export async function patch<T>(url: string, data?: unknown, config?: AxiosReques
  * undesirable (e.g. blob downloads, progress events).
  */
 export { apiClient }
+
+// Convenience default export - supports `import api from '@/api'`
+const api = { get, post, put, del, patch, apiClient }
+export default api

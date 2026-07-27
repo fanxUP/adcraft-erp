@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
 from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup, admin, notifications, conversations, acceptances, contracts, framework_contracts, vehicles, vehicle_agent, vehicle_dashboard, aerial
+from app.api import cdr_quotes
 # AI module routes
 from app.ai.api import ai_anomalies, ai_knowledge, ai_quote, ai_reports, ai_site_photo, ai_payment_ocr
 
@@ -121,6 +122,9 @@ app.include_router(ai_quote.router, prefix="/api/v1")
 app.include_router(ai_reports.router, prefix="/api/v1")
 app.include_router(ai_site_photo.router, prefix="/api/v1")
 app.include_router(ai_payment_ocr.router, prefix="/api/v1")
+
+# CDR 智能报价
+app.include_router(cdr_quotes.router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
 # Static file serving (frontend SPA + uploads)
