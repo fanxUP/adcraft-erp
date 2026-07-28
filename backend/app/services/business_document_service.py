@@ -231,9 +231,16 @@ class BusinessDocumentService:
         # 6. 删除所有关联的报价相关记录（防止 FK 约束阻止主记录删除）
         from sqlalchemy import text as sa_text
         qid_param = str(doc.id)
-        for tbl in ["quote_approvals", "quote_audit_logs", "quote_geometry"]:
+        for tbl in [
+            "quote_approvals",
+            "quote_audit_logs",
+            "quote_geometry",
+            "business_document_status_logs",
+            "business_document_versions",
+        ]:
+            column = "document_id" if tbl.startswith("business_document_") else "quote_id"
             await self.db.execute(
-                sa_text(f"DELETE FROM {tbl} WHERE quote_id = :qid"),
+                sa_text(f"DELETE FROM {tbl} WHERE {column} = :qid"),
                 {"qid": qid_param}
             )
 
