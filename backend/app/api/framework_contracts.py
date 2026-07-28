@@ -246,7 +246,7 @@ async def upload_project_attachment(
     upload_dir = os.path.join(settings.LOCAL_UPLOAD_DIR, "framework-contract-projects")
     os.makedirs(upload_dir, exist_ok=True)
     if project.get("attachment_path"):
-        old_path = os.path.join(settings.LOCAL_UPLOAD_DIR, project["attachment_path"])
+        old_path = confined_path(settings.LOCAL_UPLOAD_DIR, project["attachment_path"])
         if os.path.isfile(old_path):
             os.remove(old_path)
 
@@ -291,7 +291,7 @@ async def delete_project_attachment(
         return {"code": 40401, "message": "项目不存在", "data": None}
 
     if project.get("attachment_path"):
-        file_path = os.path.join(settings.LOCAL_UPLOAD_DIR, project["attachment_path"])
+        file_path = confined_path(settings.LOCAL_UPLOAD_DIR, project["attachment_path"])
         if os.path.isfile(file_path):
             os.remove(file_path)
 

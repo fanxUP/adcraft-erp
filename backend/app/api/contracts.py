@@ -220,7 +220,7 @@ async def upload_contract_attachment(
     os.makedirs(upload_dir, exist_ok=True)
     # Delete old file if exists
     if contract.get("attachment_path"):
-        old_path = os.path.join(settings.LOCAL_UPLOAD_DIR, contract["attachment_path"])
+        old_path = confined_path(settings.LOCAL_UPLOAD_DIR, contract["attachment_path"])
         if os.path.isfile(old_path):
             os.remove(old_path)
 
@@ -265,7 +265,7 @@ async def delete_contract_attachment(
         return {"code": 40401, "message": "合同不存在", "data": None}
 
     if contract.get("attachment_path"):
-        file_path = os.path.join(settings.LOCAL_UPLOAD_DIR, contract["attachment_path"])
+        file_path = confined_path(settings.LOCAL_UPLOAD_DIR, contract["attachment_path"])
         if os.path.isfile(file_path):
             os.remove(file_path)
 
