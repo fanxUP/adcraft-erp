@@ -33,8 +33,8 @@ class ProjectCostService:
         doc_type = result.scalar_one_or_none()
         if doc_type != "order":
             return
-        from app.services.order_service import OrderService
-        order_svc = OrderService(self.db)
+        from app.services.business_document_service import BusinessDocumentService
+        order_svc = BusinessDocumentService(self.db, doc_type="order")
         await order_svc.auto_calculate_cost(document_id)
 
     async def list_costs(

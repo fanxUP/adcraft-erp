@@ -1,204 +1,143 @@
-"""Tests for OrderService: CRUD, status change, cost calculation."""
+"""统一业务单据服务的订单路径回归测试。"""
 
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.order_service import OrderService
-from tests.conftest import SAMPLE_USER_ID, SAMPLE_ORDER_ID, SAMPLE_CUSTOMER_ID
+from app.services.business_document_service import BusinessDocumentService
+from tests.conftest import SAMPLE_CUSTOMER_ID, SAMPLE_ORDER_ID
 
 
-def make_mock_order(**kwargs):
-    o = MagicMock()
-    o.id = kwargs.get("id", SAMPLE_ORDER_ID)
-    o.order_no = kwargs.get("order_no", "O20260629-0001")
-    o.quote_id = kwargs.get("quote_id")
-    o.customer_id = kwargs.get("customer_id", SAMPLE_CUSTOMER_ID)
-    o.project_name = kwargs.get("project_name", "测试订单")
-    o.status = kwargs.get("status", "pending_confirm")
-    o.total_amount = kwargs.get("total_amount", 1000.0)
-    o.paid_amount = kwargs.get("paid_amount", 0.0)
-    o.unpaid_amount = kwargs.get("unpaid_amount", 1000.0)
-    o.cost_amount = kwargs.get("cost_amount", 0.0)
-    o.gross_profit = kwargs.get("gross_profit", 0.0)
-    o.sales_user_id = kwargs.get("sales_user_id")
-    o.delivery_deadline = kwargs.get("delivery_deadline")
-    o.installation_address = kwargs.get("installation_address")
-    o.remark = kwargs.get("remark")
-    o.created_at = kwargs.get("created_at")
-    o.items = kwargs.get("items", [])
-    o.status_logs = kwargs.get("status_logs", [])
-    o.design_tasks = kwargs.get("design_tasks", [])
-    o.production_tasks = kwargs.get("production_tasks", [])
-    o.installation_tasks = kwargs.get("installation_tasks", [])
-    return o
-
-
-@pytest.fixture
-def mock_repo():
-    repo = MagicMock()
-    repo.get_by_id = AsyncMock()
-    repo.list_orders = AsyncMock(return_value=([], 0))
-
-    async def update_side_effect(model_obj, data):
-        for key, value in data.items():
-            setattr(model_obj, key, value)
-        return model_obj
-
-    repo.update = AsyncMock(side_effect=update_side_effect)
-    repo.create_status_log = AsyncMock()
-    return repo
+def make_order(**overrides):
+    order = MagicMock()
+    defaults = {
+        "id": SAMPLE_ORDER_ID,
+        "doc_type": "order",
+        "doc_no": "O20260629-0001",
+        "customer_id": SAMPLE_CUSTOMER_ID,
+        "customer_name": None,
+        "project_name": "测试订单",
+        "department": None,
+        "contact_person": None,
+        "contact_phone": None,
+        "status": "pending_confirm",
+        "total_amount": Decimal("1000"),
+        "paid_amount": Decimal("0"),
+        "unpaid_amount": Decimal("1000"),
+        "cost_amount": Decimal("0"),
+        "gross_profit": Decimal("1000"),
+        "sales_user_id": None,
+        "delivery_deadline": None,
+        "installation_address": None,
+        "remark": None,
+        "created_at": None,
+        "updated_at": None,
+        "deleted_at": None,
+        "customer": None,
+        "items": [],
+        "status_logs": [],
+        "design_tasks": [],
+        "production_tasks": [],
+        "installation_tasks": [],
+    }
+    defaults.update(overrides)
+    for key, value in defaults.items():
+        setattr(order, key, value)
+    return order
 
 
 @pytest.fixture
-def service(mock_repo):
-    with patch("app.services.order_service.OrderRepository") as MockRepoClass:
-        MockRepoClass.return_value = mock_repo
-        db = AsyncMock()
-        svc = OrderService(db)
-        svc.repo = mock_repo
-        yield svc
+def service():
+    db = MagicMock()
+    db.execute = AsyncMock()
+    with patch(
+        "app.services.business_document_service.BusinessDocumentRepository"
+    ) as repository_class:
+        repository = repository_class.return_value
+        repository.get_by_id = AsyncMock()
+        repository.list_all = AsyncMock(return_value=([], 0))
 
+        async def update(document, data):
+            for key, value in data.items():
+                setattr(document, key, value)
+            return document
 
-# --- List Tests ---
-
-@pytest.mark.asyncio
-async def test_list_orders_empty(service, mock_repo):
-    mock_repo.list_orders.return_value = ([], 0)
-    items, total = await service.list_orders(page=1, page_size=20)
-    assert items == []
-    assert total == 0
-
-
-@pytest.mark.asyncio
-async def test_list_orders_with_results(service, mock_repo):
-    o1 = make_mock_order(project_name="订单A")
-    o2 = make_mock_order(id=SAMPLE_USER_ID, order_no="O20260629-0002", project_name="订单B")
-    mock_repo.list_orders.return_value = ([o1, o2], 2)
-
-    items, total = await service.list_orders(page=1, page_size=20)
-    assert total == 2
-    assert items[0]["project_name"] == "订单A"
-    assert items[1]["project_name"] == "订单B"
-
-
-# --- Get Tests ---
-
-@pytest.mark.asyncio
-async def test_get_order_found(service, mock_repo):
-    o = make_mock_order()
-    mock_repo.get_by_id.return_value = o
-    result = await service.get_order(SAMPLE_ORDER_ID)
-    assert result is not None
-    assert result["order_no"] == "O20260629-0001"
-    assert result["project_name"] == "测试订单"
-    assert result["status"] == "pending_confirm"
+        repository.update = AsyncMock(side_effect=update)
+        yield BusinessDocumentService(db, doc_type="order"), repository, db
 
 
 @pytest.mark.asyncio
-async def test_get_order_not_found(service, mock_repo):
-    mock_repo.get_by_id.return_value = None
-    result = await service.get_order(SAMPLE_ORDER_ID)
-    assert result is None
+async def test_list_orders(service):
+    order_service, repository, _ = service
+    repository.list_all.return_value = ([make_order()], 1)
 
+    orders, total = await order_service.list_all(1, 20)
 
-# --- Change Status Tests ---
-
-@pytest.mark.asyncio
-async def test_change_status(service, mock_repo):
-    o = make_mock_order(status="pending_confirm")
-    mock_repo.get_by_id.return_value = o
-
-    result = await service.change_status(SAMPLE_ORDER_ID, "confirmed", "确认订单", SAMPLE_USER_ID)
-    assert result["status"] == "confirmed"
-    mock_repo.update.assert_awaited_once()
-    mock_repo.create_status_log.assert_awaited_once_with(
-        SAMPLE_ORDER_ID, "pending_confirm", "confirmed", "确认订单", SAMPLE_USER_ID
+    assert total == 1
+    assert orders[0]["order_no"] == "O20260629-0001"
+    repository.list_all.assert_awaited_once_with(
+        skip=0,
+        limit=20,
+        status=None,
+        customer_id=None,
+        keyword=None,
+        exclude_status=None,
     )
 
 
 @pytest.mark.asyncio
-async def test_change_status_order_not_found(service, mock_repo):
-    mock_repo.get_by_id.return_value = None
-    with pytest.raises(ValueError, match="订单不存在"):
-        await service.change_status(SAMPLE_ORDER_ID, "cancelled", "取消", SAMPLE_USER_ID)
+async def test_get_order(service):
+    order_service, repository, _ = service
+    repository.get_by_id.return_value = make_order()
+
+    order = await order_service.get_by_id(SAMPLE_ORDER_ID)
+
+    assert order["project_name"] == "测试订单"
+    assert order["status"] == "pending_confirm"
 
 
 @pytest.mark.asyncio
-async def test_change_status_full_flow(service, mock_repo):
-    """Verify the full valid state transition chain for orders."""
-    # pending_confirm → confirmed
-    o = make_mock_order(status="pending_confirm")
-    mock_repo.get_by_id.return_value = o
-    result = await service.change_status(SAMPLE_ORDER_ID, "confirmed", "确认订单", SAMPLE_USER_ID)
-    assert result["status"] == "confirmed"
+async def test_get_missing_order(service):
+    order_service, repository, _ = service
+    repository.get_by_id.return_value = None
 
-    # confirmed → in_progress
-    o = make_mock_order(status="confirmed")
-    mock_repo.get_by_id.return_value = o
-    result = await service.change_status(SAMPLE_ORDER_ID, "in_progress", "开始制作", SAMPLE_USER_ID)
-    assert result["status"] == "in_progress"
-
-    # in_progress → in_production
-    o = make_mock_order(status="in_progress")
-    mock_repo.get_by_id.return_value = o
-    result = await service.change_status(SAMPLE_ORDER_ID, "in_production", "生产中", SAMPLE_USER_ID)
-    assert result["status"] == "in_production"
-
-    # in_production → in_installation
-    o = make_mock_order(status="in_production")
-    mock_repo.get_by_id.return_value = o
-    result = await service.change_status(SAMPLE_ORDER_ID, "in_installation", "安装中", SAMPLE_USER_ID)
-    assert result["status"] == "in_installation"
-
-    # in_installation → completed
-    o = make_mock_order(status="in_installation")
-    mock_repo.get_by_id.return_value = o
-    # In production, completed triggers _auto_create_acceptance (separate tests).
-    assert result["status"] == "in_installation"
-
-
-# --- Set Cost Tests ---
-
-@pytest.mark.asyncio
-async def test_set_cost(service, mock_repo):
-    o = make_mock_order(total_amount=5000.0)
-    mock_repo.get_by_id.return_value = o
-    mock_repo.update.return_value = o
-
-    result = await service.set_cost(SAMPLE_ORDER_ID, 3000.0)
-    assert result["cost_amount"] == 3000.0
-    assert result["gross_profit"] == 2000.0  # 5000 - 3000
+    assert await order_service.get_by_id(SAMPLE_ORDER_ID) is None
 
 
 @pytest.mark.asyncio
-async def test_set_cost_order_not_found(service, mock_repo):
-    mock_repo.get_by_id.return_value = None
-    with pytest.raises(ValueError, match="订单不存在"):
-        await service.set_cost(SAMPLE_ORDER_ID, 1000.0)
+async def test_set_order_cost(service):
+    order_service, repository, _ = service
+    repository.get_by_id.return_value = make_order(total_amount=Decimal("5000"))
 
+    order = await order_service.set_cost(SAMPLE_ORDER_ID, 3000)
 
-# --- Auto Calculate Cost Tests ---
+    assert order["cost_amount"] == 3000
+    assert order["gross_profit"] == 2000
+
 
 @pytest.mark.asyncio
-async def test_auto_calculate_cost(service, mock_repo):
-    """Auto-calculate sums outsource + material costs."""
-    o = make_mock_order(total_amount=10000.0)
-    mock_repo.get_by_id.return_value = o
+async def test_set_cost_rejects_quote(service):
+    order_service, repository, _ = service
+    repository.get_by_id.return_value = make_order(doc_type="quote")
 
-    # Mock db.execute to return outsource sum first, then stock sum
-    outsource_result = MagicMock()
-    outsource_result.scalar.return_value = 2000.0
-    stock_result = MagicMock()
-    stock_result.scalar.return_value = 1500.0
-    project_cost_result = MagicMock()
-    project_cost_result.scalar.return_value = 0
+    with pytest.raises(ValueError, match="仅订单可设置成本"):
+        await order_service.set_cost(SAMPLE_ORDER_ID, 100)
 
-    service.db.execute = AsyncMock(side_effect=[outsource_result, stock_result, project_cost_result])
 
-    mock_repo.update.return_value = make_mock_order(total_amount=10000.0, cost_amount=3500.0, gross_profit=6500.0)
+@pytest.mark.asyncio
+async def test_auto_calculate_cost(service):
+    order_service, repository, db = service
+    repository.get_by_id.return_value = make_order(total_amount=Decimal("10000"))
+    outsource = MagicMock()
+    outsource.scalar.return_value = 2000
+    inventory = MagicMock()
+    inventory.scalar.return_value = 1500
+    project_cost = MagicMock()
+    project_cost.scalar.return_value = 500
+    db.execute.side_effect = [outsource, inventory, project_cost]
 
-    result = await service.auto_calculate_cost(SAMPLE_ORDER_ID)
-    assert result["cost_amount"] == 3500.0
-    assert result["gross_profit"] == 6500.0
+    order = await order_service.auto_calculate_cost(SAMPLE_ORDER_ID)
+
+    assert order["cost_amount"] == 4000
+    assert order["gross_profit"] == 6000

@@ -650,6 +650,7 @@ class BusinessDocumentService:
             "total_amount": float(d.total_amount) if d.total_amount else 0,
         }
         if d.doc_type == "order":
+            base["order_no"] = d.doc_no
             base["paid_amount"] = float(d.paid_amount) if d.paid_amount else 0
             base["unpaid_amount"] = float(d.unpaid_amount) if d.unpaid_amount else 0
         else:
@@ -674,6 +675,7 @@ class BusinessDocumentService:
         }
         if d.doc_type == "order":
             base.update({
+                "order_no": d.doc_no,
                 "paid_amount": float(d.paid_amount),
                 "unpaid_amount": float(d.unpaid_amount),
                 "cost_amount": float(d.cost_amount),
@@ -751,6 +753,7 @@ class BusinessDocumentService:
 
         if d.doc_type == "order":
             base.update({
+                "order_no": d.doc_no,
                 "source_quote_id": str(d.source_quote_id) if d.source_quote_id else None,
                 "paid_amount": float(d.paid_amount),
                 "unpaid_amount": float(d.unpaid_amount),

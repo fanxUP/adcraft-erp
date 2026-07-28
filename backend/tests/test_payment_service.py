@@ -7,7 +7,7 @@ import pytest
 
 # Pre-import models to satisfy SQLAlchemy mapper dependencies
 import app.models.customer  # noqa: F401
-import app.models.order  # noqa: F401
+import app.models.business_document  # noqa: F401
 import app.models.user  # noqa: F401
 import app.models.notification  # noqa: F401
 from app.services.payment_service import PaymentService, StatementService, ExpenseService

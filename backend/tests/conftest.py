@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+
+# 测试必须与开发机/生产机的 .env 隔离，避免写入真实上传目录或启用外部 AI。
+_test_upload_dir = os.path.join(tempfile.gettempdir(), "adcraft-test-uploads")
+os.makedirs(_test_upload_dir, exist_ok=True)
+os.environ["APP_ENV"] = "test"
+os.environ["LOCAL_UPLOAD_DIR"] = _test_upload_dir
+os.environ["AI_ENABLED"] = "false"
+os.environ["AI_API_KEY"] = ""
 
 
 # --- Common test data ---

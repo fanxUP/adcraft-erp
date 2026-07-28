@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import app.models.customer  # noqa: F401 - ensure mappers load
-import app.models.order  # noqa: F401
+import app.models.business_document  # noqa: F401
 import app.models.payment  # noqa: F401
 import app.models.task  # noqa: F401
 from app.services.report_service import ReportService
