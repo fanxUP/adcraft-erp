@@ -17,8 +17,8 @@ function versionPlugin(): import('vite').Plugin {
   }
 }
 
-export default defineConfig({
-  plugins: [vue(), versionPlugin()],
+export default defineConfig(({ mode }) => ({
+  plugins: [vue(), ...(mode === 'test' ? [] : [versionPlugin()])],
   build: {
     rollupOptions: {
       output: {
@@ -56,4 +56,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

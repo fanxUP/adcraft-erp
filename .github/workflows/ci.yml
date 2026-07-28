@@ -42,6 +42,8 @@ jobs:
         run: npm ci
       - name: 类型与生产构建
         run: npm run build
+      - name: 前端单元测试
+        run: npm test
       - name: 代码规范
         run: npm run lint
       - name: 依赖安全审计

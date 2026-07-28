@@ -6,14 +6,11 @@ from app.repositories.contract_repo import ContractRepository
 from app.schemas.contract import ContractListResponse, ContractDetailResponse
 from app.services.number_generator import generate_contract_no
 from app.services.business_document_service import BusinessDocumentService
+from app.domain.workflows import CONTRACT_WORKFLOW, allowed_targets
 
 
 # 状态流转映射
-CONTRACT_TRANSITIONS = {
-    "draft": ["active", "completed"],
-    "active": ["draft", "completed"],
-    "completed": ["draft"],
-}
+CONTRACT_TRANSITIONS = CONTRACT_WORKFLOW
 
 
 class ContractService:
@@ -280,7 +277,7 @@ class ContractService:
         if not contract:
             raise ValueError("合同不存在")
 
-        allowed = CONTRACT_TRANSITIONS.get(contract.status, [])
+        allowed = allowed_targets(CONTRACT_TRANSITIONS, contract.status)
         if to_status not in allowed:
             raise ValueError(f"合同状态不允许从「{contract.status}」变更为「{to_status}」")
 

@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.acceptance import AcceptanceForm, AcceptanceItem
 from app.models.business_document import BusinessDocument
+from app.domain.workflows import ACCEPTANCE_WORKFLOW, allowed_targets
 from app.repositories.acceptance_repo import AcceptanceRepository
 from app.services.number_generator import generate_acceptance_no
 from app.schemas.acceptance import AcceptanceItemResponse, AcceptanceListResponse, AcceptanceDetailResponse, AcceptanceAttachmentResponse
@@ -149,11 +150,7 @@ class AcceptanceService:
         await self.repo.soft_delete(form)
 
     # ── 状态变更 ──
-    VALID_TRANSITIONS = {
-        "draft": ["pending"],
-        "pending": ["accepted", "rejected"],
-        "rejected": ["draft"],
-    }
+    VALID_TRANSITIONS = ACCEPTANCE_WORKFLOW
 
     async def change_status(
         self,
@@ -167,7 +164,7 @@ class AcceptanceService:
         if not form:
             raise ValueError("验收单不存在")
 
-        allowed = self.VALID_TRANSITIONS.get(form.status, [])
+        allowed = allowed_targets(self.VALID_TRANSITIONS, form.status)
         if to_status not in allowed:
             raise ValueError(f"不允许从 {form.status} 变更为 {to_status}")
 

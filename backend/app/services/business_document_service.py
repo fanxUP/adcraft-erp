@@ -2,12 +2,10 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select
 
+from app.domain.workflows import ORDER_WORKFLOW, QUOTE_WORKFLOW, allowed_targets
 from app.repositories.business_document_repo import BusinessDocumentRepository
-from app.models.outsource import OutsourceTask
-from app.models.inventory import StockRecord
-from app.models.project_cost import ProjectCost
 from app.models.task import DesignTask, ProductionTask, InstallationTask
 
 
@@ -33,23 +31,8 @@ def _build_spec(item) -> str | None:
 
 # ── 状态机 ──
 
-ORDER_TRANSITIONS = {
-    "pending_confirm": ["confirmed", "cancelled"],
-    "confirmed": ["designing", "cancelled"],
-    "designing": ["in_production", "in_installation", "cancelled"],
-    "in_production": ["designing", "in_installation", "cancelled"],
-    "in_installation": ["designing", "in_production", "pending_acceptance", "cancelled"],
-    "pending_acceptance": ["completed", "in_installation", "cancelled"],
-    "completed": [],
-    "cancelled": [],
-}
-
-QUOTE_TRANSITIONS = {
-    "draft": ["confirmed", "cancelled"],
-    "confirmed": ["converted", "cancelled", "draft"],
-    "cancelled": [],
-    "converted": [],  # 终端状态
-}
+ORDER_TRANSITIONS = ORDER_WORKFLOW
+QUOTE_TRANSITIONS = QUOTE_WORKFLOW
 
 
 class BusinessDocumentService:
@@ -289,7 +272,7 @@ class BusinessDocumentService:
 
         from_status = doc.status
         transitions = ORDER_TRANSITIONS if doc.doc_type == "order" else QUOTE_TRANSITIONS
-        allowed = transitions.get(from_status, [])
+        allowed = allowed_targets(transitions, from_status)
         if to_status not in allowed:
             raise ValueError(f"不允许从 {from_status} 流转到 {to_status}")
 
@@ -493,27 +476,10 @@ class BusinessDocumentService:
         if doc.doc_type != "order":
             raise ValueError("仅订单可自动计算成本")
 
-        total_cost = Decimal("0")
+        from app.services.order_cost_service import OrderCostAggregationService
 
-        r = await self.db.execute(
-            select(func.coalesce(func.sum(OutsourceTask.total_amount), 0))
-            .where(OutsourceTask.related_doc_id == doc_id, OutsourceTask.status.in_(["completed", "settled"]))
-        )
-        total_cost += Decimal(str(r.scalar()))
-
-        r = await self.db.execute(
-            select(func.coalesce(func.sum(StockRecord.total_cost), 0))
-            .where(StockRecord.document_id == doc_id, StockRecord.record_type == "out")
-        )
-        total_cost += Decimal(str(r.scalar()))
-
-        r = await self.db.execute(
-            select(func.coalesce(func.sum(ProjectCost.amount), 0))
-            .where(ProjectCost.document_id == doc_id, ProjectCost.deleted_at.is_(None))
-        )
-        total_cost += Decimal(str(r.scalar()))
-
-        return await self.set_cost(doc_id, float(total_cost))
+        breakdown = await OrderCostAggregationService(self.db).calculate(doc_id)
+        return await self.set_cost(doc_id, float(breakdown.total))
 
     # ═══════════════════════════════════════════
     # 报价计算

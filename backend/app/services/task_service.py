@@ -3,6 +3,12 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.workflows import (
+    DESIGN_TASK_WORKFLOW,
+    INSTALLATION_TASK_WORKFLOW,
+    PRODUCTION_TASK_WORKFLOW,
+    allowed_targets,
+)
 from app.schemas.attachment import AttachmentResponse
 from app.schemas.task import DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse
 
@@ -85,14 +91,7 @@ class DesignTaskService:
         if not task:
             raise ValueError("设计任务不存在")
 
-        allowed = {
-            "pending": ["designing"],
-            "designing": ["pending_review", "pending"],
-            "pending_review": ["confirmed", "revision"],
-            "revision": ["designing", "pending_review"],
-            "confirmed": [],
-        }
-        valid = allowed.get(task.status, [])
+        valid = allowed_targets(DESIGN_TASK_WORKFLOW, task.status)
         if to_status not in valid:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
 
@@ -165,15 +164,7 @@ class ProductionTaskService:
         if not task:
             raise ValueError("制作任务不存在")
 
-        allowed = {
-            "pending": ["queued", "in_progress"],
-            "queued": ["in_progress", "pending"],
-            "in_progress": ["qc_check", "rework", "completed"],
-            "qc_check": ["completed", "rework"],
-            "rework": ["in_progress", "qc_check"],
-            "completed": [],
-        }
-        valid = allowed.get(task.status, [])
+        valid = allowed_targets(PRODUCTION_TASK_WORKFLOW, task.status)
         if to_status not in valid:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
 
@@ -246,14 +237,7 @@ class InstallationTaskService:
         if not task:
             raise ValueError("安装任务不存在")
 
-        allowed = {
-            "pending": ["assigned", "in_progress"],
-            "assigned": ["in_progress", "pending"],
-            "in_progress": ["pending_acceptance", "pending"],
-            "pending_acceptance": ["completed", "in_progress"],
-            "completed": [],
-        }
-        valid = allowed.get(task.status, [])
+        valid = allowed_targets(INSTALLATION_TASK_WORKFLOW, task.status)
         if to_status not in valid:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
 

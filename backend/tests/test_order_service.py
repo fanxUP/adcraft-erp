@@ -50,11 +50,11 @@ def make_order(**overrides):
 def test_order_must_pass_acceptance_before_completion():
     assert "pending_acceptance" in ORDER_TRANSITIONS["in_installation"]
     assert "completed" not in ORDER_TRANSITIONS["in_installation"]
-    assert ORDER_TRANSITIONS["pending_acceptance"] == [
+    assert ORDER_TRANSITIONS["pending_acceptance"] == (
         "completed",
         "in_installation",
         "cancelled",
-    ]
+    )
 
 
 @pytest.fixture
