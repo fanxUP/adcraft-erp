@@ -285,6 +285,8 @@ class BusinessDocumentService:
 
         # ── 状态闸门：前置条件检查 ──
         if doc.doc_type == "order":
+            if to_status == "cancelled" and float(doc.paid_amount or 0) > 0:
+                raise ValueError("订单已有收款，请先作废相关收款记录后再取消")
             if from_status == "confirmed" and to_status == "designing":
                 # 必须有现存的 DesignTask（已由管理员/系统创建）
                 r = await self.db.execute(

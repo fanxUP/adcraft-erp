@@ -337,8 +337,8 @@ async def test_create_statement(statement_service):
     created = make_mock_statement(statement_no="STMT20260629-0002")
     svc.repo.create.return_value = created
     svc.repo.get_documents_in_range.return_value = [
-        MagicMock(total_amount=3000.0),
-        MagicMock(total_amount=2000.0),
+        MagicMock(total_amount=3000.0, doc_type="order", status="completed"),
+        MagicMock(total_amount=2000.0, doc_type="order", status="confirmed"),
     ]
     svc.repo.get_payments_in_range.return_value = [
         make_mock_payment(amount=1000.0),
@@ -352,6 +352,46 @@ async def test_create_statement(statement_service):
         })
 
     assert result["statement_no"] == "STMT20260629-0002"
+
+
+@pytest.mark.asyncio
+async def test_create_statement_excludes_quotes_and_cancelled_orders(statement_service):
+    svc = statement_service
+    created = make_mock_statement(statement_no="STMT20260629-0003")
+    svc.repo.create.return_value = created
+    svc.repo.get_documents_in_range.return_value = [
+        MagicMock(total_amount=3000.0, doc_type="order", status="completed"),
+        MagicMock(total_amount=9000.0, doc_type="quote", status="confirmed"),
+        MagicMock(total_amount=5000.0, doc_type="order", status="cancelled"),
+    ]
+    svc.repo.get_payments_in_range.return_value = []
+
+    with patch(
+        "app.services.payment_service.generate_statement_no",
+        AsyncMock(return_value="STMT20260629-0003"),
+    ):
+        await svc.create_statement({
+            "customer_id": SAMPLE_CUSTOMER_ID,
+            "start_date": "2026-06-01T00:00:00",
+            "end_date": "2026-06-30T23:59:59",
+        })
+
+    statement = svc.repo.create.await_args.args[0]
+    assert statement.total_order_amount == 3000.0
+
+
+@pytest.mark.asyncio
+async def test_create_statement_rejects_reverse_date_range(statement_service):
+    svc = statement_service
+
+    with pytest.raises(ValueError, match="结束时间不能早于开始时间"):
+        await svc.create_statement({
+            "customer_id": SAMPLE_CUSTOMER_ID,
+            "start_date": "2026-06-30T23:59:59",
+            "end_date": "2026-06-01T00:00:00",
+        })
+
+    svc.repo.create.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -371,6 +411,17 @@ async def test_confirm_statement_not_found(statement_service):
     svc.repo.get_by_id.return_value = None
     with pytest.raises(ValueError, match="对账单不存在"):
         await svc.confirm_statement(SAMPLE_ORDER_ID, SAMPLE_USER_ID)
+
+
+@pytest.mark.asyncio
+async def test_confirm_statement_rejects_duplicate_confirmation(statement_service):
+    svc = statement_service
+    svc.repo.get_by_id.return_value = make_mock_statement(status="confirmed")
+
+    with pytest.raises(ValueError, match="仅草稿对账单可以确认"):
+        await svc.confirm_statement(SAMPLE_ORDER_ID, SAMPLE_USER_ID)
+
+    svc.repo.update.assert_not_awaited()
 
 
 # ══════════════════════════════════════════════════════

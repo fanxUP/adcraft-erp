@@ -39,3 +39,9 @@ def test_delivery_workflows_are_centralized():
         "accepted",
         "rejected",
     )
+
+
+def test_completed_contract_is_terminal():
+    from app.domain.workflows import CONTRACT_WORKFLOW
+
+    assert allowed_targets(CONTRACT_WORKFLOW, "completed") == ()

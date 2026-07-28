@@ -156,8 +156,14 @@ class StatementService:
     async def create_statement(self, data: dict) -> dict:
         start = datetime.fromisoformat(data["start_date"])
         end = datetime.fromisoformat(data["end_date"])
+        if end < start:
+            raise ValueError("结束时间不能早于开始时间")
 
         documents = await self.repo.get_documents_in_range(data["customer_id"], start, end)
+        documents = [
+            document for document in documents
+            if document.doc_type == "order" and document.status != "cancelled"
+        ]
         payments = await self.repo.get_payments_in_range(data["customer_id"], start, end)
 
         total_order = sum(float(d.total_amount) for d in documents)
@@ -181,6 +187,8 @@ class StatementService:
         s = await self.repo.get_by_id(statement_id)
         if not s:
             raise ValueError("对账单不存在")
+        if s.status != "draft":
+            raise ValueError("仅草稿对账单可以确认")
         await self.repo.update(s, {"status": "confirmed", "confirmed_at": datetime.now(), "confirmed_by": confirmed_by})
         return await self._to_detail(s)
 

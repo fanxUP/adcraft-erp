@@ -96,6 +96,8 @@ class StatementRepository:
             select(BusinessDocument).where(
                 and_(
                     BusinessDocument.customer_id == customer_id,
+                    BusinessDocument.doc_type == "order",
+                    BusinessDocument.status != "cancelled",
                     BusinessDocument.deleted_at.is_(None),
                     BusinessDocument.created_at >= start,
                     BusinessDocument.created_at <= end,

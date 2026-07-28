@@ -14,6 +14,9 @@ from app.core.permissions import (
     PERM_PAYMENT_CREATE,
     PERM_PAYMENT_READ,
     PERM_PAYMENT_VOID,
+    PERM_STATEMENT_CONFIRM,
+    PERM_STATEMENT_CREATE,
+    PERM_STATEMENT_READ,
     require_permission,
     require_role,
 )
@@ -141,7 +144,7 @@ async def list_statements(
     page_size: int = Query(20, ge=1, le=200),
     customer_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_STATEMENT_READ)),
 ):
     service = StatementService(db)
     cid = UUID(customer_id) if customer_id else None
@@ -153,7 +156,7 @@ async def list_statements(
 async def get_statement(
     statement_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_STATEMENT_READ)),
 ):
     service = StatementService(db)
     stmt = await service.get_statement(UUID(statement_id))
@@ -166,7 +169,7 @@ async def get_statement(
 async def create_statement(
     data: StatementCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_STATEMENT_CREATE)),
 ):
     service = StatementService(db)
     stmt = await service.create_statement(data.model_dump())
@@ -177,7 +180,7 @@ async def create_statement(
 async def confirm_statement(
     statement_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_STATEMENT_CONFIRM)),
 ):
     service = StatementService(db)
     stmt = await service.confirm_statement(UUID(statement_id), current_user.id)

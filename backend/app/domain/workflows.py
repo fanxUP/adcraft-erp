@@ -30,7 +30,7 @@ QUOTE_WORKFLOW: Workflow = {
 CONTRACT_WORKFLOW: Workflow = {
     "draft": ("active", "completed"),
     "active": ("draft", "completed"),
-    "completed": ("draft",),
+    "completed": (),
 }
 
 ACCEPTANCE_WORKFLOW: Workflow = {

@@ -96,6 +96,26 @@ async def test_order_cannot_complete_without_acceptance_flow(service):
 
 
 @pytest.mark.asyncio
+async def test_order_with_received_payment_cannot_be_cancelled(service):
+    order_service, repository, _ = service
+    repository.get_by_id.return_value = make_order(
+        status="confirmed",
+        paid_amount=Decimal("100"),
+        unpaid_amount=Decimal("900"),
+    )
+
+    with pytest.raises(ValueError, match="已有收款"):
+        await order_service.change_status(
+            SAMPLE_ORDER_ID,
+            "cancelled",
+            reason="客户取消",
+            operated_by=uuid4(),
+        )
+
+    repository.update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_list_orders(service):
     order_service, repository, _ = service
     repository.list_all.return_value = ([make_order()], 1)
