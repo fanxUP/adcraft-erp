@@ -25,10 +25,10 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not settings.SECRET_KEY or settings.SECRET_KEY in ("change_me", "change_me_to_a_random_32_byte_hex_string"):
-        logger.warning(
-            "SECURITY WARNING: SECRET_KEY is weak or unset. "
-            "Generate a strong key with: openssl rand -hex 32"
-        )
+        message = "SECRET_KEY 未设置或过弱，请使用 openssl rand -hex 32 生成"
+        if settings.APP_ENV.lower() in {"production", "prod"}:
+            raise RuntimeError(message)
+        logger.warning("SECURITY WARNING: %s", message)
     # Performance monitoring: install slow-query listener on the database engine
     from app.core.database import engine
     install_slow_query_listener(engine)
@@ -58,7 +58,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[origin.strip() for origin in settings.ALLOWED_ORIGINS.split(",") if origin.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

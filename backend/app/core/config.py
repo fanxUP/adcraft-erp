@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     COMPANY_NAME: str = ""
     APP_ENV: str = "development"
     SECRET_KEY: str = ""  # MUST be set via .env for production — generate with: openssl rand -hex 32
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     DATABASE_URL: str = "postgresql+asyncpg://adcraft:adcraft_dev_password@127.0.0.1:5432/adcraft_erp"
     DATABASE_URL_SYNC: str = "postgresql+psycopg2://adcraft:adcraft_dev_password@127.0.0.1:5432/adcraft_erp"
