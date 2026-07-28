@@ -2,6 +2,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.customer_repo import CustomerRepository
+from app.schemas.customer import CustomerResponse
 from app.services.number_generator import generate_customer_no
 
 
@@ -11,34 +12,7 @@ class CustomerService:
         self.repo = CustomerRepository(db)
 
     def _to_response(self, customer) -> dict:
-        return {
-            "id": str(customer.id),
-            "customer_no": customer.customer_no,
-            "name": customer.name,
-            "customer_type": customer.customer_type,
-            "level": customer.level,
-            "phone": customer.phone,
-            "wechat": customer.wechat,
-            "address": customer.address,
-            "tax_no": customer.tax_no,
-            "invoice_info": customer.invoice_info,
-            "default_payment_days": customer.default_payment_days,
-            "default_discount": float(customer.default_discount) if customer.default_discount else 1.0,
-            "remark": customer.remark,
-            "created_at": customer.created_at.isoformat() if customer.created_at else None,
-            "contacts": [
-                {
-                    "id": str(c.id),
-                    "name": c.name,
-                    "phone": c.phone,
-                    "wechat": c.wechat,
-                    "position": c.position,
-                    "is_primary": c.is_primary,
-                    "remark": c.remark,
-                }
-                for c in (customer.contacts or [])
-            ],
-        }
+        return CustomerResponse.model_validate(customer).model_dump(mode="json")
 
     async def list_customers(self, page: int, page_size: int, keyword: str | None = None, customer_type: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size

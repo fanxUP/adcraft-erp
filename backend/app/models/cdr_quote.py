@@ -266,3 +266,46 @@ class DrawingSnapshot(Base, TimestampMixin):
     object_summary_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True, comment="对象摘要：数量/类型分布")
     preview_file_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
+class QuoteGeometry(Base, TimestampMixin):
+    """报价行几何分析——孔洞/重叠/曲线/板材套料数据。
+
+    每个报价明细行一条记录，存储几何分析结果。
+    is_estimated=True 表示该值是基于算法估算，非精确测量值。
+    """
+    __tablename__ = "quote_geometry"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    quote_line_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("quote_lines.id"), nullable=True, unique=True,
+        comment="关联报价明细行"
+    )
+    quote_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=True,
+        comment="关联报价 header（便于查询）"
+    )
+
+    # ── 孔洞与净面积 ──
+    net_area_mm2: Mapped[float | None] = mapped_column(Numeric(16, 3), nullable=True, comment="净面积（包围盒-孔洞）mm²")
+    hole_area_mm2: Mapped[float | None] = mapped_column(Numeric(16, 3), nullable=True, comment="孔洞总面积 mm²")
+
+    # ── 曲线信息 ──
+    curve_length_mm: Mapped[float | None] = mapped_column(Numeric(16, 3), nullable=True, comment="曲线/轮廓长度 mm")
+    is_open_curve: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否开放曲线")
+
+    # ── 重叠检测 ──
+    overlap_count: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="检测到的重叠对象数")
+    overlap_area_mm2: Mapped[float | None] = mapped_column(Numeric(16, 3), nullable=True, comment="重叠区域估计面积 mm²")
+
+    # ── 板材套料 ──
+    sheet_count: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="预估需用板材张数")
+    sheet_utilization_pct: Mapped[float | None] = mapped_column(Numeric(6, 3), nullable=True, comment="板材利用率（%）")
+    sheet_width_mm: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, comment="使用的板材宽 mm（从 material 快照）")
+    sheet_height_mm: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, comment="使用的板材高 mm")
+
+    # ── 标记 ──
+    is_estimated: Mapped[bool] = mapped_column(Boolean, default=True, comment="是否为估算值（非精确测量）")
+
+    # ── 完整数据 ──
+    nesting_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True, comment="排版布局结果")
+    analysis_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True, comment="完整几何分析明细")

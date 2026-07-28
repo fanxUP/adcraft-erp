@@ -284,8 +284,8 @@ async function loadDispatches() {
     if (searchStatus.value) params.append('status', searchStatus.value)
 
     const res = await get(`/vehicle-dispatches/?${params}`)
-    dispatchList.value = res.data.items
-    total.value = res.data.total
+    dispatchList.value = res.items
+    total.value = res.total
   } catch {
     ElMessage.error('加载数据失败')
   }
@@ -372,7 +372,7 @@ function handleReturnTrip(row: DispatchItem) {
 async function handleViewTrip(row: DispatchItem) {
   try {
     const res = await get(`/vehicle-dispatches/${row.id}`)
-    detailData.value = res.data
+    detailData.value = res
     detailDialogVisible.value = true
   } catch {
     ElMessage.error('获取详情失败')

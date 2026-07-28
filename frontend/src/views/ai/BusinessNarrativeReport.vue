@@ -2,7 +2,7 @@
   <div class="business-narrative-report">
     <div class="page-header">
       <h2>智能经营报告</h2>
-      <el-tag type="success">规则引擎 — 无需 AI Key</el-tag>
+      <el-tag :type="modeTagType">{{ modeLabel }}</el-tag>
     </div>
 
     <!-- Period selector -->
@@ -112,6 +112,24 @@ const year = ref(new Date().getFullYear())
 const month = ref(new Date().getMonth() + 1)
 const week = ref(0)
 const report = ref<BusinessNarrativeResponse | null>(null)
+
+const modeTagType = computed(() => {
+  return report.value?.mode === 'ai_enhanced' ? 'success' : 'info'
+})
+
+const modeLabel = computed(() => {
+  if (!report.value) return '规则引擎'
+  if (report.value.mode === 'ai_enhanced') {
+    const conf = report.value.ai_confidence
+    return conf && conf !== 'none' ? `AI 增强 · ${confidenceText(conf)}` : 'AI 增强'
+  }
+  return '规则引擎'
+})
+
+function confidenceText(c: string): string {
+  const map: Record<string, string> = { high: '高', medium: '中', low: '低' }
+  return map[c] || c
+}
 
 const renderedNarrative = computed(() => {
   if (!report.value?.narrative) return ''

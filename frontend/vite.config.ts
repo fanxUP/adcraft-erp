@@ -19,6 +19,20 @@ function versionPlugin(): import('vite').Plugin {
 
 export default defineConfig({
   plugins: [vue(), versionPlugin()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes("node_modules/element-plus")) {
+            return "element-plus"
+          }
+          if (id.includes("node_modules")) {
+            return "vendor"
+          }
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

@@ -17,6 +17,14 @@ class PricingCalculateRequest(BaseModel):
     width_mm: Decimal | None = Field(None, max_digits=12, decimal_places=3)
     height_mm: Decimal | None = Field(None, max_digits=12, decimal_places=3)
     length_m: Decimal | None = Field(None, max_digits=12, decimal_places=3)
+    # Phase 7 几何参数
+    hole_area_mm2: Decimal | None = Field(None, max_digits=16, decimal_places=3)
+    is_open_curve: bool = False
+    curve_length_mm: Decimal | None = Field(None, max_digits=16, decimal_places=3)
+    use_sheet_rounding: bool = False
+    sheet_width_mm: Decimal | None = Field(None, max_digits=10, decimal_places=2)
+    sheet_height_mm: Decimal | None = Field(None, max_digits=10, decimal_places=2)
+    sheet_sale_price: Decimal | None = Field(None, max_digits=14, decimal_places=2)
     process_ids: list[UUID] = []
 
 
@@ -34,11 +42,77 @@ class PricingCalculateResponse(BaseModel):
     estimated_cost: Decimal = Decimal("0")
     minimum_charge_applied: bool = False
     requires_approval: bool = False
+    # Phase 7
+    geometry_estimates: dict | None = None
+    sheet_usage: dict | None = None
     warnings: list[str] = []
     pricing_trace: list[PriceTraceStep] = []
 
 
 # ── 报价行 ──────────────────────────────────────────────────────
+
+# ── 几何分析 ──────────────────────────────────────────────────
+
+
+class QuoteGeometryResponse(BaseModel):
+    id: UUID
+    quote_line_id: UUID | None = None
+    quote_id: UUID | None = None
+    net_area_mm2: Decimal | None = None
+    hole_area_mm2: Decimal | None = None
+    curve_length_mm: Decimal | None = None
+    is_open_curve: bool = False
+    overlap_count: int | None = None
+    overlap_area_mm2: Decimal | None = None
+    sheet_count: int | None = None
+    sheet_utilization_pct: Decimal | None = None
+    is_estimated: bool = True
+    nesting_json: dict | None = None
+    analysis_json: dict | None = None
+
+
+class GeometryAnalyzeRequest(BaseModel):
+    width_mm: Decimal | None = Field(None, max_digits=12, decimal_places=3)
+    height_mm: Decimal | None = Field(None, max_digits=12, decimal_places=3)
+    holes: list[dict] = []
+
+
+class GeometryAnalyzeResponse(BaseModel):
+    bbox_area_mm2: Decimal | None = None
+    hole_area_mm2: Decimal | None = None
+    net_area_mm2: Decimal | None = None
+    hole_ratio: Decimal | None = None
+    is_estimated: bool = True
+    error: str | None = None
+
+
+class NestingRequest(BaseModel):
+    rects: list[dict] = []
+    sheet_width_mm: Decimal
+    sheet_height_mm: Decimal
+
+
+class NestingItem(BaseModel):
+    id: str
+    x: Decimal
+    y: Decimal
+    w: Decimal
+    h: Decimal
+    rotated: bool = False
+
+
+class NestingSheet(BaseModel):
+    sheet_no: int
+    items: list[NestingItem] = []
+
+
+class NestingResponse(BaseModel):
+    sheets: list[NestingSheet] = []
+    total_sheets: int = 0
+    total_pieces: int = 0
+    utilization_pct: Decimal = Decimal("0")
+    is_estimated: bool = True
+    error: str | None = None
 
 
 class QuoteLineProcessCreate(BaseModel):
@@ -130,6 +204,7 @@ class QuoteLineResponse(BaseModel):
     requires_approval: bool
     pricing_trace_json: dict | None
     created_at: datetime | None = None
+    geometry: QuoteGeometryResponse | None = None
     processes: list["QuoteLineProcessResponse"] = []
 
 
@@ -268,3 +343,92 @@ class PriceRuleResponse(BaseModel):
     conflict_policy: str
     active: bool
     created_at: datetime | None = None
+
+
+# ── Phase 8: AI报价助手 ──────────────────────────────────────────
+
+
+class ProcessGapItem(BaseModel):
+    type: str = "process_gap"
+    severity: str = "info"
+    line_id: UUID | None = None
+    line_no: int | None = None
+    line_desc: str = ""
+    missing_process_name: str = ""
+    missing_process_id: UUID | None = None
+    reason: str = ""
+
+
+class ProcessGapResponse(BaseModel):
+    mode: str = "rule_based"
+    gaps: list[ProcessGapItem] = []
+    gap_count: int = 0
+    summary: dict = {}
+
+
+class QuoteDescriptionRequest(BaseModel):
+    version_id: UUID | None = None
+    customer_id: UUID | None = None
+    lead_days: int | None = None
+    warranty_months: int | None = None
+    deposit_pct: int | None = None
+    payment_terms: str | None = None
+    delivery_address: str | None = None
+    tax_rate: Decimal | None = None
+
+
+class QuoteDescriptionResponse(BaseModel):
+    description: str = ""
+    sections: dict = {}
+    summary: dict = {}
+
+
+class PriceAnomalyItem(BaseModel):
+    type: str = ""
+    severity: str = "info"
+    line_no: int | None = None
+    title: str = ""
+    detail: str = ""
+    suggestion: str = ""
+    current_price: float | None = None
+    historical_avg: float | None = None
+    deviation_pct: float | None = None
+
+
+class PriceAnomalyResponse(BaseModel):
+    mode: str = "rule_based"
+    anomalies: list[PriceAnomalyItem] = []
+    anomaly_count: int = 0
+    summary: dict = {}
+
+
+class DeviationSummary(BaseModel):
+    estimated_amount: float = 0
+    estimated_cost: float = 0
+    estimated_margin_pct: float = 0
+    total_items: int = 0
+    has_production_data: bool = False
+    quote_converted: bool = False
+    order_id: str | None = None
+    order_no: str | None = None
+    actual_amount: float | None = None
+    actual_cost: float | None = None
+    deviation_amount: float | None = None
+    deviation_pct: float | None = None
+
+
+class DeviationLineItem(BaseModel):
+    line_no: int | None = None
+    description: str = ""
+    estimated: dict = {}
+    actual: dict | None = None
+    deviation: dict | None = None
+    no_production_data: bool = True
+
+
+class DeviationResponse(BaseModel):
+    quote_id: str = ""
+    quote_no: str = ""
+    project_name: str = ""
+    summary: DeviationSummary = DeviationSummary()
+    items: list[DeviationLineItem] = []

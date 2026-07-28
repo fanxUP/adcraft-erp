@@ -56,6 +56,9 @@
                         <div style="margin: 4px 0 4px 24px; font-weight: 600; font-size: 13px;">关联订单</div>
                         <el-table :data="ct.orders" size="small" stripe style="margin: 2px 0 8px 24px; width: calc(100% - 48px)">
                           <el-table-column prop="order_no" label="订单编号" width="180" />
+                          <el-table-column label="部门/科室" width="100">
+                            <template #default="{ row: o }">{{ o.department || '-' }}</template>
+                          </el-table-column>
                           <el-table-column prop="project_name" label="项目名称" min-width="150" />
                           <el-table-column label="订单金额" width="120">
                             <template #default="{ row: o }">¥ {{ o.total_amount?.toFixed(2) }}</template>
@@ -79,6 +82,9 @@
                         <div style="margin: 4px 0 4px 24px; font-weight: 600; font-size: 13px;">关联报价</div>
                         <el-table :data="ct.quotes" size="small" stripe style="margin: 2px 0 8px 24px; width: calc(100% - 48px)">
                           <el-table-column prop="quote_no" label="报价编号" width="180" />
+                          <el-table-column label="部门/科室" width="100">
+                            <template #default="{ row: o }">{{ o.department || '-' }}</template>
+                          </el-table-column>
                           <el-table-column prop="project_name" label="项目名称" min-width="150" />
                           <el-table-column label="金额" width="120">
                             <template #default="{ row: q }">¥ {{ q.total_amount?.toFixed(2) }}</template>
@@ -125,6 +131,9 @@
                 <template v-if="row.orders?.length">
                   <el-table :data="row.orders" size="small" stripe style="margin: 4px 0 8px 48px; width: calc(100% - 48px)">
                     <el-table-column prop="order_no" label="订单编号" width="180" />
+                    <el-table-column label="部门/科室" width="100">
+                      <template #default="{ row: q }">{{ q.department || '-' }}</template>
+                    </el-table-column>
                     <el-table-column prop="project_name" label="项目名称" min-width="180" />
                     <el-table-column label="订单金额" width="130">
                       <template #default="{ row: o }">¥ {{ o.total_amount?.toFixed(2) }}</template>
@@ -147,6 +156,9 @@
                 <template v-if="row.quotes?.length">
                   <el-table :data="row.quotes" size="small" stripe style="margin: 4px 0 8px 48px; width: calc(100% - 48px)">
                     <el-table-column prop="quote_no" label="报价编号" width="180" />
+                    <el-table-column label="部门/科室" width="100">
+                      <template #default="{ row: q }">{{ q.department || '-' }}</template>
+                    </el-table-column>
                     <el-table-column prop="project_name" label="项目名称" min-width="180" />
                     <el-table-column label="金额" width="130">
                       <template #default="{ row: q }">¥ {{ q.total_amount?.toFixed(2) }}</template>
@@ -379,8 +391,8 @@ async function fetchPayments() {
 
 async function loadOptions() {
   const [oRes, cRes] = await Promise.all([
-    getOrders({ page_size: 200 }),
-    getCustomers({ page_size: 200 }),
+    getOrders({ page_size: 100 }),
+    getCustomers({ page_size: 100 }),
   ])
   orderOptions.value = oRes.items
   customerOptions.value = cRes.items

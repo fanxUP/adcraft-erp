@@ -240,8 +240,8 @@ async function fetchDrafts() {
       status: filters.status || undefined,
       intent: filters.intent || undefined,
     })
-    drafts.value = res.data?.items || []
-    total.value = res.data?.total || 0
+    drafts.value = res?.items || []
+    total.value = res?.total || 0
   } finally {
     loading.value = false
   }
@@ -258,7 +258,7 @@ async function handleTestAnalyze() {
   analyzeResult.value = null
   try {
     const res = await analyzeAgentMessage({ content: testContent.value.trim(), platform: 'manual' })
-    analyzeResult.value = res.data
+    analyzeResult.value = res
     ElMessage.success('识别完成')
     fetchDrafts()
   } catch (e: unknown) {
@@ -284,7 +284,7 @@ async function handleConfirm(row: AgentDraftResponse) {
     ElMessage.success('已确认并创建正式记录')
     fetchDrafts()
     if (drawerVisible.value && currentDraft.value?.id === row.id) {
-      currentDraft.value = res.data
+      currentDraft.value = res
     }
   } catch (e: unknown) {
     if (e !== 'cancel') ElMessage.error(e instanceof Error ? e.message : '确认失败')

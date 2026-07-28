@@ -11,6 +11,7 @@ from app.schemas.common import success
 from app.models.user import User
 from app.ai.rule_based.report_composer import ReportComposer
 from app.ai.core.resolver import FeatureResolver
+from app.ai.gateway_providers.gateway_ai_client import GatewayAIClient
 
 logger = logging.getLogger(__name__)
 
@@ -47,13 +48,14 @@ async def get_business_narrative(
     )
 
     mode = "rule_based"
+    ai_confidence = "none"
+    ai_meta = {}
 
-    if FeatureResolver.is_ai_available():
+    if FeatureResolver.is_gateway_available():
         try:
-            from app.ai.core.ai_client import AIClient
             from app.ai.ai_enhanced.llm_report_writer import LLMReportWriter
-            writer = LLMReportWriter(AIClient())
-            narrative, suggestions = await writer.write_narrative(
+            writer = LLMReportWriter(GatewayAIClient(db))
+            narrative, suggestions, ai_confidence, ai_meta = await writer.write_narrative(
                 report["stats"], period
             )
             if narrative:
@@ -65,4 +67,6 @@ async def get_business_narrative(
             logger.exception("AI report enhancement failed, falling back to rule-based")
 
     report["mode"] = mode
+    report["ai_confidence"] = ai_confidence
+    report["ai_meta"] = ai_meta
     return success(report)

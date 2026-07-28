@@ -17,6 +17,7 @@ from app.models.user import User
 from app.models.business_document import BusinessDocument
 from app.models.customer import Customer
 from app.ai.core.resolver import FeatureResolver
+from app.ai.gateway_providers.gateway_ai_client import GatewayAIClient
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +85,23 @@ async def recognize_payment_screenshot(
     confidence = "none"
 
     # 4. AI-enhanced (if configured)
-    if FeatureResolver.is_ai_available():
+    # Only run AI OCR if a vision-capable model is configured
+    _vision_available = False
+    try:
+        from sqlalchemy import select as _sel, func as _fnc
+        from app.models.ai_model import AIModel
+        _qr = await db.execute(_sel(_fnc.count()).select_from(AIModel).where(
+            AIModel.supports_vision == True, AIModel.enabled == True
+        ))
+        _vision_available = _qr.scalar() > 0
+    except Exception:
+        pass
+
+    if _vision_available:
         try:
-            from app.ai.core.ai_client import AIClient
             from app.ai.ai_enhanced.ocr_reader import OCRReader
 
-            client = AIClient()
+            client = GatewayAIClient(db)
             reader = OCRReader(client)
             ocr_result = await reader.extract_payment_info(file_bytes, order_context)
 

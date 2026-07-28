@@ -15,7 +15,7 @@ from app.core.permissions import require_role
 from app.models.user import User
 from app.schemas.quote import QuoteCreate, QuoteUpdate, QuoteItemCreate, QuoteItemUpdate
 from app.schemas.common import success, success_paginated, error
-from app.services.quote_service import QuoteService
+from app.services.business_document_service import BusinessDocumentService
 from app.utils.excel_import import ExcelImportResult, parse_excel, format_value, parse_number
 
 logger = logging.getLogger(__name__)
@@ -35,9 +35,9 @@ async def list_quotes(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = QuoteService(db)
+    service = BusinessDocumentService(db, doc_type='quote')
     cid = UUID(customer_id) if customer_id else None
-    quotes, total = await service.list_quotes(page, page_size, status, cid, keyword=keyword, date_from=date_from, date_to=date_to)
+    quotes, total = await service.list_all(page, page_size, status, cid, keyword=keyword, exclude_status="converted")
     return success_paginated(quotes, total, page, page_size)
 
 
@@ -47,8 +47,8 @@ async def create_quote(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = QuoteService(db)
-    quote = await service.create_quote(data.model_dump())
+    service = BusinessDocumentService(db, doc_type='quote')
+    quote = await service.create(data.model_dump())
     return success(quote)
 
 
@@ -188,7 +188,7 @@ async def import_quotes(
     if not rows:
         return success(result.to_dict())
 
-    service = QuoteService(db)
+    service = BusinessDocumentService(db, doc_type='quote')
 
     # Group rows by (customer_name, project_name) — each group = one quote
     from collections import OrderedDict
@@ -272,7 +272,7 @@ async def import_quotes(
                 result.failed += 1
                 continue
 
-            await service.create_quote(quote_data)
+            await service.create(quote_data)
             result.succeeded += 1
 
         except Exception as e:
@@ -290,8 +290,8 @@ async def get_quote(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = QuoteService(db)
-    quote = await service.get_quote(UUID(quote_id))
+    service = BusinessDocumentService(db, doc_type='quote')
+    quote = await service.get_by_id(UUID(quote_id))
     if not quote:
         return {"code": 40401, "message": "报价单不存在", "data": None}
     return success(quote)
@@ -304,8 +304,8 @@ async def update_quote(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = QuoteService(db)
-    quote = await service.update_quote(UUID(quote_id), data.model_dump(exclude_unset=True))
+    service = BusinessDocumentService(db, doc_type='quote')
+    quote = await service.update(UUID(quote_id), data.model_dump(exclude_unset=True))
     return success(quote)
 
 
@@ -315,8 +315,8 @@ async def delete_quote(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    service = QuoteService(db)
-    ok = await service.delete_quote(UUID(quote_id))
+    service = BusinessDocumentService(db, doc_type='quote')
+    ok = await service.delete(UUID(quote_id))
     if not ok:
         return {"code": 40401, "message": "报价单不存在", "data": None}
     return success(None)
@@ -329,10 +329,10 @@ async def add_quote_item(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = QuoteService(db)
+    service = BusinessDocumentService(db, doc_type='quote')
     quote = await service.repo.create_item(UUID(quote_id), data.model_dump())
-    await service.calculate_quote(UUID(quote_id))
-    return success(service._quote_to_detail(await service.repo.get_by_id(UUID(quote_id))))
+    await service._calculate_quote(UUID(quote_id))
+    return success(service._to_detail(await service.repo.get_by_id(UUID(quote_id))))
 
 
 @router.put("/{quote_id}/items/{item_id}")
@@ -343,13 +343,13 @@ async def update_quote_item(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = QuoteService(db)
+    service = BusinessDocumentService(db, doc_type='quote')
     item = await service.repo.get_item(UUID(item_id))
     if not item:
         return {"code": 40401, "message": "明细不存在", "data": None}
     await service.repo.update_item(item, data.model_dump(exclude_none=True))
-    await service.calculate_quote(UUID(quote_id))
-    return success(service._quote_to_detail(await service.repo.get_by_id(UUID(quote_id))))
+    await service._calculate_quote(UUID(quote_id))
+    return success(service._to_detail(await service.repo.get_by_id(UUID(quote_id))))
 
 
 @router.delete("/{quote_id}/items/{item_id}")
@@ -359,13 +359,13 @@ async def delete_quote_item(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = QuoteService(db)
+    service = BusinessDocumentService(db, doc_type='quote')
     item = await service.repo.get_item(UUID(item_id))
     if not item:
         return {"code": 40401, "message": "明细不存在", "data": None}
     await service.repo.delete_item(item)
-    await service.calculate_quote(UUID(quote_id))
-    return success(service._quote_to_detail(await service.repo.get_by_id(UUID(quote_id))))
+    await service._calculate_quote(UUID(quote_id))
+    return success(service._to_detail(await service.repo.get_by_id(UUID(quote_id))))
 
 @router.post("/{quote_id}/confirm")
 async def confirm_quote(
@@ -373,8 +373,8 @@ async def confirm_quote(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = QuoteService(db)
-    quote = await service.confirm_quote(UUID(quote_id))
+    service = BusinessDocumentService(db, doc_type='quote')
+    quote = await service.change_status(UUID(quote_id), "confirmed", None, None)
     return success(quote)
 
 
@@ -384,9 +384,9 @@ async def revert_quote_to_draft(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = QuoteService(db)
+    service = BusinessDocumentService(db, doc_type='quote')
     try:
-        quote = await service.revert_to_draft(UUID(quote_id))
+        quote = await service.change_status(UUID(quote_id), "draft", None, None)
         return success(quote)
     except ValueError as e:
         return error(40001, str(e))
@@ -398,9 +398,9 @@ async def cancel_quote(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = QuoteService(db)
+    service = BusinessDocumentService(db, doc_type='quote')
     try:
-        quote = await service.cancel_quote(UUID(quote_id))
+        quote = await service.change_status(UUID(quote_id), "cancelled", None, None)
         return success(quote)
     except ValueError as e:
         return error(40001, str(e))
@@ -412,8 +412,8 @@ async def convert_quote_to_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = QuoteService(db)
-    order = await service.convert_to_order(UUID(quote_id), current_user.id)
+    service = BusinessDocumentService(db, doc_type='quote')
+    order = await service.convert_doc_type(UUID(quote_id), 'order', current_user.id)
     return success(order)
 
 
@@ -428,9 +428,9 @@ async def import_quote_items(
     if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
         return {"code": 40001, "message": "请上传 .xlsx 或 .xls 格式的 Excel 文件", "data": None}
 
-    service = QuoteService(db)
+    service = BusinessDocumentService(db, doc_type='quote')
     qid = UUID(quote_id)
-    quote = await service.get_quote(qid)
+    quote = await service.get_by_id(qid)
     if not quote:
         return {"code": 40401, "message": "报价不存在", "data": None}
 

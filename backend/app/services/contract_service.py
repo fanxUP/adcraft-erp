@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.contract_repo import ContractRepository
+from app.schemas.contract import ContractListResponse, ContractDetailResponse
 from app.services.number_generator import generate_contract_no
 from app.services.business_document_service import BusinessDocumentService
 
@@ -110,57 +111,41 @@ class ContractService:
             await self.db.flush()
 
     def _to_response(self, contract) -> dict:
-        # 从关联单据提取部门和来源
+        d = ContractListResponse.model_validate(contract).model_dump(mode="json")
+        # Add computed fields from documents
         docs = contract.documents or []
         departments = list({d.department for d in docs if d.department})
-        department = "、".join(departments) if departments else ""
+        d["department"] = "、".join(departments) if departments else ""
         doc_types = {d.doc_type for d in docs}
         if "order" in doc_types and "quote" in doc_types:
-            source = "订单+报价"
+            d["source"] = "订单+报价"
         elif "order" in doc_types:
-            source = "订单"
+            d["source"] = "订单"
         elif "quote" in doc_types:
-            source = "报价"
+            d["source"] = "报价"
         else:
-            source = ""
-        return {
-            "id": str(contract.id),
-            "contract_no": contract.contract_no,
-            "customer_name": contract.customer_name,
-            "project_name": contract.project_name,
-            "total_amount": float(contract.total_amount) if contract.total_amount else 0,
-            "paid_amount": float(contract.paid_amount) if contract.paid_amount else 0,
-            "unpaid_amount": float(contract.unpaid_amount) if contract.unpaid_amount else 0,
-            "contract_type": contract.contract_type,
-            "status": contract.status,
-            "sign_date": contract.sign_date.isoformat() if contract.sign_date else None,
-            "start_date": contract.start_date.isoformat() if contract.start_date else None,
-            "end_date": contract.end_date.isoformat() if contract.end_date else None,
-            "created_at": contract.created_at.isoformat() if contract.created_at else None,
-            "department": department,
-            "source": source,
-        }
+            d["source"] = ""
+        return d
 
     def _to_detail(self, contract) -> dict:
-        base = self._to_response(contract)
-        # Override paid_amount with dynamic calculation
-        # (requires caller to call async after construction, handled in get_contract)
-        all_docs = contract.documents or []
-        base.update({
-            "customer_id": str(contract.customer_id),
-            "our_signatory": contract.our_signatory,
-            "customer_signatory": contract.customer_signatory,
-            "content": contract.content,
-            "remark": contract.remark,
-            "attachment_path": contract.attachment_path,
-            "attachment_name": contract.attachment_name,
-            "created_by": str(contract.created_by) if contract.created_by else None,
-            "documents": [BusinessDocumentService._to_ref(d) for d in all_docs],
-            # Backward-compat: keep orders/quotes split for frontend
-            "orders": [BusinessDocumentService._to_ref(d) for d in all_docs if d.doc_type == "order"],
-            "quotes": [BusinessDocumentService._to_ref(d) for d in all_docs if d.doc_type == "quote"],
-        })
-        return base
+        d = ContractDetailResponse.model_validate(contract).model_dump(mode="json")
+        # Add computed fields from documents
+        docs = contract.documents or []
+        departments = list({d.department for d in docs if d.department})
+        d["department"] = "、".join(departments) if departments else ""
+        doc_types = {d.doc_type for d in docs}
+        if "order" in doc_types and "quote" in doc_types:
+            d["source"] = "订单+报价"
+        elif "order" in doc_types:
+            d["source"] = "订单"
+        elif "quote" in doc_types:
+            d["source"] = "报价"
+        else:
+            d["source"] = ""
+        d["documents"] = [BusinessDocumentService._to_ref(d) for d in docs]
+        d["orders"] = [BusinessDocumentService._to_ref(d) for d in docs if d.doc_type == "order"]
+        d["quotes"] = [BusinessDocumentService._to_ref(d) for d in docs if d.doc_type == "quote"]
+        return d
 
     async def list_contracts(
         self, page: int, page_size: int, status: str | None = None,

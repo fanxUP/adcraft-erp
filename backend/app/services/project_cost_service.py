@@ -13,6 +13,7 @@ from app.models.task import Attachment
 from app.repositories.project_cost_repo import ProjectCostRepository
 from app.repositories.task_repo import AttachmentRepository
 
+from app.schemas.payment import ProjectCostResponse
 from app.services.number_generator import generate_project_cost_no
 
 
@@ -80,7 +81,7 @@ class ProjectCostService:
         d["attachment_count"] = len(atts)
         return d
 
-    async def create_cost(self, data: dict, created_by: UUID) -> dict:
+    async def create_cost(self, data: dict, created_by: UUID, skip_sync: bool = False) -> dict:
         # Resolve document_id from backward-compat params
         document_id = None
         if data.get("document_id"):
@@ -149,7 +150,7 @@ class ProjectCostService:
         if data.get("group_name"):
             cost.group_name = data["group_name"]
         await self.repo.create(cost)
-        if document_id:
+        if document_id and not skip_sync:
             await self._sync_document_cost(document_id)
         return {
             "id": str(cost.id),
@@ -339,6 +340,7 @@ class ProjectCostService:
         rows = list(ws.iter_rows(min_row=2, values_only=True))
 
         created = 0
+        synced_doc_ids = set()
         errors = []
 
         def get(col_name: str, default=None):
@@ -400,7 +402,8 @@ class ProjectCostService:
                         "summary": summary,
                         "cost_date": cost_date.isoformat() if cost_date else None,
                         "remark": remark,
-                    }, created_by)
+                    }, created_by, skip_sync=True)
+                    synced_doc_ids.add(order_id or quote_id)
                 else:
                     # Standalone import — Excel must include order_no/报价单编号
                     doc_no = str(get("订单编号") or get("报价单编号") or "").strip()
@@ -460,10 +463,16 @@ class ProjectCostService:
                         "summary": summary,
                         "cost_date": cost_date.isoformat() if cost_date else None,
                         "remark": remark,
-                    }, created_by)
+                    }, created_by, skip_sync=True)
+                    synced_doc_ids.add(doc_obj.id)
                 created += 1
             except Exception as e:
                 errors.append({"row": i, "error": str(e)})
+
+        # Batch sync: sync each unique document once
+        if synced_doc_ids:
+            for did in synced_doc_ids:
+                await self._sync_document_cost(did)
 
         return {"created": created, "errors": errors}
 
@@ -483,61 +492,31 @@ class ProjectCostService:
         return {str(row[0]): row[1] for row in result.all()}
 
     def _to_dict(self, c: ProjectCost) -> dict:
-        project_name = None
-        doc_no = None
-        doc_type = None
-        document_id_str = str(c.document_id) if c.document_id else None
-        document_item_id_str = str(c.document_item_id) if c.document_item_id else None
+        """Pydantic model_validate + 手动补充关系派生字段和向后兼容别名。"""
+        d = ProjectCostResponse.model_validate(c).model_dump(mode="json")
 
-        if c.document:
-            project_name = c.document.project_name
-            doc_no = c.document.doc_no
-            doc_type = c.document.doc_type
+        # 从 document 关系取字段
+        doc = c.document
+        doc_type = doc.doc_type if doc else None
+        d["doc_no"] = doc.doc_no if doc else None
+        d["doc_type"] = doc_type
+        d["source_type"] = doc_type or "order"
+        d["project_name"] = doc.project_name if doc else None
+        d["customer_name"] = c.customer.name if c.customer else None
 
-        # Backward-compat: derive item_name from document_item
-        item_name = c.document_item.item_name if c.document_item else None
+        # 从 document_item 关系取字段
+        d["document_item_name"] = c.document_item.item_name if c.document_item else None
 
-        return {
-            "id": str(c.id),
-            "cost_no": c.cost_no,
-            # New unified fields
-            "document_id": document_id_str,
-            "doc_no": doc_no,
-            "doc_type": doc_type,
-            "document_item_id": document_item_id_str,
-            # Backward-compat aliases
-            "source_type": doc_type,
-            "order_id": document_id_str,
-            "quote_id": document_id_str if doc_type == "quote" else None,
-            "order_no": doc_no if doc_type == "order" else None,
-            "quote_no": doc_no if doc_type == "quote" else None,
-            "order_item_id": document_item_id_str if doc_type == "order" else None,
-            "quote_item_id": document_item_id_str if doc_type == "quote" else None,
-            "group_name": c.group_name,
-            "order_item_name": item_name if doc_type == "order" else None,
-            "quote_item_name": item_name if doc_type == "quote" else None,
-            "document_item_name": item_name,
-            "customer_id": str(c.customer_id) if c.customer_id else None,
-            "customer_name": c.customer.name if c.customer else None,
-            "project_name": project_name,
-            "category": c.category,
-            "amount": float(c.amount),
-            "quantity": float(c.quantity) if c.quantity else None,
-            "specification": c.specification,
-            "unit": c.unit,
-            "unit_price": float(c.unit_price) if c.unit_price else None,
-            "payment_method": c.payment_method,
-            "payee_company_name": c.payee_company_name,
-            "debt_amount": float(c.debt_amount) if c.debt_amount else None,
-            "is_debt": c.is_debt,
-            "is_settled": c.is_settled,
-            "settled_at": c.settled_at.isoformat() if c.settled_at else None,
-            "description": c.description,
-            "summary": c.summary,
-            "cost_date": c.cost_date.isoformat() if c.cost_date else None,
-            "receipt_url": c.receipt_url,
-            "remark": c.remark,
-            "created_by": str(c.created_by) if c.created_by else None,
-            "created_at": c.created_at.isoformat() if c.created_at else None,
-            "attachment_count": 0,
-        }
+        # 向后兼容别名
+        doc_id = d.get("document_id")
+        item_id = d.get("document_item_id")
+        item_name = d["document_item_name"]
+        d["order_id"] = doc_id
+        d["quote_id"] = doc_id if doc_type == "quote" else None
+        d["order_no"] = d["doc_no"] if doc_type == "order" else None
+        d["quote_no"] = d["doc_no"] if doc_type == "quote" else None
+        d["order_item_id"] = item_id if doc_type == "order" else None
+        d["quote_item_id"] = item_id if doc_type == "quote" else None
+        d["order_item_name"] = item_name if doc_type == "order" else None
+        d["quote_item_name"] = item_name if doc_type == "quote" else None
+        return d

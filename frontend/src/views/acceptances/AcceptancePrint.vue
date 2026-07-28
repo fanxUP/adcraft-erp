@@ -88,9 +88,9 @@
             <td></td>
           </tr>
           <tr>
-            <td colspan="2" style="text-align: right; border-right: none;">金额（大写）：</td>
+            <td colspan="2" style="text-align: right; border-right: none; white-space: nowrap;">金额（大写）：</td>
             <td colspan="5" style="border-left: none; border-right: none; font-weight: bold;">{{ toChineseAmount(itemsTotal) }}</td>
-            <td style="text-align: right; border-left: none; border-right: none; font-weight: bold;">金额（小写）：</td>
+            <td style="text-align: right; border-left: none; border-right: none; font-weight: bold; white-space: nowrap;">金额（小写）：</td>
             <td style="text-align: right; white-space: nowrap; border-left: none; font-weight: bold;">¥ {{ itemsTotal.toFixed(2) }}</td>
             <td></td>
             <td></td>
@@ -369,15 +369,38 @@ function handlePrint() {
   const printArea = document.querySelector('.print-area')
   if (!printArea) return
 
-  // 创建独立的打印容器（不受 Element Plus teleport 结构影响）
+  // 创建独立的打印容器
   const container = document.createElement('div')
   container.id = '__print_container__'
   container.innerHTML = printArea.outerHTML
   document.body.appendChild(container)
 
+  // 计算行高度，在超出页面前插入分页
+  const PAGE_HEIGHT_MM = 281 // A4 297mm - 8mm*2 边距
+  const pxPerMm = 96 / 25.4  // 96dpi 换算
+  const pageHeightPx = PAGE_HEIGHT_MM * pxPerMm
+
+  const table = container.querySelector('.preview-table')
+  if (table) {
+    const rows = Array.from(table.querySelectorAll('tbody tr'))
+    let accumH = table.querySelector('thead')?.offsetHeight || 0
+    const headerH = accumH
+
+    for (const row of rows) {
+      const rh = row.offsetHeight
+      // 如果这行高度 + 累积高度 > 页高，在这行前面加分页
+      if (accumH + rh > pageHeightPx && accumH > headerH) {
+        row.style.pageBreakBefore = 'always'
+        row.style.breakBefore = 'page'
+        accumH = headerH + rh // 新页重新累积
+      } else {
+        accumH += rh
+      }
+    }
+  }
+
   window.print()
 
-  // 打印对话框关闭后清理
   setTimeout(() => {
     const el = document.getElementById('__print_container__')
     if (el) el.remove()
@@ -402,21 +425,20 @@ function handlePrint() {
   display: flex;
   justify-content: space-between;
   padding: 4px 0;
-  font-size: 14px;
+  font-size: 16px;
 }
 .preview-table {
   width: 100%;
   border-collapse: collapse;
   margin: 16px 0;
-  font-size: 13px;
+  font-size: 16px;
   table-layout: auto;
 }
 .preview-table th,
 .preview-table td {
   border: 1px solid #333;
-  padding: 6px 8px;
-  white-space: nowrap;
-  font-size: 12px;
+  padding: 8px 10px;
+  font-size: 16px;
 }
 .preview-table th {
   background: #f5f5f5;
@@ -434,7 +456,7 @@ function handlePrint() {
   padding: 12px;
   border: 1px solid #ddd;
   background: #fafafa;
-  font-size: 14px;
+  font-size: 16px;
 }
 .conclusion-row {
   display: flex;
@@ -465,7 +487,7 @@ function handlePrint() {
   width: 45%;
 }
 .signature-label {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: bold;
   line-height: normal;
 }
@@ -473,7 +495,7 @@ function handlePrint() {
   height: 1.5em;
 }
 .signature-date {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: bold;
   color: #666;
 }
@@ -508,39 +530,20 @@ function handlePrint() {
   }
 
   #__print_container__ .preview-table {
-    table-layout: fixed;
     width: 100%;
   }
 
-  /* 列宽按比例分配（总宽100%，基于原始px比例换算）*/
-  #__print_container__ .preview-table thead th:nth-child(1) { width: 3.7%; }
-  #__print_container__ .preview-table thead th:nth-child(2) { width: 14%; }
-  #__print_container__ .preview-table thead th:nth-child(3) { width: 14%; }
-  #__print_container__ .preview-table thead th:nth-child(4) { width: 12%; }
-  #__print_container__ .preview-table thead th:nth-child(5) { width: 6.5%; }
-  #__print_container__ .preview-table thead th:nth-child(6) { width: 5%; }
-  #__print_container__ .preview-table thead th:nth-child(7) { width: 4.5%; }
-  #__print_container__ .preview-table thead th:nth-child(8) { width: 9.5%; }
-  #__print_container__ .preview-table thead th:nth-child(9) { width: 10.5%; }
-  #__print_container__ .preview-table thead th:nth-child(10) { width: 6.5%; }
-  #__print_container__ .preview-table thead th:nth-child(11) { width: 14%; }
 
   #__print_container__ .preview-table th,
   #__print_container__ .preview-table td {
-    font-size: 9px;
-    padding: 2px 3px;
+    font-size: 16px;
+    padding: 4px 4px;
     box-sizing: border-box;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
-  #__print_container__ .preview-table td:nth-child(1),
-  #__print_container__ .preview-table td:nth-child(5),
-  #__print_container__ .preview-table td:nth-child(6),
-  #__print_container__ .preview-table td:nth-child(7),
-  #__print_container__ .preview-table td:nth-child(8),
-  #__print_container__ .preview-table td:nth-child(9),
-  #__print_container__ .preview-table td:nth-child(10) {
-    white-space: nowrap;
-  }
+  
 
   /* 内容列允许折行 */
   #__print_container__ .preview-table td:nth-child(2),

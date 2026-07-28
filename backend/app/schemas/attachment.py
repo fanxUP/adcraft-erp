@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
+from app.schemas.common import CoercedModel
 
 
 class AttachmentCreate(BaseModel):
@@ -13,7 +14,8 @@ class AttachmentCreate(BaseModel):
     remark: str | None = None
 
 
-class AttachmentResponse(BaseModel):
+class AttachmentResponse(CoercedModel):
+    model_config = {"from_attributes": True}
     id: str
     related_type: str
     related_id: str

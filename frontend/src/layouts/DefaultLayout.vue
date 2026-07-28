@@ -153,6 +153,7 @@
             <el-menu-item index="/admin/settings">系统设置</el-menu-item>
             <el-menu-item index="/operation-logs">操作日志</el-menu-item>
             <el-menu-item index="/backups">备份管理</el-menu-item>
+            <el-menu-item index="/admin/ai/providers">AI 模型中心</el-menu-item>
           </el-sub-menu>
           <el-sub-menu v-if="authStore.hasAnyRole(['admin', 'sales', 'finance'])" index="/ai">
             <template #title>
@@ -203,24 +204,176 @@
         </el-main>
       </el-container>
     </el-container>
+
+    <!-- AI Assistant -->
+    <AiAssistantButton />
+    <AiAssistantDrawer />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useChatStore } from '@/stores/chat'
+import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import NotificationBell from '@/components/NotificationBell.vue'
+import AiAssistantButton from '@/components/ai-assistant/AiAssistantButton.vue'
+import AiAssistantDrawer from '@/components/ai-assistant/AiAssistantDrawer.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const chatStore = useChatStore()
+const aiStore = useAiAssistantStore()
 
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
+
+// Update AI assistant page context on route changes
+watch(
+  () => route.path,
+  (_path) => {
+    const name = route.name as string || ''
+    const params = route.params as Record<string, string>
+
+    // Comprehensive route name → page info mapping (covers ALL routes)
+    const pageLabels: Record<string, { page: string; business_type?: string }> = {
+      // --- Dashboard ---
+      'Home': { page: 'dashboard' },
+
+      // --- Customer ---
+      'CustomerList': { page: 'customer_list', business_type: 'customer' },
+      'CustomerDetail': { page: 'customer_detail', business_type: 'customer' },
+
+      // --- Orders ---
+      'OrderList': { page: 'order_list', business_type: 'order' },
+      'OrderRecycle': { page: 'order_recycle', business_type: 'order' },
+      'OrderDetail': { page: 'order_detail', business_type: 'order' },
+
+      // --- Regular Quotes ---
+      'QuoteList': { page: 'quote_list', business_type: 'quote' },
+      'QuoteCreate': { page: 'quote_create', business_type: 'quote' },
+      'QuoteEdit': { page: 'quote_edit', business_type: 'quote' },
+
+      // --- CDR Quotes (智能报价) ---
+      'CDRQuoteList': { page: 'cdr_quote_list', business_type: 'quote' },
+      'CDRQuoteCreate': { page: 'cdr_quote_create', business_type: 'quote' },
+      'CDRQuoteDetail': { page: 'cdr_quote_detail', business_type: 'quote' },
+      'CDRQuoteEdit': { page: 'cdr_quote_edit', business_type: 'quote' },
+
+      // --- Price Center ---
+      'PriceRuleList': { page: 'price_rules', business_type: 'price' },
+      'CustomerAgreementList': { page: 'customer_agreements', business_type: 'price' },
+
+      // --- Contracts ---
+      'ContractList': { page: 'contract_list', business_type: 'contract' },
+      'FrameworkContractList': { page: 'framework_contract_list', business_type: 'contract' },
+      'FrameworkContractDetail': { page: 'framework_contract_detail', business_type: 'contract' },
+
+      // --- Acceptances ---
+      'AcceptanceList': { page: 'acceptance_list', business_type: 'acceptance' },
+      'AcceptanceDetail': { page: 'acceptance_detail', business_type: 'acceptance' },
+
+      // --- Design Tasks ---
+      'DesignTaskList': { page: 'design_task_list', business_type: 'design_task' },
+      'DesignTaskDetail': { page: 'design_task_detail', business_type: 'design_task' },
+
+      // --- Production Tasks ---
+      'ProductionTaskList': { page: 'production_task_list', business_type: 'production_task' },
+      'ProductionTaskBoard': { page: 'production_task_board', business_type: 'production_task' },
+      'ProductionTaskDetail': { page: 'production_task_detail', business_type: 'production_task' },
+
+      // --- Installation Tasks ---
+      'InstallationTaskList': { page: 'installation_task_list', business_type: 'installation_task' },
+      'InstallationTaskDetail': { page: 'installation_task_detail', business_type: 'installation_task' },
+
+      // --- Products & Materials ---
+      'ProductManage': { page: 'product_manage', business_type: 'product' },
+      'MaterialProcessManage': { page: 'material_process', business_type: 'product' },
+
+      // --- Finance ---
+      'ReceivablesView': { page: 'receivables', business_type: 'finance' },
+      'ExpenseList': { page: 'expenses', business_type: 'finance' },
+      'StatementList': { page: 'statement_list', business_type: 'finance' },
+      'StatementDetail': { page: 'statement_detail', business_type: 'finance' },
+      'ProjectCostList': { page: 'project_cost_list', business_type: 'finance' },
+      'ProjectCostDetail': { page: 'project_cost_detail', business_type: 'finance' },
+      'QuoteCostDetail': { page: 'quote_cost_detail', business_type: 'finance' },
+      'CostDebtList': { page: 'cost_debt_list', business_type: 'finance' },
+
+      // --- Outsource ---
+      'OutsourceVendorList': { page: 'outsource_vendors', business_type: 'outsource' },
+      'OutsourceTaskList': { page: 'outsource_tasks', business_type: 'outsource' },
+      'OutsourceTaskRecycle': { page: 'outsource_task_recycle', business_type: 'outsource' },
+      'OutsourcePaymentList': { page: 'outsource_payments', business_type: 'outsource' },
+
+      // --- Inventory ---
+      'InventoryList': { page: 'inventory' },
+
+      // --- Reports ---
+      'DailyReport': { page: 'daily_report', business_type: 'report' },
+      'MonthlyReport': { page: 'monthly_report', business_type: 'report' },
+
+      // --- Admin ---
+      'AdminUserManage': { page: 'admin_users', business_type: 'admin' },
+      'AdminRoleManage': { page: 'admin_roles', business_type: 'admin' },
+      'AdminSettings': { page: 'admin_settings', business_type: 'admin' },
+      'AIProviderList': { page: 'ai_providers', business_type: 'admin' },
+      'OperationLogList': { page: 'operation_logs', business_type: 'admin' },
+      'BackupManage': { page: 'backups', business_type: 'admin' },
+
+      // --- System ---
+      'NotificationList': { page: 'notifications' },
+      'Chat': { page: 'chat' },
+
+      // --- Vehicle ---
+      'VehicleDashboard': { page: 'vehicle_dashboard', business_type: 'vehicle' },
+      'VehicleList': { page: 'vehicle_list', business_type: 'vehicle' },
+      'DriverList': { page: 'driver_list', business_type: 'vehicle' },
+      'VehicleUseRequestList': { page: 'vehicle_use_requests', business_type: 'vehicle' },
+      'VehicleAgentDrafts': { page: 'vehicle_agent_drafts', business_type: 'vehicle' },
+      'VehicleDispatchList': { page: 'vehicle_dispatches', business_type: 'vehicle' },
+      'VehicleTripRecordList': { page: 'vehicle_trip_records', business_type: 'vehicle' },
+      'VehicleExpenseList': { page: 'vehicle_expenses', business_type: 'vehicle' },
+      'VehicleInsuranceInspection': { page: 'vehicle_insurance', business_type: 'vehicle' },
+      'VehicleIncidentList': { page: 'vehicle_incidents', business_type: 'vehicle' },
+      'VehicleReports': { page: 'vehicle_reports', business_type: 'vehicle' },
+
+      // --- Aerial ---
+      'AerialDashboard': { page: 'aerial_dashboard', business_type: 'aerial' },
+      'AerialLedgerList': { page: 'aerial_ledgers', business_type: 'aerial' },
+      'AerialPersonnelExpenseList': { page: 'aerial_personnel_expenses', business_type: 'aerial' },
+      'AerialPersonnelWageList': { page: 'aerial_personnel_wages', business_type: 'aerial' },
+      'AerialVehicleCostList': { page: 'aerial_vehicle_costs', business_type: 'aerial' },
+      'AerialSafetyCheckList': { page: 'aerial_safety_checks', business_type: 'aerial' },
+      'AerialReports': { page: 'aerial_reports', business_type: 'aerial' },
+      'AerialVehicleList': { page: 'aerial_vehicles', business_type: 'aerial' },
+      'AerialPersonnelList': { page: 'aerial_personnel', business_type: 'aerial' },
+      'AerialAgentDraftList': { page: 'aerial_agent_drafts', business_type: 'aerial' },
+
+      // --- AI Features ---
+      'AnomalyDashboard': { page: 'anomaly_dashboard', business_type: 'ai' },
+      'AIQuoteAssistant': { page: 'ai_quote_assistant', business_type: 'ai' },
+      'QuoteKnowledgeBase': { page: 'quote_knowledge_base', business_type: 'ai' },
+      'BusinessNarrativeReport': { page: 'business_narrative_report', business_type: 'ai' },
+      'SitePhotoRecognition': { page: 'site_photo_recognition', business_type: 'ai' },
+      'PaymentOCR': { page: 'payment_ocr', business_type: 'ai' },
+    }
+
+    const info = pageLabels[name] || {}
+    const ctx: Record<string, string> = { ...info }
+
+    // Extract business IDs from all possible param names
+    if (params.id) ctx.business_id = params.id
+    if (params.orderId) ctx.business_id = params.orderId
+    if (params.quoteId) ctx.business_id = params.quoteId
+
+    aiStore.resetPageContext(ctx)
+  },
+  { immediate: true }
+)
 
 function handleLogout() {
   chatStore.disconnectWebSocket()
@@ -228,7 +381,6 @@ function handleLogout() {
 }
 
 onMounted(() => {
-  // 连接聊天 WebSocket
   if (authStore.token) {
     chatStore.connectWebSocket(authStore.token)
     chatStore.fetchConversations()
@@ -275,7 +427,6 @@ onUnmounted(() => {
   overflow-x: hidden;
 }
 
-/* 侧边栏滚动条样式 */
 .sidebar-menu-wrap::-webkit-scrollbar {
   width: 4px;
 }
@@ -331,7 +482,6 @@ onUnmounted(() => {
 }
 </style>
 
-<!-- 非 scoped：子菜单弹出层在 body 上，需要全局覆盖 -->
 <style>
 .el-menu--popup {
   --el-menu-bg-color: var(--ad-card) !important;

@@ -1,0 +1,10 @@
+Attribute VB_Name = "Config"
+Public Const ERP_BASE_URL As String = "http://192.168.0.102:8000/api/v1"
+Public Const DEVICE_CODE As String = "CDR-DESKTOP-001"
+Public Const DEVICE_NAME As String = "设计部-主设计机"
+Public Const PLUGIN_VERSION As String = "1.0.0"
+Public Const INCH_TO_MM As Double = 25.4
+Public Const MM_TO_CM As Double = 0.1
+Public Const MM_TO_M As Double = 0.001
+Public Const API_TIMEOUT_SECONDS As Long = 15
+Public Const DOCKER_TITLE As String = "AdCraft 智能报价"

@@ -3,6 +3,9 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.schemas.attachment import AttachmentResponse
+from app.schemas.task import DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse
+
 from app.repositories.task_repo import (
     DesignTaskRepository,
     ProductionTaskRepository,
@@ -17,19 +20,7 @@ from app.services.number_generator import (
 
 
 def _attachment_to_dict(att) -> dict:
-    return {
-        "id": str(att.id),
-        "related_type": att.related_type,
-        "related_id": str(att.related_id),
-        "filename": att.filename,
-        "file_path": att.file_path,
-        "file_size": att.file_size,
-        "file_type": att.file_type,
-        "category": att.category,
-        "uploaded_by": str(att.uploaded_by) if att.uploaded_by else None,
-        "remark": att.remark,
-        "created_at": att.created_at.isoformat() if att.created_at else None,
-    }
+    return AttachmentResponse.model_validate(att).model_dump(mode="json")
 
 
 class DesignTaskService:
@@ -38,23 +29,9 @@ class DesignTaskService:
         self.repo = DesignTaskRepository(db)
 
     def _to_dict(self, task) -> dict:
-        return {
-            "id": str(task.id),
-            "design_no": task.design_no,
-            "document_id": str(task.document_id),
-            "order_id": str(task.document_id),  # backward-compat alias
-            "customer_id": str(task.customer_id),
-            "project_name": task.project_name,
-            "status": task.status,
-            "assigned_to": str(task.assigned_to) if task.assigned_to else None,
-            "description": task.description,
-            "design_file_url": task.design_file_url,
-            "client_comments": task.client_comments,
-            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-            "created_at": task.created_at.isoformat() if task.created_at else None,
-            "updated_at": task.updated_at.isoformat() if task.updated_at else None,
-            "attachments": [_attachment_to_dict(a) for a in (task.attachments or [])],
-        }
+        d = DesignTaskResponse.model_validate(task).model_dump(mode="json")
+        d["order_id"] = d["document_id"]  # backward-compat alias
+        return d
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None) -> tuple[list, int]:
@@ -132,28 +109,9 @@ class ProductionTaskService:
         self.repo = ProductionTaskRepository(db)
 
     def _to_dict(self, task) -> dict:
-        return {
-            "id": str(task.id),
-            "production_no": task.production_no,
-            "document_id": str(task.document_id),
-            "order_id": str(task.document_id),  # backward-compat alias
-            "customer_id": str(task.customer_id),
-            "project_name": task.project_name,
-            "status": task.status,
-            "assigned_to": str(task.assigned_to) if task.assigned_to else None,
-            "material_id": str(task.material_id) if task.material_id else None,
-            "process_id": str(task.process_id) if task.process_id else None,
-            "length": float(task.length) if task.length else None,
-            "width": float(task.width) if task.width else None,
-            "height": float(task.height) if task.height else None,
-            "quantity": float(task.quantity),
-            "qc_result": task.qc_result,
-            "rework_reason": task.rework_reason,
-            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-            "created_at": task.created_at.isoformat() if task.created_at else None,
-            "updated_at": task.updated_at.isoformat() if task.updated_at else None,
-            "attachments": [_attachment_to_dict(a) for a in (task.attachments or [])],
-        }
+        d = ProductionTaskResponse.model_validate(task).model_dump(mode="json")
+        d["order_id"] = d["document_id"]  # backward-compat alias
+        return d
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None) -> tuple[list, int]:
@@ -232,25 +190,9 @@ class InstallationTaskService:
         self.repo = InstallationTaskRepository(db)
 
     def _to_dict(self, task) -> dict:
-        return {
-            "id": str(task.id),
-            "installation_no": task.installation_no,
-            "document_id": str(task.document_id),
-            "order_id": str(task.document_id),  # backward-compat alias
-            "customer_id": str(task.customer_id),
-            "project_name": task.project_name,
-            "status": task.status,
-            "assigned_to": str(task.assigned_to) if task.assigned_to else None,
-            "address": task.address,
-            "contact_name": task.contact_name,
-            "contact_phone": task.contact_phone,
-            "scheduled_at": task.scheduled_at.isoformat() if task.scheduled_at else None,
-            "acceptance_result": task.acceptance_result,
-            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-            "created_at": task.created_at.isoformat() if task.created_at else None,
-            "updated_at": task.updated_at.isoformat() if task.updated_at else None,
-            "attachments": [_attachment_to_dict(a) for a in (task.attachments or [])],
-        }
+        d = InstallationTaskResponse.model_validate(task).model_dump(mode="json")
+        d["order_id"] = d["document_id"]  # backward-compat alias
+        return d
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None) -> tuple[list, int]:

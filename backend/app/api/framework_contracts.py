@@ -75,14 +75,17 @@ async def get_available_projects(
     )
     from app.models.contract import ContractDocument
 
-    # 已被框架合同项目关联的 document ID
-    used_sub = select(FrameworkContractProjectDocument.document_id)
+    # 已被框架合同项目关联的 document ID（排除已软删除的项目）
+    used_sub = (
+        select(FrameworkContractProjectDocument.document_id)
+        .join(FrameworkContractProject, FrameworkContractProjectDocument.project_id == FrameworkContractProject.id)
+        .where(FrameworkContractProject.deleted_at.is_(None))
+    )
     if project_id:
         # 编辑项目：保留当前项目的已关联资源
         used_sub = used_sub.where(
             FrameworkContractProjectDocument.project_id != UUID(project_id)
         )
-    # 添加项目时不排除任何 — 所有已关联的都过滤掉
 
     # 已被常规合同关联的 document ID
     contract_used_sub = select(ContractDocument.document_id)

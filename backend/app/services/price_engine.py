@@ -92,6 +92,15 @@ class CalculateRequest:
     quantity: Decimal = Decimal("1")
     pieces: Decimal | None = None
 
+    # Phase 7: 高级几何
+    hole_area_mm2: Decimal | None = None
+    is_open_curve: bool = False
+    curve_length_mm: Decimal | None = None
+    use_sheet_rounding: bool = False
+    sheet_width_mm: Decimal | None = None
+    sheet_height_mm: Decimal | None = None
+    sheet_sale_price: Decimal | None = None
+
     # 客户输入
     customer_discount_rate: Decimal = Decimal("1")
     manual_unit_price: Decimal | None = None
@@ -116,6 +125,9 @@ class CalculateResult:
     total_amount: Decimal = Decimal("0")
     minimum_charge_applied: bool = False
     requires_approval: bool = False
+    # Phase 7 几何估算标记
+    geometry_estimates: dict | None = None
+    sheet_usage: dict | None = None
     warnings: list[str] = field(default_factory=list)
     pricing_trace: list[PriceTraceStep] = field(default_factory=list)
 
@@ -142,16 +154,36 @@ class PriceEngine:
 
         # ── 1. 计算计费面积/数量 ──
         net_area_m2, billable_qty = self._compute_billable_quantity(req)
+
+        # Phase 7: 几何估算标记
+        geo_estimates = {}
+        if req.hole_area_mm2 and req.hole_area_mm2 > 0:
+            hole_m2 = (req.hole_area_mm2 * req.quantity) / SQMM_PER_SQM
+            geo_estimates["hole_area_m2"] = str(hole_m2)
+            geo_estimates["net_area_m2"] = str(net_area_m2)
+        if req.is_open_curve:
+            geo_estimates["is_open_curve"] = True
+            geo_estimates["curve_length_mm"] = str(req.curve_length_mm or req.length_m or 0)
+        if geo_estimates:
+            result.geometry_estimates = geo_estimates
+
+        trace_input = {
+            "width_mm": str(req.width_mm) if req.width_mm else None,
+            "height_mm": str(req.height_mm) if req.height_mm else None,
+            "length_m": str(req.length_m) if req.length_m else None,
+            "quantity": str(req.quantity),
+            "loss_rate": str(req.product.default_loss_rate),
+        }
+        if req.hole_area_mm2:
+            trace_input["hole_area_mm2"] = str(req.hole_area_mm2)
+        if req.is_open_curve:
+            trace_input["is_open_curve"] = "true"
+            trace_input["curve_length_mm"] = str(req.curve_length_mm or req.length_m or 0)
+
         trace.append(PriceTraceStep(
             rule_code="BILLABLE-QTY",
             description="计算计费数量",
-            input_value={
-                "width_mm": str(req.width_mm) if req.width_mm else None,
-                "height_mm": str(req.height_mm) if req.height_mm else None,
-                "length_m": str(req.length_m) if req.length_m else None,
-                "quantity": str(req.quantity),
-                "loss_rate": str(req.product.default_loss_rate),
-            },
+            input_value=trace_input,
             output_value={
                 "net_area_m2": str(net_area_m2),
                 "billable_quantity": str(billable_qty),
@@ -161,6 +193,27 @@ class PriceEngine:
 
         # ── 2. 计算材料成本 ──
         material_cost = self._calc_material_cost(req, billable_qty)
+        if req.use_sheet_rounding and req.sheet_width_mm and req.sheet_height_mm:
+            from app.services.geometry_service import geometry_service
+            sr = geometry_service.estimate_sheets(
+                width_mm=req.width_mm or Decimal("0"),
+                height_mm=req.height_mm or Decimal("0"),
+                sheet_w=req.sheet_width_mm,
+                sheet_h=req.sheet_height_mm,
+                quantity=req.quantity,
+            )
+            result.sheet_usage = {
+                "sheets_needed": sr.get("sheets_needed", 0),
+                "per_sheet": sr.get("per_sheet", 0),
+                "utilization_pct": str(sr.get("utilization_pct", "0")),
+                "is_estimated": sr.get("is_estimated", True),
+            }
+            trace.append(PriceTraceStep(
+                rule_code="SHEET-ROUND",
+                description="板材整张取整",
+                input_value={"sheet_w_mm": str(req.sheet_width_mm), "sheet_h_mm": str(req.sheet_height_mm)},
+                output_value={"sheets_needed": str(sr.get("sheets_needed", 0)), "utilization": str(sr.get("utilization_pct", "0"))},
+            ))
         result.material_cost = material_cost
         if material_cost > 0:
             trace.append(PriceTraceStep(
@@ -270,12 +323,18 @@ class PriceEngine:
     # ── 内部方法 ──────────────────────────────────────────────
 
     def _compute_billable_quantity(self, req: CalculateRequest) -> tuple[Decimal, Decimal]:
-        """计算净面积和计费数量。"""
+        """计算净面积和计费数量（含孔洞扣除、开放曲线处理）。"""
         method = req.product.pricing_method
 
         if method == "area":
             if req.width_mm and req.height_mm:
-                area_m2 = (req.width_mm * req.height_mm * req.quantity) / SQMM_PER_SQM
+                base_area_m2 = (req.width_mm * req.height_mm * req.quantity) / SQMM_PER_SQM
+                # Phase 7: 孔洞面积扣除
+                if req.hole_area_mm2 and req.hole_area_mm2 > 0:
+                    hole_m2 = (req.hole_area_mm2 * req.quantity) / SQMM_PER_SQM
+                    area_m2 = max(base_area_m2 - hole_m2, Decimal("0"))
+                else:
+                    area_m2 = base_area_m2
             else:
                 area_m2 = Decimal("0")
 
@@ -285,11 +344,14 @@ class PriceEngine:
             return area_m2.quantize(self.CALC_PRECISION), billable.quantize(self.CALC_PRECISION)
 
         elif method == "length":
-            length_m = req.length_m or Decimal("0")
-            total_length = length_m * req.quantity
+            # Phase 7: 开放曲线优先使用 curve_length_mm
+            if req.is_open_curve and req.curve_length_mm and req.curve_length_mm > 0:
+                total_m = (req.curve_length_mm * req.quantity) / MM_PER_M
+            else:
+                total_m = (req.length_m or Decimal("0")) * req.quantity
             loss_rate = req.product.default_loss_rate or (req.material.loss_rate if req.material else Decimal("0"))
-            billable = total_length * (Decimal("1") + loss_rate)
-            return total_length.quantize(self.CALC_PRECISION), billable.quantize(self.CALC_PRECISION)
+            billable = total_m * (Decimal("1") + loss_rate)
+            return total_m.quantize(self.CALC_PRECISION), billable.quantize(self.CALC_PRECISION)
 
         elif method in ("quantity", "tiered", "fixed"):
             qty = req.quantity
@@ -302,19 +364,42 @@ class PriceEngine:
         return Decimal("0"), Decimal("0")
 
     def _calc_material_cost(self, req: CalculateRequest, billable_qty: Decimal) -> Decimal:
-        """计算材料成本。"""
+        """计算材料成本（含整张取整支持）。"""
         if not req.material:
             return Decimal("0")
 
+        # Phase 7: 整张取整材料成本
+        if req.use_sheet_rounding and req.sheet_width_mm and req.sheet_height_mm:
+            sheet_cost = self._calc_sheet_material_cost(req)
+            if sheet_cost is not None:
+                return sheet_cost
+
         method = req.product.pricing_method
         if method == "area":
-            # 材料单价 × 计费面积
             cost = req.material.sale_price * billable_qty
         elif method == "length":
             cost = req.material.sale_price * billable_qty
         else:
             cost = req.material.sale_price * billable_qty
 
+        return cost.quantize(self.ROUND_PRECISION)
+
+    def _calc_sheet_material_cost(self, req: CalculateRequest) -> Decimal | None:
+        """整张取整材料成本计算。"""
+        if not req.width_mm or not req.height_mm:
+            return None
+        from app.services.geometry_service import geometry_service
+        result = geometry_service.estimate_sheets(
+            width_mm=req.width_mm,
+            height_mm=req.height_mm,
+            sheet_w=req.sheet_width_mm,
+            sheet_h=req.sheet_height_mm,
+            quantity=req.quantity,
+        )
+        if result.get("is_estimated") or result["sheets_needed"] <= 0:
+            return None
+        sale_price = req.sheet_sale_price or (req.material.sale_price if req.material else Decimal("0"))
+        cost = Decimal(str(result["sheets_needed"])) * sale_price
         return cost.quantize(self.ROUND_PRECISION)
 
     def _resolve_unit_price(self, req: CalculateRequest) -> Decimal:

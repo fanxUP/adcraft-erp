@@ -245,4 +245,9 @@ async def update_settings(
             if key not in written:
                 f.write(line)
 
-    return success({"updated": updated, "message": "配置已更新，重启服务后生效"})
+    # Also update in-memory settings so changes take effect immediately
+    for key, value in data.model_dump(exclude_none=True).items():
+        if key in allowed_keys and hasattr(settings, key):
+            setattr(settings, key, value)
+
+    return success({"updated": updated, "message": "配置已更新"})

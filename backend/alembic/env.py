@@ -12,6 +12,7 @@ from app.models.cdr_quote import (
     PriceRuleSet, CdrPriceRule,
     CustomerPriceAgreement, QuoteVersion, QuoteLine, QuoteLineProcess,
     QuoteApproval, QuoteAuditLog, CdrDevice, CdrCaptureSession, DrawingSnapshot,
+    QuoteGeometry,
 )
 from app.models.business_document import BusinessDocument, BusinessDocumentItem, BusinessDocumentStatusLog, BusinessDocumentVersion
 from app.models.operation_log import OperationLog
@@ -35,6 +36,7 @@ from app.models.aerial import (
     AerialPersonnelWage, AerialVehicleCost, AerialSafetyCheck,
     AerialLedgerAttachment, AerialLedgerAuditLog, AerialAgentDraft,
 )
+from app.ai_assistant.models import AiChatSession, AiChatMessage, AiToolCallLog, AiPendingAction, AiOperationAuditLog
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
@@ -64,3 +66,12 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
+
+# AI Gateway models (Phase 2)
+from app.models.ai_task_route import AITaskRoute
+from app.models.ai_request import AIRequest
+from app.models.ai_usage_daily import AIUsageDaily
+from app.models.ai_health_check import AIHealthCheck
+from app.models.ai_prompt_template import AIPromptTemplate
+from app.models.ai_prompt_version import AIPromptVersion
+from app.models.ai_prompt_execution_log import AIPromptExecutionLog

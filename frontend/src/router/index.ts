@@ -61,6 +61,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'admin/users', name: 'AdminUserManage', meta: { roles: ['admin'] }, component: () => import('@/views/admin/UserManage.vue') },
       { path: 'admin/roles', name: 'AdminRoleManage', meta: { roles: ['admin'] }, component: () => import('@/views/admin/RoleManage.vue') },
       { path: 'admin/settings', name: 'AdminSettings', meta: { roles: ['admin'] }, component: () => import('@/views/admin/SystemSettings.vue') },
+      { path: 'admin/ai/providers', name: 'AIProviderList', meta: { roles: ['admin'] },
+            component: () => import('@/views/ai-model-center/ProviderList.vue') },
       { path: 'vehicle-dashboard', name: 'VehicleDashboard', component: () => import('@/views/vehicles/VehicleDashboard.vue') },
       { path: 'vehicles', name: 'VehicleList', component: () => import('@/views/vehicles/VehicleList.vue') },
       { path: 'vehicle-drivers', name: 'DriverList', component: () => import('@/views/vehicles/DriverList.vue') },
@@ -103,7 +105,9 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/MobileLayout.vue'),
     meta: { requiresAuth: true },
     children: [
+      { path: '', name: 'MobileHome', component: () => import('@/views/mobile/MobileHome.vue') },
       { path: 'installation', name: 'MobileInstallation', component: () => import('@/views/tasks/MobileInstallation.vue') },
+      { path: 'profile', name: 'MobileProfile', component: () => import('@/views/mobile/MobileProfile.vue') },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
@@ -114,6 +118,12 @@ const router = createRouter({
   routes,
 })
 
+/** Quick mobile user-agent detection */
+function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+}
+
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
@@ -122,22 +132,45 @@ router.beforeEach(async (to, _from, next) => {
     await authStore.fetchProfile(true)
   }
 
+  // Auth guard
   if (to.meta.requiresAuth && !authStore.isLoggedIn) {
     next('/login')
-  } else if (to.path === '/login' && authStore.isLoggedIn) {
-    next('/')
-  } else if (to.meta.roles && authStore.user) {
+    return
+  }
+
+  // If logged in and on login page, redirect
+  if (to.path === '/login' && authStore.isLoggedIn) {
+    // Redirect mobile users to mobile home, desktop users to desktop home
+    const pref = localStorage.getItem('prefer_mobile')
+    if (pref === 'true' || (pref === null && isMobileDevice())) {
+      next('/mobile')
+    } else {
+      next('/')
+    }
+    return
+  }
+
+  // Role-based guard
+  if (to.meta.roles && authStore.user) {
     const userRoles: string[] = authStore.user.roles || []
     const required: string[] = to.meta.roles as string[]
     const hasAccess = required.some(r => userRoles.includes(r))
     if (!hasAccess) {
       next('/')
-    } else {
-      next()
+      return
     }
-  } else {
-    next()
   }
+
+  // Mobile auto-detect on first visit to desktop home
+  if (to.path === '/' && authStore.isLoggedIn) {
+    const pref = localStorage.getItem('prefer_mobile')
+    if (pref === 'true' || (pref === null && isMobileDevice())) {
+      next('/mobile')
+      return
+    }
+  }
+
+  next()
 })
 
 // 每次路由切换时检查是否有版本更新
@@ -152,7 +185,6 @@ router.afterEach(async () => {
     const storedVersion = localStorage.getItem(VERSION_KEY)
     if (storedVersion && storedVersion !== currentVersion) {
       // 版本已变化，标记为有更新（UpdateNotification 会显示提示条）
-      // 如果 localStorage 里还没有版本号，存一下
     }
     if (!storedVersion) {
       localStorage.setItem(VERSION_KEY, currentVersion)

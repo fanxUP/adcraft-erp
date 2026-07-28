@@ -315,9 +315,9 @@ async function loadData() {
     if (filters.value.certificate_type) params.certificate_type = filters.value.certificate_type
     if (filters.value.status) params.status = filters.value.status
     const res = await getCertificates(params)
-    if (res.data) {
-      certificates.value = res.data.items
-      pagination.value.total = res.data.total
+    if (res) {
+      certificates.value = res.items
+      pagination.value.total = res.total
     }
   } catch {
     ElMessage.error('加载数据失败')
@@ -329,8 +329,8 @@ async function loadData() {
 async function loadExpiring() {
   try {
     const res = await getExpiringCertificates({ days: 30 })
-    if (res.data) {
-      expiringCerts.value = res.data
+    if (res) {
+      expiringCerts.value = res
     }
   } catch {
     // ignore
@@ -340,8 +340,8 @@ async function loadExpiring() {
 async function loadVehicles() {
   try {
     const res = await getVehicles({ page: 1, page_size: 100 })
-    if (res.data) {
-      vehicleOptions.value = res.data.items
+    if (res) {
+      vehicleOptions.value = res.items
     }
   } catch {
     // ignore
@@ -351,8 +351,8 @@ async function loadVehicles() {
 async function loadDrivers() {
   try {
     const res = await getDrivers({ page: 1, page_size: 100 })
-    if (res.data) {
-      driverOptions.value = res.data.items
+    if (res) {
+      driverOptions.value = res.items
     }
   } catch {
     // ignore

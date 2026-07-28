@@ -1,7 +1,8 @@
 from uuid import UUID
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update as sa_update
+from sqlalchemy.orm import selectinload
 
 from app.models.business_document import (
     BusinessDocument,
@@ -21,7 +22,14 @@ class BusinessDocumentRepository:
     # ── 基础查询 ──
 
     async def get_by_id(self, doc_id: UUID) -> BusinessDocument | None:
-        q = select(BusinessDocument).where(
+        q = select(BusinessDocument).options(
+            selectinload(BusinessDocument.items),
+            selectinload(BusinessDocument.status_logs),
+            selectinload(BusinessDocument.customer),
+            selectinload(BusinessDocument.design_tasks),
+            selectinload(BusinessDocument.production_tasks),
+            selectinload(BusinessDocument.installation_tasks),
+        ).where(
             BusinessDocument.id == doc_id,
             BusinessDocument.deleted_at.is_(None),
         )
@@ -31,7 +39,14 @@ class BusinessDocumentRepository:
         return result.scalar_one_or_none()
 
     async def get_deleted_by_id(self, doc_id: UUID) -> BusinessDocument | None:
-        q = select(BusinessDocument).where(
+        q = select(BusinessDocument).options(
+            selectinload(BusinessDocument.items),
+            selectinload(BusinessDocument.status_logs),
+            selectinload(BusinessDocument.customer),
+            selectinload(BusinessDocument.design_tasks),
+            selectinload(BusinessDocument.production_tasks),
+            selectinload(BusinessDocument.installation_tasks),
+        ).where(
             BusinessDocument.id == doc_id,
             BusinessDocument.deleted_at.isnot(None),
         )
@@ -48,7 +63,9 @@ class BusinessDocumentRepository:
         exclude_status: str | None = None,
     ) -> tuple[list[BusinessDocument], int]:
         """列出所有活跃单据，支持 doc_type 过滤。"""
-        q = select(BusinessDocument).where(BusinessDocument.deleted_at.is_(None))
+        q = select(BusinessDocument).options(
+            selectinload(BusinessDocument.customer),
+        ).where(BusinessDocument.deleted_at.is_(None))
         if self.doc_type:
             q = q.where(BusinessDocument.doc_type == self.doc_type)
         if status:
@@ -72,7 +89,9 @@ class BusinessDocumentRepository:
     async def list_deleted(
         self, skip: int = 0, limit: int = 20, keyword: str | None = None
     ) -> tuple[list[BusinessDocument], int]:
-        q = select(BusinessDocument).where(BusinessDocument.deleted_at.isnot(None))
+        q = select(BusinessDocument).options(
+            selectinload(BusinessDocument.customer),
+        ).where(BusinessDocument.deleted_at.isnot(None))
         if self.doc_type:
             q = q.where(BusinessDocument.doc_type == self.doc_type)
         if keyword:
@@ -116,8 +135,16 @@ class BusinessDocumentRepository:
                     BusinessDocumentItem.document_id == doc.id
                 )
             )).scalars().all()
+            # Clear FK references before deleting items
+            from app.models.acceptance import AcceptanceItem
             for old in existing:
+                await self.db.execute(
+                    sa_update(AcceptanceItem)
+                    .where(AcceptanceItem.document_item_id == old.id)
+                    .values(document_item_id=None)
+                )
                 await self.db.delete(old)
+            await self.db.flush()
             for idx, item in enumerate(items_data):
                 item.setdefault("sort_order", idx)
                 item["document_id"] = doc.id

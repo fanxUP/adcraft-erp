@@ -12,10 +12,12 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
-from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup, admin, notifications, conversations, acceptances, contracts, framework_contracts, vehicles, vehicle_agent, vehicle_dashboard, aerial
+from app.core.performance import PerformanceMiddleware, SLOW_QUERY_MS, SLOW_API_MS, install_slow_query_listener
+from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup, admin, notifications, conversations, acceptances, contracts, framework_contracts, vehicles, vehicle_agent, vehicle_dashboard, aerial, ai_execute, ai_models, ai_providers, ai_prompts, ai_requests, ai_routes
 from app.api import cdr_quotes
 # AI module routes
 from app.ai.api import ai_anomalies, ai_knowledge, ai_quote, ai_reports, ai_site_photo, ai_payment_ocr
+from app.ai_assistant.router import router as ai_assistant_router
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,11 @@ async def lifespan(app: FastAPI):
             "SECURITY WARNING: SECRET_KEY is weak or unset. "
             "Generate a strong key with: openssl rand -hex 32"
         )
+    # Performance monitoring: install slow-query listener on the database engine
+    from app.core.database import engine
+    install_slow_query_listener(engine)
+    logger.info("Performance monitoring active (slow-query %dms, slow-api %dms)",
+                 SLOW_QUERY_MS, SLOW_API_MS)
     yield
 
 
@@ -56,6 +63,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Performance monitoring: logs response times and adds X-Response-Time-MS header
+app.add_middleware(PerformanceMiddleware)
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
@@ -122,9 +132,17 @@ app.include_router(ai_quote.router, prefix="/api/v1")
 app.include_router(ai_reports.router, prefix="/api/v1")
 app.include_router(ai_site_photo.router, prefix="/api/v1")
 app.include_router(ai_payment_ocr.router, prefix="/api/v1")
+# AI infrastructure (model management, providers, execution)
+app.include_router(ai_execute.router, prefix="/api/v1")
+app.include_router(ai_models.router, prefix="/api/v1")
+app.include_router(ai_providers.router, prefix="/api/v1")
+app.include_router(ai_prompts.router, prefix="/api/v1")
+app.include_router(ai_requests.router, prefix="/api/v1")
+app.include_router(ai_routes.router, prefix="/api/v1")
 
 # CDR 智能报价
 app.include_router(cdr_quotes.router, prefix="/api/v1")
+app.include_router(ai_assistant_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
 # Static file serving (frontend SPA + uploads)

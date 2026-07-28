@@ -295,6 +295,16 @@ class ReportService:
                             if did in all_docs_by_id and all_docs_by_id[did].doc_type == doc_type]
                 return [d for d in (ct.documents or []) if d.doc_type == doc_type]
 
+            # 获取合同科室/部门（取第一个关联单据的部门）
+            def _get_ct_dept(ct):
+                for d in _get_ct_docs(ct, "order"):
+                    if d.department:
+                        return d.department
+                for d in _get_ct_docs(ct, "quote"):
+                    if d.department:
+                        return d.department
+                return None
+
             debts.append({
                 "customer_id": str(c.id),
                 "customer_name": c.name,
@@ -310,6 +320,7 @@ class ReportService:
                         "id": str(ct.id),
                         "contract_no": ct.contract_no,
                         "project_name": ct.project_name,
+                        "department": _get_ct_dept(ct),
                         "total_amount": _ct_amount(ct),
                         "paid_amount": paid_map.get(ct.id, 0.0),
                         "unpaid_amount": max(0, _ct_amount(ct) - paid_map.get(ct.id, 0.0)),
@@ -375,14 +386,19 @@ class ReportService:
         )
         rows = result.all()
         ranking = []
-        for customer_id, debt in rows:
-            c_result = await self.db.execute(select(Customer).where(Customer.id == customer_id))
-            c = c_result.scalar_one_or_none()
-            ranking.append({
-                "customer_id": str(customer_id),
-                "customer_name": c.name if c else "未知",
-                "debt_amount": float(debt),
-            })
+        if rows:
+            customer_ids = [r[0] for r in rows]
+            c_result = await self.db.execute(
+                select(Customer).where(Customer.id.in_(set(customer_ids)))
+            )
+            customer_map = {c.id: c for c in c_result.scalars().all()}
+            for customer_id, debt in rows:
+                c = customer_map.get(customer_id)
+                ranking.append({
+                    "customer_id": str(customer_id),
+                    "customer_name": c.name if c else "未知",
+                    "debt_amount": float(debt),
+                })
         return ranking
 
     async def _list_orders_in_range(self, start: datetime, end: datetime) -> list[BusinessDocument]:

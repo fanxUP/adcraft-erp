@@ -10,7 +10,7 @@ from app.core.permissions import require_role
 from app.models.user import User
 from app.schemas.order import OrderStatusChange
 from app.schemas.common import success, success_paginated, error
-from app.services.order_service import OrderService
+from app.services.business_document_service import BusinessDocumentService
 from app.services.operation_log_service import log_operation, OBJ_ORDER, ACTION_STATUS_CHANGE, ACTION_DELETE
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -30,9 +30,9 @@ async def list_orders(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = OrderService(db)
+    service = BusinessDocumentService(db, doc_type='order')
     cid = UUID(customer_id) if customer_id else None
-    orders, total = await service.list_orders(page, page_size, status, cid, keyword=keyword)
+    orders, total = await service.list_all(page, page_size, status, cid, keyword=keyword)
     return success_paginated(orders, total, page, page_size)
 
 
@@ -44,7 +44,7 @@ async def list_deleted_orders(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    service = OrderService(db)
+    service = BusinessDocumentService(db, doc_type='order')
     orders, total = await service.list_deleted(page, page_size, keyword=keyword)
     return success_paginated(orders, total, page, page_size)
 
@@ -55,8 +55,8 @@ async def get_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = OrderService(db)
-    order = await service.get_order(UUID(order_id))
+    service = BusinessDocumentService(db, doc_type='order')
+    order = await service.get_by_id(UUID(order_id))
     if not order:
         return {"code": 40401, "message": "订单不存在", "data": None}
     return success(order)
@@ -69,7 +69,7 @@ async def set_order_cost(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = OrderService(db)
+    service = BusinessDocumentService(db, doc_type='order')
     try:
         order = await service.set_cost(UUID(order_id), data.cost_amount)
         return success(order)
@@ -83,7 +83,7 @@ async def auto_calculate_cost(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = OrderService(db)
+    service = BusinessDocumentService(db, doc_type='order')
     try:
         order = await service.auto_calculate_cost(UUID(order_id))
         return success(order)
@@ -99,7 +99,7 @@ async def change_order_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = OrderService(db)
+    service = BusinessDocumentService(db, doc_type='order')
     oid = UUID(order_id)
     try:
         order = await service.change_status(oid, data.to_status, data.reason, current_user.id)
@@ -119,10 +119,10 @@ async def delete_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    service = OrderService(db)
+    service = BusinessDocumentService(db, doc_type='order')
     oid = UUID(order_id)
     try:
-        await service.delete_order(oid)
+        await service.delete(oid)
         await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                             OBJ_ORDER, oid, ACTION_DELETE,
                             ip_address=request.client.host if request.client else None)
@@ -138,10 +138,10 @@ async def restore_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    service = OrderService(db)
+    service = BusinessDocumentService(db, doc_type='order')
     oid = UUID(order_id)
     try:
-        order = await service.restore_order(oid)
+        order = await service.restore(oid)
         await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                             OBJ_ORDER, oid, "restore",
                             ip_address=request.client.host if request.client else None,
@@ -158,10 +158,10 @@ async def convert_order_to_quote(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    service = OrderService(db)
+    service = BusinessDocumentService(db, doc_type='order')
     oid = UUID(order_id)
     try:
-        quote = await service.convert_to_quote(oid, current_user.id)
+        quote = await service.convert_doc_type(oid, 'quote', current_user.id)
         await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                             OBJ_ORDER, oid, "convert_to_quote",
                             ip_address=request.client.host if request.client else None,

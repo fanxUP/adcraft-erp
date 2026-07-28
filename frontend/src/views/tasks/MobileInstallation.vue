@@ -191,6 +191,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   getInstallationTasks,
   getInstallationTask,
@@ -205,6 +206,7 @@ import { InstallationTaskResponse } from '@/types/api'
 import { getErrorMessage } from '@/utils/error'
 
 const authStore = useAuthStore()
+const route = useRoute()
 
 // --- State ---
 const loading = ref(false)
@@ -489,6 +491,18 @@ function compressImage(file: File, maxDim: number, quality: number): Promise<Fil
 // --- Lifecycle ---
 onMounted(() => {
   fetchTasks()
+  // Deep linking: auto-open task from query param
+  const taskId = route.query.task_id as string
+  if (taskId) {
+    const check = setInterval(async () => {
+      const match = allTasks.value.find(t => t.id === taskId)
+      if (match) {
+        clearInterval(check)
+        await openTask(match)
+      }
+    }, 300)
+    setTimeout(() => clearInterval(check), 10000)
+  }
 })
 
 // Re-fetch on window focus (user switched back to tab)

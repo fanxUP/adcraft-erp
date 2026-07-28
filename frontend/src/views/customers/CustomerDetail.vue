@@ -103,11 +103,13 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { getCustomer, updateCustomer } from '@/api/customers'
 import type { CustomerResponse } from '@/types/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
+const aiStore = useAiAssistantStore()
 const loading = ref(false)
 const saving = ref(false)
 const customer = ref<CustomerResponse | null>(null)
@@ -124,6 +126,13 @@ async function fetchData() {
   loading.value = true
   try {
     customer.value = await getCustomer(route.params.id as string)
+    if (customer.value) {
+      aiStore.setPageContext({
+        customer_id: customer.value.id,
+        customer_name: customer.value.name,
+        customer_no: customer.value.customer_no,
+      })
+    }
   } finally {
     loading.value = false
   }

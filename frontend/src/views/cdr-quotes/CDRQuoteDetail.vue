@@ -5,6 +5,7 @@
       <div>
         <el-button @click="$router.push('/cdr/quotes')">返回列表</el-button>
         <el-button type="primary" @click="handleEdit">编辑</el-button>
+        <el-button type="danger" plain @click="handleDelete" v-if="version?.status === 'draft'">删除</el-button>
         <el-button :type="'warning'" @click="handleRequestApproval" v-if="version?.status === 'draft'">提交审批</el-button>
         <el-button type="danger" @click="handleConvertToOrder" v-if="canConvert">转订单</el-button>
       </div>
@@ -95,12 +96,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
-import { getCDRQuote, getLatestVersion, listVersions, listAuditLogs, requestApproval, convertToOrder } from '@/api/cdrQuote'
+import { getCDRQuote, getLatestVersion, listVersions, listAuditLogs, requestApproval, convertToOrder, deleteCDRQuote } from '@/api/cdrQuote'
 
 const route = useRoute()
 const router = useRouter()
+const aiStore = useAiAssistantStore()
 const quote = ref<any>(null)
 const version = ref<any>(null)
 const versions = ref<any[]>([])
@@ -129,6 +132,15 @@ async function fetchData() {
   const quoteId = route.params.id as string
   try {
     quote.value = await getCDRQuote(quoteId)
+    if (quote.value) {
+      aiStore.setPageContext({
+        quote_id: quote.value.id,
+        quote_no: quote.value.quote_no,
+        customer_id: quote.value.customer_id,
+        customer_name: quote.value.customer_name || quote.value.customer?.name || '',
+        project_name: quote.value.project_name,
+      })
+    }
     version.value = await getLatestVersion(quoteId)
     versions.value = await listVersions(quoteId)
     approvals.value = await api.get(`/cdr/quotes/${quoteId}/approvals`).catch(() => [])
@@ -152,6 +164,22 @@ async function handleRequestApproval() {
     ElMessage.success('已提交审批')
     await fetchData()
   } catch { /* cancelled */ }
+}
+
+async function handleDelete() {
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除报价单 ' + (quote.value?.quote_no || '') + ' 吗？此操作不可恢复。',
+      '删除报价', { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' },
+    )
+    await deleteCDRQuote(route.params.id as string)
+    ElMessage.success('报价单已删除')
+    router.push('/cdr/quotes')
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error(e?.message || '删除失败')
+    }
+  }
 }
 
 async function handleConvertToOrder() {

@@ -9,8 +9,16 @@ from app.models.acceptance import AcceptanceForm, AcceptanceItem
 from app.models.business_document import BusinessDocument
 from app.repositories.acceptance_repo import AcceptanceRepository
 from app.services.number_generator import generate_acceptance_no
+from app.schemas.acceptance import AcceptanceItemResponse, AcceptanceListResponse, AcceptanceDetailResponse, AcceptanceAttachmentResponse
 from app.services.business_document_service import _build_spec, BusinessDocumentService
 
+
+
+def _acceptance_item_to_dict(item) -> dict:
+    """AcceptanceItem → dict, with backward-compat alias order_item_id."""
+    d = AcceptanceItemResponse.model_validate(item).model_dump(mode="json")
+    d["order_item_id"] = d["document_item_id"]  # backward compat
+    return d
 
 class AcceptanceService:
     def __init__(self, db: AsyncSession):
@@ -99,7 +107,7 @@ class AcceptanceService:
                 unit=item.unit,
                 area=float(item.area) if item.area else None,
                 unit_price=float(item.unit_price) if item.unit_price else None,
-                subtotal=float(item.subtotal_amount) if item.subtotal_amount else None,
+                subtotal=float(item.subtotal_amount) if item.subtotal_amount is not None and float(item.subtotal_amount) > 0 else (float(item.unit_price or 0) * float(item.quantity or 0)),
                 item_status="pending",
                 group_name=item.group_name,
                 remark=item.remark,
@@ -165,12 +173,16 @@ class AcceptanceService:
             form.accepted_at = datetime.now()
             if kwargs.get("accepted_by"):
                 form.accepted_by = kwargs["accepted_by"]
+            # 验收接受 → 自动完成订单
+            await self._sync_order_on_acceptance(form, "completed")
         elif to_status == "rejected":
             reason = kwargs.get("reason", "")
             if not reason:
                 raise ValueError("驳回时请填写驳回原因")
             form.status = "rejected"
             form.reject_reason = reason
+            # 验收驳回 → 订单回退到安装中
+            await self._sync_order_on_acceptance(form, "in_installation")
         elif to_status == "draft":
             form.status = "draft"
             form.reject_reason = None
@@ -178,6 +190,32 @@ class AcceptanceService:
         await self.db.flush()
         form = await self.repo.get_by_id(acceptance_id)
         return self._to_detail_dict(form)
+
+    async def _sync_order_on_acceptance(self, form, target_status: str) -> None:
+        """验收反馈：更新关联订单状态。"""
+        doc = form.document
+        if not doc or doc.doc_type != "order":
+            return
+        if doc.status == target_status:
+            return
+        from uuid import UUID as _UUID
+        raw = form.accepted_by or doc.sales_user_id
+        if not raw:
+            return
+        try:
+            operated_by = _UUID(raw) if isinstance(raw, str) else raw
+        except (ValueError, TypeError):
+            return
+        from app.services.business_document_service import BusinessDocumentService
+        order_svc = BusinessDocumentService(self.db, doc_type="order")
+        try:
+            await order_svc.change_status(
+                doc.id, target_status,
+                reason="验收单自动触发" if target_status == "completed" else "验收驳回，回退安装",
+                operated_by=operated_by,
+            )
+        except ValueError:
+            pass
 
     # ── 序列化（统一访问 form.document） ──
     @staticmethod
@@ -226,34 +264,26 @@ class AcceptanceService:
 
     def _to_list_dict(self, form: AcceptanceForm) -> dict:
         info = self._doc_info(form)
-        return {
-            "id": str(form.id),
-            "acceptance_no": form.acceptance_no,
-            "document_id": str(form.document_id) if form.document_id else None,
-            # Backward-compat aliases
-            "order_id": str(form.document_id) if (info["doc_type"] == "order") else None,
-            "quote_id": str(form.document_id) if (info["doc_type"] == "quote") else None,
+        d = AcceptanceListResponse.model_validate(form).model_dump(mode="json")
+        d.update({
+            "order_id": d["document_id"] if info["doc_type"] == "order" else None,
+            "quote_id": d["document_id"] if info["doc_type"] == "quote" else None,
             "order_no": info["doc_no"] if info["doc_type"] == "order" else None,
             "quote_no": info["doc_no"] if info["doc_type"] == "quote" else None,
             "customer_name": info["customer_name"],
             "project_name": info["project_name"],
             "department": info["department"],
             "total_amount": sum(float(i.subtotal or 0) for i in (form.items or [])),
-            "status": form.status,
-            "accepted_at": form.accepted_at.isoformat() if form.accepted_at else None,
-            "accepted_by": form.accepted_by,
-            "created_at": form.created_at.isoformat() if form.created_at else None,
-        }
+        })
+        return d
 
     def _to_detail_dict(self, form: AcceptanceForm) -> dict:
         info = self._doc_info(form)
-        return {
-            "id": str(form.id),
-            "acceptance_no": form.acceptance_no,
-            "document_id": str(form.document_id) if form.document_id else None,
-            # Backward-compat aliases
-            "order_id": str(form.document_id) if (info["doc_type"] == "order") else None,
-            "quote_id": str(form.document_id) if (info["doc_type"] == "quote") else None,
+        d = AcceptanceDetailResponse.model_validate(form).model_dump(mode="json")
+        # Override with doc_info fields (not on AcceptanceForm model)
+        d.update({
+            "order_id": d["document_id"] if info["doc_type"] == "order" else None,
+            "quote_id": d["document_id"] if info["doc_type"] == "quote" else None,
             "order_no": info["doc_no"] if info["doc_type"] == "order" else None,
             "quote_no": info["doc_no"] if info["doc_type"] == "quote" else None,
             "customer_name": info["customer_name"],
@@ -264,47 +294,17 @@ class AcceptanceService:
             "order_date": info["order_date"],
             "project_name": info["project_name"],
             "department": info["department"],
-            "status": form.status,
-            "accepted_at": form.accepted_at.isoformat() if form.accepted_at else None,
-            "accepted_by": form.accepted_by,
-            "our_acceptor_id": str(form.our_acceptor_id) if form.our_acceptor_id else None,
             "our_acceptor_name": form.our_acceptor.real_name if form.our_acceptor else None,
-            "remark": form.remark,
-            "reject_reason": form.reject_reason,
-            "discount_amount": float(form.discount_amount),
-            "advance_amount": float(form.advance_amount),
-            "created_at": form.created_at.isoformat() if form.created_at else None,
-            "updated_at": form.updated_at.isoformat() if form.updated_at else None,
-            "items": [
-                {
-                    "id": str(item.id),
-                    "acceptance_id": str(item.acceptance_id),
-                    "document_item_id": str(item.document_item_id) if item.document_item_id else None,
-                    "order_item_id": str(item.document_item_id) if item.document_item_id else None,  # backward compat
-                    "item_name": item.item_name,
-                    "material_process": item.material_process,
-                    "specification": item.specification,
-                    "quantity": float(item.quantity) if item.quantity is not None else None,
-                    "unit": item.unit,
-                    "area": float(item.area) if item.area is not None else None,
-                    "unit_price": float(item.unit_price) if item.unit_price is not None else None,
-                    "subtotal": float(item.subtotal) if item.subtotal is not None else None,
-                    "image_url": item.image_url,
-                    "item_status": item.item_status,
-                    "remark": item.remark,
-                    "group_name": item.group_name,
-                }
-                for item in (form.items or [])
-            ],
-            "attachments": [
-                {
-                    "id": str(att.id),
-                    "acceptance_id": str(att.acceptance_id),
-                    "filename": att.filename,
-                    "filepath": att.filepath,
-                    "filesize": att.filesize,
-                    "upload_by": str(att.upload_by) if att.upload_by else None,
-                }
-                for att in (form.attachments or [])
-            ],
-        }
+            "total_amount": sum(float(i.subtotal or 0) for i in (form.items or [])),
+        })
+        # Items: model_validate handles type coercion
+        d["items"] = [
+            _acceptance_item_to_dict(item)
+            for item in (form.items or [])
+        ]
+        # Attachments: model_validate handles type coercion
+        d["attachments"] = [
+            AcceptanceAttachmentResponse.model_validate(att).model_dump(mode="json")
+            for att in (form.attachments or [])
+        ]
+        return d

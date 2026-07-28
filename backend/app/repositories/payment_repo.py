@@ -2,6 +2,7 @@ from uuid import UUID
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
+from sqlalchemy.orm import selectinload
 
 from app.models.payment import Payment, CustomerStatement, Expense
 from app.models.business_document import BusinessDocument
@@ -17,7 +18,9 @@ class PaymentRepository:
 
     async def list_payments(self, skip: int = 0, limit: int = 20, order_id: UUID | None = None,
                             customer_id: UUID | None = None, is_voided: bool | None = None) -> tuple[list[Payment], int]:
-        q = select(Payment)
+        q = select(Payment).options(
+            selectinload(Payment.document).selectinload(BusinessDocument.customer),
+        )
         if order_id:
             q = q.where(Payment.document_id == order_id)
         if customer_id:

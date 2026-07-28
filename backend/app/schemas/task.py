@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
+from app.schemas.common import CoercedModel
 
 from app.schemas.attachment import AttachmentResponse
 
@@ -24,9 +25,11 @@ class DesignTaskUpdate(BaseModel):
     client_comments: str | None = None
 
 
-class DesignTaskResponse(BaseModel):
+class DesignTaskResponse(CoercedModel):
+    model_config = {"from_attributes": True}
     id: str
     design_no: str
+    document_id: str
     order_id: str
     customer_id: str
     project_name: str
@@ -69,9 +72,11 @@ class ProductionTaskUpdate(BaseModel):
     rework_reason: str | None = None
 
 
-class ProductionTaskResponse(BaseModel):
+class ProductionTaskResponse(CoercedModel):
+    model_config = {"from_attributes": True}
     id: str
     production_no: str
+    document_id: str
     order_id: str
     customer_id: str
     project_name: str
@@ -114,9 +119,11 @@ class InstallationTaskUpdate(BaseModel):
     acceptance_result: str | None = None
 
 
-class InstallationTaskResponse(BaseModel):
+class InstallationTaskResponse(CoercedModel):
+    model_config = {"from_attributes": True}
     id: str
     installation_no: str
+    document_id: str
     order_id: str
     customer_id: str
     project_name: str

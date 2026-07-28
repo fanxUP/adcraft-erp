@@ -636,9 +636,30 @@ watch(() => route.params.id, async (newId) => {
 .header-actions { display: flex; gap: 8px; }
 .save-bar { margin-top: 20px; display: flex; gap: 12px; }
 .order-info-card { margin-bottom: 0; }
-.order-info-card :deep(.el-descriptions__title) { font-size: 14px; font-weight: 600; }
+.order-info-card :deep(.el-descriptions__title) { font-size: 16px; font-weight: 600; }
 :deep(.group-header-row) { background: var(--ad-bg-secondary, #f5f7fa) !important; }
 :deep(.group-header-row td) { border-bottom: 2px solid var(--ad-primary, #409eff) !important; }
 :deep(.group-total-row) { background: var(--ad-bg-secondary, #fafafa) !important; }
 :deep(.group-total-row td) { border-top: 1px solid var(--ad-border, #dcdfe6) !important; font-weight: 600; }
+
+.page :deep(.el-table) {
+  font-size: 16px;
+}
+.page :deep(.el-table th) {
+  font-size: 16px;
+}
+.page :deep(.el-table .cell) {
+  padding: 8px 6px;
+}
+.page :deep(.el-input__wrapper) {
+  font-size: 16px;
+}
+.page :deep(.el-input-number__increase),
+.page :deep(.el-input-number__decrease) {
+  font-size: 16px;
+}
+.page :deep(.el-select) {
+  font-size: 16px;
+}
+
 </style>

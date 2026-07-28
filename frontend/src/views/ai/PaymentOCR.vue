@@ -2,7 +2,7 @@
   <div class="payment-ocr">
     <div class="page-header">
       <h2>收款截图识别</h2>
-      <el-tag type="success">规则引擎 — 无需 AI Key</el-tag>
+      <el-tag :type="modeTagType">{{ modeLabel }}</el-tag>
     </div>
 
     <el-row :gutter="16">
@@ -128,6 +128,16 @@ const selectedFile = ref<File | null>(null)
 const previewUrl = ref('')
 const orderId = ref('')
 const result = ref<OCRRecognizeResponse | null>(null)
+
+const modeTagType = computed(() => {
+  return result.value?.mode === 'ai_enhanced' ? 'success' : 'info'
+})
+
+const modeLabel = computed(() => {
+  if (!result.value) return '规则引擎'
+  if (result.value.mode === 'ai_enhanced') return 'AI 增强'
+  return '规则引擎'
+})
 
 const confidenceTag = computed(() => {
   const map: Record<string, 'success' | 'warning' | 'info'> = {

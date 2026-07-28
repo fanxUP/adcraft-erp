@@ -411,10 +411,10 @@ async function loadData() {
     if (filters.value.incident_type) params.incident_type = filters.value.incident_type
     if (filters.value.status) params.status = filters.value.status
     const res = await getIncidents(params)
-    if (res.data) {
-      incidents.value = res.data.items
-      pagination.value.total = res.data.total
-      pendingCount.value = res.data.items.filter((i: IncidentResponse) => i.status === 'pending').length
+    if (res) {
+      incidents.value = res.items
+      pagination.value.total = res.total
+      pendingCount.value = res.items.filter((i: IncidentResponse) => i.status === 'pending').length
     }
   } catch {
     ElMessage.error('加载数据失败')
@@ -426,8 +426,8 @@ async function loadData() {
 async function loadVehicles() {
   try {
     const res = await getVehicles({ page: 1, page_size: 100 })
-    if (res.data) {
-      vehicleOptions.value = res.data.items
+    if (res) {
+      vehicleOptions.value = res.items
     }
   } catch {
     // ignore
@@ -437,8 +437,8 @@ async function loadVehicles() {
 async function loadDrivers() {
   try {
     const res = await getDrivers({ page: 1, page_size: 100 })
-    if (res.data) {
-      driverOptions.value = res.data.items
+    if (res) {
+      driverOptions.value = res.items
     }
   } catch {
     // ignore
@@ -447,9 +447,9 @@ async function loadDrivers() {
 
 async function loadUsers() {
   try {
-    const res = await getUsers({ page: 1, page_size: 200 })
-    if (res.data) {
-      userOptions.value = res.data.items || res.data
+    const res = await getUsers({ page: 1, page_size: 100 })
+    if (res) {
+      userOptions.value = res.items || res
     }
   } catch {
     // ignore

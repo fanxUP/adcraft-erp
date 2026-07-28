@@ -79,3 +79,14 @@ export function searchByDescription(description: string, limit = 5) {
     params: { description, limit },
   })
 }
+// ── Smart Pricing Recommendation ──────────────────────────────────────
+
+export function recommendPrice(params: {
+  product_id?: string
+  material_id?: string
+  width_mm?: number
+  height_mm?: number
+  quantity?: number
+}) {
+  return post<{default_price: number; historical_avg: number | null; price_range: {min: number; max: number; recommended: number}; confidence: string}>('/ai/quotes/pricing/recommend', params)
+}

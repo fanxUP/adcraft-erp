@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from app.schemas.common import CoercedModel
 from datetime import datetime
 
 
@@ -40,7 +41,7 @@ class ContractUpdate(BaseModel):
     quote_ids: list[str] | None = None
 
 
-class ContractListResponse(BaseModel):
+class ContractListResponse(CoercedModel):
     id: str
     contract_no: str
     customer_name: str
@@ -58,7 +59,7 @@ class ContractListResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class SimpleOrderRef(BaseModel):
+class SimpleOrderRef(CoercedModel):
     id: str
     order_no: str
     project_name: str
@@ -67,7 +68,7 @@ class SimpleOrderRef(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class SimpleQuoteRef(BaseModel):
+class SimpleQuoteRef(CoercedModel):
     id: str
     quote_no: str
     project_name: str

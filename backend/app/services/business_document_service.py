@@ -8,6 +8,7 @@ from app.repositories.business_document_repo import BusinessDocumentRepository
 from app.models.outsource import OutsourceTask
 from app.models.inventory import StockRecord
 from app.models.project_cost import ProjectCost
+from app.models.task import DesignTask, ProductionTask, InstallationTask
 
 
 def _build_spec(item) -> str | None:
@@ -111,8 +112,8 @@ class BusinessDocumentService:
             data["sales_user_id"] = UUID(data["sales_user_id"])
 
         doc = await self.repo.create(data)
-        # Eager-load relationships before serializing (avoid MissingGreenlet in async)
-        await self.db.refresh(doc, ["customer", "items", "status_logs", "versions"])
+        # Refresh to load relationships (e.g. customer) in async context
+        await self.db.refresh(doc, ["customer", "items", "status_logs"])
         return self._to_detail(doc)
 
     # ═══════════════════════════════════════════
@@ -179,6 +180,8 @@ class BusinessDocumentService:
         from app.models.contract import ContractDocument
         from app.models.framework_contract import FrameworkContractProjectDocument
         from app.models.acceptance import AcceptanceForm
+        from app.models.outsource import OutsourcePayment
+        from app.models.cdr_quote import QuoteVersion
 
         # 1. 删除外协任务及付款
         tasks = (await self.db.execute(
@@ -187,14 +190,16 @@ class BusinessDocumentService:
                 & (OutsourceTask.related_doc_type == "quote")
             )
         )).scalars().all()
-        for t in tasks:
-            from app.models.outsource import OutsourcePayment
+        if tasks:
+            # Batch-fetch all payments for all tasks in one query
+            task_ids = [t.id for t in tasks]
             payments = (await self.db.execute(
-                select(OutsourcePayment).where(OutsourcePayment.task_id == t.id)
+                select(OutsourcePayment).where(OutsourcePayment.task_id.in_(task_ids))
             )).scalars().all()
             for p in payments:
                 await self.db.delete(p)
-            await self.db.delete(t)
+            for t in tasks:
+                await self.db.delete(t)
 
         # 2. 清理合同关联
         links = (await self.db.execute(
@@ -230,7 +235,36 @@ class BusinessDocumentService:
             c.document_id = None
             c.document_item_id = None
 
-        # 6. 硬删除主记录
+        # 6. 删除所有关联的报价相关记录（防止 FK 约束阻止主记录删除）
+        from sqlalchemy import text as sa_text
+        qid_param = str(doc.id)
+        for tbl in ["quote_approvals", "quote_audit_logs", "quote_geometry"]:
+            await self.db.execute(
+                sa_text(f"DELETE FROM {tbl} WHERE quote_id = :qid"),
+                {"qid": qid_param}
+            )
+
+        # 删除报价版本及关联明细
+        await self.db.execute(
+            sa_text("DELETE FROM quote_line_processes WHERE line_id IN (SELECT id FROM quote_lines WHERE version_id IN (SELECT id FROM quote_versions WHERE quote_id = :qid))"),
+            {"qid": qid_param}
+        )
+        await self.db.execute(
+            sa_text("DELETE FROM quote_lines WHERE version_id IN (SELECT id FROM quote_versions WHERE quote_id = :qid)"),
+            {"qid": qid_param}
+        )
+        await self.db.execute(
+            sa_text("DELETE FROM quote_versions WHERE quote_id = :qid"),
+            {"qid": qid_param}
+        )
+
+        # 删除图纸快照
+        await self.db.execute(
+            sa_text("DELETE FROM drawing_snapshots WHERE quote_id = :qid"),
+            {"qid": qid_param}
+        )
+
+        # 7. 硬删除主记录
         await self.db.delete(doc)
         await self.db.flush()
         return True
@@ -251,12 +285,52 @@ class BusinessDocumentService:
         if to_status not in allowed:
             raise ValueError(f"不允许从 {from_status} 流转到 {to_status}")
 
+        # ── 状态闸门：前置条件检查 ──
+        if doc.doc_type == "order":
+            if from_status == "confirmed" and to_status == "designing":
+                # 必须有现存的 DesignTask（已由管理员/系统创建）
+                r = await self.db.execute(
+                    select(DesignTask).where(DesignTask.document_id == doc_id).limit(1)
+                )
+                if not r.scalar_one_or_none():
+                    raise ValueError("请先创建设计任务，再流转到「设计中」状态")
+            elif from_status == "designing" and to_status == "in_production":
+                await self._require_all_tasks_completed(
+                    doc_id, DesignTask, "design_no", "设计"
+                )
+            elif from_status == "in_production" and to_status == "in_installation":
+                await self._require_all_tasks_completed(
+                    doc_id, ProductionTask, "production_no", "生产"
+                )
+            elif from_status == "in_installation" and to_status == "completed":
+                await self._require_all_tasks_completed(
+                    doc_id, InstallationTask, "installation_no", "安装"
+                )
+
         await self.repo.update(doc, {"status": to_status})
         await self.repo.create_status_log(doc_id, from_status, to_status, reason, operated_by)
 
-        # 订单完成 → 自动创建验收单
+        # 订单完成 → 自动创建验收单 + 逾期提醒
         if doc.doc_type == "order" and to_status == "completed":
             await self._auto_create_acceptance(doc)
+            if doc.unpaid_amount and float(doc.unpaid_amount) > 0 and doc.sales_user_id:
+                from app.models.notification import Notification
+                reminder = Notification(
+                    user_id=doc.sales_user_id,
+                    type="payment_reminder",
+                    title=f"收款提醒: {doc.doc_no}",
+                    content=f"订单 {doc.project_name} 已完成，尚有 {float(doc.unpaid_amount):.2f} 元未收款，请及时跟进。",
+                    link=f"/orders/{doc.id}",
+                )
+                self.db.add(reminder)
+                await self.db.flush()
+
+        # 订单状态转换 → 自动创建任务
+        if doc.doc_type == "order":
+            if to_status == "in_production":
+                await self._auto_create_production_task(doc)
+            elif to_status == "in_installation":
+                await self._auto_create_installation_task(doc)
 
         # 订单取消 → 进回收站
         if doc.doc_type == "order" and to_status == "cancelled":
@@ -282,17 +356,32 @@ class BusinessDocumentService:
 
         return self._to_detail(doc)
 
+    async def _require_all_tasks_completed(self, doc_id: UUID, model,
+                                            no_attr: str, label: str) -> None:
+        # Check all tasks of a given type for this document are completed.
+        # Raises ValueError if any task is not completed or none exist.
+        r = await self.db.execute(
+            select(model).where(model.document_id == doc_id)
+        )
+        tasks = r.scalars().all()
+        if not tasks:
+            raise ValueError(f"请先创建{label}任务，再继续流转")
+        for t in tasks:
+            if t.status != "completed":
+                task_no = getattr(t, no_attr, "N/A")
+                raise ValueError(f"{label}任务 {task_no} 未完成，请先完成后再流转")
+
     async def _auto_create_acceptance(self, doc) -> None:
         from app.models.acceptance import AcceptanceForm, AcceptanceItem
         from app.services.number_generator import generate_acceptance_no
 
-        existing = await self.db.execute(
+        existing = (await self.db.execute(
             select(AcceptanceForm).where(
                 AcceptanceForm.document_id == doc.id,
                 AcceptanceForm.deleted_at.is_(None),
             )
-        )
-        if existing.scalar_one_or_none():
+        )).scalars().first()
+        if existing:
             return
 
         acceptance_no = await generate_acceptance_no(self.db)
@@ -324,6 +413,46 @@ class BusinessDocumentService:
             )
             self.db.add(acceptance_item)
 
+        await self.db.flush()
+    async def _auto_create_production_task(self, doc) -> None:
+        from app.models.task import ProductionTask
+        from app.services.number_generator import generate_production_no
+
+        existing = await self.db.execute(
+            select(ProductionTask).where(ProductionTask.document_id == doc.id)
+        )
+        if existing.scalar_one_or_none():
+            return
+
+        task = ProductionTask(
+            production_no=await generate_production_no(self.db),
+            document_id=doc.id,
+            customer_id=doc.customer_id,
+            project_name=doc.project_name,
+            status="pending",
+            quantity=1,
+        )
+        self.db.add(task)
+        await self.db.flush()
+
+    async def _auto_create_installation_task(self, doc) -> None:
+        from app.models.task import InstallationTask
+        from app.services.number_generator import generate_installation_no
+
+        existing = await self.db.execute(
+            select(InstallationTask).where(InstallationTask.document_id == doc.id)
+        )
+        if existing.scalar_one_or_none():
+            return
+
+        task = InstallationTask(
+            installation_no=await generate_installation_no(self.db),
+            document_id=doc.id,
+            customer_id=doc.customer_id,
+            project_name=doc.project_name,
+            status="pending",
+        )
+        self.db.add(task)
         await self.db.flush()
 
     # ═══════════════════════════════════════════
@@ -445,6 +574,8 @@ class BusinessDocumentService:
             doc.tax_rate = 0
             doc.tax_amount = 0
             doc.valid_until = None
+            # 标记来源报价ID
+            doc.source_quote_id = doc.id
         else:  # new_type == "quote"
             doc.doc_no = await generate_quote_no(self.db)
             doc.doc_type = "quote"
@@ -513,12 +644,12 @@ class BusinessDocumentService:
             "doc_type": d.doc_type,
             "doc_no": d.doc_no,
             "project_name": d.project_name or "",
-            "customer_name": d.customer_name or "",
+            "customer_name": d.customer_name or (d.customer.name if d.customer else None),
+            "department": d.department or "",
             "status": d.status or "",
             "total_amount": float(d.total_amount) if d.total_amount else 0,
         }
         if d.doc_type == "order":
-            base["order_no"] = d.doc_no
             base["paid_amount"] = float(d.paid_amount) if d.paid_amount else 0
             base["unpaid_amount"] = float(d.unpaid_amount) if d.unpaid_amount else 0
         else:
@@ -531,7 +662,7 @@ class BusinessDocumentService:
             "doc_type": d.doc_type,
             "doc_no": d.doc_no,
             "customer_id": str(d.customer_id) if d.customer_id else None,
-            "customer_name": d.customer_name or "",
+            "customer_name": d.customer_name or (d.customer.name if d.customer else None),
             "project_name": d.project_name,
             "status": d.status,
             "total_amount": float(d.total_amount),
@@ -543,8 +674,6 @@ class BusinessDocumentService:
         }
         if d.doc_type == "order":
             base.update({
-                # Backward-compat aliases
-                "order_no": d.doc_no,
                 "paid_amount": float(d.paid_amount),
                 "unpaid_amount": float(d.unpaid_amount),
                 "cost_amount": float(d.cost_amount),
@@ -563,7 +692,7 @@ class BusinessDocumentService:
             "doc_type": d.doc_type,
             "doc_no": d.doc_no,
             "customer_id": str(d.customer_id) if d.customer_id else None,
-            "customer_name": d.customer_name or "",
+            "customer_name": d.customer_name or (d.customer.name if d.customer else None),
             "project_name": d.project_name,
             "sales_user_id": str(d.sales_user_id) if d.sales_user_id else None,
             "status": d.status,
@@ -622,9 +751,7 @@ class BusinessDocumentService:
 
         if d.doc_type == "order":
             base.update({
-                "order_no": d.doc_no,
                 "source_quote_id": str(d.source_quote_id) if d.source_quote_id else None,
-                "quote_id": str(d.source_quote_id) if d.source_quote_id else None,  # backward compat
                 "paid_amount": float(d.paid_amount),
                 "unpaid_amount": float(d.unpaid_amount),
                 "cost_amount": float(d.cost_amount),

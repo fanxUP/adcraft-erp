@@ -1,11 +1,13 @@
 from pydantic import BaseModel
+from app.schemas.common import CoercedModel
 from typing import Optional
 
 
-class AcceptanceItemResponse(BaseModel):
+class AcceptanceItemResponse(CoercedModel):
     model_config = {"from_attributes": True}
     id: str
     acceptance_id: str
+    document_item_id: Optional[str] = None
     order_item_id: Optional[str] = None
     item_name: str
     material_process: Optional[str] = None
@@ -21,7 +23,7 @@ class AcceptanceItemResponse(BaseModel):
     group_name: Optional[str] = None
 
 
-class AcceptanceAttachmentResponse(BaseModel):
+class AcceptanceAttachmentResponse(CoercedModel):
     model_config = {"from_attributes": True}
     id: str
     acceptance_id: str
@@ -31,7 +33,7 @@ class AcceptanceAttachmentResponse(BaseModel):
     upload_by: Optional[str] = None
 
 
-class AcceptanceListResponse(BaseModel):
+class AcceptanceListResponse(CoercedModel):
     model_config = {"from_attributes": True}
     id: str
     acceptance_no: str
@@ -50,7 +52,7 @@ class AcceptanceListResponse(BaseModel):
     created_at: str
 
 
-class AcceptanceDetailResponse(BaseModel):
+class AcceptanceDetailResponse(CoercedModel):
     model_config = {"from_attributes": True}
     id: str
     acceptance_no: str

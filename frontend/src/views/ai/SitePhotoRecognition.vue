@@ -2,7 +2,7 @@
   <div class="site-photo-recognition">
     <div class="page-header">
       <h2>现场照片识别</h2>
-      <el-tag type="success">规则引擎 — 无需 AI Key</el-tag>
+      <el-tag :type="modeTagType">{{ modeLabel }}</el-tag>
     </div>
 
     <el-row :gutter="16">
@@ -110,7 +110,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled, Camera, Picture } from '@element-plus/icons-vue'
 import { analyzeSitePhoto } from '@/api/ai'
@@ -123,6 +123,15 @@ const previewUrl = ref('')
 const taskId = ref('')
 const remark = ref('')
 const result = ref<SitePhotoAnalyzeResponse | null>(null)
+
+const modeTagType = computed(() => {
+  return result.value?.mode === 'ai_enhanced' ? 'success' : 'info'
+})
+
+const modeLabel = computed(() => {
+  if (!result.value) return '规则引擎'
+  return result.value.mode === 'ai_enhanced' ? 'AI 增强' : '规则引擎'
+})
 
 const CHECK_MAP: Record<string, string> = {
   awaiting_review: '待评估',

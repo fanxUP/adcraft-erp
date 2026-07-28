@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     AI_MAX_TOKENS: int = 4096
     AI_TEMPERATURE: float = 0.7
 
+    # Rate limiting (API throttling via Redis)
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_DEFAULT: int = 120        # default requests per window
+    RATE_LIMIT_WINDOW: int = 60          # window in seconds
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

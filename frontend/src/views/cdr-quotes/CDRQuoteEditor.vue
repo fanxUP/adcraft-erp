@@ -8,6 +8,56 @@
       </div>
     </div>
 
+    <!-- ── 设计文件上传 / SVG 解析 / AI 辅助 ── -->
+    <el-card shadow="never" class="section-card" style="margin-top:16px">
+      <template #header>
+        <span>设计文件</span>
+      </template>
+      <div v-if="!route.params.id" style="color:#909399;font-size:13px">保存报价后可上传设计文件</div>
+      <template v-else>
+        <el-upload
+          :show-file-list="false"
+          :before-upload="(f:any)=>{onFileUpload({target:{files:[f]}} as any);return false}"
+          accept=".cdr,.svg,.pdf,.ai,.eps,.dxf,.png,.jpg,.jpeg"
+        >
+          <el-button type="primary" :loading="uploading" size="small">上传设计文件</el-button>
+          <span style="margin-left:8px;font-size:12px;color:#909399">支持 .cdr .svg .pdf .ai .eps .dxf .png .jpg</span>
+        </el-upload>
+
+        <div v-if="uploadList.length" style="margin-top:8px">
+          <div v-for="att in uploadList" :key="att.id" style="display:flex;align-items:center;gap:8px;padding:4px 0">
+            <span>{{ att.filename }}</span>
+            <el-tag size="small">{{ att.file_type }}</el-tag>
+            <el-button text type="primary" size="small" @click="handleParseSvg(att.id)" :disabled="att.file_type!=='svg'">解析 SVG</el-button>
+            <el-button text type="danger" size="small" @click="deleteFile(att.id)">删除</el-button>
+          </div>
+        </div>
+
+        <!-- SVG 解析结果 -->
+        <div v-if="parseResult" style="margin-top:8px;background:#f5f7fa;padding:8px;border-radius:4px">
+          <div style="font-weight:bold;margin-bottom:4px">SVG 解析结果</div>
+          <div style="font-size:13px">页面: {{ parseResult.document_width_mm }}mm x {{ parseResult.document_height_mm }}mm</div>
+          <div v-for="(s,i) in parseResult.shapes" :key="i" style="font-size:13px">{{ s.label }} ({{ s.area_m2 }} m²)</div>
+          <el-button size="small" type="success" style="margin-top:4px" @click="applyParsedShapes">应用为报价明细</el-button>
+        </div>
+
+        <!-- AI 辅助 -->
+        <div style="margin-top:12px">
+          <el-input
+            v-model="aiDescription"
+            type="textarea"
+            :rows="2"
+            placeholder="输入需求描述，AI 将根据已上传文件生成报价明细，例如：5米宽2米高户外广告牌，不锈钢边框，UV打印"
+          />
+          <div style="margin-top:4px;display:flex;gap:8px">
+            <el-button type="success" :loading="aiLoading" size="small" @click="handleAiAssist">AI 智能生成</el-button>
+            <el-button v-if="aiResult" size="small" type="warning" @click="applyAiSuggestion">应用 AI 建议</el-button>
+          </div>
+          <div v-if="aiLoading" style="font-size:13px;color:#909399;margin-top:4px">AI 正在生成报价明细...</div>
+        </div>
+      </template>
+    </el-card>
+
     <!-- 基本信息 -->
     <el-card shadow="never" class="section-card">
       <el-form :model="form" label-width="100px">
@@ -166,7 +216,9 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
-import { calculatePricing, createQuoteVersion, getLatestVersion, getCDRQuote } from '@/api/cdrQuote'
+import { calculatePricing, createQuoteVersion, getLatestVersion, getCDRQuote,
+  uploadDesignFile, listDesignAttachments, deleteDesignAttachment,
+  parseSvgAttachment, aiAssistFromDescription } from '@/api/cdrQuote'
 
 const route = useRoute()
 const router = useRouter()
@@ -188,6 +240,15 @@ const form = reactive({
 
 const lines = ref<any[]>([createEmptyLine()])
 const calcResults = ref<Record<number, any>>({})
+
+// 设计文件上传 / SVG / AI
+const uploadList = ref<any[]>([])
+const uploading = ref(false)
+const parseResult = ref<any>(null)
+const parseLoading = ref(false)
+const aiDescription = ref('')
+const aiLoading = ref(false)
+const aiResult = ref<any>(null)
 
 function createEmptyLine() {
   return {
@@ -310,6 +371,105 @@ async function handleSave() {
   }
 }
 
+async function onFileUpload(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files?.length) return
+  if (!route.params.id) {
+    ElMessage.warning('请先保存报价再上传文件')
+    return
+  }
+  uploading.value = true
+  const file = input.files[0]
+  try {
+    await uploadDesignFile(route.params.id as string, file)
+    ElMessage.success('上传成功: ' + file.name)
+    await loadAttachments()
+  } catch (e: any) {
+    ElMessage.error(e.message || '上传失败')
+  } finally {
+    uploading.value = false
+    input.value = ''
+  }
+}
+
+async function loadAttachments() {
+  if (!route.params.id) return
+  uploadList.value = (await listDesignAttachments(route.params.id as string)) || []
+}
+
+async function deleteFile(attId: string) {
+  try {
+    await deleteDesignAttachment(attId)
+    uploadList.value = uploadList.value.filter(a => a.id !== attId)
+  } catch (e: any) {
+    ElMessage.error(e.message || '删除失败')
+  }
+}
+
+async function handleParseSvg(attId: string) {
+  parseLoading.value = true
+  parseResult.value = null
+  try {
+    const res = await parseSvgAttachment(attId)
+    parseResult.value = res
+    ElMessage.success('解析完成，规格 ' + res.shape_count + ' 个')
+  } catch (e: any) {
+    ElMessage.error(e.message || '解析失败')
+  } finally {
+    parseLoading.value = false
+  }
+}
+
+async function handleAiAssist() {
+  if (!aiDescription.value.trim()) {
+    ElMessage.warning('请输入需求描述')
+    return
+  }
+  if (!route.params.id) {
+    ElMessage.warning('请先保存报价')
+    return
+  }
+  aiLoading.value = true
+  aiResult.value = null
+  try {
+    const res = await aiAssistFromDescription(route.params.id as string, aiDescription.value)
+    aiResult.value = res
+    ElMessage.success('生成完成')
+  } catch (e: any) {
+    ElMessage.error(e.message || 'AI 请求失败')
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+async function applyAiSuggestion() {
+  if (!aiResult.value?.ai_suggestions) return
+  const suggestions = aiResult.value.ai_suggestions
+  const items = Array.isArray(suggestions) ? suggestions : (suggestions.items || suggestions.lines || [])
+  for (const item of items) {
+    const line = createEmptyLine()
+    line.description = item.description || item.item_name || ''
+    line.width_mm = Number(item.width_mm || 0)
+    line.height_mm = Number(item.height_mm || 0)
+    line.quantity = Number(item.quantity || 1)
+    lines.value.push(line)
+  }
+  ElMessage.success('已应用 ' + items.length + ' 条明细')
+}
+
+async function applyParsedShapes() {
+  if (!parseResult.value?.shapes) return
+  for (const s of parseResult.value.shapes) {
+    const line = createEmptyLine()
+    line.description = s.label
+    line.width_mm = s.width_mm || 0
+    line.height_mm = s.height_mm || 0
+    line.quantity = s.quantity || 1
+    lines.value.push(line)
+  }
+  ElMessage.success('已应用 ' + parseResult.value.shapes.length + ' 个图形')
+}
+
 onMounted(async () => {
   await fetchLookups()
 
@@ -338,6 +498,7 @@ onMounted(async () => {
         }))
       }
     } catch { /* ignore */ }
+    await loadAttachments()
   }
 })
 </script>

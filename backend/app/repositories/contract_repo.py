@@ -29,7 +29,9 @@ class ContractRepository:
         contract_type: str | None = None,
         exclude_contract_type: str | None = None,
     ) -> tuple[list[Contract], int]:
-        q = select(Contract).where(Contract.deleted_at.is_(None))
+        q = select(Contract).options(
+            selectinload(Contract.documents),
+        ).where(Contract.deleted_at.is_(None))
         if status:
             q = q.where(Contract.status == status)
         if keyword:

@@ -255,8 +255,8 @@ async function fetchData() {
       keyword: filters.keyword || undefined,
       status: filters.status || undefined,
     })
-    list.value = res.data?.items || []
-    total.value = res.data?.total || 0
+    list.value = res?.items || []
+    total.value = res?.total || 0
   } catch {
     ElMessage.error('获取派车列表失败')
   } finally {
@@ -308,7 +308,7 @@ function handleEdit(row: VehicleDispatchResponse) {
 async function handleView(row: VehicleDispatchResponse) {
   try {
     const res = await getVehicleDispatch(row.id)
-    detail.value = res.data
+    detail.value = res
     detailVisible.value = true
   } catch {
     ElMessage.error('获取详情失败')

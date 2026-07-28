@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from app.schemas.common import CoercedModel
 from datetime import datetime
 from uuid import UUID
 
@@ -42,7 +43,7 @@ class CustomerUpdate(BaseModel):
     contacts: list[ContactCreate] | None = None
 
 
-class ContactResponse(BaseModel):
+class ContactResponse(CoercedModel):
     id: str
     name: str
     phone: str | None = None
@@ -54,7 +55,7 @@ class ContactResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class CustomerResponse(BaseModel):
+class CustomerResponse(CoercedModel):
     id: str
     customer_no: str
     name: str

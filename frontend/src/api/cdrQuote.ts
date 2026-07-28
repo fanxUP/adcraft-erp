@@ -102,6 +102,11 @@ export async function listAuditLogs(quoteId: string): Promise<any[]> {
   return api.get(`/cdr/quotes/${quoteId}/audit-logs`)
 }
 
+/** 删除报价 */
+export async function deleteCDRQuote(quoteId: string): Promise<any> {
+  return api.del(`/cdr/quotes/${quoteId}`)
+}
+
 /** 转订单 */
 export async function convertToOrder(quoteId: string): Promise<any> {
   return api.post(`/cdr/quotes/${quoteId}/convert-to-order`)
@@ -115,4 +120,31 @@ export async function getCDRQuote(quoteId: string): Promise<any> {
 /** 报价列表 */
 export async function listCDRQuotes(params?: Record<string, any>): Promise<any> {
   return api.get('/cdr/quotes', { params })
+}
+
+
+// ── 设计文件上传 / SVG 解析 / AI 辅助 ───────────────────────
+
+export async function uploadDesignFile(quoteId: string, file: File): Promise<any> {
+  const form = new FormData()
+  form.append("file", file)
+  return api.post("/cdr/quotes/" + quoteId + "/upload", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  })
+}
+
+export async function listDesignAttachments(quoteId: string): Promise<any[]> {
+  return api.get("/cdr/quotes/" + quoteId + "/attachments")
+}
+
+export async function deleteDesignAttachment(attId: string): Promise<any> {
+  return api.del("/cdr/attachments/" + attId)
+}
+
+export async function parseSvgAttachment(attId: string): Promise<any> {
+  return api.post("/cdr/attachments/" + attId + "/parse-svg")
+}
+
+export async function aiAssistFromDescription(quoteId: string, description: string): Promise<any> {
+  return api.post("/cdr/quotes/" + quoteId + "/ai-assist-description", { description })
 }

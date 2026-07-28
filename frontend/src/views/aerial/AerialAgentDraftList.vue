@@ -235,8 +235,8 @@ const loadDrafts = async () => {
       page: pagination.page,
       page_size: pagination.pageSize,
     })
-    drafts.value = res.data?.items || []
-    pagination.total = res.data?.total || 0
+    drafts.value = res?.items || []
+    pagination.total = res?.total || 0
   } finally {
     loading.value = false
   }
@@ -245,7 +245,7 @@ const loadDrafts = async () => {
 const showDetail = async (row: AerialAgentDraft) => {
   try {
     const res = await getAerialAgentDraft(row.id)
-    detailDraft.value = res.data
+    detailDraft.value = res
     showDetailDialog.value = true
   } catch {
     detailDraft.value = row
@@ -263,12 +263,12 @@ const doConfirm = async () => {
   confirming.value = true
   try {
     const res = await confirmAerialAgentDraft(confirmDraft.value.id, confirmDraft.value.extracted)
-    if (res.data?.success) {
+    if (res?.success) {
       ElMessage.success('草稿已确认，已写入正式台账')
       showConfirmDialog.value = false
       loadDrafts()
     } else {
-      ElMessage.error(res.data?.error || '确认失败')
+      ElMessage.error(res?.error || '确认失败')
     }
   } catch (e: any) {
     ElMessage.error(e.response?.data?.detail || '确认失败')
@@ -309,7 +309,7 @@ const handleIngest = async () => {
       sender_name: ingestForm.sender_name || undefined,
       content: ingestForm.content,
     })
-    const data = res.data
+    const data = res
     if (data?.intent && data.intent !== 'normal_chat') {
       ElMessage.success(`识别成功：${intentLabel(data.intent)}，置信度 ${(data.confidence * 100).toFixed(0)}%`)
     } else {

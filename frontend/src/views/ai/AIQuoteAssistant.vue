@@ -2,7 +2,7 @@
   <div class="ai-quote-assistant">
     <div class="page-header">
       <h2>AI 报价助手</h2>
-      <el-tag type="success">规则引擎 — 无需 AI Key</el-tag>
+      <el-tag :type="modeTagType">{{ modeLabel }}</el-tag>
     </div>
 
     <el-row :gutter="20">
@@ -74,6 +74,8 @@
 
             <!-- Risk notes -->
             <el-alert v-for="(risk, i) in draft.risk_notes" :key="i" :title="risk" type="warning" :closable="false" style="margin-bottom: 8px" />
+            <!-- Pricing notes -->
+            <el-alert v-if="draft.pricing_notes" :title="draft.pricing_notes" type="info" :closable="false" show-icon style="margin-bottom: 8px" />
 
             <!-- Project name -->
             <div class="project-name">
@@ -150,6 +152,8 @@ import { getCustomers } from '@/api/customers'
 import type { AIQuoteAssistResponse, CustomerResponse } from '@/types/api'
 
 const router = useRouter()
+const modeTagType = computed(() => draft.value?.mode === "ai_enhanced" ? "success" : "info")
+const modeLabel = computed(() => draft.value?.mode === "ai_enhanced" ? "AI 增强 · " + (draft.value?.confidence || "medium") : "规则引擎")
 const loading = ref(false)
 const saving = ref(false)
 const description = ref('')

@@ -322,12 +322,14 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { Printer } from '@element-plus/icons-vue'
 import OrderWorkflow from './OrderWorkflow.vue'
 import { useRoute } from 'vue-router'
+import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { getOrder, changeOrderStatus, autoCalculateCost } from '@/api/orders'
 import { getDesignTasks, getProductionTasks, getInstallationTasks, createDesignTask, createProductionTask, createInstallationTask } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, OrderDetailResponse, OrderItemResponse } from '@/types/api'
 
 const route = useRoute()
+const aiStore = useAiAssistantStore()
 const loading = ref(false)
 const changing = ref(false)
 const tasksLoading = ref(false)
@@ -465,6 +467,15 @@ async function fetchOrder() {
   loading.value = true
   try {
     order.value = await getOrder(route.params.id as string)
+    if (order.value) {
+      aiStore.setPageContext({
+        order_id: order.value.id,
+        order_no: order.value.order_no,
+        customer_id: order.value.customer_id,
+        customer_name: order.value.customer_name || '',
+        project_name: order.value.project_name,
+      })
+    }
   } finally { loading.value = false }
 }
 

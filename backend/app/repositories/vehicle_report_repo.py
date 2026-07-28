@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.vehicle import (
     Vehicle, VehicleDriver, VehicleDispatch, VehicleTripRecord,
     VehicleFuelRecord, VehicleMaintenanceRecord, VehicleCostAllocation,
-    VehicleCertificate, VehicleIncident,
+    VehicleCertificate, VehicleIncident, VehicleUseRequest,
 )
 
 
@@ -30,7 +30,7 @@ class VehicleReportRepository:
         # 车辆总数（未删除、未报废）
         total_vehicles = (await self.db.execute(
             select(func.count()).select_from(Vehicle).where(
-                Vehicle.is_deleted == False,
+                Vehicle.deleted_at.is_(None),
                 Vehicle.status != "scrapped",
             )
         )).scalar() or 0
@@ -38,7 +38,7 @@ class VehicleReportRepository:
         # 可用车辆数
         available_vehicles = (await self.db.execute(
             select(func.count()).select_from(Vehicle).where(
-                Vehicle.is_deleted == False,
+                Vehicle.deleted_at.is_(None),
                 Vehicle.status == "available",
             )
         )).scalar() or 0

@@ -2,7 +2,7 @@
   <div class="quote-knowledge-base">
     <div class="page-header">
       <h2>报价知识库</h2>
-      <el-tag type="success">规则引擎 — 无需 AI Key</el-tag>
+      <el-tag type="success">AI 知识库</el-tag>
     </div>
 
     <!-- Search form -->

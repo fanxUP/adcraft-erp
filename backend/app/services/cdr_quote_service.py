@@ -102,6 +102,14 @@ class CdrQuoteService:
             length_m=Decimal(str(data["length_m"])) if data.get("length_m") else None,
             quantity=Decimal(str(data.get("quantity", 1))),
             tax_rate=Decimal(str(data.get("tax_rate", 0))),
+            # Phase 7 几何参数
+            hole_area_mm2=Decimal(str(data["hole_area_mm2"])) if data.get("hole_area_mm2") else None,
+            is_open_curve=bool(data.get("is_open_curve", False)),
+            curve_length_mm=Decimal(str(data["curve_length_mm"])) if data.get("curve_length_mm") else None,
+            use_sheet_rounding=bool(data.get("use_sheet_rounding", False)),
+            sheet_width_mm=Decimal(str(data["sheet_width_mm"])) if data.get("sheet_width_mm") else None,
+            sheet_height_mm=Decimal(str(data["sheet_height_mm"])) if data.get("sheet_height_mm") else None,
+            sheet_sale_price=Decimal(str(data["sheet_sale_price"])) if data.get("sheet_sale_price") else None,
         )
 
     def _result_to_dict(self, result: CalculateResult) -> dict:
@@ -118,6 +126,8 @@ class CdrQuoteService:
             "total_amount": str(result.total_amount),
             "minimum_charge_applied": result.minimum_charge_applied,
             "requires_approval": result.requires_approval,
+            "geometry_estimates": result.geometry_estimates,
+            "sheet_usage": result.sheet_usage,
             "warnings": result.warnings,
             "pricing_trace": [
                 {"rule_code": s.rule_code, "description": s.description,
@@ -159,7 +169,7 @@ class CdrQuoteService:
         max_no = await self.repo.get_max_version_no(quote_id)
         version_data = {
             "quote_id": quote_id,
-            "version_no": max_no + 1,
+            "version_no": (max_no or 0) + 1,
             "status": "draft",
             "created_by": created_by,
             "notes": data.get("notes"),
@@ -234,7 +244,7 @@ class CdrQuoteService:
             "quote_version_id": version.id,
             "actor_id": created_by,
             "action": "version.created",
-            "after_json": {"version_no": max_no + 1, "line_count": len(lines_data)},
+            "after_json": {"version_no": (max_no or 0) + 1, "line_count": len(lines_data)},
         })
 
         return self._version_to_dict(version)
@@ -521,8 +531,9 @@ class CdrQuoteService:
     # ── 转订单 ──
 
     async def convert_to_order(self, quote_id: UUID, current_user_id: UUID) -> dict:
-        """将CDR智能报价转为销售订单（创建新 BusinessDocument + 明细）。"""
+        """将CDR智能报价转为销售订单，含生产/安装/车辆/外协/财务联动（阶段6）。"""
         from datetime import datetime
+        import uuid
         from sqlalchemy import select, update as sa_update
         from app.models.business_document import (
             BusinessDocument, BusinessDocumentItem, BusinessDocumentStatusLog,
@@ -546,8 +557,25 @@ class CdrQuoteService:
         if not version:
             raise ValueError("报价没有版本数据，无法转订单")
 
-        # 3. 检查是否已转换
+        # 3. 检查是否已转换（幂等性验证）
         if quote_doc.status == "converted":
+            r2 = await self.db.execute(
+                select(BusinessDocument).where(
+                    BusinessDocument.source_quote_id == quote_id,
+                    BusinessDocument.doc_type == "order",
+                    BusinessDocument.deleted_at.is_(None),
+                ).order_by(BusinessDocument.created_at.desc()).limit(1)
+            )
+            existing = r2.scalar_one_or_none()
+            if existing:
+                return {
+                    "id": str(existing.id),
+                    "doc_no": existing.doc_no,
+                    "project_name": existing.project_name,
+                    "total_amount": float(existing.total_amount),
+                    "status": existing.status,
+                    "note": "该报价已转换过，返回现有订单",
+                }
             raise ValueError("该报价已转为订单，不能重复转换")
         if version.status == "rejected":
             raise ValueError("已驳回的报价不能转订单")
@@ -591,23 +619,128 @@ class CdrQuoteService:
             )
             self.db.add(item)
 
-        # 6. 更新报价 header 状态为 converted
-        await self.db.execute(
-            sa_update(BusinessDocument)
-            .where(BusinessDocument.id == quote_id)
-            .values(status="converted")
-        )
+        # 5b. 自动创建生产任务（每个报价明细行 → 一个生产任务）
+        from app.models.task import ProductionTask
+        from app.services.number_generator import generate_production_no
 
-        # 7. 更新版本状态
-        from app.models.cdr_quote import QuoteVersion
-        await self.db.execute(
-            sa_update(QuoteVersion)
-            .where(QuoteVersion.id == version.id)
-            .values(status="converted")
-        )
+        prod_task_count = 0
+        for line in (version.lines or []):
+            if not line.description:
+                continue
+            prod_no = await generate_production_no(self.db)
+            width_m = float(line.width_mm / 1000) if line.width_mm else None
+            height_m = float(line.height_mm / 1000) if line.height_mm else None
+            prod_task = ProductionTask(
+                production_no=prod_no,
+                document_id=order_doc.id,
+                customer_id=quote_doc.customer_id,
+                project_name=line.description,
+                status="pending",
+                material_id=line.material_id,
+                width=width_m,
+                height=height_m,
+                length=float(line.length_m) if line.length_m else None,
+                quantity=float(line.quantity or 1),
+            )
+            self.db.add(prod_task)
+            prod_task_count += 1
 
-        # 8. 状态日志
+        # ── 安装任务 + 车辆需求 + 财务应收 + 图稿快照 ──
+        from app.models.task import InstallationTask
+        from app.models.vehicle import VehicleUseRequest
+        from app.models.outsource import OutsourceTask
+        from app.models.payment import Payment
+        from app.services.number_generator import generate_installation_no
+
+        install_task = None
+        vehicle_request = None
+        payment_recv = None
+        outsourced_processes = []
+
+        has_installation = prod_task_count > 0 and (quote_doc.contact_person or quote_doc.contact_phone)
+        if has_installation:
+            install_no = await generate_installation_no(self.db)
+            install_task = InstallationTask(
+                installation_no=install_no,
+                document_id=order_doc.id,
+                customer_id=quote_doc.customer_id,
+                project_name=quote_doc.project_name or f"安装-{order_no}",
+                status="pending",
+                contact_name=quote_doc.contact_person,
+                contact_phone=quote_doc.contact_phone,
+                address=quote_doc.installation_address,
+            )
+            self.db.add(install_task)
+            await self.db.flush()
+
+            # 5c-i. 车辆使用申请草稿（关联安装任务，status=draft 不自动派车）
+
+            vreq = VehicleUseRequest(
+                request_no=f"VR-{uuid.uuid4().hex[:8].upper()}-{datetime.now().strftime('%Y%m%d')}",
+                requester_id=current_user_id,
+                reason="installation",
+                related_order_id=order_doc.id,
+                related_install_task_id=install_task.id,
+                destination=quote_doc.installation_address,
+                status="draft",
+                remark="来自报价自动转换，请确认用车需求后提交审批",
+            )
+            self.db.add(vreq)
+            vehicle_request = vreq
+
+        # 5d. 外协工艺检查 — 根据 Product.allows_outsource 判断
+        from app.models.product import Product as ProdModel
+        product_ids = [
+            line.product_id for line in (version.lines or [])
+            if line.product_id
+        ]
+        products_map = {}
+        if product_ids:
+            rp = await self.db.execute(
+                select(ProdModel).where(ProdModel.id.in_(set(product_ids)))
+            )
+            for prod in rp.scalars().all():
+                products_map[prod.id] = prod
+        for line in (version.lines or []):
+            prod = products_map.get(line.product_id) if line.product_id else None
+            if prod and getattr(prod, 'allows_outsource', False):
+                outsourced_processes.append({
+                    "line_description": line.description,
+                    "product_id": str(line.product_id),
+                    "product_name": prod.name,
+                })
+
+        # 5e. 财务应收草稿（不自动确认收款）
+        if float(version.total_amount or 0) > 0:
+            from app.services.number_generator import generate_payment_no
+            pay_no = await generate_payment_no(self.db)
+            payment_recv = Payment(
+                payment_no=pay_no,
+                document_id=order_doc.id,
+                customer_id=quote_doc.customer_id,
+                amount=float(version.total_amount),
+                paid_at=None,
+                remark="来自报价自动转换，待收款",
+                created_by=current_user_id,
+                is_voided=False,
+            )
+            self.db.add(payment_recv)
+
+        # 5f. 图稿指纹快照
+        from app.models.cdr_quote import DrawingSnapshot
+        drawing_fingerprint = None
+        r_snap = await self.db.execute(
+            select(DrawingSnapshot)
+            .where(DrawingSnapshot.quote_id == quote_id)
+            .order_by(DrawingSnapshot.created_at.desc()).limit(1)
+        )
+        drawing_snap = r_snap.scalar_one_or_none()
+        if drawing_snap:
+            drawing_fingerprint = drawing_snap.drawing_fingerprint
+
+        # 6. 状态日志（先记录，再改状态）
         now = datetime.now()
+        old_quote_status = quote_doc.status
         self.db.add(BusinessDocumentStatusLog(
             document_id=order_doc.id,
             from_status=None,
@@ -618,33 +751,157 @@ class CdrQuoteService:
         ))
         self.db.add(BusinessDocumentStatusLog(
             document_id=quote_id,
-            from_status=quote_doc.status,
+            from_status=old_quote_status,
             to_status="converted",
             reason="已转为订单",
             operated_by=current_user_id,
             operated_at=now,
         ))
 
+        # 7. 更新报价 header 状态为 converted
+        quote_doc.status = "converted"
+
+        # 8. 更新版本状态
+        version.status = "converted"
+
         # 9. 审计日志
+        audit_after = {
+            "order_id": str(order_doc.id),
+            "order_no": order_no,
+            "production_task_count": prod_task_count,
+            "has_installation": has_installation,
+            "has_vehicle_request": vehicle_request is not None,
+            "has_payment_draft": payment_recv is not None,
+        }
+        if outsourced_processes:
+            audit_after["outsourced_processes"] = outsourced_processes
+        if drawing_fingerprint:
+            audit_after["drawing_fingerprint"] = drawing_fingerprint
+
         await self.repo.create_audit_log({
             "quote_id": quote_id,
             "quote_version_id": version.id,
             "actor_id": current_user_id,
             "action": "converted_to_order",
-            "after_json": {"order_id": str(order_doc.id), "order_no": order_no},
+            "after_json": audit_after,
         })
 
         await self.db.commit()
 
-        return {
+        result = {
             "id": str(order_doc.id),
             "doc_no": order_no,
             "project_name": order_doc.project_name,
             "total_amount": float(order_doc.total_amount),
             "status": "pending_confirm",
+            "production_tasks_created": prod_task_count,
+            "has_installation_task": has_installation,
+            "has_vehicle_request": vehicle_request is not None,
+            "has_payment_draft": payment_recv is not None,
+        }
+        if outsourced_processes:
+            result["outsourced_processes"] = outsourced_processes
+        if drawing_fingerprint:
+            result["drawing_fingerprint"] = drawing_fingerprint
+        return result
+
+
+    # ── 几何分析 ─────────────────────────────────────────────
+
+    async def analyze_geometry_from_capture(self, capture_id: UUID) -> dict:
+        """从 CDR capture_payload 分析几何数据返回结果。"""
+        from app.services.geometry_service import geometry_service
+        capture = await self.repo.get_capture_session(capture_id)
+        if not capture:
+            raise ValueError("采集记录不存在")
+        payload = capture.capture_payload_json or {}
+        result = geometry_service.analyze_cdr_payload(payload)
+        return result
+
+    async def save_quote_geometry(self, quote_id: UUID, version_id: UUID) -> list[dict]:
+        """从报价版本自动创建几何分析记录。"""
+        from app.services.geometry_service import geometry_service
+        from sqlalchemy import select
+        from app.models.cdr_quote import DrawingSnapshot
+        version = await self.repo.get_version(version_id)
+        if not version:
+            return []
+
+        # Get latest snapshot for hole data
+        r_snap = await self.db.execute(
+            select(DrawingSnapshot)
+            .where(DrawingSnapshot.quote_id == quote_id)
+            .order_by(DrawingSnapshot.created_at.desc()).limit(1)
+        )
+        snap = r_snap.scalar_one_or_none()
+        captured_holes = None
+        if snap and snap.geometry_summary_json:
+            captured_holes = snap.geometry_summary_json.get("holes_detected")
+
+        results = []
+        for line in (version.lines or []):
+            if not line.width_mm and not line.height_mm:
+                continue
+
+            geometry_data = {
+                "quote_line_id": line.id,
+                "quote_id": quote_id,
+                "net_area_mm2": None,
+                "hole_area_mm2": None,
+                "curve_length_mm": line.length_m,
+                "is_open_curve": False,
+                "is_estimated": True,
+            }
+
+            if line.width_mm and line.height_mm:
+                if captured_holes:
+                    net = geometry_service.calculate_net_area(
+                        line.width_mm, line.height_mm, captured_holes
+                    )
+                    geometry_data["net_area_mm2"] = float(net["net_area_mm2"])
+                    geometry_data["hole_area_mm2"] = float(net["hole_area_mm2"])
+                    geometry_data["is_estimated"] = net.get("is_estimated", True)
+
+            geo = await self.repo.create_geometry(geometry_data)
+            results.append({
+                "id": str(geo.id),
+                "quote_line_id": str(geo.quote_line_id) if geo.quote_line_id else None,
+                "net_area_mm2": geo.net_area_mm2,
+            })
+
+        return results
+
+    async def get_quote_geometry(self, quote_id: UUID) -> list[dict]:
+        """获取报价所有行的几何分析。"""
+        records = await self.repo.list_geometry_by_quote(quote_id)
+        return [self._geometry_to_dict(g) for g in records]
+
+    async def get_line_geometry(self, quote_line_id: UUID) -> dict | None:
+        """获取指定报价行的几何分析。"""
+        g = await self.repo.get_geometry(quote_line_id)
+        if g:
+            return self._geometry_to_dict(g)
+        return None
+
+    def _geometry_to_dict(self, g: Any) -> dict:
+        return {
+            "id": str(g.id),
+            "quote_line_id": str(g.quote_line_id) if g.quote_line_id else None,
+            "quote_id": str(g.quote_id) if g.quote_id else None,
+            "net_area_mm2": float(g.net_area_mm2) if g.net_area_mm2 else None,
+            "hole_area_mm2": float(g.hole_area_mm2) if g.hole_area_mm2 else None,
+            "curve_length_mm": float(g.curve_length_mm) if g.curve_length_mm else None,
+            "is_open_curve": g.is_open_curve,
+            "overlap_count": g.overlap_count,
+            "overlap_area_mm2": float(g.overlap_area_mm2) if g.overlap_area_mm2 else None,
+            "sheet_count": g.sheet_count,
+            "sheet_utilization_pct": float(g.sheet_utilization_pct) if g.sheet_utilization_pct else None,
+            "is_estimated": g.is_estimated,
+            "nesting_json": g.nesting_json,
+            "analysis_json": g.analysis_json,
         }
 
-    # ── 审计日志查询 ──
+        # ── 审计日志查询 ──
 
     async def list_audit_logs(self, quote_id: UUID) -> list[dict]:
         from sqlalchemy import select
@@ -662,3 +919,188 @@ class CdrQuoteService:
             "reason": log.reason,
             "created_at": log.created_at.isoformat() if log.created_at else None,
         } for log in logs]
+
+
+    # ── 设备管理 ──
+
+    async def register_device(self, data: dict, current_user_id: UUID) -> dict:
+        """注册 CDR 插件设备。"""
+        device_code = data.get("device_code", "")
+        existing = await self.repo.get_device_by_code(device_code)
+        if existing:
+            existing.employee_id = current_user_id
+            existing.device_name = data.get("device_name", existing.device_name)
+            existing.plugin_version = data.get("plugin_version")
+            existing.bridge_version = data.get("bridge_version")
+            existing.last_seen_at = datetime.utcnow()
+            await self.db.commit()
+            await self.db.refresh(existing)
+            return {"id": str(existing.id), "device_code": existing.device_code, "status": existing.status}
+
+        device_data = {
+            "device_code": device_code,
+            "device_name": data.get("device_name", ""),
+            "employee_id": current_user_id,
+            "machine_fingerprint_hash": data.get("machine_fingerprint_hash", device_code),
+            "plugin_version": data.get("plugin_version"),
+            "bridge_version": data.get("bridge_version"),
+            "last_seen_at": datetime.utcnow(),
+            "status": "active",
+        }
+        device = await self.repo.create_device(device_data)
+        return {"id": str(device.id), "device_code": device.device_code, "status": device.status}
+
+    async def list_devices(self, page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
+        """获取设备列表。"""
+        devices, total = await self.repo.list_devices(page, page_size)
+        result = []
+        for d in devices:
+            result.append({
+                "id": str(d.id),
+                "device_code": d.device_code,
+                "device_name": d.device_name,
+                "employee_id": str(d.employee_id) if d.employee_id else None,
+                "plugin_version": d.plugin_version,
+                "bridge_version": d.bridge_version,
+                "status": d.status,
+                "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+            })
+        return result, total
+
+    async def revoke_device(self, device_id: UUID) -> None:
+        """撤销设备。"""
+        await self.repo.revoke_device(device_id)
+
+    # ── 图稿采集 ──
+
+    async def create_capture(self, data: dict, current_user_id: UUID) -> dict:
+        """创建图稿采集会话。"""
+        from datetime import datetime, timedelta
+
+        device_code = data.get("device_code", "")
+        device = await self.repo.get_device_by_code(device_code)
+        if not device:
+            raise ValueError(f"设备 {device_code} 未注册")
+        if device.status == "revoked":
+            raise ValueError(f"设备 {device_code} 已被撤销")
+
+        # Update device last seen
+        await self.repo.update_device_last_seen(device.id)
+
+        # Generate session code
+        import hashlib, random
+        raw = f"{device_code}-{datetime.utcnow().isoformat()}-{random.randint(1000, 9999)}"
+        session_code = "CAP-" + hashlib.md5(raw.encode()).hexdigest()[:12].upper()
+
+        doc = data.get("document", {})
+        sel = data.get("selection", {})
+
+        capture_data = {
+            "session_code": session_code,
+            "device_id": device.id,
+            "employee_id": current_user_id,
+            "document_name": doc.get("document_name", ""),
+            "page_index": doc.get("active_page_index", 0),
+            "page_name": doc.get("active_page_name", ""),
+            "selection_count": sel.get("selection_count", 0),
+            "drawing_fingerprint": data.get("drawing_fingerprint", ""),
+            "capture_payload_json": data,
+            "warnings_json": data.get("warnings", []),
+            "captured_at": datetime.utcnow(),
+            "expires_at": datetime.utcnow() + timedelta(days=30),
+        }
+        capture = await self.repo.create_capture_session(capture_data)
+        return {
+            "id": str(capture.id),
+            "session_code": capture.session_code,
+            "document_name": capture.document_name,
+            "selection_count": capture.selection_count,
+            "drawing_fingerprint": capture.drawing_fingerprint,
+            "captured_at": capture.captured_at.isoformat() if capture.captured_at else None,
+        }
+
+    async def get_capture(self, capture_id: UUID) -> dict | None:
+        """获取采集详情。"""
+        capture = await self.repo.get_capture_session(capture_id)
+        if not capture:
+            return None
+        return {
+            "id": str(capture.id),
+            "session_code": capture.session_code,
+            "device_id": str(capture.device_id) if capture.device_id else None,
+            "employee_id": str(capture.employee_id) if capture.employee_id else None,
+            "document_name": capture.document_name,
+            "selection_count": capture.selection_count,
+            "drawing_fingerprint": capture.drawing_fingerprint,
+            "capture_payload": capture.capture_payload_json,
+            "warnings": capture.warnings_json,
+            "captured_at": capture.captured_at.isoformat() if capture.captured_at else None,
+            "expires_at": capture.expires_at.isoformat() if capture.expires_at else None,
+        }
+
+    async def create_quote_from_capture(self, capture_id: UUID, data: dict, current_user_id: UUID) -> dict:
+        """根据图稿采集创建报价草稿。"
+        """
+        from app.models.business_document import BusinessDocument
+
+        capture = await self.repo.get_capture_session(capture_id)
+        if not capture:
+            raise ValueError("采集记录不存在")
+
+        # Create a quote (business_document with doc_type="quote")
+        import random
+        quote_no = "Q-" + datetime.utcnow().strftime("%Y%m%d") + "-" + str(random.randint(1000, 9999))
+
+        doc = BusinessDocument(
+            doc_type="quote",
+            doc_no=quote_no,
+            status="draft",
+            source="cdr_plugin",
+            customer_id=data.get("customer_id"),
+            customer_name=data.get("customer_name", ""),
+            project_name=data.get("project_name", f"CDR: {capture.document_name or ''}"),
+            department=data.get("department", ""),
+            subtotal_amount=Decimal("0"),
+            discount_amount=Decimal("0"),
+            tax_rate=Decimal(str(data.get("tax_rate", 0.13))),
+            tax_amount=Decimal("0"),
+            total_amount=Decimal("0"),
+            paid_amount=Decimal("0"),
+            cost_amount=Decimal("0"),
+            gross_profit=Decimal("0"),
+            notes=data.get("notes", f"来源：CDR 图稿采集 {capture.session_code}"),
+            created_by=current_user_id,
+        )
+        self.db.add(doc)
+        await self.db.commit()
+        await self.db.refresh(doc)
+
+        # Create drawing snapshot
+        snapshot_data = {
+            "snapshot_code": "DS-" + capture.session_code,
+            "capture_session_id": capture.id,
+            "quote_id": doc.id,
+            "drawing_fingerprint": capture.drawing_fingerprint or "",
+            "geometry_summary_json": data.get("geometry_summary"),
+            "object_summary_json": data.get("object_summary"),
+            "created_by": current_user_id,
+        }
+        await self.repo.create_drawing_snapshot(snapshot_data)
+
+        # Log audit
+        await self.repo.create_audit_log({
+            "quote_id": doc.id,
+            "actor_id": current_user_id,
+            "action": "quote.created_from_capture",
+            "after_json": {"capture_session_id": str(capture.id), "quote_no": quote_no},
+        })
+
+        return {
+            "id": str(doc.id),
+            "quote_no": doc.doc_no,
+            "status": doc.status,
+            "project_name": doc.project_name,
+            "capture_session_id": str(capture.id),
+            "message": "报价草稿已创建，请完善报价明细",
+        }

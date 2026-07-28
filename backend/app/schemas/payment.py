@@ -1,3 +1,4 @@
+from app.schemas.common import CoercedModel
 from pydantic import BaseModel, field_validator
 from datetime import datetime
 from uuid import UUID
@@ -21,7 +22,7 @@ class PaymentCreate(BaseModel):
         return v
 
 
-class PaymentResponse(BaseModel):
+class PaymentResponse(CoercedModel):
     id: str
     payment_no: str
     order_id: str
@@ -50,7 +51,7 @@ class StatementCreate(BaseModel):
     end_date: str
 
 
-class StatementResponse(BaseModel):
+class StatementResponse(CoercedModel):
     id: str
     statement_no: str
     customer_id: str
@@ -72,7 +73,7 @@ class StatementDetailResponse(StatementResponse):
     payments: list["StatementPaymentItem"] = []
 
 
-class StatementOrderItem(BaseModel):
+class StatementOrderItem(CoercedModel):
     id: str
     order_no: str
     project_name: str
@@ -82,7 +83,7 @@ class StatementOrderItem(BaseModel):
     unpaid_amount: float
 
 
-class StatementPaymentItem(BaseModel):
+class StatementPaymentItem(CoercedModel):
     id: str
     payment_no: str
     amount: float
@@ -114,7 +115,7 @@ class ExpenseUpdate(BaseModel):
     receipt_url: str | None = None
 
 
-class ExpenseResponse(BaseModel):
+class ExpenseResponse(CoercedModel):
     id: str
     expense_no: str
     category: str | None = None
@@ -124,6 +125,13 @@ class ExpenseResponse(BaseModel):
     receipt_url: str | None = None
     created_by: str | None = None
     created_at: str | None = None
+    # New unified fields
+    document_id: str | None = None
+    doc_no: str | None = None
+    doc_type: str | None = None
+    document_item_id: str | None = None
+    document_item_name: str | None = None
+    attachment_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -191,7 +199,7 @@ class ProjectCostUpdate(BaseModel):
     summary: str | None = None
 
 
-class ProjectCostResponse(BaseModel):
+class ProjectCostResponse(CoercedModel):
     id: str
     cost_no: str
     source_type: str = "order"
@@ -225,6 +233,13 @@ class ProjectCostResponse(BaseModel):
     remark: str | None = None
     created_by: str | None = None
     created_at: str | None = None
+    # New unified fields
+    document_id: str | None = None
+    doc_no: str | None = None
+    doc_type: str | None = None
+    document_item_id: str | None = None
+    document_item_name: str | None = None
+    attachment_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -236,7 +251,7 @@ class DebtSettleCreate(BaseModel):
     remark: str | None = None
 
 
-class DebtResponse(BaseModel):
+class DebtResponse(CoercedModel):
     """欠款清单响应"""
     id: str
     cost_no: str
@@ -264,5 +279,12 @@ class DebtResponse(BaseModel):
     remark: str | None = None
     created_by: str | None = None
     created_at: str | None = None
+    # New unified fields
+    document_id: str | None = None
+    doc_no: str | None = None
+    doc_type: str | None = None
+    document_item_id: str | None = None
+    document_item_name: str | None = None
+    attachment_count: int = 0
 
     model_config = {"from_attributes": True}

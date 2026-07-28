@@ -1004,6 +1004,8 @@ export interface BusinessNarrativeStats {
 
 export interface BusinessNarrativeResponse {
   mode: string
+  ai_confidence?: string
+  ai_meta?: Record<string, unknown>
   period: string
   year: number
   month?: number

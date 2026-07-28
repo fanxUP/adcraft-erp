@@ -6,6 +6,7 @@ from app.models.payment import Payment, CustomerStatement, Expense
 from app.models.business_document import BusinessDocument
 from app.services.business_document_service import BusinessDocumentService
 from app.repositories.payment_repo import PaymentRepository, StatementRepository, ExpenseRepository
+from app.schemas.payment import StatementPaymentItem
 from app.services.number_generator import generate_payment_no, generate_statement_no, generate_expense_no
 
 
@@ -150,7 +151,7 @@ class StatementService:
             status="draft",
         )
         await self.repo.create(stmt)
-        return await self._to_detail(stmt)
+        return await self._to_detail(stmt, documents, payments)
 
     async def confirm_statement(self, statement_id: UUID, confirmed_by: UUID) -> dict:
         s = await self.repo.get_by_id(statement_id)
@@ -174,18 +175,15 @@ class StatementService:
             "created_at": s.created_at.isoformat() if s.created_at else None,
         }
 
-    async def _to_detail(self, s: CustomerStatement) -> dict:
-        documents = await self.repo.get_documents_in_range(s.customer_id, s.start_date, s.end_date)
-        payments = await self.repo.get_payments_in_range(s.customer_id, s.start_date, s.end_date)
+    async def _to_detail(self, s: CustomerStatement, documents: list | None = None, payments: list | None = None) -> dict:
+        if documents is None:
+            documents = await self.repo.get_documents_in_range(s.customer_id, s.start_date, s.end_date)
+        if payments is None:
+            payments = await self.repo.get_payments_in_range(s.customer_id, s.start_date, s.end_date)
         base = self._to_summary(s)
         base["orders"] = [BusinessDocumentService._to_ref(d) for d in documents]
         base["payments"] = [
-            {
-                "id": str(p.id), "payment_no": p.payment_no, "amount": float(p.amount),
-                "payment_method": p.payment_method,
-                "paid_at": p.paid_at.isoformat() if p.paid_at else None,
-                "is_voided": p.is_voided,
-            }
+            StatementPaymentItem.model_validate(p).model_dump(mode="json")
             for p in payments
         ]
         return base

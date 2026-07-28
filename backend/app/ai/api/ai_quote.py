@@ -1,6 +1,7 @@
 """AI Quote Assistant API — generate draft quotes from natural language descriptions."""
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -10,6 +11,7 @@ from app.ai.schemas.ai_quote import AIQuoteAssistRequest
 from app.models.user import User
 from app.ai.rule_based.quote_finder import QuoteFinder
 from app.ai.core.resolver import FeatureResolver
+from app.ai.gateway_providers.gateway_ai_client import GatewayAIClient
 
 router = APIRouter(prefix="/ai/quotes", tags=["AI Quotes"])
 
@@ -28,13 +30,11 @@ async def assist_quote(
 
     Returns a draft quote with items, pricing estimate, and similar historical quotes.
     """
-    mode = FeatureResolver.ai_mode()
+    mode = "ai_enhanced" if FeatureResolver.is_gateway_available() else "rule_based"
 
-    if FeatureResolver.is_ai_available():
-        from app.ai.core.ai_client import AIClient
+    if FeatureResolver.is_gateway_available():
         from app.ai.ai_enhanced.llm_quote_assistant import LLMQuoteAssistant
-        client = AIClient()
-        assistant = LLMQuoteAssistant(db, client)
+        assistant = LLMQuoteAssistant(db, GatewayAIClient(db))
     else:
         assistant = QuoteFinder(db)
 
@@ -54,8 +54,8 @@ async def save_assisted_quote(
     The draft data comes from POST /ai/quotes/assist.
     Creates a Quote entity that can be further edited and confirmed.
     """
-    from app.services.quote_service import QuoteService
-    service = QuoteService(db)
+    from app.services.business_document_service import BusinessDocumentService
+    service = BusinessDocumentService(db, doc_type='quote')
 
     quote_data = {
         "project_name": draft.get("project_name", "新项目"),
@@ -92,3 +92,33 @@ async def save_assisted_quote(
         quote = await service.add_items(str(quote["id"]), items_data)
 
     return success(quote)
+
+
+# ── Smart Pricing Recommendation ──
+
+
+class SmartPriceRequest(BaseModel):
+    product_id: str | None = None
+    material_id: str | None = None
+    width_mm: float | None = None
+    height_mm: float | None = None
+    quantity: float = 1
+
+
+@router.post("/pricing/recommend")
+async def recommend_price(
+    req: SmartPriceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get smart pricing recommendation based on historical data."""
+    from app.ai.ai_enhanced.llm_quote_assistant import SmartPricingRecommendation
+    engine = SmartPricingRecommendation(db)
+    result = await engine.recommend_price(
+        product_id=req.product_id,
+        material_id=req.material_id,
+        width_mm=req.width_mm,
+        height_mm=req.height_mm,
+        quantity=req.quantity,
+    )
+    return success(result)

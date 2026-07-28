@@ -239,8 +239,8 @@ async function fetchData() {
       keyword: filters.keyword || undefined,
       status: filters.status || undefined,
     })
-    list.value = res.data.items
-    total.value = res.data.total
+    list.value = res.items
+    total.value = res.total
   } finally {
     loading.value = false
   }
@@ -273,7 +273,7 @@ function handleEdit(row: VehicleUseRequestResponse) {
 async function handleView(row: VehicleUseRequestResponse) {
   try {
     const res = await getVehicleUseRequest(row.id)
-    detail.value = res.data
+    detail.value = res
     detailVisible.value = true
   } catch {
     ElMessage.error('获取详情失败')

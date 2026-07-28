@@ -74,4 +74,27 @@ async function handleLogin() {
   margin: 0 0 32px;
   font-size: 14px;
 }
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+  .login-container {
+    max-width: 100%;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  .login-card {
+    width: 100%;
+    padding: 32px 24px;
+  }
+  .login-title {
+    font-size: 24px;
+  }
+  .login-subtitle {
+    font-size: 13px;
+  }
+}
 </style>

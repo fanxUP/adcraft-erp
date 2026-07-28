@@ -2,7 +2,7 @@
   <div class="anomaly-dashboard">
     <div class="page-header">
       <h2>智能异常提醒</h2>
-      <el-tag type="success">规则引擎 — 无需 AI Key</el-tag>
+      <el-tag :type="modeTagType" v-if="loaded">{{ modeLabel }}</el-tag>
     </div>
 
     <!-- Summary cards -->
@@ -91,14 +91,25 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { scanAnomalies } from '@/api/ai'
-import type { AnomalyAlert, AnomalySummary } from '@/types/api'
+import type { AnomalyAlert, AnomalyScanResponse, AnomalySummary } from '@/types/api'
 
 const router = useRouter()
 const loading = ref(false)
+const loaded = ref(false)
+const scanResult = ref<AnomalyScanResponse | null>(null)
 const alerts = ref<AnomalyAlert[]>([])
 const summary = ref<AnomalySummary>({ critical: 0, warning: 0, info: 0 })
 const filterSeverity = ref('')
 const filterType = ref('')
+
+const modeTagType = computed(() => {
+  return scanResult.value?.mode === 'ai_enhanced' ? 'success' : 'info'
+})
+
+const modeLabel = computed(() => {
+  if (!scanResult.value) return '规则引擎'
+  return scanResult.value.mode === 'ai_enhanced' ? 'AI 增强' : '规则引擎'
+})
 
 const filteredAlerts = computed(() => {
   let list = alerts.value
@@ -152,8 +163,10 @@ async function fetchData() {
   loading.value = true
   try {
     const res = await scanAnomalies()
+    scanResult.value = res
     alerts.value = res.alerts || []
     summary.value = res.summary || { critical: 0, warning: 0, info: 0 }
+    loaded.value = true
   } catch {
     ElMessage.error('获取异常数据失败')
   } finally {
