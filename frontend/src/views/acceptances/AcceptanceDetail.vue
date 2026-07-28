@@ -441,6 +441,7 @@ const form = reactive<AcceptanceDetailResponse>({
   contact_person: '',
   contact_phone: '',
   status: 'draft',
+  total_amount: 0,
   accepted_at: undefined,
   accepted_by: '',
   our_acceptor_id: '',

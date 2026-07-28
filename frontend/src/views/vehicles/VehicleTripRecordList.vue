@@ -196,6 +196,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, post } from '@/api'
+import type { PaginatedData } from '@/types/api'
 
 // Types
 interface DispatchItem {
@@ -283,7 +284,7 @@ async function loadDispatches() {
     if (searchKeyword.value) params.append('keyword', searchKeyword.value)
     if (searchStatus.value) params.append('status', searchStatus.value)
 
-    const res = await get(`/vehicle-dispatches/?${params}`)
+    const res = await get<PaginatedData<DispatchItem>>(`/vehicle-dispatches/?${params}`)
     dispatchList.value = res.items
     total.value = res.total
   } catch {
@@ -371,7 +372,7 @@ function handleReturnTrip(row: DispatchItem) {
 
 async function handleViewTrip(row: DispatchItem) {
   try {
-    const res = await get(`/vehicle-dispatches/${row.id}`)
+    const res = await get<TripRecord>(`/vehicle-dispatches/${row.id}`)
     detailData.value = res
     detailDialogVisible.value = true
   } catch {

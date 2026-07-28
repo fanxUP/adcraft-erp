@@ -343,8 +343,9 @@ import {
 import { getOrder } from '@/api/orders'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadFile } from 'element-plus'
 import { ArrowLeft, Plus, Delete, Download } from '@element-plus/icons-vue'
-import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, AttachmentResponse } from '@/types/api'
+import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, QuoteDetailResponse, AttachmentResponse } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -366,7 +367,7 @@ const showDialog = ref(false)
 const showImport = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
-const order = ref<OrderDetailResponse | null>(null)
+const order = ref<OrderDetailResponse | QuoteDetailResponse | null>(null)
 const selectedFile = ref<File | null>(null)
 const importResult = ref<ProjectCostImportResponse | null>(null)
 const dialogAttachments = ref<AttachmentResponse[]>([])
@@ -481,8 +482,8 @@ function openImport() {
   importResult.value = null
 }
 
-function onFileChange(file: unknown) {
-  selectedFile.value = file.raw
+function onFileChange(file: UploadFile) {
+  selectedFile.value = file.raw || null
 }
 
 function downloadTemplate() {
@@ -682,8 +683,8 @@ async function handleUploadAtt(file: File) {
   }
 }
 
-function onUploadChange(uploadFile: unknown) {
-  handleUploadAtt(uploadFile.raw || uploadFile)
+function onUploadChange(uploadFile: UploadFile) {
+  if (uploadFile.raw) handleUploadAtt(uploadFile.raw)
   return false // prevent el-upload auto upload
 }
 

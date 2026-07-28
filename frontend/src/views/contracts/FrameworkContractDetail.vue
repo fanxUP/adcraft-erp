@@ -35,7 +35,14 @@
           <span v-else>-</span>
         </el-descriptions-item>
         <el-descriptions-item label="合同原件" :span="2">
-          <a v-if="contract?.attachment_name && contract" :href="getContractAttachmentUrl(contract.id)" target="_blank">{{ contract.attachment_name }}</a>
+          <el-button
+            v-if="contract?.attachment_name && contract"
+            link
+            type="primary"
+            @click="handleDownloadContract"
+          >
+            {{ contract.attachment_name }}
+          </el-button>
           <span v-else>-</span>
         </el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">{{ contract?.remark || '-' }}</el-descriptions-item>
@@ -82,7 +89,14 @@
         <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
         <el-table-column label="附件" width="100">
           <template #default="{ row }">
-            <a v-if="row.attachment_name" :href="getContractProjectAttachmentUrl(row.id)" target="_blank">下载</a>
+            <el-button
+              v-if="row.attachment_name"
+              link
+              type="primary"
+              @click="handleDownloadProject(row)"
+            >
+              下载
+            </el-button>
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -200,14 +214,15 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getContract, updateContract, getContractAttachmentUrl } from '@/api/contracts'
+import { downloadContractAttachment, getContract, updateContract } from '@/api/contracts'
 import {
-  getContractProjects,
+  getContractProject, getContractProjects,
   createContractProject, updateContractProject, deleteContractProject,
   uploadContractProjectAttachment, deleteContractProjectAttachment,
-  getContractProjectAttachmentUrl, getAvailableResources,
+  downloadContractProjectAttachment, getAvailableResources,
 } from '@/api/framework-contracts'
 import { getCustomers } from '@/api/customers'
+import { downloadBlob } from '@/utils/download'
 import type {
   ContractDetailResponse,
   FrameworkContractProjectDetailResponse,
@@ -233,6 +248,18 @@ async function loadContract() {
   try {
     contract.value = await getContract(contractId)
   } finally { loadingContract.value = false }
+}
+
+async function handleDownloadContract() {
+  if (!contract.value?.attachment_name) return
+  const blob = await downloadContractAttachment(contract.value.id)
+  downloadBlob(blob, contract.value.attachment_name)
+}
+
+async function handleDownloadProject(row: FrameworkContractProjectDetailResponse) {
+  if (!row.attachment_name) return
+  const blob = await downloadContractProjectAttachment(row.id)
+  downloadBlob(blob, row.attachment_name)
 }
 
 // ── 项目列表 ──

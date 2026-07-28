@@ -54,15 +54,25 @@ export function createAcceptance(data: {
 }
 
 export function updateAcceptance(id: string, data: {
-  accepted_by?: string
-  our_acceptor_id?: string
-  remark?: string
+  accepted_by?: string | null
+  our_acceptor_id?: string | null
+  remark?: string | null
+  discount_amount?: number
+  advance_amount?: number
   items?: Array<{
     item_name: string
-    specification?: string
-    quantity?: number
-    unit?: string
-    order_item_id?: string
+    material_process?: string | null
+    specification?: string | null
+    quantity?: number | null
+    unit?: string | null
+    area?: number | null
+    unit_price?: number | null
+    subtotal?: number | null
+    image_url?: string | null
+    order_item_id?: string | null
+    remark?: string | null
+    item_status?: string
+    group_name?: string | null
   }>
 }) {
   return put<AcceptanceDetailResponse>(`/acceptances/${id}`, data)
@@ -74,8 +84,8 @@ export function deleteAcceptance(id: string) {
 
 export function changeAcceptanceStatus(id: string, data: {
   to_status: string
-  reason?: string
-  accepted_by?: string
+  reason?: string | null
+  accepted_by?: string | null
 }) {
   return post<AcceptanceDetailResponse>(`/acceptances/${id}/change-status`, data)
 }

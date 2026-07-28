@@ -1,4 +1,5 @@
 import { get, post, patch } from './index'
+import type { PaginatedData } from '@/types/api'
 
 export interface VehicleUseRequestResponse {
   id: string
@@ -57,57 +58,40 @@ export interface VehicleUseRequestUpdateData {
   remark?: string | null
 }
 
-export interface PaginatedResponse<T> {
-  code: number
-  message: string
-  data: {
-    items: T[]
-    total: number
-    page: number
-    page_size: number
-  }
-}
-
-export interface SuccessResponse<T> {
-  code: number
-  message: string
-  data: T
-}
-
 export async function getVehicleUseRequests(params?: {
   page?: number
   page_size?: number
   keyword?: string
   status?: string
   requester_id?: string
-}): Promise<PaginatedResponse<VehicleUseRequestResponse>> {
-  return get('/vehicle-use-requests', { params }) as Promise<PaginatedResponse<VehicleUseRequestResponse>>
+}): Promise<PaginatedData<VehicleUseRequestResponse>> {
+  return get<PaginatedData<VehicleUseRequestResponse>>('/vehicle-use-requests', { params })
 }
 
-export async function getVehicleUseRequest(id: string): Promise<SuccessResponse<VehicleUseRequestResponse>> {
-  return get(`/vehicle-use-requests/${id}`) as Promise<SuccessResponse<VehicleUseRequestResponse>>
+export async function getVehicleUseRequest(id: string): Promise<VehicleUseRequestResponse> {
+  return get<VehicleUseRequestResponse>(`/vehicle-use-requests/${id}`)
 }
 
-export async function createVehicleUseRequest(data: VehicleUseRequestCreateData): Promise<SuccessResponse<VehicleUseRequestResponse>> {
-  return post('/vehicle-use-requests', data) as Promise<SuccessResponse<VehicleUseRequestResponse>>
+export async function createVehicleUseRequest(data: VehicleUseRequestCreateData): Promise<VehicleUseRequestResponse> {
+  return post<VehicleUseRequestResponse>('/vehicle-use-requests', data)
 }
 
-export async function updateVehicleUseRequest(id: string, data: VehicleUseRequestUpdateData): Promise<SuccessResponse<VehicleUseRequestResponse>> {
-  return patch(`/vehicle-use-requests/${id}`, data) as Promise<SuccessResponse<VehicleUseRequestResponse>>
+export async function updateVehicleUseRequest(id: string, data: VehicleUseRequestUpdateData): Promise<VehicleUseRequestResponse> {
+  return patch<VehicleUseRequestResponse>(`/vehicle-use-requests/${id}`, data)
 }
 
-export async function submitVehicleUseRequest(id: string): Promise<SuccessResponse<VehicleUseRequestResponse>> {
-  return post(`/vehicle-use-requests/${id}/submit`) as Promise<SuccessResponse<VehicleUseRequestResponse>>
+export async function submitVehicleUseRequest(id: string): Promise<VehicleUseRequestResponse> {
+  return post<VehicleUseRequestResponse>(`/vehicle-use-requests/${id}/submit`)
 }
 
-export async function approveVehicleUseRequest(id: string): Promise<SuccessResponse<VehicleUseRequestResponse>> {
-  return post(`/vehicle-use-requests/${id}/approve`) as Promise<SuccessResponse<VehicleUseRequestResponse>>
+export async function approveVehicleUseRequest(id: string): Promise<VehicleUseRequestResponse> {
+  return post<VehicleUseRequestResponse>(`/vehicle-use-requests/${id}/approve`)
 }
 
-export async function rejectVehicleUseRequest(id: string, rejectReason: string): Promise<SuccessResponse<VehicleUseRequestResponse>> {
-  return post(`/vehicle-use-requests/${id}/reject`, { reject_reason: rejectReason }) as Promise<SuccessResponse<VehicleUseRequestResponse>>
+export async function rejectVehicleUseRequest(id: string, rejectReason: string): Promise<VehicleUseRequestResponse> {
+  return post<VehicleUseRequestResponse>(`/vehicle-use-requests/${id}/reject`, { reject_reason: rejectReason })
 }
 
-export async function cancelVehicleUseRequest(id: string): Promise<SuccessResponse<VehicleUseRequestResponse>> {
-  return post(`/vehicle-use-requests/${id}/cancel`) as Promise<SuccessResponse<VehicleUseRequestResponse>>
+export async function cancelVehicleUseRequest(id: string): Promise<VehicleUseRequestResponse> {
+  return post<VehicleUseRequestResponse>(`/vehicle-use-requests/${id}/cancel`)
 }

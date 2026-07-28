@@ -111,6 +111,7 @@
             :limit="1"
             :on-change="onAttChange"
             :on-remove="onAttRemove"
+            :on-preview="onAttPreview"
             :file-list="attFileList"
             accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
           >
@@ -156,10 +157,11 @@ import { getFrameworkContracts } from '@/api/framework-contracts'
 import {
   getContract, createContract, updateContract, deleteContract,
   changeContractStatus, uploadContractAttachment, deleteContractAttachment,
-  getContractAttachmentUrl,
+  downloadContractAttachment,
 } from '@/api/contracts'
 import { getCustomers } from '@/api/customers'
 import type { ContractListResponse, ContractDetailResponse } from '@/types/api'
+import { downloadBlob } from '@/utils/download'
 
 const router = useRouter()
 
@@ -210,7 +212,7 @@ const editingId = ref('')
 const saving = ref(false)
 const customerOptions = ref<{ id: string; name: string }[]>([])
 const pendingAttFile = ref<File | null>(null)
-const attFileList = ref<{ name: string; url?: string }[]>([])
+const attFileList = ref<{ name: string }[]>([])
 const existingAtt = ref<{ path?: string; name?: string }>({})
 
 const form = reactive({
@@ -227,6 +229,11 @@ const form = reactive({
 
 function onAttChange(file: { raw?: File }) { pendingAttFile.value = file.raw ?? null }
 function onAttRemove() { pendingAttFile.value = null }
+async function onAttPreview(file: { name: string }) {
+  if (!editingId.value || pendingAttFile.value) return
+  const blob = await downloadContractAttachment(editingId.value)
+  downloadBlob(blob, file.name)
+}
 
 function resetForm() {
   Object.assign(form, {
@@ -267,7 +274,7 @@ async function openEdit(row: ContractListResponse) {
     form.remark = detail.remark || ''
     existingAtt.value = { path: detail.attachment_path, name: detail.attachment_name }
     if (detail.attachment_name) {
-      attFileList.value = [{ name: detail.attachment_name, url: getContractAttachmentUrl(row.id) }]
+      attFileList.value = [{ name: detail.attachment_name }]
     }
   } catch { /* ignore */ }
   await loadCustomers()

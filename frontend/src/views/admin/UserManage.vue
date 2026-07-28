@@ -144,13 +144,13 @@ async function handleSave() {
   saving.value = true
   try {
     if (isEditing.value) {
-      const payload: Record<string, unknown> = {}
-      payload.real_name = form.real_name || null
-      payload.phone = form.phone || null
-      payload.email = form.email || null
-      payload.is_active = form.is_active
-      payload.role_ids = form.role_ids
-      await updateUser(editingId.value, payload)
+      await updateUser(editingId.value, {
+        real_name: form.real_name || null,
+        phone: form.phone || null,
+        email: form.email || null,
+        is_active: form.is_active,
+        role_ids: form.role_ids,
+      })
       ElMessage.success('用户已更新')
     } else {
       if (!form.username || !form.password) {
@@ -161,7 +161,7 @@ async function handleSave() {
         username: form.username, password: form.password,
         real_name: form.real_name || null, phone: form.phone || null,
         email: form.email || null, role_ids: form.role_ids,
-      } as unknown)
+      })
       ElMessage.success('用户已创建')
     }
     showDialog.value = false

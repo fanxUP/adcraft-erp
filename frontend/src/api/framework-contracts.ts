@@ -1,4 +1,4 @@
-import { get, post, put, del } from './index'
+import { apiClient, get, post, put, del } from './index'
 import type {
   PaginatedData,
   ContractListResponse,
@@ -64,8 +64,12 @@ export function deleteContractProjectAttachment(projectId: string) {
   return del<SuccessResponse>(`/framework-contracts/projects/${projectId}/attachment`)
 }
 
-export function getContractProjectAttachmentUrl(projectId: string) {
-  return `/api/v1/framework-contracts/projects/${projectId}/attachment`
+export async function downloadContractProjectAttachment(projectId: string) {
+  const response = await apiClient.get<Blob>(
+    `/framework-contracts/projects/${projectId}/attachment`,
+    { responseType: 'blob' }
+  )
+  return response.data
 }
 
 // ── 可用资源 ──

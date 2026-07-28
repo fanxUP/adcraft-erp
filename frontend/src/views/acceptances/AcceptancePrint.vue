@@ -308,7 +308,7 @@ watch(() => props.visible, async (val) => {
         item_name: item.item_name,
         material_process: item.material_process,
         specification: item.specification,
-        quantity: item.quantity,
+        quantity: item.quantity ?? 0,
         unit: item.unit,
         area: item.area,
         unit_price: item.unit_price,
@@ -380,9 +380,9 @@ function handlePrint() {
   const pxPerMm = 96 / 25.4  // 96dpi 换算
   const pageHeightPx = PAGE_HEIGHT_MM * pxPerMm
 
-  const table = container.querySelector('.preview-table')
+  const table = container.querySelector<HTMLElement>('.preview-table')
   if (table) {
-    const rows = Array.from(table.querySelectorAll('tbody tr'))
+    const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody tr'))
     let accumH = table.querySelector('thead')?.offsetHeight || 0
     const headerH = accumH
 

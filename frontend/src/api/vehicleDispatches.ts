@@ -1,4 +1,5 @@
 import { get, post, patch } from './index'
+import type { PaginatedData } from '@/types/api'
 
 export interface VehicleDispatchResponse {
   id: string
@@ -58,23 +59,6 @@ export interface VehicleDispatchUpdateData {
   remark?: string
 }
 
-export interface PaginatedResponse<T> {
-  code: number
-  message: string
-  data: {
-    items: T[]
-    total: number
-    page: number
-    page_size: number
-  }
-}
-
-export interface SuccessResponse<T> {
-  code: number
-  message: string
-  data: T
-}
-
 export async function getVehicleDispatches(params?: {
   page?: number
   page_size?: number
@@ -82,30 +66,30 @@ export async function getVehicleDispatches(params?: {
   status?: string
   vehicle_id?: string
   driver_id?: string
-}): Promise<PaginatedResponse<VehicleDispatchResponse>> {
-  return get('/vehicle-dispatches/', { params }) as Promise<PaginatedResponse<VehicleDispatchResponse>>
+}): Promise<PaginatedData<VehicleDispatchResponse>> {
+  return get<PaginatedData<VehicleDispatchResponse>>('/vehicle-dispatches/', { params })
 }
 
-export async function getVehicleDispatch(id: string): Promise<SuccessResponse<VehicleDispatchResponse>> {
-  return get(`/vehicle-dispatches/${id}`) as Promise<SuccessResponse<VehicleDispatchResponse>>
+export async function getVehicleDispatch(id: string): Promise<VehicleDispatchResponse> {
+  return get<VehicleDispatchResponse>(`/vehicle-dispatches/${id}`)
 }
 
-export async function createVehicleDispatch(data: VehicleDispatchCreateData): Promise<SuccessResponse<VehicleDispatchResponse>> {
-  return post('/vehicle-dispatches/', data) as Promise<SuccessResponse<VehicleDispatchResponse>>
+export async function createVehicleDispatch(data: VehicleDispatchCreateData): Promise<VehicleDispatchResponse> {
+  return post<VehicleDispatchResponse>('/vehicle-dispatches/', data)
 }
 
-export async function updateVehicleDispatch(id: string, data: VehicleDispatchUpdateData): Promise<SuccessResponse<VehicleDispatchResponse>> {
-  return patch(`/vehicle-dispatches/${id}`, data) as Promise<SuccessResponse<VehicleDispatchResponse>>
+export async function updateVehicleDispatch(id: string, data: VehicleDispatchUpdateData): Promise<VehicleDispatchResponse> {
+  return patch<VehicleDispatchResponse>(`/vehicle-dispatches/${id}`, data)
 }
 
-export async function cancelVehicleDispatch(id: string): Promise<SuccessResponse<VehicleDispatchResponse>> {
-  return post(`/vehicle-dispatches/${id}/cancel`) as Promise<SuccessResponse<VehicleDispatchResponse>>
+export async function cancelVehicleDispatch(id: string): Promise<VehicleDispatchResponse> {
+  return post<VehicleDispatchResponse>(`/vehicle-dispatches/${id}/cancel`)
 }
 
 export async function getAvailableVehicles() {
-  return get('/vehicles/available')
+  return get<{ id: string; vehicle_name: string; plate_number: string }[]>('/vehicles/available')
 }
 
 export async function getAvailableDrivers() {
-  return get('/vehicle-drivers/available')
+  return get<{ id: string; driver_name: string; phone: string }[]>('/vehicle-drivers/available')
 }

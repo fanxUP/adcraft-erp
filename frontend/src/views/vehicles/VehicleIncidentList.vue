@@ -449,7 +449,10 @@ async function loadUsers() {
   try {
     const res = await getUsers({ page: 1, page_size: 100 })
     if (res) {
-      userOptions.value = res.items || res
+      userOptions.value = (res.items || []).map(user => ({
+        id: user.id,
+        real_name: user.real_name || user.username,
+      }))
     }
   } catch {
     // ignore

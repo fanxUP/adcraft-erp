@@ -1,4 +1,4 @@
-import { get, post, put, del } from './index'
+import { apiClient, get, post, put, del } from './index'
 import type { PaginatedData, ContractListResponse, ContractDetailResponse, ContractAvailableResources, SuccessResponse } from '@/types/api'
 
 export function getContracts(params: {
@@ -27,7 +27,7 @@ export function deleteContract(id: string) {
   return del<SuccessResponse>(`/contracts/${id}`)
 }
 
-export function changeContractStatus(id: string, data: { to_status: string; reason?: string }) {
+export function changeContractStatus(id: string, data: { to_status: string; reason?: string | null }) {
   return post<ContractDetailResponse>(`/contracts/${id}/status`, data)
 }
 
@@ -43,8 +43,11 @@ export function deleteContractAttachment(contractId: string) {
   return del<SuccessResponse>(`/contracts/${contractId}/attachment`)
 }
 
-export function getContractAttachmentUrl(contractId: string) {
-  return `/api/v1/contracts/${contractId}/attachment`
+export async function downloadContractAttachment(contractId: string) {
+  const response = await apiClient.get<Blob>(`/contracts/${contractId}/attachment`, {
+    responseType: 'blob',
+  })
+  return response.data
 }
 
 export function getContractAvailableResources(customerId?: string, contractId?: string) {

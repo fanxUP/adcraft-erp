@@ -184,6 +184,7 @@ import {
   cancelOutsourceTask, revertOutsourceTask, deleteOutsourceTask,
   getQuotesForDropdown, getOrdersForDropdown,
 } from '@/api/outsource'
+import type { OutsourceTaskPaymentSummary } from '@/api/outsource'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { OutsourceTaskResponse } from '@/types/api'
@@ -214,9 +215,10 @@ const rules = {
 // 付款对话框
 const payDialogVisible = ref(false)
 const paySaving = ref(false)
-const payTask = ref<OutsourceTaskResponse | null>(null)
+type PaymentTarget = Omit<OutsourceTaskPaymentSummary, 'payments'>
+const payTask = ref<PaymentTarget | null>(null)
 const payForm = reactive({
-  amount: 0, payment_method: 'bank_transfer', paid_at: '', remark: '',
+  amount: 0, payment_method: 'bank_transfer', payee_company_name: '', paid_at: '', remark: '',
 })
 const payRules = {
   amount: [{ required: true, message: '请输入付款金额', trigger: 'blur' }],
@@ -314,7 +316,7 @@ async function handlePay(row: OutsourceTaskResponse) {
   // 先刷新最新的付款摘要
   try {
     const summary = await getOutsourceTaskPaymentSummary(row.id)
-    payTask.value = { ...summary, id: summary.task_id }
+    payTask.value = summary
     payForm.amount = summary.unpaid_amount > 0 ? summary.unpaid_amount : 0
     payForm.payment_method = 'bank_transfer'
     payForm.paid_at = ''
@@ -323,7 +325,16 @@ async function handlePay(row: OutsourceTaskResponse) {
     payDialogVisible.value = true
   } catch {
     // fallback: use row data
-    payTask.value = row
+    payTask.value = {
+      task_id: row.id,
+      task_no: row.task_no,
+      vendor_id: row.vendor_id,
+      vendor_name: row.vendor_name || null,
+      related_project_name: row.related_project_name || null,
+      total_amount: row.total_amount,
+      paid_amount: row.paid_amount,
+      unpaid_amount: row.unpaid_amount,
+    }
     payForm.amount = row.unpaid_amount > 0 ? row.unpaid_amount : 0
     payForm.payment_method = 'bank_transfer'
     payForm.paid_at = ''
@@ -339,7 +350,7 @@ async function handlePaySubmit() {
   try {
     await createOutsourcePayment({
       vendor_id: payTask.value.vendor_id,
-      task_id: payTask.value.id,
+      task_id: payTask.value.task_id,
       amount: payForm.amount,
       payment_method: payForm.payment_method || undefined,
       payee_company_name: payForm.payee_company_name || undefined,

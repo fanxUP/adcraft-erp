@@ -138,7 +138,7 @@ const totalCount = computed(() => {
     const kw = keyword.value.toLowerCase()
     list = list.filter(r => {
       const no = r._type === 'order' ? (r as unknown as Record<string, unknown>).order_no : (r as unknown as Record<string, unknown>).quote_no
-      return (no?.toLowerCase().includes(kw)) || (r.project_name?.toLowerCase().includes(kw))
+      return String(no || '').toLowerCase().includes(kw) || (r.project_name?.toLowerCase().includes(kw))
     })
   }
   if (statusFilter.value) {
@@ -160,7 +160,7 @@ const combinedList = computed(() => {
     const kw = keyword.value.toLowerCase()
     list = list.filter(r => {
       const no = r._type === 'order' ? (r as unknown as Record<string, unknown>).order_no : (r as unknown as Record<string, unknown>).quote_no
-      return (no?.toLowerCase().includes(kw)) || (r.project_name?.toLowerCase().includes(kw))
+      return String(no || '').toLowerCase().includes(kw) || (r.project_name?.toLowerCase().includes(kw))
     })
   }
   // Status filter (only for orders)

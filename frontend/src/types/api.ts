@@ -49,9 +49,9 @@ export interface UserResponse {
 export interface ContactResponse {
   id: string
   name: string
-  phone?: string
-  wechat?: string
-  position?: string
+  phone?: string | null
+  wechat?: string | null
+  position?: string | null
   is_primary: boolean
   remark?: string
 }
@@ -119,6 +119,7 @@ export interface OrderItemResponse {
   sort_order: number
   group_name?: string
   material_process?: string
+  specification?: string
 }
 
 export interface OrderStatusLogResponse {

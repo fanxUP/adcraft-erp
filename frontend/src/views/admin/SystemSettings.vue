@@ -143,7 +143,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getSystemSettings, updateSystemSettings, type SystemSettings } from '@/api/admin'
 import { useAppStore, THEME_LIST, FONT_WEIGHT_OPTIONS } from '@/stores/app'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const appStore = useAppStore()
 const themes = THEME_LIST

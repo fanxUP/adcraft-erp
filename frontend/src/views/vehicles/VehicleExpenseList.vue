@@ -468,7 +468,10 @@ const loadDriverOptions = async () => {
 const loadUserOptions = async () => {
   try {
     const res = await getUsers({ page: 1, page_size: 100 })
-    userOptions.value = res.items || []
+    userOptions.value = (res.items || []).map(user => ({
+      id: user.id,
+      real_name: user.real_name || user.username,
+    }))
   } catch { /* ignore */ }
 }
 
@@ -688,12 +691,12 @@ const submitReview = async () => {
 }
 
 const viewFuelDetail = (row: FuelRecordResponse) => {
-  detailData.value = row as Record<string, unknown>
+  detailData.value = row as unknown as Record<string, unknown>
   detailDialogVisible.value = true
 }
 
 const viewMaintenanceDetail = (row: MaintenanceRecordResponse) => {
-  detailData.value = row as Record<string, unknown>
+  detailData.value = row as unknown as Record<string, unknown>
   detailDialogVisible.value = true
 }
 

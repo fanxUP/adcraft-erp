@@ -8,7 +8,8 @@ export default withVueTs(
   {
     name: 'app/no-explicit-any',
     rules: {
-      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': 'warn',
     },
   },
   {

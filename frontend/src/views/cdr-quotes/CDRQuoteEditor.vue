@@ -284,9 +284,9 @@ const summary = computed(() => {
 async function fetchLookups() {
   try {
     const [custRes, prodRes, matRes] = await Promise.all([
-      api.get('/customers/'),
-      api.get('/products/'),
-      api.get('/materials/'),
+      api.get<{ items: any[] }>('/customers/'),
+      api.get<{ items: any[] }>('/products/'),
+      api.get<{ items: any[] }>('/materials/'),
     ])
     customers.value = custRes?.items || custRes || []
     products.value = prodRes?.items || prodRes || []
@@ -337,7 +337,7 @@ async function handleSave() {
     // 1. 创建或获取报价
     let quoteId = route.params.id as string
     if (!quoteId) {
-      const newQuote = await api.post('/quotes/', {
+      const newQuote = await api.post<{ id: string }>('/quotes/', {
         doc_type: 'quote',
         project_name: form.project_name,
         customer_id: form.customer_id || undefined,

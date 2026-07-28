@@ -1,5 +1,5 @@
-import { get, post, put, del, apiClient } from './index'
-import { SuccessResponse } from '@/types/api'
+import { get, post, put, del } from './index'
+import type { SuccessResponse } from '@/types/api'
 
 // ── Roles ──
 
@@ -63,7 +63,7 @@ export function getSystemSettings() {
 }
 
 export function forceRelogin() {
-  return apiClient.post('/users/bump-token-version')
+  return post<{ message: string }>('/admin/force-relogin')
 }
 
 export function updateSystemSettings(data: Record<string, unknown>) {

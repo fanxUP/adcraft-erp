@@ -143,7 +143,7 @@ async function fetchData() {
     }
     version.value = await getLatestVersion(quoteId)
     versions.value = await listVersions(quoteId)
-    approvals.value = await api.get(`/cdr/quotes/${quoteId}/approvals`).catch(() => [])
+    approvals.value = await api.get<any[]>(`/cdr/quotes/${quoteId}/approvals`).catch(() => [])
   } catch { /* ignore */ }
 }
 

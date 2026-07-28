@@ -139,6 +139,7 @@ import {
   getVehicles, createVehicle, updateVehicle,
   disableVehicle, enableVehicle, scrapVehicle, deleteVehicle,
 } from '@/api/vehicles'
+import type { VehicleCreateData, VehicleUpdateData } from '@/api/vehicles'
 import type { VehicleResponse } from '@/api/vehicles'
 import { getErrorMessage } from '@/utils/error'
 
@@ -268,10 +269,10 @@ async function handleSave() {
     // 清除空字符串
     Object.keys(payload).forEach(k => { if (payload[k] === '') payload[k] = undefined })
     if (editingId.value) {
-      await updateVehicle(editingId.value, payload)
+      await updateVehicle(editingId.value, payload as VehicleUpdateData)
       ElMessage.success('更新成功')
     } else {
-      await createVehicle(payload)
+      await createVehicle(payload as unknown as VehicleCreateData)
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false

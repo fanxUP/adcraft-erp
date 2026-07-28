@@ -5,6 +5,7 @@ import os
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -153,6 +154,20 @@ async def list_permissions(
 
 
 # ── System Settings ────────────────────────────────────────────────────────
+
+@router.post("/force-relogin")
+async def force_relogin(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """递增所有活跃用户的令牌版本，使现有 JWT 在下次请求时失效。"""
+    await db.execute(
+        update(User)
+        .where(User.deleted_at.is_(None), User.is_active.is_(True))
+        .values(token_version=User.token_version + 1)
+    )
+    await db.commit()
+    return success({"message": "已强制所有用户重新登录"})
 
 @router.get("/settings")
 async def get_settings(

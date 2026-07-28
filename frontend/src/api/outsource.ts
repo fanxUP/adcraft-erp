@@ -1,6 +1,29 @@
 import { get, post, put, del } from './index'
 import { PaginatedData, VendorResponse, OutsourceTaskResponse, OutsourcePaymentResponse, SuccessResponse } from '@/types/api'
 
+export interface OutsourcePaymentSummaryItem {
+  id: string
+  payment_no: string
+  amount: number
+  payment_method: string | null
+  payee_company_name: string | null
+  paid_at: string | null
+  remark: string | null
+  created_at: string | null
+}
+
+export interface OutsourceTaskPaymentSummary {
+  task_id: string
+  task_no: string
+  vendor_id: string
+  vendor_name: string | null
+  related_project_name: string | null
+  total_amount: number
+  paid_amount: number
+  unpaid_amount: number
+  payments: OutsourcePaymentSummaryItem[]
+}
+
 export function getOutsourceVendors(params: { page?: number; page_size?: number; keyword?: string; service_type?: string }) {
   return get<PaginatedData<VendorResponse>>('/outsource/vendors', { params })
 }
@@ -58,7 +81,7 @@ export function deleteOutsourceTask(id: string) {
 }
 
 export function getOutsourceTaskPaymentSummary(id: string) {
-  return get<{task_id: string; task_no: string; vendor_name: string; total_amount: number; paid_amount: number; unpaid_amount: number; payments: Array<{payment_no: string; amount: number; payment_method: string | null; paid_at: string | null; remark: string | null; created_at: string | null}>}>(`/outsource/tasks/payment-summary/${id}`)
+  return get<OutsourceTaskPaymentSummary>(`/outsource/tasks/payment-summary/${id}`)
 }
 
 export function getDeletedOutsourceTasks(params: { page?: number; page_size?: number }) {

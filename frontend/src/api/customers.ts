@@ -1,5 +1,18 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, CustomerResponse, SuccessResponse, ImportResponse } from '@/types/api'
+import type { PaginatedData, CustomerResponse, SuccessResponse, ImportResponse } from '@/types/api'
+
+export interface ContactInput {
+  name: string
+  phone?: string | null
+  wechat?: string | null
+  position?: string | null
+  is_primary?: boolean
+  remark?: string | null
+}
+
+export type CustomerInput = Partial<Omit<CustomerResponse, 'id' | 'customer_no' | 'created_at' | 'contacts'>> & {
+  contacts?: ContactInput[]
+}
 
 export function getCustomers(params: { page?: number; page_size?: number; keyword?: string; customer_type?: string }) {
   return get<PaginatedData<CustomerResponse>>('/customers/', { params })
@@ -9,11 +22,11 @@ export function getCustomer(id: string) {
   return get<CustomerResponse>(`/customers/${id}`)
 }
 
-export function createCustomer(data: Omit<Partial<CustomerResponse>, 'id' | 'created_at'>) {
+export function createCustomer(data: CustomerInput) {
   return post<CustomerResponse>('/customers/', data)
 }
 
-export function updateCustomer(id: string, data: Partial<Omit<CustomerResponse, 'id' | 'created_at'>>) {
+export function updateCustomer(id: string, data: CustomerInput) {
   return put<CustomerResponse>(`/customers/${id}`, data)
 }
 

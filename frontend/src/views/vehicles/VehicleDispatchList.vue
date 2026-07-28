@@ -227,11 +227,11 @@ const availableDrivers = ref<{ id: string; driver_name: string; phone: string }[
 async function fetchDropdownData() {
   try {
     const reqRes = await getVehicleUseRequests({ status: 'approved', page_size: 100 })
-    approvedRequests.value = reqRes.data?.items || []
+    approvedRequests.value = reqRes.items || []
     const vehRes = await getAvailableVehicles()
-    availableVehicles.value = (vehRes as { data: { id: string; vehicle_name: string; plate_number: string }[] }).data || []
+    availableVehicles.value = vehRes || []
     const drvRes = await getAvailableDrivers()
-    availableDrivers.value = (drvRes as { data: { id: string; driver_name: string; phone: string }[] }).data || []
+    availableDrivers.value = drvRes || []
   } catch {}
 }
 

@@ -755,7 +755,7 @@ async function handleSave() {
         height: item.height || undefined,
         height_unit: item.height_unit || undefined,
         quantity: item.quantity,
-        unit: item.unit || null,
+        unit: item.unit || undefined,
         use_area: item.use_area || false,
         pieces: item.pieces || 1,
         unit_price: item.unit_price || 0,
@@ -767,7 +767,7 @@ async function handleSave() {
         remark: item.remark || undefined,
         image_url: item.image_url || undefined,
         sort_order: idx,
-        group_name: item.group_name || null,
+        group_name: item.group_name || undefined,
         material_process: item.material_process || undefined,
       }))
       await updateQuote(route.params.id as string, {
