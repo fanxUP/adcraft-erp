@@ -4,7 +4,9 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
+from app.schemas.outsource import OutsourcePaymentCreate, OutsourceTaskCreate
 from app.services.outsource_service import OutsourceService
 from tests.conftest import SAMPLE_USER_ID, SAMPLE_ORDER_ID
 
@@ -36,11 +38,14 @@ def make_mock_outsource_task(**kwargs):
     t.quantity = kwargs.get("quantity", 10.0)
     t.unit_price = kwargs.get("unit_price", 50.0)
     t.total_amount = kwargs.get("total_amount", 500.0)
+    t.paid_amount = kwargs.get("paid_amount", 0.0)
+    t.unpaid_amount = kwargs.get("unpaid_amount", t.total_amount - t.paid_amount)
     t.status = kwargs.get("status", "pending")
     t.expected_at = kwargs.get("expected_at")
     t.completed_at = kwargs.get("completed_at")
     t.remark = kwargs.get("remark")
     t.created_at = kwargs.get("created_at", datetime.now(timezone.utc))
+    t.deleted_at = kwargs.get("deleted_at")
     return t
 
 
@@ -78,6 +83,9 @@ def mock_repos():
     task_repo.get_by_id = AsyncMock()
     task_repo.list_tasks = AsyncMock(return_value=([], 0))
     task_repo.create = AsyncMock()
+    task_repo.get_deleted_by_id = AsyncMock()
+    task_repo.restore = AsyncMock()
+    task_repo.soft_delete = AsyncMock()
 
     async def task_update_side_effect(model_obj, data):
         for key, value in data.items():
@@ -88,6 +96,7 @@ def mock_repos():
     payment_repo = MagicMock()
     payment_repo.list_payments = AsyncMock(return_value=([], 0))
     payment_repo.create = AsyncMock()
+    payment_repo.has_task_payments = AsyncMock(return_value=False)
 
     return vendor_repo, task_repo, payment_repo
 
@@ -250,6 +259,74 @@ async def test_update_task_with_unit_price_change(service):
 
 
 @pytest.mark.asyncio
+async def test_update_task_recalculates_unpaid_amount(service):
+    svc, _, tr, _ = service
+    task = make_mock_outsource_task(
+        quantity=10,
+        unit_price=50.0,
+        total_amount=500.0,
+        paid_amount=200.0,
+        unpaid_amount=300.0,
+    )
+    tr.get_by_id.return_value = task
+
+    result = await svc.update_task(SAMPLE_ORDER_ID, {"unit_price": 60.0})
+
+    assert result["total_amount"] == 600.0
+    assert result["paid_amount"] == 200.0
+    assert result["unpaid_amount"] == 400.0
+
+
+@pytest.mark.asyncio
+async def test_update_task_rejects_total_below_paid_amount(service):
+    svc, _, tr, _ = service
+    task = make_mock_outsource_task(
+        quantity=10,
+        unit_price=50.0,
+        total_amount=500.0,
+        paid_amount=400.0,
+        unpaid_amount=100.0,
+    )
+    tr.get_by_id.return_value = task
+
+    with pytest.raises(ValueError, match="不能低于已付金额"):
+        await svc.update_task(SAMPLE_ORDER_ID, {"unit_price": 30.0})
+
+
+@pytest.mark.asyncio
+async def test_update_task_rejects_status_jump(service):
+    svc, _, tr, _ = service
+    tr.get_by_id.return_value = make_mock_outsource_task(status="pending")
+
+    with pytest.raises(ValueError, match="不允许从 pending 流转到 completed"):
+        await svc.update_task(SAMPLE_ORDER_ID, {"status": "completed"})
+
+
+@pytest.mark.asyncio
+async def test_update_task_cannot_reactivate_cancelled_task(service):
+    svc, _, tr, _ = service
+    tr.get_by_id.return_value = make_mock_outsource_task(status="cancelled")
+
+    with pytest.raises(ValueError, match="已取消的外协任务不能编辑"):
+        await svc.update_task(SAMPLE_ORDER_ID, {"remark": "绕过恢复"})
+
+
+@pytest.mark.asyncio
+async def test_completing_fully_paid_task_marks_it_settled(service):
+    svc, _, tr, _ = service
+    tr.get_by_id.return_value = make_mock_outsource_task(
+        status="in_progress",
+        paid_amount=500.0,
+        unpaid_amount=0.0,
+    )
+
+    result = await svc.update_task(SAMPLE_ORDER_ID, {"status": "completed"})
+
+    assert result["status"] == "settled"
+    assert result["completed_at"] is not None
+
+
+@pytest.mark.asyncio
 async def test_update_task_not_found(service):
     svc, _, tr, _ = service
     tr.get_by_id.return_value = None
@@ -280,3 +357,143 @@ async def test_create_payment(service):
             "amount": 500.0,
         })
     assert result["payment_no"] == "OP20260629-0002"
+
+
+@pytest.mark.asyncio
+async def test_create_payment_rejects_vendor_mismatch(service):
+    svc, _, tr, _ = service
+    task = make_mock_outsource_task(vendor_id=SAMPLE_USER_ID)
+    tr.get_by_id.return_value = task
+
+    with pytest.raises(ValueError, match="付款供应商与外协任务不一致"):
+        await svc.create_payment({
+            "vendor_id": "99999999-9999-9999-9999-999999999999",
+            "task_id": SAMPLE_ORDER_ID,
+            "amount": 100,
+        })
+
+
+@pytest.mark.asyncio
+async def test_create_payment_rejects_amount_above_task_balance(service):
+    svc, _, tr, _ = service
+    task = make_mock_outsource_task(
+        total_amount=500.0,
+        paid_amount=400.0,
+        unpaid_amount=100.0,
+    )
+    tr.get_by_id.return_value = task
+
+    with pytest.raises(ValueError, match="超过任务未付金额"):
+        await svc.create_payment({
+            "vendor_id": SAMPLE_USER_ID,
+            "task_id": SAMPLE_ORDER_ID,
+            "amount": 101,
+        })
+
+
+@pytest.mark.asyncio
+async def test_create_payment_updates_balance_and_creator(service):
+    svc, _, tr, pr = service
+    task = make_mock_outsource_task(
+        total_amount=500.0,
+        paid_amount=100.0,
+        unpaid_amount=400.0,
+    )
+    tr.get_by_id.return_value = task
+    pr.create.return_value = make_mock_outsource_payment(amount=150.0)
+
+    with patch(
+        "app.services.outsource_service.generate_outsource_payment_no",
+        AsyncMock(return_value="OP20260629-0002"),
+    ):
+        await svc.create_payment(
+            {
+                "vendor_id": SAMPLE_USER_ID,
+                "task_id": SAMPLE_ORDER_ID,
+                "amount": 150,
+            },
+            created_by=SAMPLE_USER_ID,
+        )
+
+    create_data = pr.create.await_args.args[0]
+    assert create_data["created_by"] == SAMPLE_USER_ID
+    assert task.paid_amount == 250.0
+    assert task.unpaid_amount == 250.0
+
+
+@pytest.mark.asyncio
+async def test_full_payment_settles_completed_task(service):
+    svc, _, tr, pr = service
+    task = make_mock_outsource_task(
+        status="completed",
+        total_amount=500.0,
+        paid_amount=400.0,
+        unpaid_amount=100.0,
+    )
+    tr.get_by_id.return_value = task
+    pr.create.return_value = make_mock_outsource_payment(amount=100.0)
+
+    with patch(
+        "app.services.outsource_service.generate_outsource_payment_no",
+        AsyncMock(return_value="OP20260629-0002"),
+    ):
+        await svc.create_payment({
+            "vendor_id": SAMPLE_USER_ID,
+            "task_id": SAMPLE_ORDER_ID,
+            "amount": 100,
+        })
+
+    assert task.status == "settled"
+
+
+@pytest.mark.asyncio
+async def test_cancel_task_rejects_task_with_payment(service):
+    svc, _, tr, _ = service
+    tr.get_by_id.return_value = make_mock_outsource_task(paid_amount=100.0)
+
+    with pytest.raises(ValueError, match="已有付款"):
+        await svc.cancel_task(SAMPLE_ORDER_ID)
+
+
+@pytest.mark.asyncio
+async def test_delete_task_preserves_payment_history(service):
+    svc, _, tr, pr = service
+    task = make_mock_outsource_task(status="cancelled")
+    tr.get_by_id.return_value = task
+    pr.has_task_payments.return_value = True
+
+    with pytest.raises(ValueError, match="存在付款记录"):
+        await svc.delete_task(SAMPLE_ORDER_ID)
+
+    tr.soft_delete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_restore_task_keeps_cancelled_status(service):
+    svc, _, tr, _ = service
+    task = make_mock_outsource_task(status="cancelled", deleted_at=datetime.now(timezone.utc))
+    tr.get_deleted_by_id.return_value = task
+
+    result = await svc.restore_task(SAMPLE_ORDER_ID)
+
+    assert result["status"] == "cancelled"
+    tr.restore.assert_awaited_once_with(task)
+
+
+def test_outsource_amounts_and_quantity_must_be_valid():
+    with pytest.raises(ValidationError):
+        OutsourcePaymentCreate(vendor_id=str(SAMPLE_USER_ID), amount=0)
+    with pytest.raises(ValidationError):
+        OutsourceTaskCreate(
+            vendor_id=str(SAMPLE_USER_ID),
+            task_type="production",
+            quantity=0,
+            unit_price=1,
+        )
+    with pytest.raises(ValidationError):
+        OutsourceTaskCreate(
+            vendor_id=str(SAMPLE_USER_ID),
+            task_type="production",
+            quantity=1,
+            unit_price=-1,
+        )

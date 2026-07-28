@@ -53,7 +53,7 @@
           <el-button text type="primary" @click="handleEdit(row as OutsourceTaskResponse)">编辑</el-button>
           <el-button v-if="row.status === 'pending'" text type="primary" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'in_progress')">开始</el-button>
           <el-button v-if="row.status === 'in_progress'" text type="success" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'completed')">完成</el-button>
-          <el-button v-if="row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" text type="warning" @click="handlePay(row as OutsourceTaskResponse)">付款</el-button>
+          <el-button v-if="isAdmin && row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" text type="warning" @click="handlePay(row as OutsourceTaskResponse)">付款</el-button>
           <el-button v-if="isAdmin && row.status === 'completed'" text type="warning" @click="handleRevert(row as OutsourceTaskResponse)">退回</el-button>
           <el-button v-if="isAdmin && !['completed', 'settled', 'cancelled'].includes(row.status)" text type="danger" @click="handleCancel(row as OutsourceTaskResponse)">取消</el-button>
           <el-button v-if="isAdmin && row.status === 'cancelled'" text type="danger" @click="handleDelete(row as OutsourceTaskResponse)">删除</el-button>
@@ -389,7 +389,7 @@ async function handleRevert(row: OutsourceTaskResponse) {
 
 async function handleDelete(row: OutsourceTaskResponse) {
   try {
-    await ElMessageBox.confirm(`确认删除外协任务「${row.task_no}」？删除后不可恢复。`, '确认', {
+    await ElMessageBox.confirm(`确认删除外协任务「${row.task_no}」？删除后可在回收站恢复。`, '确认', {
       confirmButtonText: '确认删除', cancelButtonText: '取消', type: 'warning',
     })
     await deleteOutsourceTask(row.id)

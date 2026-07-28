@@ -64,6 +64,14 @@ INSTALLATION_TASK_WORKFLOW: Workflow = {
     "completed": (),
 }
 
+OUTSOURCE_TASK_WORKFLOW: Workflow = {
+    "pending": ("in_progress",),
+    "in_progress": ("completed",),
+    "completed": (),
+    "settled": (),
+    "cancelled": (),
+}
+
 
 def allowed_targets(workflow: Workflow, current_status: str) -> tuple[str, ...]:
     return workflow.get(current_status, ())

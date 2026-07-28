@@ -126,6 +126,8 @@ PERM_OUTSOURCE_READ = "outsource:read"
 PERM_OUTSOURCE_CREATE = "outsource:create"
 PERM_OUTSOURCE_UPDATE = "outsource:update"
 PERM_OUTSOURCE_DELETE = "outsource:delete"
+PERM_OUTSOURCE_PAYMENT_READ = "outsource_payment:read"
+PERM_OUTSOURCE_PAYMENT_CREATE = "outsource_payment:create"
 
 # Report
 PERM_REPORT_READ = "report:read"

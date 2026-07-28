@@ -126,6 +126,8 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "outsource:create", "name": "创建外协", "description": "创建外协商/任务/付款"},
     {"code": "outsource:update", "name": "编辑外协", "description": "编辑外协信息"},
     {"code": "outsource:delete", "name": "删除外协", "description": "删除外协记录"},
+    {"code": "outsource_payment:read", "name": "查看外协付款", "description": "查看外协付款记录和任务付款摘要"},
+    {"code": "outsource_payment:create", "name": "登记外协付款", "description": "登记外协任务付款"},
     # Report
     {"code": "report:read", "name": "查看报表", "description": "查看销售报表"},
     # Vehicle
@@ -204,6 +206,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "process:read", "process:create", "process:update", "process:delete",
         "production_task:read", "production_task:create", "production_task:update", "production_task:change_status",
         "inventory:read", "inventory:create", "inventory:update", "inventory:stock_in", "inventory:stock_out",
+        "outsource:read", "outsource:create", "outsource:update",
         "vehicle:read", "vehicle:create", "vehicle:update", "vehicle:delete",
         "aerial:read", "aerial:create", "aerial:update", "aerial:wage",
     ],
@@ -219,6 +222,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "payment:read", "payment:create", "payment:void",
         "statement:read", "statement:create", "statement:confirm",
         "expense:read", "expense:create", "expense:update", "expense:delete",
+        "outsource:read", "outsource_payment:read", "outsource_payment:create",
         "report:read",
         "ai_quote:read", "ai_anomaly:read", "ai_knowledge:read", "ai_report:read",
         "vehicle:read", "finance:review",

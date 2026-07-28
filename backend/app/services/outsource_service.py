@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import datetime
 from decimal import Decimal
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.outsource_repo import OutsourceVendorRepository, OutsourceTaskRepository, OutsourcePaymentRepository
 from app.services.number_generator import generate_vendor_no, generate_outsource_task_no, generate_outsource_payment_no
 from app.models.outsource import OutsourceVendor, OutsourcePayment
+from app.domain.workflows import OUTSOURCE_TASK_WORKFLOW, ensure_transition
 
 
 class OutsourceService:
@@ -98,9 +100,13 @@ class OutsourceService:
         return self._task_to_dict(task, vname, pname)
 
     async def update_task(self, task_id: UUID, data: dict) -> dict:
-        task = await self.task_repo.get_by_id(task_id)
+        task = await self.task_repo.get_by_id(task_id, for_update=True)
         if not task:
             raise ValueError("外协任务不存在")
+        if task.status == "cancelled":
+            raise ValueError("已取消的外协任务不能编辑，请从回收站流程恢复")
+        if task.status == "settled":
+            raise ValueError("已结算的外协任务不能编辑")
         # 移除前端传入的响应-only 字段，避免 ORM 报错
         data.pop("related_project_name", None)
         # 向后兼容：接受 order_id 参数，映射到 related_doc_id
@@ -111,10 +117,22 @@ class OutsourceService:
         # 空字符串转 None，避免 UUID 字段报错
         if "related_doc_id" in data and not data["related_doc_id"]:
             data["related_doc_id"] = None
-        # 编辑已取消的任务时自动恢复为待处理（重新激活）
-        if task.status == "cancelled":
-            data["status"] = "pending"
-            data["completed_at"] = None
+        if (
+            data.get("vendor_id")
+            and UUID(str(data["vendor_id"])) != task.vendor_id
+            and Decimal(str(task.paid_amount or 0)) > 0
+        ):
+            raise ValueError("已有付款的外协任务不能更换供应商")
+        if "status" in data:
+            ensure_transition(
+                OUTSOURCE_TASK_WORKFLOW,
+                task.status,
+                data["status"],
+            )
+            if data["status"] == "completed":
+                data["completed_at"] = datetime.now()
+                if Decimal(str(task.unpaid_amount or 0)) == 0:
+                    data["status"] = "settled"
         # Recalculate total if price or quantity changed
         if "unit_price" in data:
             price = Decimal(str(data["unit_price"]))
@@ -124,6 +142,12 @@ class OutsourceService:
             qty = Decimal(str(data["quantity"]))
             price = Decimal(str(task.unit_price))
             data["total_amount"] = float(qty * price)
+        if "total_amount" in data:
+            total_amount = Decimal(str(data["total_amount"]))
+            paid_amount = Decimal(str(task.paid_amount or 0))
+            if total_amount < paid_amount:
+                raise ValueError("任务总金额不能低于已付金额")
+            data["unpaid_amount"] = float(total_amount - paid_amount)
         task = await self.task_repo.update(task, data)
         vname = await self._task_vendor_name(task)
         pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
@@ -141,18 +165,50 @@ class OutsourceService:
             result.append(self._payment_to_dict(p, vname))
         return result, total
 
-    async def create_payment(self, data: dict) -> dict:
-        data["payment_no"] = await generate_outsource_payment_no(self.db)
+    async def create_payment(
+        self,
+        data: dict,
+        created_by: UUID | None = None,
+    ) -> dict:
+        data = dict(data)
         # Convert string fields to proper types
         if data.get("paid_at"):
             from datetime import datetime as dt
             data["paid_at"] = dt.fromisoformat(data["paid_at"])
         if data.get("task_id") and not isinstance(data["task_id"], UUID):
             data["task_id"] = UUID(data["task_id"])
+        if not isinstance(data["vendor_id"], UUID):
+            data["vendor_id"] = UUID(data["vendor_id"])
+        amount = Decimal(str(data["amount"]))
+        if amount <= 0:
+            raise ValueError("付款金额必须大于0")
+        task = None
+        if data.get("task_id"):
+            task = await self.task_repo.get_by_id(
+                data["task_id"],
+                for_update=True,
+            )
+            if not task:
+                raise ValueError("外协任务不存在")
+            if task.status == "cancelled":
+                raise ValueError("已取消的外协任务不能付款")
+            if task.vendor_id != data["vendor_id"]:
+                raise ValueError("付款供应商与外协任务不一致")
+            unpaid_amount = Decimal(str(task.unpaid_amount or 0))
+            if amount > unpaid_amount:
+                raise ValueError(f"付款金额超过任务未付金额 {unpaid_amount:.2f} 元")
+        data["payment_no"] = await generate_outsource_payment_no(self.db)
+        data["created_by"] = created_by
         payment = await self.payment_repo.create(data)
-        # 同步更新关联任务的已付/未付金额
-        if payment.task_id:
-            await self._update_task_paid_amounts(payment.task_id)
+        if task:
+            task.paid_amount = float(Decimal(str(task.paid_amount or 0)) + amount)
+            task.unpaid_amount = float(
+                Decimal(str(task.total_amount or 0))
+                - Decimal(str(task.paid_amount))
+            )
+            if task.unpaid_amount == 0 and task.status == "completed":
+                task.status = "settled"
+            await self.db.flush()
         vname = await self._vendor_name(payment.vendor_id)
         return self._payment_to_dict(payment, vname)
 
@@ -298,11 +354,13 @@ class OutsourceService:
     # ── Cancel Task (admin only) ──
 
     async def cancel_task(self, task_id: UUID) -> dict:
-        task = await self.task_repo.get_by_id(task_id)
+        task = await self.task_repo.get_by_id(task_id, for_update=True)
         if not task:
             raise ValueError("外协任务不存在")
         if task.status in ("completed", "settled", "cancelled"):
             raise ValueError(f"当前状态「{task.status}」不允许取消")
+        if Decimal(str(task.paid_amount or 0)) > 0:
+            raise ValueError("该外协任务已有付款，不能取消")
         task.status = "cancelled"
         await self.db.flush()
         vname = await self._task_vendor_name(task)
@@ -325,19 +383,13 @@ class OutsourceService:
     # ── Delete Task (admin only, soft delete + cascade payments) ──
 
     async def delete_task(self, task_id: UUID) -> bool:
-        """软删除外协任务，同时级联删除关联的外协付款"""
+        """软删除没有付款记录的已取消任务。"""
         task = await self.task_repo.get_by_id(task_id)
         if not task:
             raise ValueError("外协任务不存在")
         if task.status != "cancelled":
             raise ValueError("仅已取消的外协任务可以删除")
-        # 级联删除关联的外协付款
-        from app.models.outsource import OutsourcePayment
-        from sqlalchemy import select
-        payments = (await self.db.execute(
-            select(OutsourcePayment).where(OutsourcePayment.task_id == task_id)
-        )).scalars().all()
-        for p in payments:
-            await self.db.delete(p)
+        if await self.payment_repo.has_task_payments(task_id):
+            raise ValueError("该外协任务存在付款记录，不能删除")
         await self.task_repo.soft_delete(task)
         return True

@@ -4,8 +4,15 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
-from app.core.permissions import require_role
+from app.core.permissions import (
+    PERM_OUTSOURCE_CREATE,
+    PERM_OUTSOURCE_DELETE,
+    PERM_OUTSOURCE_PAYMENT_CREATE,
+    PERM_OUTSOURCE_PAYMENT_READ,
+    PERM_OUTSOURCE_READ,
+    PERM_OUTSOURCE_UPDATE,
+    require_permission,
+)
 from app.models.user import User
 from app.schemas.common import success, success_paginated, error
 from app.schemas.outsource import VendorCreate, VendorUpdate, OutsourceTaskCreate, OutsourceTaskUpdate, OutsourcePaymentCreate
@@ -25,7 +32,7 @@ async def list_vendors(
     keyword: str | None = None,
     service_type: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
     service = OutsourceService(db)
     vendors, total = await service.list_vendors(page, page_size, keyword, service_type)
@@ -36,7 +43,7 @@ async def list_vendors(
 async def get_vendor(
     vendor_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
     service = OutsourceService(db)
     vendor = await service.get_vendor(UUID(vendor_id))
@@ -50,7 +57,7 @@ async def create_vendor(
     data: VendorCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_CREATE)),
 ):
     service = OutsourceService(db)
     vendor = await service.create_vendor(data.model_dump())
@@ -67,7 +74,7 @@ async def update_vendor(
     data: VendorUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_UPDATE)),
 ):
     service = OutsourceService(db)
     vid = UUID(vendor_id)
@@ -86,7 +93,7 @@ async def delete_vendor(
     vendor_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_DELETE)),
 ):
     service = OutsourceService(db)
     vid = UUID(vendor_id)
@@ -109,7 +116,7 @@ async def list_tasks(
     vendor_id: str | None = None,
     order_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
     service = OutsourceService(db)
     vid = UUID(vendor_id) if vendor_id else None
@@ -122,7 +129,7 @@ async def list_tasks(
 async def get_task_payment_summary(
     task_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_PAYMENT_READ)),
 ):
     """获取外协任务付款摘要：总金额、已付、未付、付款明细"""
     from uuid import UUID
@@ -137,7 +144,7 @@ async def get_task_payment_summary(
 async def get_task(
     task_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
     service = OutsourceService(db)
     task = await service.get_task(UUID(task_id))
@@ -151,7 +158,7 @@ async def create_task(
     data: OutsourceTaskCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_CREATE)),
 ):
     service = OutsourceService(db)
     task = await service.create_task(data.model_dump())
@@ -168,7 +175,7 @@ async def update_task(
     data: OutsourceTaskUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_UPDATE)),
 ):
     service = OutsourceService(db)
     tid = UUID(task_id)
@@ -192,7 +199,7 @@ async def list_payments(
     vendor_id: str | None = None,
     task_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_PAYMENT_READ)),
 ):
     service = OutsourceService(db)
     vid = UUID(vendor_id) if vendor_id else None
@@ -206,10 +213,13 @@ async def create_payment(
     data: OutsourcePaymentCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_PAYMENT_CREATE)),
 ):
     service = OutsourceService(db)
-    payment = await service.create_payment(data.model_dump())
+    payment = await service.create_payment(
+        data.model_dump(),
+        created_by=current_user.id,
+    )
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_OUTSOURCE_PAYMENT, UUID(payment["id"]), ACTION_CREATE,
                         ip_address=request.client.host if request.client else None,
@@ -223,7 +233,7 @@ async def cancel_task(
     task_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_DELETE)),
 ):
     """取消外协任务。仅限管理员操作。"""
     service = OutsourceService(db)
@@ -246,7 +256,7 @@ async def revert_task(
     task_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_DELETE)),
 ):
     """退回已完成的外协任务为进行中。仅限管理员操作。"""
     service = OutsourceService(db)
@@ -269,7 +279,7 @@ async def delete_task(
     task_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_DELETE)),
 ):
     """删除已取消的外协任务。仅限管理员操作。"""
     service = OutsourceService(db)
@@ -292,7 +302,7 @@ async def list_deleted_tasks(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_DELETE)),
 ):
     """列出已删除的外协任务（回收站）"""
     service = OutsourceService(db)
@@ -305,7 +315,7 @@ async def restore_task(
     task_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_DELETE)),
 ):
     """从回收站恢复外协任务"""
     service = OutsourceService(db)
@@ -326,7 +336,7 @@ async def restore_task(
 @router.get("/quotes-for-dropdown")
 async def list_quotes_for_dropdown(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
     """返回所有报价单供下拉选择（精简字段）"""
     from sqlalchemy import select
@@ -349,7 +359,7 @@ async def list_quotes_for_dropdown(
 @router.get("/orders-for-dropdown")
 async def list_orders_for_dropdown(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
     """返回所有订单供下拉选择（精简字段）"""
     from sqlalchemy import select

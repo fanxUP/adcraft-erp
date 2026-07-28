@@ -52,8 +52,8 @@ class OutsourceTaskCreate(BaseModel):
     order_id: str | None = None
     task_type: str = Field(...)
     description: str | None = None
-    quantity: int = 1
-    unit_price: Decimal = Decimal("0")
+    quantity: int = Field(1, gt=0)
+    unit_price: Decimal = Field(Decimal("0"), ge=0)
     expected_at: str | None = None
     remark: str | None = None
 
@@ -64,8 +64,8 @@ class OutsourceTaskUpdate(BaseModel):
     related_doc_type: str | None = None
     task_type: str | None = None
     description: str | None = None
-    quantity: int | None = None
-    unit_price: Decimal | None = None
+    quantity: int | None = Field(None, gt=0)
+    unit_price: Decimal | None = Field(None, ge=0)
     status: str | None = None
     expected_at: str | None = None
     completed_at: str | None = None
@@ -101,7 +101,7 @@ class OutsourceTaskResponse(BaseModel):
 class OutsourcePaymentCreate(BaseModel):
     vendor_id: str = Field(...)
     task_id: str | None = None
-    amount: Decimal = Field(...)
+    amount: Decimal = Field(..., gt=0)
     payment_method: str | None = None
     payee_company_name: str | None = None
     paid_at: str | None = None

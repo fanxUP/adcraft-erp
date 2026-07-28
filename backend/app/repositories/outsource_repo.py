@@ -53,10 +53,19 @@ class OutsourceTaskRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_by_id(self, task_id: UUID) -> OutsourceTask | None:
-        result = await self.db.execute(
-            select(OutsourceTask).where(OutsourceTask.id == task_id)
+    async def get_by_id(
+        self,
+        task_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> OutsourceTask | None:
+        query = select(OutsourceTask).where(
+            OutsourceTask.id == task_id,
+            OutsourceTask.deleted_at.is_(None),
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
@@ -96,7 +105,7 @@ class OutsourceTaskRepository:
 
     async def restore(self, task: OutsourceTask) -> None:
         task.deleted_at = None
-        task.status = cancelled
+        task.status = "cancelled"
         await self.db.flush()
 
     async def list_deleted_tasks(self, skip: int = 0, limit: int = 20) -> tuple[list[OutsourceTask], int]:
@@ -137,3 +146,11 @@ class OutsourcePaymentRepository:
         self.db.add(payment)
         await self.db.flush()
         return payment
+
+    async def has_task_payments(self, task_id: UUID) -> bool:
+        result = await self.db.execute(
+            select(func.count(OutsourcePayment.id)).where(
+                OutsourcePayment.task_id == task_id
+            )
+        )
+        return bool(result.scalar())
