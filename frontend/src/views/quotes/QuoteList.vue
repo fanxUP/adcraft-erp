@@ -91,6 +91,7 @@ import { getQuotes, deleteQuote, cancelQuote, revertQuoteToDraft } from '@/api/q
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { QuoteListResponse } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false)
 const list = ref<QuoteListResponse[]>([])
@@ -170,14 +171,25 @@ async function handleRevert(row: QuoteListResponse) {
 }
 
 async function handleDelete(row: QuoteListResponse) {
-  await ElMessageBox.confirm(
-    `此操作将彻底删除报价「${row.quote_no}」及所有关联数据，不可恢复！确定继续？`,
-    '删除报价',
-    { confirmButtonText: '彻底删除', cancelButtonText: '取消', type: 'error' },
-  )
-  await deleteQuote(row.id)
-  ElMessage.success('已彻底删除')
-  fetchData()
+  try {
+    await ElMessageBox.confirm(
+      `此操作将彻底删除报价「${row.quote_no}」及所有关联数据，不可恢复！确定继续？`,
+      '确认删除报价',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        distinguishCancelAndClose: true,
+        customClass: 'quote-delete-confirm',
+      },
+    )
+    await deleteQuote(row.id)
+    ElMessage.success('报价已删除')
+    await fetchData()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(getErrorMessage(error, '报价删除失败'))
+  }
 }
 
 onMounted(fetchData)

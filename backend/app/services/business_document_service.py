@@ -7,6 +7,8 @@ from sqlalchemy import select
 from app.domain.workflows import ORDER_WORKFLOW, QUOTE_WORKFLOW, allowed_targets
 from app.repositories.business_document_repo import BusinessDocumentRepository
 from app.models.task import DesignTask, ProductionTask, InstallationTask
+from app.models.outsource import OutsourceTask
+from app.models.project_cost import ProjectCost
 
 
 def _build_spec(item) -> str | None:
