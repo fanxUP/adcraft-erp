@@ -96,6 +96,36 @@ async def create_quote_confirmed(db, user, customer_id, project_name="", items=N
     }
 
 
+async def preview_quote_creation(db, user, customer_id, project_name="", items=None,
+                                 sales_user_id=None, remark=""):
+    """Build a deterministic preview without creating a quote."""
+    preview_items = []
+    total_amount = 0.0
+    for item in items or []:
+        quantity = float(item.get("quantity", 1))
+        unit_price = float(item.get("unit_price", 0))
+        subtotal = quantity * unit_price
+        preview_items.append({
+            "item_name": item.get("item_name", ""),
+            "quantity": quantity,
+            "unit": item.get("unit", "个"),
+            "unit_price": unit_price,
+            "subtotal": subtotal,
+        })
+        total_amount += subtotal
+    return {
+        "action_label": "创建报价单",
+        "customer_id": customer_id,
+        "project_name": project_name or "新报价单",
+        "items": preview_items,
+        "items_count": len(preview_items),
+        "total_amount": total_amount,
+        "sales_user_id": sales_user_id or "",
+        "remark": remark,
+        "note": "确认后才会创建报价单。",
+    }
+
+
 async def add_quote_items(db, user, quote_id, items):
     """Add line items to an existing quote (does not create a new quote)."""
     from app.services.business_document_service import BusinessDocumentService
@@ -227,8 +257,9 @@ def register_quote_tools():
                     "required": ["item_name", "quantity", "unit_price"]}}},
             "required": ["quote_id", "items"]},
         risk_level="level_3",
-        required_permission="customer:read",
+        required_permission="quote:update",
         requires_confirmation=True,
+        preview_handler=add_quote_items_preview,
         handler=add_quote_items,
     ))
     r.register(AiToolDefinition(
@@ -265,7 +296,8 @@ def register_quote_tools():
             "remark": {"type": "string", "description": "报价单备注"}},
             "required": ["customer_id", "items"]},
         risk_level="level_3",
-        required_permission="customer:read",
+        required_permission="quote:create",
         requires_confirmation=True,
+        preview_handler=preview_quote_creation,
         handler=create_quote_confirmed,
     ))

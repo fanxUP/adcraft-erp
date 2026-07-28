@@ -54,3 +54,5 @@ def test_prompt_uses_the_canonical_backend_workflows():
     assert "pending_confirm → confirmed / cancelled" in prompt
     assert "pending_acceptance → completed / in_installation / cancelled" in prompt
     assert "pending_review → confirmed / revision" in prompt
+    assert "change_order_status" in prompt
+    assert "blockers 为空" in prompt

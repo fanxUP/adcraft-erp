@@ -30,6 +30,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   // Tool call state
   const toolResults = ref<AiToolCallResult[]>([])
   const pendingAction = ref<AiPendingAction | null>(null)
+  const actionSubmitting = ref(false)
   const activeGuidance = ref<AiWorkflowGuidance | null>(null)
   const guidanceLoading = ref(false)
   const guidanceError = ref('')
@@ -343,6 +344,8 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
 
   // Confirm/cancel actions
   async function confirmPendingAction(actionId: string) {
+    if (actionSubmitting.value) return null
+    actionSubmitting.value = true
     try {
       const result = (await aiApi.confirmAction(actionId)) as Record<string, unknown> | null
       pendingAction.value = null
@@ -363,6 +366,8 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : '确认失败'
       return null
+    } finally {
+      actionSubmitting.value = false
     }
   }
 
@@ -378,7 +383,8 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   return {
     visible, loading, error,
     sessions, currentSessionId, messages, pageContext,
-    toolResults, pendingAction, activeGuidance, guidanceLoading, guidanceError, inputText,
+    toolResults, pendingAction, actionSubmitting,
+    activeGuidance, guidanceLoading, guidanceError, inputText,
     currentSession, hasMessages, isProcessing, canGuideCurrentPage,
     toggleDrawer, openDrawer, closeDrawer, lastActionTimestamp,
     setPageContext, resetPageContext,

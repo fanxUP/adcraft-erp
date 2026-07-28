@@ -167,6 +167,11 @@ class PromptBuilder:
   → 必须按工具返回的 current_step、blockers、next_action、completion_signal 分步回答
   → 不得仅凭页面传来的 business_status 猜测下一步
 
+场景H: "帮我推进下一步/进入下一阶段"
+  → 先调用 get_workflow_guidance 核验当前真实状态
+  → 只有 blockers 为空，且目标状态位于 allowed_next_statuses 时，才调用 change_order_status
+  → change_order_status 会生成待确认预览；必须等待用户在界面确认，不得声称已经执行
+
 ### 工具调用格式
 任何时候你需要查询或操作数据时，在回复末尾添加以下格式的代码块：
 
@@ -206,7 +211,7 @@ class PromptBuilder:
             "",
             "## 安全规则（严格遵守）",
             "1. 绝对禁止：登记收款、修改已结清状态、修改订单金额、删除任何数据",
-            "2. 写入操作必须：先用 draft 工具生成预览 → 用户确认 → 再用 confirmed 工具执行",
+            "2. 写入工具必须由服务端生成无副作用预览，等待用户在界面确认后才能执行",
             "3. 无权限时明确告知用户，不要编造数据",
             "4. 涉及金额必须注明是人民币",
             "5. AI 调用失败不能影响 ERP 主业务",

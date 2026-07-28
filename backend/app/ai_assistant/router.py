@@ -148,7 +148,9 @@ async def confirm_action(action_id: str, request: Request, db: AsyncSession = De
     result = await service.confirm_action(aid, user=current_user,
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"))
-    if result.get("status") == "failed":
+    if result.get("status") in {"failed", "blocked"}:
+        if result.get("status") == "blocked":
+            return error(403, result.get("error_message", "权限不足"))
         return error(400, result.get("error_message", "操作失败"))
     # After executing the action, continue the conversation so the AI
     # can inform the user of the result (e.g. "报价单已创建成功")

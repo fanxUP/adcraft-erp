@@ -49,6 +49,32 @@ async def create_installation_task_confirmed(db, user, order_id, customer_name="
     return {"status": "created", "task": task}
 
 
+async def preview_installation_task_creation(
+    db,
+    user,
+    order_id,
+    customer_name="",
+    project_name="",
+    install_address="",
+    scheduled_date="",
+    assigned_to="",
+    notes="",
+    business_type=None,
+    business_id=None,
+):
+    return await create_installation_task_draft(
+        db=db,
+        user=user,
+        order_id=order_id,
+        customer_name=customer_name,
+        project_name=project_name,
+        install_address=install_address,
+        scheduled_date=scheduled_date,
+        assigned_to=assigned_to,
+        notes=notes,
+    )
+
+
 def register_installation_tools():
     r = ToolRegistry()
     r.register(AiToolDefinition(name="create_installation_task_draft", description="生成安装任务草稿预览（不保存）",
@@ -70,5 +96,7 @@ def register_installation_tools():
             "scheduled_date": {"type": "string", "description": "计划安装日期"},
             "assigned_to": {"type": "string", "description": "安装人员ID"},
             "notes": {"type": "string", "description": "备注"}}, "required": ["order_id"]},
-        risk_level="level_3", required_permission="customer:read", requires_confirmation=True,
+        risk_level="level_3", required_permission="installation_task:create",
+        requires_confirmation=True,
+        preview_handler=preview_installation_task_creation,
         handler=create_installation_task_confirmed))

@@ -55,6 +55,7 @@ const toolLabel = computed(() => {
     create_installation_task_draft: '安装任务草稿',
     create_installation_task_confirmed: '创建安装任务',
     create_quote_confirmed: '创建报价单',
+    change_order_status: '推进订单状态',
   }
   return labels[name] || name
 })

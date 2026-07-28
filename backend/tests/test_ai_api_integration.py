@@ -193,6 +193,34 @@ class TestAIWorkflowGuidanceAPI:
         assert response.status_code == 422
 
 
+class TestAISafeActionAPI:
+    """POST /api/v1/ai-assistant/actions/{id}/confirm"""
+
+    def test_confirm_returns_forbidden_when_permission_was_revoked(
+        self,
+        client,
+        auth_headers,
+    ):
+        action_id = uuid4()
+        with patch.object(
+            AiAssistantService,
+            "confirm_action",
+            new=AsyncMock(return_value={
+                "status": "blocked",
+                "error_message": "权限不足",
+            }),
+        ):
+            response = client.post(
+                f"/api/v1/ai-assistant/actions/{action_id}/confirm",
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["code"] == 403
+        assert body["message"] == "权限不足"
+
+
 # ── AI Knowledge Base ──────────────────────────────────────────────
 
 class TestAIKnowledgeAPI:

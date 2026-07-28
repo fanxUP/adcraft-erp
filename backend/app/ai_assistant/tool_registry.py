@@ -13,6 +13,7 @@ class AiToolDefinition:
     required_permission: str = ""
     requires_confirmation: bool = False
     handler: Callable[..., Coroutine[Any, Any, dict]] | None = None
+    preview_handler: Callable[..., Coroutine[Any, Any, dict]] | None = None
 
 
 class ToolRegistry:
