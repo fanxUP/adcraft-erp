@@ -11,6 +11,8 @@ import type {
 import * as aiApi from '@/api/aiAssistant'
 import {
   extractWorkflowGuidance,
+  getGuidanceContextKey,
+  matchesGuidanceContext,
   parseWorkflowGuidance,
 } from '@/utils/workflowGuidance'
 
@@ -34,6 +36,9 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   const activeGuidance = ref<AiWorkflowGuidance | null>(null)
   const guidanceLoading = ref(false)
   const guidanceError = ref('')
+  const guidanceRequestKey = ref<string | null>(null)
+  const dismissedGuidanceKey = ref<string | null>(null)
+  let guidanceRequestSequence = 0
 
   // Input state
   const inputText = ref('')
@@ -44,40 +49,55 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   )
   const hasMessages = computed(() => messages.value.length > 0)
   const isProcessing = computed(() => loading.value)
-  const canGuideCurrentPage = computed(() => {
-    const supported = [
-      'quote',
-      'order',
-      'design_task',
-      'production_task',
-      'installation_task',
-      'acceptance',
-    ]
-    return Boolean(
-      pageContext.value.business_id
-      && supported.includes(pageContext.value.business_type || ''),
-    )
-  })
+  const canGuideCurrentPage = computed(() =>
+    Boolean(getGuidanceContextKey(pageContext.value)),
+  )
 
   // Toggle drawer
   function toggleDrawer() {
     visible.value = !visible.value
-    if (visible.value && !currentSessionId.value) {
-      loadSessions()
+    if (visible.value) {
+      dismissedGuidanceKey.value = null
+      if (!currentSessionId.value) loadSessions()
+      void maybeStartWorkflowGuidance()
     }
   }
 
-  function openDrawer() { visible.value = true; loadSessions() }
+  function openDrawer() {
+    visible.value = true
+    dismissedGuidanceKey.value = null
+    loadSessions()
+    void maybeStartWorkflowGuidance()
+  }
   function closeDrawer() { visible.value = false }
 
   // Page context
   function setPageContext(ctx: AiPageContext) {
+    const previousKey = getGuidanceContextKey(pageContext.value)
     pageContext.value = { ...pageContext.value, ...ctx }
+    handleGuidanceContextChange(previousKey)
   }
 
   /** Full replacement — used on route change to avoid stale context leaking */
   function resetPageContext(ctx: AiPageContext) {
+    const previousKey = getGuidanceContextKey(pageContext.value)
     pageContext.value = { ...ctx }
+    handleGuidanceContextChange(previousKey)
+  }
+
+  function handleGuidanceContextChange(previousKey: string | null) {
+    const currentKey = getGuidanceContextKey(pageContext.value)
+    if (previousKey !== currentKey) {
+      dismissedGuidanceKey.value = null
+      guidanceError.value = ''
+    }
+    if (
+      activeGuidance.value
+      && !matchesGuidanceContext(activeGuidance.value, pageContext.value)
+    ) {
+      activeGuidance.value = null
+    }
+    void maybeStartWorkflowGuidance()
   }
 
   // Sessions
@@ -295,16 +315,41 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
 
   function adoptWorkflowGuidance(results: AiToolCallResult[]) {
     const guidance = extractWorkflowGuidance(results)
-    if (guidance) activeGuidance.value = guidance
+    const currentKey = getGuidanceContextKey(pageContext.value)
+    if (
+      guidance
+      && (!currentKey || matchesGuidanceContext(guidance, pageContext.value))
+    ) {
+      activeGuidance.value = guidance
+    }
   }
 
   async function requestWorkflowGuidance(
     businessType: string | undefined,
     businessId: string | undefined,
+    force = false,
   ) {
-    if (!businessType || !businessId || guidanceLoading.value) return null
+    if (!businessType || !businessId) return null
+    const requestKey = getGuidanceContextKey({
+      business_type: businessType,
+      business_id: businessId,
+    })
+    if (!requestKey) return null
+    if (
+      !force
+      && activeGuidance.value
+      && matchesGuidanceContext(activeGuidance.value, {
+        business_type: businessType,
+        business_id: businessId,
+      })
+    ) {
+      return activeGuidance.value
+    }
+    if (guidanceLoading.value && guidanceRequestKey.value === requestKey) return null
 
+    const requestSequence = ++guidanceRequestSequence
     guidanceLoading.value = true
+    guidanceRequestKey.value = requestKey
     guidanceError.value = ''
     try {
       const response = await aiApi.getWorkflowGuidance({
@@ -313,31 +358,62 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
       })
       const guidance = parseWorkflowGuidance(response)
       if (!guidance) throw new Error('流程导航数据格式不正确')
-      activeGuidance.value = guidance
+      if (requestKey === getGuidanceContextKey(pageContext.value)) {
+        activeGuidance.value = guidance
+        dismissedGuidanceKey.value = null
+      }
       return guidance
     } catch (e: unknown) {
-      guidanceError.value = e instanceof Error ? e.message : '流程核验失败'
+      if (
+        requestSequence === guidanceRequestSequence
+        && requestKey === getGuidanceContextKey(pageContext.value)
+      ) {
+        guidanceError.value = e instanceof Error ? e.message : '流程核验失败'
+      }
       return null
     } finally {
-      guidanceLoading.value = false
+      if (requestSequence === guidanceRequestSequence) {
+        guidanceLoading.value = false
+        guidanceRequestKey.value = null
+      }
     }
   }
 
-  function startWorkflowGuidance() {
+  function maybeStartWorkflowGuidance() {
+    const currentKey = getGuidanceContextKey(pageContext.value)
+    if (
+      !visible.value
+      || !currentKey
+      || dismissedGuidanceKey.value === currentKey
+      || matchesGuidanceContext(activeGuidance.value, pageContext.value)
+    ) {
+      return Promise.resolve(null)
+    }
     return requestWorkflowGuidance(
       pageContext.value.business_type,
       pageContext.value.business_id,
     )
   }
 
+  function startWorkflowGuidance() {
+    dismissedGuidanceKey.value = null
+    return requestWorkflowGuidance(
+      pageContext.value.business_type,
+      pageContext.value.business_id,
+      true,
+    )
+  }
+
   function refreshWorkflowGuidance() {
     return requestWorkflowGuidance(
-      activeGuidance.value?.business_type,
-      activeGuidance.value?.business_id,
+      pageContext.value.business_type,
+      pageContext.value.business_id,
+      true,
     )
   }
 
   function clearWorkflowGuidance() {
+    dismissedGuidanceKey.value = getGuidanceContextKey(pageContext.value)
     activeGuidance.value = null
     guidanceError.value = ''
   }
@@ -361,6 +437,14 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
         })
         // Force reactivity
         messages.value = [...messages.value]
+      }
+      if (getGuidanceContextKey(pageContext.value)) {
+        dismissedGuidanceKey.value = null
+        await requestWorkflowGuidance(
+          pageContext.value.business_type,
+          pageContext.value.business_id,
+          true,
+        )
       }
       return result
     } catch (e: unknown) {

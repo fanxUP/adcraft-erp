@@ -1,10 +1,19 @@
 import type {
+  AiPageContext,
   AiToolCallResult,
   AiWorkflowAction,
   AiWorkflowGuidance,
 } from '@/types/aiAssistant'
 
 const UUID_SEGMENT = '[0-9a-fA-F-]{36}'
+const GUIDED_BUSINESS_TYPES = new Set([
+  'quote',
+  'order',
+  'design_task',
+  'production_task',
+  'installation_task',
+  'acceptance',
+])
 const SAFE_TARGETS = [
   /^\/orders$/,
   new RegExp(`^/orders/${UUID_SEGMENT}$`),
@@ -86,4 +95,31 @@ export function extractWorkflowGuidance(
 
 export function isSafeWorkflowTarget(path: string): boolean {
   return SAFE_TARGETS.some(pattern => pattern.test(path))
+}
+
+export function getGuidanceContextKey(
+  context: Pick<AiPageContext, 'business_type' | 'business_id'>,
+): string | null {
+  const businessType = context.business_type
+  const businessId = context.business_id
+  if (!businessType || !businessId || !GUIDED_BUSINESS_TYPES.has(businessType)) {
+    return null
+  }
+  return `${businessType}:${businessId}`
+}
+
+export function matchesGuidanceContext(
+  guidance: unknown,
+  context: Pick<AiPageContext, 'business_type' | 'business_id'>,
+): boolean {
+  if (!isRecord(guidance)) return false
+  const guidanceKey = getGuidanceContextKey({
+    business_type: typeof guidance.business_type === 'string'
+      ? guidance.business_type
+      : undefined,
+    business_id: typeof guidance.business_id === 'string'
+      ? guidance.business_id
+      : undefined,
+  })
+  return Boolean(guidanceKey && guidanceKey === getGuidanceContextKey(context))
 }

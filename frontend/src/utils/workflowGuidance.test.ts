@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   extractWorkflowGuidance,
+  getGuidanceContextKey,
   isSafeWorkflowTarget,
+  matchesGuidanceContext,
 } from './workflowGuidance'
+import type { AiPageContext } from '@/types/aiAssistant'
 import type { AiToolCallResult } from '@/types/aiAssistant'
 
 const guidanceResult: AiToolCallResult = {
@@ -48,5 +51,34 @@ describe('workflow guidance helpers', () => {
     expect(isSafeWorkflowTarget('https://example.com/orders/1')).toBe(false)
     expect(isSafeWorkflowTarget('//example.com/orders/1')).toBe(false)
     expect(isSafeWorkflowTarget('/admin/users')).toBe(false)
+  })
+
+  it('creates a stable key only for workflow-aware business pages', () => {
+    const context: AiPageContext = {
+      business_type: 'order',
+      business_id: '33333333-3333-3333-3333-333333333333',
+      business_status: 'designing',
+    }
+
+    expect(getGuidanceContextKey(context)).toBe(
+      'order:33333333-3333-3333-3333-333333333333',
+    )
+    expect(getGuidanceContextKey({ business_type: 'customer', business_id: context.business_id }))
+      .toBeNull()
+    expect(getGuidanceContextKey({ business_type: 'order' })).toBeNull()
+  })
+
+  it('detects whether guidance still belongs to the current business record', () => {
+    const context: AiPageContext = {
+      business_type: 'order',
+      business_id: '33333333-3333-3333-3333-333333333333',
+    }
+
+    expect(matchesGuidanceContext(guidanceResult.result, context)).toBe(true)
+    expect(matchesGuidanceContext(guidanceResult.result, {
+      ...context,
+      business_id: '44444444-4444-4444-4444-444444444444',
+    })).toBe(false)
+    expect(matchesGuidanceContext(null, context)).toBe(false)
   })
 })
