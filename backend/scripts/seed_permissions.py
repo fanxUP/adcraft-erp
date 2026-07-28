@@ -17,8 +17,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.config import settings
 from app.core.database import engine, async_session_maker
-from app.models.user import Permission, Role, role_permissions
-from sqlalchemy import select, delete
+from app.models.user import Permission, Role
+from sqlalchemy import select
 
 
 # ── Define all permissions ────────────────────────────────────────────────
@@ -92,11 +92,29 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "statement:read", "name": "查看对账单", "description": "查看对账单列表和详情"},
     {"code": "statement:create", "name": "创建对账单", "description": "创建新对账单"},
     {"code": "statement:confirm", "name": "确认对账单", "description": "确认对账单"},
+    # Contract
+    {"code": "contract:read", "name": "查看合同", "description": "查看合同列表和详情"},
+    {"code": "contract:create", "name": "创建合同", "description": "创建新合同"},
+    {"code": "contract:update", "name": "编辑合同", "description": "编辑合同信息"},
+    {"code": "contract:delete", "name": "删除合同", "description": "删除合同"},
+    {"code": "contract:change_status", "name": "变更合同状态", "description": "变更合同状态"},
+    # Acceptance
+    {"code": "acceptance:read", "name": "查看验收单", "description": "查看验收单列表和详情"},
+    {"code": "acceptance:create", "name": "创建验收单", "description": "创建新验收单"},
+    {"code": "acceptance:update", "name": "编辑验收单", "description": "编辑验收单及附件"},
+    {"code": "acceptance:delete", "name": "删除验收单", "description": "删除草稿验收单"},
+    {"code": "acceptance:change_status", "name": "变更验收状态", "description": "提交、通过或驳回验收单"},
     # Expense
     {"code": "expense:read", "name": "查看支出", "description": "查看支出记录"},
     {"code": "expense:create", "name": "创建支出", "description": "创建支出记录"},
     {"code": "expense:update", "name": "编辑支出", "description": "编辑支出信息"},
     {"code": "expense:delete", "name": "删除支出", "description": "删除支出"},
+    # Chat
+    {"code": "chat:read", "name": "查看会话", "description": "查看会话和消息"},
+    {"code": "chat:create", "name": "发送消息", "description": "创建会话和发送消息"},
+    {"code": "chat:delete", "name": "删除消息", "description": "删除本人消息"},
+    {"code": "chat:group:create", "name": "创建群聊", "description": "创建群聊"},
+    {"code": "chat:group:manage", "name": "管理群聊", "description": "管理群聊成员和设置"},
     # Inventory
     {"code": "inventory:read", "name": "查看库存", "description": "查看库存物料"},
     {"code": "inventory:create", "name": "创建物料", "description": "创建新物料"},
@@ -212,6 +230,11 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
 ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance"]
 
 
+def replace_role_permissions(role: Role, permissions: list[Permission]) -> None:
+    """交给 ORM 统一计算关联表差异，避免手工清空后只补回新增权限。"""
+    role.permissions = list(permissions)
+
+
 async def seed_permissions():
     """Create or refresh all permissions and role-permission mappings."""
     async with async_session_maker() as session:
@@ -254,13 +277,7 @@ async def seed_permissions():
             codes = ROLE_PERMISSION_MAP.get(role_name, [])
             target_perms = [existing_perms[c] for c in codes if c in existing_perms]
 
-            # Clear existing mappings for this role
-            await session.execute(
-                delete(role_permissions).where(role_permissions.c.role_id == role.id)
-            )
-
-            # Re-add
-            role.permissions = target_perms
+            replace_role_permissions(role, target_perms)
             print(f"  → {role_name}: {len(target_perms)} permissions")
 
         await session.flush()

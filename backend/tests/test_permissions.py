@@ -116,6 +116,48 @@ async def test_sales_role_can_read_project_delivery_tasks():
     assert "installation_task:read" in sales_permissions
 
 
+async def test_every_declared_permission_can_be_seeded():
+    from app.core import permissions
+    from scripts.seed_permissions import ALL_PERMISSIONS
+
+    declared = {
+        value
+        for name, value in vars(permissions).items()
+        if name.startswith("PERM_") and isinstance(value, str)
+    }
+    seeded = {permission["code"] for permission in ALL_PERMISSIONS}
+
+    assert declared <= seeded
+
+
+async def test_role_mappings_only_reference_seeded_permissions():
+    from scripts.seed_permissions import ALL_PERMISSIONS, ROLE_PERMISSION_MAP
+
+    seeded = {permission["code"] for permission in ALL_PERMISSIONS}
+    mapped = {
+        permission
+        for permissions in ROLE_PERMISSION_MAP.values()
+        for permission in permissions
+    }
+
+    assert mapped <= seeded
+
+
+async def test_role_permission_refresh_replaces_the_complete_collection():
+    from scripts.seed_permissions import replace_role_permissions
+
+    role = MagicMock()
+    role.permissions = [_make_perm("stale")]
+    target = [_make_perm("order:read"), _make_perm("payment:read")]
+
+    replace_role_permissions(role, target)
+
+    assert [permission.code for permission in role.permissions] == [
+        "order:read",
+        "payment:read",
+    ]
+
+
 class TestRequireRole:
     async def _check(self, role_name: str, user) -> bool:
         dep = require_role(role_name)

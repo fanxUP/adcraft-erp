@@ -101,7 +101,11 @@ async def init_app():
                 print("  ✓ Admin already has admin role")
 
         # 4. Seed permissions (import the logic from seed_permissions.py)
-        from scripts.seed_permissions import ALL_PERMISSIONS, ROLE_PERMISSION_MAP
+        from scripts.seed_permissions import (
+            ALL_PERMISSIONS,
+            ROLE_PERMISSION_MAP,
+            replace_role_permissions,
+        )
 
         # Upsert permissions
         result = await session.execute(select(Permission))
@@ -124,7 +128,7 @@ async def init_app():
         for role_name, role in roles_by_name.items():
             codes = ROLE_PERMISSION_MAP.get(role_name, [])
             target_perms = [existing_perms[c] for c in codes if c in existing_perms]
-            role.permissions = target_perms
+            replace_role_permissions(role, target_perms)
 
         await session.flush()
         await session.commit()
