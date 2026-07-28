@@ -70,6 +70,17 @@
       </el-table-column>
     </el-table>
 
+    <el-dialog v-model="deleteDialogVisible" title="确认删除报价" width="420px" :close-on-click-modal="false">
+      <div class="delete-confirm-content">
+        <p>确定彻底删除报价「{{ pendingDeleteQuote?.quote_no }}」吗？</p>
+        <p class="delete-confirm-warning">报价及其关联数据删除后不可恢复。</p>
+      </div>
+      <template #footer>
+        <el-button @click="deleteDialogVisible = false">取消</el-button>
+        <el-button type="danger" :loading="deleting" @click="confirmDelete">确认删除</el-button>
+      </template>
+    </el-dialog>
+
     <QuotePreview :visible="previewVisible" :quote-id="previewQuoteId" @close="previewVisible = false" />
 
     <el-pagination
@@ -104,6 +115,9 @@ const dateRange = ref<[string, string] | null>(null)
 
 const previewVisible = ref(false)
 const previewQuoteId = ref<string | null>(null)
+const deleteDialogVisible = ref(false)
+const pendingDeleteQuote = ref<QuoteListResponse | null>(null)
+const deleting = ref(false)
 
 function handlePreview(row: QuoteListResponse) {
   previewQuoteId.value = row.id
@@ -170,25 +184,24 @@ async function handleRevert(row: QuoteListResponse) {
   fetchData()
 }
 
-async function handleDelete(row: QuoteListResponse) {
+function handleDelete(row: QuoteListResponse) {
+  pendingDeleteQuote.value = row
+  deleteDialogVisible.value = true
+}
+
+async function confirmDelete() {
+  if (!pendingDeleteQuote.value) return
+  deleting.value = true
   try {
-    await ElMessageBox.confirm(
-      `此操作将彻底删除报价「${row.quote_no}」及所有关联数据，不可恢复！确定继续？`,
-      '确认删除报价',
-      {
-        confirmButtonText: '确认删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        distinguishCancelAndClose: true,
-        customClass: 'quote-delete-confirm',
-      },
-    )
-    await deleteQuote(row.id)
+    await deleteQuote(pendingDeleteQuote.value.id)
     ElMessage.success('报价已删除')
+    deleteDialogVisible.value = false
+    pendingDeleteQuote.value = null
     await fetchData()
   } catch (error) {
-    if (error === 'cancel' || error === 'close') return
     ElMessage.error(getErrorMessage(error, '报价删除失败'))
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -201,4 +214,6 @@ onMounted(fetchData)
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .quote-actions { display: flex; gap: 8px; }
 .filter-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); margin-bottom: 16px; }
+.delete-confirm-content p { margin: 0; line-height: 1.7; }
+.delete-confirm-warning { margin-top: 8px !important; color: var(--el-color-danger); font-size: 13px; }
 </style>
