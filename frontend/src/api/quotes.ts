@@ -21,6 +21,10 @@ export function deleteQuote(id: string) {
   return del<SuccessResponse>(`/quotes/${id}`)
 }
 
+export function previewDeleteQuote(id: string) {
+  return get<{ quote_no: string; associations: Array<{ label: string; count: number }> }>(`/quotes/${id}/delete-preview`)
+}
+
 export function confirmQuote(id: string) {
   return post<QuoteDetailResponse>(`/quotes/${id}/confirm`)
 }

@@ -322,6 +322,19 @@ async def delete_quote(
     return success(None)
 
 
+@router.get("/{quote_id}/delete-preview")
+async def preview_delete_quote(
+    quote_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_QUOTE_DELETE)),
+):
+    service = BusinessDocumentService(db, doc_type="quote")
+    try:
+        return success(await service.delete_preview(UUID(quote_id)))
+    except ValueError as e:
+        return error(40401, str(e))
+
+
 @router.post("/{quote_id}/items")
 async def add_quote_item(
     quote_id: str,

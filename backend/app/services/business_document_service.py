@@ -162,6 +162,30 @@ class BusinessDocumentService:
         else:
             return await self._soft_delete_order(doc)
 
+    async def delete_preview(self, doc_id: UUID) -> dict:
+        """返回硬删除前的有效关联数量，不包含已软删除记录。"""
+        from app.models.acceptance import AcceptanceForm
+        from app.models.contract import ContractDocument
+        from app.models.outsource import OutsourceTask
+        from app.models.project_cost import ProjectCost
+        doc = await self.repo.get_by_id(doc_id)
+        if not doc:
+            raise ValueError("报价单不存在")
+        if doc.doc_type != "quote":
+            raise ValueError("仅支持预览报价单硬删除")
+        checks = {
+            "验收单": select(AcceptanceForm).where(AcceptanceForm.document_id == doc_id, AcceptanceForm.deleted_at.is_(None)),
+            "合同关联": select(ContractDocument).where(ContractDocument.document_id == doc_id),
+            "外协任务": select(OutsourceTask).where(OutsourceTask.related_doc_id == doc_id, OutsourceTask.deleted_at.is_(None)),
+            "项目成本": select(ProjectCost).where(ProjectCost.document_id == doc_id),
+        }
+        associations = []
+        for label, query in checks.items():
+            count = len((await self.db.execute(query)).scalars().all())
+            if count:
+                associations.append({"label": label, "count": count})
+        return {"quote_no": doc.doc_no, "associations": associations}
+
     async def _soft_delete_order(self, doc) -> bool:
         if doc.status != "cancelled":
             raise ValueError("只有已取消的订单可以删除")

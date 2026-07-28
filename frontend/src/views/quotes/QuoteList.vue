@@ -70,10 +70,17 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="deleteDialogVisible" title="确认删除报价" width="420px" :close-on-click-modal="false">
+    <el-dialog v-model="deleteDialogVisible" title="确认硬删除报价" width="460px" :close-on-click-modal="false">
       <div class="delete-confirm-content">
         <p>确定彻底删除报价「{{ pendingDeleteQuote?.quote_no }}」吗？</p>
         <p class="delete-confirm-warning">报价及其关联数据删除后不可恢复。</p>
+        <div v-if="deleteAssociations.length" class="delete-associations">
+          <div class="delete-associations-title">将一并删除以下有效关联数据：</div>
+          <div v-for="item in deleteAssociations" :key="item.label" class="delete-association-row">
+            <span>{{ item.label }}</span><strong>{{ item.count }} 条</strong>
+          </div>
+        </div>
+        <p v-else class="delete-confirm-safe">未发现有效关联数据（已软删除数据不计入）。</p>
       </div>
       <template #footer>
         <el-button @click="deleteDialogVisible = false">取消</el-button>
@@ -98,7 +105,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { getQuotes, deleteQuote, cancelQuote, revertQuoteToDraft } from '@/api/quotes'
+import { getQuotes, deleteQuote, previewDeleteQuote, cancelQuote, revertQuoteToDraft } from '@/api/quotes'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { QuoteListResponse } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
@@ -118,6 +125,7 @@ const previewQuoteId = ref<string | null>(null)
 const deleteDialogVisible = ref(false)
 const pendingDeleteQuote = ref<QuoteListResponse | null>(null)
 const deleting = ref(false)
+const deleteAssociations = ref<Array<{ label: string; count: number }>>([])
 
 function handlePreview(row: QuoteListResponse) {
   previewQuoteId.value = row.id
@@ -186,7 +194,14 @@ async function handleRevert(row: QuoteListResponse) {
 
 function handleDelete(row: QuoteListResponse) {
   pendingDeleteQuote.value = row
+  deleteAssociations.value = []
   deleteDialogVisible.value = true
+  previewDeleteQuote(row.id).then((preview) => {
+    deleteAssociations.value = preview.associations
+  }).catch((error) => {
+    deleteDialogVisible.value = false
+    ElMessage.error(getErrorMessage(error, '无法读取关联数据，已取消删除'))
+  })
 }
 
 async function confirmDelete() {
@@ -197,6 +212,7 @@ async function confirmDelete() {
     ElMessage.success('报价已删除')
     deleteDialogVisible.value = false
     pendingDeleteQuote.value = null
+    deleteAssociations.value = []
     await fetchData()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '报价删除失败'))
@@ -216,4 +232,8 @@ onMounted(fetchData)
 .filter-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); margin-bottom: 16px; }
 .delete-confirm-content p { margin: 0; line-height: 1.7; }
 .delete-confirm-warning { margin-top: 8px !important; color: var(--el-color-danger); font-size: 13px; }
+.delete-confirm-safe { margin-top: 12px !important; color: var(--el-color-success); font-size: 13px; }
+.delete-associations { margin-top: 16px; padding: 12px; background: var(--ad-darker); border: 1px solid var(--ad-border); border-radius: 6px; }
+.delete-associations-title { margin-bottom: 8px; font-weight: 600; }
+.delete-association-row { display: flex; justify-content: space-between; padding: 4px 0; }
 </style>
