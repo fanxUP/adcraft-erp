@@ -220,9 +220,11 @@ docker ps --format "table {{.Names}}\t{{.Status}}"
 ### 紧急恢复数据
 
 ```bash
-# 从自动备份恢复
-docker exec -i adcraft_postgres psql -U adcraft -d adcraft_erp < backups/backup_YYYYMMDD_020000.tar.gz
+# 从自动备份恢复（压缩包内含 SQL 与 uploads）
+tar -xOf backups/backup_YYYYMMDD_020000.tar.gz backup_YYYYMMDD_020000.sql \
+  | docker exec -i adcraft_postgres psql -U adcraft -d adcraft_erp
 
 # 从手动备份恢复
-docker exec -i adcraft_postgres psql -U adcraft -d adcraft_erp < backups/manual_backup_YYYYMMDD_HHMMSS.tar.gz
+tar -xOf backups/manual_backup_YYYYMMDD_HHMMSS.tar.gz manual_backup_YYYYMMDD_HHMMSS.sql \
+  | docker exec -i adcraft_postgres psql -U adcraft -d adcraft_erp
 ```

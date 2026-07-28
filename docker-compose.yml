@@ -19,8 +19,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - HTTP_PROXY=http://192.168.0.169:7890
-        - HTTPS_PROXY=http://192.168.0.169:7890
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
     container_name: adcraft_frontend
     restart: unless-stopped
     networks:
@@ -31,8 +31,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        - HTTP_PROXY=http://192.168.0.169:7890
-        - HTTPS_PROXY=http://192.168.0.169:7890
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
         - NO_PROXY=postgres,redis,minio,localhost,127.0.0.1
     container_name: adcraft_backend
     env_file:
@@ -65,7 +65,7 @@ services:
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     restart: unless-stopped
     networks:
       - adcraft-net
@@ -81,7 +81,7 @@ services:
     volumes:
       - ./data/redis:/data
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     restart: unless-stopped
     networks:
       - adcraft-net
@@ -101,8 +101,8 @@ services:
     volumes:
       - ./data/minio:/data
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     restart: unless-stopped
     networks:
       - adcraft-net
