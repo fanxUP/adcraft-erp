@@ -1,5 +1,11 @@
 <template>
-  <div class="ai-float-btn" @click="store.toggleDrawer()" :class="{ 'is-active': store.visible }">
+  <button
+    type="button"
+    class="ai-float-btn"
+    :class="{ 'is-active': store.visible }"
+    :aria-label="store.visible ? '关闭 AI 助手' : '打开 AI 助手'"
+    @click="store.toggleDrawer()"
+  >
     <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="ai-badge">
       <div class="ai-btn-inner">
         <el-icon :size="24">
@@ -8,7 +14,7 @@
         </el-icon>
       </div>
     </el-badge>
-  </div>
+  </button>
 </template>
 
 <script setup lang="ts">
@@ -26,6 +32,9 @@ const unreadCount = computed(() => 0)
   right: 28px;
   z-index: 2002;
   cursor: pointer;
+  padding: 0;
+  border: 0;
+  background: transparent;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .ai-float-btn:hover {

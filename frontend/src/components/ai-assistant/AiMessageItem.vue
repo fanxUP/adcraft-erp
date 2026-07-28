@@ -20,9 +20,9 @@
           <div class="ai-msg-content markdown-body" v-html="renderedContent" />
         </div>
         <!-- Tool results inline -->
-        <div v-if="hasToolResults" class="ai-msg-tools">
+        <div v-if="hasToolResults && isLatestAssistant" class="ai-msg-tools">
           <AiToolResultCard
-            v-for="(tr, idx) in toolResults"
+            v-for="(tr, idx) in displayToolResults"
             :key="idx"
             :data="tr"
           />
@@ -58,8 +58,14 @@ const props = defineProps<{
 const store = useAiAssistantStore()
 
 const toolResults = computed(() => store.toolResults)
+const displayToolResults = computed(() =>
+  toolResults.value.filter(result => result.tool_name !== 'get_workflow_guidance'),
+)
 
-const hasToolResults = computed(() => toolResults.value.length > 0)
+const hasToolResults = computed(() => displayToolResults.value.length > 0)
+const isLatestAssistant = computed(() =>
+  [...store.messages].reverse().find(message => message.role === 'assistant')?.id === props.msg.id,
+)
 
 const isError = computed(() => {
   const c = props.msg.content || ''

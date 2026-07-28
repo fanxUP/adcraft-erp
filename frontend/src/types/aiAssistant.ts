@@ -48,6 +48,24 @@ export interface AiToolCallResult {
   is_preview?: boolean
 }
 
+export interface AiWorkflowAction {
+  label: string
+  target_page: string
+  target_path: string
+  target_status?: string
+}
+
+export interface AiWorkflowGuidance {
+  business_type: string
+  business_id: string
+  current_status: string
+  current_step: string
+  blockers: string[]
+  next_action: AiWorkflowAction | null
+  completion_signal: string
+  allowed_next_statuses: string[]
+}
+
 export interface AiPendingAction {
   id: string
   tool_name: string

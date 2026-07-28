@@ -68,6 +68,8 @@
         <!-- Context bar -->
         <AiContextBar />
 
+        <AiWorkflowGuidanceCard v-if="store.activeGuidance" />
+
         <!-- Chat window -->
         <AiChatWindow />
 
@@ -104,6 +106,7 @@ import { ref, computed } from 'vue'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import AiChatWindow from './AiChatWindow.vue'
 import AiContextBar from './AiContextBar.vue'
+import AiWorkflowGuidanceCard from './AiWorkflowGuidanceCard.vue'
 import AiActionPreview from './AiActionPreview.vue'
 import AiInputBox from './AiInputBox.vue'
 

@@ -9,11 +9,30 @@ from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.common import success, error
 from app.ai_assistant.config import settings
-from app.ai_assistant.schemas import AiChatRequest
+from app.ai_assistant.schemas import AiChatRequest, WorkflowGuidanceRequest
 from app.ai_assistant.service import AiAssistantService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai-assistant", tags=["AI Assistant"])
+
+
+@router.post("/workflow-guidance")
+async def workflow_guidance(
+    data: WorkflowGuidanceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return deterministic, permission-gated guidance without an LLM round trip."""
+    service = AiAssistantService(db)
+    result = await service.get_workflow_guidance(
+        current_user,
+        data.business_type,
+        data.business_id,
+    )
+    if result.get("status") != "success":
+        code = 403 if result.get("status") == "blocked" else 400
+        return error(code, result.get("error_message", "流程核验失败"))
+    return success(result.get("result"))
 
 
 @router.post("/chat")

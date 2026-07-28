@@ -1,7 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { AiPageContext, AiSession, AiMessage, AiToolCallResult, AiPendingAction } from '@/types/aiAssistant'
+import type {
+  AiMessage,
+  AiPageContext,
+  AiPendingAction,
+  AiSession,
+  AiToolCallResult,
+  AiWorkflowGuidance,
+} from '@/types/aiAssistant'
 import * as aiApi from '@/api/aiAssistant'
+import {
+  extractWorkflowGuidance,
+  parseWorkflowGuidance,
+} from '@/utils/workflowGuidance'
 
 export const useAiAssistantStore = defineStore('aiAssistant', () => {
   // UI state
@@ -19,6 +30,9 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   // Tool call state
   const toolResults = ref<AiToolCallResult[]>([])
   const pendingAction = ref<AiPendingAction | null>(null)
+  const activeGuidance = ref<AiWorkflowGuidance | null>(null)
+  const guidanceLoading = ref(false)
+  const guidanceError = ref('')
 
   // Input state
   const inputText = ref('')
@@ -29,6 +43,20 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   )
   const hasMessages = computed(() => messages.value.length > 0)
   const isProcessing = computed(() => loading.value)
+  const canGuideCurrentPage = computed(() => {
+    const supported = [
+      'quote',
+      'order',
+      'design_task',
+      'production_task',
+      'installation_task',
+      'acceptance',
+    ]
+    return Boolean(
+      pageContext.value.business_id
+      && supported.includes(pageContext.value.business_type || ''),
+    )
+  })
 
   // Toggle drawer
   function toggleDrawer() {
@@ -62,6 +90,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     currentSessionId.value = sessionId
     toolResults.value = []
     pendingAction.value = null
+    activeGuidance.value = null
     try {
       messages.value = await aiApi.getSessionMessages(sessionId)
     } catch {
@@ -74,6 +103,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     messages.value = []
     toolResults.value = []
     pendingAction.value = null
+    activeGuidance.value = null
     inputText.value = ''
   }
 
@@ -116,6 +146,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
       })
 
       toolResults.value = response.tool_calls || []
+      adoptWorkflowGuidance(toolResults.value)
 
       if (response.pending_action) {
         pendingAction.value = response.pending_action
@@ -216,6 +247,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
 
               case 'tool_calls':
                 toolResults.value = event.tool_calls || []
+                adoptWorkflowGuidance(toolResults.value)
                 break
 
               case 'pending_action':
@@ -260,6 +292,55 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     }
   }
 
+  function adoptWorkflowGuidance(results: AiToolCallResult[]) {
+    const guidance = extractWorkflowGuidance(results)
+    if (guidance) activeGuidance.value = guidance
+  }
+
+  async function requestWorkflowGuidance(
+    businessType: string | undefined,
+    businessId: string | undefined,
+  ) {
+    if (!businessType || !businessId || guidanceLoading.value) return null
+
+    guidanceLoading.value = true
+    guidanceError.value = ''
+    try {
+      const response = await aiApi.getWorkflowGuidance({
+        business_type: businessType,
+        business_id: businessId,
+      })
+      const guidance = parseWorkflowGuidance(response)
+      if (!guidance) throw new Error('流程导航数据格式不正确')
+      activeGuidance.value = guidance
+      return guidance
+    } catch (e: unknown) {
+      guidanceError.value = e instanceof Error ? e.message : '流程核验失败'
+      return null
+    } finally {
+      guidanceLoading.value = false
+    }
+  }
+
+  function startWorkflowGuidance() {
+    return requestWorkflowGuidance(
+      pageContext.value.business_type,
+      pageContext.value.business_id,
+    )
+  }
+
+  function refreshWorkflowGuidance() {
+    return requestWorkflowGuidance(
+      activeGuidance.value?.business_type,
+      activeGuidance.value?.business_id,
+    )
+  }
+
+  function clearWorkflowGuidance() {
+    activeGuidance.value = null
+    guidanceError.value = ''
+  }
+
   // Confirm/cancel actions
   async function confirmPendingAction(actionId: string) {
     try {
@@ -297,12 +378,13 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   return {
     visible, loading, error,
     sessions, currentSessionId, messages, pageContext,
-    toolResults, pendingAction, inputText,
-    currentSession, hasMessages, isProcessing,
+    toolResults, pendingAction, activeGuidance, guidanceLoading, guidanceError, inputText,
+    currentSession, hasMessages, isProcessing, canGuideCurrentPage,
     toggleDrawer, openDrawer, closeDrawer, lastActionTimestamp,
     setPageContext, resetPageContext,
     loadSessions, switchSession, createNewSession,
     sendMessage, sendMessageStream,
+    startWorkflowGuidance, refreshWorkflowGuidance, clearWorkflowGuidance,
     confirmPendingAction, cancelPendingAction,
   }
 })

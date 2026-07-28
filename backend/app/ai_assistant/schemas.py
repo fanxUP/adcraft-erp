@@ -1,6 +1,6 @@
 """AI Assistant Pydantic schemas."""
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 from datetime import datetime
 
@@ -35,6 +35,18 @@ class AiChatRequest(BaseModel):
     session_id: Optional[str] = None
     message: str = Field(..., min_length=1, max_length=4000)
     context: Optional[AiPageContext] = None
+
+
+class WorkflowGuidanceRequest(BaseModel):
+    business_type: Literal[
+        "quote",
+        "order",
+        "design_task",
+        "production_task",
+        "installation_task",
+        "acceptance",
+    ]
+    business_id: UUID
 
 
 class AiConfirmActionRequest(BaseModel):

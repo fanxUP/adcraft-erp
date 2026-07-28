@@ -1,5 +1,10 @@
 import { post, get } from './index'
-import type { AiChatResponse, AiSession, AiMessage } from '@/types/aiAssistant'
+import type {
+  AiChatResponse,
+  AiMessage,
+  AiSession,
+  AiWorkflowGuidance,
+} from '@/types/aiAssistant'
 
 export function sendChatMessage(data: {
   session_id?: string | null
@@ -28,6 +33,13 @@ export function sendChatMessageStream(data: {
 
 export function getSessions() {
   return get<AiSession[]>('/ai-assistant/sessions')
+}
+
+export function getWorkflowGuidance(data: {
+  business_type: string
+  business_id: string
+}) {
+  return post<AiWorkflowGuidance>('/ai-assistant/workflow-guidance', data)
 }
 
 export function getSessionMessages(sessionId: string) {

@@ -26,6 +26,17 @@ class AiAssistantService:
             user=user, message=message, session_id=sid, context=context,
             ip_address=ip_address, user_agent=user_agent)
 
+    async def get_workflow_guidance(self, user, business_type, business_id):
+        """Resolve the next step through the same permission-gated tool path as chat."""
+        return await self.tool_executor.execute_tool(
+            tool_name="get_workflow_guidance",
+            args={
+                "business_type": business_type,
+                "business_id": str(business_id),
+            },
+            user=user,
+        )
+
     async def get_sessions(self, user_id):
         sessions = await self.memory_service.list_user_sessions(user_id)
         return [

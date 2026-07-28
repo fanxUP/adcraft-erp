@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.ai_assistant.workflow_guidance import build_workflow_guidance
+from app.ai_assistant.service import AiAssistantService
 from app.ai_assistant.tools.workflow_tools import (
     get_workflow_guidance,
     register_workflow_tools,
@@ -221,3 +222,29 @@ def test_workflow_guidance_tool_is_registered_as_read_only():
     assert tool is not None
     assert tool.risk_level == "level_1"
     assert tool.requires_confirmation is False
+
+
+@pytest.mark.asyncio
+async def test_direct_guidance_uses_permission_gated_tool_executor():
+    service = object.__new__(AiAssistantService)
+    service.tool_executor = MagicMock()
+    service.tool_executor.execute_tool = AsyncMock(
+        return_value={"status": "success", "result": {"current_step": "设计阶段"}}
+    )
+    user = MagicMock()
+
+    result = await service.get_workflow_guidance(
+        user,
+        "order",
+        SAMPLE_ORDER_ID,
+    )
+
+    assert result["status"] == "success"
+    service.tool_executor.execute_tool.assert_awaited_once_with(
+        tool_name="get_workflow_guidance",
+        args={
+            "business_type": "order",
+            "business_id": str(SAMPLE_ORDER_ID),
+        },
+        user=user,
+    )

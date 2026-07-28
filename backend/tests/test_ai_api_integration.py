@@ -17,6 +17,7 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.core.deps import get_db, get_current_user
 from app.schemas.common import success
+from app.ai_assistant.service import AiAssistantService
 
 SAMPLE_USER_ID = UUID("11111111-1111-1111-1111-111111111111")
 SAMPLE_CUSTOMER_ID = UUID("44444444-4444-4444-4444-444444444444")
@@ -141,6 +142,55 @@ class TestAIAnomaliesAPI:
             data = response.json()["data"]
             assert len(data["alerts"]) == 1
             assert data["summary"]["critical"] == 1
+
+
+class TestAIWorkflowGuidanceAPI:
+    """POST /api/v1/ai-assistant/workflow-guidance"""
+
+    def test_returns_live_guidance_for_supported_business(self, client, auth_headers):
+        guidance = {
+            "business_type": "order",
+            "business_id": "33333333-3333-3333-3333-333333333333",
+            "current_status": "designing",
+            "current_step": "设计阶段",
+            "blockers": [],
+            "next_action": {
+                "label": "进入生产阶段",
+                "target_page": "订单详情",
+                "target_path": "/orders/33333333-3333-3333-3333-333333333333",
+            },
+            "completion_signal": "订单状态变为“生产中”",
+            "allowed_next_statuses": ["in_production"],
+        }
+        with patch.object(
+            AiAssistantService,
+            "get_workflow_guidance",
+            new=AsyncMock(return_value={"status": "success", "result": guidance}),
+        ) as mock_guidance:
+            response = client.post(
+                "/api/v1/ai-assistant/workflow-guidance",
+                json={
+                    "business_type": "order",
+                    "business_id": "33333333-3333-3333-3333-333333333333",
+                },
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json()["data"]["current_step"] == "设计阶段"
+        mock_guidance.assert_awaited_once()
+
+    def test_rejects_unsupported_business_type(self, client, auth_headers):
+        response = client.post(
+            "/api/v1/ai-assistant/workflow-guidance",
+            json={
+                "business_type": "vehicle",
+                "business_id": "33333333-3333-3333-3333-333333333333",
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 422
 
 
 # ── AI Knowledge Base ──────────────────────────────────────────────

@@ -3,6 +3,17 @@
     <div class="ai-context-dot" />
     <el-icon :size="13"><InfoFilled /></el-icon>
     <span class="ai-context-text">{{ contextText }}</span>
+    <el-button
+      v-if="store.canGuideCurrentPage"
+      text
+      size="small"
+      class="ai-context-guide"
+      :loading="store.guidanceLoading"
+      aria-label="查看当前业务下一步"
+      @click="store.startWorkflowGuidance()"
+    >
+      下一步
+    </el-button>
   </div>
 </template>
 
@@ -54,5 +65,11 @@ const contextText = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.ai-context-guide {
+  flex-shrink: 0;
+  color: var(--ai-accent, #f56c6c);
+  font-size: 12px;
+  padding: 2px 6px;
 }
 </style>
