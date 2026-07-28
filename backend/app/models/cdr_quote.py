@@ -10,7 +10,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric, String, Text, ForeignKey
+from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric, String, Text, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -195,7 +195,7 @@ class QuoteApproval(Base, TimestampMixin):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
-class QuoteAuditLog(Base, TimestampMixin):
+class QuoteAuditLog(Base):
     """报价审计日志。"""
     __tablename__ = "quote_audit_logs"
 
@@ -209,6 +209,7 @@ class QuoteAuditLog(Base, TimestampMixin):
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     device_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("cdr_devices.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 # ── 5. CDR 设备与图稿采集 ────────────────────────────────────────
