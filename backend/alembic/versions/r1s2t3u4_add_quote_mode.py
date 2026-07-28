@@ -18,26 +18,33 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "business_documents",
-        sa.Column(
-            "quote_mode",
-            sa.String(length=16),
-            nullable=False,
-            server_default="regular",
-            comment="报价模式: regular | cdr",
-        ),
-    )
-    op.create_index(
-        "ix_business_documents_quote_mode",
-        "business_documents",
-        ["quote_mode"],
-    )
+    inspector = sa.inspect(op.get_bind())
+    columns = {column["name"] for column in inspector.get_columns("business_documents")}
+    if "quote_mode" not in columns:
+        op.add_column(
+            "business_documents",
+            sa.Column(
+                "quote_mode",
+                sa.String(length=16),
+                nullable=False,
+                server_default="regular",
+                comment="报价模式: regular | cdr",
+            ),
+        )
+    indexes = {index["name"] for index in inspector.get_indexes("business_documents")}
+    if "ix_business_documents_quote_mode" not in indexes:
+        op.create_index(
+            "ix_business_documents_quote_mode",
+            "business_documents",
+            ["quote_mode"],
+        )
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_business_documents_quote_mode",
-        table_name="business_documents",
-    )
-    op.drop_column("business_documents", "quote_mode")
+    inspector = sa.inspect(op.get_bind())
+    indexes = {index["name"] for index in inspector.get_indexes("business_documents")}
+    if "ix_business_documents_quote_mode" in indexes:
+        op.drop_index("ix_business_documents_quote_mode", table_name="business_documents")
+    columns = {column["name"] for column in inspector.get_columns("business_documents")}
+    if "quote_mode" in columns:
+        op.drop_column("business_documents", "quote_mode")

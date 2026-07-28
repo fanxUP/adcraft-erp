@@ -16,11 +16,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "vehicle_dispatches",
-        sa.Column("companions", sa.String(255), nullable=True),
-    )
+    columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("vehicle_dispatches")}
+    if "companions" not in columns:
+        op.add_column(
+            "vehicle_dispatches",
+            sa.Column("companions", sa.String(255), nullable=True),
+        )
 
 
 def downgrade() -> None:
-    op.drop_column("vehicle_dispatches", "companions")
+    columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("vehicle_dispatches")}
+    if "companions" in columns:
+        op.drop_column("vehicle_dispatches", "companions")
