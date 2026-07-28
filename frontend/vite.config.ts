@@ -1,7 +1,18 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import * as ElementPlusIcons from '@element-plus/icons-vue'
 import { resolve } from 'path'
 import { writeFileSync } from 'fs'
+
+const elementPlusIconNames = new Set(Object.keys(ElementPlusIcons))
+
+function elementPlusIconResolver(name: string) {
+  if (elementPlusIconNames.has(name)) {
+    return { name, from: '@element-plus/icons-vue' }
+  }
+}
 
 function versionPlugin(): import('vite').Plugin {
   return {
@@ -18,16 +29,23 @@ function versionPlugin(): import('vite').Plugin {
 }
 
 export default defineConfig(({ mode }) => ({
-  plugins: [vue(), ...(mode === 'test' ? [] : [versionPlugin()])],
+  plugins: [
+    vue(),
+    Components({
+      dts: false,
+      resolvers: [
+        ElementPlusResolver({ importStyle: 'css' }),
+        elementPlusIconResolver,
+      ],
+    }),
+    ...(mode === 'test' ? [] : [versionPlugin()]),
+  ],
   build: {
     rollupOptions: {
       output: {
         manualChunks(id: string) {
-          if (id.includes("node_modules/element-plus")) {
-            return "element-plus"
-          }
-          if (id.includes("node_modules")) {
-            return "vendor"
+          if (/[\\/]node_modules[\\/](echarts|zrender|vue-echarts)[\\/]/.test(id)) {
+            return 'charts'
           }
         },
       },

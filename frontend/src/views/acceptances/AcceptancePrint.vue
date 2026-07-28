@@ -145,8 +145,6 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import html2canvas from 'html2canvas'
-import jsPDF from 'jspdf'
 import { getAcceptance } from '@/api/acceptances'
 import { getSystemSettings } from '@/api/admin'
 import { downloadBlob } from '@/utils/download'
@@ -327,6 +325,7 @@ watch(() => props.visible, async (val) => {
 async function getCanvas(): Promise<HTMLCanvasElement | null> {
   const el = document.querySelector('.print-area') as HTMLElement | null
   if (!el) return null
+  const { default: html2canvas } = await import('html2canvas')
   return html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
 }
 
@@ -342,6 +341,7 @@ async function handleExportImage() {
 async function handleExportPDF() {
   const canvas = await getCanvas()
   if (!canvas) return
+  const { default: jsPDF } = await import('jspdf')
 
   const imgData = canvas.toDataURL('image/png')
 

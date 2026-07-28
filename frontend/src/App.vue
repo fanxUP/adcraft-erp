@@ -1,10 +1,13 @@
 <template>
-  <UpdateNotification />
-  <router-view />
+  <el-config-provider :locale="zhCn">
+    <UpdateNotification />
+    <router-view />
+  </el-config-provider>
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 import { useAppStore } from '@/stores/app'
 import UpdateNotification from '@/components/UpdateNotification.vue'
 
