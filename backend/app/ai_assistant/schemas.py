@@ -11,9 +11,14 @@ from pydantic import BaseModel, Field
 
 
 class AiPageContext(BaseModel):
-    page: Optional[str] = None
-    business_type: Optional[str] = None
-    business_id: Optional[str] = None
+    page: Optional[str] = Field(default=None, max_length=128)
+    page_title: Optional[str] = Field(default=None, max_length=80)
+    page_purpose: Optional[str] = Field(default=None, max_length=300)
+    workflow_stage: Optional[str] = Field(default=None, max_length=64)
+    available_actions: list[str] = Field(default_factory=list, max_length=12)
+    business_type: Optional[str] = Field(default=None, max_length=64)
+    business_id: Optional[str] = Field(default=None, max_length=64)
+    business_status: Optional[str] = Field(default=None, max_length=64)
     customer_id: Optional[str] = None
     customer_name: Optional[str] = None
     customer_no: Optional[str] = None

@@ -24,13 +24,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
-import { PAGE_QUICK_ACTIONS } from '@/types/aiAssistant'
+import { getPageQuickActions } from '@/config/pageContext'
 
 const store = useAiAssistantStore()
 
 const prompts = computed(() => {
   const page = store.pageContext.page || ''
-  return PAGE_QUICK_ACTIONS[page] || PAGE_QUICK_ACTIONS[''] || []
+  return getPageQuickActions(page)
 })
 
 function handleClick(prompt: string) {

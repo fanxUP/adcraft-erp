@@ -7,7 +7,15 @@
         <el-icon :size="32"><MagicStick /></el-icon>
       </div>
       <div class="ai-welcome-text">你好！我是 ERP AI 助手</div>
-      <div class="ai-welcome-hint">我可以帮你查询客户、订单、欠款信息，<br>生成报价草稿和安装任务草稿。</div>
+      <div class="ai-welcome-hint">
+        <template v-if="store.pageContext.page_purpose">
+          你正在使用“{{ store.pageContext.page_title }}”。<br>
+          {{ store.pageContext.page_purpose }}
+        </template>
+        <template v-else>
+          我可以帮你查询客户、订单、欠款信息，<br>生成报价草稿和安装任务草稿。
+        </template>
+      </div>
       <div class="ai-welcome-divider" />
       <AiSuggestedPrompts />
     </div>

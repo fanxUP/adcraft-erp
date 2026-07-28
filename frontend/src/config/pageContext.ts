@@ -1,7 +1,16 @@
+import {
+  getPageCapability,
+  getPageQuickActions,
+} from './page-capabilities'
+
 export interface PageContext {
   page?: string
+  page_title?: string
+  page_purpose?: string
   business_type?: string
   business_id?: string
+  workflow_stage?: string
+  available_actions?: string[]
 }
 
 const pageContexts: Record<string, PageContext> = {
@@ -90,8 +99,26 @@ export function resolvePageContext(
   routeName: string,
   params: Record<string, string | string[]>,
 ): PageContext {
-  const context = { ...(pageContexts[routeName] || {}) }
+  const routeContext = pageContexts[routeName]
+  if (!routeContext) return {}
+
+  const capability = routeContext.page
+    ? getPageCapability(routeContext.page)
+    : undefined
+  const context: PageContext = {
+    ...routeContext,
+    ...(capability
+      ? {
+          page_title: capability.title,
+          page_purpose: capability.purpose,
+          workflow_stage: capability.workflowStage,
+          available_actions: [...capability.availableActions],
+        }
+      : {}),
+  }
   const businessId = params.id || params.orderId || params.quoteId
   if (typeof businessId === 'string') context.business_id = businessId
   return context
 }
+
+export { getPageCapability, getPageQuickActions }

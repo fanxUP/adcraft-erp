@@ -496,6 +496,7 @@ async function fetchOrder() {
         customer_id: order.value.customer_id,
         customer_name: order.value.customer_name || '',
         project_name: order.value.project_name,
+        business_status: order.value.status,
       })
     }
   } finally { loading.value = false }

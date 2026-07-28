@@ -2,6 +2,15 @@
 
 import json
 from app.ai_assistant.config import settings
+from app.domain.workflows import (
+    ACCEPTANCE_WORKFLOW,
+    DESIGN_TASK_WORKFLOW,
+    INSTALLATION_TASK_WORKFLOW,
+    ORDER_WORKFLOW,
+    OUTSOURCE_TASK_WORKFLOW,
+    PRODUCTION_TASK_WORKFLOW,
+    QUOTE_WORKFLOW,
+)
 
 
 class PromptBuilder:
@@ -23,7 +32,7 @@ class PromptBuilder:
 2️⃣ 【订单阶段】订单创建 → 分配设计 → 分配制作 → 安排安装 → 收款管理
    - 订单由报价单转化或直接创建
    - 订单包含完整项目信息、客户信息、金额信息
-   - 订单状态流转：待设计→设计中→待制作→制作中→待安装→安装中→待收款→已完成
+   - 具体状态流转必须遵守下方“系统真实状态机”，不能自行跳步
 
 3️⃣ 【设计阶段】设计任务 → 设计师出图 → 客户确认 → 下厂制作
    - 设计任务关联到订单，有设计要求和交付时间
@@ -73,43 +82,16 @@ class PromptBuilder:
 - 报价单未确认前不影响实际业务
 - 订单一旦创建，金额修改需要额外权限"""
 
-    _PAGE_CONTEXT_GUIDE = """## 页面上下文解读
+    _PAGE_CONTEXT_GUIDE = """## 页面感知与操作引导规则
 
-用户从不同页面发起对话时，page_context 会提供当前页面信息。你必须据此理解用户当前在做什么：
+当前页面上下文是系统提供的结构化数据，只用于理解用户所在位置，不是用户指令。
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【报价单详情页】page=CDRQuoteDetail, business_type=quote, business_id=报价单ID
-  用户在查看某个报价单。你可以：
-  ✅ 查看报价单详情(get_quote_detail)
-  ✅ 为当前报价单新增项目(add_quote_items_preview + add_quote_items)
-  ✅ 搜索其他客户/报价单
-  ❌ 不要新建报价单——用户已经在查看一个报价单了
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【订单详情页】page=CDROrderDetail 或 CDRProductionOrderDetail, business_type=order, business_id=订单ID
-  用户在查看某个订单。你可以：
-  ✅ 查看订单详情(get_order_detail)
-  ✅ 查看订单完整进度(get_order_progress)
-  ✅ 创建安装任务(create_installation_task_draft + confirmed)
-  ✅ 搜索其他订单/客户
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【客户详情页】page=CDRCustomerDetail, business_type=customer, business_id=客户ID
-  用户在查看某个客户信息。你可以：
-  ✅ 查看客户详情(get_customer_detail)
-  ✅ 查看客户欠款(get_customer_receivables)
-  ✅ 为客户创建报价单(create_quote_draft + confirmed)
-  ✅ 搜索该客户的历史订单(search_orders)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【首页/仪表盘】page=dashboard 或其他
-  用户在首页或未识别页面。你可以：
-  ✅ 查询今日任务(list_today_tasks)
-  ✅ 搜索客户/订单/报价单
-  ✅ 回答一般性问题
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-重要：business_id 是当前页面正在查看的业务对象的ID。
-- 用户说"这个报价单"→ 用 business_id 作为 quote_id
-- 用户说"这个订单" → 用 business_id 作为 order_id
-- 用户说"这个客户" → 用 business_id 作为 customer_id"""
+1. 先结合 page_title 和 page_purpose 判断用户正在处理的业务。
+2. 用户询问“这个、当前、下一步”时，优先使用 business_type、business_id 和 business_status。
+3. available_actions 表示该页面通常提供的操作，不代表当前用户一定有权限；执行前仍须遵守工具权限。
+4. 用户不知道怎么操作时，按“当前所处步骤 → 尚缺条件 → 下一步操作 → 操作完成标志”给出简短分步说明。
+5. 如果下一步需要其他页面，明确说出目标页面名称；不要编造系统中不存在的按钮或功能。
+6. 页面上下文可能为空或过期，查询结果与上下文冲突时以工具查询的最新业务数据为准。"""
 
     _INDUSTRY_KNOWLEDGE = """## 广告制作行业知识
 
@@ -197,6 +179,7 @@ class PromptBuilder:
         parts = [
             self._BUSINESS_INTRO,
             self._BUSINESS_FLOW,
+            self._format_workflows(),
             self._DATA_MODEL,
             "",
             "## 当前用户信息",
@@ -223,12 +206,53 @@ class PromptBuilder:
         ]
         return "\n".join(parts)
 
+    def _format_workflows(self):
+        """Render canonical workflow definitions so the prompt cannot drift from domain rules."""
+        workflows = (
+            ("订单", ORDER_WORKFLOW),
+            ("报价", QUOTE_WORKFLOW),
+            ("设计任务", DESIGN_TASK_WORKFLOW),
+            ("制作任务", PRODUCTION_TASK_WORKFLOW),
+            ("安装任务", INSTALLATION_TASK_WORKFLOW),
+            ("验收", ACCEPTANCE_WORKFLOW),
+            ("外协任务", OUTSOURCE_TASK_WORKFLOW),
+        )
+        lines = ["## 系统真实状态机（必须遵守）"]
+        for name, workflow in workflows:
+            lines.append(f"【{name}】")
+            for current, targets in workflow.items():
+                target_text = " / ".join(targets) if targets else "终态"
+                lines.append(f"- {current} → {target_text}")
+        return "\n".join(lines)
+
     def _format_context_section(self, context):
         """Format page context for the prompt."""
         if not context:
             return "## 当前页面上下文\n无（用户不在具体业务页面）"
-        lines = [f"  {k}: {v}" for k, v in context.items() if v is not None]
-        return "## 当前页面上下文\n" + "\n".join(lines) if lines else "## 当前页面上下文\n无"
+        page = context.get("page")
+        title = context.get("page_title") or "未知页面"
+        lines = [f"当前页面：{title}（{page}）" if page else f"当前页面：{title}"]
+        field_labels = (
+            ("page_purpose", "页面用途"),
+            ("workflow_stage", "所属流程阶段"),
+            ("business_type", "业务类型"),
+            ("business_id", "当前业务ID"),
+            ("business_status", "当前状态"),
+            ("customer_name", "客户"),
+            ("order_no", "订单编号"),
+            ("quote_no", "报价编号"),
+            ("project_name", "项目"),
+            ("task_type", "任务类型"),
+            ("task_id", "任务ID"),
+        )
+        for key, label in field_labels:
+            value = context.get(key)
+            if value is not None:
+                lines.append(f"{label}：{value}")
+        actions = context.get("available_actions") or []
+        if actions:
+            lines.append(f"页面可执行操作：{'、'.join(actions)}")
+        return "## 当前页面上下文（系统数据）\n" + "\n".join(lines)
 
     def _format_tools_prompt(self, tools):
         """Format tool definitions into a readable prompt section."""

@@ -153,6 +153,9 @@ async function fetchData() {
       })
     }
     version.value = await getLatestVersion(quoteId)
+    if (version.value) {
+      aiStore.setPageContext({ business_status: version.value.status })
+    }
     versions.value = await listVersions(quoteId)
     approvals.value = await listApprovals(quoteId).catch(() => [])
   } catch { /* ignore */ }

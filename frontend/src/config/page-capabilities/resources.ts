@@ -1,0 +1,132 @@
+import type { PageCapabilityMap } from './types'
+
+export const resourceCapabilities: PageCapabilityMap = {
+  vehicle_dashboard: {
+    title: '车辆看板',
+    purpose: '汇总今日用车申请、派车、出车和车辆异常',
+    workflowStage: 'vehicle_overview',
+    availableActions: ['查看今日申请', '查看待派车', '查看车辆状态'],
+    quickActions: [{ label: '今日用车', prompt: '今天有哪些用车申请' }],
+  },
+  vehicle_list: {
+    title: '车辆档案',
+    purpose: '维护公司车辆基础信息和使用状态',
+    workflowStage: 'vehicle_registry',
+    availableActions: ['查询车辆', '新增车辆', '查看车辆详情'],
+  },
+  driver_list: {
+    title: '司机管理',
+    purpose: '维护司机档案、证照和在岗状态',
+    workflowStage: 'vehicle_registry',
+    availableActions: ['查询司机', '新增司机', '查看证照状态'],
+  },
+  vehicle_use_requests: {
+    title: '用车申请',
+    purpose: '提交和审核业务用车需求',
+    workflowStage: 'vehicle_request',
+    availableActions: ['查询用车申请', '提交申请', '审核申请'],
+  },
+  vehicle_agent_drafts: {
+    title: '车辆消息识别',
+    purpose: '复核从消息中识别的车辆业务草稿',
+    workflowStage: 'vehicle_request',
+    availableActions: ['查看识别草稿', '确认草稿', '驳回草稿'],
+  },
+  vehicle_dispatches: {
+    title: '派车管理',
+    purpose: '安排用车申请的车辆、司机与出车时间',
+    workflowStage: 'vehicle_dispatch',
+    availableActions: ['查看待派车申请', '创建派车单', '更新派车状态'],
+  },
+  vehicle_trip_records: {
+    title: '出车收车台账',
+    purpose: '登记车辆出发、到达、返回和里程信息',
+    workflowStage: 'vehicle_trip',
+    availableActions: ['查询出车记录', '登记出车', '登记收车'],
+  },
+  vehicle_expenses: {
+    title: '车辆费用',
+    purpose: '登记和审核加油、维修、停车等车辆费用',
+    workflowStage: 'vehicle_finance',
+    availableActions: ['查询车辆费用', '登记费用', '审核费用'],
+  },
+  vehicle_insurance: {
+    title: '保险年检',
+    purpose: '管理车辆保险、年检到期和续办记录',
+    workflowStage: 'vehicle_compliance',
+    availableActions: ['查看到期提醒', '登记保险', '登记年检'],
+  },
+  vehicle_incidents: {
+    title: '违章事故',
+    purpose: '登记和跟踪车辆违章、事故及处理结果',
+    workflowStage: 'vehicle_incident',
+    availableActions: ['查询违章事故', '登记事件', '更新处理结果'],
+  },
+  vehicle_reports: {
+    title: '车辆报表',
+    purpose: '统计车辆使用率、里程、费用和异常',
+    workflowStage: 'vehicle_report',
+    availableActions: ['查看使用统计', '查看费用统计', '筛选报表'],
+  },
+  aerial_dashboard: {
+    title: '高空车看板',
+    purpose: '汇总高空作业车出车、收入、成本和待处理事项',
+    workflowStage: 'aerial_overview',
+    availableActions: ['查看今日出车', '查看待审核事项', '查看经营概况'],
+    quickActions: [{ label: '今日出车', prompt: '今天高空车出车情况' }],
+  },
+  aerial_ledgers: {
+    title: '高空车出车台账',
+    purpose: '登记和核对高空车作业、人员、收入及回款',
+    workflowStage: 'aerial_ledger',
+    availableActions: ['查询出车台账', '新增台账', '审核台账'],
+  },
+  aerial_personnel_expenses: {
+    title: '高空车垫付报销',
+    purpose: '登记和审核高空车人员垫付费用',
+    workflowStage: 'aerial_finance',
+    availableActions: ['查询垫付', '提交报销', '审核报销'],
+  },
+  aerial_personnel_wages: {
+    title: '高空车人员工资',
+    purpose: '核算和登记高空车司机及辅助人员工资',
+    workflowStage: 'aerial_finance',
+    availableActions: ['查询工资', '生成工资记录', '登记发放'],
+  },
+  aerial_vehicle_costs: {
+    title: '高空车车辆费用',
+    purpose: '登记高空作业车辆相关运营成本',
+    workflowStage: 'aerial_finance',
+    availableActions: ['查询车辆成本', '登记费用', '审核费用'],
+  },
+  aerial_safety_checks: {
+    title: '高空车安全检查',
+    purpose: '执行出车前安全检查并记录异常处理',
+    workflowStage: 'aerial_safety',
+    availableActions: ['查询安全检查', '提交检查', '处理异常'],
+  },
+  aerial_reports: {
+    title: '高空车统计报表',
+    purpose: '统计高空车收入、成本、利润和人员效率',
+    workflowStage: 'aerial_report',
+    availableActions: ['查看经营统计', '查看成本统计', '筛选报表'],
+  },
+  aerial_vehicles: {
+    title: '高空车档案',
+    purpose: '维护高空作业车辆档案及启用状态',
+    workflowStage: 'aerial_registry',
+    availableActions: ['查询车辆', '新增车辆', '更新车辆状态'],
+  },
+  aerial_personnel: {
+    title: '高空车人员管理',
+    purpose: '维护司机、辅助人员和作业人员档案',
+    workflowStage: 'aerial_registry',
+    availableActions: ['查询人员', '新增人员', '更新人员状态'],
+  },
+  aerial_agent_drafts: {
+    title: '高空车 Agent 草稿',
+    purpose: '复核从业务消息生成的高空车台账草稿',
+    workflowStage: 'aerial_ledger',
+    availableActions: ['查看 Agent 草稿', '确认草稿', '驳回草稿'],
+  },
+}
