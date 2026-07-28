@@ -49,22 +49,22 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
         result = await db.execute(
             select(Expense.expense_no).where(Expense.expense_no.like(pattern)).order_by(Expense.expense_no.desc()).limit(1)
         )
-    elif prefix in ("SO", "Q"):
-        # 兼容旧编号格式 — 统一查询 business_documents
+    elif prefix == "Q":
         from app.models.business_document import BusinessDocument
         result = await db.execute(
             select(BusinessDocument.doc_no).where(
-                BusinessDocument.doc_no.like(f"%{today}-%")
+                BusinessDocument.doc_type == "quote",
+                BusinessDocument.doc_no.like(pattern),
             ).order_by(BusinessDocument.doc_no.desc()).limit(1)
         )
-        last = result.scalar_one_or_none()
-        if last:
-            seq = int(last.split("-")[1]) + 1
-        else:
-            seq = 1
-        if prefix == "Q":
-            return f"O{today}-{seq:04d}"
-        return f"S{today}-{seq:04d}"
+    elif prefix == "SO":
+        # 兼容旧销售单编号格式
+        from app.models.business_document import BusinessDocument
+        result = await db.execute(
+            select(BusinessDocument.doc_no).where(
+                BusinessDocument.doc_no.like(pattern)
+            ).order_by(BusinessDocument.doc_no.desc()).limit(1)
+        )
     elif prefix == "V":
         from app.models.outsource import OutsourceVendor
         result = await db.execute(
@@ -116,11 +116,11 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
 
 
 async def generate_quote_no(db: AsyncSession) -> str:
-    return await _generate_no(db, "O")
+    return await _generate_no(db, "Q")
 
 
 async def generate_order_no(db: AsyncSession) -> str:
-    return await _generate_no(db, "S")
+    return await _generate_no(db, "O")
 
 
 async def generate_customer_no(db: AsyncSession) -> str:
