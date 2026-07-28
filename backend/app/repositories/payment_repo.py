@@ -12,8 +12,16 @@ class PaymentRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_by_id(self, payment_id: UUID) -> Payment | None:
-        result = await self.db.execute(select(Payment).where(Payment.id == payment_id))
+    async def get_by_id(
+        self,
+        payment_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> Payment | None:
+        query = select(Payment).where(Payment.id == payment_id)
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def list_payments(self, skip: int = 0, limit: int = 20, order_id: UUID | None = None,

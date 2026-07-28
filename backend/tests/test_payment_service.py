@@ -140,6 +140,10 @@ async def test_create_payment(payment_service):
     svc, db = payment_service
     order = MagicMock()
     order.total_amount = 5000.0
+    order.customer_id = SAMPLE_CUSTOMER_ID
+    order.doc_type = "order"
+    order.status = "confirmed"
+    order.deleted_at = None
     order.sales_user_id = None
     order.doc_no = "O20260629-0001"
     order.project_name = "测试项目"
@@ -147,7 +151,7 @@ async def test_create_payment(payment_service):
 
     p = make_mock_payment()
     svc.repo.create.return_value = p
-    svc.repo.get_document_paid_sum.return_value = 500.0
+    svc.repo.get_document_paid_sum.return_value = 0.0
 
     with patch("app.services.payment_service.generate_payment_no", AsyncMock(return_value="PAY20260629-0002")):
         result = await svc.create_payment({
@@ -161,6 +165,11 @@ async def test_create_payment(payment_service):
     assert result["amount"] == 500.0
     assert order.paid_amount == 500.0
     assert order.unpaid_amount == 4500.0
+    db.get.assert_awaited_once_with(
+        app.models.business_document.BusinessDocument,
+        SAMPLE_ORDER_ID,
+        with_for_update=True,
+    )
 
 
 @pytest.mark.asyncio
@@ -170,6 +179,57 @@ async def test_create_payment_order_not_found(payment_service):
 
     with pytest.raises(ValueError, match="单据不存在"):
         await svc.create_payment({"order_id": SAMPLE_ORDER_ID, "customer_id": SAMPLE_CUSTOMER_ID, "amount": 500.0}, SAMPLE_USER_ID)
+
+
+@pytest.mark.asyncio
+async def test_create_payment_rejects_customer_mismatch(payment_service):
+    svc, db = payment_service
+    order = MagicMock(
+        customer_id=SAMPLE_CUSTOMER_ID,
+        doc_type="order",
+        status="confirmed",
+        total_amount=5000.0,
+        deleted_at=None,
+    )
+    db.get.return_value = order
+
+    with pytest.raises(ValueError, match="客户与订单不一致"):
+        await svc.create_payment(
+            {
+                "order_id": SAMPLE_ORDER_ID,
+                "customer_id": SAMPLE_USER_ID,
+                "amount": 500.0,
+            },
+            SAMPLE_USER_ID,
+        )
+
+    svc.repo.create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_payment_rejects_amount_above_remaining(payment_service):
+    svc, db = payment_service
+    order = MagicMock(
+        customer_id=SAMPLE_CUSTOMER_ID,
+        doc_type="order",
+        status="confirmed",
+        total_amount=1000.0,
+        deleted_at=None,
+    )
+    db.get.return_value = order
+    svc.repo.get_document_paid_sum.return_value = 800.0
+
+    with pytest.raises(ValueError, match="超过订单未收金额 200.00 元"):
+        await svc.create_payment(
+            {
+                "order_id": SAMPLE_ORDER_ID,
+                "customer_id": SAMPLE_CUSTOMER_ID,
+                "amount": 300.0,
+            },
+            SAMPLE_USER_ID,
+        )
+
+    svc.repo.create.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -185,6 +245,10 @@ async def test_void_payment(payment_service):
 
     result = await svc.void_payment(SAMPLE_ORDER_ID, "客户退款")
     assert result["payment_no"] == "PAY20260629-0001"
+    svc.repo.get_by_id.assert_awaited_once_with(
+        SAMPLE_ORDER_ID,
+        for_update=True,
+    )
     svc.repo.void.assert_awaited_once_with(p, "客户退款")
 
 

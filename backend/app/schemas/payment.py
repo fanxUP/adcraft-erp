@@ -44,6 +44,14 @@ class PaymentResponse(CoercedModel):
 class PaymentVoid(BaseModel):
     void_reason: str
 
+    @field_validator("void_reason")
+    @classmethod
+    def reason_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("作废原因不能为空")
+        return value
+
 
 class StatementCreate(BaseModel):
     customer_id: UUID

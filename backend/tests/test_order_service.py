@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -67,6 +68,7 @@ def service():
         repository = repository_class.return_value
         repository.get_by_id = AsyncMock()
         repository.list_all = AsyncMock(return_value=([], 0))
+        repository.create_status_log = AsyncMock()
 
         async def update(document, data):
             for key, value in data.items():
@@ -75,6 +77,22 @@ def service():
 
         repository.update = AsyncMock(side_effect=update)
         yield BusinessDocumentService(db, doc_type="order"), repository, db
+
+
+@pytest.mark.asyncio
+async def test_order_cannot_complete_without_acceptance_flow(service):
+    order_service, repository, _ = service
+    repository.get_by_id.return_value = make_order(status="pending_acceptance")
+
+    with pytest.raises(ValueError, match="请通过验收单确认验收"):
+        await order_service.change_status(
+            SAMPLE_ORDER_ID,
+            "completed",
+            reason="手工完成",
+            operated_by=uuid4(),
+        )
+
+    repository.update.assert_not_awaited()
 
 
 @pytest.mark.asyncio

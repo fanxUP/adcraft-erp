@@ -173,28 +173,34 @@ class AcceptanceService:
                 raise ValueError("请先添加验收明细再提交")
             form.status = "pending"
         elif to_status == "accepted":
-            form.status = "accepted"
-            form.accepted_at = datetime.now()
-            if kwargs.get("accepted_by"):
-                form.accepted_by = kwargs["accepted_by"]
+            unfinished_items = [
+                item for item in form.items
+                if item.item_status not in ("accepted", "conditional")
+            ]
+            if unfinished_items:
+                raise ValueError("仍有未确认的验收明细，请逐项确认后再通过")
             # 验收接受 → 自动完成订单
             await self._sync_order_on_acceptance(
                 form,
                 "completed",
                 operated_by=operated_by,
             )
+            form.status = "accepted"
+            form.accepted_at = datetime.now()
+            if kwargs.get("accepted_by"):
+                form.accepted_by = kwargs["accepted_by"]
         elif to_status == "rejected":
             reason = kwargs.get("reason", "")
             if not reason:
                 raise ValueError("驳回时请填写驳回原因")
-            form.status = "rejected"
-            form.reject_reason = reason
             # 验收驳回 → 订单回退到安装中
             await self._sync_order_on_acceptance(
                 form,
                 "in_installation",
                 operated_by=operated_by,
             )
+            form.status = "rejected"
+            form.reject_reason = reason
         elif to_status == "draft":
             form.status = "draft"
             form.reject_reason = None
@@ -222,9 +228,10 @@ class AcceptanceService:
                 doc.id, target_status,
                 reason="验收单自动触发" if target_status == "completed" else "验收驳回，回退安装",
                 operated_by=operated_by,
+                **({"acceptance_id": form.id} if target_status == "completed" else {}),
             )
         except ValueError as exc:
-            raise ValueError(f"验收状态已更新，但订单状态同步失败：{exc}") from exc
+            raise ValueError(f"订单状态同步失败，验收状态未变更：{exc}") from exc
 
     # ── 序列化（统一访问 form.document） ──
     @staticmethod

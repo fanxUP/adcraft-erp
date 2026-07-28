@@ -264,8 +264,15 @@ class BusinessDocumentService:
     # 状态流转
     # ═══════════════════════════════════════════
 
-    async def change_status(self, doc_id: UUID, to_status: str,
-                            reason: str | None, operated_by: UUID) -> dict:
+    async def change_status(
+        self,
+        doc_id: UUID,
+        to_status: str,
+        reason: str | None,
+        operated_by: UUID,
+        *,
+        acceptance_id: UUID | None = None,
+    ) -> dict:
         doc = await self.repo.get_by_id(doc_id)
         if not doc:
             raise ValueError("单据不存在")
@@ -296,6 +303,11 @@ class BusinessDocumentService:
             elif from_status == "in_installation" and to_status == "pending_acceptance":
                 await self._require_all_tasks_completed(
                     doc_id, InstallationTask, "installation_no", "安装"
+                )
+            elif from_status == "pending_acceptance" and to_status == "completed":
+                await self._require_acceptance_completion_source(
+                    doc_id,
+                    acceptance_id,
                 )
 
         await self.repo.update(doc, {"status": to_status})
@@ -350,6 +362,28 @@ class BusinessDocumentService:
             )
 
         return self._to_detail(doc)
+
+    async def _require_acceptance_completion_source(
+        self,
+        doc_id: UUID,
+        acceptance_id: UUID | None,
+    ) -> None:
+        """仅允许验收服务凭待确认验收单完成订单。"""
+        if not acceptance_id:
+            raise ValueError("请通过验收单确认验收后完成订单")
+
+        from app.models.acceptance import AcceptanceForm
+
+        result = await self.db.execute(
+            select(AcceptanceForm.id).where(
+                AcceptanceForm.id == acceptance_id,
+                AcceptanceForm.document_id == doc_id,
+                AcceptanceForm.status == "pending",
+                AcceptanceForm.deleted_at.is_(None),
+            )
+        )
+        if result.scalar_one_or_none() is None:
+            raise ValueError("验收单与订单不匹配或当前不可确认")
 
     async def _require_all_tasks_completed(self, doc_id: UUID, model,
                                             no_attr: str, label: str) -> None:

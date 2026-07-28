@@ -10,7 +10,13 @@ from uuid import UUID
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.permissions import require_role
+from app.core.permissions import (
+    PERM_PAYMENT_CREATE,
+    PERM_PAYMENT_READ,
+    PERM_PAYMENT_VOID,
+    require_permission,
+    require_role,
+)
 from app.models.user import User
 from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate, ProjectCostCreate, ProjectCostUpdate, DebtSettleCreate
 from app.schemas.common import success, success_paginated
@@ -35,7 +41,7 @@ async def list_payments(
     customer_id: str | None = None,
     is_voided: bool | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PAYMENT_READ)),
 ):
     service = PaymentService(db)
     oid = UUID(order_id) if order_id else None
@@ -48,7 +54,7 @@ async def list_payments(
 async def get_payment(
     payment_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PAYMENT_READ)),
 ):
     service = PaymentService(db)
     payment = await service.get_payment(UUID(payment_id))
@@ -62,7 +68,7 @@ async def create_payment(
     data: PaymentCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PAYMENT_CREATE)),
 ):
     service = PaymentService(db)
     payment = await service.create_payment(data.model_dump(), current_user.id)
@@ -79,7 +85,7 @@ async def void_payment(
     data: PaymentVoid,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PAYMENT_VOID)),
 ):
     service = PaymentService(db)
     pid = UUID(payment_id)
@@ -96,7 +102,7 @@ async def upload_receipt(
     payment_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PAYMENT_CREATE)),
 ):
     import os, uuid as _uuid
     from datetime import datetime, timezone

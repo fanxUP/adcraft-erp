@@ -1,5 +1,6 @@
 from uuid import UUID
 from datetime import datetime
+from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.payment import Payment, CustomerStatement, Expense
@@ -31,15 +32,34 @@ class PaymentService:
         if not document_id:
             raise ValueError("缺少关联单据ID")
 
-        doc = await self.db.get(BusinessDocument, document_id)
+        doc = await self.db.get(
+            BusinessDocument,
+            document_id,
+            with_for_update=True,
+        )
         if not doc:
             raise ValueError("单据不存在")
+        if doc.doc_type != "order":
+            raise ValueError("仅订单可以登记收款")
+        if doc.status in ("pending_confirm", "cancelled") or doc.deleted_at is not None:
+            raise ValueError("当前订单状态不允许登记收款")
+        if doc.customer_id != data["customer_id"]:
+            raise ValueError("收款客户与订单不一致")
+
+        amount = Decimal(str(data["amount"]))
+        total_amount = Decimal(str(doc.total_amount or 0))
+        existing_paid = Decimal(
+            str(await self.repo.get_document_paid_sum(document_id))
+        )
+        remaining = max(Decimal("0"), total_amount - existing_paid)
+        if amount > remaining:
+            raise ValueError(f"收款金额超过订单未收金额 {remaining:.2f} 元")
 
         payment = Payment(
             payment_no=await generate_payment_no(self.db),
             document_id=document_id,
             customer_id=data["customer_id"],
-            amount=data["amount"],
+            amount=amount,
             payment_method=data.get("payment_method"),
             paid_at=datetime.fromisoformat(data["paid_at"]) if data.get("paid_at") else None,
             remark=data.get("remark"),
@@ -60,8 +80,8 @@ class PaymentService:
                 link=f"/payments",
             )
 
-        paid = await self.repo.get_document_paid_sum(document_id)
-        unpaid = max(0, float(doc.total_amount) - paid)
+        paid = existing_paid + amount
+        unpaid = total_amount - paid
         doc.paid_amount = paid
         doc.unpaid_amount = unpaid
         await self.db.flush()
@@ -69,7 +89,11 @@ class PaymentService:
         return self._to_dict(payment)
 
     async def void_payment(self, payment_id: UUID, reason: str) -> dict:
-        p = await self.repo.get_by_id(payment_id)
+        reason = reason.strip()
+        if not reason:
+            raise ValueError("作废原因不能为空")
+
+        p = await self.repo.get_by_id(payment_id, for_update=True)
         if not p:
             raise ValueError("收款记录不存在")
         if p.is_voided:
