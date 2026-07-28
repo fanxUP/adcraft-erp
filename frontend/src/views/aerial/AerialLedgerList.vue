@@ -279,26 +279,32 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, defineComponent, h } from 'vue'
-import { ElMessage, ElMessageBox, ElTable, ElTableColumn, ElTag, ElEmpty } from 'element-plus'
+import { ElMessage, ElMessageBox, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import {
   getAerialLedgers, getAerialLedger, createAerialLedger, updateAerialLedger,
   voidAerialLedger, approveAerialLedger, rejectAerialLedger,
   getAerialVehicles, getAerialPersonnel, getAerialAuditLogs,
   exportAerialLedgers,
+  type AerialAuditLog,
+  type AerialLedger,
+  type AerialPersonnel,
+  type AerialQueryParams,
+  type AerialVehicle,
 } from '@/api/aerial'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false)
 const saving = ref(false)
-const list = ref<any[]>([])
+const list = ref<AerialLedger[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const editingId = ref<string | null>(null)
-const detailData = ref<any>(null)
-const vehicleOptions = ref<any[]>([])
-const personnelOptions = ref<any[]>([])
+const detailData = ref<AerialLedger | null>(null)
+const vehicleOptions = ref<AerialVehicle[]>([])
+const personnelOptions = ref<AerialPersonnel[]>([])
 
 const filters = reactive({
   dateRange: [] as string[],
@@ -334,7 +340,7 @@ const form = reactive({
 async function fetchData() {
   loading.value = true
   try {
-    const params: any = { page: page.value, page_size: pageSize.value }
+    const params: AerialQueryParams = { page: page.value, page_size: pageSize.value }
     if (filters.dateRange?.length === 2) {
       params.date_from = filters.dateRange[0]
       params.date_to = filters.dateRange[1]
@@ -346,8 +352,8 @@ async function fetchData() {
     const res = await getAerialLedgers(params)
     list.value = res.items || []
     total.value = res.total || 0
-  } catch (e: any) {
-    ElMessage.error(e.message || '加载失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '加载失败'))
   } finally {
     loading.value = false
   }
@@ -375,7 +381,7 @@ function handleCreate() {
   dialogVisible.value = true
 }
 
-function handleEdit(row: any) {
+function handleEdit(row: AerialLedger) {
   editingId.value = row.id
   Object.assign(form, {
     work_date: row.work_date, aerial_vehicle_id: row.aerial_vehicle_id, personnel_id: row.personnel_id,
@@ -408,23 +414,23 @@ async function handleSave() {
     }
     dialogVisible.value = false
     fetchData()
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '保存失败'))
   } finally {
     saving.value = false
   }
 }
 
-async function handleDetail(row: any) {
+async function handleDetail(row: AerialLedger) {
   try {
     detailData.value = await getAerialLedger(row.id)
     detailVisible.value = true
-  } catch (e: any) {
-    ElMessage.error(e.message || '加载详情失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '加载详情失败'))
   }
 }
 
-async function handleApprove(row: any) {
+async function handleApprove(row: AerialLedger) {
   try {
     await ElMessageBox.confirm('确定审核通过此台账？', '审核确认')
     await approveAerialLedger(row.id)
@@ -433,7 +439,7 @@ async function handleApprove(row: any) {
   } catch {}
 }
 
-async function handleReject(row: any) {
+async function handleReject(row: AerialLedger) {
   try {
     const { value } = await ElMessageBox.prompt('请输入驳回原因', '驳回台账', { inputType: 'textarea' })
     if (!value?.trim()) return ElMessage.warning('请填写驳回原因')
@@ -443,7 +449,7 @@ async function handleReject(row: any) {
   } catch {}
 }
 
-async function handleVoid(row: any) {
+async function handleVoid(row: AerialLedger) {
   try {
     const { value } = await ElMessageBox.prompt('请输入作废原因', '作废台账', { inputType: 'textarea' })
     if (!value?.trim()) return ElMessage.warning('请填写作废原因')
@@ -458,8 +464,8 @@ async function handleExport() {
   try {
     await exportAerialLedgers(filters.dateRange[0], filters.dateRange[1])
     ElMessage.success('导出成功')
-  } catch (e: any) {
-    ElMessage.error(e.message || '导出失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '导出失败'))
   }
 }
 
@@ -492,7 +498,7 @@ function settlementLabel(s: string) {
 const AuditLog = defineComponent({
   props: { ledgerId: { type: String, required: true } },
   setup(props) {
-    const logs = ref<any[]>([])
+    const logs = ref<AerialAuditLog[]>([])
     const loadingLog = ref(false)
     async function loadLogs() {
       loadingLog.value = true

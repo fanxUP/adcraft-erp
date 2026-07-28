@@ -67,12 +67,25 @@ import {
   getAerialDashboardOverview,
   getAerialDashboardToday,
   getAerialDashboardReminders,
+  type AerialDashboardOverview,
+  type AerialLedger,
+  type AerialReminder,
 } from '@/api/aerial'
 
 const loading = ref(false)
-const overview = ref<any>({ today: {}, monthly: {} })
-const todayLedgers = ref<any[]>([])
-const reminders = ref<any[]>([])
+const emptySummary = {
+  trip_count: 0,
+  receivable: 0,
+  received: 0,
+  unpaid: 0,
+  wages: 0,
+  reimbursements: 0,
+  vehicle_costs: 0,
+  gross_profit: 0,
+}
+const overview = ref<AerialDashboardOverview>({ today: emptySummary, monthly: emptySummary })
+const todayLedgers = ref<AerialLedger[]>([])
+const reminders = ref<AerialReminder[]>([])
 
 const overviewCards = computed(() => {
   const t = overview.value.today || {}
@@ -117,7 +130,7 @@ async function loadData() {
       getAerialDashboardToday(),
       getAerialDashboardReminders(),
     ])
-    overview.value = ov || { today: {}, monthly: {} }
+    overview.value = ov || { today: emptySummary, monthly: emptySummary }
     todayLedgers.value = today || []
     reminders.value = rem || []
   } catch (e) {

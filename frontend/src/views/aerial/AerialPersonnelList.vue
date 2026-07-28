@@ -53,10 +53,17 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAerialPersonnel, createAerialPersonnel, updateAerialPersonnel, deleteAerialPersonnel } from '@/api/aerial'
+import {
+  getAerialPersonnel,
+  createAerialPersonnel,
+  updateAerialPersonnel,
+  deleteAerialPersonnel,
+  type AerialPersonnel,
+} from '@/api/aerial'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
-const list = ref<any[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
+const list = ref<AerialPersonnel[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
 const keyword = ref(''); const editingId = ref<string | null>(null)
 
 const form = reactive({ name: '', phone: '', license_no: '', license_type: '', license_expire_date: '', is_external: false, remark: '' })
@@ -64,7 +71,7 @@ const form = reactive({ name: '', phone: '', license_no: '', license_type: '', l
 async function fetchData() {
   loading.value = true
   try { const res = await getAerialPersonnel({ keyword: keyword.value, page: page.value, page_size: pageSize.value }); list.value = res.items || []; total.value = res.total || 0 }
-  catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
+  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
 function handleCreate() {
@@ -73,7 +80,7 @@ function handleCreate() {
   dialogVisible.value = true
 }
 
-function handleEdit(row: any) {
+function handleEdit(row: AerialPersonnel) {
   editingId.value = row.id
   Object.assign(form, { name: row.name, phone: row.phone, license_no: row.license_no, license_type: row.license_type, license_expire_date: row.license_expire_date, is_external: row.is_external, remark: row.remark })
   dialogVisible.value = true
@@ -86,16 +93,16 @@ async function handleSave() {
     if (editingId.value) { await updateAerialPersonnel(editingId.value, form); ElMessage.success('修改成功') }
     else { await createAerialPersonnel(form); ElMessage.success('新增成功') }
     dialogVisible.value = false; fetchData()
-  } catch (e: any) { ElMessage.error(e.message) } finally { saving.value = false }
+  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { saving.value = false }
 }
 
-async function handleToggle(row: any) {
+async function handleToggle(row: AerialPersonnel) {
   const newStatus = row.status === 'active' ? 'disabled' : 'active'
   try { await ElMessageBox.confirm(`确定${newStatus === 'disabled' ? '停用' : '启用'} ${row.name}？`, '确认'); await updateAerialPersonnel(row.id, { status: newStatus }); ElMessage.success('操作成功'); fetchData() } catch {}
 }
 
-async function handleDelete(row: any) {
-  try { await deleteAerialPersonnel(row.id); ElMessage.success('删除成功'); fetchData() } catch (e: any) { ElMessage.error(e.message) }
+async function handleDelete(row: AerialPersonnel) {
+  try { await deleteAerialPersonnel(row.id); ElMessage.success('删除成功'); fetchData() } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) }
 }
 
 function isExpiredSoon(d: string | null) { if (!d) return false; return new Date(d) <= new Date(Date.now() + 30 * 86400000) }

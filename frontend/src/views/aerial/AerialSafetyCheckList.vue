@@ -56,14 +56,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getAerialSafetyChecks, createAerialSafetyCheck, getAerialLedgers } from '@/api/aerial'
+import {
+  getAerialSafetyChecks,
+  createAerialSafetyCheck,
+  getAerialLedgers,
+  type AerialLedger,
+  type AerialSafetyCheck,
+} from '@/api/aerial'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false); const saving = ref(false); const showAddDialog = ref(false)
 const selectedLedgerId = ref('')
-const ledgerOptions = ref<any[]>([])
-const checks = ref<any[]>([])
+const ledgerOptions = ref<AerialLedger[]>([])
+const checks = ref<AerialSafetyCheck[]>([])
 
 const checkItems = [
   { key: 'vehicle_appearance_ok', label: '车辆外观' }, { key: 'tire_ok', label: '轮胎' },
@@ -93,7 +100,7 @@ async function loadChecks() {
   if (!selectedLedgerId.value) return
   loading.value = true
   try { checks.value = await getAerialSafetyChecks({ ledger_id: selectedLedgerId.value }) || [] }
-  catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
+  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
 async function handleSaveCheck() {
@@ -101,7 +108,7 @@ async function handleSaveCheck() {
   try {
     await createAerialSafetyCheck({ ...checkForm, ledger_id: selectedLedgerId.value })
     ElMessage.success('检查记录已保存'); showAddDialog.value = false; loadChecks()
-  } catch (e: any) { ElMessage.error(e.message) } finally { saving.value = false }
+  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { saving.value = false }
 }
 </script>
 

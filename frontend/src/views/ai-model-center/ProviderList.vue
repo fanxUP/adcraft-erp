@@ -246,7 +246,7 @@ async function loadProviders() {
   try {
     const res = await getProviders({ page_size: 100 })
     providers.value = res.items || []
-  } catch (e: any) {
+  } catch {
     ElMessage.error('加载供应商列表失败')
   } finally {
     loading.value = false

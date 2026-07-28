@@ -59,27 +59,36 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAerialPersonnelExpenses, reviewAerialPersonnelExpense, reimburseAerialPersonnelExpense, getAerialPersonnel } from '@/api/aerial'
+import {
+  getAerialPersonnelExpenses,
+  reviewAerialPersonnelExpense,
+  reimburseAerialPersonnelExpense,
+  getAerialPersonnel,
+  type AerialPersonnel,
+  type AerialPersonnelExpense,
+  type AerialQueryParams,
+} from '@/api/aerial'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false)
-const list = ref<any[]>([])
+const list = ref<AerialPersonnelExpense[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
-const personnelOptions = ref<any[]>([])
+const personnelOptions = ref<AerialPersonnel[]>([])
 const filters = reactive({ dateRange: [] as string[], personnel_id: '', review_status: '', reimbursement_status: '' })
 
 async function fetchData() {
   loading.value = true
   try {
-    const params: any = { page: page.value, page_size: pageSize.value }
+    const params: AerialQueryParams = { page: page.value, page_size: pageSize.value }
     if (filters.dateRange?.length === 2) { params.date_from = filters.dateRange[0]; params.date_to = filters.dateRange[1] }
     if (filters.personnel_id) params.personnel_id = filters.personnel_id
     if (filters.review_status) params.review_status = filters.review_status
     if (filters.reimbursement_status) params.reimbursement_status = filters.reimbursement_status
     const res = await getAerialPersonnelExpenses(params)
     list.value = res.items || []; total.value = res.total || 0
-  } catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
+  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
 function resetFilters() {
@@ -87,7 +96,7 @@ function resetFilters() {
   page.value = 1; fetchData()
 }
 
-async function handleReview(row: any, status: string) {
+async function handleReview(row: AerialPersonnelExpense, status: string) {
   try {
     await ElMessageBox.confirm(`确定${status === 'approved' ? '通过' : '驳回'}此垫付记录？`, '审核')
     await reviewAerialPersonnelExpense(row.id, status)
@@ -95,7 +104,7 @@ async function handleReview(row: any, status: string) {
   } catch {}
 }
 
-async function handleReimburse(row: any) {
+async function handleReimburse(row: AerialPersonnelExpense) {
   try {
     await ElMessageBox.confirm('确定标记此垫付已报销？', '报销确认')
     await reimburseAerialPersonnelExpense(row.id)

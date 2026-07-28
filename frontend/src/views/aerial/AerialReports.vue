@@ -87,7 +87,13 @@ import { ElMessage } from 'element-plus'
 import {
   getAerialReportMonthly, getAerialReportReceivables, getAerialReportReimbursements,
   getAerialReportCosts, getAerialReportPersonnelSummary,
+  type AerialCostReportItem,
+  type AerialPersonnelSummaryItem,
+  type AerialReceivablesReport,
+  type AerialReimbursementsReport,
+  type AerialSummary,
 } from '@/api/aerial'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false)
 const activeTab = ref('monthly')
@@ -95,26 +101,31 @@ const month = ref(new Date().toISOString().slice(0, 7))
 const costMonth = ref('')
 const personnelMonth = ref(new Date().toISOString().slice(0, 7))
 
-const monthlyData = ref<any>(null)
-const receivables = ref<any>({})
-const reimbursements = ref<any>({})
-const costData = ref<any[]>([])
-const personnelData = ref<any[]>([])
+const monthlyData = ref<AerialSummary | null>(null)
+const receivables = ref<AerialReceivablesReport>({ items: [], total: 0, total_unpaid: 0 })
+const reimbursements = ref<AerialReimbursementsReport>({
+  pending_review: [],
+  pending_review_total: 0,
+  pending_reimbursement: [],
+  pending_reimbursement_total: 0,
+})
+const costData = ref<AerialCostReportItem[]>([])
+const personnelData = ref<AerialPersonnelSummaryItem[]>([])
 
 const monthlyCards = computed(() => {
-  const d = monthlyData.value || {}
+  const d = monthlyData.value
   return [
-    { label: '出车天数', value: d.work_days || 0, color: '#409eff' },
-    { label: '出车趟数', value: d.trip_count || 0 },
-    { label: '应收金额', value: `¥${d.receivable || 0}` },
-    { label: '实收金额', value: `¥${d.received || 0}` },
-    { label: '待收金额', value: `¥${d.unpaid || 0}`, color: (d.unpaid || 0) > 0 ? '#f56c6c' : '#909399' },
-    { label: '人员工资', value: `¥${d.wages || 0}` },
-    { label: '报 销', value: `¥${d.reimbursements || 0}` },
-    { label: '车辆费用', value: `¥${d.vehicle_costs || 0}` },
-    { label: '毛利润', value: `¥${d.gross_profit || 0}`, color: (d.gross_profit || 0) >= 0 ? '#67c23a' : '#f56c6c' },
-    { label: '平均趟收入', value: `¥${d.avg_trip_revenue || 0}` },
-    { label: '平均趟利润', value: `¥${d.avg_trip_profit || 0}` },
+    { label: '出车天数', value: d?.work_days || 0, color: '#409eff' },
+    { label: '出车趟数', value: d?.trip_count || 0 },
+    { label: '应收金额', value: `¥${d?.receivable || 0}` },
+    { label: '实收金额', value: `¥${d?.received || 0}` },
+    { label: '待收金额', value: `¥${d?.unpaid || 0}`, color: (d?.unpaid || 0) > 0 ? '#f56c6c' : '#909399' },
+    { label: '人员工资', value: `¥${d?.wages || 0}` },
+    { label: '报 销', value: `¥${d?.reimbursements || 0}` },
+    { label: '车辆费用', value: `¥${d?.vehicle_costs || 0}` },
+    { label: '毛利润', value: `¥${d?.gross_profit || 0}`, color: (d?.gross_profit || 0) >= 0 ? '#67c23a' : '#f56c6c' },
+    { label: '平均趟收入', value: `¥${d?.avg_trip_revenue || 0}` },
+    { label: '平均趟利润', value: `¥${d?.avg_trip_profit || 0}` },
   ]
 })
 
@@ -122,32 +133,32 @@ async function loadMonthly() {
   if (!month.value) return
   loading.value = true
   try { monthlyData.value = await getAerialReportMonthly(month.value) }
-  catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
+  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
 async function loadReceivables() {
   loading.value = true
   try { receivables.value = await getAerialReportReceivables({ page_size: 100 }) }
-  catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
+  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
 async function loadReimbursements() {
   loading.value = true
   try { reimbursements.value = await getAerialReportReimbursements() }
-  catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
+  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
 async function loadCosts() {
   loading.value = true
   try { costData.value = await getAerialReportCosts(costMonth.value || undefined) || [] }
-  catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
+  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
 async function loadPersonnel() {
   if (!personnelMonth.value) return
   loading.value = true
   try { personnelData.value = await getAerialReportPersonnelSummary(personnelMonth.value) || [] }
-  catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
+  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
 function handleTabChange(tab: string) {

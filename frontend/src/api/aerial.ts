@@ -3,6 +3,12 @@ import type { PaginatedData } from '@/types/api'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+export type AerialQueryParams = Record<string, string | number | boolean | undefined>
+export type JsonValue = string | number | boolean | null | JsonObject | JsonValue[]
+export interface JsonObject {
+  [key: string]: JsonValue
+}
+
 export interface AerialVehicle {
   id: string
   plate_number: string
@@ -22,6 +28,10 @@ export interface AerialVehicle {
   updated_at?: string
 }
 
+export type AerialVehicleCreate = Pick<AerialVehicle, 'plate_number' | 'vehicle_name'> &
+  Partial<Omit<AerialVehicle, 'id' | 'plate_number' | 'vehicle_name' | 'created_at' | 'updated_at'>>
+export type AerialVehicleUpdate = Partial<Omit<AerialVehicle, 'id' | 'created_at' | 'updated_at'>>
+
 export interface AerialPersonnel {
   id: string
   name: string
@@ -36,6 +46,10 @@ export interface AerialPersonnel {
   created_at?: string
   updated_at?: string
 }
+
+export type AerialPersonnelCreate = Pick<AerialPersonnel, 'name'> &
+  Partial<Omit<AerialPersonnel, 'id' | 'name' | 'created_at' | 'updated_at'>>
+export type AerialPersonnelUpdate = Partial<Omit<AerialPersonnel, 'id' | 'created_at' | 'updated_at'>>
 
 export interface AerialLedger {
   id: string
@@ -95,6 +109,13 @@ export interface AerialLedger {
   voided_at?: string
 }
 
+export type AerialLedgerCreate = Pick<
+  AerialLedger,
+  'work_date' | 'aerial_vehicle_id' | 'personnel_id' | 'work_location'
+> &
+  Partial<Omit<AerialLedger, 'id' | 'ledger_no' | 'created_at'>>
+export type AerialLedgerUpdate = Partial<Omit<AerialLedger, 'id' | 'ledger_no' | 'created_at'>>
+
 export interface AerialPersonnelExpense {
   id: string
   ledger_id: string
@@ -112,6 +133,12 @@ export interface AerialPersonnelExpense {
   reimbursed_at?: string
   created_at?: string
 }
+
+export type AerialPersonnelExpenseCreate = Pick<
+  AerialPersonnelExpense,
+  'ledger_id' | 'expense_date' | 'personnel_id' | 'expense_type' | 'amount'
+> &
+  Partial<Omit<AerialPersonnelExpense, 'id' | 'created_at'>>
 
 export interface AerialPersonnelWage {
   id: string
@@ -132,6 +159,9 @@ export interface AerialPersonnelWage {
   remark?: string
   created_at?: string
 }
+
+export type AerialPersonnelWageCreate = Pick<AerialPersonnelWage, 'personnel_id'> &
+  Partial<Omit<AerialPersonnelWage, 'id' | 'created_at'>>
 
 export interface AerialVehicleCost {
   id: string
@@ -154,6 +184,12 @@ export interface AerialVehicleCost {
   remark?: string
   created_at?: string
 }
+
+export type AerialVehicleCostCreate = Pick<
+  AerialVehicleCost,
+  'aerial_vehicle_id' | 'cost_date' | 'cost_type' | 'amount'
+> &
+  Partial<Omit<AerialVehicleCost, 'id' | 'created_at'>>
 
 export interface AerialSafetyCheck {
   id: string
@@ -179,6 +215,9 @@ export interface AerialSafetyCheck {
   checked_at?: string
 }
 
+export type AerialSafetyCheckCreate = Pick<AerialSafetyCheck, 'ledger_id' | 'check_type'> &
+  Partial<Omit<AerialSafetyCheck, 'id' | 'checked_at'>>
+
 export interface AerialAttachment {
   id: string
   ledger_id: string
@@ -190,18 +229,93 @@ export interface AerialAttachment {
   remark?: string
 }
 
+export type AerialAttachmentCreate = Pick<AerialAttachment, 'ledger_id' | 'file_url'> &
+  Partial<Omit<AerialAttachment, 'id' | 'uploaded_at'>>
+
+export interface AerialAuditLog {
+  id: string
+  ledger_id?: string
+  operator_id?: string
+  action: string
+  source: string
+  target_type?: string
+  target_id?: string
+  before_json?: JsonObject
+  after_json?: JsonObject
+  remark?: string
+  created_at?: string
+}
+
+export interface AerialSummary {
+  work_days?: number
+  trip_count: number
+  receivable: number
+  received: number
+  unpaid: number
+  wages: number
+  reimbursements: number
+  vehicle_costs: number
+  gross_profit: number
+  avg_trip_revenue?: number
+  avg_trip_cost?: number
+  avg_trip_profit?: number
+}
+
+export interface AerialDashboardOverview {
+  today: AerialSummary
+  monthly: AerialSummary
+}
+
+export interface AerialReminder {
+  type: 'insurance' | 'inspection' | 'maintenance'
+  vehicle: string
+  plate: string
+  expire_date?: string
+  due_date?: string
+  days_left: number
+  urgent: boolean
+}
+
+export interface AerialReceivablesReport {
+  items: AerialLedger[]
+  total: number
+  total_unpaid: number
+}
+
+export interface AerialReimbursementsReport {
+  pending_review: AerialPersonnelExpense[]
+  pending_review_total: number
+  pending_reimbursement: AerialPersonnelExpense[]
+  pending_reimbursement_total: number
+}
+
+export interface AerialCostReportItem {
+  cost_type: string
+  total_amount: number
+  count: number
+}
+
+export interface AerialPersonnelSummaryItem {
+  personnel_id: string
+  name: string
+  trip_count: number
+  total_wage: number
+  total_expense: number
+  total_reimbursement: number
+}
+
 // ── Vehicle API ────────────────────────────────────────────────────────────
 
-export const getAerialVehicles = (params?: any) =>
+export const getAerialVehicles = (params?: AerialQueryParams) =>
   get<PaginatedData<AerialVehicle>>('/aerial/vehicles', { params })
 
 export const getAerialVehicle = (id: string) =>
   get<AerialVehicle>(`/aerial/vehicles/${id}`)
 
-export const createAerialVehicle = (data: any) =>
+export const createAerialVehicle = (data: AerialVehicleCreate) =>
   post<AerialVehicle>('/aerial/vehicles', data)
 
-export const updateAerialVehicle = (id: string, data: any) =>
+export const updateAerialVehicle = (id: string, data: AerialVehicleUpdate) =>
   patch<AerialVehicle>(`/aerial/vehicles/${id}`, data)
 
 export const deleteAerialVehicle = (id: string) =>
@@ -209,16 +323,16 @@ export const deleteAerialVehicle = (id: string) =>
 
 // ── Personnel API ─────────────────────────────────────────────────────────────
 
-export const getAerialPersonnel = (params?: any) =>
+export const getAerialPersonnel = (params?: AerialQueryParams) =>
   get<PaginatedData<AerialPersonnel>>('/aerial/personnel', { params })
 
 export const getAerialPersonnelItem = (id: string) =>
   get<AerialPersonnel>(`/aerial/personnel/${id}`)
 
-export const createAerialPersonnel = (data: any) =>
+export const createAerialPersonnel = (data: AerialPersonnelCreate) =>
   post<AerialPersonnel>('/aerial/personnel', data)
 
-export const updateAerialPersonnel = (id: string, data: any) =>
+export const updateAerialPersonnel = (id: string, data: AerialPersonnelUpdate) =>
   patch<AerialPersonnel>(`/aerial/personnel/${id}`, data)
 
 export const deleteAerialPersonnel = (id: string) =>
@@ -226,16 +340,16 @@ export const deleteAerialPersonnel = (id: string) =>
 
 // ── Ledger API ─────────────────────────────────────────────────────────────
 
-export const getAerialLedgers = (params?: any) =>
+export const getAerialLedgers = (params?: AerialQueryParams) =>
   get<PaginatedData<AerialLedger>>('/aerial/ledgers', { params })
 
 export const getAerialLedger = (id: string) =>
   get<AerialLedger>(`/aerial/ledgers/${id}`)
 
-export const createAerialLedger = (data: any) =>
+export const createAerialLedger = (data: AerialLedgerCreate) =>
   post<AerialLedger>('/aerial/ledgers', data)
 
-export const updateAerialLedger = (id: string, data: any) =>
+export const updateAerialLedger = (id: string, data: AerialLedgerUpdate) =>
   patch<AerialLedger>(`/aerial/ledgers/${id}`, data)
 
 export const voidAerialLedger = (id: string, reason: string) =>
@@ -249,10 +363,10 @@ export const rejectAerialLedger = (id: string, remark?: string) =>
 
 // ── Personnel Expense API ─────────────────────────────────────────────────────
 
-export const getAerialPersonnelExpenses = (params?: any) =>
+export const getAerialPersonnelExpenses = (params?: AerialQueryParams) =>
   get<PaginatedData<AerialPersonnelExpense>>('/aerial/personnel-expenses', { params })
 
-export const createAerialPersonnelExpense = (data: any) =>
+export const createAerialPersonnelExpense = (data: AerialPersonnelExpenseCreate) =>
   post<AerialPersonnelExpense>('/aerial/personnel-expenses', data)
 
 export const reviewAerialPersonnelExpense = (id: string, status: string, remark?: string) =>
@@ -263,10 +377,10 @@ export const reimburseAerialPersonnelExpense = (id: string, remark?: string) =>
 
 // ── Personnel Wage API ────────────────────────────────────────────────────────
 
-export const getAerialPersonnelWages = (params?: any) =>
+export const getAerialPersonnelWages = (params?: AerialQueryParams) =>
   get<PaginatedData<AerialPersonnelWage>>('/aerial/personnel-wages', { params })
 
-export const createAerialPersonnelWage = (data: any) =>
+export const createAerialPersonnelWage = (data: AerialPersonnelWageCreate) =>
   post<AerialPersonnelWage>('/aerial/personnel-wages', data)
 
 export const payAerialPersonnelWage = (id: string, remark?: string) =>
@@ -274,10 +388,10 @@ export const payAerialPersonnelWage = (id: string, remark?: string) =>
 
 // ── Vehicle Cost API ───────────────────────────────────────────────────────
 
-export const getAerialVehicleCosts = (params?: any) =>
+export const getAerialVehicleCosts = (params?: AerialQueryParams) =>
   get<PaginatedData<AerialVehicleCost>>('/aerial/vehicle-costs', { params })
 
-export const createAerialVehicleCost = (data: any) =>
+export const createAerialVehicleCost = (data: AerialVehicleCostCreate) =>
   post<AerialVehicleCost>('/aerial/vehicle-costs', data)
 
 export const reviewAerialVehicleCost = (id: string, status: string, remark?: string) =>
@@ -285,18 +399,18 @@ export const reviewAerialVehicleCost = (id: string, status: string, remark?: str
 
 // ── Safety Check API ───────────────────────────────────────────────────────
 
-export const getAerialSafetyChecks = (params?: any) =>
+export const getAerialSafetyChecks = (params?: AerialQueryParams) =>
   get<AerialSafetyCheck[]>('/aerial/safety-checks', { params })
 
-export const createAerialSafetyCheck = (data: any) =>
+export const createAerialSafetyCheck = (data: AerialSafetyCheckCreate) =>
   post<AerialSafetyCheck>('/aerial/safety-checks', data)
 
 // ── Attachment API ─────────────────────────────────────────────────────────
 
-export const getAerialAttachments = (params?: any) =>
+export const getAerialAttachments = (params?: AerialQueryParams) =>
   get<AerialAttachment[]>('/aerial/attachments', { params })
 
-export const createAerialAttachment = (data: any) =>
+export const createAerialAttachment = (data: AerialAttachmentCreate) =>
   post<AerialAttachment>('/aerial/attachments', data)
 
 export const deleteAerialAttachment = (id: string) =>
@@ -304,39 +418,39 @@ export const deleteAerialAttachment = (id: string) =>
 
 // ── Audit Log API ──────────────────────────────────────────────────────────
 
-export const getAerialAuditLogs = (params?: any) =>
-  get<PaginatedData<any>>('/aerial/audit-logs', { params })
+export const getAerialAuditLogs = (params?: AerialQueryParams) =>
+  get<PaginatedData<AerialAuditLog>>('/aerial/audit-logs', { params })
 
 // ── Dashboard API ──────────────────────────────────────────────────────────
 
 export const getAerialDashboardOverview = () =>
-  get<any>('/aerial/dashboard/overview')
+  get<AerialDashboardOverview>('/aerial/dashboard/overview')
 
 export const getAerialDashboardToday = () =>
   get<AerialLedger[]>('/aerial/dashboard/today')
 
 export const getAerialDashboardReminders = () =>
-  get<any[]>('/aerial/dashboard/reminders')
+  get<AerialReminder[]>('/aerial/dashboard/reminders')
 
 // ── Report API ─────────────────────────────────────────────────────────────
 
 export const getAerialReportDaily = (date: string) =>
-  get<any>('/aerial/reports/daily', { params: { date } })
+  get<AerialSummary & { ledgers: AerialLedger[] }>('/aerial/reports/daily', { params: { date } })
 
 export const getAerialReportMonthly = (month: string) =>
-  get<any>('/aerial/reports/monthly', { params: { month } })
+  get<AerialSummary>('/aerial/reports/monthly', { params: { month } })
 
-export const getAerialReportReceivables = (params?: any) =>
-  get<any>('/aerial/reports/receivables', { params })
+export const getAerialReportReceivables = (params?: AerialQueryParams) =>
+  get<AerialReceivablesReport>('/aerial/reports/receivables', { params })
 
-export const getAerialReportReimbursements = (params?: any) =>
-  get<any>('/aerial/reports/reimbursements', { params })
+export const getAerialReportReimbursements = (params?: AerialQueryParams) =>
+  get<AerialReimbursementsReport>('/aerial/reports/reimbursements', { params })
 
 export const getAerialReportCosts = (month?: string) =>
-  get<any[]>('/aerial/reports/costs', { params: { month } })
+  get<AerialCostReportItem[]>('/aerial/reports/costs', { params: { month } })
 
 export const getAerialReportPersonnelSummary = (month: string) =>
-  get<any[]>('/aerial/reports/personnel-summary', { params: { month } })
+  get<AerialPersonnelSummaryItem[]>('/aerial/reports/personnel-summary', { params: { month } })
 
 // ── Export API ───────────────────────────────────────────────────────────────
 
@@ -382,7 +496,7 @@ export interface AerialAgentDraft {
   intent: string
   confidence: number
   risk_level: string
-  extracted?: Record<string, any>
+  extracted?: JsonObject
   suggested_action?: string
   status: string
   confirmed_by?: string
@@ -394,6 +508,24 @@ export interface AerialAgentDraft {
   created_at: string
 }
 
+export interface AerialAgentIngestResult {
+  draft_id?: string
+  intent: string
+  confidence: number
+  risk_level: string
+  suggested_action?: string
+  query_result?: JsonObject
+  extracted?: JsonObject
+  requires_confirmation?: boolean
+  message?: string
+}
+
+export interface AerialAgentActionResult {
+  success: boolean
+  error?: string
+  ids?: JsonObject
+}
+
 export const ingestAerialAgentMessage = (data: {
   platform: string
   conversation_id?: string
@@ -402,18 +534,18 @@ export const ingestAerialAgentMessage = (data: {
   sender_name?: string
   message_type?: string
   content: string
-  attachments?: any[]
+  attachments?: JsonObject[]
   sent_at?: string
-}) => post<any>('/aerial/agent/messages/ingest', data)
+}) => post<AerialAgentIngestResult>('/aerial/agent/messages/ingest', data)
 
-export const getAerialAgentDrafts = (params?: any) =>
+export const getAerialAgentDrafts = (params?: AerialQueryParams) =>
   get<PaginatedData<AerialAgentDraft>>('/aerial/agent/drafts', { params })
 
 export const getAerialAgentDraft = (id: string) =>
   get<AerialAgentDraft>(`/aerial/agent/drafts/${id}`)
 
-export const confirmAerialAgentDraft = (id: string, adjustments?: Record<string, any>) =>
-  post<any>(`/aerial/agent/drafts/${id}/confirm`, { adjustments })
+export const confirmAerialAgentDraft = (id: string, adjustments?: JsonObject) =>
+  post<AerialAgentActionResult>(`/aerial/agent/drafts/${id}/confirm`, { adjustments })
 
 export const rejectAerialAgentDraft = (id: string, reason?: string) =>
-  post<any>(`/aerial/agent/drafts/${id}/reject`, { reason })
+  post<AerialAgentActionResult>(`/aerial/agent/drafts/${id}/reject`, { reason })

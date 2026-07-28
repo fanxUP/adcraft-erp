@@ -64,10 +64,17 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getAerialVehicles, createAerialVehicle, updateAerialVehicle, deleteAerialVehicle } from '@/api/aerial'
+import {
+  getAerialVehicles,
+  createAerialVehicle,
+  updateAerialVehicle,
+  deleteAerialVehicle,
+  type AerialVehicle,
+} from '@/api/aerial'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
-const list = ref<any[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
+const list = ref<AerialVehicle[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
 const keyword = ref(''); const editingId = ref<string | null>(null)
 
 const form = reactive({
@@ -78,7 +85,7 @@ const form = reactive({
 async function fetchData() {
   loading.value = true
   try { const res = await getAerialVehicles({ keyword: keyword.value, page: page.value, page_size: pageSize.value }); list.value = res.items || []; total.value = res.total || 0 }
-  catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
+  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
 function handleCreate() {
@@ -87,7 +94,7 @@ function handleCreate() {
   dialogVisible.value = true
 }
 
-function handleEdit(row: any) {
+function handleEdit(row: AerialVehicle) {
   editingId.value = row.id
   Object.assign(form, { plate_number: row.plate_number, vehicle_name: row.vehicle_name, brand_model: row.brand_model, max_working_height: row.max_working_height, platform_capacity: row.platform_capacity, insurance_expire_date: row.insurance_expire_date, inspection_expire_date: row.inspection_expire_date, maintenance_due_date: row.maintenance_due_date, remark: row.remark })
   dialogVisible.value = true
@@ -101,11 +108,11 @@ async function handleSave() {
     if (editingId.value) { await updateAerialVehicle(editingId.value, form); ElMessage.success('修改成功') }
     else { await createAerialVehicle(form); ElMessage.success('新增成功') }
     dialogVisible.value = false; fetchData()
-  } catch (e: any) { ElMessage.error(e.message) } finally { saving.value = false }
+  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { saving.value = false }
 }
 
-async function handleDelete(row: any) {
-  try { await deleteAerialVehicle(row.id); ElMessage.success('删除成功'); fetchData() } catch (e: any) { ElMessage.error(e.message) }
+async function handleDelete(row: AerialVehicle) {
+  try { await deleteAerialVehicle(row.id); ElMessage.success('删除成功'); fetchData() } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) }
 }
 
 function statusLabel(s: string) { return { available: '可用', in_use: '使用中', maintenance: '维修中', disabled: '已停用', scrapped: '已报废' }[s] || s }

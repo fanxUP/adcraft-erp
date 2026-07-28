@@ -99,7 +99,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
-import { getCDRQuote, getLatestVersion, listVersions, listAuditLogs, requestApproval, convertToOrder, deleteCDRQuote } from '@/api/cdrQuote'
+import { getCDRQuote, getLatestVersion, listVersions, requestApproval, convertToOrder, deleteCDRQuote } from '@/api/cdrQuote'
 
 const route = useRoute()
 const router = useRouter()

@@ -231,7 +231,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
               case 'error':
                 throw new Error(event.message)
             }
-          } catch (parseErr) {
+          } catch {
             // Ignore parse errors for incomplete chunks
           }
         }

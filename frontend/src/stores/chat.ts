@@ -109,7 +109,7 @@ export const useChatStore = defineStore('chat', () => {
         handlePresenceUpdate(data.data.user_id, data.data.status)
         break
       case 'message_read':
-        handleMessageRead(data.data.conversation_id, data.data.message_id, data.data.user_id)
+        handleMessageRead(data.data.conversation_id, data.data.message_id)
         break
     }
   }
@@ -172,7 +172,7 @@ export const useChatStore = defineStore('chat', () => {
     })
   }
 
-  function handleMessageRead(conversationId: string, messageId: string, _userId: string) {
+  function handleMessageRead(conversationId: string, messageId: string) {
     const convMessages = messages.value.get(conversationId) || []
     const message = convMessages.find(m => m.id === messageId)
     if (message) {

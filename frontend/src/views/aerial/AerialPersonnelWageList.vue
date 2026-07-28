@@ -44,30 +44,39 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAerialPersonnelWages, payAerialPersonnelWage, getAerialPersonnel, exportAerialWages } from '@/api/aerial'
+import {
+  getAerialPersonnelWages,
+  payAerialPersonnelWage,
+  getAerialPersonnel,
+  exportAerialWages,
+  type AerialPersonnel,
+  type AerialPersonnelWage,
+  type AerialQueryParams,
+} from '@/api/aerial'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false)
-const list = ref<any[]>([])
+const list = ref<AerialPersonnelWage[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const month = ref('')
-const personnelOptions = ref<any[]>([])
+const personnelOptions = ref<AerialPersonnel[]>([])
 const filters = reactive({ personnel_id: '', payment_status: '' })
 
 async function fetchData() {
   loading.value = true
   try {
-    const params: any = { page: page.value, page_size: pageSize.value }
+    const params: AerialQueryParams = { page: page.value, page_size: pageSize.value }
     if (month.value) params.wage_month = month.value
     if (filters.personnel_id) params.personnel_id = filters.personnel_id
     if (filters.payment_status) params.payment_status = filters.payment_status
     const res = await getAerialPersonnelWages(params)
     list.value = res.items || []; total.value = res.total || 0
-  } catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
+  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
-async function handlePay(row: any) {
+async function handlePay(row: AerialPersonnelWage) {
   try {
     await ElMessageBox.confirm(`确定标记 ${row.name} 的工资 ¥${row.final_wage_amount} 已发放？`, '工资发放')
     await payAerialPersonnelWage(row.id)
@@ -80,8 +89,8 @@ async function handleExport() {
   try {
     await exportAerialWages(month.value)
     ElMessage.success('导出成功')
-  } catch (e: any) {
-    ElMessage.error(e.message || '导出失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '导出失败'))
   }
 }
 

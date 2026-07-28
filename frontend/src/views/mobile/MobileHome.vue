@@ -102,10 +102,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { getInstallationTasks, getInstallationTask } from '@/api/tasks'
+import { getInstallationTasks } from '@/api/tasks'
 import type { InstallationTaskResponse } from '@/types/api'
 import { getErrorMessage } from '@/utils/error'
-import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const authStore = useAuthStore()

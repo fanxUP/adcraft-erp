@@ -361,7 +361,7 @@ async function handleSave() {
       })),
     }
 
-    const version = await createQuoteVersion(quoteId, versionData)
+    await createQuoteVersion(quoteId, versionData)
     ElMessage.success('保存成功')
     router.push(`/cdr/quotes/${quoteId}`)
   } catch (e: any) {

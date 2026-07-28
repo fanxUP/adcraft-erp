@@ -68,12 +68,23 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAerialVehicleCosts, createAerialVehicleCost, reviewAerialVehicleCost, getAerialVehicles, getAerialPersonnel } from '@/api/aerial'
+import {
+  getAerialVehicleCosts,
+  createAerialVehicleCost,
+  reviewAerialVehicleCost,
+  getAerialVehicles,
+  getAerialPersonnel,
+  type AerialPersonnel,
+  type AerialQueryParams,
+  type AerialVehicle,
+  type AerialVehicleCost,
+} from '@/api/aerial'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
-const list = ref<any[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
-const vehicleOptions = ref<any[]>([])
-const personnelOptions = ref<{ id: string; name: string }[]>([])
+const list = ref<AerialVehicleCost[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
+const vehicleOptions = ref<AerialVehicle[]>([])
+const personnelOptions = ref<AerialPersonnel[]>([])
 const filters = reactive({ dateRange: [] as string[], cost_type: '', review_status: '' })
 const form = reactive({ aerial_vehicle_id: '', cost_date: '', cost_type: '', amount: 0, allocation_type: 'none', payer_id: '', remark: '' })
 
@@ -89,12 +100,12 @@ const costTypes = [
 async function fetchData() {
   loading.value = true
   try {
-    const params: any = { page: page.value, page_size: pageSize.value }
+    const params: AerialQueryParams = { page: page.value, page_size: pageSize.value }
     if (filters.dateRange?.length === 2) { params.date_from = filters.dateRange[0]; params.date_to = filters.dateRange[1] }
     if (filters.cost_type) params.cost_type = filters.cost_type
     if (filters.review_status) params.review_status = filters.review_status
     const res = await getAerialVehicleCosts(params); list.value = res.items || []; total.value = res.total || 0
-  } catch (e: any) { ElMessage.error(e.message) } finally { loading.value = false }
+  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
 function handleCreate() {
@@ -109,10 +120,10 @@ async function handleSave() {
   if (form.amount <= 0) return ElMessage.warning('金额必须大于0')
   saving.value = true
   try { await createAerialVehicleCost(form); ElMessage.success('新增成功'); dialogVisible.value = false; fetchData() }
-  catch (e: any) { ElMessage.error(e.message) } finally { saving.value = false }
+  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { saving.value = false }
 }
 
-async function handleReview(row: any, status: string) {
+async function handleReview(row: AerialVehicleCost, status: string) {
   try { await ElMessageBox.confirm(`确定${status === 'approved' ? '通过' : '驳回'}？`, '审核'); await reviewAerialVehicleCost(row.id, status); ElMessage.success('操作成功'); fetchData() } catch {}
 }
 

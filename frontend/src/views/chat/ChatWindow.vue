@@ -894,7 +894,7 @@ async function handleBeforeUpload(file: File) {
     const result = await uploadChatFile(props.conversation.id, file)
     emit('sendMessage', result.url, 'image')
     ElMessage.success('图片发送成功')
-  } catch (error) {
+  } catch {
     ElMessage.error('图片上传失败')
   }
   return false
@@ -908,7 +908,7 @@ async function handleBeforeFileUpload(file: File) {
     const result = await uploadChatFile(props.conversation.id, file)
     emit('sendMessage', JSON.stringify({ url: result.url, name: file.name, size: file.size }), 'file')
     ElMessage.success('文件发送成功')
-  } catch (error) {
+  } catch {
     ElMessage.error('文件上传失败')
   }
   return false
@@ -927,7 +927,7 @@ async function handleDrop(e: DragEvent) {
       } else {
         emit('sendMessage', JSON.stringify({ url: result.url, name: file.name, size: file.size }), 'file')
       }
-    } catch (error) {
+    } catch {
       ElMessage.error(`${file.name} 上传失败`)
     }
   }
@@ -1053,7 +1053,7 @@ async function searchBusinessObjects() {
     const results = await searchApi(shareCardType.value as any, shareCardKeyword.value)
     shareCardResults.value = results || []
     shareCardSearched.value = true
-  } catch (error) {
+  } catch {
     ElMessage.error('搜索失败')
   }
 }
@@ -1075,7 +1075,7 @@ async function handleShareCard(item: any) {
     }
     showShareCard.value = false
     ElMessage.success('分享成功')
-  } catch (error) {
+  } catch {
     ElMessage.error('分享失败')
   }
 }
@@ -1159,7 +1159,7 @@ async function handleSearch() {
       conversation_id: props.conversation.id,
     })
     searchResults.value = result.items || []
-  } catch (error) {
+  } catch {
     ElMessage.error('搜索失败')
   }
 }

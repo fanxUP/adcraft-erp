@@ -5,8 +5,9 @@
 export function getErrorMessage(e: unknown, fallback = '操作失败'): string {
   if (typeof e === 'string') return e
   // Prefer backend error message from Axios response body
-  const axiosErr = e as { response?: { data?: { message?: string } } }
+  const axiosErr = e as { response?: { data?: { message?: string; detail?: string } } }
   if (axiosErr.response?.data?.message) return axiosErr.response.data.message
+  if (axiosErr.response?.data?.detail) return axiosErr.response.data.detail
   if (e instanceof Error) return e.message
   return fallback
 }

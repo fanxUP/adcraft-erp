@@ -205,6 +205,7 @@ import {
   ingestAerialAgentMessage,
   type AerialAgentDraft,
 } from '@/api/aerial'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false)
 const drafts = ref<AerialAgentDraft[]>([])
@@ -270,8 +271,8 @@ const doConfirm = async () => {
     } else {
       ElMessage.error(res?.error || '确认失败')
     }
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '确认失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '确认失败'))
   } finally {
     confirming.value = false
   }
@@ -290,8 +291,8 @@ const doReject = async () => {
     ElMessage.success('草稿已拒绝')
     showRejectDialog.value = false
     loadDrafts()
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '拒绝失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '拒绝失败'))
   } finally {
     rejecting.value = false
   }
@@ -318,8 +319,8 @@ const handleIngest = async () => {
     showIngestDialog.value = false
     ingestForm.content = ''
     loadDrafts()
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '发送失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '发送失败'))
   } finally {
     ingesting.value = false
   }

@@ -234,7 +234,7 @@ async function handleStartChat(user: {id: string, real_name: string, username: s
     await chatStore.startPrivateChat(user.id)
     activeTab.value = 'conversations'
     ElMessage.success(`与 ${user.real_name || user.username} 的会话已创建`)
-  } catch (error) {
+  } catch {
     ElMessage.error('创建会话失败')
   }
 }
@@ -264,7 +264,7 @@ async function handleCreateGroup() {
     selectedMemberIds.value = []
     activeTab.value = 'conversations'
     ElMessage.success('群聊创建成功')
-  } catch (error) {
+  } catch {
     ElMessage.error('创建失败')
   } finally {
     creating.value = false
@@ -276,7 +276,7 @@ async function handleSendMessage(content: string, type: string, replyToId?: stri
 
   try {
     await chatStore.sendMessage(currentConversation.value.id, content, type, replyToId, mentions)
-  } catch (error) {
+  } catch {
     ElMessage.error('发送失败')
   }
 }
@@ -296,7 +296,7 @@ async function handleDeleteMessage(messageId: string) {
   try {
     await chatStore.deleteMessage(messageId, currentConversation.value.id)
     ElMessage.success('删除成功')
-  } catch (error) {
+  } catch {
     ElMessage.error('删除失败')
   }
 }
@@ -307,7 +307,7 @@ async function handleRecallMessage(messageId: string) {
   try {
     await chatStore.recallMessage(messageId, currentConversation.value.id)
     ElMessage.success('撤回成功')
-  } catch (error) {
+  } catch {
     ElMessage.error('撤回失败')
   }
 }

@@ -96,7 +96,7 @@ async function handleCreate() {
   }
 }
 
-function viewRules(row: any) {
+function viewRules() {
   ElMessage.info('规则详情功能将在后续版本完善')
 }
 
