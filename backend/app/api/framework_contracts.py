@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.file_security import confined_path, safe_upload_name, save_upload
 
 logger = logging.getLogger(__name__)
 
@@ -250,14 +251,12 @@ async def upload_project_attachment(
             os.remove(old_path)
 
     ts = str(int(time.time()))
-    safe_name = f"{project_id}_{ts}_{file.filename}"
+    safe_name, display_name = safe_upload_name(file.filename, f"{project_id}_{ts}")
     file_path = os.path.join(upload_dir, safe_name)
-    contents = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(contents)
+    await save_upload(file, file_path)
 
     rel_path = f"framework-contract-projects/{safe_name}"
-    updated = await service.update_attachment(pid, rel_path, file.filename)
+    updated = await service.update_attachment(pid, rel_path, display_name)
     return success(updated)
 
 
@@ -265,13 +264,14 @@ async def upload_project_attachment(
 async def download_project_attachment(
     project_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     service = FrameworkContractService(db)
     project = await service.get_project(UUID(project_id))
     if not project or not project.get("attachment_path"):
         return {"code": 40401, "message": "附件不存在", "data": None}
 
-    file_path = os.path.join(settings.LOCAL_UPLOAD_DIR, project["attachment_path"])
+    file_path = confined_path(settings.LOCAL_UPLOAD_DIR, project["attachment_path"])
     if not os.path.isfile(file_path):
         return {"code": 40401, "message": "附件文件不存在", "data": None}
 

@@ -64,7 +64,7 @@
               @contextmenu.prevent="showContextMenu($event, msg)"
             >
               <!-- 文本消息 -->
-              <div v-if="msg.type === 'text'" class="msg-text" v-html="formatTextContent(msg.content)" />
+              <div v-if="msg.type === 'text'" class="msg-text">{{ msg.content }}</div>
 
               <!-- 图片消息 -->
               <div v-else-if="msg.type === 'image'" class="msg-image">
@@ -812,19 +812,6 @@ function getStatusLabel(status: string, cardType?: string): string {
 // 格式化金额
 function formatAmount(amount: number): string {
   return amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-// 格式化文本内容（支持@高亮和链接）
-function formatTextContent(content: string) {
-  if (!content) return ''
-  // @高亮
-  let formatted = content.replace(/@(\S+)/g, '<span class="mention-highlight">@$1</span>')
-  // 链接
-  formatted = formatted.replace(
-    /(https?:\/\/[^\s]+)/g,
-    '<a href="$1" target="_blank" rel="noopener">$1</a>'
-  )
-  return formatted
 }
 
 // 格式化文件大小

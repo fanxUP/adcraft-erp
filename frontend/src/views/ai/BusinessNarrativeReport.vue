@@ -81,7 +81,7 @@
           <el-tag v-if="report.mode === 'ai_enhanced'" size="small" type="success" style="margin-left: 8px">AI 增强</el-tag>
         </span>
       </template>
-      <div class="narrative-content" v-html="renderedNarrative" />
+      <div class="narrative-content">{{ report.narrative }}</div>
     </el-card>
 
     <!-- Suggestions -->
@@ -130,13 +130,6 @@ function confidenceText(c: string): string {
   const map: Record<string, string> = { high: '高', medium: '中', low: '低' }
   return map[c] || c
 }
-
-const renderedNarrative = computed(() => {
-  if (!report.value?.narrative) return ''
-  return report.value.narrative
-    .replace(/\n/g, '<br>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-})
 
 function formatMoney(val: number | undefined | null): string {
   if (val == null) return '0'
