@@ -10,6 +10,7 @@ import app.models.customer  # noqa: F401
 import app.models.business_document  # noqa: F401
 import app.models.user  # noqa: F401
 import app.models.notification  # noqa: F401
+import app.models.vehicle  # noqa: F401
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
 from tests.conftest import SAMPLE_USER_ID, SAMPLE_ORDER_ID, SAMPLE_CUSTOMER_ID
 
@@ -28,6 +29,7 @@ def make_mock_payment(**kwargs):
     p.void_reason = kwargs.get("void_reason")
     p.voided_at = kwargs.get("voided_at")
     p.receipt_url = kwargs.get("receipt_url")
+    p.document = kwargs.get("document")
     p.created_by = kwargs.get("created_by", SAMPLE_USER_ID)
     p.created_at = kwargs.get("created_at", datetime.now(timezone.utc))
     return p
@@ -75,23 +77,20 @@ def mock_payment_repo():
     repo.list_payments = AsyncMock(return_value=([], 0))
     repo.create = AsyncMock()
     repo.void = AsyncMock()
-    repo.get_order_paid_sum = AsyncMock(return_value=0.0)
+    repo.get_document_paid_sum = AsyncMock(return_value=0.0)
     return repo
 
 
 @pytest.fixture
 def payment_service(mock_payment_repo):
-    with patch("app.services.payment_service.PaymentRepository") as MockRepoClass, \
-         patch("app.repositories.order_repo.OrderRepository") as MockOrderRepo:
+    with patch("app.services.payment_service.PaymentRepository") as MockRepoClass:
         MockRepoClass.return_value = mock_payment_repo
-        mock_order_repo = MagicMock()
-        mock_order_repo.get_by_id = AsyncMock()
-        mock_order_repo.update = AsyncMock()
-        MockOrderRepo.return_value = mock_order_repo
-        db = AsyncMock()
+        db = MagicMock()
+        db.get = AsyncMock()
+        db.flush = AsyncMock()
         svc = PaymentService(db)
         svc.repo = mock_payment_repo
-        yield svc, mock_order_repo
+        yield svc, db
 
 
 # --- List ---
@@ -138,17 +137,17 @@ async def test_get_payment_not_found(payment_service):
 
 @pytest.mark.asyncio
 async def test_create_payment(payment_service):
-    svc, mock_order_repo = payment_service
+    svc, db = payment_service
     order = MagicMock()
     order.total_amount = 5000.0
     order.sales_user_id = None
-    order.order_no = "O20260629-0001"
+    order.doc_no = "O20260629-0001"
     order.project_name = "测试项目"
-    mock_order_repo.get_by_id.return_value = order
+    db.get.return_value = order
 
     p = make_mock_payment()
     svc.repo.create.return_value = p
-    svc.repo.get_order_paid_sum.return_value = 500.0
+    svc.repo.get_document_paid_sum.return_value = 500.0
 
     with patch("app.services.payment_service.generate_payment_no", AsyncMock(return_value="PAY20260629-0002")):
         result = await svc.create_payment({
@@ -160,31 +159,29 @@ async def test_create_payment(payment_service):
 
     assert result["payment_no"] == "PAY20260629-0002"
     assert result["amount"] == 500.0
-    # Verify order paid/unpaid was updated
-    mock_order_repo.update.assert_awaited_once()
-    args = mock_order_repo.update.call_args[0]
-    assert args[1]["paid_amount"] == 500.0
-    assert args[1]["unpaid_amount"] == 4500.0
+    assert order.paid_amount == 500.0
+    assert order.unpaid_amount == 4500.0
 
 
 @pytest.mark.asyncio
 async def test_create_payment_order_not_found(payment_service):
-    svc, mock_order_repo = payment_service
-    mock_order_repo.get_by_id.return_value = None
+    svc, db = payment_service
+    db.get.return_value = None
 
-    with pytest.raises(ValueError, match="订单不存在"):
+    with pytest.raises(ValueError, match="单据不存在"):
         await svc.create_payment({"order_id": SAMPLE_ORDER_ID, "customer_id": SAMPLE_CUSTOMER_ID, "amount": 500.0}, SAMPLE_USER_ID)
 
 
 @pytest.mark.asyncio
 async def test_void_payment(payment_service):
-    svc, mock_order_repo = payment_service
+    svc, db = payment_service
     p = make_mock_payment()
     svc.repo.get_by_id.return_value = p
 
     order = MagicMock()
-    mock_order_repo.get_by_id.return_value = order
-    svc.repo.get_order_paid_sum.return_value = 0.0
+    order.total_amount = 5000
+    db.get.return_value = order
+    svc.repo.get_document_paid_sum.return_value = 0.0
 
     result = await svc.void_payment(SAMPLE_ORDER_ID, "客户退款")
     assert result["payment_no"] == "PAY20260629-0001"
@@ -225,7 +222,7 @@ def mock_statement_repo():
         return model_obj
 
     repo.update = AsyncMock(side_effect=update_side_effect)
-    repo.get_orders_in_range = AsyncMock(return_value=[])
+    repo.get_documents_in_range = AsyncMock(return_value=[])
     repo.get_payments_in_range = AsyncMock(return_value=[])
     return repo
 
@@ -254,7 +251,7 @@ async def test_get_statement_found(statement_service):
     svc = statement_service
     s = make_mock_statement()
     svc.repo.get_by_id.return_value = s
-    svc.repo.get_orders_in_range.return_value = []
+    svc.repo.get_documents_in_range.return_value = []
     svc.repo.get_payments_in_range.return_value = []
 
     result = await svc.get_statement(SAMPLE_ORDER_ID)
@@ -275,12 +272,12 @@ async def test_create_statement(statement_service):
     svc = statement_service
     created = make_mock_statement(statement_no="STMT20260629-0002")
     svc.repo.create.return_value = created
-    svc.repo.get_orders_in_range.return_value = [
+    svc.repo.get_documents_in_range.return_value = [
         MagicMock(total_amount=3000.0),
         MagicMock(total_amount=2000.0),
     ]
     svc.repo.get_payments_in_range.return_value = [
-        MagicMock(amount=1000.0),
+        make_mock_payment(amount=1000.0),
     ]
 
     with patch("app.services.payment_service.generate_statement_no", AsyncMock(return_value="STMT20260629-0002")):

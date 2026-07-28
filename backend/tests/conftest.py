@@ -102,6 +102,7 @@ def make_mock_installation_task(
     task = MagicMock()
     task.id = task_id
     task.installation_no = installation_no
+    task.document_id = order_id
     task.order_id = order_id
     task.customer_id = customer_id
     task.project_name = project_name
@@ -138,6 +139,7 @@ def make_mock_design_task(
     task = MagicMock()
     task.id = task_id
     task.design_no = design_no
+    task.document_id = order_id
     task.order_id = order_id
     task.customer_id = customer_id
     task.project_name = project_name
@@ -177,6 +179,7 @@ def make_mock_production_task(
     task = MagicMock()
     task.id = task_id
     task.production_no = production_no
+    task.document_id = order_id
     task.order_id = order_id
     task.customer_id = customer_id
     task.project_name = project_name
