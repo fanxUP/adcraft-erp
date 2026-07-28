@@ -160,6 +160,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "contract:read", "contract:create", "contract:update", "contract:delete", "contract:change_status",
         "order:read", "order:create", "order:update", "order:change_status",
         "acceptance:read", "acceptance:create", "acceptance:update", "acceptance:delete", "acceptance:change_status",
+        "design_task:read", "production_task:read", "installation_task:read",
         "payment:read", "payment:create",
         "expense:read",
         "report:read",

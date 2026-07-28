@@ -2,8 +2,10 @@
   <div class="page">
     <div class="page-header">
       <h2>报价管理</h2>
-      <div>
-        <el-button type="danger" @click="$router.push('/quotes/new')">新建报价</el-button>
+      <div class="quote-actions">
+        <el-button @click="$router.push('/cdr/quotes')">智能报价记录</el-button>
+        <el-button type="primary" @click="$router.push('/cdr/quotes/new')">新建智能报价</el-button>
+        <el-button type="danger" @click="$router.push('/quotes/new')">新建常规报价</el-button>
       </div>
     </div>
 
@@ -185,5 +187,6 @@ onMounted(fetchData)
 .page { padding: 0; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
+.quote-actions { display: flex; gap: 8px; }
 .filter-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); margin-bottom: 16px; }
 </style>

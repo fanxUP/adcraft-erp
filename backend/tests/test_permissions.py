@@ -107,6 +107,15 @@ class TestRequireAnyPermission:
         assert exc_info.value.status_code == 403
 
 
+async def test_sales_role_can_read_project_delivery_tasks():
+    from scripts.seed_permissions import ROLE_PERMISSION_MAP
+
+    sales_permissions = ROLE_PERMISSION_MAP["sales"]
+    assert "design_task:read" in sales_permissions
+    assert "production_task:read" in sales_permissions
+    assert "installation_task:read" in sales_permissions
+
+
 class TestRequireRole:
     async def _check(self, role_name: str, user) -> bool:
         dep = require_role(role_name)

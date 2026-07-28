@@ -14,6 +14,21 @@
 
       <el-tabs v-model="activeTab">
         <el-tab-pane label="基本信息" name="info">
+          <OrderProjectOverview
+            :order-id="order.id"
+            :status="order.status"
+            :total-amount="order.total_amount || 0"
+            :paid-amount="order.paid_amount || 0"
+            :cost-amount="order.cost_amount || 0"
+            :gross-profit="order.gross_profit || 0"
+            :design-count="designTasks.length"
+            :design-completed="designCompleted"
+            :production-count="productionTasks.length"
+            :production-completed="productionCompleted"
+            :installation-count="installationTasks.length"
+            :installation-completed="installationCompleted"
+            @select-tab="activeTab = $event"
+          />
           <el-card shadow="never" class="info-card">
             <el-descriptions :column="2">
               <el-descriptions-item label="订单编号">{{ order.order_no }}</el-descriptions-item>
@@ -198,7 +213,7 @@
             <template #header>
               <div class="card-header">
                 <span>设计任务</span>
-                <el-button size="small" type="danger" @click="showDesignDialog = true">创建</el-button>
+                <el-button v-if="authStore.hasAnyRole(['admin', 'designer'])" size="small" type="danger" @click="showDesignDialog = true">创建</el-button>
               </div>
             </template>
             <el-table :data="designTasks" stripe size="small" v-loading="tasksLoading">
@@ -220,7 +235,7 @@
             <template #header>
               <div class="card-header">
                 <span>制作任务</span>
-                <el-button size="small" type="danger" @click="showProdDialog = true">创建</el-button>
+                <el-button v-if="authStore.hasAnyRole(['admin', 'production'])" size="small" type="danger" @click="showProdDialog = true">创建</el-button>
               </div>
             </template>
             <el-table :data="productionTasks" stripe size="small" v-loading="tasksLoading">
@@ -242,7 +257,7 @@
             <template #header>
               <div class="card-header">
                 <span>安装任务</span>
-                <el-button size="small" type="danger" @click="showInstDialog = true">创建</el-button>
+                <el-button v-if="authStore.hasAnyRole(['admin', 'installer'])" size="small" type="danger" @click="showInstDialog = true">创建</el-button>
               </div>
             </template>
             <el-table :data="installationTasks" stripe size="small" v-loading="tasksLoading">
@@ -321,7 +336,9 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Printer } from '@element-plus/icons-vue'
 import OrderWorkflow from './OrderWorkflow.vue'
+import OrderProjectOverview from './OrderProjectOverview.vue'
 import { useRoute } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { getOrder, changeOrderStatus, autoCalculateCost } from '@/api/orders'
 import { getDesignTasks, getProductionTasks, getInstallationTasks, createDesignTask, createProductionTask, createInstallationTask } from '@/api/tasks'
@@ -329,6 +346,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, OrderDetailResponse, OrderItemResponse } from '@/types/api'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const aiStore = useAiAssistantStore()
 const loading = ref(false)
 const changing = ref(false)
@@ -347,6 +365,9 @@ const autoCostLoading = ref(false)
 const taskForm = reactive({ project_name: '', assigned_to: '' as string | null, description: '', quantity: 1 })
 
 const itemsTotal = computed(() => (order.value?.items || []).reduce((s, i) => s + (i.subtotal_amount || 0), 0))
+const designCompleted = computed(() => designTasks.value.filter(task => task.status === 'confirmed').length)
+const productionCompleted = computed(() => productionTasks.value.filter(task => task.status === 'completed').length)
+const installationCompleted = computed(() => installationTasks.value.filter(task => task.status === 'completed').length)
 
 function toChineseAmount(n: number): string {
   const digits = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖']
