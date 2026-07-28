@@ -14,8 +14,13 @@ class ProjectCostRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_by_id(self, cost_id: UUID) -> ProjectCost | None:
-        result = await self.db.execute(
+    async def get_by_id(
+        self,
+        cost_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> ProjectCost | None:
+        query = (
             select(ProjectCost)
             .options(
                 selectinload(ProjectCost.document),
@@ -24,6 +29,9 @@ class ProjectCostRepository:
             )
             .where(ProjectCost.id == cost_id, ProjectCost.deleted_at.is_(None))
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def list_costs(

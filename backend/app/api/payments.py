@@ -9,8 +9,11 @@ from uuid import UUID
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.deps import get_current_user
 from app.core.permissions import (
+    PERM_EXPENSE_CREATE,
+    PERM_EXPENSE_DELETE,
+    PERM_EXPENSE_READ,
+    PERM_EXPENSE_UPDATE,
     PERM_PAYMENT_CREATE,
     PERM_PAYMENT_READ,
     PERM_PAYMENT_VOID,
@@ -18,7 +21,6 @@ from app.core.permissions import (
     PERM_STATEMENT_CREATE,
     PERM_STATEMENT_READ,
     require_permission,
-    require_role,
 )
 from app.models.user import User
 from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate, ProjectCostCreate, ProjectCostUpdate, DebtSettleCreate
@@ -197,7 +199,7 @@ async def list_expenses(
     start_date: str | None = None,
     end_date: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     service = ExpenseService(db)
     expenses, total = await service.list_expenses(page, page_size, category, start_date, end_date)
@@ -208,7 +210,7 @@ async def list_expenses(
 async def get_expense(
     expense_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     service = ExpenseService(db)
     expense = await service.get_expense(UUID(expense_id))
@@ -222,7 +224,7 @@ async def create_expense(
     data: ExpenseCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_CREATE)),
 ):
     service = ExpenseService(db)
     expense = await service.create_expense(data.model_dump(), current_user.id)
@@ -239,7 +241,7 @@ async def update_expense(
     data: ExpenseUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_UPDATE)),
 ):
     service = ExpenseService(db)
     eid = UUID(expense_id)
@@ -255,7 +257,7 @@ async def delete_expense(
     expense_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_DELETE)),
 ):
     service = ExpenseService(db)
     eid = UUID(expense_id)
@@ -279,7 +281,7 @@ async def list_project_costs(
     date_from: str | None = None,
     date_to: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     service = ProjectCostService(db)
     oid = UUID(order_id) if order_id else None
@@ -292,7 +294,7 @@ async def list_project_costs(
 async def get_project_costs_summary(
     order_ids: str = Query(..., description="Comma-separated order UUIDs"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     service = ProjectCostService(db)
     ids = [UUID(oid.strip()) for oid in order_ids.split(",") if oid.strip()]
@@ -302,7 +304,7 @@ async def get_project_costs_summary(
 
 @cost_router.get("/template")
 async def download_project_cost_template(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     """Download an Excel template for importing project costs."""
     import openpyxl
@@ -368,7 +370,7 @@ async def list_quotes_for_cost(
     page_size: int = Query(20, ge=1, le=200),
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     """获取可登记成本的报价单列表"""
     from app.models.business_document import BusinessDocument
@@ -422,7 +424,7 @@ async def list_cost_debts(
     keyword: str | None = None,
     is_settled: bool | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     """获取成本欠款清单"""
     service = ProjectCostService(db)
@@ -436,7 +438,7 @@ async def settle_cost_debt(
     data: DebtSettleCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_UPDATE)),
 ):
     """冲红：结算成本欠款"""
     service = ProjectCostService(db)
@@ -455,7 +457,7 @@ async def settle_cost_debt(
 async def get_project_cost(
     cost_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     service = ProjectCostService(db)
     cost = await service.get_cost(UUID(cost_id))
@@ -469,7 +471,7 @@ async def create_project_cost(
     data: ProjectCostCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_CREATE)),
 ):
     service = ProjectCostService(db)
     payload = data.model_dump()
@@ -504,7 +506,7 @@ async def update_project_cost(
     data: ProjectCostUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_UPDATE)),
 ):
     service = ProjectCostService(db)
     cid = UUID(cost_id)
@@ -523,7 +525,7 @@ async def batch_delete_project_costs(
     cost_ids: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_DELETE)),
 ):
     """Batch delete project costs by comma-separated IDs."""
     service = ProjectCostService(db)
@@ -543,7 +545,7 @@ async def delete_project_cost(
     cost_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_DELETE)),
 ):
     service = ProjectCostService(db)
     cid = UUID(cost_id)
@@ -565,7 +567,7 @@ async def import_project_costs(
     source_type: str = "order",
     request: Request = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_CREATE)),
 ):
     if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
         return {"code": 40001, "message": "请上传Excel文件（.xlsx 或 .xls）", "data": None}
@@ -593,7 +595,7 @@ async def import_project_costs(
 async def list_project_cost_attachments(
     cost_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     service = AttachmentService(db)
     atts = await service.list_attachments("project_cost", UUID(cost_id))
@@ -605,7 +607,7 @@ async def upload_project_cost_attachment(
     cost_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_UPDATE)),
 ):
     ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "bin"
     date_dir = datetime.now(timezone.utc).strftime("%Y%m")
@@ -636,7 +638,7 @@ async def upload_project_cost_attachment(
 async def delete_project_cost_attachment(
     attachment_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_DELETE)),
 ):
     service = AttachmentService(db)
     ok = await service.delete_attachment(UUID(attachment_id))

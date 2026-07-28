@@ -277,16 +277,21 @@ class ProjectCostService:
         return result_list, total
 
     async def settle_debt(self, cost_id: UUID, settle_data: dict) -> dict:
-        """Settle a cost debt (write-off)."""
+        """结清成本欠款，不重复计入项目成本。"""
         from datetime import datetime, timezone
+        from decimal import Decimal
 
-        c = await self.repo.get_by_id(cost_id)
+        c = await self.repo.get_by_id(cost_id, for_update=True)
         if not c:
             raise ValueError("成本记录不存在")
         if not c.is_debt:
             raise ValueError("该记录不是欠款记录")
         if c.is_settled:
             raise ValueError("该欠款已结清")
+        settle_amount = Decimal(str(settle_data["settle_amount"]))
+        debt_amount = Decimal(str(c.debt_amount or 0))
+        if settle_amount != debt_amount:
+            raise ValueError(f"结清金额必须等于欠款金额 {debt_amount:.2f} 元")
 
         c.is_settled = True
         c.settled_at = datetime.now(timezone.utc)
@@ -294,25 +299,6 @@ class ProjectCostService:
         if settle_data.get("remark"):
             c.remark = (c.remark or "") + f" [结清: {settle_data['remark']}]"
         await self.db.flush()
-
-        # Also create a formal cost entry for the settled debt amount
-        settle_cost = ProjectCost(
-            cost_no=await generate_project_cost_no(self.db),
-            document_id=c.document_id,
-            customer_id=c.customer_id,
-            category=c.category,
-            amount=settle_data.get("settle_amount", float(c.debt_amount or 0)),
-            payment_method=settle_data.get("payment_method", "转账支付"),
-            debt_amount=0,
-            is_debt=False,
-            is_settled=False,
-            description=f"欠款冲红 - 原成本编号 {c.cost_no}",
-            cost_date=datetime.now(timezone.utc),
-            remark=settle_data.get("remark"),
-            created_by=c.created_by,
-        )
-        await self.repo.create(settle_cost)
-        await self._sync_document_cost(c.document_id)
 
         return self._to_dict(c)
 

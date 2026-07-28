@@ -5,9 +5,11 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
 from app.core.permissions import (
     PERM_ORDER_CHANGE_STATUS,
+    PERM_ORDER_DELETE,
+    PERM_ORDER_READ,
+    PERM_ORDER_UPDATE,
     require_permission,
     require_role,
 )
@@ -32,7 +34,7 @@ async def list_orders(
     customer_id: str | None = None,
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_ORDER_READ)),
 ):
     service = BusinessDocumentService(db, doc_type='order')
     cid = UUID(customer_id) if customer_id else None
@@ -57,7 +59,7 @@ async def list_deleted_orders(
 async def get_order(
     order_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_ORDER_READ)),
 ):
     service = BusinessDocumentService(db, doc_type='order')
     order = await service.get_by_id(UUID(order_id))
@@ -71,7 +73,7 @@ async def set_order_cost(
     order_id: str,
     data: CostEntry,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
 ):
     service = BusinessDocumentService(db, doc_type='order')
     try:
@@ -85,7 +87,7 @@ async def set_order_cost(
 async def auto_calculate_cost(
     order_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
 ):
     service = BusinessDocumentService(db, doc_type='order')
     try:
@@ -121,7 +123,7 @@ async def delete_order(
     order_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_ORDER_DELETE)),
 ):
     service = BusinessDocumentService(db, doc_type='order')
     oid = UUID(order_id)
@@ -140,7 +142,7 @@ async def restore_order(
     order_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_ORDER_DELETE)),
 ):
     service = BusinessDocumentService(db, doc_type='order')
     oid = UUID(order_id)

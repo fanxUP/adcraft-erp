@@ -122,6 +122,13 @@ class ExpenseUpdate(BaseModel):
     expense_date: str | None = None
     receipt_url: str | None = None
 
+    @field_validator("amount")
+    @classmethod
+    def amount_positive(cls, value: float | None) -> float | None:
+        if value is not None and value <= 0:
+            raise ValueError("支出金额必须大于0")
+        return value
+
 
 class ExpenseResponse(CoercedModel):
     id: str
@@ -257,6 +264,13 @@ class DebtSettleCreate(BaseModel):
     settle_amount: float
     payment_method: str = "转账支付"
     remark: str | None = None
+
+    @field_validator("settle_amount")
+    @classmethod
+    def amount_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("结清金额必须大于0")
+        return value
 
 
 class DebtResponse(CoercedModel):
