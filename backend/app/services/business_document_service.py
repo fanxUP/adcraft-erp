@@ -165,6 +165,7 @@ class BusinessDocumentService:
     async def delete_preview(self, doc_id: UUID) -> dict:
         """返回硬删除前的有效关联数量，不包含已软删除记录。"""
         from app.models.acceptance import AcceptanceForm
+        from app.models.business_document import BusinessDocumentItem
         from app.models.contract import ContractDocument
         from app.models.outsource import OutsourceTask
         from app.models.project_cost import ProjectCost
@@ -174,6 +175,7 @@ class BusinessDocumentService:
         if doc.doc_type != "quote":
             raise ValueError("仅支持预览报价单硬删除")
         checks = {
+            "报价明细": select(BusinessDocumentItem).where(BusinessDocumentItem.document_id == doc_id),
             "验收单": select(AcceptanceForm).where(AcceptanceForm.document_id == doc_id, AcceptanceForm.deleted_at.is_(None)),
             "合同关联": select(ContractDocument).where(ContractDocument.document_id == doc_id),
             "外协任务": select(OutsourceTask).where(OutsourceTask.related_doc_id == doc_id, OutsourceTask.deleted_at.is_(None)),
@@ -262,6 +264,7 @@ class BusinessDocumentService:
             "quote_geometry",
             "business_document_status_logs",
             "business_document_versions",
+            "business_document_items",
         ]:
             column = "document_id" if tbl.startswith("business_document_") else "quote_id"
             await self.db.execute(
