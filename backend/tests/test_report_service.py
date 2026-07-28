@@ -83,17 +83,11 @@ async def test_get_dashboard(service):
     ]
 
     # Mock _customer_debt_ranking db.execute (last 2 calls) with iterable rows
-    class MockRow:
-        def __init__(self, cid, dbt):
-            self.customer_id = cid
-            self.debt = dbt
-        def __iter__(self):
-            return iter((self.customer_id, self.debt))
-
-    debt_result = make_all_result([MockRow(SAMPLE_CUSTOMER_ID, 50000.0)])
+    debt_result = make_all_result([(SAMPLE_CUSTOMER_ID, 50000.0)])
     mock_customer = MagicMock()
+    mock_customer.id = SAMPLE_CUSTOMER_ID
     mock_customer.name = "测试客户"
-    customer_result = MockResultWithScalar(scalar_one_or_none_value=mock_customer)
+    customer_result = make_scalars_result([mock_customer])
     db.execute = AsyncMock(side_effect=results + [debt_result, customer_result])
 
     dash = await svc.get_dashboard()
@@ -134,7 +128,11 @@ async def test_get_daily_report(service):
     ]
     db.execute = AsyncMock(side_effect=results)
 
-    report = await svc.get_daily_report("2026-06-29")
+    with patch(
+        "app.services.report_service.VehicleDashboardService"
+    ) as vehicle_service:
+        vehicle_service.return_value.get_daily_report = AsyncMock(return_value={})
+        report = await svc.get_daily_report("2026-06-29")
     assert report["date"] == "2026-06-29"
     assert report["order_count"] == 1
     assert report["order_amount"] == 5000.0
@@ -183,23 +181,18 @@ async def test_get_monthly_report(service):
 
 @pytest.mark.asyncio
 async def test_get_customer_debt(service):
-    """Customer debt returns ranking with customer names."""
+    """Customer debt ranking returns customer names."""
     svc, db = service
-
-    class MockRow:
-        def __init__(self, cid, dbt):
-            self.customer_id = cid
-            self.debt = dbt
-        def __iter__(self):
-            return iter((self.customer_id, self.debt))
-
+    customer = MagicMock()
+    customer.id = SAMPLE_CUSTOMER_ID
+    customer.name = "测试客户"
     results = [
-        make_all_result([MockRow(SAMPLE_CUSTOMER_ID, 50000.0)]),  # group_by query
-        MockResultWithScalar(scalar_one_or_none_value=MagicMock()),  # customer lookup
+        make_all_result([(SAMPLE_CUSTOMER_ID, 50000.0)]),
+        make_scalars_result([customer]),
     ]
     db.execute = AsyncMock(side_effect=results)
 
-    debts = await svc.get_customer_debt()
+    debts = await svc._customer_debt_ranking()
     assert len(debts) == 1
     assert debts[0]["customer_name"] is not None
     assert debts[0]["debt_amount"] == 50000.0

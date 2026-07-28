@@ -63,7 +63,7 @@ async def save_assisted_quote(
         "sales_user_id": str(current_user.id),
         "remark": draft.get("ai_analysis", ""),
     }
-    quote = await service.create_quote(quote_data)
+    quote = await service.create(quote_data)
 
     # Add items via service
     from uuid import UUID as _UUID
@@ -89,7 +89,7 @@ async def save_assisted_quote(
         for item_data in draft.get("items", [])
     ]
     if items_data:
-        quote = await service.add_items(str(quote["id"]), items_data)
+        quote = await service.add_items(_UUID(quote["id"]), items_data)
 
     return success(quote)
 

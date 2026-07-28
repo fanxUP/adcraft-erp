@@ -339,7 +339,7 @@ class ReportService:
     async def _sum_orders(self, start: datetime, end: datetime) -> float:
         result = await self.db.execute(
             select(func.coalesce(func.sum(BusinessDocument.total_amount), 0))
-            .where(and_(BusinessDocument.deleted_at.is_(None), BusinessDocument.created_at >= start, BusinessDocument.created_at <= end))
+            .where(and_(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.created_at >= start, BusinessDocument.created_at <= end))
         )
         return result.scalar() or 0
 
@@ -353,7 +353,7 @@ class ReportService:
     async def _calc_month_unpaid(self, start: datetime, end: datetime) -> float:
         result = await self.db.execute(
             select(func.coalesce(func.sum(BusinessDocument.unpaid_amount), 0))
-            .where(and_(BusinessDocument.deleted_at.is_(None), BusinessDocument.created_at >= start, BusinessDocument.created_at <= end))
+            .where(and_(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.created_at >= start, BusinessDocument.created_at <= end))
         )
         return result.scalar() or 0
 
@@ -369,6 +369,7 @@ class ReportService:
             select(func.count()).select_from(BusinessDocument).where(
                 and_(
                     BusinessDocument.deleted_at.is_(None),
+                    BusinessDocument.doc_type == "order",
                     BusinessDocument.status.in_(["confirmed", "in_progress", "in_production", "in_installation"]),
                     BusinessDocument.delivery_deadline < now,
                 )
@@ -379,7 +380,7 @@ class ReportService:
     async def _customer_debt_ranking(self, limit: int = 10) -> list:
         result = await self.db.execute(
             select(BusinessDocument.customer_id, func.sum(BusinessDocument.unpaid_amount).label("debt"))
-            .where(BusinessDocument.deleted_at.is_(None), BusinessDocument.unpaid_amount > 0)
+            .where(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.unpaid_amount > 0)
             .group_by(BusinessDocument.customer_id)
             .order_by(func.sum(BusinessDocument.unpaid_amount).desc())
             .limit(limit)
@@ -404,7 +405,7 @@ class ReportService:
     async def _list_orders_in_range(self, start: datetime, end: datetime) -> list[BusinessDocument]:
         result = await self.db.execute(
             select(BusinessDocument).where(
-                and_(BusinessDocument.deleted_at.is_(None), BusinessDocument.created_at >= start, BusinessDocument.created_at <= end)
+                and_(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.created_at >= start, BusinessDocument.created_at <= end)
             ).order_by(BusinessDocument.created_at.desc())
         )
         return list(result.scalars().all())

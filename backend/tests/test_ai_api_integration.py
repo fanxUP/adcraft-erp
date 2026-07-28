@@ -253,6 +253,7 @@ class TestAIQuoteAPI:
         with patch("app.ai.api.ai_quote.FeatureResolver") as mock_resolver:
             mock_resolver.ai_mode.return_value = "rule_based"
             mock_resolver.is_ai_available.return_value = False
+            mock_resolver.is_gateway_available.return_value = False
 
             response = client.post(
                 "/api/v1/ai/quotes/assist",
@@ -271,6 +272,7 @@ class TestAIQuoteAPI:
         with patch("app.ai.api.ai_quote.FeatureResolver") as mock_resolver:
             mock_resolver.ai_mode.return_value = "rule_based"
             mock_resolver.is_ai_available.return_value = False
+            mock_resolver.is_gateway_available.return_value = False
 
             response = client.post(
                 "/api/v1/ai/quotes/assist",
@@ -284,20 +286,16 @@ class TestAIQuoteAPI:
 
     def test_save_assisted_quote_invalid_data(self, client, auth_headers):
         """Should handle empty draft gracefully."""
-        from app.services.quote_service import QuoteService
+        from app.services.business_document_service import BusinessDocumentService
 
-        with patch.object(QuoteService, "create_quote", new_callable=AsyncMock) as mock_create:
+        with patch.object(BusinessDocumentService, "create", new_callable=AsyncMock) as mock_create:
             mock_create.return_value = {"id": str(uuid4()), "project_name": "Test"}
-            with patch.object(QuoteService, "calculate_quote", new_callable=AsyncMock) as mock_calc:
-                mock_calc.return_value = {"id": str(uuid4()), "project_name": "Test", "total_amount": 0}
-
-                response = client.post(
-                    "/api/v1/ai/quotes/assist/save",
-                    json={"project_name": "Test", "items": []},
-                    headers=auth_headers,
-                )
-                # Should not crash even with no items
-                assert response.status_code == 200
+            response = client.post(
+                "/api/v1/ai/quotes/assist/save",
+                json={"project_name": "Test", "items": []},
+                headers=auth_headers,
+            )
+            assert response.status_code == 200
 
 
 # ── AI Reports ─────────────────────────────────────────────────────
