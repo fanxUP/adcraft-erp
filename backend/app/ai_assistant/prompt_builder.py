@@ -160,6 +160,13 @@ class PromptBuilder:
   → 工具：list_today_tasks
   → 可以先问想看哪种类型（设计/制作/安装），也可以全部查
 
+场景G: "下一步做什么/这个流程怎么走/我该怎么操作"
+  → 用户需要基于当前真实状态的流程导航
+  → 工具：get_workflow_guidance
+  → 优先使用 page_context 的 business_type 和 business_id
+  → 必须按工具返回的 current_step、blockers、next_action、completion_signal 分步回答
+  → 不得仅凭页面传来的 business_status 猜测下一步
+
 ### 工具调用格式
 任何时候你需要查询或操作数据时，在回复末尾添加以下格式的代码块：
 
