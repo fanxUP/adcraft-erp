@@ -258,6 +258,17 @@ class BusinessDocumentService:
         # 6. 删除所有关联的报价相关记录（防止 FK 约束阻止主记录删除）
         from sqlalchemy import text as sa_text
         qid_param = str(doc.id)
+        # 验收历史保留，但解除其对报价明细的外键引用。
+        await self.db.execute(
+            sa_text("""
+                UPDATE acceptance_items
+                SET document_item_id = NULL
+                WHERE document_item_id IN (
+                    SELECT id FROM business_document_items WHERE document_id = :qid
+                )
+            """),
+            {"qid": qid_param},
+        )
         for tbl in [
             "quote_approvals",
             "quote_audit_logs",
