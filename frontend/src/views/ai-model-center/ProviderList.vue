@@ -188,6 +188,7 @@ import {
   type AIProviderItem,
   type TestResult,
 } from '@/api/ai-admin'
+import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false)
 const providers = ref<AIProviderItem[]>([])
@@ -292,10 +293,10 @@ async function testConnection(p: AIProviderItem) {
   try {
     const res = await testProvider(p.id)
     testResult.value = res
-  } catch (e: any) {
+  } catch (error: unknown) {
     testResult.value = { success: false, status_code: null, latency_ms: null,
       first_token_latency_ms: null, input_tokens: null, output_tokens: null,
-      output_text: null, error_code: 'CLIENT_ERROR', error_message: e.message || '请求失败' }
+      output_text: null, error_code: 'CLIENT_ERROR', error_message: getErrorMessage(error, '请求失败') }
   }
 }
 

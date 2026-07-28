@@ -7,6 +7,7 @@ import type {
   Message,
   UserPresence,
   WsChatMessage,
+  MessageCreate,
 } from '@/types/chat'
 import * as chatApi from '@/api/chat'
 
@@ -165,10 +166,10 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  function handlePresenceUpdate(userId: string, status: string) {
+  function handlePresenceUpdate(userId: string, status: UserPresence['status']) {
     userPresences.value.set(userId, {
       user_id: userId,
-      status: status as any,
+      status,
     })
   }
 
@@ -285,11 +286,17 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function sendMessage(conversationId: string, content: string, type: string = 'text', replyToId?: string, mentions?: string[]) {
+  async function sendMessage(
+    conversationId: string,
+    content: string,
+    type: NonNullable<MessageCreate['type']> = 'text',
+    replyToId?: string,
+    mentions?: string[],
+  ) {
     try {
       const message = await chatApi.sendMessage(conversationId, {
         content,
-        type: type as any,
+        type,
         reply_to_id: replyToId,
         mentions,
       })

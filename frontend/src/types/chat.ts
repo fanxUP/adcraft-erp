@@ -32,6 +32,23 @@ export interface ConversationDetail extends Conversation {
   members: ConversationMember[]
 }
 
+export type BusinessObjectType = 'order' | 'quote' | 'task' | 'customer'
+
+export interface BusinessCardData {
+  card_type?: BusinessObjectType | 'batch'
+  card_id?: string
+  task_type?: string
+  customer_id?: string
+  title?: string
+  subtitle?: string
+  status?: string
+  amount?: number
+  url?: string
+  name?: string
+  size?: number
+  cards?: BusinessCardData[]
+}
+
 export interface Message {
   id: string
   conversation_id: string
@@ -44,7 +61,7 @@ export interface Message {
   reply_to_content?: string
   reply_to_sender_name?: string
   mentions?: string[]
-  extra_data?: Record<string, any>
+  extra_data?: BusinessCardData
   is_read: boolean
   read_by_count: number
   created_at: string
@@ -78,7 +95,7 @@ export interface MessageCreate {
   type?: 'text' | 'image' | 'file'
   reply_to_id?: string
   mentions?: string[]
-  extra_data?: Record<string, any>
+  extra_data?: BusinessCardData
 }
 
 // WebSocket 消息类型

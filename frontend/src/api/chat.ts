@@ -8,7 +8,26 @@ import type {
   MessageListResponse,
   MessageCreate,
   UserPresence,
+  BusinessObjectType,
 } from '@/types/chat'
+
+export interface BusinessObject {
+  id: string
+  title: string
+  subtitle: string
+  status: string | null
+}
+
+export interface BusinessRecommendation extends BusinessObject {
+  type: BusinessObjectType
+  amount?: number
+}
+
+export interface RecentSharedCard extends BusinessObject {
+  card_type: BusinessObjectType
+  amount: number | null
+  shared_at: string | null
+}
 
 // ============ 会话管理 ============
 
@@ -151,7 +170,7 @@ export async function uploadChatFile(conversationId: string, file: File) {
 /** 分享业务卡片 */
 export function shareBusinessCard(
   conversationId: string,
-  cardType: 'order' | 'quote' | 'task' | 'customer',
+  cardType: BusinessObjectType,
   cardId: string
 ) {
   return post<Message>('/conversations/share-card', null, {
@@ -176,7 +195,7 @@ export function getRecommendations(
   conversationId: string,
   limit: number = 10
 ) {
-  return get<Array<{id: string, type: string, title: string, subtitle: string, status: string | null, amount?: number}>>(
+  return get<BusinessRecommendation[]>(
     `/conversations/${conversationId}/recommendations`,
     { params: { limit } }
   )
@@ -184,10 +203,10 @@ export function getRecommendations(
 
 /** 搜索业务对象（用于名片分享） */
 export function searchBusinessObjects(
-  type: 'order' | 'quote' | 'task' | 'customer',
+  type: BusinessObjectType,
   keyword: string
 ) {
-  return get<Array<{id: string, title: string, subtitle: string, status: string | null}>>(
+  return get<BusinessObject[]>(
     '/conversations/search-objects',
     { params: { type, keyword } }
   )
@@ -195,10 +214,10 @@ export function searchBusinessObjects(
 
 /** 获取最近分享的业务卡片 */
 export function getRecentSharedCards(
-  type?: 'order' | 'quote' | 'task' | 'customer',
+  type?: BusinessObjectType,
   limit: number = 10
 ) {
-  return get<Array<{id: string, card_type: string, title: string, subtitle: string, status: string | null, amount: number | null, shared_at: string | null}>>(
+  return get<RecentSharedCard[]>(
     '/conversations/recent-shared',
     { params: { type, limit } }
   )
@@ -206,10 +225,10 @@ export function getRecentSharedCards(
 
 /** 获取用户最近创建/关联的业务对象 */
 export function getMyRecentObjects(
-  type: 'order' | 'quote' | 'task' | 'customer',
+  type: BusinessObjectType,
   limit: number = 10
 ) {
-  return get<Array<{id: string, title: string, subtitle: string, status: string | null}>>(
+  return get<BusinessObject[]>(
     '/conversations/my-recent-objects',
     { params: { type, limit } }
   )

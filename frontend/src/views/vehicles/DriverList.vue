@@ -210,7 +210,7 @@ async function handleEnable(row: VehicleDriverResponse) {
 }
 
 async function handleDelete(row: VehicleDriverResponse) {
-  try { await deleteDriver(row.id); ElMessage.success('删除成功'); fetchData() } catch (e: any) { ElMessage.error(getErrorMessage(e)) }
+  try { await deleteDriver(row.id); ElMessage.success('删除成功'); fetchData() } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) }
 }
 
 onMounted(fetchData)

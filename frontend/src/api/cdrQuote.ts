@@ -1,11 +1,14 @@
 /** CDR 智能报价 API 封装 */
 import api from './index'
+import type { PaginatedData, QuoteListResponse } from '@/types/api'
+
+export type CDRQueryParams = Record<string, string | number | boolean | undefined>
 
 export interface PricingTraceStep {
   rule_code: string
   description: string
-  input_value?: Record<string, any>
-  output_value?: Record<string, any>
+  input_value?: Record<string, unknown>
+  output_value?: Record<string, unknown>
 }
 
 export interface PricingResult {
@@ -25,8 +28,7 @@ export interface PricingResult {
   pricing_trace: PricingTraceStep[]
 }
 
-/** 报价试算 */
-export async function calculatePricing(data: {
+export interface PricingRequest {
   product_id: string
   material_id?: string
   quantity?: number
@@ -36,115 +38,296 @@ export async function calculatePricing(data: {
   process_ids?: string[]
   customer_id?: string
   tax_rate?: number
-}): Promise<PricingResult> {
-  return api.post('/cdr/pricing/calculate', data)
+}
+
+export interface QuoteLineProcessInput {
+  process_id: string
+  billing_quantity?: number
+  unit?: string
+  unit_price?: number
+}
+
+export interface QuoteLineInput {
+  product_id?: string
+  material_id?: string
+  description: string
+  width_mm?: number
+  height_mm?: number
+  length_m?: number
+  quantity?: number
+  unit?: string
+  pieces?: number
+  unit_price?: number
+  manual_adjustment?: number
+  manual_reason?: string
+  processes?: QuoteLineProcessInput[]
+}
+
+export interface QuoteLineProcess {
+  id: string
+  process_id: string
+  billing_quantity: string
+  unit_price: string
+  amount: string
+}
+
+export interface QuoteVersionLine {
+  id: string
+  line_no: number
+  product_id?: string
+  material_id?: string
+  description: string
+  width_mm?: string
+  height_mm?: string
+  length_m?: string
+  quantity: string
+  unit_price: string
+  amount: string
+  estimated_cost: string
+  source: string
+  requires_approval: boolean
+  processes: QuoteLineProcess[]
+}
+
+export interface QuoteVersion {
+  id: string
+  quote_id: string
+  version_no: number
+  status: string
+  subtotal_amount: string
+  total_amount: string
+  estimated_cost: string
+  estimated_profit: string
+  estimated_margin: string
+  notes?: string
+  created_by?: string
+  created_at?: string
+  lines: QuoteVersionLine[]
+}
+
+export interface QuoteApproval {
+  id: string
+  quote_id: string
+  quote_version_id?: string
+  approval_type: string
+  status: string
+  reason?: string
+  decision_comment?: string
+  requested_by?: string
+  approver_id?: string
+  created_at?: string
+  decided_at?: string
+}
+
+export interface PriceRuleInput {
+  code: string
+  name: string
+  priority?: number
+  conditions_json?: Record<string, unknown>
+  actions_json?: Record<string, unknown>
+  conflict_policy?: string
+}
+
+export interface PriceRuleSetInput {
+  code: string
+  name: string
+  effective_from?: string
+  effective_to?: string
+  description?: string
+  rules?: PriceRuleInput[]
+}
+
+export interface PriceRuleSet extends PriceRuleSetInput {
+  id: string
+  version: number
+  status: string
+}
+
+export interface CustomerAgreementInput {
+  customer_id: string
+  product_id?: string
+  material_id?: string
+  process_id?: string
+  pricing_method: string
+  price_value: number
+  minimum_charge?: number
+  discount_rate?: number
+  effective_from: string
+  effective_to?: string
+  remark?: string
+}
+
+export interface CustomerAgreement {
+  id: string
+  customer_id: string
+  product_id?: string
+  material_id?: string
+  process_id?: string
+  pricing_method: string
+  price_value: string
+  minimum_charge: string
+  discount_rate: string
+  effective_from: string
+  effective_to?: string
+  remark?: string
+}
+
+export interface CDRAuditLog {
+  id: string
+  actor_id?: string
+  action: string
+  reason?: string
+  created_at?: string
+}
+
+export interface CDRQuote extends QuoteListResponse {
+  doc_no?: string
+  tax_rate?: number
+  customer?: { name?: string }
+}
+
+export interface DesignAttachment {
+  id: string
+  filename: string
+  file_size: number
+  file_type: string
+  created_at?: string
+}
+
+export interface ParsedShape {
+  type: string
+  width_mm: number
+  height_mm: number
+  area_m2: number
+  quantity: number
+  label: string
+}
+
+export interface SvgParseResult {
+  document_width_mm?: number
+  document_height_mm?: number
+  shapes: ParsedShape[]
+  shape_count: number
+  total_area_m2?: number
+  filename: string
+  attachment_id: string
+}
+
+export interface CDRSuggestedLine {
+  description?: string
+  item_name?: string
+  width_mm?: number
+  height_mm?: number
+  quantity?: number
+  unit?: string
+  material_suggestion?: string
+}
+
+export interface AiAssistResult {
+  project_name: string
+  files: string[]
+  ai_suggestions:
+    | CDRSuggestedLine[]
+    | { items?: CDRSuggestedLine[]; lines?: CDRSuggestedLine[]; raw?: string }
+}
+
+/** 报价试算 */
+export function calculatePricing(data: PricingRequest) {
+  return api.post<PricingResult>('/cdr/pricing/calculate', data)
 }
 
 /** 创建报价版本 */
-export async function createQuoteVersion(quoteId: string, data: {
-  notes?: string
-  lines: any[]
-}): Promise<any> {
-  return api.post(`/cdr/quotes/${quoteId}/versions`, data)
+export function createQuoteVersion(
+  quoteId: string,
+  data: { notes?: string; lines: QuoteLineInput[] },
+) {
+  return api.post<QuoteVersion>(`/cdr/quotes/${quoteId}/versions`, data)
 }
 
-/** 获取最新版本 */
-export async function getLatestVersion(quoteId: string): Promise<any> {
-  return api.get(`/cdr/quotes/${quoteId}/versions/latest`)
+export function getLatestVersion(quoteId: string) {
+  return api.get<QuoteVersion | null>(`/cdr/quotes/${quoteId}/versions/latest`)
 }
 
-/** 获取版本历史 */
-export async function listVersions(quoteId: string): Promise<any[]> {
-  return api.get(`/cdr/quotes/${quoteId}/versions`)
+export function listVersions(quoteId: string) {
+  return api.get<QuoteVersion[]>(`/cdr/quotes/${quoteId}/versions`)
 }
 
-/** 请求审批 */
-export async function requestApproval(quoteId: string, data: {
-  approval_type: string
-  reason?: string
-}): Promise<any> {
-  return api.post(`/cdr/quotes/${quoteId}/approvals`, data)
+export function listApprovals(quoteId: string) {
+  return api.get<QuoteApproval[]>(`/cdr/quotes/${quoteId}/approvals`)
 }
 
-/** 批准 */
-export async function approveQuote(approvalId: string, comment?: string): Promise<any> {
-  return api.post(`/cdr/approvals/${approvalId}/approve`, { comment })
+export function requestApproval(
+  quoteId: string,
+  data: { approval_type: string; reason?: string },
+) {
+  return api.post<QuoteApproval>(`/cdr/quotes/${quoteId}/approvals`, data)
 }
 
-/** 驳回 */
-export async function rejectQuote(approvalId: string, comment?: string): Promise<any> {
-  return api.post(`/cdr/approvals/${approvalId}/reject`, { comment })
+export function approveQuote(approvalId: string, comment?: string) {
+  return api.post<{ status: string }>(`/cdr/approvals/${approvalId}/approve`, { comment })
 }
 
-/** 获取规则集列表 */
-export async function listRuleSets(): Promise<any[]> {
-  return api.get('/cdr/rule-sets')
+export function rejectQuote(approvalId: string, comment?: string) {
+  return api.post<{ status: string }>(`/cdr/approvals/${approvalId}/reject`, { comment })
 }
 
-/** 创建规则集 */
-export async function createRuleSet(data: any): Promise<any> {
-  return api.post('/cdr/rule-sets', data)
+export function listRuleSets() {
+  return api.get<PriceRuleSet[]>('/cdr/rule-sets')
 }
 
-/** 获取客户协议价 */
-export async function listCustomerAgreements(customerId?: string): Promise<any[]> {
+export function createRuleSet(data: PriceRuleSetInput) {
+  return api.post<Pick<PriceRuleSet, 'id' | 'code' | 'name'>>('/cdr/rule-sets', data)
+}
+
+export function listCustomerAgreements(customerId?: string) {
   const params = customerId ? { customer_id: customerId } : {}
-  return api.get('/cdr/customer-agreements', { params })
+  return api.get<CustomerAgreement[]>('/cdr/customer-agreements', { params })
 }
 
-/** 创建客户协议价 */
-export async function createCustomerAgreement(data: any): Promise<any> {
-  return api.post('/cdr/customer-agreements', data)
+export function createCustomerAgreement(data: CustomerAgreementInput) {
+  return api.post<Pick<CustomerAgreement, 'id' | 'customer_id'>>('/cdr/customer-agreements', data)
 }
 
-/** 查询审计日志 */
-export async function listAuditLogs(quoteId: string): Promise<any[]> {
-  return api.get(`/cdr/quotes/${quoteId}/audit-logs`)
+export function listAuditLogs(quoteId: string) {
+  return api.get<CDRAuditLog[]>(`/cdr/quotes/${quoteId}/audit-logs`)
 }
 
-/** 删除报价 */
-export async function deleteCDRQuote(quoteId: string): Promise<any> {
-  return api.del(`/cdr/quotes/${quoteId}`)
+export function deleteCDRQuote(quoteId: string) {
+  return api.del<{ deleted: boolean }>(`/cdr/quotes/${quoteId}`)
 }
 
-/** 转订单 */
-export async function convertToOrder(quoteId: string): Promise<any> {
-  return api.post(`/cdr/quotes/${quoteId}/convert-to-order`)
+export function convertToOrder(quoteId: string) {
+  return api.post<{ id: string; doc_no: string }>(`/cdr/quotes/${quoteId}/convert-to-order`)
 }
 
-/** 获取报价详情 */
-export async function getCDRQuote(quoteId: string): Promise<any> {
-  return api.get(`/cdr/quotes/${quoteId}`)
+export function getCDRQuote(quoteId: string) {
+  return api.get<CDRQuote>(`/cdr/quotes/${quoteId}`)
 }
 
-/** 报价列表 */
-export async function listCDRQuotes(params?: Record<string, any>): Promise<any> {
-  return api.get('/cdr/quotes', { params })
+export function listCDRQuotes(params?: CDRQueryParams) {
+  return api.get<PaginatedData<CDRQuote>>('/cdr/quotes', { params })
 }
 
-
-// ── 设计文件上传 / SVG 解析 / AI 辅助 ───────────────────────
-
-export async function uploadDesignFile(quoteId: string, file: File): Promise<any> {
+export function uploadDesignFile(quoteId: string, file: File) {
   const form = new FormData()
-  form.append("file", file)
-  return api.post("/cdr/quotes/" + quoteId + "/upload", form, {
-    headers: { "Content-Type": "multipart/form-data" },
+  form.append('file', file)
+  return api.post<DesignAttachment>(`/cdr/quotes/${quoteId}/upload`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
 
-export async function listDesignAttachments(quoteId: string): Promise<any[]> {
-  return api.get("/cdr/quotes/" + quoteId + "/attachments")
+export function listDesignAttachments(quoteId: string) {
+  return api.get<DesignAttachment[]>(`/cdr/quotes/${quoteId}/attachments`)
 }
 
-export async function deleteDesignAttachment(attId: string): Promise<any> {
-  return api.del("/cdr/attachments/" + attId)
+export function deleteDesignAttachment(attId: string) {
+  return api.del<{ deleted: boolean }>(`/cdr/attachments/${attId}`)
 }
 
-export async function parseSvgAttachment(attId: string): Promise<any> {
-  return api.post("/cdr/attachments/" + attId + "/parse-svg")
+export function parseSvgAttachment(attId: string) {
+  return api.post<SvgParseResult>(`/cdr/attachments/${attId}/parse-svg`)
 }
 
-export async function aiAssistFromDescription(quoteId: string, description: string): Promise<any> {
-  return api.post("/cdr/quotes/" + quoteId + "/ai-assist-description", { description })
+export function aiAssistFromDescription(quoteId: string, description: string) {
+  return api.post<AiAssistResult>(`/cdr/quotes/${quoteId}/ai-assist-description`, { description })
 }

@@ -109,6 +109,7 @@ import {
   type AIProviderItem,
   type ProviderCreateData,
 } from '@/api/ai-admin'
+import { getErrorMessage } from '@/utils/error'
 
 const props = defineProps<{ provider?: AIProviderItem | null }>()
 const emit = defineEmits<{ close: []; saved: [] }>()
@@ -189,8 +190,8 @@ async function submit() {
       ElMessage.success('供应商已创建')
     }
     emit('saved')
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '操作失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '操作失败'))
   } finally {
     submitting.value = false
   }

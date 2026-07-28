@@ -98,16 +98,27 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import api from '@/api'
-import { getCDRQuote, getLatestVersion, listVersions, requestApproval, convertToOrder, deleteCDRQuote } from '@/api/cdrQuote'
+import {
+  getCDRQuote,
+  getLatestVersion,
+  listVersions,
+  listApprovals,
+  requestApproval,
+  convertToOrder,
+  deleteCDRQuote,
+  type CDRQuote,
+  type QuoteApproval,
+  type QuoteVersion,
+} from '@/api/cdrQuote'
+import { getErrorMessage } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
 const aiStore = useAiAssistantStore()
-const quote = ref<any>(null)
-const version = ref<any>(null)
-const versions = ref<any[]>([])
-const approvals = ref<any[]>([])
+const quote = ref<CDRQuote | null>(null)
+const version = ref<QuoteVersion | null>(null)
+const versions = ref<QuoteVersion[]>([])
+const approvals = ref<QuoteApproval[]>([])
 
 function statusType(s: string): string {
   return { draft: 'info', review: 'warning', approved: 'success', rejected: 'danger' }[s] || 'info'
@@ -143,7 +154,7 @@ async function fetchData() {
     }
     version.value = await getLatestVersion(quoteId)
     versions.value = await listVersions(quoteId)
-    approvals.value = await api.get<any[]>(`/cdr/quotes/${quoteId}/approvals`).catch(() => [])
+    approvals.value = await listApprovals(quoteId).catch(() => [])
   } catch { /* ignore */ }
 }
 
@@ -153,7 +164,6 @@ function handleEdit() {
 
 async function handleRequestApproval() {
   try {
-    await ElMessageBox.prompt('请输入审批原因', '提交审批', { inputType: 'textarea' })
     const { value: reason } = await ElMessageBox.prompt('请输入审批原因', '提交审批', {
       inputType: 'textarea', inputPlaceholder: '如：客户急需、超折扣等',
     })
@@ -175,9 +185,9 @@ async function handleDelete() {
     await deleteCDRQuote(route.params.id as string)
     ElMessage.success('报价单已删除')
     router.push('/cdr/quotes')
-  } catch (e: any) {
-    if (e !== 'cancel') {
-      ElMessage.error(e?.message || '删除失败')
+  } catch (error: unknown) {
+    if (error !== 'cancel') {
+      ElMessage.error(getErrorMessage(error, '删除失败'))
     }
   }
 }
@@ -191,9 +201,9 @@ async function handleConvertToOrder() {
     const order = await convertToOrder(route.params.id as string)
     ElMessage.success(`订单 ${order.doc_no} 创建成功`)
     router.push(`/orders/${order.id}`)
-  } catch (e: any) {
-    if (e !== 'cancel') {
-      ElMessage.error(e?.message || '转订单失败')
+  } catch (error: unknown) {
+    if (error !== 'cancel') {
+      ElMessage.error(getErrorMessage(error, '转订单失败'))
     }
   }
 }

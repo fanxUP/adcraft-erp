@@ -116,6 +116,7 @@ import {
   type AIModelItem,
   type ModelCreateData,
 } from '@/api/ai-admin'
+import { getErrorMessage } from '@/utils/error'
 
 const props = defineProps<{ provider: AIProviderItem }>()
 const emit = defineEmits<{ close: [] }>()
@@ -144,8 +145,8 @@ const addRules = {
   display_name: [{ required: true, message: '请输入显示名称' }],
 }
 
-function roleTagType(role: string | null): any {
-  const map: Record<string, string> = {
+function roleTagType(role: string | null): '' | 'primary' | 'warning' | 'success' | 'info' {
+  const map: Record<string, '' | 'primary' | 'warning' | 'success' | 'info'> = {
     fast: '', standard: 'primary', reasoning: 'warning', vision: 'success', embedding: 'info',
   }
   return map[role || ''] || ''
@@ -195,8 +196,8 @@ async function addModel() {
     ElMessage.success('模型已添加')
     showAdd.value = false
     await loadModels()
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '添加失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '添加失败'))
   } finally {
     addLoading.value = false
   }

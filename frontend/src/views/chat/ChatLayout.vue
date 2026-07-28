@@ -151,7 +151,7 @@ import { ElMessage } from 'element-plus'
 import { useChatStore } from '@/stores/chat'
 import { useAuthStore } from '@/stores/auth'
 import ChatWindow from './ChatWindow.vue'
-import type { Conversation } from '@/types/chat'
+import type { Conversation, MessageCreate } from '@/types/chat'
 
 const chatStore = useChatStore()
 const authStore = useAuthStore()
@@ -271,7 +271,12 @@ async function handleCreateGroup() {
   }
 }
 
-async function handleSendMessage(content: string, type: string, replyToId?: string, mentions?: string[]) {
+async function handleSendMessage(
+  content: string,
+  type: NonNullable<MessageCreate['type']>,
+  replyToId?: string,
+  mentions?: string[],
+) {
   if (!currentConversation.value) return
 
   try {

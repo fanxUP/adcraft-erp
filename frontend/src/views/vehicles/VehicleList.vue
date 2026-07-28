@@ -305,7 +305,7 @@ async function handleScrap(row: VehicleResponse) {
 }
 
 async function handleDelete(row: VehicleResponse) {
-  try { await deleteVehicle(row.id); ElMessage.success('删除成功'); fetchData() } catch (e: any) { ElMessage.error(getErrorMessage(e)) }
+  try { await deleteVehicle(row.id); ElMessage.success('删除成功'); fetchData() } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) }
 }
 
 onMounted(fetchData)

@@ -56,11 +56,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { listRuleSets, createRuleSet } from '@/api/cdrQuote'
+import { listRuleSets, createRuleSet, type PriceRuleSet } from '@/api/cdrQuote'
 
 const loading = ref(false)
 const submitting = ref(false)
-const ruleSets = ref<any[]>([])
+const ruleSets = ref<PriceRuleSet[]>([])
 const createDialogVisible = ref(false)
 const form = ref({
   code: '',

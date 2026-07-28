@@ -218,17 +218,44 @@ import { ElMessage } from 'element-plus'
 import api from '@/api'
 import { calculatePricing, createQuoteVersion, getLatestVersion, getCDRQuote,
   uploadDesignFile, listDesignAttachments, deleteDesignAttachment,
-  parseSvgAttachment, aiAssistFromDescription } from '@/api/cdrQuote'
+  parseSvgAttachment, aiAssistFromDescription,
+  type AiAssistResult,
+  type DesignAttachment,
+  type PricingResult,
+  type PricingTraceStep,
+  type QuoteLineProcessInput,
+  type SvgParseResult,
+} from '@/api/cdrQuote'
+import type {
+  CustomerResponse,
+  MaterialResponse,
+  PaginatedData,
+  ProductResponse,
+} from '@/types/api'
+import { getErrorMessage } from '@/utils/error'
+
+interface EditorLine {
+  product_id: string
+  material_id: string
+  description: string
+  width_mm: number
+  height_mm: number
+  quantity: number
+  unit_price: number
+  amount: number
+  cost: number
+  processes: QuoteLineProcessInput[]
+}
 
 const route = useRoute()
 const router = useRouter()
 const isEdit = computed(() => !!route.params.id)
 const saving = ref(false)
 
-const customers = ref<any[]>([])
-const products = ref<any[]>([])
-const materials = ref<any[]>([])
-const pricingTrace = ref<any[]>([])
+const customers = ref<CustomerResponse[]>([])
+const products = ref<ProductResponse[]>([])
+const materials = ref<MaterialResponse[]>([])
+const pricingTrace = ref<PricingTraceStep[]>([])
 
 const form = reactive({
   quote_no: '',
@@ -238,19 +265,19 @@ const form = reactive({
   notes: '',
 })
 
-const lines = ref<any[]>([createEmptyLine()])
-const calcResults = ref<Record<number, any>>({})
+const lines = ref<EditorLine[]>([createEmptyLine()])
+const calcResults = ref<Record<number, PricingResult>>({})
 
 // 设计文件上传 / SVG / AI
-const uploadList = ref<any[]>([])
+const uploadList = ref<DesignAttachment[]>([])
 const uploading = ref(false)
-const parseResult = ref<any>(null)
+const parseResult = ref<SvgParseResult | null>(null)
 const parseLoading = ref(false)
 const aiDescription = ref('')
 const aiLoading = ref(false)
-const aiResult = ref<any>(null)
+const aiResult = ref<AiAssistResult | null>(null)
 
-function createEmptyLine() {
+function createEmptyLine(): EditorLine {
   return {
     product_id: '',
     material_id: '',
@@ -284,13 +311,13 @@ const summary = computed(() => {
 async function fetchLookups() {
   try {
     const [custRes, prodRes, matRes] = await Promise.all([
-      api.get<{ items: any[] }>('/customers/'),
-      api.get<{ items: any[] }>('/products/'),
-      api.get<{ items: any[] }>('/materials/'),
+      api.get<PaginatedData<CustomerResponse>>('/customers/'),
+      api.get<PaginatedData<ProductResponse>>('/products/'),
+      api.get<PaginatedData<MaterialResponse>>('/materials/'),
     ])
-    customers.value = custRes?.items || custRes || []
-    products.value = prodRes?.items || prodRes || []
-    materials.value = matRes?.items || matRes || []
+    customers.value = custRes.items || []
+    products.value = prodRes.items || []
+    materials.value = matRes.items || []
   } catch { /* ignore */ }
 }
 
@@ -317,8 +344,8 @@ async function onLineChange(index: number) {
     if (index === 0) {
       pricingTrace.value = result.pricing_trace || []
     }
-  } catch (e: any) {
-    ElMessage.warning(e.message || '计算失败')
+  } catch (error: unknown) {
+    ElMessage.warning(getErrorMessage(error, '计算失败'))
   }
 }
 
@@ -364,8 +391,8 @@ async function handleSave() {
     await createQuoteVersion(quoteId, versionData)
     ElMessage.success('保存成功')
     router.push(`/cdr/quotes/${quoteId}`)
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '保存失败'))
   } finally {
     saving.value = false
   }
@@ -384,8 +411,8 @@ async function onFileUpload(event: Event) {
     await uploadDesignFile(route.params.id as string, file)
     ElMessage.success('上传成功: ' + file.name)
     await loadAttachments()
-  } catch (e: any) {
-    ElMessage.error(e.message || '上传失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '上传失败'))
   } finally {
     uploading.value = false
     input.value = ''
@@ -401,8 +428,8 @@ async function deleteFile(attId: string) {
   try {
     await deleteDesignAttachment(attId)
     uploadList.value = uploadList.value.filter(a => a.id !== attId)
-  } catch (e: any) {
-    ElMessage.error(e.message || '删除失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '删除失败'))
   }
 }
 
@@ -413,8 +440,8 @@ async function handleParseSvg(attId: string) {
     const res = await parseSvgAttachment(attId)
     parseResult.value = res
     ElMessage.success('解析完成，规格 ' + res.shape_count + ' 个')
-  } catch (e: any) {
-    ElMessage.error(e.message || '解析失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '解析失败'))
   } finally {
     parseLoading.value = false
   }
@@ -435,8 +462,8 @@ async function handleAiAssist() {
     const res = await aiAssistFromDescription(route.params.id as string, aiDescription.value)
     aiResult.value = res
     ElMessage.success('生成完成')
-  } catch (e: any) {
-    ElMessage.error(e.message || 'AI 请求失败')
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, 'AI 请求失败'))
   } finally {
     aiLoading.value = false
   }
@@ -484,9 +511,9 @@ onMounted(async () => {
       }
       const version = await getLatestVersion(route.params.id as string)
       if (version?.lines?.length) {
-        lines.value = version.lines.map((l: any) => ({
-          product_id: l.product_id,
-          material_id: l.material_id,
+        lines.value = version.lines.map((l) => ({
+          product_id: l.product_id || '',
+          material_id: l.material_id || '',
           description: l.description,
           width_mm: Number(l.width_mm || 0),
           height_mm: Number(l.height_mm || 0),
@@ -494,7 +521,11 @@ onMounted(async () => {
           unit_price: Number(l.unit_price || 0),
           amount: Number(l.amount || 0),
           cost: Number(l.estimated_cost || 0),
-          processes: l.processes || [],
+          processes: l.processes.map((process) => ({
+            process_id: process.process_id,
+            billing_quantity: Number(process.billing_quantity),
+            unit_price: Number(process.unit_price),
+          })),
         }))
       }
     } catch { /* ignore */ }

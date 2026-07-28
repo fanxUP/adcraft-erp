@@ -600,7 +600,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -631,7 +631,18 @@ import {
 import { useChatStore } from '@/stores/chat'
 import { useAuthStore } from '@/stores/auth'
 import { searchMessages, uploadChatFile } from '@/api/chat'
-import type { Message, Conversation, ConversationMember } from '@/types/chat'
+import type {
+  BusinessObjectType,
+  BusinessCardData,
+  Message,
+  Conversation,
+  ConversationMember,
+} from '@/types/chat'
+import type {
+  BusinessObject,
+  BusinessRecommendation,
+  RecentSharedCard,
+} from '@/api/chat'
 import {
   formatAmount,
   formatFileSize,
@@ -657,31 +668,31 @@ const chatStore = useChatStore()
 const authStore = useAuthStore()
 
 const messageListRef = ref<HTMLElement>()
-const inputRef = ref()
+const inputRef = ref<{ focus: () => void } | null>(null)
 const inputText = ref('')
 const showSearch = ref(false)
 const showGroupSetting = ref(false)
 const searchKeyword = ref('')
-const searchResults = ref<any[]>([])
+const searchResults = ref<Message[]>([])
 const groupName = ref('')
 const replyTo = ref<Message | null>(null)
 const showShareCard = ref(false)
-const shareCardType = ref<string>('')
+const shareCardType = ref<BusinessObjectType>('order')
 const shareCardKeyword = ref('')
-const shareCardResults = ref<any[]>([])
+const shareCardResults = ref<BusinessObject[]>([])
 const shareCardSearched = ref(false)
-const recentSharedCards = ref<any[]>([])
-const myRecentObjects = ref<any[]>([])
-const shareRecommendations = ref<any[]>([])
+const recentSharedCards = ref<RecentSharedCard[]>([])
+const myRecentObjects = ref<BusinessObject[]>([])
+const shareRecommendations = ref<BusinessRecommendation[]>([])
 const isLoadingRecommendations = ref(false)
 const isLoadingRecent = ref(false)
 
 // 批量分享
 const showBatchShare = ref(false)
-const batchShareType = ref<string>('order')
+const batchShareType = ref<BusinessObjectType>('order')
 const batchShareKeyword = ref('')
-const batchShareItems = ref<any[]>([])
-const batchSelected = ref<Map<string, any>>(new Map())
+const batchShareItems = ref<BusinessObject[]>([])
+const batchSelected = ref<Map<string, BusinessObject>>(new Map())
 const batchSelectedIds = ref<Set<string>>(new Set())
 const batchShareLoading = ref(false)
 
@@ -695,8 +706,9 @@ const contextMenu = ref({
 const currentUserId = computed(() => authStore.user?.id)
 const messages = computed(() => chatStore.getMessages(props.conversation.id))
 const conversationMembers = computed(() => {
-  const detail = chatStore.conversations.find(c => c.id === props.conversation.id)
-  return (detail as any)?.members || []
+  return chatStore.currentConversation?.id === props.conversation.id
+    ? chatStore.currentConversation.members
+    : []
 })
 
 const typingUsers = computed(() => {
@@ -734,8 +746,8 @@ const emojiGroups = [
 ]
 
 // 获取卡片图标
-function getCardIcon(cardType?: string) {
-  const icons: Record<string, any> = {
+function getCardIcon(cardType?: string): Component {
+  const icons: Record<string, Component> = {
     order: ShoppingCart,
     quote: Tickets,
     task: List,
@@ -791,7 +803,7 @@ function isValidUUID(id?: string): boolean {
   return !!id && UUID_RE.test(id)
 }
 
-function navigateToCard(data?: Record<string, any>) {
+function navigateToCard(data?: BusinessCardData) {
   if (!data?.card_type || !data?.card_id) return
   if (!isValidUUID(data.card_id)) {
     ElMessage.warning('卡片ID无效，无法跳转')
@@ -811,7 +823,7 @@ function navigateToCard(data?: Record<string, any>) {
       production: `/production-tasks/${data.card_id}`,
       installation: `/installation-tasks/${data.card_id}`,
     }
-    route = taskRoutes[data.task_type] || `/tasks/${data.card_id}`
+    route = (data.task_type && taskRoutes[data.task_type]) || `/tasks/${data.card_id}`
   } else if (data.card_type === 'customer') {
     route = `/customers/${data.card_id}`
   }
@@ -822,7 +834,7 @@ function navigateToCard(data?: Record<string, any>) {
 }
 
 // 复制卡片链接
-function copyCardLink(data?: Record<string, any>) {
+function copyCardLink(data?: BusinessCardData) {
   if (!data?.card_type || !data?.card_id) return
   if (!isValidUUID(data.card_id)) {
     ElMessage.warning('卡片ID无效')
@@ -840,7 +852,7 @@ function copyCardLink(data?: Record<string, any>) {
       production: `/production-tasks/${data.card_id}`,
       installation: `/installation-tasks/${data.card_id}`,
     }
-    route = taskRoutes[data.task_type] || `/tasks/${data.card_id}`
+    route = (data.task_type && taskRoutes[data.task_type]) || `/tasks/${data.card_id}`
   } else if (data.card_type === 'customer') {
     route = `/customers/${data.card_id}`
   }
@@ -1000,7 +1012,7 @@ function scrollToMessage(messageId?: string) {
 }
 
 // 显示分享卡片对话框
-async function showShareDialog(type: string) {
+async function showShareDialog(type: BusinessObjectType) {
   shareCardType.value = type
   shareCardKeyword.value = ''
   shareCardResults.value = []
@@ -1017,8 +1029,8 @@ async function showShareDialog(type: string) {
   // 并行加载最近数据
   try {
     const [shared, recent] = await Promise.all([
-      getShared(type as any, 5).catch(() => []),
-      getMine(type as any, 5).catch(() => []),
+      getShared(type, 5).catch(() => []),
+      getMine(type, 5).catch(() => []),
     ])
     recentSharedCards.value = shared || []
     myRecentObjects.value = recent || []
@@ -1050,7 +1062,7 @@ async function searchBusinessObjects() {
   shareCardSearched.value = false
   try {
     const { searchBusinessObjects: searchApi } = await import('@/api/chat')
-    const results = await searchApi(shareCardType.value as any, shareCardKeyword.value)
+    const results = await searchApi(shareCardType.value, shareCardKeyword.value)
     shareCardResults.value = results || []
     shareCardSearched.value = true
   } catch {
@@ -1059,7 +1071,7 @@ async function searchBusinessObjects() {
 }
 
 // 处理分享卡片
-async function handleShareCard(item: any) {
+async function handleShareCard(item: BusinessObject) {
   if (!props.conversation) return
   if (!isValidUUID(item.id)) {
     ElMessage.warning('该记录ID无效，无法分享')
@@ -1068,7 +1080,7 @@ async function handleShareCard(item: any) {
 
   try {
     const { shareBusinessCard } = await import('@/api/chat')
-    const msg = await shareBusinessCard(props.conversation.id, shareCardType.value as any, item.id)
+    const msg = await shareBusinessCard(props.conversation.id, shareCardType.value, item.id)
     // 广播排除了发送者，手动把消息加入本地列表
     if (msg) {
       chatStore.handleNewMessage(msg, props.conversation.id)
@@ -1095,7 +1107,7 @@ async function loadBatchItems() {
   batchShareKeyword.value = ''
   try {
     const { searchBusinessObjects } = await import('@/api/chat')
-    const results = await searchBusinessObjects(batchShareType.value as any, '')
+    const results = await searchBusinessObjects(batchShareType.value, '')
     batchShareItems.value = results || []
   } catch {
     batchShareItems.value = []
@@ -1109,14 +1121,14 @@ async function searchBatchItems() {
   }
   try {
     const { searchBusinessObjects } = await import('@/api/chat')
-    const results = await searchBusinessObjects(batchShareType.value as any, batchShareKeyword.value)
+    const results = await searchBusinessObjects(batchShareType.value, batchShareKeyword.value)
     batchShareItems.value = results || []
   } catch {
     batchShareItems.value = []
   }
 }
 
-function toggleBatchItem(item: any) {
+function toggleBatchItem(item: BusinessObject) {
   if (batchSelectedIds.value.has(item.id)) {
     batchSelected.value.delete(item.id)
     batchSelectedIds.value.delete(item.id)

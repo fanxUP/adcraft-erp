@@ -37,11 +37,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { listCDRQuotes } from '@/api/cdrQuote'
+import { listCDRQuotes, type CDRQuote } from '@/api/cdrQuote'
 
 const router = useRouter()
 const loading = ref(false)
-const quotes = ref<any[]>([])
+const quotes = ref<CDRQuote[]>([])
 
 function statusType(s: string): string {
   return { draft: 'info', confirmed: 'success', cancelled: 'danger', converted: 'warning' }[s] || 'info'
@@ -55,7 +55,7 @@ async function fetchData() {
   loading.value = true
   try {
     const res = await listCDRQuotes({ page: 1, page_size: 100 })
-    quotes.value = res?.items || res || []
+    quotes.value = res.items || []
   } finally {
     loading.value = false
   }
@@ -65,11 +65,11 @@ function handleNewQuote() {
   router.push('/cdr/quotes/new')
 }
 
-function viewDetail(row: any) {
+function viewDetail(row: CDRQuote) {
   router.push(`/cdr/quotes/${row.id}`)
 }
 
-function editQuote(row: any) {
+function editQuote(row: CDRQuote) {
   router.push(`/cdr/quotes/${row.id}/edit`)
 }
 

@@ -78,12 +78,17 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
-import { listCustomerAgreements, createCustomerAgreement } from '@/api/cdrQuote'
+import {
+  listCustomerAgreements,
+  createCustomerAgreement,
+  type CustomerAgreement,
+} from '@/api/cdrQuote'
+import type { CustomerResponse, PaginatedData } from '@/types/api'
 
 const loading = ref(false)
 const submitting = ref(false)
-const agreements = ref<any[]>([])
-const customers = ref<any[]>([])
+const agreements = ref<CustomerAgreement[]>([])
+const customers = ref<CustomerResponse[]>([])
 const filterCustomerId = ref('')
 const dialogVisible = ref(false)
 
@@ -105,7 +110,8 @@ const form = ref({
 
 async function fetchCustomers() {
   try {
-    customers.value = await api.get('/customers')
+    const response = await api.get<PaginatedData<CustomerResponse>>('/customers')
+    customers.value = response.items
   } catch { /* ignore */ }
 }
 
