@@ -16,9 +16,6 @@ from app.core.permissions import (
     PERM_AERIAL_APPROVE,
 )
 
-pytestmark = pytest.mark.asyncio
-
-
 def _make_role(name: str, permission_codes: list[str]) -> MagicMock:
     role = MagicMock()
     role.name = name
@@ -67,6 +64,7 @@ class TestAerialPermissionConstants:
 
 # ── Permission enforcement ──────────────────────────────────────────────────
 
+@pytest.mark.asyncio
 class TestAerialPermissionEnforcement:
     """Test that aerial permission codes work with require_permission."""
 
