@@ -296,7 +296,11 @@ class BusinessDocumentService:
                     raise ValueError("请先创建设计任务，再流转到「设计中」状态")
             elif from_status == "designing" and to_status == "in_production":
                 await self._require_all_tasks_completed(
-                    doc_id, DesignTask, "design_no", "设计"
+                    doc_id,
+                    DesignTask,
+                    "design_no",
+                    "设计",
+                    terminal_statuses=("confirmed",),
                 )
             elif from_status == "in_production" and to_status == "in_installation":
                 await self._require_all_tasks_completed(
@@ -387,8 +391,15 @@ class BusinessDocumentService:
         if result.scalar_one_or_none() is None:
             raise ValueError("验收单与订单不匹配或当前不可确认")
 
-    async def _require_all_tasks_completed(self, doc_id: UUID, model,
-                                            no_attr: str, label: str) -> None:
+    async def _require_all_tasks_completed(
+        self,
+        doc_id: UUID,
+        model,
+        no_attr: str,
+        label: str,
+        *,
+        terminal_statuses: tuple[str, ...] = ("completed",),
+    ) -> None:
         # Check all tasks of a given type for this document are completed.
         # Raises ValueError if any task is not completed or none exist.
         r = await self.db.execute(
@@ -398,7 +409,7 @@ class BusinessDocumentService:
         if not tasks:
             raise ValueError(f"请先创建{label}任务，再继续流转")
         for t in tasks:
-            if t.status != "completed":
+            if t.status not in terminal_statuses:
                 task_no = getattr(t, no_attr, "N/A")
                 raise ValueError(f"{label}任务 {task_no} 未完成，请先完成后再流转")
 
