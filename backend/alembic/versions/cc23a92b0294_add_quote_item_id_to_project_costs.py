@@ -19,8 +19,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Column already exists on production, no-op
-    pass
+    # 部分环境的历史迁移未创建该字段，使用幂等 DDL 兼容新旧数据库。
+    op.execute(
+        sa.text(
+            "ALTER TABLE project_costs "
+            "ADD COLUMN IF NOT EXISTS quote_item_id UUID"
+        )
+    )
 
 
 def downgrade() -> None:
