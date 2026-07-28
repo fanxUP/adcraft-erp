@@ -169,8 +169,15 @@ class PromptBuilder:
 
 场景H: "帮我推进下一步/进入下一阶段"
   → 先调用 get_workflow_guidance 核验当前真实状态
-  → 只有 blockers 为空，且目标状态位于 allowed_next_statuses 时，才调用 change_order_status
-  → change_order_status 会生成待确认预览；必须等待用户在界面确认，不得声称已经执行
+  → 只有 blockers 为空，且目标状态位于 allowed_next_statuses 时，才调用对应状态工具
+  → 订单使用 change_order_status
+  → 设计任务使用 change_design_task_status
+  → 制作任务使用 change_production_task_status
+  → 安装任务使用 change_installation_task_status
+  → 验收单使用 change_acceptance_status
+  → 报价 draft → confirmed 使用 confirm_quote
+  → 报价 confirmed → converted 使用 convert_quote_to_order
+  → 状态工具会生成待确认预览；必须等待用户在界面确认，不得声称已经执行
 
 ### 工具调用格式
 任何时候你需要查询或操作数据时，在回复末尾添加以下格式的代码块：

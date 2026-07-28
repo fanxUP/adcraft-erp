@@ -61,6 +61,12 @@ const actionLabel = computed(() => {
     create_quote_confirmed: '创建报价单',
     add_quote_items: '新增报价项目',
     change_order_status: '推进订单状态',
+    change_design_task_status: '推进设计任务',
+    change_production_task_status: '推进制作任务',
+    change_installation_task_status: '推进安装任务',
+    change_acceptance_status: '推进验收状态',
+    confirm_quote: '确认报价单',
+    convert_quote_to_order: '报价转订单',
   }
   return labels[toolName] || toolName
 })
