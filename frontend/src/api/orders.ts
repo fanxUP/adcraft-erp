@@ -13,6 +13,10 @@ export function changeOrderStatus(id: string, data: { to_status: string; reason?
   return post<OrderDetailResponse>(`/orders/${id}/change-status`, data)
 }
 
+export function reopenCompletedOrder(id: string, reason: string) {
+  return post<OrderDetailResponse>(`/orders/${id}/reopen-completed`, { to_status: 'pending_acceptance', reason })
+}
+
 export function setOrderCost(id: string, cost_amount: number) {
   return post<OrderDetailResponse>(`/orders/${id}/set-cost`, { cost_amount })
 }

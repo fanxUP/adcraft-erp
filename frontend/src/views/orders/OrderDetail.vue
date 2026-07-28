@@ -73,6 +73,13 @@
             :changing="changing"
             @change="handleChangeStatus"
           />
+          <el-button
+            v-if="order.status === 'completed'"
+            type="warning"
+            plain
+            style="margin-top: 12px"
+            @click="handleReopenCompleted"
+          >管理员撤回已完成订单</el-button>
         </el-tab-pane>
 
         <el-tab-pane label="订单明细" name="items">
@@ -340,7 +347,7 @@ import OrderProjectOverview from './OrderProjectOverview.vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
-import { getOrder, changeOrderStatus, autoCalculateCost } from '@/api/orders'
+import { getOrder, changeOrderStatus, reopenCompletedOrder, autoCalculateCost } from '@/api/orders'
 import { getDesignTasks, getProductionTasks, getInstallationTasks, createDesignTask, createProductionTask, createInstallationTask } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, OrderDetailResponse, OrderItemResponse } from '@/types/api'
@@ -556,6 +563,25 @@ async function handleChangeStatus(to_status: string) {
       reason: undefined,
     })
     ElMessage.success(`状态已变更为「${label}」`)
+  } finally { changing.value = false }
+}
+
+async function handleReopenCompleted() {
+  if (!order.value) return
+  const { value: reason } = await ElMessageBox.prompt(
+    '撤回后订单将回到“待验收”，之后可继续取消。请输入撤回原因。',
+    '撤回已完成订单',
+    {
+      confirmButtonText: '确认撤回',
+      cancelButtonText: '取消',
+      inputPlaceholder: '例如：客户要求终止项目',
+      inputValidator: (value) => value.trim() ? true : '请输入撤回原因',
+    },
+  )
+  changing.value = true
+  try {
+    order.value = await reopenCompletedOrder(order.value.id, reason)
+    ElMessage.success('订单已撤回到待验收状态，现在可以取消订单')
   } finally { changing.value = false }
 }
 

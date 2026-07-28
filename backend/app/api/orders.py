@@ -68,6 +68,27 @@ async def get_order(
     return success(order)
 
 
+@router.post("/{order_id}/reopen-completed")
+async def reopen_completed_order(
+    order_id: str,
+    data: OrderStatusChange,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    service = BusinessDocumentService(db, doc_type="order")
+    oid = UUID(order_id)
+    try:
+        order = await service.reopen_completed_order(oid, data.reason or "", current_user.id)
+    except ValueError as e:
+        return error(40001, str(e))
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_ORDER, oid, ACTION_STATUS_CHANGE,
+                        ip_address=request.client.host if request.client else None,
+                        after_data={"status": "pending_acceptance", "reason": data.reason, "action": "reopen_completed"})
+    return success(order)
+
+
 @router.post("/{order_id}/set-cost")
 async def set_order_cost(
     order_id: str,

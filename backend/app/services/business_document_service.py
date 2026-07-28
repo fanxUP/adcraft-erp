@@ -371,6 +371,19 @@ class BusinessDocumentService:
 
         return self._to_detail(doc)
 
+    async def reopen_completed_order(self, doc_id: UUID, reason: str, operated_by: UUID) -> dict:
+        """管理员专用：将已完成订单退回待验收，供后续取消或纠正。"""
+        doc = await self.repo.get_by_id(doc_id)
+        if not doc:
+            raise ValueError("订单不存在")
+        if doc.doc_type != "order" or doc.status != "completed":
+            raise ValueError("只有已完成订单可以撤回")
+        if not reason.strip():
+            raise ValueError("撤回原因不能为空")
+        await self.repo.update(doc, {"status": "pending_acceptance"})
+        await self.repo.create_status_log(doc_id, "completed", "pending_acceptance", reason.strip(), operated_by)
+        return self._to_detail(doc)
+
     async def _require_acceptance_completion_source(
         self,
         doc_id: UUID,
