@@ -214,11 +214,12 @@ class BusinessDocumentService:
         acceptances = (await self.db.execute(
             select(AcceptanceForm).where(
                 AcceptanceForm.document_id == doc.id,
-                AcceptanceForm.deleted_at.is_(None),
             )
         )).scalars().all()
         for a in acceptances:
             a.deleted_at = datetime.now()
+            # 验收单保留在回收记录中，但解除对报价主记录的外键引用。
+            a.document_id = None
 
         # 5. 清除项目成本引用
         costs = (await self.db.execute(
