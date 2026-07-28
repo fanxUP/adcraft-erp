@@ -141,7 +141,7 @@ class CdrQuoteService:
     async def get_quote(self, quote_id: UUID) -> dict | None:
         """获取 CDR 报价 header 信息。"""
         from app.services.business_document_service import BusinessDocumentService
-        svc = BusinessDocumentService(self.db, doc_type="quote")
+        svc = BusinessDocumentService(self.db, doc_type="quote", quote_mode="cdr")
         quote = await svc.get_by_id(quote_id)
         if quote:
             quote.setdefault("quote_no", quote.get("doc_no", ""))
@@ -153,7 +153,7 @@ class CdrQuoteService:
     ) -> tuple[list, int]:
         """列出 CDR 报价（复用 BusinessDocumentService 的 quote 查询）。"""
         from app.services.business_document_service import BusinessDocumentService
-        svc = BusinessDocumentService(self.db, doc_type="quote")
+        svc = BusinessDocumentService(self.db, doc_type="quote", quote_mode="cdr")
         # Reuse the existing list with exclude_status handling
         docs, total = await svc.repo.list_all(
             skip=(page - 1) * page_size, limit=page_size,
@@ -545,6 +545,7 @@ class CdrQuoteService:
             select(BusinessDocument).where(
                 BusinessDocument.id == quote_id,
                 BusinessDocument.doc_type == "quote",
+                BusinessDocument.quote_mode == "cdr",
                 BusinessDocument.deleted_at.is_(None),
             )
         )
@@ -1048,15 +1049,15 @@ class CdrQuoteService:
         if not capture:
             raise ValueError("采集记录不存在")
 
-        # Create a quote (business_document with doc_type="quote")
-        import random
-        quote_no = "Q-" + datetime.utcnow().strftime("%Y%m%d") + "-" + str(random.randint(1000, 9999))
+        # Create a CDR quote (business_document with doc_type="quote")
+        from app.services.number_generator import generate_quote_no
+        quote_no = await generate_quote_no(self.db)
 
         doc = BusinessDocument(
             doc_type="quote",
             doc_no=quote_no,
             status="draft",
-            source="cdr_plugin",
+            quote_mode="cdr",
             customer_id=data.get("customer_id"),
             customer_name=data.get("customer_name", ""),
             project_name=data.get("project_name", f"CDR: {capture.document_name or ''}"),
@@ -1069,7 +1070,7 @@ class CdrQuoteService:
             paid_amount=Decimal("0"),
             cost_amount=Decimal("0"),
             gross_profit=Decimal("0"),
-            notes=data.get("notes", f"来源：CDR 图稿采集 {capture.session_code}"),
+            remark=data.get("notes", f"来源：CDR 图稿采集 {capture.session_code}"),
             created_by=current_user_id,
         )
         self.db.add(doc)

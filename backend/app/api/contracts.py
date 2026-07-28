@@ -13,8 +13,14 @@ from app.core.file_security import confined_path, safe_upload_name, save_upload
 logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
-from app.core.permissions import require_any_role
+from app.core.permissions import (
+    PERM_CONTRACT_CHANGE_STATUS,
+    PERM_CONTRACT_CREATE,
+    PERM_CONTRACT_DELETE,
+    PERM_CONTRACT_READ,
+    PERM_CONTRACT_UPDATE,
+    require_permission,
+)
 from app.models.user import User
 from app.schemas.contract import ContractCreate, ContractUpdate, ContractStatusChange
 from app.schemas.common import success, success_paginated
@@ -36,7 +42,7 @@ async def list_contracts(
     contract_type: str | None = None,
     exclude_contract_type: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
     service = ContractService(db)
     contracts, total = await service.list_contracts(page, page_size, status, keyword, customer_id, contract_type, exclude_contract_type)
@@ -48,7 +54,7 @@ async def create_contract(
     data: ContractCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_CREATE)),
 ):
     service = ContractService(db)
     contract = await service.create_contract(data.model_dump())
@@ -64,7 +70,7 @@ async def get_available_resources(
     customer_id: str | None = None,
     contract_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
     """Return orders and quotes not yet linked to any contract (including framework contract projects).
     If contract_id is provided (editing), also include resources already linked to that contract.
@@ -136,7 +142,7 @@ async def get_available_resources(
 async def get_contract(
     contract_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
     service = ContractService(db)
     contract = await service.get_contract(UUID(contract_id))
@@ -151,7 +157,7 @@ async def update_contract(
     data: ContractUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_UPDATE)),
 ):
     service = ContractService(db)
     cid = UUID(contract_id)
@@ -169,7 +175,7 @@ async def delete_contract(
     contract_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_DELETE)),
 ):
     service = ContractService(db)
     cid = UUID(contract_id)
@@ -190,7 +196,7 @@ async def change_contract_status(
     data: ContractStatusChange,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_CHANGE_STATUS)),
 ):
     service = ContractService(db)
     cid = UUID(contract_id)
@@ -208,7 +214,7 @@ async def upload_contract_attachment(
     contract_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_UPDATE)),
 ):
     service = ContractService(db)
     cid = UUID(contract_id)
@@ -238,7 +244,7 @@ async def upload_contract_attachment(
 async def download_contract_attachment(
     contract_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
     service = ContractService(db)
     contract = await service.get_contract(UUID(contract_id))
@@ -256,7 +262,7 @@ async def download_contract_attachment(
 async def delete_contract_attachment(
     contract_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_UPDATE)),
 ):
     service = ContractService(db)
     cid = UUID(contract_id)

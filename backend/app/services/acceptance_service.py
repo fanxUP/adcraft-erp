@@ -155,7 +155,14 @@ class AcceptanceService:
         "rejected": ["draft"],
     }
 
-    async def change_status(self, acceptance_id: UUID, to_status: str, **kwargs):
+    async def change_status(
+        self,
+        acceptance_id: UUID,
+        to_status: str,
+        *,
+        operated_by: UUID,
+        **kwargs,
+    ):
         form = await self.repo.get_by_id(acceptance_id)
         if not form:
             raise ValueError("验收单不存在")
@@ -174,7 +181,11 @@ class AcceptanceService:
             if kwargs.get("accepted_by"):
                 form.accepted_by = kwargs["accepted_by"]
             # 验收接受 → 自动完成订单
-            await self._sync_order_on_acceptance(form, "completed")
+            await self._sync_order_on_acceptance(
+                form,
+                "completed",
+                operated_by=operated_by,
+            )
         elif to_status == "rejected":
             reason = kwargs.get("reason", "")
             if not reason:
@@ -182,7 +193,11 @@ class AcceptanceService:
             form.status = "rejected"
             form.reject_reason = reason
             # 验收驳回 → 订单回退到安装中
-            await self._sync_order_on_acceptance(form, "in_installation")
+            await self._sync_order_on_acceptance(
+                form,
+                "in_installation",
+                operated_by=operated_by,
+            )
         elif to_status == "draft":
             form.status = "draft"
             form.reject_reason = None
@@ -191,22 +206,19 @@ class AcceptanceService:
         form = await self.repo.get_by_id(acceptance_id)
         return self._to_detail_dict(form)
 
-    async def _sync_order_on_acceptance(self, form, target_status: str) -> None:
+    async def _sync_order_on_acceptance(
+        self,
+        form,
+        target_status: str,
+        *,
+        operated_by: UUID,
+    ) -> None:
         """验收反馈：更新关联订单状态。"""
         doc = form.document
         if not doc or doc.doc_type != "order":
             return
         if doc.status == target_status:
             return
-        from uuid import UUID as _UUID
-        raw = form.accepted_by or doc.sales_user_id
-        if not raw:
-            return
-        try:
-            operated_by = _UUID(raw) if isinstance(raw, str) else raw
-        except (ValueError, TypeError):
-            return
-        from app.services.business_document_service import BusinessDocumentService
         order_svc = BusinessDocumentService(self.db, doc_type="order")
         try:
             await order_svc.change_status(
@@ -214,8 +226,8 @@ class AcceptanceService:
                 reason="验收单自动触发" if target_status == "completed" else "验收驳回，回退安装",
                 operated_by=operated_by,
             )
-        except ValueError:
-            pass
+        except ValueError as exc:
+            raise ValueError(f"验收状态已更新，但订单状态同步失败：{exc}") from exc
 
     # ── 序列化（统一访问 form.document） ──
     @staticmethod

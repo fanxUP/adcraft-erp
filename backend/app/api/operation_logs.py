@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.permissions import PERM_SYSTEM_LOGS, require_permission
 from app.models.user import User
 from app.schemas.common import success, success_paginated, error
 from app.services.operation_log_service import OperationLogService
@@ -23,7 +23,7 @@ async def list_logs(
     date_from: date | None = None,
     date_to: date | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_LOGS)),
 ):
     service = OperationLogService(db)
     uid = UUID(user_id) if user_id else None
@@ -39,7 +39,7 @@ async def list_logs(
 async def get_log(
     log_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_LOGS)),
 ):
     service = OperationLogService(db)
     log = await service.get_log(UUID(log_id))

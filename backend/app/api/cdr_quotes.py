@@ -40,7 +40,7 @@ async def delete_cdr_quote(
 ):
     """删除CDR智能报价（硬删除）。"""
     from app.services.business_document_service import BusinessDocumentService
-    svc = BusinessDocumentService(db, doc_type="quote")
+    svc = BusinessDocumentService(db, doc_type="quote", quote_mode="cdr")
     ok = await svc.delete(quote_id)
     if not ok:
         from fastapi import HTTPException
@@ -73,7 +73,7 @@ async def create_cdr_quote(
 ):
     """创建CDR智能报价 header（明细通过版本接口添加）。"""
     from app.services.business_document_service import BusinessDocumentService
-    svc = BusinessDocumentService(db, doc_type="quote")
+    svc = BusinessDocumentService(db, doc_type="quote", quote_mode="cdr")
     data["doc_type"] = "quote"
     # CDR line items are managed through the version API (QuoteLine), not BusinessDocumentItem
     data.pop("items", None)

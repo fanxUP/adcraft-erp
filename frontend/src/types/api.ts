@@ -580,6 +580,7 @@ export interface QuoteItemResponse {
 export interface QuoteListResponse {
   id: string
   quote_no: string
+  quote_mode?: 'regular' | 'cdr'
   customer_id?: string
   customer_name?: string
   project_name: string
@@ -595,6 +596,7 @@ export interface QuoteListResponse {
 export interface QuoteDetailResponse {
   id: string
   quote_no: string
+  quote_mode?: 'regular' | 'cdr'
   customer_id?: string
   customer_name?: string
   project_name: string

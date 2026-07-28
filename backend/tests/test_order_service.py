@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.business_document_service import BusinessDocumentService
+from app.services.business_document_service import BusinessDocumentService, ORDER_TRANSITIONS
 from tests.conftest import SAMPLE_CUSTOMER_ID, SAMPLE_ORDER_ID
 
 
@@ -45,6 +45,16 @@ def make_order(**overrides):
     for key, value in defaults.items():
         setattr(order, key, value)
     return order
+
+
+def test_order_must_pass_acceptance_before_completion():
+    assert "pending_acceptance" in ORDER_TRANSITIONS["in_installation"]
+    assert "completed" not in ORDER_TRANSITIONS["in_installation"]
+    assert ORDER_TRANSITIONS["pending_acceptance"] == [
+        "completed",
+        "in_installation",
+        "cancelled",
+    ]
 
 
 @pytest.fixture

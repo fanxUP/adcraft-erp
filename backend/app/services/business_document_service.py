@@ -36,10 +36,11 @@ def _build_spec(item) -> str | None:
 ORDER_TRANSITIONS = {
     "pending_confirm": ["confirmed", "cancelled"],
     "confirmed": ["designing", "cancelled"],
-    "designing": ["in_production", "in_installation", "completed", "cancelled"],
-    "in_production": ["designing", "in_installation", "completed", "cancelled"],
-    "in_installation": ["designing", "in_production", "completed", "cancelled"],
-    "completed": ["designing", "in_production", "in_installation", "cancelled"],
+    "designing": ["in_production", "in_installation", "cancelled"],
+    "in_production": ["designing", "in_installation", "cancelled"],
+    "in_installation": ["designing", "in_production", "pending_acceptance", "cancelled"],
+    "pending_acceptance": ["completed", "in_installation", "cancelled"],
+    "completed": [],
     "cancelled": [],
 }
 
@@ -54,10 +55,16 @@ QUOTE_TRANSITIONS = {
 class BusinessDocumentService:
     """统一业务单据服务 — 按 doc_type 处理订单/报价的 CRUD、转换、状态流转。"""
 
-    def __init__(self, db: AsyncSession, doc_type: str | None = None):
+    def __init__(
+        self,
+        db: AsyncSession,
+        doc_type: str | None = None,
+        quote_mode: str | None = None,
+    ):
         self.db = db
         self.doc_type = doc_type  # 'order', 'quote', or None
-        self.repo = BusinessDocumentRepository(db, doc_type)
+        self.quote_mode = quote_mode or ("regular" if doc_type == "quote" else None)
+        self.repo = BusinessDocumentRepository(db, doc_type, self.quote_mode)
 
     # ═══════════════════════════════════════════
     # 查询
@@ -93,6 +100,7 @@ class BusinessDocumentService:
         if self.doc_type == 'quote':
             data.setdefault("status", "draft")
             data["doc_type"] = "quote"
+            data["quote_mode"] = self.quote_mode or "regular"
             if not data.get("doc_no"):
                 data["doc_no"] = await generate_quote_no(self.db)
             data.setdefault("subtotal_amount", Decimal("0"))
@@ -302,7 +310,7 @@ class BusinessDocumentService:
                 await self._require_all_tasks_completed(
                     doc_id, ProductionTask, "production_no", "生产"
                 )
-            elif from_status == "in_installation" and to_status == "completed":
+            elif from_status == "in_installation" and to_status == "pending_acceptance":
                 await self._require_all_tasks_completed(
                     doc_id, InstallationTask, "installation_no", "安装"
                 )
@@ -310,9 +318,12 @@ class BusinessDocumentService:
         await self.repo.update(doc, {"status": to_status})
         await self.repo.create_status_log(doc_id, from_status, to_status, reason, operated_by)
 
-        # 订单完成 → 自动创建验收单 + 逾期提醒
-        if doc.doc_type == "order" and to_status == "completed":
+        # 安装完成 → 自动创建验收单，验收通过后才完成订单
+        if doc.doc_type == "order" and to_status == "pending_acceptance":
             await self._auto_create_acceptance(doc)
+
+        # 订单完成 → 生成收款提醒
+        if doc.doc_type == "order" and to_status == "completed":
             if doc.unpaid_amount and float(doc.unpaid_amount) > 0 and doc.sales_user_id:
                 from app.models.notification import Notification
                 reminder = Notification(
@@ -343,7 +354,8 @@ class BusinessDocumentService:
             notif_svc = NotificationService(self.db)
             labels = {
                 "pending_confirm": "待确认", "confirmed": "已确认", "designing": "设计中",
-                "in_production": "生产中", "in_installation": "安装中", "completed": "已完成",
+                "in_production": "生产中", "in_installation": "安装中",
+                "pending_acceptance": "待验收", "completed": "已完成",
                 "cancelled": "已取消", "draft": "草稿", "converted": "已转换",
             }
             await notif_svc.create_system_notification(
@@ -649,6 +661,8 @@ class BusinessDocumentService:
             "status": d.status or "",
             "total_amount": float(d.total_amount) if d.total_amount else 0,
         }
+        if d.doc_type == "quote":
+            base["quote_mode"] = d.quote_mode
         if d.doc_type == "order":
             base["order_no"] = d.doc_no
             base["paid_amount"] = float(d.paid_amount) if d.paid_amount else 0
@@ -684,6 +698,7 @@ class BusinessDocumentService:
         else:
             base.update({
                 "quote_no": d.doc_no,
+                "quote_mode": d.quote_mode,
                 "valid_until": d.valid_until.isoformat() if d.valid_until else None,
             })
         return base
@@ -777,6 +792,7 @@ class BusinessDocumentService:
         else:
             base.update({
                 "quote_no": d.doc_no,
+                "quote_mode": d.quote_mode,
                 "subtotal_amount": float(d.subtotal_amount),
                 "discount_amount": float(d.discount_amount),
                 "tax_rate": float(d.tax_rate),

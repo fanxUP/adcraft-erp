@@ -19,6 +19,7 @@
             <el-option label="设计中" value="designing" />
             <el-option label="生产中" value="in_production" />
             <el-option label="安装中" value="in_installation" />
+            <el-option label="待验收" value="pending_acceptance" />
             <el-option label="已完成" value="completed" />
             <el-option label="已取消" value="cancelled" />
           </el-select>
@@ -99,12 +100,13 @@ const filters = reactive({ keyword: '', status: '' })
 function statusLabel(s: string) {
   const map: Record<string, string> = {
     pending_confirm: '待确认', confirmed: '已确认', designing: '设计中',
-    in_production: '生产中', in_installation: '安装中', completed: '已完成', cancelled: '已取消',
+    in_production: '生产中', in_installation: '安装中', pending_acceptance: '待验收',
+    completed: '已完成', cancelled: '已取消',
   }
   return map[s] || s
 }
 function statusColor(s: string) {
-  const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', designing: '', in_production: '', in_installation: '', completed: 'success', cancelled: 'danger' }
+  const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', designing: '', in_production: '', in_installation: '', pending_acceptance: 'warning', completed: 'success', cancelled: 'danger' }
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 

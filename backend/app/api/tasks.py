@@ -7,7 +7,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.permissions import (
+    PERM_DESIGN_TASK_CHANGE_STATUS,
+    PERM_DESIGN_TASK_CREATE,
+    PERM_DESIGN_TASK_READ,
+    PERM_DESIGN_TASK_UPDATE,
+    PERM_INSTALLATION_TASK_CHANGE_STATUS,
+    PERM_INSTALLATION_TASK_CREATE,
+    PERM_INSTALLATION_TASK_READ,
+    PERM_INSTALLATION_TASK_UPDATE,
+    PERM_PRODUCTION_TASK_CHANGE_STATUS,
+    PERM_PRODUCTION_TASK_CREATE,
+    PERM_PRODUCTION_TASK_READ,
+    PERM_PRODUCTION_TASK_UPDATE,
+    require_any_permission,
+    require_permission,
+)
 from app.models.user import User
 from app.schemas.common import success, success_paginated
 from app.schemas.task import (
@@ -41,7 +56,7 @@ async def list_design_tasks(
     order_id: str | None = None,
     assigned_to: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_DESIGN_TASK_READ)),
 ):
     service = DesignTaskService(db)
     tasks, total = await service.list_tasks(page, page_size, status, order_id, assigned_to)
@@ -52,7 +67,7 @@ async def list_design_tasks(
 async def create_design_task(
     data: DesignTaskCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_DESIGN_TASK_CREATE)),
 ):
     service = DesignTaskService(db)
     task = await service.create_task(data.model_dump())
@@ -63,7 +78,7 @@ async def create_design_task(
 async def get_design_task(
     task_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_DESIGN_TASK_READ)),
 ):
     service = DesignTaskService(db)
     task = await service.get_task(_ensure_uuid(task_id))
@@ -77,7 +92,7 @@ async def update_design_task(
     task_id: str,
     data: DesignTaskUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_DESIGN_TASK_UPDATE)),
 ):
     service = DesignTaskService(db)
     task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_none=True))
@@ -89,7 +104,7 @@ async def change_design_task_status(
     task_id: str,
     data: TaskStatusChange,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_DESIGN_TASK_CHANGE_STATUS)),
 ):
     service = DesignTaskService(db)
     task = await service.change_status(_ensure_uuid(task_id), data.to_status, current_user.id)
@@ -109,7 +124,7 @@ async def list_production_tasks(
     order_id: str | None = None,
     assigned_to: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_READ)),
 ):
     service = ProductionTaskService(db)
     tasks, total = await service.list_tasks(page, page_size, status, order_id, assigned_to)
@@ -120,7 +135,7 @@ async def list_production_tasks(
 async def create_production_task(
     data: ProductionTaskCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_CREATE)),
 ):
     service = ProductionTaskService(db)
     task = await service.create_task(data.model_dump())
@@ -131,7 +146,7 @@ async def create_production_task(
 async def get_production_task(
     task_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_READ)),
 ):
     service = ProductionTaskService(db)
     task = await service.get_task(_ensure_uuid(task_id))
@@ -145,7 +160,7 @@ async def update_production_task(
     task_id: str,
     data: ProductionTaskUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_UPDATE)),
 ):
     service = ProductionTaskService(db)
     task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_none=True))
@@ -157,7 +172,7 @@ async def change_production_task_status(
     task_id: str,
     data: TaskStatusChange,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_CHANGE_STATUS)),
 ):
     service = ProductionTaskService(db)
     task = await service.change_status(_ensure_uuid(task_id), data.to_status, current_user.id)
@@ -177,7 +192,7 @@ async def list_installation_tasks(
     order_id: str | None = None,
     assigned_to: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_READ)),
 ):
     service = InstallationTaskService(db)
     tasks, total = await service.list_tasks(page, page_size, status, order_id, assigned_to)
@@ -188,7 +203,7 @@ async def list_installation_tasks(
 async def create_installation_task(
     data: InstallationTaskCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_CREATE)),
 ):
     service = InstallationTaskService(db)
     task = await service.create_task(data.model_dump())
@@ -199,7 +214,7 @@ async def create_installation_task(
 async def get_installation_task(
     task_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_READ)),
 ):
     service = InstallationTaskService(db)
     task = await service.get_task(_ensure_uuid(task_id))
@@ -213,7 +228,7 @@ async def update_installation_task(
     task_id: str,
     data: InstallationTaskUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_UPDATE)),
 ):
     service = InstallationTaskService(db)
     task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_none=True))
@@ -225,7 +240,7 @@ async def change_installation_task_status(
     task_id: str,
     data: TaskStatusChange,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_CHANGE_STATUS)),
 ):
     service = InstallationTaskService(db)
     task = await service.change_status(_ensure_uuid(task_id), data.to_status, current_user.id)
@@ -244,7 +259,11 @@ async def upload_attachment(
     category: str | None = None,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_any_permission(
+        PERM_DESIGN_TASK_UPDATE,
+        PERM_PRODUCTION_TASK_UPDATE,
+        PERM_INSTALLATION_TASK_UPDATE,
+    )),
 ):
     upload_dir = settings.LOCAL_UPLOAD_DIR
     date_dir = datetime.now(timezone.utc).strftime("%Y%m")
@@ -281,7 +300,11 @@ async def upload_attachment(
 async def delete_attachment(
     attachment_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_any_permission(
+        PERM_DESIGN_TASK_UPDATE,
+        PERM_PRODUCTION_TASK_UPDATE,
+        PERM_INSTALLATION_TASK_UPDATE,
+    )),
 ):
     service = AttachmentService(db)
     ok = await service.delete_attachment(_ensure_uuid(attachment_id))

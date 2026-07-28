@@ -7,8 +7,14 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
-from app.core.permissions import require_any_role
+from app.core.permissions import (
+    PERM_ACCEPTANCE_CHANGE_STATUS,
+    PERM_ACCEPTANCE_CREATE,
+    PERM_ACCEPTANCE_DELETE,
+    PERM_ACCEPTANCE_READ,
+    PERM_ACCEPTANCE_UPDATE,
+    require_permission,
+)
 from app.models.user import User
 from app.schemas.common import success, success_paginated, error
 from app.repositories.acceptance_repo import AcceptanceRepository
@@ -46,7 +52,7 @@ class StatusChange(BaseModel):
 @router.get("/available-orders")
 async def list_available_orders(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_ACCEPTANCE_READ)),
 ):
     """Return orders that don't have an acceptance yet."""
     service = AcceptanceService(db)
@@ -57,7 +63,7 @@ async def list_available_orders(
 @router.get("/available-quotes")
 async def list_available_quotes(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_ACCEPTANCE_READ)),
 ):
     """Return confirmed quotes that don't have an acceptance yet."""
     service = AcceptanceService(db)
@@ -73,7 +79,7 @@ async def list_acceptances(
     status: str = "",
     order_id: str = "",
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_ACCEPTANCE_READ)),
 ):
     service = AcceptanceService(db)
     items, total = await service.list_acceptances(
@@ -86,7 +92,7 @@ async def list_acceptances(
 async def get_acceptance(
     acceptance_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_ACCEPTANCE_READ)),
 ):
     service = AcceptanceService(db)
     try:
@@ -100,7 +106,7 @@ async def get_acceptance(
 async def create_acceptance(
     body: AcceptanceCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_ACCEPTANCE_CREATE)),
 ):
     service = AcceptanceService(db)
     try:
@@ -115,7 +121,7 @@ async def update_acceptance(
     acceptance_id: str,
     body: AcceptanceUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_ACCEPTANCE_UPDATE)),
 ):
     service = AcceptanceService(db)
     try:
@@ -129,7 +135,7 @@ async def update_acceptance(
 async def delete_acceptance(
     acceptance_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_ACCEPTANCE_DELETE)),
 ):
     service = AcceptanceService(db)
     try:
@@ -144,13 +150,15 @@ async def change_status(
     acceptance_id: str,
     body: StatusChange,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_ACCEPTANCE_CHANGE_STATUS)),
 ):
     service = AcceptanceService(db)
     try:
         data = await service.change_status(
             uuid.UUID(acceptance_id), body.to_status,
-            reason=body.reason, accepted_by=body.accepted_by
+            reason=body.reason,
+            accepted_by=body.accepted_by,
+            operated_by=current_user.id,
         )
         return success(data)
     except ValueError as e:
@@ -162,7 +170,7 @@ async def upload_attachment(
     acceptance_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_ACCEPTANCE_UPDATE)),
 ):
     repo = AcceptanceRepository(db)
     form = await repo.get_by_id(uuid.UUID(acceptance_id))
@@ -197,7 +205,7 @@ async def delete_attachment(
     acceptance_id: str,
     att_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_ACCEPTANCE_UPDATE)),
 ):
     repo = AcceptanceRepository(db)
     att = await repo.get_attachment_by_id(uuid.UUID(att_id))

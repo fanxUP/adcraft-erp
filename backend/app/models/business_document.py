@@ -56,6 +56,12 @@ class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
     )
 
     # ── 报价专有字段（doc_type='quote' 时有效） ──
+    quote_mode: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="regular",
+        comment="报价模式: regular | cdr",
+    )
     subtotal_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     discount_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     tax_rate: Mapped[float] = mapped_column(Numeric(8, 4), default=0)

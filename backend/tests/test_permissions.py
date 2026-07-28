@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
-from app.core.permissions import require_permission, require_role
+from app.core.permissions import require_any_permission, require_permission, require_role
 
 pytestmark = pytest.mark.asyncio
 
@@ -88,6 +88,23 @@ class TestRequirePermission:
         assert await self._check("backup:create", user) is True
         assert await self._check("user:delete", user) is True
         assert await self._check("customer:read", user) is True
+
+
+class TestRequireAnyPermission:
+    async def test_one_matching_permission_is_enough(self):
+        user = _make_user([_make_role("operator", ["task:update"])])
+        dependency = require_any_permission("task:create", "task:update")
+
+        assert await dependency(user) is user
+
+    async def test_missing_all_permissions_is_rejected(self):
+        user = _make_user([_make_role("viewer", ["task:read"])])
+        dependency = require_any_permission("task:create", "task:update")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await dependency(user)
+
+        assert exc_info.value.status_code == 403
 
 
 class TestRequireRole:

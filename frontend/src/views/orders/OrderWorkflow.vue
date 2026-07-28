@@ -22,7 +22,7 @@
         <div class="ow-point">▶</div>
       </div>
 
-      <!-- 列2: 设计中 / 生产中 / 安装中 + 已完成（互通） -->
+      <!-- 列2: 项目执行阶段 -->
       <div class="ow-col ow-col-stack">
         <div class="ow-card" :class="cardClass('designing')" @click="tryChange('designing')">
           <div class="ow-icon" :class="iconClass('designing')">
@@ -63,6 +63,20 @@
             <div v-else-if="isReachable('in_installation')" class="ow-tag ready-tag">可点击</div>
           </div>
         </div>
+
+        <div class="stack-line" :class="{ 'stack-done': isPast('pending_acceptance') || currentStatus === 'pending_acceptance' }"></div>
+
+        <div class="ow-card" :class="cardClass('pending_acceptance')" @click="tryChange('pending_acceptance')">
+          <div class="ow-icon" :class="iconClass('pending_acceptance')">
+            <el-icon v-if="isPast('pending_acceptance')" :size="16"><Check /></el-icon>
+            <span v-else>5</span>
+          </div>
+          <div class="ow-text">
+            <div class="ow-label">待验收</div>
+            <div v-if="'pending_acceptance' === currentStatus" class="ow-tag cur-tag">当前</div>
+            <div v-else-if="isReachable('pending_acceptance')" class="ow-tag ready-tag">可点击</div>
+          </div>
+        </div>
       </div>
 
       <!-- 箭头2 -->
@@ -76,7 +90,7 @@
         <div class="ow-card" :class="cardClass('completed')" @click="tryChange('completed')">
           <div class="ow-icon" :class="iconClass('completed')">
             <el-icon v-if="isPast('completed')" :size="16"><Check /></el-icon>
-            <span v-else>5</span>
+            <span v-else>6</span>
           </div>
           <div class="ow-text">
             <div class="ow-label">已完成</div>
@@ -97,7 +111,7 @@
         <div class="ow-card" :class="cardClass('cancelled') + ' ' + cancellClass()" @click="tryChange('cancelled')">
           <div class="ow-icon" :class="iconClass('cancelled')">
             <el-icon v-if="isPast('cancelled')" :size="16"><Close /></el-icon>
-            <span v-else>6</span>
+            <span v-else>7</span>
           </div>
           <div class="ow-text">
             <div class="ow-label">取消订单</div>
@@ -123,11 +137,28 @@ const emit = defineEmits<{
   change: [status: string]
 }>()
 
-/** 线性前置状态（确认订单 → 设计中 → …… 已完成 → 取消） */
-const linearStatuses = ['pending_confirm', 'confirmed', 'designing', 'in_production', 'in_installation', 'completed', 'cancelled']
+/** 与后端订单状态机保持一致。 */
+const linearStatuses = [
+  'pending_confirm',
+  'confirmed',
+  'designing',
+  'in_production',
+  'in_installation',
+  'pending_acceptance',
+  'completed',
+  'cancelled',
+]
 
-/** 四个可自由切换的状态 */
-const freeStates = ['designing', 'in_production', 'in_installation', 'completed']
+const transitions: Record<string, string[]> = {
+  pending_confirm: ['confirmed', 'cancelled'],
+  confirmed: ['designing', 'cancelled'],
+  designing: ['in_production', 'in_installation', 'cancelled'],
+  in_production: ['designing', 'in_installation', 'cancelled'],
+  in_installation: ['designing', 'in_production', 'pending_acceptance', 'cancelled'],
+  pending_acceptance: ['completed', 'in_installation', 'cancelled'],
+  completed: [],
+  cancelled: [],
+}
 
 const currentIdx = computed(() => {
   const idx = linearStatuses.indexOf(props.currentStatus)
@@ -135,28 +166,10 @@ const currentIdx = computed(() => {
 })
 
 const reachableTargets = computed(() => {
-  const cur = props.currentStatus
-  if (cur === 'cancelled') return []
-
-  // 自由状态组内互相切换，同时都可取消
-  if (freeStates.includes(cur)) {
-    return [...freeStates.filter(s => s !== cur), 'cancelled']
-  }
-
-  // 线性递进
-  const idx = linearStatuses.indexOf(cur)
-  if (idx < 0) return []
-  // confirmed → 第一个自由状态
-  if (cur === 'confirmed') return ['designing', 'cancelled']
-  if (cur === 'pending_confirm') return ['confirmed', 'cancelled']
-  return []
+  return transitions[props.currentStatus] || []
 })
 
 function isPast(status: string): boolean {
-  // 自由状态组内的"已完成"判断：如果当前在组内且目标在前面
-  if (freeStates.includes(status) && freeStates.includes(props.currentStatus)) {
-    return false // 所有自由状态平级，无前后关系
-  }
   const idx = linearStatuses.indexOf(status)
   return idx >= 0 && idx < currentIdx.value
 }

@@ -15,9 +15,15 @@ from app.models.business_document import (
 class BusinessDocumentRepository:
     """统一业务单据仓库 — 提供按 doc_type 筛选的 CRUD。"""
 
-    def __init__(self, db: AsyncSession, doc_type: str | None = None):
+    def __init__(
+        self,
+        db: AsyncSession,
+        doc_type: str | None = None,
+        quote_mode: str | None = None,
+    ):
         self.db = db
         self.doc_type = doc_type  # 'order', 'quote', or None for both
+        self.quote_mode = quote_mode
 
     # ── 基础查询 ──
 
@@ -35,6 +41,8 @@ class BusinessDocumentRepository:
         )
         if self.doc_type:
             q = q.where(BusinessDocument.doc_type == self.doc_type)
+        if self.quote_mode:
+            q = q.where(BusinessDocument.quote_mode == self.quote_mode)
         result = await self.db.execute(q)
         return result.scalar_one_or_none()
 
@@ -52,6 +60,8 @@ class BusinessDocumentRepository:
         )
         if self.doc_type:
             q = q.where(BusinessDocument.doc_type == self.doc_type)
+        if self.quote_mode:
+            q = q.where(BusinessDocument.quote_mode == self.quote_mode)
         result = await self.db.execute(q)
         return result.scalar_one_or_none()
 
@@ -68,6 +78,8 @@ class BusinessDocumentRepository:
         ).where(BusinessDocument.deleted_at.is_(None))
         if self.doc_type:
             q = q.where(BusinessDocument.doc_type == self.doc_type)
+        if self.quote_mode:
+            q = q.where(BusinessDocument.quote_mode == self.quote_mode)
         if status:
             q = q.where(BusinessDocument.status == status)
         if exclude_status:

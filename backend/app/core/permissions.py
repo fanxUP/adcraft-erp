@@ -222,6 +222,25 @@ def require_permission(permission_code: str):
     return dependency
 
 
+def require_any_permission(*permission_codes: str):
+    """要求当前用户至少拥有一个指定权限。"""
+
+    async def dependency(current_user: User = Depends(get_current_user)) -> User:
+        granted = {
+            permission.code
+            for role in current_user.roles
+            for permission in role.permissions
+        }
+        if granted.intersection(permission_codes):
+            return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"权限不足: 需要以下任一权限「{'/'.join(permission_codes)}」",
+        )
+
+    return dependency
+
+
 def require_role(role_name: str):
     """FastAPI dependency: require the current user to have a specific role.
 
