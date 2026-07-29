@@ -36,3 +36,18 @@ def test_quote_audit_log_matches_append_only_table():
 
     assert "created_at" in columns
     assert "updated_at" not in columns
+
+
+def test_ai_business_rule_tables_are_created_by_migration():
+    versions_dir = Path(__file__).parents[1] / "alembic" / "versions"
+    migration_sources = [
+        path.read_text(encoding="utf-8")
+        for path in versions_dir.glob("*.py")
+    ]
+
+    assert any(
+        '"ai_business_rules"' in source
+        and '"ai_business_rule_sync_logs"' in source
+        and "op.create_table(" in source
+        for source in migration_sources
+    )

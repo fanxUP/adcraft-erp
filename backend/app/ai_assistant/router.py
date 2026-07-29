@@ -6,14 +6,34 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import require_role
 from app.models.user import User
 from app.schemas.common import success, error
 from app.ai_assistant.config import settings
 from app.ai_assistant.schemas import AiChatRequest, WorkflowGuidanceRequest
 from app.ai_assistant.service import AiAssistantService
+from app.ai_assistant.business_rules.service import BusinessRuleSyncService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai-assistant", tags=["AI Assistant"])
+
+
+@router.get("/business-rules/status")
+async def business_rule_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Return source/database drift and the latest synchronization result."""
+    return success(await BusinessRuleSyncService(db).build_status())
+
+
+@router.post("/business-rules/sync")
+async def synchronize_business_rules(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Synchronize source-controlled rules into the versioned AI registry."""
+    return success(await BusinessRuleSyncService(db).synchronize())
 
 
 @router.post("/workflow-guidance")

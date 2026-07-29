@@ -193,12 +193,19 @@ class PromptBuilder:
 - 可以一次调用多个工具
 - 不需要调用工具时直接回复即可"""
 
-    def build_system_prompt(self, user, context=None, tool_definitions=None):
+    def build_system_prompt(
+        self,
+        user,
+        context=None,
+        tool_definitions=None,
+        *,
+        business_rules_context: str | None = None,
+    ):
         """Build a comprehensive system prompt infused with business knowledge."""
         parts = [
             self._BUSINESS_INTRO,
-            self._BUSINESS_FLOW,
-            self._format_workflows(),
+            business_rules_context or self._BUSINESS_FLOW,
+            "" if business_rules_context else self._format_workflows(),
             self._DATA_MODEL,
             "",
             "## 当前用户信息",

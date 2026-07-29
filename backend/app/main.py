@@ -34,6 +34,28 @@ async def lifespan(app: FastAPI):
     install_slow_query_listener(engine)
     logger.info("Performance monitoring active (slow-query %dms, slow-api %dms)",
                  SLOW_QUERY_MS, SLOW_API_MS)
+    if (
+        settings.AI_BUSINESS_RULE_SYNC_ON_STARTUP
+        and settings.APP_ENV.lower() != "test"
+    ):
+        from app.ai_assistant.business_rules.startup import (
+            synchronize_business_rules_at_startup,
+        )
+
+        try:
+            sync_result = await synchronize_business_rules_at_startup()
+            logger.info(
+                "AI business rules synchronized: added=%d updated=%d retired=%d",
+                sync_result["added_count"],
+                sync_result["updated_count"],
+                sync_result["retired_count"],
+            )
+        except Exception:
+            if settings.APP_ENV.lower() in {"production", "prod"}:
+                raise
+            logger.exception(
+                "AI business-rule startup sync failed; AI will use source rules"
+            )
     yield
 
 

@@ -4,7 +4,17 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, Integer, DateTime, Boolean, ForeignKey, func, Index
+from sqlalchemy import (
+    String,
+    Text,
+    Integer,
+    DateTime,
+    Boolean,
+    ForeignKey,
+    func,
+    Index,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -111,4 +121,69 @@ class AiOperationAuditLog(Base, TimestampMixin):
     __table_args__ = (
         Index("idx_ai_operation_audit_logs_user_id", "user_id"),
         Index("idx_ai_operation_audit_logs_business", "business_type", "business_id"),
+    )
+
+
+class AiBusinessRule(Base, TimestampMixin):
+    """Source-controlled AI business rule with immutable version history."""
+
+    __tablename__ = "ai_business_rules"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    rule_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    rule_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="active",
+        comment="active/superseded/retired",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "rule_key",
+            "version",
+            name="uq_ai_business_rule_version",
+        ),
+        Index("idx_ai_business_rules_key_status", "rule_key", "status"),
+    )
+
+
+class AiBusinessRuleSyncLog(Base):
+    """Append-only audit record for every business-rule synchronization."""
+
+    __tablename__ = "ai_business_rule_sync_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    catalog_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    added_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    retired_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unchanged_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    details_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_ai_business_rule_sync_logs_created_at",
+            "created_at",
+        ),
     )

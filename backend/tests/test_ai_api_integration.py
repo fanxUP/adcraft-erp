@@ -7,6 +7,7 @@ response structure, and error handling.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4, UUID
 
@@ -18,6 +19,7 @@ from app.main import app
 from app.core.deps import get_db, get_current_user
 from app.schemas.common import success
 from app.ai_assistant.service import AiAssistantService
+from app.ai_assistant.business_rules.service import BusinessRuleSyncService
 
 SAMPLE_USER_ID = UUID("11111111-1111-1111-1111-111111111111")
 SAMPLE_CUSTOMER_ID = UUID("44444444-4444-4444-4444-444444444444")
@@ -48,7 +50,7 @@ def make_mock_user():
     user.username = "testadmin"
     user.real_name = "Test Admin"
     user.is_active = True
-    user.roles = ["admin"]
+    user.roles = [SimpleNamespace(name="admin", permissions=[])]
     return user
 
 
@@ -191,6 +193,61 @@ class TestAIWorkflowGuidanceAPI:
         )
 
         assert response.status_code == 422
+
+
+class TestAIBusinessRulesAPI:
+    def test_admin_can_view_rule_sync_status(self, client, auth_headers):
+        status = {
+            "catalog_digest": "abc123",
+            "in_sync": True,
+            "active_count": 8,
+            "pending": {
+                "added_count": 0,
+                "updated_count": 0,
+                "retired_count": 0,
+                "unchanged_count": 8,
+            },
+            "last_sync": None,
+        }
+        with patch.object(
+            BusinessRuleSyncService,
+            "build_status",
+            new=AsyncMock(return_value=status),
+        ):
+            response = client.get(
+                "/api/v1/ai-assistant/business-rules/status",
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json()["data"] == status
+
+    def test_admin_can_trigger_rule_sync(self, client, auth_headers):
+        result = {
+            "catalog_digest": "abc123",
+            "in_sync": True,
+            "added_count": 1,
+            "updated_count": 0,
+            "retired_count": 0,
+            "unchanged_count": 7,
+            "details": {
+                "added": ["workflow.order"],
+                "updated": [],
+                "retired": [],
+            },
+        }
+        with patch.object(
+            BusinessRuleSyncService,
+            "synchronize",
+            new=AsyncMock(return_value=result),
+        ):
+            response = client.post(
+                "/api/v1/ai-assistant/business-rules/sync",
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json()["data"] == result
 
 
 class TestAISafeActionAPI:

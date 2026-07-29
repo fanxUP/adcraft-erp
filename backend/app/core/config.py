@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     AI_MODEL: str = "claude-sonnet-4-20250514"
     AI_MAX_TOKENS: int = 4096
     AI_TEMPERATURE: float = 0.7
+    AI_BUSINESS_RULE_SYNC_ON_STARTUP: bool = True
 
     # Rate limiting (API throttling via Redis)
     RATE_LIMIT_ENABLED: bool = True

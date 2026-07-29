@@ -1,6 +1,7 @@
 """AI Orchestrator — main loop for parsing intent, calling tools, and generating responses."""
 
 import json
+import logging
 import re
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,14 @@ from app.ai_assistant.prompt_builder import PromptBuilder
 from app.ai_assistant.memory_service import MemoryService
 from app.ai_assistant.tool_executor import ToolExecutor
 from app.ai_assistant.tool_registry import ToolRegistry
+from app.ai_assistant.business_rules.catalog import (
+    build_business_rule_catalog,
+    render_business_rules_context,
+)
+from app.ai_assistant.business_rules.service import BusinessRuleSyncService
+
+
+logger = logging.getLogger(__name__)
 
 
 class AiOrchestrator:
@@ -20,6 +29,7 @@ class AiOrchestrator:
         self.prompt_builder = PromptBuilder()
         self.memory_service = MemoryService(db)
         self.tool_executor = ToolExecutor(db)
+        self.business_rule_service = BusinessRuleSyncService(db)
 
     async def process_message(self, user, message, session_id=None, context=None,
                               ip_address=None, user_agent=None):
@@ -86,13 +96,31 @@ class AiOrchestrator:
         accumulated_text = ""
         current_message = message
         round_count = 0
+        try:
+            business_rules_context = (
+                await self.business_rule_service.get_prompt_context()
+            )
+        except Exception:
+            # AI failures must not affect ERP. Current source rules are safer
+            # than a stale or unavailable database snapshot.
+            logger.exception(
+                "Failed to load published AI business rules; using source catalog"
+            )
+            business_rules_context = render_business_rules_context(
+                build_business_rule_catalog()
+            )
 
         while round_count < max_rounds:
             round_count += 1
             history = await self.memory_service.get_history_messages(session.id)
             registry = ToolRegistry()
             tool_defs = registry.to_prompt_format()
-            system_prompt = self.prompt_builder.build_system_prompt(user, context, tool_defs)
+            system_prompt = self.prompt_builder.build_system_prompt(
+                user,
+                context,
+                tool_defs,
+                business_rules_context=business_rules_context,
+            )
             full_prompt = self._build_llm_prompt(history, current_message)
 
             try:
