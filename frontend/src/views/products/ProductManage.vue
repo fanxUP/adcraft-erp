@@ -14,7 +14,7 @@
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
-      <el-table-column prop="name" label="产品名称" min-width="180" />
+      <el-table-column prop="name" label="产品材质工艺" min-width="180" />
       <el-table-column prop="unit" label="单位" width="80" />
       <el-table-column label="计价方式" width="100">
         <template #default="{ row }">{{ pricingLabel(row.pricing_method) }}</template>
@@ -27,8 +27,9 @@
           <el-tag :type="row.is_active ? 'success' : 'info'" size="small">{{ row.is_active ? '启用' : '禁用' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200">
+      <el-table-column label="操作" width="280">
         <template #default="{ row }">
+          <el-button text type="success" @click="openMaterialProcess(row as ProductResponse)">材质工艺</el-button>
           <el-button text type="primary" @click="handleEdit(row as ProductResponse)">编辑</el-button>
           <el-button text type="danger" @click="handleDelete(row as ProductResponse)">删除</el-button>
         </template>
@@ -83,6 +84,29 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="materialProcessDialogVisible" :title="`${selectedProduct?.name || ''}｜产品材质工艺`" width="680px" :close-on-click-modal="false">
+      <el-form :model="materialProcessForm" inline>
+        <el-form-item label="材质">
+          <el-select v-model="materialProcessForm.material_id" filterable placeholder="选择材质" style="width: 190px">
+            <el-option v-for="item in materialOptions" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="工艺">
+          <el-select v-model="materialProcessForm.process_id" filterable placeholder="选择工艺" style="width: 190px">
+            <el-option v-for="item in processOptions" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-button type="primary" :loading="materialProcessSaving" @click="saveMaterialProcess">添加</el-button>
+      </el-form>
+      <el-table :data="materialProcessList" v-loading="materialProcessLoading" border>
+        <el-table-column prop="material_name" label="材质" />
+        <el-table-column prop="process_name" label="工艺" />
+        <el-table-column label="操作" width="90">
+          <template #default="{ row }"><el-button text type="danger" @click="removeMaterialProcess(row.id)">停用</el-button></template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
     <el-dialog v-model="importDialogVisible" title="导入产品" width="520px" :close-on-click-modal="false">
       <div style="margin-bottom: 16px; font-size: 13px; color: var(--ad-text-secondary)">
         <p>支持 .xlsx / .xls 格式，请确保 Excel 包含以下列（<span style="color: #f56c6c">*</span>为必填）：</p>
@@ -121,8 +145,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { getProducts, createProduct, updateProduct, deleteProduct, importProducts } from '@/api/products'
-import type { ProductResponse, ImportResponse } from '@/types/api'
+import { getProducts, createProduct, updateProduct, deleteProduct, importProducts, getProductMaterialProcesses, createProductMaterialProcess, deleteProductMaterialProcess, getMaterials, getProcesses } from '@/api/products'
+import type { ProductResponse, ImportResponse, ProductMaterialProcessResponse, MaterialResponse, ProcessResponse } from '@/types/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { getErrorMessage } from '@/utils/error'
@@ -137,6 +161,14 @@ const keyword = ref('')
 const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
 const form = reactive({ name: '', unit: '项', pricing_method: 'quantity', default_price: 0, min_charge: 0, remark: '' })
+const materialProcessDialogVisible = ref(false)
+const materialProcessLoading = ref(false)
+const materialProcessSaving = ref(false)
+const selectedProduct = ref<ProductResponse | null>(null)
+const materialProcessList = ref<ProductMaterialProcessResponse[]>([])
+const materialOptions = ref<MaterialResponse[]>([])
+const processOptions = ref<ProcessResponse[]>([])
+const materialProcessForm = reactive({ material_id: '', process_id: '' })
 
 // Import
 const importDialogVisible = ref(false)
@@ -177,6 +209,44 @@ function handleEdit(row: ProductResponse) {
   editingId.value = row.id
   Object.assign(form, { name: row.name, unit: row.unit, pricing_method: row.pricing_method, default_price: row.default_price, min_charge: row.min_charge, remark: row.remark })
   dialogVisible.value = true
+}
+
+async function openMaterialProcess(row: ProductResponse) {
+  selectedProduct.value = row
+  materialProcessDialogVisible.value = true
+  materialProcessLoading.value = true
+  try {
+    const [links, materials, processes] = await Promise.all([
+      getProductMaterialProcesses(row.id),
+      getMaterials({ page: 1, page_size: 100 }),
+      getProcesses({ page: 1, page_size: 100 }),
+    ])
+    materialProcessList.value = links
+    materialOptions.value = materials.items.filter(item => item.is_active)
+    processOptions.value = processes.items.filter(item => item.is_active)
+  } finally { materialProcessLoading.value = false }
+}
+
+async function saveMaterialProcess() {
+  if (!selectedProduct.value || !materialProcessForm.material_id || !materialProcessForm.process_id) {
+    ElMessage.warning('请选择材质和工艺')
+    return
+  }
+  materialProcessSaving.value = true
+  try {
+    const item = await createProductMaterialProcess(selectedProduct.value.id, materialProcessForm)
+    materialProcessList.value.push(item)
+    materialProcessForm.material_id = ''
+    materialProcessForm.process_id = ''
+    ElMessage.success('添加成功')
+  } finally { materialProcessSaving.value = false }
+}
+
+async function removeMaterialProcess(id: string) {
+  await ElMessageBox.confirm('确认停用该产品材质工艺组合？', '确认操作', { type: 'warning' })
+  await deleteProductMaterialProcess(id)
+  materialProcessList.value = materialProcessList.value.filter(item => item.id !== id)
+  ElMessage.success('已停用')
 }
 
 async function handleSave() {
