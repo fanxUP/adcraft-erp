@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.business_document import BusinessDocument
 from app.domain.workflows import (
     DESIGN_TASK_WORKFLOW,
     INSTALLATION_TASK_WORKFLOW,
@@ -29,6 +30,71 @@ def _attachment_to_dict(att) -> dict:
     return AttachmentResponse.model_validate(att).model_dump(mode="json")
 
 
+async def _refresh_task_for_response(db: AsyncSession, task) -> None:
+    """显式加载异步 ORM 字段，避免响应序列化触发隐式数据库 IO。"""
+    await db.refresh(task)
+    await db.refresh(task, ["attachments"])
+
+
+async def _prepare_task_create_data(
+    db: AsyncSession,
+    data: dict,
+    *,
+    allowed_order_statuses: tuple[str, ...],
+    task_label: str,
+) -> dict:
+    """校验父订单并把前端兼容字段转换为任务模型字段。"""
+    normalized = dict(data)
+    raw_order_id = normalized.pop("order_id", None) or normalized.get(
+        "document_id"
+    )
+    if not raw_order_id:
+        raise ValueError("请选择关联订单")
+    order_id = (
+        raw_order_id
+        if isinstance(raw_order_id, UUID)
+        else UUID(str(raw_order_id))
+    )
+    order = await db.get(BusinessDocument, order_id)
+    if (
+        not order
+        or order.doc_type != "order"
+        or order.deleted_at is not None
+    ):
+        raise ValueError("关联订单不存在或已取消")
+    if order.status not in allowed_order_statuses:
+        allowed_text = "、".join(allowed_order_statuses)
+        raise ValueError(
+            f"订单当前状态不能创建{task_label}任务，允许状态：{allowed_text}"
+        )
+    if not order.customer_id:
+        raise ValueError("订单未关联正式客户，请先完善客户资料")
+
+    normalized["document_id"] = order_id
+    normalized["customer_id"] = order.customer_id
+    normalized["project_name"] = (
+        (normalized.get("project_name") or "").strip()
+        or order.project_name
+    )
+    for field in ("assigned_to", "material_id", "process_id"):
+        if field not in normalized:
+            continue
+        value = normalized[field]
+        normalized[field] = (
+            UUID(str(value))
+            if value and not isinstance(value, UUID)
+            else value or None
+        )
+    if normalized.get("scheduled_at") and isinstance(
+        normalized["scheduled_at"],
+        str,
+    ):
+        normalized["scheduled_at"] = datetime.fromisoformat(
+            normalized["scheduled_at"]
+        )
+    return normalized
+
+
 class DesignTaskService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -50,6 +116,12 @@ class DesignTaskService:
         return self._to_dict(task) if task else None
 
     async def create_task(self, data: dict) -> dict:
+        data = await _prepare_task_create_data(
+            self.db,
+            data,
+            allowed_order_statuses=("confirmed", "designing"),
+            task_label="设计",
+        )
         data["design_no"] = await generate_design_no(self.db)
         data["status"] = "pending"
         task = await self.repo.create(data)
@@ -64,6 +136,7 @@ class DesignTaskService:
                 content=f"您被分配了设计任务 {task.project_name}",
                 link=f"/design-tasks/{task.id}",
             )
+        await _refresh_task_for_response(self.db, task)
         return self._to_dict(task)
 
     async def update_task(self, task_id: UUID, data: dict) -> dict:
@@ -84,6 +157,7 @@ class DesignTaskService:
                 content=f"您被分配了设计任务 {task.project_name}",
                 link=f"/design-tasks/{task.id}",
             )
+        await _refresh_task_for_response(self.db, task)
         return self._to_dict(task)
 
     async def change_status(self, task_id: UUID, to_status: str, operated_by: UUID | None = None) -> dict:
@@ -99,6 +173,7 @@ class DesignTaskService:
         if to_status == "confirmed":
             task.completed_at = datetime.now()
         await self.db.flush()
+        await _refresh_task_for_response(self.db, task)
         return self._to_dict(task)
 
 
@@ -123,6 +198,12 @@ class ProductionTaskService:
         return self._to_dict(task) if task else None
 
     async def create_task(self, data: dict) -> dict:
+        data = await _prepare_task_create_data(
+            self.db,
+            data,
+            allowed_order_statuses=("in_production",),
+            task_label="制作",
+        )
         data["production_no"] = await generate_production_no(self.db)
         data["status"] = "pending"
         task = await self.repo.create(data)
@@ -137,6 +218,7 @@ class ProductionTaskService:
                 content=f"您被分配了制作任务 {task.project_name}",
                 link=f"/production-tasks/{task.id}",
             )
+        await _refresh_task_for_response(self.db, task)
         return self._to_dict(task)
 
     async def update_task(self, task_id: UUID, data: dict) -> dict:
@@ -157,6 +239,7 @@ class ProductionTaskService:
                 content=f"您被分配了制作任务 {task.project_name}",
                 link=f"/production-tasks/{task.id}",
             )
+        await _refresh_task_for_response(self.db, task)
         return self._to_dict(task)
 
     async def change_status(self, task_id: UUID, to_status: str, operated_by: UUID | None = None) -> dict:
@@ -172,6 +255,7 @@ class ProductionTaskService:
         if to_status == "completed":
             task.completed_at = datetime.now()
         await self.db.flush()
+        await _refresh_task_for_response(self.db, task)
         return self._to_dict(task)
 
 
@@ -196,6 +280,12 @@ class InstallationTaskService:
         return self._to_dict(task) if task else None
 
     async def create_task(self, data: dict) -> dict:
+        data = await _prepare_task_create_data(
+            self.db,
+            data,
+            allowed_order_statuses=("in_installation",),
+            task_label="安装",
+        )
         data["installation_no"] = await generate_installation_no(self.db)
         data["status"] = "pending"
         task = await self.repo.create(data)
@@ -210,6 +300,7 @@ class InstallationTaskService:
                 content=f"您被分配了安装任务 {task.project_name}",
                 link=f"/installation-tasks/{task.id}",
             )
+        await _refresh_task_for_response(self.db, task)
         return self._to_dict(task)
 
     async def update_task(self, task_id: UUID, data: dict) -> dict:
@@ -230,6 +321,7 @@ class InstallationTaskService:
                 content=f"您被分配了安装任务 {task.project_name}",
                 link=f"/installation-tasks/{task.id}",
             )
+        await _refresh_task_for_response(self.db, task)
         return self._to_dict(task)
 
     async def change_status(self, task_id: UUID, to_status: str, operated_by: UUID | None = None) -> dict:
@@ -245,6 +337,7 @@ class InstallationTaskService:
         if to_status == "completed":
             task.completed_at = datetime.now()
         await self.db.flush()
+        await _refresh_task_for_response(self.db, task)
         return self._to_dict(task)
 
 

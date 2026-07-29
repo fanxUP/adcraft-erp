@@ -12,6 +12,7 @@
         <el-option label="安装中" value="in_progress" />
         <el-option label="待验收" value="pending_acceptance" />
         <el-option label="已完成" value="completed" />
+        <el-option label="已取消" value="cancelled" />
       </el-select>
       <el-button type="primary" style="margin-left: 12px" @click="fetchData">搜索</el-button>
     </div>
@@ -103,11 +104,11 @@ const userOptions = ref<UserResponse[]>([])
 const form = reactive({ order_id: '', customer_id: '', project_name: '', assigned_to: '', address: '', contact_name: '', contact_phone: '', scheduled_at: '' })
 
 function instStatusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成' }
+  const map: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成', cancelled: '已取消' }
   return map[s] || s
 }
 function instStatusColor(s: string) {
-  const map: Record<string, string> = { pending: 'info', assigned: '', in_progress: 'warning', pending_acceptance: 'warning', completed: 'success' }
+  const map: Record<string, string> = { pending: 'info', assigned: '', in_progress: 'warning', pending_acceptance: 'warning', completed: 'success', cancelled: 'info' }
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
@@ -122,7 +123,9 @@ async function fetchData() {
 
 async function loadOptions() {
   const [ordersRes, usersRes] = await Promise.all([getOrders({ page_size: 100 }), getUsers({ page_size: 100 })])
-  orderOptions.value = ordersRes.items
+  orderOptions.value = ordersRes.items.filter(order =>
+    order.status === 'in_installation'
+  )
   userOptions.value = usersRes.items
 }
 

@@ -54,6 +54,7 @@ class PaymentService:
         remaining = max(Decimal("0"), total_amount - existing_paid)
         if amount > remaining:
             raise ValueError(f"收款金额超过订单未收金额 {remaining:.2f} 元")
+        await self.db.refresh(doc, ["customer"])
 
         payment = Payment(
             payment_no=await generate_payment_no(self.db),
@@ -66,6 +67,7 @@ class PaymentService:
             receipt_url=data.get("receipt_url"),
             created_by=created_by,
         )
+        payment.document = doc
         await self.repo.create(payment)
 
         # Notify admin/finance about payment

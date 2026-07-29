@@ -9,6 +9,12 @@ from app.repositories.business_document_repo import BusinessDocumentRepository
 from app.models.task import DesignTask, ProductionTask, InstallationTask
 from app.models.outsource import OutsourceTask
 from app.models.project_cost import ProjectCost
+from app.services.quote_calculation import (
+    calculate_quote_item_values,
+    calculate_quote_totals,
+    normalize_quote_item_data,
+)
+from app.services.order_customer_service import ensure_document_customer
 
 
 def _build_spec(item) -> str | None:
@@ -78,6 +84,7 @@ class BusinessDocumentService:
     async def create(self, data: dict) -> dict:
         from app.services.number_generator import generate_quote_no
 
+        data = dict(data)
         if self.doc_type == 'quote':
             data.setdefault("status", "draft")
             data["doc_type"] = "quote"
@@ -89,6 +96,10 @@ class BusinessDocumentService:
             data.setdefault("tax_rate", Decimal(str(data.pop("tax_rate", "0"))))
             data.setdefault("tax_amount", Decimal("0"))
             data.setdefault("total_amount", Decimal("0"))
+            data["items"] = [
+                normalize_quote_item_data(item)
+                for item in data.get("items", [])
+            ]
         else:
             # Default to order creation
             data.setdefault("status", "pending_confirm")
@@ -101,6 +112,8 @@ class BusinessDocumentService:
             data["sales_user_id"] = UUID(data["sales_user_id"])
 
         doc = await self.repo.create(data)
+        if doc.doc_type == "quote":
+            await self._calculate_quote(doc.id)
         # Refresh to load relationships (e.g. customer) in async context
         await self.db.refresh(doc, ["customer", "items", "status_logs"])
         return self._to_detail(doc)
@@ -113,6 +126,32 @@ class BusinessDocumentService:
         doc = await self.repo.get_by_id(doc_id)
         if not doc:
             raise ValueError("单据不存在")
+        if doc.doc_type == "quote" and doc.status != "draft":
+            raise ValueError("仅草稿报价可以编辑，请先撤回为草稿")
+
+        data = dict(data)
+        if doc.doc_type == "quote" and data.get("items") is not None:
+            data["items"] = [
+                normalize_quote_item_data(item)
+                for item in data["items"]
+            ]
+        if doc.doc_type == "quote" and (
+            "customer_id" in data or "customer_name" in data
+        ):
+            customer_id = data.pop("customer_id", None)
+            customer_name = (data.pop("customer_name", None) or "").strip()
+            if customer_id:
+                doc.customer_id = (
+                    customer_id
+                    if isinstance(customer_id, UUID)
+                    else UUID(str(customer_id))
+                )
+                doc.customer_name = None
+            elif customer_name:
+                doc.customer_id = None
+                doc.customer_name = customer_name
+            else:
+                raise ValueError("请选择已有客户或输入新客户名称")
 
         updated = await self.repo.update(doc, data)
 
@@ -359,6 +398,10 @@ class BusinessDocumentService:
                     doc_id,
                     acceptance_id,
                 )
+        elif to_status == "confirmed":
+            if not doc.items:
+                raise ValueError("请先添加报价明细再确认报价")
+            await self._calculate_quote(doc_id)
 
         await self.repo.update(doc, {"status": to_status})
         await self.repo.create_status_log(doc_id, from_status, to_status, reason, operated_by)
@@ -390,6 +433,7 @@ class BusinessDocumentService:
 
         # 订单取消 → 进回收站
         if doc.doc_type == "order" and to_status == "cancelled":
+            await self._cancel_open_tasks(doc_id)
             doc.deleted_at = datetime.now()
             await self.db.flush()
 
@@ -412,6 +456,34 @@ class BusinessDocumentService:
             )
 
         return self._to_detail(doc)
+
+    async def _cancel_open_tasks(self, doc_id: UUID) -> None:
+        """订单取消后关闭未完任务和验收，避免交付链继续推进。"""
+        task_rules = (
+            (DesignTask, {"confirmed"}),
+            (ProductionTask, {"completed"}),
+            (InstallationTask, {"completed"}),
+        )
+        for model, terminal_statuses in task_rules:
+            result = await self.db.execute(
+                select(model).where(model.document_id == doc_id)
+            )
+            for task in result.scalars().all():
+                if task.status not in terminal_statuses:
+                    task.status = "cancelled"
+
+        from app.models.acceptance import AcceptanceForm
+
+        acceptance_result = await self.db.execute(
+            select(AcceptanceForm).where(
+                AcceptanceForm.document_id == doc_id,
+                AcceptanceForm.deleted_at.is_(None),
+                AcceptanceForm.status != "accepted",
+            )
+        )
+        for form in acceptance_result.scalars().all():
+            form.deleted_at = datetime.now()
+        await self.db.flush()
 
     async def reopen_completed_order(self, doc_id: UUID, reason: str, operated_by: UUID) -> dict:
         """管理员专用：将已完成订单退回待验收，供后续取消或纠正。"""
@@ -594,22 +666,33 @@ class BusinessDocumentService:
         if not doc or doc.doc_type != "quote":
             return
         items = await self.repo.get_items(doc_id)
-        subtotal = sum(
-            Decimal(str(it.subtotal_amount)) if it.subtotal_amount else
-            Decimal(str(it.unit_price)) * Decimal(str(it.quantity))
-            for it in items
+        for item in items:
+            values = calculate_quote_item_values(
+                {
+                    "width": item.width,
+                    "width_unit": item.width_unit,
+                    "height": item.height,
+                    "height_unit": item.height_unit,
+                    "pieces": item.pieces,
+                    "quantity": item.quantity,
+                    "use_area": item.use_area,
+                    "unit_price": item.unit_price,
+                    "process_fee": item.process_fee,
+                    "installation_fee": item.installation_fee,
+                    "design_fee": item.design_fee,
+                    "transport_fee": item.transport_fee,
+                    "other_fee": item.other_fee,
+                }
+            )
+            item.area = values["area"]
+            item.subtotal_amount = values["subtotal_amount"]
+        totals = calculate_quote_totals(
+            [item.subtotal_amount for item in items],
+            discount_amount=doc.discount_amount,
+            tax_rate=doc.tax_rate,
         )
-        discount = Decimal(str(doc.discount_amount or 0))
-        tax_rate = Decimal(str(doc.tax_rate or 0))
-        taxable = subtotal - discount
-        tax_amount = taxable * tax_rate / Decimal("100")
-        total = taxable + tax_amount
 
-        await self.repo.update(doc, {
-            "subtotal_amount": float(subtotal),
-            "tax_amount": float(tax_amount),
-            "total_amount": float(total),
-        })
+        await self.repo.update(doc, totals)
 
     # ═══════════════════════════════════════════
     # 核心：类型转换（订单 ↔ 报价）
@@ -636,6 +719,7 @@ class BusinessDocumentService:
         if old_type == "quote" and new_type == "order":
             if doc.status not in ("confirmed",):
                 raise ValueError("只有已确认的报价单可以转订单")
+            await ensure_document_customer(self.db, doc, created_by)
         elif old_type == "order" and new_type == "quote":
             if doc.status not in ("cancelled",):
                 raise ValueError("只有已取消的订单可以转报价")
@@ -656,6 +740,10 @@ class BusinessDocumentService:
             doc.tax_rate = 0
             doc.tax_amount = 0
             doc.valid_until = None
+            doc.paid_amount = 0
+            doc.unpaid_amount = doc.total_amount
+            doc.cost_amount = 0
+            doc.gross_profit = doc.total_amount
             # 标记来源报价ID
             doc.source_quote_id = doc.id
         else:  # new_type == "quote"
@@ -700,14 +788,70 @@ class BusinessDocumentService:
         doc = await self.repo.get_by_id(doc_id)
         if not doc:
             raise ValueError("单据不存在")
-        for item in items_data:
-            for fee_key in ("unit_price", "process_fee", "installation_fee",
-                            "design_fee", "transport_fee", "other_fee"):
-                item[fee_key] = Decimal(str(item.get(fee_key, "0")))
-            item["quantity"] = Decimal(str(item.get("quantity", "1")))
-        await self.repo.add_items(doc_id, items_data)
+        if doc.doc_type == "quote" and doc.status != "draft":
+            raise ValueError("仅草稿报价可以编辑，请先撤回为草稿")
+        normalized_items = [
+            normalize_quote_item_data(item)
+            for item in items_data
+        ]
+        await self.repo.add_items(doc_id, normalized_items)
         if doc.doc_type == "quote":
             await self._calculate_quote(doc_id)
+        return self._to_detail(await self.repo.get_by_id(doc_id))
+
+    async def add_item(self, doc_id: UUID, data: dict) -> dict:
+        item_data = dict(data)
+        item_data.pop("id", None)
+        return await self.add_items(doc_id, [item_data])
+
+    async def update_item(
+        self,
+        doc_id: UUID,
+        item_id: UUID,
+        data: dict,
+    ) -> dict:
+        doc = await self.repo.get_by_id(doc_id)
+        if not doc:
+            raise ValueError("报价单不存在")
+        if doc.status != "draft":
+            raise ValueError("仅草稿报价可以编辑，请先撤回为草稿")
+        item = await self.repo.get_item(item_id, document_id=doc_id)
+        if not item:
+            raise ValueError("报价明细不存在或不属于当前报价")
+
+        update_data = dict(data)
+        merged = {
+            "width": item.width,
+            "width_unit": item.width_unit,
+            "height": item.height,
+            "height_unit": item.height_unit,
+            "pieces": item.pieces,
+            "quantity": item.quantity,
+            "use_area": item.use_area,
+            "unit_price": item.unit_price,
+            "process_fee": item.process_fee,
+            "installation_fee": item.installation_fee,
+            "design_fee": item.design_fee,
+            "transport_fee": item.transport_fee,
+            "other_fee": item.other_fee,
+            **update_data,
+        }
+        update_data.update(calculate_quote_item_values(merged))
+        await self.repo.update_item(item, update_data)
+        await self._calculate_quote(doc_id)
+        return self._to_detail(await self.repo.get_by_id(doc_id))
+
+    async def delete_item(self, doc_id: UUID, item_id: UUID) -> dict:
+        doc = await self.repo.get_by_id(doc_id)
+        if not doc:
+            raise ValueError("报价单不存在")
+        if doc.status != "draft":
+            raise ValueError("仅草稿报价可以编辑，请先撤回为草稿")
+        item = await self.repo.get_item(item_id, document_id=doc_id)
+        if not item:
+            raise ValueError("报价明细不存在或不属于当前报价")
+        await self.repo.delete_item(item)
+        await self._calculate_quote(doc_id)
         return self._to_detail(await self.repo.get_by_id(doc_id))
 
     # ═══════════════════════════════════════════

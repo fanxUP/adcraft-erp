@@ -71,6 +71,34 @@ class AcceptanceService:
         data["document_id"] = doc_id
         data.pop("order_id", None)
         data.pop("quote_id", None)
+        if doc_id:
+            source_result = await self.db.execute(
+                select(BusinessDocument).where(
+                    BusinessDocument.id == doc_id,
+                    BusinessDocument.deleted_at.is_(None),
+                )
+            )
+            source = source_result.scalar_one_or_none()
+            if not source:
+                raise ValueError("关联单据不存在或已取消")
+            allowed_statuses = (
+                ("in_installation", "pending_acceptance")
+                if source.doc_type == "order"
+                else ("confirmed",)
+            )
+            if source.doc_type not in ("order", "quote"):
+                raise ValueError("验收单只能关联订单或报价")
+            if source.status not in allowed_statuses:
+                raise ValueError("关联单据尚未进入可验收阶段")
+            duplicate_result = await self.db.execute(
+                select(AcceptanceForm.id).where(
+                    AcceptanceForm.document_id == doc_id,
+                    AcceptanceForm.deleted_at.is_(None),
+                )
+            )
+            if duplicate_result.scalar_one_or_none():
+                raise ValueError("该单据已有有效验收单，请勿重复创建")
+
         data["acceptance_no"] = await generate_acceptance_no(self.db)
         data["status"] = "draft"
 
@@ -123,8 +151,8 @@ class AcceptanceService:
         form = await self.repo.get_by_id(acceptance_id)
         if not form:
             raise ValueError("验收单不存在")
-        if form.status not in ("draft", "rejected"):
-            raise ValueError("仅草稿和已驳回状态可编辑")
+        if form.status not in ("draft", "rejected", "pending"):
+            raise ValueError("当前验收单状态不可编辑")
 
         if data.get("our_acceptor_id"):
             data["our_acceptor_id"] = UUID(data["our_acceptor_id"])
@@ -132,6 +160,17 @@ class AcceptanceService:
             data["our_acceptor_id"] = None
 
         items_data = data.pop("items", None)
+        if form.status == "pending":
+            for field in ("accepted_by", "our_acceptor_id", "remark"):
+                if field in data:
+                    setattr(form, field, data[field])
+            if items_data is not None:
+                self._update_pending_item_results(form, items_data)
+            await self.db.flush()
+            return self._to_detail_dict(
+                await self.repo.get_by_id(acceptance_id)
+            )
+
         update_dict = {k: v for k, v in data.items()
                        if k not in ("id", "acceptance_no", "document_id", "status")}
         if items_data is not None:
@@ -139,6 +178,25 @@ class AcceptanceService:
 
         form = await self.repo.update(form, update_dict)
         return self._to_detail_dict(form)
+
+    @staticmethod
+    def _update_pending_item_results(form, items_data: list[dict]) -> None:
+        """待验收阶段只允许更新现有明细的验收结果和备注。"""
+        existing = {str(item.id): item for item in form.items}
+        valid_statuses = {"pending", "accepted", "rejected", "conditional"}
+        for item_data in items_data:
+            item_id = str(item_data.get("id") or "")
+            item = existing.get(item_id)
+            if not item:
+                raise ValueError("验收明细不存在或不属于当前验收单")
+            item_status = item_data.get("item_status", item.item_status)
+            if item_status not in valid_statuses:
+                raise ValueError("验收明细状态无效")
+            item.item_status = item_status
+            if "remark" in item_data:
+                item.remark = item_data["remark"]
+            if "image_url" in item_data:
+                item.image_url = item_data["image_url"]
 
     # ── 删除 ──
     async def delete_acceptance(self, acceptance_id: UUID):
@@ -171,6 +229,12 @@ class AcceptanceService:
         if to_status == "pending":
             if not form.items:
                 raise ValueError("请先添加验收明细再提交")
+            if (
+                form.document
+                and form.document.doc_type == "order"
+                and form.document.status != "pending_acceptance"
+            ):
+                raise ValueError("请先完成安装任务并将订单流转到待验收")
             form.status = "pending"
         elif to_status == "accepted":
             unfinished_items = [

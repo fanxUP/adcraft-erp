@@ -60,6 +60,7 @@ export function updateAcceptance(id: string, data: {
   discount_amount?: number
   advance_amount?: number
   items?: Array<{
+    id?: string
     item_name: string
     material_process?: string | null
     specification?: string | null

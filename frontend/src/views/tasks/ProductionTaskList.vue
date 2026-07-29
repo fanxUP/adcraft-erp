@@ -13,6 +13,7 @@
         <el-option label="待质检" value="qc_check" />
         <el-option label="返工" value="rework" />
         <el-option label="已完成" value="completed" />
+        <el-option label="已取消" value="cancelled" />
       </el-select>
       <el-button type="primary" style="margin-left: 12px" @click="fetchData">搜索</el-button>
     </div>
@@ -102,11 +103,11 @@ const userOptions = ref<UserResponse[]>([])
 const form = reactive({ order_id: '', customer_id: '', project_name: '', assigned_to: '', length: undefined as number | undefined, width: undefined as number | undefined, height: undefined as number | undefined, quantity: 1 })
 
 function prodStatusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待制作', queued: '排队中', in_progress: '制作中', qc_check: '待质检', rework: '返工', completed: '已完成' }
+  const map: Record<string, string> = { pending: '待制作', queued: '排队中', in_progress: '制作中', qc_check: '待质检', rework: '返工', completed: '已完成', cancelled: '已取消' }
   return map[s] || s
 }
 function prodStatusColor(s: string) {
-  const map: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success' }
+  const map: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success', cancelled: 'info' }
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
@@ -121,7 +122,9 @@ async function fetchData() {
 
 async function loadOptions() {
   const [ordersRes, usersRes] = await Promise.all([getOrders({ page_size: 100 }), getUsers({ page_size: 100 })])
-  orderOptions.value = ordersRes.items
+  orderOptions.value = ordersRes.items.filter(order =>
+    order.status === 'in_production'
+  )
   userOptions.value = usersRes.items
 }
 

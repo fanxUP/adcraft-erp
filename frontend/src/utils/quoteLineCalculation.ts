@@ -40,12 +40,13 @@ export function calcQuoteLineSubtotal(line: QuoteLineCalculationFields): number 
   const base = line.use_area
     ? calcQuoteLineArea(line)
     : Number(line.quantity || 0)
-  return base * Number(line.unit_price || 0)
+  const subtotal = base * Number(line.unit_price || 0)
     + Number(line.process_fee || 0)
     + Number(line.installation_fee || 0)
     + Number(line.design_fee || 0)
     + Number(line.transport_fee || 0)
     + Number(line.other_fee || 0)
+  return Math.round((subtotal + Number.EPSILON) * 100) / 100
 }
 
 export function syncQuoteLineAreaQuantity(line: QuoteLineCalculationFields): void {

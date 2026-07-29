@@ -184,6 +184,22 @@ class BusinessDocumentRepository:
         )
         return list(result.scalars().all())
 
+    async def get_item(
+        self,
+        item_id: UUID,
+        *,
+        document_id: UUID | None = None,
+    ) -> BusinessDocumentItem | None:
+        query = select(BusinessDocumentItem).where(
+            BusinessDocumentItem.id == item_id
+        )
+        if document_id:
+            query = query.where(
+                BusinessDocumentItem.document_id == document_id
+            )
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
     async def add_items(self, doc_id: UUID, items_data: list[dict]) -> list[BusinessDocumentItem]:
         items = []
         for item in items_data:

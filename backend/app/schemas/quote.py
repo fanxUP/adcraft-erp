@@ -8,23 +8,23 @@ class QuoteItemCreate(BaseModel):
     material_id: str | None = None
     process_id: str | None = None
     item_name: str = Field(..., min_length=1)
-    length: float | None = None
+    length: float | None = Field(None, ge=0)
     length_unit: str | None = "m"
-    width: float | None = None
+    width: float | None = Field(None, ge=0)
     width_unit: str | None = "m"
-    height: float | None = None
+    height: float | None = Field(None, ge=0)
     height_unit: str | None = "m"
-    quantity: float = 1
+    quantity: float = Field(1, gt=0)
     unit: str | None = None
     use_area: bool = False
     quantity_mode: str = "piece"
-    pieces: float | None = 1
-    unit_price: float = 0
-    process_fee: float = 0
-    installation_fee: float = 0
-    design_fee: float = 0
-    transport_fee: float = 0
-    other_fee: float = 0
+    pieces: float | None = Field(1, gt=0)
+    unit_price: float = Field(0, ge=0)
+    process_fee: float = Field(0, ge=0)
+    installation_fee: float = Field(0, ge=0)
+    design_fee: float = Field(0, ge=0)
+    transport_fee: float = Field(0, ge=0)
+    other_fee: float = Field(0, ge=0)
     remark: str | None = None
     image_url: str | None = None
     sort_order: int = 0
@@ -37,23 +37,23 @@ class QuoteItemUpdate(BaseModel):
     material_id: str | None = None
     process_id: str | None = None
     item_name: str | None = Field(None, min_length=1)
-    length: float | None = None
+    length: float | None = Field(None, ge=0)
     length_unit: str | None = None
-    width: float | None = None
+    width: float | None = Field(None, ge=0)
     width_unit: str | None = None
-    height: float | None = None
+    height: float | None = Field(None, ge=0)
     height_unit: str | None = None
-    quantity: float | None = None
+    quantity: float | None = Field(None, gt=0)
     unit: str | None = None
     use_area: bool | None = None
     quantity_mode: str | None = None
-    pieces: float | None = None
-    unit_price: float | None = None
-    process_fee: float | None = None
-    installation_fee: float | None = None
-    design_fee: float | None = None
-    transport_fee: float | None = None
-    other_fee: float | None = None
+    pieces: float | None = Field(None, gt=0)
+    unit_price: float | None = Field(None, ge=0)
+    process_fee: float | None = Field(None, ge=0)
+    installation_fee: float | None = Field(None, ge=0)
+    design_fee: float | None = Field(None, ge=0)
+    transport_fee: float | None = Field(None, ge=0)
+    other_fee: float | None = Field(None, ge=0)
     remark: str | None = None
     image_url: str | None = None
     sort_order: int | None = None
@@ -99,15 +99,16 @@ class QuoteItemResponse(BaseModel):
 class QuoteCreate(BaseModel):
     customer_id: str | None = None
     customer_name: str | None = None
-    project_name: str
+    project_name: str = Field(..., min_length=1)
     sales_user_id: str | None = None
-    tax_rate: float = 0
+    discount_amount: float = Field(0, ge=0)
+    tax_rate: float = Field(0, ge=0, le=100)
     valid_until: date | None = None
     remark: str | None = None
     department: str | None = None
     contact_person: str | None = None
     contact_phone: str | None = None
-    items: list[QuoteItemCreate] = []
+    items: list[QuoteItemCreate] = Field(default_factory=list)
 
     @model_validator(mode='after')
     def check_customer(self):
@@ -117,10 +118,12 @@ class QuoteCreate(BaseModel):
 
 
 class QuoteUpdate(BaseModel):
+    customer_id: str | None = None
+    customer_name: str | None = None
     project_name: str | None = None
     sales_user_id: str | None = None
-    discount_amount: float | None = None
-    tax_rate: float | None = None
+    discount_amount: float | None = Field(None, ge=0)
+    tax_rate: float | None = Field(None, ge=0, le=100)
     valid_until: date | None = None
     remark: str | None = None
     department: str | None = None

@@ -64,6 +64,15 @@ def build_task_guidance(snapshot: dict, task_type: str) -> dict:
     config = TASK_CONFIGS[task_type]
     task_id = str(snapshot.get("business_id") or "")
     status = str(snapshot.get("status") or "")
+    if status == "cancelled":
+        return guidance_result(
+            snapshot,
+            f"{config['label']}已取消",
+            [],
+            None,
+            "父订单已取消，当前任务无需继续处理",
+            config["workflow"],
+        )
     if status == config["terminal"]:
         parent_guidance = snapshot.get("parent_order_guidance") or {}
         next_action = parent_guidance.get("next_action")

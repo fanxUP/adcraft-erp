@@ -26,7 +26,8 @@
           <el-input v-model="form.contact_phone" :disabled="isReadonly" placeholder="手机/电话" style="width: 160px" />
         </el-form-item>
         <el-form-item label="税率">
-          <el-input-number v-model="form.tax_rate" :precision="4" :min="0" :step="0.01" :disabled="isReadonly" style="width: 160px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
+          <el-input-number v-model="form.tax_rate" :precision="2" :min="0" :max="100" :step="1" :disabled="isReadonly" style="width: 160px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
+          <span style="margin-left: 6px">%</span>
         </el-form-item>
         <el-form-item label="有效期">
           <el-date-picker v-model="form.valid_until" type="date" value-format="YYYY-MM-DD" :disabled="isReadonly" style="width: 160px" />
@@ -265,7 +266,7 @@
           <div class="summary-item"><span>明细合计：</span><strong>¥ {{ calcQuoteSubtotal().toFixed(2) }}</strong></div>
           <div class="summary-item">
             <span>优惠金额：</span>
-            <el-input-number v-model="form.discount_amount" :precision="2" :min="0" :disabled="isReadonly" size="small" style="width: 140px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
+            <el-input-number v-model="form.discount_amount" :precision="2" :min="0" :max="calcQuoteSubtotal()" :disabled="isReadonly" size="small" style="width: 140px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
           </div>
           <div class="summary-item"><span>税额：</span><strong>¥ {{ calcTax().toFixed(2) }}</strong></div>
           <div class="summary-item total"><span>总计：</span><strong>¥ {{ calcTotal().toFixed(2) }}</strong></div>
@@ -434,7 +435,7 @@ onBeforeUnmount(() => {
 
 const isReadonly = computed(() => {
   if (!isEdit.value || !quote.value) return false
-  return quote.value.status === 'converted' || quote.value.status === 'cancelled'
+  return ['confirmed', 'converted', 'cancelled'].includes(quote.value.status)
 })
 
 function calcArea(item: QuoteItemResponse) {
@@ -468,7 +469,7 @@ function calcItemSubtotal(item: QuoteItemResponse) {
 }
 
 function calcQuoteSubtotal() { return items.value.reduce((s, i) => s + calcSubtotal(i), 0) }
-function calcTax() { return (calcQuoteSubtotal() - (form.discount_amount || 0)) * (form.tax_rate || 0) }
+function calcTax() { return (calcQuoteSubtotal() - (form.discount_amount || 0)) * (form.tax_rate || 0) / 100 }
 function calcTotal() { return calcQuoteSubtotal() - (form.discount_amount || 0) + calcTax() }
 
 function toChineseAmount(n: number): string {
@@ -649,6 +650,16 @@ function isExistingCustomer(value: string): boolean {
   return customerOptions.value.some(c => c.id === value)
 }
 
+function buildCustomerPayload(): Record<string, string> {
+  if (form.customer_id && isExistingCustomer(form.customer_id)) {
+    return { customer_id: form.customer_id }
+  }
+  if (form.customer_id) {
+    return { customer_name: form.customer_id }
+  }
+  return {}
+}
+
 async function handleImageUpload(opt: { file: File }, item: QuoteItemResponse) {
   try {
     const res = await uploadAttachment('quote_item', item.id || route.params.id as string, opt.file, 'image')
@@ -713,18 +724,16 @@ async function doCreateNewQuote(): Promise<QuoteDetailResponse> {
     group_name: item.group_name || null,
     material_process: item.material_process || undefined,
   }))
-  const payload: Record<string, unknown> = { ...form, items: cleanItems }
+  const payload: Record<string, unknown> = {
+    ...form,
+    ...buildCustomerPayload(),
+    items: cleanItems,
+  }
   if (!payload.valid_until) delete payload.valid_until
   if (!payload.remark) delete payload.remark
   if (!payload.contact_person) delete payload.contact_person
   if (!payload.contact_phone) delete payload.contact_phone
-  delete payload.discount_amount
-  if (form.customer_id && !isExistingCustomer(form.customer_id)) {
-    payload.customer_name = form.customer_id
-    delete payload.customer_id
-  } else if (!form.customer_id) {
-    delete payload.customer_id
-  }
+  if (!isExistingCustomer(form.customer_id)) delete payload.customer_id
   return createQuote(payload)
 }
 
@@ -766,6 +775,7 @@ async function handleSave() {
         material_process: item.material_process || undefined,
       }))
       await updateQuote(route.params.id as string, {
+        ...buildCustomerPayload(),
         project_name: form.project_name,
         tax_rate: form.tax_rate,
         discount_amount: form.discount_amount,

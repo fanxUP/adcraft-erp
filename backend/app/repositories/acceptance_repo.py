@@ -9,6 +9,23 @@ from app.models.acceptance import AcceptanceForm, AcceptanceItem, AcceptanceAtta
 from app.models.business_document import BusinessDocument
 
 
+def normalize_acceptance_item_data(item_data: dict) -> dict:
+    """兼容旧前端字段，并移除不可由客户端写入的模型字段。"""
+    data = dict(item_data)
+    data.pop("id", None)
+    legacy_document_item_id = data.pop("order_item_id", None)
+    if "document_item_id" not in data and legacy_document_item_id:
+        data["document_item_id"] = legacy_document_item_id
+    for field in ("acceptance_id", "created_at", "updated_at"):
+        data.pop(field, None)
+    if data.get("document_item_id") and not isinstance(
+        data["document_item_id"],
+        UUID,
+    ):
+        data["document_item_id"] = UUID(str(data["document_item_id"]))
+    return data
+
+
 class AcceptanceRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -46,7 +63,7 @@ class AcceptanceRepository:
         return items, total
 
     async def list_available_quotes(self) -> list[BusinessDocument]:
-        """Return quotes not yet linked to any acceptance (exclude cancelled/converted)."""
+        """Return confirmed quotes not yet linked to an acceptance."""
         ac_sub = select(AcceptanceForm.document_id).where(
             AcceptanceForm.deleted_at.is_(None),
             AcceptanceForm.document_id.isnot(None),
@@ -56,7 +73,7 @@ class AcceptanceRepository:
             .where(
                 BusinessDocument.deleted_at.is_(None),
                 BusinessDocument.doc_type == "quote",
-                BusinessDocument.status.notin_(["cancelled", "converted"]),
+                BusinessDocument.status == "confirmed",
                 not_(BusinessDocument.id.in_(ac_sub)),
             )
             .order_by(BusinessDocument.created_at.desc())
@@ -65,7 +82,7 @@ class AcceptanceRepository:
         return list(result.scalars().all())
 
     async def list_available_orders(self) -> list[BusinessDocument]:
-        """Return orders not yet linked to any acceptance (exclude cancelled)."""
+        """Return orders at the acceptance stage without an active form."""
         ac_sub = select(AcceptanceForm.document_id).where(
             AcceptanceForm.deleted_at.is_(None),
             AcceptanceForm.document_id.isnot(None),
@@ -76,7 +93,7 @@ class AcceptanceRepository:
             .where(
                 BusinessDocument.deleted_at.is_(None),
                 BusinessDocument.doc_type == "order",
-                BusinessDocument.status != "cancelled",
+                BusinessDocument.status == "pending_acceptance",
                 not_(BusinessDocument.id.in_(ac_sub)),
             )
             .order_by(BusinessDocument.created_at.desc())
@@ -105,7 +122,10 @@ class AcceptanceRepository:
         await self.db.flush()
 
         for item_data in items_data:
-            item = AcceptanceItem(acceptance_id=form.id, **item_data)
+            item = AcceptanceItem(
+                acceptance_id=form.id,
+                **normalize_acceptance_item_data(item_data),
+            )
             self.db.add(item)
 
         await self.db.flush()
@@ -123,7 +143,10 @@ class AcceptanceRepository:
                 await self.db.delete(item)
             await self.db.flush()
             for item_data in items_data:
-                item = AcceptanceItem(acceptance_id=form.id, **item_data)
+                item = AcceptanceItem(
+                    acceptance_id=form.id,
+                    **normalize_acceptance_item_data(item_data),
+                )
                 self.db.add(item)
 
         await self.db.flush()

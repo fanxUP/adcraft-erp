@@ -38,6 +38,7 @@ class DesignTaskRepository:
 
     async def create(self, data: dict) -> DesignTask:
         task = DesignTask(**data)
+        task.attachments = []
         self.db.add(task)
         await self.db.flush()
         return task
@@ -76,6 +77,7 @@ class ProductionTaskRepository:
 
     async def create(self, data: dict) -> ProductionTask:
         task = ProductionTask(**data)
+        task.attachments = []
         self.db.add(task)
         await self.db.flush()
         return task
@@ -118,6 +120,7 @@ class InstallationTaskRepository:
 
     async def create(self, data: dict) -> InstallationTask:
         task = InstallationTask(**data)
+        task.attachments = []
         self.db.add(task)
         await self.db.flush()
         return task

@@ -71,9 +71,17 @@ class CdrQuoteConversionService(CdrQuoteServiceBase):
             raise ValueError("该报价已转为订单，不能重复转换")
         if version.status == "rejected":
             raise ValueError("已驳回的报价不能转订单")
+        from app.services.order_customer_service import ensure_document_customer
+
+        await ensure_document_customer(
+            self.db,
+            quote_doc,
+            current_user_id,
+        )
 
         # 4. 生成订单号 & 创建订单
         order_no = await generate_order_no(self.db)
+        total_amount = Decimal(str(version.total_amount or 0))
         order_doc = BusinessDocument(
             doc_type="order",
             doc_no=order_no,
@@ -85,7 +93,11 @@ class CdrQuoteConversionService(CdrQuoteServiceBase):
             contact_person=quote_doc.contact_person,
             contact_phone=quote_doc.contact_phone,
             status="pending_confirm",
-            total_amount=float(version.total_amount or 0),
+            total_amount=total_amount,
+            paid_amount=Decimal("0"),
+            unpaid_amount=total_amount,
+            cost_amount=Decimal("0"),
+            gross_profit=total_amount,
             source_quote_id=quote_id,
         )
         self.db.add(order_doc)
@@ -129,12 +141,10 @@ class CdrQuoteConversionService(CdrQuoteServiceBase):
         from app.models.task import InstallationTask
         from app.models.vehicle import VehicleUseRequest
         from app.models.outsource import OutsourceTask
-        from app.models.payment import Payment
         from app.services.number_generator import generate_installation_no
 
         install_task = None
         vehicle_request = None
-        payment_recv = None
         outsourced_processes = []
 
         has_installation = prod_task_count > 0 and (quote_doc.contact_person or quote_doc.contact_phone)
@@ -190,22 +200,6 @@ class CdrQuoteConversionService(CdrQuoteServiceBase):
                     "product_name": prod.name,
                 })
 
-        # 5e. 财务应收草稿（不自动确认收款）
-        if float(version.total_amount or 0) > 0:
-            from app.services.number_generator import generate_payment_no
-            pay_no = await generate_payment_no(self.db)
-            payment_recv = Payment(
-                payment_no=pay_no,
-                document_id=order_doc.id,
-                customer_id=quote_doc.customer_id,
-                amount=float(version.total_amount),
-                paid_at=None,
-                remark="来自报价自动转换，待收款",
-                created_by=current_user_id,
-                is_voided=False,
-            )
-            self.db.add(payment_recv)
-
         # 5f. 图稿指纹快照
         from app.models.cdr_quote import DrawingSnapshot
         drawing_fingerprint = None
@@ -251,7 +245,8 @@ class CdrQuoteConversionService(CdrQuoteServiceBase):
             "production_task_count": prod_task_count,
             "has_installation": has_installation,
             "has_vehicle_request": vehicle_request is not None,
-            "has_payment_draft": payment_recv is not None,
+            "has_payment_draft": False,
+            "receivable_amount": float(total_amount),
         }
         if outsourced_processes:
             audit_after["outsourced_processes"] = outsourced_processes
@@ -277,7 +272,8 @@ class CdrQuoteConversionService(CdrQuoteServiceBase):
             "production_tasks_created": prod_task_count,
             "has_installation_task": has_installation,
             "has_vehicle_request": vehicle_request is not None,
-            "has_payment_draft": payment_recv is not None,
+            "has_payment_draft": False,
+            "receivable_amount": float(total_amount),
         }
         if outsourced_processes:
             result["outsourced_processes"] = outsourced_processes

@@ -88,6 +88,7 @@ def payment_service(mock_payment_repo):
         db = MagicMock()
         db.get = AsyncMock()
         db.flush = AsyncMock()
+        db.refresh = AsyncMock()
         svc = PaymentService(db)
         svc.repo = mock_payment_repo
         yield svc, db

@@ -2,6 +2,75 @@
 
 from uuid import UUID
 from app.ai_assistant.tool_registry import ToolRegistry, AiToolDefinition
+from app.services.quote_calculation import calculate_quote_item_values
+
+
+AI_QUOTE_ITEM_FIELDS = (
+    "item_name",
+    "quantity",
+    "unit",
+    "unit_price",
+    "width",
+    "width_unit",
+    "height",
+    "height_unit",
+    "pieces",
+    "use_area",
+    "process_fee",
+    "installation_fee",
+    "design_fee",
+    "transport_fee",
+    "other_fee",
+    "material_process",
+    "remark",
+)
+
+AI_QUOTE_ITEM_SCHEMA_PROPERTIES = {
+    "item_name": {"type": "string", "description": "项目名称"},
+    "quantity": {"type": "number", "description": "数量"},
+    "unit": {"type": "string", "description": "单位"},
+    "unit_price": {"type": "number", "description": "单价"},
+    "product_id": {"type": "string", "description": "产品/材质/工艺组合ID"},
+    "material_process": {"type": "string", "description": "产品/材质/工艺组合"},
+    "width": {"type": "number", "description": "宽"},
+    "width_unit": {"type": "string", "description": "宽单位: m/cm/mm"},
+    "height": {"type": "number", "description": "高"},
+    "height_unit": {"type": "string", "description": "高单位: m/cm/mm"},
+    "pieces": {"type": "number", "description": "件数"},
+    "use_area": {"type": "boolean", "description": "是否按面积计价"},
+    "process_fee": {"type": "number", "description": "工艺费"},
+    "installation_fee": {"type": "number", "description": "安装费"},
+    "design_fee": {"type": "number", "description": "设计费"},
+    "transport_fee": {"type": "number", "description": "运输费"},
+    "other_fee": {"type": "number", "description": "其他费用"},
+    "remark": {"type": "string", "description": "备注"},
+}
+
+
+def _build_ai_quote_item(item: dict, sort_order: int) -> dict:
+    """只保留常规报价支持的字段，金额统一交给业务服务重算。"""
+    result = {
+        field: item[field]
+        for field in AI_QUOTE_ITEM_FIELDS
+        if field in item and item[field] is not None
+    }
+    result.setdefault("item_name", "")
+    result.setdefault("quantity", 1)
+    result.setdefault("unit_price", 0)
+    result["sort_order"] = sort_order
+    if item.get("product_id"):
+        result["product_id"] = UUID(str(item["product_id"]))
+    return result
+
+
+def _preview_ai_quote_item(item: dict) -> dict:
+    normalized = _build_ai_quote_item(item, 0)
+    values = calculate_quote_item_values(normalized)
+    return {
+        **normalized,
+        "area": float(values["area"]),
+        "subtotal": float(values["subtotal_amount"]),
+    }
 
 
 async def search_quotes(db, user, keyword="", page=1, page_size=20, status=None, customer_id=None):
@@ -48,31 +117,10 @@ async def create_quote_confirmed(db, user, customer_id, project_name="", items=N
     from app.services.business_document_service import BusinessDocumentService
     svc = BusinessDocumentService(db, doc_type="quote")
 
-    items_data = []
-    for i, item in enumerate(items or []):
-        item_data = {
-            "item_name": item.get("item_name", ""),
-            "quantity": float(item.get("quantity", 1)),
-            "unit": item.get("unit", "个"),
-            "unit_price": float(item.get("unit_price", 0)),
-            "sort_order": i,
-        }
-        for field in ("width", "height"):
-            if item.get(field):
-                item_data[field] = float(item[field])
-        if item.get("width_unit"):
-            item_data["width_unit"] = item["width_unit"]
-        if item.get("height_unit"):
-            item_data["height_unit"] = item["height_unit"]
-        if item.get("product_id"):
-            item_data["product_id"] = UUID(item["product_id"])
-        if item.get("material_process"):
-            item_data["material_process"] = item["material_process"]
-        if item.get("remark"):
-            item_data["remark"] = item["remark"]
-        if item.get("subtotal_amount"):
-            item_data["subtotal_amount"] = float(item["subtotal_amount"])
-        items_data.append(item_data)
+    items_data = [
+        _build_ai_quote_item(item, index)
+        for index, item in enumerate(items or [])
+    ]
 
     quote_data = {
         "customer_id": customer_id,
@@ -87,32 +135,26 @@ async def create_quote_confirmed(db, user, customer_id, project_name="", items=N
     return {
         "status": "created",
         "quote_id": quote["id"],
-        "quote_no": quote.get("doc_no", ""),
+        "quote_no": quote.get("quote_no", ""),
         "customer_name": quote.get("customer_name", ""),
         "project_name": quote.get("project_name", ""),
         "total_amount": quote.get("total_amount", 0),
         "items_count": len(items_data),
-        "note": "报价单 " + quote.get("doc_no", "") + " 已成功创建。",
+        "note": "报价单 " + quote.get("quote_no", "") + " 已成功创建。",
     }
 
 
 async def preview_quote_creation(db, user, customer_id, project_name="", items=None,
                                  sales_user_id=None, remark=""):
     """Build a deterministic preview without creating a quote."""
-    preview_items = []
-    total_amount = 0.0
-    for item in items or []:
-        quantity = float(item.get("quantity", 1))
-        unit_price = float(item.get("unit_price", 0))
-        subtotal = quantity * unit_price
-        preview_items.append({
-            "item_name": item.get("item_name", ""),
-            "quantity": quantity,
-            "unit": item.get("unit", "个"),
-            "unit_price": unit_price,
-            "subtotal": subtotal,
-        })
-        total_amount += subtotal
+    preview_items = [
+        _preview_ai_quote_item(item)
+        for item in items or []
+    ]
+    total_amount = round(
+        sum(item["subtotal"] for item in preview_items),
+        2,
+    )
     return {
         "action_label": "创建报价单",
         "customer_id": customer_id,
@@ -129,37 +171,12 @@ async def preview_quote_creation(db, user, customer_id, project_name="", items=N
 async def add_quote_items(db, user, quote_id, items):
     """Add line items to an existing quote (does not create a new quote)."""
     from app.services.business_document_service import BusinessDocumentService
-    from decimal import Decimal
-
     svc = BusinessDocumentService(db, doc_type="quote")
 
-    items_data = []
-    for i, item in enumerate(items or []):
-        item_data = {
-            "item_name": item.get("item_name", ""),
-            "quantity": Decimal(str(item.get("quantity", 1))),
-            "unit": item.get("unit", "个"),
-            "unit_price": Decimal(str(item.get("unit_price", 0))),
-            "sort_order": i,
-        }
-        for fee_key in ("process_fee", "installation_fee", "design_fee", "transport_fee", "other_fee"):
-            item_data[fee_key] = Decimal(str(item.get(fee_key, "0")))
-        for field in ("width", "height"):
-            if item.get(field):
-                item_data[field] = Decimal(str(item[field]))
-        if item.get("width_unit"):
-            item_data["width_unit"] = item["width_unit"]
-        if item.get("height_unit"):
-            item_data["height_unit"] = item["height_unit"]
-        if item.get("product_id"):
-            item_data["product_id"] = UUID(item["product_id"])
-        if item.get("material_process"):
-            item_data["material_process"] = item["material_process"]
-        if item.get("remark"):
-            item_data["remark"] = item["remark"]
-        if item.get("subtotal_amount"):
-            item_data["subtotal_amount"] = Decimal(str(item["subtotal_amount"]))
-        items_data.append(item_data)
+    items_data = [
+        _build_ai_quote_item(item, index)
+        for index, item in enumerate(items or [])
+    ]
 
     result = await svc.add_items(UUID(quote_id), items_data)
     return result
@@ -173,26 +190,20 @@ async def add_quote_items_preview(db, user, quote_id, items):
     if not quote:
         return {"error": "报价单不存在"}
 
-    preview_total = 0
-    preview_items = []
-    for item in items or []:
-        qty = float(item.get("quantity", 1))
-        price = float(item.get("unit_price", 0))
-        subtotal = qty * price
-        preview_items.append({
-            "item_name": item.get("item_name", ""),
-            "quantity": qty,
-            "unit": item.get("unit", "个"),
-            "unit_price": price,
-            "subtotal": subtotal,
-        })
-        preview_total += subtotal
+    preview_items = [
+        _preview_ai_quote_item(item)
+        for item in items or []
+    ]
+    preview_total = round(
+        sum(item["subtotal"] for item in preview_items),
+        2,
+    )
 
     return {
         "_preview": True,
         "_note": "此为新增项目预览，尚未保存到报价单。",
         "quote_id": quote_id,
-        "quote_no": quote.get("doc_no", ""),
+        "quote_no": quote.get("quote_no", ""),
         "current_items": len(quote.get("items", [])),
         "new_items": preview_items,
         "new_items_total": preview_total,
@@ -212,7 +223,7 @@ def register_quote_tools():
             "page_size": {"type": "integer", "description": "每页数量"}},
             "required": []},
         risk_level="level_1",
-        required_permission="customer:read",
+        required_permission="quote:read",
         handler=search_quotes,
     ))
     r.register(AiToolDefinition(
@@ -222,7 +233,7 @@ def register_quote_tools():
             "quote_id": {"type": "string", "description": "报价单ID"}},
             "required": ["quote_id"]},
         risk_level="level_1",
-        required_permission="customer:read",
+        required_permission="quote:read",
         handler=get_quote_detail,
     ))
     r.register(AiToolDefinition(
@@ -231,15 +242,11 @@ def register_quote_tools():
         parameters={"type": "object", "properties": {
             "quote_id": {"type": "string", "description": "报价单ID"},
             "items": {"type": "array", "description": "要添加的项目列表",
-                "items": {"type": "object", "properties": {
-                    "item_name": {"type": "string", "description": "项目名称"},
-                    "quantity": {"type": "number", "description": "数量"},
-                    "unit": {"type": "string", "description": "单位"},
-                    "unit_price": {"type": "number", "description": "单价"}},
+                "items": {"type": "object", "properties": AI_QUOTE_ITEM_SCHEMA_PROPERTIES,
                     "required": ["item_name", "quantity", "unit_price"]}}},
             "required": ["quote_id", "items"]},
         risk_level="level_2",
-        required_permission="customer:read",
+        required_permission="quote:read",
         handler=add_quote_items_preview,
     ))
     r.register(AiToolDefinition(
@@ -248,13 +255,7 @@ def register_quote_tools():
         parameters={"type": "object", "properties": {
             "quote_id": {"type": "string", "description": "报价单ID"},
             "items": {"type": "array", "description": "要添加的项目列表",
-                "items": {"type": "object", "properties": {
-                    "item_name": {"type": "string", "description": "项目名称"},
-                    "quantity": {"type": "number", "description": "数量"},
-                    "unit": {"type": "string", "description": "单位"},
-                    "unit_price": {"type": "number", "description": "单价"},
-                    "material_process": {"type": "string", "description": "产品/材质/工艺组合"},
-                    "remark": {"type": "string", "description": "备注"}},
+                "items": {"type": "object", "properties": AI_QUOTE_ITEM_SCHEMA_PROPERTIES,
                     "required": ["item_name", "quantity", "unit_price"]}}},
             "required": ["quote_id", "items"]},
         risk_level="level_3",
@@ -272,7 +273,7 @@ def register_quote_tools():
             "customer_name": {"type": "string", "description": "客户名称"}},
             "required": ["customer_id", "description"]},
         risk_level="level_2",
-        required_permission="customer:read",
+        required_permission="quote:create",
         handler=create_quote_draft,
     ))
     r.register(AiToolDefinition(
@@ -282,16 +283,7 @@ def register_quote_tools():
             "customer_id": {"type": "string", "description": "客户ID"},
             "project_name": {"type": "string", "description": "项目名称"},
             "items": {"type": "array", "description": "报价明细项",
-                "items": {"type": "object", "properties": {
-                    "item_name": {"type": "string", "description": "项目名称/描述"},
-                    "quantity": {"type": "number", "description": "数量"},
-                    "unit": {"type": "string", "description": "单位"},
-                    "unit_price": {"type": "number", "description": "单价"},
-                    "width": {"type": "number", "description": "宽"},
-                    "height": {"type": "number", "description": "高"},
-                    "width_unit": {"type": "string", "description": "宽度单位"},
-                    "height_unit": {"type": "string", "description": "高度单位"},
-                    "remark": {"type": "string", "description": "备注"}},
+                "items": {"type": "object", "properties": AI_QUOTE_ITEM_SCHEMA_PROPERTIES,
                     "required": ["item_name", "quantity", "unit_price"]}},
             "sales_user_id": {"type": "string", "description": "销售员用户ID"},
             "remark": {"type": "string", "description": "报价单备注"}},

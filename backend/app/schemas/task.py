@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.schemas.common import CoercedModel
 
 from app.schemas.attachment import AttachmentResponse
@@ -11,8 +11,8 @@ from app.schemas.attachment import AttachmentResponse
 
 class DesignTaskCreate(BaseModel):
     order_id: str
-    customer_id: str
-    project_name: str
+    customer_id: str | None = None
+    project_name: str | None = None
     assigned_to: str | None = None
     description: str | None = None
 
@@ -30,7 +30,7 @@ class DesignTaskResponse(CoercedModel):
     id: str
     design_no: str
     document_id: str
-    order_id: str
+    order_id: str | None = None
     customer_id: str
     project_name: str
     status: str
@@ -41,15 +41,15 @@ class DesignTaskResponse(CoercedModel):
     completed_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
-    attachments: list[AttachmentResponse] = []
+    attachments: list[AttachmentResponse] = Field(default_factory=list)
 
 
 # -- Production Task --
 
 class ProductionTaskCreate(BaseModel):
     order_id: str
-    customer_id: str
-    project_name: str
+    customer_id: str | None = None
+    project_name: str | None = None
     assigned_to: str | None = None
     material_id: str | None = None
     process_id: str | None = None
@@ -77,7 +77,7 @@ class ProductionTaskResponse(CoercedModel):
     id: str
     production_no: str
     document_id: str
-    order_id: str
+    order_id: str | None = None
     customer_id: str
     project_name: str
     status: str
@@ -93,15 +93,15 @@ class ProductionTaskResponse(CoercedModel):
     completed_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
-    attachments: list[AttachmentResponse] = []
+    attachments: list[AttachmentResponse] = Field(default_factory=list)
 
 
 # -- Installation Task --
 
 class InstallationTaskCreate(BaseModel):
     order_id: str
-    customer_id: str
-    project_name: str
+    customer_id: str | None = None
+    project_name: str | None = None
     assigned_to: str | None = None
     address: str | None = None
     contact_name: str | None = None
@@ -124,7 +124,7 @@ class InstallationTaskResponse(CoercedModel):
     id: str
     installation_no: str
     document_id: str
-    order_id: str
+    order_id: str | None = None
     customer_id: str
     project_name: str
     status: str
@@ -137,7 +137,7 @@ class InstallationTaskResponse(CoercedModel):
     completed_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
-    attachments: list[AttachmentResponse] = []
+    attachments: list[AttachmentResponse] = Field(default_factory=list)
 
 
 # -- Status change --

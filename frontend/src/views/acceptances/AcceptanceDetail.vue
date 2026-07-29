@@ -59,7 +59,7 @@
 
         <el-card style="margin-top: 16px;">
           <!-- 编辑模式：显示表单 -->
-          <el-form v-if="canEdit" :model="form" label-width="140px">
+          <el-form v-if="canEditStructure" :model="form" label-width="140px">
             <el-form-item label="验收人/联系电话：">
               <el-input v-model="form.accepted_by" placeholder="验收人姓名/联系电话" />
             </el-form-item>
@@ -85,7 +85,7 @@
           </el-form>
 
           <!-- 详细信息（编辑/查看模式均显示） -->
-          <el-descriptions :column="1" border :style="canEdit ? 'margin-top: 16px;' : ''">
+          <el-descriptions :column="1" border :style="canEditStructure ? 'margin-top: 16px;' : ''">
             <el-descriptions-item label="状态：">
               <el-tag :type="statusColor(form.status)">{{ statusLabel(form.status) }}</el-tag>
             </el-descriptions-item>
@@ -112,7 +112,7 @@
           <template #header>
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span>验收明细（{{ form.items.length }} 项）</span>
-              <el-button v-if="form.items.length" type="success" size="small" @click="acceptAll">一键验收</el-button>
+              <el-button v-if="form.items.length && canEditResult" type="success" size="small" @click="acceptAll">一键验收</el-button>
             </div>
           </template>
 
@@ -131,7 +131,7 @@
                   <span style="font-weight: 600; float: right;">分项合计</span>
                 </template>
                 <template v-else>
-                  <el-input v-if="canEdit" v-model="row.item.item_name" placeholder="项目内容" />
+                  <el-input v-if="canEditStructure" v-model="row.item.item_name" placeholder="项目内容" />
                   <span v-else>{{ row.item.item_name }}</span>
                 </template>
               </template>
@@ -139,7 +139,7 @@
             <el-table-column label="产品/材质/工艺" min-width="150">
               <template #default="{ row }">
                 <template v-if="row.type === 'item'">
-                  <el-input v-if="canEdit" v-model="row.item.material_process" placeholder="产品 / 材质 / 工艺" />
+                  <el-input v-if="canEditStructure" v-model="row.item.material_process" placeholder="产品 / 材质 / 工艺" />
                   <span v-else>{{ row.item.material_process || '-' }}</span>
                 </template>
               </template>
@@ -147,7 +147,7 @@
             <el-table-column label="规格" min-width="120">
               <template #default="{ row }">
                 <template v-if="row.type === 'item'">
-                  <el-input v-if="canEdit" v-model="row.item.specification" placeholder="规格" />
+                  <el-input v-if="canEditStructure" v-model="row.item.specification" placeholder="规格" />
                   <span v-else>{{ row.item.specification || '-' }}</span>
                 </template>
               </template>
@@ -160,7 +160,7 @@
             <el-table-column label="数量" width="80">
               <template #default="{ row }">
                 <template v-if="row.type === 'item'">
-                  <el-input-number v-if="canEdit" v-model="row.item.quantity" :min="0" :precision="2" size="small" controls-position="right" />
+                  <el-input-number v-if="canEditStructure" v-model="row.item.quantity" :min="0" :precision="2" size="small" controls-position="right" />
                   <span v-else>{{ row.item.quantity ?? '-' }}</span>
                 </template>
               </template>
@@ -168,7 +168,7 @@
             <el-table-column label="单位" width="70">
               <template #default="{ row }">
                 <template v-if="row.type === 'item'">
-                  <el-input v-if="canEdit" v-model="row.item.unit" placeholder="单位" />
+                  <el-input v-if="canEditStructure" v-model="row.item.unit" placeholder="单位" />
                   <span v-else>{{ row.item.unit || '-' }}</span>
                 </template>
               </template>
@@ -176,7 +176,7 @@
             <el-table-column label="单价" width="90">
               <template #default="{ row }">
                 <template v-if="row.type === 'item'">
-                  <el-input-number v-if="canEdit" v-model="row.item.unit_price" :min="0" :precision="2" size="small" controls-position="right" />
+                  <el-input-number v-if="canEditStructure" v-model="row.item.unit_price" :min="0" :precision="2" size="small" controls-position="right" />
                   <span v-else>{{ row.item.unit_price != null ? row.item.unit_price.toFixed(2) : '-' }}</span>
                 </template>
               </template>
@@ -184,7 +184,7 @@
             <el-table-column label="小计" width="100">
               <template #default="{ row }">
                 <template v-if="row.type === 'item'">
-                  <el-input-number v-if="canEdit" v-model="row.item.subtotal" :min="0" :precision="2" size="small" controls-position="right" />
+                  <el-input-number v-if="canEditStructure" v-model="row.item.subtotal" :min="0" :precision="2" size="small" controls-position="right" />
                   <span v-else>{{ row.item.subtotal != null ? row.item.subtotal.toFixed(2) : '-' }}</span>
                 </template>
                 <template v-else-if="row.type === 'group-total'"><strong>¥ {{ row.total.toFixed(2) }}</strong></template>
@@ -195,9 +195,9 @@
                 <template v-if="row.type === 'item'">
                   <div v-if="row.item.image_url" style="display: flex; align-items: center; gap: 4px;">
                     <el-image :src="row.item.image_url" :preview-src-list="[row.item.image_url]" fit="cover" style="width: 32px; height: 32px; border-radius: 4px; cursor: pointer;" />
-                    <el-button v-if="canEdit" text type="danger" size="small" @click="row.item.image_url = ''" style="padding: 0;">×</el-button>
+                    <el-button v-if="canEditResult" text type="danger" size="small" @click="row.item.image_url = ''" style="padding: 0;">×</el-button>
                   </div>
-                  <el-upload v-else-if="canEdit" :show-file-list="false" :http-request="(opt: any) => handleImageUpload(opt, row.item)" accept="image/*" style="display: inline;">
+                  <el-upload v-else-if="canEditResult" :show-file-list="false" :http-request="(opt: any) => handleImageUpload(opt, row.item)" accept="image/*" style="display: inline;">
                     <el-button text type="primary" size="small" style="padding: 0;">上传</el-button>
                   </el-upload>
                   <span v-else style="color: #999">-</span>
@@ -207,7 +207,7 @@
             <el-table-column label="备注" min-width="100">
               <template #default="{ row }">
                 <template v-if="row.type === 'item'">
-                  <el-input v-if="canEdit" v-model="row.item.remark" placeholder="备注" />
+                  <el-input v-if="canEditResult" v-model="row.item.remark" placeholder="备注" />
                   <span v-else>{{ row.item.remark || '-' }}</span>
                 </template>
               </template>
@@ -215,7 +215,7 @@
             <el-table-column label="验收结果" width="100">
               <template #default="{ row }">
                 <template v-if="row.type === 'item'">
-                  <el-select v-model="row.item.item_status" size="small">
+                  <el-select v-model="row.item.item_status" size="small" :disabled="!canEditResult">
                     <el-option label="待验收" value="pending" />
                     <el-option label="通过" value="accepted" />
                     <el-option label="不通过" value="rejected" />
@@ -273,7 +273,7 @@
     </el-tabs>
 
     <!-- 保存按钮 -->
-    <div class="save-bar" v-if="canEdit">
+    <div class="save-bar" v-if="canEditResult">
       <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
       <el-button @click="$router.push('/acceptances')">取消</el-button>
     </div>
@@ -333,7 +333,8 @@ const showPrint = ref(false)
 const rejectDialogVisible = ref(false)
 const rejectReason = ref('')
 
-const canEdit = computed(() => form.status === 'draft' || form.status === 'rejected' || route.query.edit === '1')
+const canEditStructure = computed(() => form.status === 'draft' || form.status === 'rejected')
+const canEditResult = computed(() => canEditStructure.value || form.status === 'pending')
 
 const itemsTotal = computed(() => form.items.reduce((s, i) => s + (i.subtotal || 0), 0))
 
@@ -480,6 +481,7 @@ async function handleSave() {
       discount_amount: form.discount_amount || 0,
       advance_amount: form.advance_amount || 0,
       items: form.items.map((item) => ({
+        id: item.id,
         item_name: item.item_name,
         material_process: item.material_process || null,
         specification: item.specification || null,

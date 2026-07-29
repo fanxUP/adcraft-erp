@@ -221,7 +221,7 @@
               <div class="card-header">
                 <span>设计任务</span>
                 <el-button
-                  v-if="authStore.hasAnyRole(['admin', 'designer'])"
+                  v-if="authStore.hasAnyRole(['admin', 'designer']) && ['confirmed', 'designing'].includes(order.status)"
                   data-ai-target="order-create-design"
                   size="small"
                   type="danger"
@@ -249,7 +249,7 @@
               <div class="card-header">
                 <span>制作任务</span>
                 <el-button
-                  v-if="authStore.hasAnyRole(['admin', 'production'])"
+                  v-if="authStore.hasAnyRole(['admin', 'production']) && order.status === 'in_production'"
                   data-ai-target="order-create-production"
                   size="small"
                   type="danger"
@@ -277,7 +277,7 @@
               <div class="card-header">
                 <span>安装任务</span>
                 <el-button
-                  v-if="authStore.hasAnyRole(['admin', 'installer'])"
+                  v-if="authStore.hasAnyRole(['admin', 'installer']) && order.status === 'in_installation'"
                   data-ai-target="order-create-installation"
                   size="small"
                   type="danger"
@@ -503,12 +503,12 @@ function statusColor(s: string) {
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
-function designStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已确认' }; return m[s] || s }
-function designStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
-function prodStatusLabel(s: string) { const m: Record<string, string> = { pending: '待制作', queued: '排队中', in_progress: '制作中', qc_check: '待质检', rework: '返工', completed: '已完成' }; return m[s] || s }
-function prodStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
-function instStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成' }; return m[s] || s }
-function instStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', assigned: '', in_progress: 'warning', pending_acceptance: 'warning', completed: 'success' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
+function designStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已确认', cancelled: '已取消' }; return m[s] || s }
+function designStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
+function prodStatusLabel(s: string) { const m: Record<string, string> = { pending: '待制作', queued: '排队中', in_progress: '制作中', qc_check: '待质检', rework: '返工', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
+function prodStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
+function instStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
+function instStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', assigned: '', in_progress: 'warning', pending_acceptance: 'warning', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
 
 async function fetchOrder() {
   loading.value = true

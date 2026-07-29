@@ -199,6 +199,13 @@ async def test_list_tasks_with_results(service, mock_repo):
 @pytest.mark.asyncio
 async def test_create_task(service, mock_repo):
     """create_task sets design_no, status, and returns serialized result."""
+    service.db.get.return_value = MagicMock(
+        doc_type="order",
+        deleted_at=None,
+        status="confirmed",
+        customer_id=SAMPLE_USER_ID,
+        project_name="订单项目",
+    )
 
     async def create_side_effect(data):
         return make_mock_design_task(
@@ -217,6 +224,26 @@ async def test_create_task(service, mock_repo):
 
     assert result["design_no"] == "D20260629-0050"
     assert result["project_name"] == "新设计"
+    created_data = mock_repo.create.await_args.args[0]
+    assert created_data["document_id"] == SAMPLE_TASK_ID
+    assert created_data["customer_id"] == SAMPLE_USER_ID
+    assert "order_id" not in created_data
+
+
+@pytest.mark.asyncio
+async def test_create_task_rejects_order_outside_design_stage(service, mock_repo):
+    service.db.get.return_value = MagicMock(
+        doc_type="order",
+        deleted_at=None,
+        status="in_production",
+        customer_id=SAMPLE_USER_ID,
+        project_name="已进入生产的订单",
+    )
+
+    with pytest.raises(ValueError, match="当前状态不能创建设计任务"):
+        await service.create_task({"order_id": SAMPLE_TASK_ID})
+
+    mock_repo.create.assert_not_awaited()
 
 
 # --- Update Task Tests ---

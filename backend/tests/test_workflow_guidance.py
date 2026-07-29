@@ -76,6 +76,21 @@ def test_confirmed_design_tasks_unlock_order_production():
     assert guidance["completion_signal"] == "订单状态变为“生产中”并生成制作任务"
 
 
+def test_cancelled_task_guidance_stops_all_follow_up_actions():
+    guidance = build_workflow_guidance(
+        {
+            "business_type": "production_task",
+            "business_id": "22222222-2222-2222-2222-222222222222",
+            "status": "cancelled",
+        }
+    )
+
+    assert guidance["current_step"] == "制作任务已取消"
+    assert guidance["next_action"] is None
+    assert guidance["allowed_next_statuses"] == []
+    assert guidance["completion_signal"] == "父订单已取消，当前任务无需继续处理"
+
+
 def test_completed_order_with_balance_guides_user_to_receivables():
     guidance = build_workflow_guidance(
         {

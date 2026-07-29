@@ -63,6 +63,7 @@ def test_order_must_pass_acceptance_before_completion():
 def service():
     db = MagicMock()
     db.execute = AsyncMock()
+    db.refresh = AsyncMock()
     with patch(
         "app.services.business_document_service.BusinessDocumentRepository"
     ) as repository_class:
@@ -155,6 +156,44 @@ async def test_order_with_received_payment_cannot_be_cancelled(service):
         )
 
     repository.update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_order_cancellation_closes_all_open_delivery_tasks(service):
+    order_service, repository, db = service
+    order = make_order(status="in_installation")
+    repository.get_by_id.return_value = order
+
+    design_task = MagicMock(status="confirmed")
+    production_task = MagicMock(status="in_progress")
+    installation_task = MagicMock(status="pending_acceptance")
+    acceptance = MagicMock(status="pending", deleted_at=None)
+    task_results = []
+    for tasks in (
+        [design_task],
+        [production_task],
+        [installation_task],
+        [acceptance],
+    ):
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = tasks
+        task_results.append(result)
+    db.execute.side_effect = task_results
+    db.flush = AsyncMock()
+
+    result = await order_service.change_status(
+        SAMPLE_ORDER_ID,
+        "cancelled",
+        reason="客户取消",
+        operated_by=uuid4(),
+    )
+
+    assert result["status"] == "cancelled"
+    assert design_task.status == "confirmed"
+    assert production_task.status == "cancelled"
+    assert installation_task.status == "cancelled"
+    assert acceptance.deleted_at is not None
+    assert order.deleted_at is not None
 
 
 @pytest.mark.asyncio

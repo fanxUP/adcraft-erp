@@ -31,6 +31,13 @@ describe('quoteLineCalculation', () => {
     expect(calcQuoteLineSubtotal(line)).toBe(825)
   })
 
+  it('rounds every line subtotal to cents like the backend', () => {
+    expect(calcQuoteLineSubtotal({
+      quantity: 3,
+      unit_price: 0.335,
+    })).toBe(1.01)
+  })
+
   it('synchronizes area quantity and unit', () => {
     const changed = { ...line, quantity: 1, unit: '' }
 

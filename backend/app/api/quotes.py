@@ -10,8 +10,15 @@ from openpyxl import Workbook
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
-from app.core.permissions import PERM_QUOTE_DELETE, require_permission
+from app.core.permissions import (
+    PERM_QUOTE_CONFIRM,
+    PERM_QUOTE_CONVERT,
+    PERM_QUOTE_CREATE,
+    PERM_QUOTE_DELETE,
+    PERM_QUOTE_READ,
+    PERM_QUOTE_UPDATE,
+    require_permission,
+)
 from app.models.user import User
 from app.schemas.quote import QuoteCreate, QuoteUpdate, QuoteItemCreate, QuoteItemUpdate
 from app.schemas.common import success, success_paginated, error
@@ -33,7 +40,7 @@ async def list_quotes(
     date_from: date | None = None,
     date_to: date | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_READ)),
 ):
     service = BusinessDocumentService(db, doc_type='quote')
     cid = UUID(customer_id) if customer_id else None
@@ -45,7 +52,7 @@ async def list_quotes(
 async def create_quote(
     data: QuoteCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_CREATE)),
 ):
     service = BusinessDocumentService(db, doc_type='quote')
     quote = await service.create(data.model_dump())
@@ -126,7 +133,9 @@ QUOTE_ITEM_REQUIRED = ["项目内容", "数量"]
 
 
 @router.get("/template")
-async def download_quote_template():
+async def download_quote_template(
+    current_user: User = Depends(require_permission(PERM_QUOTE_READ)),
+):
     """Download Excel template for importing quote items (明细 only)."""
     wb = Workbook()
     ws = wb.active
@@ -174,7 +183,7 @@ async def download_quote_template():
 async def import_quotes(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_CREATE)),
 ):
     """Batch import quotes from Excel file.
     Rows with the same (客户名称, 项目名称) are grouped into one quote.
@@ -290,7 +299,7 @@ async def import_quotes(
 async def get_quote(
     quote_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_READ)),
 ):
     service = BusinessDocumentService(db, doc_type='quote')
     quote = await service.get_by_id(UUID(quote_id))
@@ -304,7 +313,7 @@ async def update_quote(
     quote_id: str,
     data: QuoteUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_UPDATE)),
 ):
     service = BusinessDocumentService(db, doc_type='quote')
     quote = await service.update(UUID(quote_id), data.model_dump(exclude_unset=True))
@@ -342,12 +351,12 @@ async def add_quote_item(
     quote_id: str,
     data: QuoteItemCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_UPDATE)),
 ):
     service = BusinessDocumentService(db, doc_type='quote')
-    quote = await service.repo.create_item(UUID(quote_id), data.model_dump())
-    await service._calculate_quote(UUID(quote_id))
-    return success(service._to_detail(await service.repo.get_by_id(UUID(quote_id))))
+    return success(
+        await service.add_item(UUID(quote_id), data.model_dump())
+    )
 
 
 @router.put("/{quote_id}/items/{item_id}")
@@ -356,15 +365,16 @@ async def update_quote_item(
     item_id: str,
     data: QuoteItemUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_UPDATE)),
 ):
     service = BusinessDocumentService(db, doc_type='quote')
-    item = await service.repo.get_item(UUID(item_id))
-    if not item:
-        return {"code": 40401, "message": "明细不存在", "data": None}
-    await service.repo.update_item(item, data.model_dump(exclude_none=True))
-    await service._calculate_quote(UUID(quote_id))
-    return success(service._to_detail(await service.repo.get_by_id(UUID(quote_id))))
+    return success(
+        await service.update_item(
+            UUID(quote_id),
+            UUID(item_id),
+            data.model_dump(exclude_none=True),
+        )
+    )
 
 
 @router.delete("/{quote_id}/items/{item_id}")
@@ -372,24 +382,26 @@ async def delete_quote_item(
     quote_id: str,
     item_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_UPDATE)),
 ):
     service = BusinessDocumentService(db, doc_type='quote')
-    item = await service.repo.get_item(UUID(item_id))
-    if not item:
-        return {"code": 40401, "message": "明细不存在", "data": None}
-    await service.repo.delete_item(item)
-    await service._calculate_quote(UUID(quote_id))
-    return success(service._to_detail(await service.repo.get_by_id(UUID(quote_id))))
+    return success(
+        await service.delete_item(UUID(quote_id), UUID(item_id))
+    )
 
 @router.post("/{quote_id}/confirm")
 async def confirm_quote(
     quote_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_CONFIRM)),
 ):
     service = BusinessDocumentService(db, doc_type='quote')
-    quote = await service.change_status(UUID(quote_id), "confirmed", None, None)
+    quote = await service.change_status(
+        UUID(quote_id),
+        "confirmed",
+        None,
+        current_user.id,
+    )
     return success(quote)
 
 
@@ -397,11 +409,16 @@ async def confirm_quote(
 async def revert_quote_to_draft(
     quote_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_CONFIRM)),
 ):
     service = BusinessDocumentService(db, doc_type='quote')
     try:
-        quote = await service.change_status(UUID(quote_id), "draft", None, None)
+        quote = await service.change_status(
+            UUID(quote_id),
+            "draft",
+            None,
+            current_user.id,
+        )
         return success(quote)
     except ValueError as e:
         return error(40001, str(e))
@@ -411,11 +428,16 @@ async def revert_quote_to_draft(
 async def cancel_quote(
     quote_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_CONFIRM)),
 ):
     service = BusinessDocumentService(db, doc_type='quote')
     try:
-        quote = await service.change_status(UUID(quote_id), "cancelled", None, None)
+        quote = await service.change_status(
+            UUID(quote_id),
+            "cancelled",
+            None,
+            current_user.id,
+        )
         return success(quote)
     except ValueError as e:
         return error(40001, str(e))
@@ -425,7 +447,7 @@ async def cancel_quote(
 async def convert_quote_to_order(
     quote_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_CONVERT)),
 ):
     service = BusinessDocumentService(db, doc_type='quote')
     order = await service.convert_doc_type(UUID(quote_id), 'order', current_user.id)
@@ -437,7 +459,7 @@ async def import_quote_items(
     quote_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_QUOTE_UPDATE)),
 ):
     """Import items into an existing quote from Excel, skipping header columns."""
     if not file.filename or not file.filename.endswith((".xlsx", ".xls")):

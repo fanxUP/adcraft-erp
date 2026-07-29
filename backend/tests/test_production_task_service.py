@@ -232,6 +232,13 @@ async def test_list_tasks_with_results(service, mock_repo):
 @pytest.mark.asyncio
 async def test_create_task(service, mock_repo):
     """create_task sets production_no, status, and returns serialized result."""
+    service.db.get.return_value = MagicMock(
+        doc_type="order",
+        deleted_at=None,
+        status="in_production",
+        customer_id=SAMPLE_USER_ID,
+        project_name="订单项目",
+    )
 
     async def create_side_effect(data):
         return make_mock_production_task(
@@ -252,6 +259,10 @@ async def test_create_task(service, mock_repo):
 
     assert result["production_no"] == "P20260629-0050"
     assert result["project_name"] == "新制作"
+    created_data = mock_repo.create.await_args.args[0]
+    assert created_data["document_id"] == SAMPLE_TASK_ID
+    assert created_data["customer_id"] == SAMPLE_USER_ID
+    assert "order_id" not in created_data
 
 
 # --- Update Task Tests ---
