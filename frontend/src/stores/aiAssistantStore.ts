@@ -8,6 +8,7 @@ import type {
   AiPendingAction,
   AiSession,
   AiToolCallResult,
+  AiWorkflowAction,
   AiWorkflowGuidance,
 } from '@/types/aiAssistant'
 import * as aiApi from '@/api/aiAssistant'
@@ -17,7 +18,10 @@ import {
   matchesGuidanceContext,
   parseWorkflowGuidance,
 } from '@/utils/workflowGuidance'
-import { hasPageActionCompleted } from '@/utils/pageActionGuide'
+import {
+  getPageGuideContinuation,
+  hasPageActionCompleted,
+} from '@/utils/pageActionGuide'
 
 export const useAiAssistantStore = defineStore('aiAssistant', () => {
   // UI state
@@ -43,6 +47,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   const dismissedGuidanceKey = ref<string | null>(null)
   const activePageGuide = ref<AiPageActionGuide | null>(null)
   const pageGuideState = ref<AiPageGuideState>('idle')
+  const pageGuideContinuation = ref<AiWorkflowAction | null>(null)
   let guidanceRequestSequence = 0
 
   // Input state
@@ -370,6 +375,10 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
           activePageGuide.value
           && hasPageActionCompleted(activePageGuide.value, guidance)
         ) {
+          pageGuideContinuation.value = getPageGuideContinuation(
+            activePageGuide.value,
+            guidance,
+          )
           pageGuideState.value = 'completed'
         }
       }
@@ -431,6 +440,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
 
   function startPageActionGuide(action: AiWorkflowGuidance['next_action']) {
     if (!action?.target_key) return false
+    pageGuideContinuation.value = null
     activePageGuide.value = {
       label: action.label,
       target_path: action.target_path,
@@ -449,6 +459,13 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   function clearPageActionGuide() {
     activePageGuide.value = null
     pageGuideState.value = 'idle'
+    pageGuideContinuation.value = null
+  }
+
+  function takePageGuideContinuation() {
+    const continuation = pageGuideContinuation.value
+    pageGuideContinuation.value = null
+    return continuation
   }
 
   async function notifyBusinessMutation() {
@@ -507,7 +524,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     sessions, currentSessionId, messages, pageContext,
     toolResults, pendingAction, actionSubmitting,
     activeGuidance, guidanceLoading, guidanceError, inputText,
-    activePageGuide, pageGuideState,
+    activePageGuide, pageGuideState, pageGuideContinuation,
     currentSession, hasMessages, isProcessing, canGuideCurrentPage,
     toggleDrawer, openDrawer, closeDrawer, lastActionTimestamp,
     setPageContext, resetPageContext,
@@ -515,6 +532,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     sendMessage, sendMessageStream,
     startWorkflowGuidance, refreshWorkflowGuidance, clearWorkflowGuidance,
     startPageActionGuide, setPageGuideState, clearPageActionGuide,
+    takePageGuideContinuation,
     notifyBusinessMutation,
     confirmPendingAction, cancelPendingAction,
   }

@@ -1,4 +1,9 @@
-import type { AiPageActionGuide, AiWorkflowGuidance } from '@/types/aiAssistant'
+import type {
+  AiPageActionGuide,
+  AiWorkflowAction,
+  AiWorkflowGuidance,
+} from '@/types/aiAssistant'
+import { isSafeWorkflowTarget } from '@/utils/workflowGuidance'
 
 const TARGET_KEY_PATTERN = /^[a-z0-9_-]+$/
 
@@ -16,6 +21,21 @@ export function hasPageActionCompleted(
   }
   const nextTargetKey = guidance.next_action?.target_key
   return !guidance.next_action || Boolean(nextTargetKey && nextTargetKey !== guide.target_key)
+}
+
+export function getPageGuideContinuation(
+  guide: AiPageActionGuide,
+  guidance: AiWorkflowGuidance,
+): AiWorkflowAction | null {
+  const nextAction = guidance.next_action
+  if (
+    !nextAction?.target_key
+    || !isSafeWorkflowTarget(nextAction.target_path)
+    || isSameWorkflowPath(guide.target_path, nextAction.target_path)
+  ) {
+    return null
+  }
+  return nextAction
 }
 
 export function getPageGuideCalloutPosition(

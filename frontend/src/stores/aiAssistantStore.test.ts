@@ -125,4 +125,48 @@ describe('AI assistant proactive workflow guidance', () => {
 
     expect(store.pageGuideState).toBe('completed')
   })
+
+  it('queues a cross-page continuation after a terminal task action', async () => {
+    const taskId = '22222222-2222-2222-2222-222222222222'
+    const taskGuidance: AiWorkflowGuidance = {
+      business_type: 'design_task',
+      business_id: taskId,
+      current_status: 'pending_review',
+      current_step: '设计阶段',
+      blockers: [],
+      next_action: {
+        label: '确认设计稿',
+        target_page: '设计任务详情',
+        target_path: `/design-tasks/${taskId}`,
+        target_status: 'confirmed',
+        target_key: 'task-status-confirmed',
+      },
+      completion_signal: '设计任务状态变为“已确认”',
+      allowed_next_statuses: ['confirmed'],
+    }
+    const parentOrderAction = {
+      label: '进入生产阶段',
+      target_page: '订单详情',
+      target_path: `/orders/${orderId}`,
+      target_status: 'in_production',
+      target_key: 'order-status-in_production',
+    }
+    vi.mocked(aiApi.getWorkflowGuidance)
+      .mockResolvedValueOnce(taskGuidance)
+      .mockResolvedValueOnce({
+        ...taskGuidance,
+        current_status: 'confirmed',
+        next_action: parentOrderAction,
+      })
+    const store = useAiAssistantStore()
+    store.resetPageContext({ business_type: 'design_task', business_id: taskId })
+    store.openDrawer()
+    await vi.waitFor(() => expect(store.activeGuidance).not.toBeNull())
+    store.startPageActionGuide(store.activeGuidance!.next_action!)
+
+    await store.notifyBusinessMutation()
+
+    expect(store.pageGuideState).toBe('completed')
+    expect(store.pageGuideContinuation).toEqual(parentOrderAction)
+  })
 })

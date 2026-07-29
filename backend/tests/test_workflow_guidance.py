@@ -159,6 +159,49 @@ def test_task_guidance_identifies_the_target_status_control(
     assert guidance["next_action"]["target_key"] == target_key
 
 
+@pytest.mark.parametrize(
+    ("business_type", "terminal_status", "next_label", "next_target_key"),
+    [
+        ("design_task", "confirmed", "进入生产阶段", "order-status-in_production"),
+        ("production_task", "completed", "进入安装阶段", "order-status-in_installation"),
+        (
+            "installation_task",
+            "completed",
+            "提交订单验收",
+            "order-status-pending_acceptance",
+        ),
+    ],
+)
+def test_completed_task_continues_with_parent_order_guidance(
+    business_type,
+    terminal_status,
+    next_label,
+    next_target_key,
+):
+    guidance = build_workflow_guidance(
+        {
+            "business_type": business_type,
+            "business_id": "22222222-2222-2222-2222-222222222222",
+            "status": terminal_status,
+            "parent_order_guidance": {
+                "blockers": [],
+                "next_action": {
+                    "label": next_label,
+                    "target_page": "订单详情",
+                    "target_path": f"/orders/{SAMPLE_ORDER_ID}",
+                    "target_key": next_target_key,
+                },
+                "completion_signal": f"完成父订单操作：{next_label}",
+            },
+        }
+    )
+
+    assert guidance["next_action"]["label"] == next_label
+    assert guidance["next_action"]["target_path"] == f"/orders/{SAMPLE_ORDER_ID}"
+    assert guidance["next_action"]["target_key"] == next_target_key
+    assert guidance["completion_signal"] == f"完成父订单操作：{next_label}"
+
+
 def test_unknown_business_status_returns_safe_guidance():
     guidance = build_workflow_guidance(
         {
@@ -208,6 +251,58 @@ async def test_order_guidance_tool_uses_latest_business_data():
 
     assert result["current_status"] == "designing"
     assert result["next_action"]["target_status"] == "in_production"
+
+
+@pytest.mark.asyncio
+async def test_completed_task_guidance_loads_parent_order_progress():
+    task_id = "22222222-2222-2222-2222-222222222222"
+    task_service = MagicMock()
+    task_service.get_task = AsyncMock(
+        return_value={
+            "id": task_id,
+            "status": "confirmed",
+            "order_id": str(SAMPLE_ORDER_ID),
+        }
+    )
+    progress = {
+        "order": {
+            "id": str(SAMPLE_ORDER_ID),
+            "status": "designing",
+            "total_amount": 1000,
+        },
+        "design_tasks": {
+            "items": [
+                {
+                    "id": task_id,
+                    "design_no": "D20260729-0001",
+                    "status": "confirmed",
+                }
+            ]
+        },
+        "production_tasks": {"items": []},
+        "installation_tasks": {"items": []},
+        "total_paid": 0,
+    }
+
+    with (
+        patch(
+            "app.services.task_service.DesignTaskService",
+            return_value=task_service,
+        ),
+        patch(
+            "app.ai_assistant.tools.order_tools.get_order_progress",
+            new=AsyncMock(return_value=progress),
+        ),
+    ):
+        result = await get_workflow_guidance(
+            db=MagicMock(),
+            user=MagicMock(),
+            business_type="design_task",
+            business_id=task_id,
+        )
+
+    assert result["next_action"]["label"] == "进入生产阶段"
+    assert result["next_action"]["target_path"] == f"/orders/{SAMPLE_ORDER_ID}"
 
 
 @pytest.mark.asyncio

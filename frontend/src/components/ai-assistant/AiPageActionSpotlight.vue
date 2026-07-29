@@ -20,9 +20,16 @@
         <strong>{{ store.activePageGuide.label }}</strong>
         <small v-if="store.pageGuideState === 'active'">请操作高亮区域，完成后 AI 会自动核验。</small>
         <small v-else-if="store.pageGuideState === 'not_found'">控件暂未显示，请先处理页面中的阻塞条件。</small>
-        <small v-else-if="store.pageGuideState === 'completed'">已检测到业务状态更新，可以继续下一步。</small>
+        <small v-else-if="store.pageGuideState === 'completed'">
+          {{ store.pageGuideContinuation ? '本步已完成，正在前往下一业务页面。' : '已检测到业务状态更新，可以继续下一步。' }}
+        </small>
       </div>
       <div class="ai-page-guide-actions">
+        <button
+          v-if="store.pageGuideState === 'completed' && store.pageGuideContinuation"
+          type="button"
+          @click="continueToNextPage"
+        >立即继续</button>
         <button
           v-if="store.pageGuideState === 'not_found'"
           type="button"
@@ -41,13 +48,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { CSSProperties } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import {
   getPageGuideCalloutPosition,
+  isSameWorkflowPath,
   locatePageActionTarget,
 } from '@/utils/pageActionGuide'
 
 const store = useAiAssistantStore()
+const route = useRoute()
+const router = useRouter()
 const targetRect = ref<DOMRect | null>(null)
 let targetElement: HTMLElement | null = null
 let locateTimer: number | null = null
@@ -146,6 +157,22 @@ function startLocating() {
   locateTimer = window.setInterval(() => void tryLocate(), 160)
 }
 
+async function continueToNextPage() {
+  if (completionTimer !== null) {
+    window.clearTimeout(completionTimer)
+    completionTimer = null
+  }
+  const continuation = store.takePageGuideContinuation()
+  if (!continuation) {
+    store.clearPageActionGuide()
+    return
+  }
+  store.startPageActionGuide(continuation)
+  if (!isSameWorkflowPath(route.path, continuation.target_path)) {
+    await router.push(continuation.target_path)
+  }
+}
+
 watch(
   () => store.activePageGuide?.target_key,
   targetKey => {
@@ -161,7 +188,12 @@ watch(
     if (completionTimer !== null) window.clearTimeout(completionTimer)
     if (state === 'completed') {
       clearLocatingResources()
-      completionTimer = window.setTimeout(() => store.clearPageActionGuide(), 3500)
+      completionTimer = window.setTimeout(
+        store.pageGuideContinuation
+          ? () => void continueToNextPage()
+          : () => store.clearPageActionGuide(),
+        store.pageGuideContinuation ? 1600 : 3500,
+      )
     }
   },
 )

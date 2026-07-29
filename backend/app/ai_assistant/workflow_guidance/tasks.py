@@ -63,12 +63,18 @@ def build_task_guidance(snapshot: dict, task_type: str) -> dict:
     task_id = str(snapshot.get("business_id") or "")
     status = str(snapshot.get("status") or "")
     if status == config["terminal"]:
+        parent_guidance = snapshot.get("parent_order_guidance") or {}
+        next_action = parent_guidance.get("next_action")
         return guidance_result(
             snapshot,
-            config["step"],
-            [],
-            None,
-            f"{config['page']}已完成，可返回订单推进下一阶段",
+            f"{config['label']}已完成",
+            list(parent_guidance.get("blockers") or []),
+            next_action,
+            (
+                str(parent_guidance.get("completion_signal"))
+                if next_action
+                else f"{config['page']}已完成，父订单暂无待处理步骤"
+            ),
             config["workflow"],
         )
 

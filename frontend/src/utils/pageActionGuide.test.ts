@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getPageGuideContinuation,
   getPageGuideCalloutPosition,
   hasPageActionCompleted,
   isSameWorkflowPath,
@@ -54,6 +55,45 @@ describe('page action guidance helpers', () => {
       },
     }))).toBe(true)
     expect(hasPageActionCompleted(guide, guidance({ next_action: null }))).toBe(true)
+  })
+
+  it('continues automatically only when the next action moves to another page', () => {
+    const parentOrderAction = {
+      label: '进入生产阶段',
+      target_page: '订单详情',
+      target_path: '/orders/33333333-3333-3333-3333-333333333333',
+      target_status: 'in_production',
+      target_key: 'order-status-in_production',
+    }
+    const taskGuide: AiPageActionGuide = {
+      label: '确认设计稿',
+      target_path: '/design-tasks/22222222-2222-2222-2222-222222222222',
+      target_key: 'task-status-confirmed',
+      target_status: 'confirmed',
+    }
+
+    expect(getPageGuideContinuation(
+      taskGuide,
+      guidance({ next_action: parentOrderAction }),
+    )).toEqual(parentOrderAction)
+    expect(getPageGuideContinuation(
+      guide,
+      guidance({
+        next_action: {
+          ...parentOrderAction,
+          target_path: guide.target_path,
+        },
+      }),
+    )).toBeNull()
+    expect(getPageGuideContinuation(
+      taskGuide,
+      guidance({
+        next_action: {
+          ...parentOrderAction,
+          target_path: 'https://unsafe.example',
+        },
+      }),
+    )).toBeNull()
   })
 
   it('compares workflow paths without being affected by trailing slashes', () => {

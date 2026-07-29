@@ -55,7 +55,7 @@ async def _load_quote_snapshot(db, user, business_id: str) -> dict:
     return {**quote, "business_type": "quote", "business_id": business_id}
 
 
-async def _load_task_snapshot(db, business_type: str, business_id: str) -> dict:
+async def _load_task_snapshot(db, user, business_type: str, business_id: str) -> dict:
     from app.services.task_service import (
         DesignTaskService,
         InstallationTaskService,
@@ -70,7 +70,17 @@ async def _load_task_snapshot(db, business_type: str, business_id: str) -> dict:
     task = await service_class(db).get_task(_require_uuid(business_id))
     if not task:
         raise ValueError("任务不存在")
-    return {**task, "business_type": business_type, "business_id": business_id}
+    snapshot = {**task, "business_type": business_type, "business_id": business_id}
+    terminal_status = {
+        "design_task": "confirmed",
+        "production_task": "completed",
+        "installation_task": "completed",
+    }[business_type]
+    order_id = str(task.get("order_id") or task.get("document_id") or "")
+    if task.get("status") == terminal_status and order_id:
+        order_snapshot = await _load_order_snapshot(db, user, order_id)
+        snapshot["parent_order_guidance"] = build_workflow_guidance(order_snapshot)
+    return snapshot
 
 
 async def _load_acceptance_snapshot(db, business_id: str) -> dict:
@@ -92,7 +102,7 @@ async def get_workflow_guidance(db, user, business_type: str, business_id: str):
     elif business_type == "quote":
         snapshot = await _load_quote_snapshot(db, user, business_id)
     elif business_type in ("design_task", "production_task", "installation_task"):
-        snapshot = await _load_task_snapshot(db, business_type, business_id)
+        snapshot = await _load_task_snapshot(db, user, business_type, business_id)
     elif business_type == "acceptance":
         snapshot = await _load_acceptance_snapshot(db, business_id)
     else:
