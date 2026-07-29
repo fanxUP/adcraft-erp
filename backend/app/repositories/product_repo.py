@@ -1,6 +1,6 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 
 from app.models.product import ProductCategory, Product, Material, Process
 
@@ -36,7 +36,12 @@ class ProductRepository:
     async def list_products(self, skip: int = 0, limit: int = 20, keyword: str | None = None, category_id: UUID | None = None) -> tuple[list[Product], int]:
         q = select(Product)
         if keyword:
-            q = q.where(Product.name.ilike(f"%{keyword}%"))
+            pattern = f"%{keyword}%"
+            q = q.where(or_(
+                Product.name.ilike(pattern),
+                Product.material_name.ilike(pattern),
+                Product.process_name.ilike(pattern),
+            ))
         if category_id:
             q = q.where(Product.category_id == category_id)
         count_q = select(func.count()).select_from(q.subquery())

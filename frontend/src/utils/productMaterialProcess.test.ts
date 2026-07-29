@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyProductMaterialProcess } from './productMaterialProcess'
+import { applyProductMaterialProcess, formatProductMaterialProcess } from './productMaterialProcess'
+
+describe('formatProductMaterialProcess', () => {
+  it('joins product, material and process from one master record', () => {
+    expect(formatProductMaterialProcess({
+      name: '标识牌',
+      material_name: '亚克力',
+      process_name: 'UV打印',
+    })).toBe('标识牌 / 亚克力 / UV打印')
+  })
+
+  it('omits empty fields without leaving separators', () => {
+    expect(formatProductMaterialProcess({
+      name: '安装服务',
+      material_name: '',
+      process_name: undefined,
+    })).toBe('安装服务')
+  })
+})
 
 describe('applyProductMaterialProcess', () => {
   it('uses one master record and clears legacy material/process ids', () => {
@@ -15,7 +33,9 @@ describe('applyProductMaterialProcess', () => {
       },
       {
         id: 'pmp-1',
-        name: '亚克力UV打印',
+        name: '标识牌',
+        material_name: '亚克力',
+        process_name: 'UV打印',
         unit: '㎡',
         default_price: 280,
       },
@@ -25,7 +45,7 @@ describe('applyProductMaterialProcess', () => {
       product_id: 'pmp-1',
       material_id: undefined,
       process_id: undefined,
-      material_process: '亚克力UV打印',
+      material_process: '标识牌 / 亚克力 / UV打印',
       unit: '㎡',
       unit_price: 280,
     })
@@ -44,6 +64,8 @@ describe('applyProductMaterialProcess', () => {
       {
         id: 'pmp-2',
         name: '现场安装服务',
+        material_name: '',
+        process_name: '',
         unit: '项',
         default_price: 0,
       },

@@ -20,6 +20,8 @@ class ProductCategoryResponse(BaseModel):
 class ProductCreate(BaseModel):
     category_id: str | None = None
     name: str
+    material_name: str | None = None
+    process_name: str | None = None
     unit: str = "项"
     pricing_method: str = "quantity"
     default_price: float = 0
@@ -31,6 +33,8 @@ class ProductCreate(BaseModel):
 class ProductUpdate(BaseModel):
     category_id: str | None = None
     name: str | None = None
+    material_name: str | None = None
+    process_name: str | None = None
     unit: str | None = None
     pricing_method: str | None = None
     default_price: float | None = None
@@ -43,6 +47,8 @@ class ProductResponse(BaseModel):
     id: str
     category_id: str | None = None
     name: str
+    material_name: str | None = None
+    process_name: str | None = None
     unit: str
     pricing_method: str
     default_price: float

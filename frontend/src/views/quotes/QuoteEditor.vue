@@ -91,7 +91,12 @@
                   placeholder="选择产品材质工艺"
                   @change="applyProductSelection(row.item)"
                 >
-                  <el-option v-for="option in productMaterialProcessOptions" :key="option.id" :label="option.name" :value="option.id" />
+                  <el-option
+                    v-for="option in productMaterialProcessOptions"
+                    :key="option.id"
+                    :label="formatProductMaterialProcess(option)"
+                    :value="option.id"
+                  />
                 </el-select>
                 <el-input v-model="row.item.material_process" :disabled="isReadonly" size="small" placeholder="可自由输入产品材质工艺" />
               </div>
@@ -322,7 +327,7 @@ import { uploadAttachment } from '@/api/tasks'
 import type { QuoteItemResponse, QuoteDetailResponse, CustomerResponse, ProductResponse } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
-import { applyProductMaterialProcess } from '@/utils/productMaterialProcess'
+import { applyProductMaterialProcess, formatProductMaterialProcess } from '@/utils/productMaterialProcess'
 
 const route = useRoute()
 const router = useRouter()

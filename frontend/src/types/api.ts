@@ -246,6 +246,8 @@ export interface ProductResponse {
   id: string
   category_id?: string
   name: string
+  material_name?: string
+  process_name?: string
   unit: string
   pricing_method: string
   default_price: number

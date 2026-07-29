@@ -52,7 +52,8 @@ class ProductService:
     def _product_to_dict(self, p) -> dict:
         return {
             "id": str(p.id), "category_id": str(p.category_id) if p.category_id else None,
-            "name": p.name, "unit": p.unit, "pricing_method": p.pricing_method,
+            "name": p.name, "material_name": p.material_name, "process_name": p.process_name,
+            "unit": p.unit, "pricing_method": p.pricing_method,
             "default_price": float(p.default_price), "min_charge": float(p.min_charge),
             "remark": p.remark, "is_active": p.is_active,
             "created_at": p.created_at.isoformat() if p.created_at else None,

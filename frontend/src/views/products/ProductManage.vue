@@ -9,12 +9,18 @@
     </div>
 
     <div class="search-bar">
-      <el-input v-model="keyword" placeholder="搜索产品材质工艺" clearable style="width: 300px" @keyup.enter="fetchData" />
+      <el-input v-model="keyword" placeholder="搜索产品、材质或工艺" clearable style="width: 300px" @keyup.enter="fetchData" />
       <el-button type="primary" @click="fetchData" style="margin-left: 12px">搜索</el-button>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
-      <el-table-column prop="name" label="产品材质工艺" min-width="180" />
+      <el-table-column prop="name" label="产品" min-width="150" />
+      <el-table-column prop="material_name" label="材质" min-width="150">
+        <template #default="{ row }">{{ row.material_name || '-' }}</template>
+      </el-table-column>
+      <el-table-column prop="process_name" label="工艺" min-width="150">
+        <template #default="{ row }">{{ row.process_name || '-' }}</template>
+      </el-table-column>
       <el-table-column prop="unit" label="单位" width="80" />
       <el-table-column label="计价方式" width="100">
         <template #default="{ row }">{{ pricingLabel(row.pricing_method) }}</template>
@@ -45,11 +51,19 @@
       @change="fetchData"
     />
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑产品材质工艺' : '新建产品材质工艺'" width="500px" :close-on-click-modal="false">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑产品材质工艺' : '新建产品材质工艺'" width="min(760px, 92vw)" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
-        <el-form-item label="产品材质工艺">
-          <el-input v-model="form.name" placeholder="如：亚克力UV打印" />
-        </el-form-item>
+        <div class="combination-fields">
+          <el-form-item label="产品" required>
+            <el-input v-model="form.name" placeholder="如：标识牌" />
+          </el-form-item>
+          <el-form-item label="材质">
+            <el-input v-model="form.material_name" placeholder="如：亚克力" />
+          </el-form-item>
+          <el-form-item label="工艺">
+            <el-input v-model="form.process_name" placeholder="如：UV打印" />
+          </el-form-item>
+        </div>
         <el-form-item label="单位">
           <el-select v-model="form.unit" style="width: 100%">
             <el-option label="项" value="项" />
@@ -94,10 +108,10 @@
           </el-table-column>
         </el-table>
         <el-table :data="sampleData" border size="small" style="margin: 8px 0">
-          <el-table-column prop="col1" label="产品材质工艺" />
-          <el-table-column prop="col2" label="单位" />
-          <el-table-column prop="col3" label="计价方式" />
-          <el-table-column prop="col4" label="默认价格" />
+          <el-table-column prop="col1" label="产品" />
+          <el-table-column prop="col2" label="材质" />
+          <el-table-column prop="col3" label="工艺" />
+          <el-table-column prop="col4" label="单位" />
         </el-table>
       </div>
       <el-upload ref="uploadRef" accept=".xlsx,.xls" :auto-upload="false" :limit="1" :on-change="handleFileChange" :on-exceed="() => ElMessage.warning('只能上传一个文件')">
@@ -136,7 +150,16 @@ const pageSize = ref(20)
 const keyword = ref('')
 const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
-const form = reactive({ name: '', unit: '项', pricing_method: 'quantity', default_price: 0, min_charge: 0, remark: '' })
+const form = reactive({
+  name: '',
+  material_name: '',
+  process_name: '',
+  unit: '项',
+  pricing_method: 'quantity',
+  default_price: 0,
+  min_charge: 0,
+  remark: '',
+})
 
 // Import
 const importDialogVisible = ref(false)
@@ -144,14 +167,16 @@ const importing = ref(false)
 const importFile = ref<File | null>(null)
 const importResult = ref<ImportResponse | null>(null)
 const templateColumns = [
-  { name: '产品材质工艺', desc: '统一的产品材质工艺名称', required: true },
+  { name: '产品', desc: '产品名称', required: true },
+  { name: '材质', desc: '材质名称', required: false },
+  { name: '工艺', desc: '工艺名称', required: false },
   { name: '单位', desc: '项 / ㎡ / 米 / 个 / 套', required: false },
   { name: '计价方式', desc: 'area / quantity / length / word_count', required: false },
   { name: '默认价格', desc: '默认单价（数字）', required: false },
   { name: '最低收费', desc: '最低收费金额（数字）', required: false },
   { name: '备注', desc: '备注信息', required: false },
 ]
-const sampleData = [{ col1: '灯箱制作', col2: '㎡', col3: 'area', col4: '350.00' }]
+const sampleData = [{ col1: '灯箱', col2: '亚克力', col3: 'UV打印', col4: '㎡' }]
 
 function pricingLabel(m: string) {
   const map: Record<string, string> = { area: '按面积', quantity: '按数量', length: '按长度', word_count: '按字数' }
@@ -169,17 +194,30 @@ async function fetchData() {
 
 function handleCreate() {
   editingId.value = null
-  Object.assign(form, { name: '', unit: '项', pricing_method: 'quantity', default_price: 0, min_charge: 0, remark: '' })
+  Object.assign(form, { name: '', material_name: '', process_name: '', unit: '项', pricing_method: 'quantity', default_price: 0, min_charge: 0, remark: '' })
   dialogVisible.value = true
 }
 
 function handleEdit(row: ProductResponse) {
   editingId.value = row.id
-  Object.assign(form, { name: row.name, unit: row.unit, pricing_method: row.pricing_method, default_price: row.default_price, min_charge: row.min_charge, remark: row.remark })
+  Object.assign(form, {
+    name: row.name,
+    material_name: row.material_name || '',
+    process_name: row.process_name || '',
+    unit: row.unit,
+    pricing_method: row.pricing_method,
+    default_price: row.default_price,
+    min_charge: row.min_charge,
+    remark: row.remark,
+  })
   dialogVisible.value = true
 }
 
 async function handleSave() {
+  if (!form.name.trim()) {
+    ElMessage.warning('请填写产品')
+    return
+  }
   saving.value = true
   try {
     if (editingId.value) {
@@ -195,7 +233,8 @@ async function handleSave() {
 }
 
 async function handleDelete(row: ProductResponse) {
-  await ElMessageBox.confirm(`确认删除产品材质工艺 "${row.name}"？`, '确认', { type: 'warning' })
+  const label = [row.name, row.material_name, row.process_name].filter(Boolean).join(' / ')
+  await ElMessageBox.confirm(`确认删除产品材质工艺 "${label}"？`, '确认', { type: 'warning' })
   await deleteProduct(row.id)
   ElMessage.success('已删除')
   fetchData()
@@ -229,4 +268,21 @@ onMounted(fetchData)
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .search-bar { display: flex; align-items: center; }
+.combination-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.combination-fields :deep(.el-form-item) {
+  display: block;
+}
+.combination-fields :deep(.el-form-item__label) {
+  justify-content: flex-start;
+}
+.combination-fields :deep(.el-form-item__content) {
+  margin-left: 0 !important;
+}
+@media (max-width: 720px) {
+  .combination-fields { grid-template-columns: 1fr; }
+}
 </style>

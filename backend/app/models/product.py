@@ -22,6 +22,8 @@ class Product(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     category_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("product_categories.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
+    material_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    process_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     unit: Mapped[str] = mapped_column(String(32), default="项")
     pricing_method: Mapped[str] = mapped_column(String(64), default="quantity")
     default_price: Mapped[float] = mapped_column(Numeric(14, 2), default=0)

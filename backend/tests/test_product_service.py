@@ -23,6 +23,8 @@ def make_mock_product(**kwargs):
     p.id = kwargs.get("id", SAMPLE_USER_ID)
     p.category_id = kwargs.get("category_id")
     p.name = kwargs.get("name", "测试产品")
+    p.material_name = kwargs.get("material_name", "测试材质")
+    p.process_name = kwargs.get("process_name", "测试工艺")
     p.unit = kwargs.get("unit", "平方米")
     p.pricing_method = kwargs.get("pricing_method", "by_area")
     p.default_price = kwargs.get("default_price", 100.0)
@@ -157,6 +159,8 @@ async def test_get_product_found(service, mock_repo):
     result = await service.get_product(SAMPLE_USER_ID)
     assert result is not None
     assert result["name"] == "测试产品"
+    assert result["material_name"] == "测试材质"
+    assert result["process_name"] == "测试工艺"
     assert result["default_price"] == 100.0
 
 

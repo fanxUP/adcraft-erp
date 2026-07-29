@@ -88,6 +88,9 @@ async def create_product(
 
 
 PRODUCT_COLUMN_MAP = {
+    "产品": "name",
+    "材质": "material_name",
+    "工艺": "process_name",
     "产品材质工艺": "name",
     "产品名称": "name",
     "单位": "unit",
@@ -96,7 +99,7 @@ PRODUCT_COLUMN_MAP = {
     "最低收费": "min_charge",
     "备注": "remark",
 }
-PRODUCT_REQUIRED = ["产品材质工艺"]
+PRODUCT_REQUIRED = ["产品"]
 
 
 @router.post("/import")
@@ -112,7 +115,9 @@ async def import_products(
     content = await file.read()
     rows, header_errors = parse_excel(content, PRODUCT_REQUIRED, PRODUCT_COLUMN_MAP)
     if header_errors:
-        rows, legacy_header_errors = parse_excel(content, ["产品名称"], PRODUCT_COLUMN_MAP)
+        rows, legacy_header_errors = parse_excel(content, ["产品材质工艺"], PRODUCT_COLUMN_MAP)
+        if legacy_header_errors:
+            rows, legacy_header_errors = parse_excel(content, ["产品名称"], PRODUCT_COLUMN_MAP)
         if legacy_header_errors:
             return {"code": 40002, "message": "文件格式错误", "data": {"errors": header_errors}}
 
@@ -125,7 +130,7 @@ async def import_products(
             name = format_value(row.get("name"))
             if not name:
                 result.failed += 1
-                result.errors.append({"row": row["_excel_row"], "message": "产品材质工艺不能为空"})
+                result.errors.append({"row": row["_excel_row"], "message": "产品不能为空"})
                 continue
 
             unit = format_value(row.get("unit")) or "项"
@@ -137,6 +142,8 @@ async def import_products(
 
             data = {
                 "name": name,
+                "material_name": format_value(row.get("material_name")) or None,
+                "process_name": format_value(row.get("process_name")) or None,
                 "unit": unit,
                 "pricing_method": pricing_method,
                 "default_price": parse_number(row.get("default_price")),
