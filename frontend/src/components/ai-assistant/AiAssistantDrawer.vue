@@ -356,4 +356,16 @@ function selectSession(id: string) {
 
 .slide-up-enter-active, .slide-up-leave-active { transition: all 0.25s ease; }
 .slide-up-enter-from, .slide-up-leave-to { opacity: 0; transform: translateY(10px); }
+
+@media (max-width: 440px) {
+  .ai-panel,
+  .ai-footer {
+    width: 100vw;
+  }
+
+  .ai-header {
+    padding-right: 10px;
+    padding-left: 12px;
+  }
+}
 </style>
