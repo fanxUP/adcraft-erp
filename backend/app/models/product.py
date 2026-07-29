@@ -81,6 +81,19 @@ class Process(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class ProductMaterialProcess(Base, TimestampMixin):
+    """产品可用的材质工艺组合，是报价选择的统一来源。"""
+
+    __tablename__ = "product_material_processes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=False)
+    material_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("materials.id"), nullable=False)
+    process_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("processes.id"), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class PriceRule(Base, TimestampMixin):
     __tablename__ = "price_rules"
 
