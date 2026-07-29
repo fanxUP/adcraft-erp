@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <h2>产品管理</h2>
+      <h2>产品材质工艺</h2>
       <div>
         <el-button @click="importDialogVisible = true">导入</el-button>
         <el-button type="danger" @click="handleCreate">新建产品</el-button>
