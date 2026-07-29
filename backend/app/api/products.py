@@ -14,6 +14,7 @@ from app.schemas.product import (
     ProductCategoryCreate, ProductCreate, ProductUpdate,
     MaterialCreate, MaterialUpdate,
     ProcessCreate, ProcessUpdate,
+    ProductMaterialProcessCreate,
 )
 from app.schemas.common import success, success_paginated
 from app.services.product_service import ProductService
@@ -161,6 +162,47 @@ async def get_product(
     if not product:
         return {"code": 40401, "message": "产品不存在", "data": None}
     return success(product)
+
+
+@router.get("/{product_id}/material-processes")
+async def list_product_material_processes(
+    product_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    if not await service.get_product(UUID(product_id)):
+        return {"code": 40401, "message": "产品不存在", "data": None}
+    return success(await service.list_product_material_processes(UUID(product_id)))
+
+
+@router.post("/{product_id}/material-processes")
+async def create_product_material_process(
+    product_id: str,
+    data: ProductMaterialProcessCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = ProductService(db)
+    try:
+        item = await service.create_product_material_process(
+            UUID(product_id), UUID(data.material_id), UUID(data.process_id), data.remark
+        )
+    except ValueError as exc:
+        return {"code": 40001, "message": str(exc), "data": None}
+    return success(item)
+
+
+@router.delete("/material-processes/{item_id}")
+async def delete_product_material_process(
+    item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    service = ProductService(db)
+    if not await service.delete_product_material_process(UUID(item_id)):
+        return {"code": 40401, "message": "产品材质工艺不存在", "data": None}
+    return success(None)
 
 
 @router.put("/{product_id}")

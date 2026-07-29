@@ -54,6 +54,24 @@ class ProductResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ProductMaterialProcessCreate(BaseModel):
+    material_id: str
+    process_id: str
+    remark: str | None = None
+
+
+class ProductMaterialProcessResponse(BaseModel):
+    id: str
+    product_id: str
+    material_id: str
+    process_id: str
+    material_name: str
+    process_name: str
+    remark: str | None = None
+    is_active: bool
+
+
+
 class MaterialCreate(BaseModel):
     name: str
     spec: str | None = None
