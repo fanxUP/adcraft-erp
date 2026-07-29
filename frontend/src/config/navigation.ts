@@ -40,8 +40,7 @@ export const navigationItems: NavigationItem[] = [
       { label: '外协任务', path: '/outsource/tasks', roles: ['admin', 'production'] },
       { label: '外协商', path: '/outsource/vendors', roles: ['admin', 'production'] },
       { label: '库存管理', path: '/inventory', roles: ['admin', 'production'] },
-      { label: '产品管理', path: '/products', roles: ['admin', 'designer', 'production'] },
-      { label: '材质工艺', path: '/material-process', roles: ['admin', 'designer', 'production'] },
+      { label: '产品材质工艺', path: '/products', roles: ['admin', 'designer', 'production'] },
     ],
   },
   {

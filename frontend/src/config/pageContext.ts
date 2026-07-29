@@ -42,7 +42,6 @@ const pageContexts: Record<string, PageContext> = {
   InstallationTaskList: { page: 'installation_task_list', business_type: 'installation_task' },
   InstallationTaskDetail: { page: 'installation_task_detail', business_type: 'installation_task' },
   ProductManage: { page: 'product_manage', business_type: 'product' },
-  MaterialProcessManage: { page: 'material_process', business_type: 'product' },
   ReceivablesView: { page: 'receivables', business_type: 'finance' },
   ExpenseList: { page: 'expenses', business_type: 'finance' },
   StatementList: { page: 'statement_list', business_type: 'finance' },
