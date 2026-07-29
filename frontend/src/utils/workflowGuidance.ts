@@ -1,5 +1,6 @@
 import type {
   AiPageContext,
+  AiActionSemantics,
   AiFormDraft,
   AiFormDraftField,
   AiToolCallResult,
@@ -53,6 +54,7 @@ function parseAction(value: unknown): AiWorkflowAction | null {
     return null
   }
   const draft = parseWorkflowDraft(value.draft)
+  const semantics = parseActionSemantics(value.semantics)
   return {
     label: value.label,
     target_page: value.target_page,
@@ -63,7 +65,34 @@ function parseAction(value: unknown): AiWorkflowAction | null {
     ...(typeof value.target_key === 'string'
       ? { target_key: value.target_key }
       : {}),
+    ...(semantics ? { semantics } : {}),
     ...(draft ? { draft } : {}),
+  }
+}
+
+function parseActionSemantics(value: unknown): AiActionSemantics | null {
+  if (!isRecord(value)) return null
+  if (
+    typeof value.purpose !== 'string'
+    || !Array.isArray(value.prerequisites)
+    || !value.prerequisites.every(item => typeof item === 'string')
+    || typeof value.completion_signal !== 'string'
+    || !Array.isArray(value.blocking_conditions)
+    || !value.blocking_conditions.every(item => typeof item === 'string')
+    || (value.effect !== 'read' && value.effect !== 'write')
+    || typeof value.requires_confirmation !== 'boolean'
+    || typeof value.required_permission !== 'string'
+  ) {
+    return null
+  }
+  return {
+    purpose: value.purpose,
+    prerequisites: value.prerequisites as string[],
+    completion_signal: value.completion_signal,
+    blocking_conditions: value.blocking_conditions as string[],
+    effect: value.effect,
+    requires_confirmation: value.requires_confirmation,
+    required_permission: value.required_permission,
   }
 }
 

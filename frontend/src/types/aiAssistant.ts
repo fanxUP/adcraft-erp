@@ -54,7 +54,18 @@ export interface AiWorkflowAction {
   target_path: string
   target_status?: string
   target_key?: string
+  semantics?: AiActionSemantics
   draft?: AiFormDraft
+}
+
+export interface AiActionSemantics {
+  purpose: string
+  prerequisites: string[]
+  completion_signal: string
+  blocking_conditions: string[]
+  effect: 'read' | 'write'
+  requires_confirmation: boolean
+  required_permission: string
 }
 
 export type AiFormDraftFieldKey = 'assigned_to' | 'address' | 'scheduled_at'

@@ -6,6 +6,7 @@ import pytest
 from app.ai_assistant.business_rules.catalog import (
     BusinessRuleSpec,
     build_business_rule_catalog,
+    render_business_rules_context,
 )
 from app.ai_assistant.business_rules.service import BusinessRuleSyncService
 from app.ai_assistant.business_rules.sync_plan import (
@@ -99,6 +100,21 @@ def test_prompt_prefers_published_business_rule_context():
     assert "pending_confirm → confirmed / cancelled" not in prompt
 
 
+def test_prompt_context_includes_only_current_page_operation_semantics():
+    context = render_business_rules_context(
+        build_business_rule_catalog(),
+        page_key="order_detail",
+        business_type="order",
+    )
+
+    assert "当前页面：订单详情" in context
+    assert "查看订单信息、交付任务、验收与收款进度" in context
+    assert "order-status-confirmed" in context
+    assert "确认订单进入正式交付流程" in context
+    assert "order:change_status" in context
+    assert "quote-status-confirmed" not in context
+
+
 class _ScalarRows:
     def __init__(self, rows):
         self._rows = rows
@@ -184,6 +200,10 @@ async def test_orchestrator_loads_published_rules_once_per_tool_loop():
     assert tool_results == []
     assert pending is None
     orchestrator.business_rule_service.get_prompt_context.assert_awaited_once()
+    orchestrator.business_rule_service.get_prompt_context.assert_awaited_once_with(
+        page_key=None,
+        business_type=None,
+    )
     assert (
         orchestrator.prompt_builder.build_system_prompt.call_args.kwargs[
             "business_rules_context"

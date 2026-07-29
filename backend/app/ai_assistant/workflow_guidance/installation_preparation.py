@@ -2,16 +2,16 @@
 
 from datetime import datetime
 
-from app.ai_assistant.page_capabilities import validate_page_action_target
+from app.ai_assistant.page_capabilities import build_page_action_semantics
 
 
 def _action(label: str, path: str, target_key: str, draft: dict | None = None) -> dict:
-    validate_page_action_target(target_key, path)
     result = {
         "label": label,
         "target_page": "安装任务详情",
         "target_path": path,
         "target_key": target_key,
+        "semantics": build_page_action_semantics(target_key, path),
     }
     if draft:
         result["draft"] = draft

@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "guidance_business_types": [
     "acceptance",
     "design_task",
@@ -408,5 +408,379 @@
         }
       ]
     }
-  ]
+  ],
+  "pages": [
+    {
+      "page_key": "order_detail",
+      "route_name": "OrderDetail",
+      "path": "/orders/:id",
+      "title": "订单详情",
+      "purpose": "查看订单信息、交付任务、验收与收款进度",
+      "workflow_stage": "order_delivery",
+      "business_types": ["order"]
+    },
+    {
+      "page_key": "quote_edit",
+      "route_name": "QuoteEdit",
+      "path": "/quotes/:id/edit",
+      "title": "编辑报价",
+      "purpose": "修改未锁定报价单的项目、数量和价格",
+      "workflow_stage": "quote",
+      "business_types": ["quote"]
+    },
+    {
+      "page_key": "acceptance_detail",
+      "route_name": "AcceptanceDetail",
+      "path": "/acceptances/:id",
+      "title": "验收详情",
+      "purpose": "核对验收项目、记录客户意见并完成或驳回验收",
+      "workflow_stage": "acceptance",
+      "business_types": ["acceptance", "order"]
+    },
+    {
+      "page_key": "design_task_detail",
+      "route_name": "DesignTaskDetail",
+      "path": "/design-tasks/:id",
+      "title": "设计任务详情",
+      "purpose": "查看设计要求、设计稿、客户反馈和确认状态",
+      "workflow_stage": "design",
+      "business_types": ["design_task", "order"]
+    },
+    {
+      "page_key": "production_task_detail",
+      "route_name": "ProductionTaskDetail",
+      "path": "/production-tasks/:id",
+      "title": "制作任务详情",
+      "purpose": "查看材料工艺、制作进度、质检和返工信息",
+      "workflow_stage": "production",
+      "business_types": ["production_task", "order"]
+    },
+    {
+      "page_key": "installation_task_detail",
+      "route_name": "InstallationTaskDetail",
+      "path": "/installation-tasks/:id",
+      "title": "安装任务详情",
+      "purpose": "查看安装地址、人员、时间、现场照片和完成状态",
+      "workflow_stage": "installation",
+      "business_types": ["installation_task", "order"]
+    },
+    {
+      "page_key": "receivables",
+      "route_name": "ReceivablesView",
+      "path": "/receivables",
+      "title": "应收管理",
+      "purpose": "查看订单应收、已收、欠款并登记客户收款",
+      "workflow_stage": "receivables",
+      "business_types": ["order"]
+    }
+  ],
+  "semantics": {
+    "acceptance-items": {
+      "purpose": "逐项核对并记录验收结果",
+      "prerequisites": ["验收单处于待验收状态且存在验收明细"],
+      "completion_signal": "所有验收明细均显示已通过或有条件通过",
+      "blocking_conditions": ["验收明细为空、验收单状态不允许修改或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"AcceptanceDetail": "acceptance:update"}
+    },
+    "acceptance-status-accepted": {
+      "purpose": "确认验收通过并推动订单完工",
+      "prerequisites": ["全部验收明细已经确认"],
+      "completion_signal": "验收单显示“已通过”，关联订单显示“已完成”",
+      "blocking_conditions": ["仍有未确认明细、状态不允许变更或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"AcceptanceDetail": "acceptance:change_status"}
+    },
+    "acceptance-status-draft": {
+      "purpose": "将驳回的验收单恢复为可整改草稿",
+      "prerequisites": ["验收单处于已驳回状态"],
+      "completion_signal": "验收单显示“草稿”",
+      "blocking_conditions": ["验收单不是已驳回状态或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"AcceptanceDetail": "acceptance:change_status"}
+    },
+    "acceptance-status-pending": {
+      "purpose": "提交验收单进入客户验收",
+      "prerequisites": ["验收单包含可核对的验收明细"],
+      "completion_signal": "验收单显示“待验收”",
+      "blocking_conditions": ["验收明细为空、状态不允许提交或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"AcceptanceDetail": "acceptance:change_status"}
+    },
+    "design-file": {
+      "purpose": "上传或登记本次任务的设计稿",
+      "prerequisites": ["设计任务处于设计中状态"],
+      "completion_signal": "设计任务详情显示可访问的设计稿",
+      "blocking_conditions": ["文件不可用、任务状态不允许修改或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"DesignTaskDetail": "design_task:update"}
+    },
+    "installation-address": {
+      "purpose": "补充可用于导航和进场的准确安装地址",
+      "prerequisites": ["已与客户核对门牌、楼层和进场位置"],
+      "completion_signal": "安装任务详情显示完整安装地址",
+      "blocking_conditions": ["地址信息不完整、任务已锁定或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"InstallationTaskDetail": "installation_task:update"}
+    },
+    "installation-draft": {
+      "purpose": "预览由订单信息生成的安装准备草稿",
+      "prerequisites": ["安装任务存在且订单可提供参考信息"],
+      "completion_signal": "页面展示可人工复核的安装准备草稿",
+      "blocking_conditions": ["任务不存在、订单无可引用信息或权限不足"],
+      "effect": "read",
+      "requires_confirmation": false,
+      "required_permissions": {"InstallationTaskDetail": "installation_task:read"}
+    },
+    "installation-schedule": {
+      "purpose": "安排与客户及施工人员确认后的实际进场时间",
+      "prerequisites": ["已协调客户现场与施工人员时间"],
+      "completion_signal": "安装任务详情显示计划安装时间",
+      "blocking_conditions": ["时间未协调、任务已锁定或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"InstallationTaskDetail": "installation_task:update"}
+    },
+    "order-create-design": {
+      "purpose": "为已确认订单创建设计任务",
+      "prerequisites": ["订单已确认且尚无有效设计任务"],
+      "completion_signal": "订单详情出现设计任务",
+      "blocking_conditions": ["订单状态不允许创建、已存在有效任务或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"OrderDetail": "design_task:create"}
+    },
+    "order-create-installation": {
+      "purpose": "为制作完成的订单创建安装任务",
+      "prerequisites": ["制作任务已完成且订单尚无有效安装任务"],
+      "completion_signal": "订单详情出现安装任务",
+      "blocking_conditions": ["制作未完成、已存在有效任务或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"OrderDetail": "installation_task:create"}
+    },
+    "order-create-production": {
+      "purpose": "为设计确认后的订单创建制作任务",
+      "prerequisites": ["设计任务已确认且订单尚无有效制作任务"],
+      "completion_signal": "订单详情出现制作任务",
+      "blocking_conditions": ["设计未确认、已存在有效任务或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"OrderDetail": "production_task:create"}
+    },
+    "order-status-completed": {
+      "purpose": "确认订单交付流程已经完成",
+      "prerequisites": ["安装和验收均已完成"],
+      "completion_signal": "订单状态显示为“已完成”",
+      "blocking_conditions": ["仍有未完成任务、验收未通过或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"OrderDetail": "order:change_status"}
+    },
+    "order-status-confirmed": {
+      "purpose": "确认订单进入正式交付流程",
+      "prerequisites": ["订单关键信息和金额已核对"],
+      "completion_signal": "订单状态显示为“已确认”",
+      "blocking_conditions": ["订单信息不完整、状态不允许变更或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"OrderDetail": "order:change_status"}
+    },
+    "order-status-designing": {
+      "purpose": "将订单推进到设计执行阶段",
+      "prerequisites": ["订单已确认且存在设计任务"],
+      "completion_signal": "订单状态显示为“设计中”",
+      "blocking_conditions": ["设计任务缺失、状态不允许变更或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"OrderDetail": "order:change_status"}
+    },
+    "order-status-in_installation": {
+      "purpose": "将制作完成的订单推进到安装阶段",
+      "prerequisites": ["制作任务已经完成"],
+      "completion_signal": "订单状态显示为“安装中”并出现安装任务",
+      "blocking_conditions": ["制作任务未完成、状态不允许变更或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"OrderDetail": "order:change_status"}
+    },
+    "order-status-in_production": {
+      "purpose": "将设计确认的订单推进到制作阶段",
+      "prerequisites": ["设计任务已经确认"],
+      "completion_signal": "订单状态显示为“生产中”并出现制作任务",
+      "blocking_conditions": ["设计任务未确认、状态不允许变更或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"OrderDetail": "order:change_status"}
+    },
+    "order-status-pending_acceptance": {
+      "purpose": "提交安装完成的订单进入验收",
+      "prerequisites": ["安装任务已经完成"],
+      "completion_signal": "订单状态显示为“待验收”并出现验收单",
+      "blocking_conditions": ["安装任务未完成、状态不允许变更或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"OrderDetail": "order:change_status"}
+    },
+    "quote-status-confirmed": {
+      "purpose": "确认报价内容和金额",
+      "prerequisites": ["客户、报价项目、数量和价格已经核对"],
+      "completion_signal": "报价单状态显示为“已确认”",
+      "blocking_conditions": ["报价内容不完整、状态不允许确认或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"QuoteEdit": "quote:confirm"}
+    },
+    "quote-status-converted": {
+      "purpose": "将已确认报价转换为正式订单",
+      "prerequisites": ["报价单已经确认且未转换"],
+      "completion_signal": "报价单显示“已转换”并生成正式订单",
+      "blocking_conditions": ["报价未确认、已经转换或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"QuoteEdit": "quote:convert"}
+    },
+    "quote-status-draft": {
+      "purpose": "将可调整报价恢复为草稿状态",
+      "prerequisites": ["报价单允许继续编辑"],
+      "completion_signal": "报价单状态显示为“草稿”",
+      "blocking_conditions": ["报价已转订单、状态不允许回退或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"QuoteEdit": "quote:update"}
+    },
+    "receivable-register-payment": {
+      "purpose": "登记客户实际到账的收款记录",
+      "prerequisites": ["已核对付款方、到账金额、时间和收款凭证"],
+      "completion_signal": "应收记录的已收金额增加且欠款同步减少",
+      "blocking_conditions": ["到账信息未核实、订单不存在或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"ReceivablesView": "payment:create"}
+    },
+    "task-assignee": {
+      "purpose": "为任务分配实际负责人",
+      "prerequisites": ["已确认人员可用且职责匹配"],
+      "completion_signal": "任务详情显示已分配负责人",
+      "blocking_conditions": ["人员不可用、任务已锁定或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {
+        "DesignTaskDetail": "design_task:update",
+        "ProductionTaskDetail": "production_task:update",
+        "InstallationTaskDetail": "installation_task:update"
+      }
+    },
+    "task-status-assigned": {
+      "purpose": "确认安装任务已经完成派工",
+      "prerequisites": ["已填写负责人、地址和计划安装时间"],
+      "completion_signal": "安装任务状态显示为“已分配”",
+      "blocking_conditions": ["安装准备信息不完整或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"InstallationTaskDetail": "installation_task:change_status"}
+    },
+    "task-status-completed": {
+      "purpose": "确认当前制作或安装任务已经完成",
+      "prerequisites": ["任务要求和质量检查均已完成"],
+      "completion_signal": "任务状态显示为“已完成”",
+      "blocking_conditions": ["仍有未完成要求、状态不允许变更或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {
+        "ProductionTaskDetail": "production_task:change_status",
+        "InstallationTaskDetail": "installation_task:change_status"
+      }
+    },
+    "task-status-confirmed": {
+      "purpose": "确认设计稿已经通过审核",
+      "prerequisites": ["设计稿已上传并完成审核"],
+      "completion_signal": "设计任务状态显示为“已确认”",
+      "blocking_conditions": ["设计稿缺失、审核未完成或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"DesignTaskDetail": "design_task:change_status"}
+    },
+    "task-status-designing": {
+      "purpose": "启动或恢复设计任务",
+      "prerequisites": ["任务已分配给可执行的设计人员"],
+      "completion_signal": "设计任务状态显示为“设计中”",
+      "blocking_conditions": ["负责人未分配、任务状态不允许变更或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"DesignTaskDetail": "design_task:change_status"}
+    },
+    "task-status-in_progress": {
+      "purpose": "开始现场安装或制作执行",
+      "prerequisites": ["任务已分配且执行准备已完成"],
+      "completion_signal": "任务状态显示为“进行中”",
+      "blocking_conditions": ["负责人或准备信息缺失、状态不允许变更或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {
+        "ProductionTaskDetail": "production_task:change_status",
+        "InstallationTaskDetail": "installation_task:change_status"
+      }
+    },
+    "task-status-pending_acceptance": {
+      "purpose": "提交已完成安装等待验收",
+      "prerequisites": ["现场安装已完成并保留必要记录"],
+      "completion_signal": "安装任务状态显示为“待验收”",
+      "blocking_conditions": ["安装未完成、现场记录缺失或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"InstallationTaskDetail": "installation_task:change_status"}
+    },
+    "task-status-pending_review": {
+      "purpose": "提交设计稿进入审核",
+      "prerequisites": ["设计稿已经上传且内容完整"],
+      "completion_signal": "设计任务状态显示为“待审核”",
+      "blocking_conditions": ["设计稿缺失、状态不允许提交或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"DesignTaskDetail": "design_task:change_status"}
+    },
+    "task-status-qc_check": {
+      "purpose": "提交制作成果进入质量检查",
+      "prerequisites": ["制作内容已经完成"],
+      "completion_signal": "制作任务状态显示为“质检中”",
+      "blocking_conditions": ["制作未完成、状态不允许提交或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"ProductionTaskDetail": "production_task:change_status"}
+    },
+    "task-status-queued": {
+      "purpose": "将制作任务加入排产队列",
+      "prerequisites": ["制作要求、材料和计划已经核对"],
+      "completion_signal": "制作任务状态显示为“已排产”",
+      "blocking_conditions": ["制作信息不完整、状态不允许排产或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"ProductionTaskDetail": "production_task:change_status"}
+    },
+    "task-status-revision": {
+      "purpose": "将设计任务退回修改",
+      "prerequisites": ["已记录明确的审核或客户修改意见"],
+      "completion_signal": "设计任务状态显示为“待修改”",
+      "blocking_conditions": ["修改意见缺失、状态不允许退回或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"DesignTaskDetail": "design_task:change_status"}
+    },
+    "task-status-rework": {
+      "purpose": "将制作任务退回返工",
+      "prerequisites": ["质检已记录明确的不合格项"],
+      "completion_signal": "制作任务状态显示为“返工中”",
+      "blocking_conditions": ["返工原因缺失、状态不允许退回或权限不足"],
+      "effect": "write",
+      "requires_confirmation": true,
+      "required_permissions": {"ProductionTaskDetail": "production_task:change_status"}
+    }
+  }
 }

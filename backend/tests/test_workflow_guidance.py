@@ -308,12 +308,16 @@ def test_missing_design_file_alert_guides_to_upload_control():
         for alert in guidance["alerts"]
         if alert["code"] == "design_file_missing"
     )
-    assert alert["action"] == {
+    assert {
+        key: alert["action"][key]
+        for key in ("label", "target_page", "target_path", "target_key")
+    } == {
         "label": "上传或填写设计稿",
         "target_page": "设计任务详情",
         "target_path": "/design-tasks/22222222-2222-2222-2222-222222222222",
         "target_key": "design-file",
     }
+    assert alert["action"]["semantics"]["required_permission"] == "design_task:update"
 
 
 def test_fully_paid_completed_order_marks_every_stage_complete():

@@ -23,6 +23,15 @@ const guidanceResult: AiToolCallResult = {
       target_page: '设计任务详情',
       target_path: '/design-tasks/22222222-2222-2222-2222-222222222222',
       target_key: 'task-status-confirmed',
+      semantics: {
+        purpose: '确认设计稿已经通过审核',
+        prerequisites: ['设计稿已上传并完成审核'],
+        completion_signal: '设计任务状态显示为“已确认”',
+        blocking_conditions: ['设计稿缺失、审核未完成或权限不足'],
+        effect: 'write',
+        requires_confirmation: true,
+        required_permission: 'design_task:change_status',
+      },
     },
     completion_signal: '设计任务状态变为“已确认”',
     allowed_next_statuses: ['in_production'],
@@ -37,6 +46,11 @@ describe('workflow guidance helpers', () => {
       next_action: {
         label: '确认设计稿',
         target_key: 'task-status-confirmed',
+        semantics: {
+          purpose: '确认设计稿已经通过审核',
+          required_permission: 'design_task:change_status',
+          requires_confirmation: true,
+        },
       },
     })
   })

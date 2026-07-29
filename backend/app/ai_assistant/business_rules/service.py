@@ -108,7 +108,12 @@ class BusinessRuleSyncService:
             "details": details,
         }
 
-    async def get_prompt_context(self) -> str:
+    async def get_prompt_context(
+        self,
+        *,
+        page_key: str | None = None,
+        business_type: str | None = None,
+    ) -> str:
         """Return current rules; source fallback prevents stale database guidance."""
         source_rules = build_business_rule_catalog()
         active_rows = await self._active_rules()
@@ -117,7 +122,11 @@ class BusinessRuleSyncService:
             logger.error(
                 "AI business-rule database drift detected; using current source rules"
             )
-            return render_business_rules_context(source_rules)
+            return render_business_rules_context(
+                source_rules,
+                page_key=page_key,
+                business_type=business_type,
+            )
 
         published_rules = tuple(
             BusinessRuleSpec(
@@ -132,6 +141,8 @@ class BusinessRuleSyncService:
         return render_business_rules_context(
             published_rules,
             catalog_digest=business_rule_catalog_digest(published_rules),
+            page_key=page_key,
+            business_type=business_type,
         )
 
     @staticmethod

@@ -128,6 +128,8 @@ def render_business_rules_context(
     rules: tuple[BusinessRuleSpec, ...],
     *,
     catalog_digest: str | None = None,
+    page_key: str | None = None,
+    business_type: str | None = None,
 ) -> str:
     """Render published database rules as compact LLM context."""
     digest = catalog_digest or business_rule_catalog_digest(rules)
@@ -152,4 +154,58 @@ def render_business_rules_context(
             lines.append(
                 f"- 当前登记 {len(rule.payload.get('target_keys', []))} 个页面控件。"
             )
+            current_page = next(
+                (
+                    page
+                    for page in rule.payload.get("pages", [])
+                    if page.get("page_key") == page_key
+                ),
+                None,
+            )
+            if current_page:
+                lines.append(
+                    "- 当前页面："
+                    f"{current_page['title']}（{current_page['workflow_stage']}）"
+                    f"；用途：{current_page['purpose']}。"
+                )
+
+            semantics = rule.payload.get("semantics", {})
+            relevant_capabilities = []
+            for capability in rule.payload.get("capabilities", []):
+                if (
+                    business_type
+                    and business_type not in capability.get("business_types", [])
+                ):
+                    continue
+                matching_routes = [
+                    route
+                    for route in capability.get("routes", [])
+                    if (
+                        not current_page
+                        or route.get("name") == current_page.get("route_name")
+                    )
+                ]
+                if not matching_routes:
+                    continue
+                relevant_capabilities.append((capability, matching_routes[0]))
+
+            if relevant_capabilities:
+                lines.append("- 当前业务可用页面操作：")
+            for capability, route in relevant_capabilities:
+                target_key = capability["target_key"]
+                operation = semantics.get(target_key, {})
+                permission = operation.get("required_permissions", {}).get(
+                    route.get("name"),
+                    "未登记",
+                )
+                confirmation = (
+                    "需人工确认"
+                    if operation.get("requires_confirmation")
+                    else "只读预览"
+                )
+                lines.append(
+                    f"  - {target_key}：{operation.get('purpose', '')}"
+                    f"；权限 {permission}；{confirmation}"
+                    f"；完成标志：{operation.get('completion_signal', '')}。"
+                )
     return "\n".join(lines)

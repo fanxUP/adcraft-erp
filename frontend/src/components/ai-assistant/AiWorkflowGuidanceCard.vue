@@ -29,6 +29,32 @@
       @action="goToAction"
     />
 
+    <div
+      v-if="guidance.next_action?.semantics"
+      class="action-contract"
+      aria-label="下一步操作说明"
+    >
+      <div class="action-contract-heading">
+        <span>下一步怎么做</span>
+        <el-tag
+          size="small"
+          :type="guidance.next_action.semantics.effect === 'write' ? 'warning' : 'info'"
+        >
+          {{ guidance.next_action.semantics.requires_confirmation ? '需要人工确认' : '只读预览' }}
+        </el-tag>
+      </div>
+      <strong>{{ guidance.next_action.semantics.purpose }}</strong>
+      <ul>
+        <li
+          v-for="item in guidance.next_action.semantics.prerequisites"
+          :key="item"
+        >
+          操作前：{{ item }}
+        </li>
+      </ul>
+      <small>所需权限：{{ guidance.next_action.semantics.required_permission }}</small>
+    </div>
+
     <div v-if="visibleBlockers.length" class="workflow-blockers">
       <div class="workflow-label">
         <el-icon><WarningFilled /></el-icon>
@@ -158,6 +184,35 @@ h2 {
   padding: 8px 10px;
   border-radius: 6px;
   background: var(--ai-warning-bg, rgba(230, 162, 60, 0.1));
+}
+.action-contract {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--ai-border, #2a2a4a);
+  border-radius: 6px;
+  background: rgba(144, 147, 153, 0.06);
+}
+.action-contract-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ai-text-muted, #666688);
+  font-size: 11px;
+}
+.action-contract strong {
+  color: var(--ai-text, #e8e8f0);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.action-contract ul {
+  margin-top: 0;
+}
+.action-contract small {
+  color: var(--ai-text-muted, #666688);
+  font-size: 10px;
 }
 .workflow-label {
   display: flex;

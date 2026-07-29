@@ -96,9 +96,16 @@ class AiOrchestrator:
         accumulated_text = ""
         current_message = message
         round_count = 0
+        page_key = context.get("page") if isinstance(context, dict) else None
+        business_type = (
+            context.get("business_type") if isinstance(context, dict) else None
+        )
         try:
             business_rules_context = (
-                await self.business_rule_service.get_prompt_context()
+                await self.business_rule_service.get_prompt_context(
+                    page_key=page_key,
+                    business_type=business_type,
+                )
             )
         except Exception:
             # AI failures must not affect ERP. Current source rules are safer
@@ -107,7 +114,9 @@ class AiOrchestrator:
                 "Failed to load published AI business rules; using source catalog"
             )
             business_rules_context = render_business_rules_context(
-                build_business_rule_catalog()
+                build_business_rule_catalog(),
+                page_key=page_key,
+                business_type=business_type,
             )
 
         while round_count < max_rounds:

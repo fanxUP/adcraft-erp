@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from app.ai_assistant.page_capabilities import validate_page_action_target
+from app.ai_assistant.page_capabilities import build_page_action_semantics
 
 from .installation_preparation import build_installation_preparation
 
@@ -83,12 +83,12 @@ def _workflow_action(
     path: str,
     target_key: str,
 ) -> dict:
-    validate_page_action_target(target_key, path)
     return {
         "label": label,
         "target_page": page,
         "target_path": path,
         "target_key": target_key,
+        "semantics": build_page_action_semantics(target_key, path),
     }
 
 
