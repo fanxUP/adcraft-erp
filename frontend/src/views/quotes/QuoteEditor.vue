@@ -78,10 +78,20 @@
             </template>
           </template>
         </el-table-column>
-        <el-table-column label="材质工艺" min-width="140">
+        <el-table-column label="产品材质工艺" min-width="280">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
-              <el-input v-model="row.item.material_process" :disabled="isReadonly" size="small" placeholder="材质/工艺" />
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; gap: 4px;">
+                  <el-select v-model="row.item.material_id" :disabled="isReadonly" size="small" filterable clearable placeholder="选择材质" style="flex: 1">
+                    <el-option v-for="material in materialOptions" :key="material.id" :label="material.name" :value="material.id" />
+                  </el-select>
+                  <el-select v-model="row.item.process_id" :disabled="isReadonly" size="small" filterable clearable placeholder="选择工艺" style="flex: 1">
+                    <el-option v-for="process in processOptions" :key="process.id" :label="process.name" :value="process.id" />
+                  </el-select>
+                </div>
+                <el-input v-model="row.item.material_process" :disabled="isReadonly" size="small" placeholder="补充材质/工艺说明（可自由输入）" />
+              </div>
             </template>
           </template>
         </el-table-column>
@@ -303,9 +313,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { onBeforeRouteLeave } from 'vue-router'
 import { createQuote, getQuote, updateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft, importQuoteItems, downloadQuoteTemplate } from '@/api/quotes'
 import { getCustomers } from '@/api/customers'
+import { getMaterials, getProcesses } from '@/api/products'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { uploadAttachment } from '@/api/tasks'
-import type { QuoteItemResponse, QuoteDetailResponse, CustomerResponse } from '@/types/api'
+import type { QuoteItemResponse, QuoteDetailResponse, CustomerResponse, MaterialResponse, ProcessResponse } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 
@@ -320,6 +331,8 @@ const importingItems = ref(false)
 const customerSelectRef = ref()
 const quote = ref<QuoteDetailResponse | null>(null)
 const customerOptions = ref<CustomerResponse[]>([])
+const materialOptions = ref<MaterialResponse[]>([])
+const processOptions = ref<ProcessResponse[]>([])
 const previewVisible = ref(false)
 const quoteId = computed(() => route.params.id as string)
 
@@ -360,6 +373,8 @@ const newItem = (groupName?: string): QuoteItemResponse => ({
   image_url: '',
   sort_order: 0,
   group_name: groupName || undefined,
+  material_id: undefined,
+  process_id: undefined,
   material_process: '',
 })
 
@@ -612,6 +627,15 @@ async function loadCustomers() {
   customerOptions.value = data.items
 }
 
+async function loadMaterialProcessOptions() {
+  const [materials, processes] = await Promise.all([
+    getMaterials({ page: 1, page_size: 100 }),
+    getProcesses({ page: 1, page_size: 100 }),
+  ])
+  materialOptions.value = materials.items.filter(item => item.is_active)
+  processOptions.value = processes.items.filter(item => item.is_active)
+}
+
 function onCustomerVisible(visible: boolean) {
   if (visible) loadCustomers()
 }
@@ -839,7 +863,7 @@ async function handleRevertToDraft() {
 }
 
 onMounted(async () => {
-  await loadCustomers()
+  await Promise.all([loadCustomers(), loadMaterialProcessOptions()])
   if (route.params.id) {
     await fetchQuote()
   } else {
