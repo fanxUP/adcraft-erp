@@ -78,7 +78,7 @@
             </template>
           </template>
         </el-table-column>
-        <el-table-column label="产品材质工艺" min-width="280">
+        <el-table-column label="产品/材质/工艺" min-width="280">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
               <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -88,7 +88,7 @@
                   size="small"
                   filterable
                   clearable
-                  placeholder="选择产品材质工艺"
+                  placeholder="选择产品/材质/工艺组合"
                   @change="applyProductSelection(row.item)"
                 >
                   <el-option
@@ -98,7 +98,7 @@
                     :value="option.id"
                   />
                 </el-select>
-                <el-input v-model="row.item.material_process" :disabled="isReadonly" size="small" placeholder="可自由输入产品材质工艺" />
+                <el-input v-model="row.item.material_process" :disabled="isReadonly" size="small" placeholder="可自由输入产品/材质/工艺" />
               </div>
             </template>
           </template>

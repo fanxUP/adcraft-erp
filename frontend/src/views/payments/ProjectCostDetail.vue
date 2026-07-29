@@ -98,7 +98,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="summary" label="成本摘要" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="description" label="材质工艺" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="description" label="产品/材质/工艺" min-width="180" show-overflow-tooltip />
       <el-table-column prop="specification" label="规格尺寸" width="120" show-overflow-tooltip>
         <template #default="{ row }">{{ row.specification || '-' }}</template>
       </el-table-column>
@@ -185,8 +185,8 @@
         <el-form-item label="成本摘要">
           <el-input v-model="form.summary" type="textarea" :rows="2" placeholder="成本摘要说明…" />
         </el-form-item>
-        <el-form-item label="材质工艺">
-          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="材质工艺说明…" />
+        <el-form-item label="产品/材质/工艺">
+          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="产品/材质/工艺说明…" />
         </el-form-item>
         <el-form-item label="规格尺寸">
           <el-input v-model="form.specification" placeholder="规格尺寸（如 1200×2400mm）" clearable />
@@ -285,7 +285,7 @@
     <el-dialog v-model="showImport" title="导入Excel" width="480px" :close-on-click-modal="false">
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary)">
         Excel 需包含以下列：<br />
-        <b>分项、成本类别、付款方式、收款公司、规格尺寸、数量、单位、单价、金额、欠款金额、成本日期、材质工艺、成本摘要、备注</b>
+        <b>分项、成本类别、付款方式、收款公司、规格尺寸、数量、单位、单价、金额、欠款金额、成本日期、产品/材质/工艺、成本摘要、备注</b>
       </p>
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 13px">
         导入的成本将自动关联到 <b>{{ isQuote ? (order?.quote_no || '报价单') : (order?.order_no || '订单') }}</b>

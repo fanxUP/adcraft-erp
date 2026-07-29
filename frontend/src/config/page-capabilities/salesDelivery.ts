@@ -192,10 +192,10 @@ export const salesDeliveryCapabilities: PageCapabilityMap = {
     availableActions: ['查看安装要求', '更新安装进度', '提交待验收'],
   },
   product_manage: {
-    title: '产品材质工艺',
-    purpose: '维护报价统一使用的产品材质工艺及默认计价信息',
+    title: '产品/材质/工艺',
+    purpose: '维护报价统一使用的产品、材质、工艺组合及默认计价信息',
     workflowStage: 'master_data',
-    availableActions: ['查询产品材质工艺', '新增产品材质工艺', '调整产品材质工艺'],
+    availableActions: ['查询产品/材质/工艺', '新增产品/材质/工艺组合', '调整产品/材质/工艺组合'],
   },
   outsource_vendors: {
     title: '外协商列表',

@@ -65,7 +65,7 @@
             <tr>
               <th class="center">序号</th>
               <th>项目内容</th>
-              <th>材质工艺</th>
+              <th>产品/材质/工艺</th>
               <th>规格</th>
               <th class="numeric">数量</th>
               <th class="center">单位</th>

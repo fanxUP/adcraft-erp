@@ -88,7 +88,7 @@ function roleLabel(name: string) { return ROLE_MAP[name] || name }
 
 const groupLabels: Record<string, string> = {
   system: '系统管理', user: '用户管理', customer: '客户管理',
-  product: '产品材质工艺', material: '产品材质工艺（兼容权限）', process: '产品材质工艺（兼容权限）',
+  product: '产品/材质/工艺', material: '产品/材质/工艺（兼容权限）', process: '产品/材质/工艺（兼容权限）',
   quote: '报价管理', order: '订单管理', design_task: '设计任务',
   production_task: '生产任务', installation_task: '安装任务',
   payment: '收款管理', statement: '对账单', expense: '支出管理',

@@ -1,10 +1,10 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <h2>产品材质工艺</h2>
+      <h2>产品/材质/工艺</h2>
       <div>
         <el-button @click="importDialogVisible = true">导入</el-button>
-        <el-button type="danger" @click="handleCreate">新建产品材质工艺</el-button>
+        <el-button type="danger" @click="handleCreate">新建产品/材质/工艺组合</el-button>
       </div>
     </div>
 
@@ -51,7 +51,7 @@
       @change="fetchData"
     />
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑产品材质工艺' : '新建产品材质工艺'" width="min(760px, 92vw)" :close-on-click-modal="false">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑产品/材质/工艺组合' : '新建产品/材质/工艺组合'" width="min(760px, 92vw)" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <div class="combination-fields">
           <el-form-item label="产品" required>
@@ -97,7 +97,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="importDialogVisible" title="导入产品材质工艺" width="520px" :close-on-click-modal="false">
+    <el-dialog v-model="importDialogVisible" title="导入产品/材质/工艺组合" width="520px" :close-on-click-modal="false">
       <div style="margin-bottom: 16px; font-size: 13px; color: var(--ad-text-secondary)">
         <p>支持 .xlsx / .xls 格式，请确保 Excel 包含以下列（<span style="color: #f56c6c">*</span>为必填）：</p>
         <el-table :data="templateColumns" border size="small" style="margin: 12px 0">
@@ -234,7 +234,7 @@ async function handleSave() {
 
 async function handleDelete(row: ProductResponse) {
   const label = [row.name, row.material_name, row.process_name].filter(Boolean).join(' / ')
-  await ElMessageBox.confirm(`确认删除产品材质工艺 "${label}"？`, '确认', { type: 'warning' })
+  await ElMessageBox.confirm(`确认删除产品/材质/工艺组合 "${label}"？`, '确认', { type: 'warning' })
   await deleteProduct(row.id)
   ElMessage.success('已删除')
   fetchData()

@@ -64,6 +64,8 @@ QUOTE_COLUMN_MAP = {
     "备注": "remark",
     "明细分组": "group_name",
     "项目名称(明细)": "item_name",
+    "产品/材质/工艺": "material_process",
+    "产品材质工艺": "material_process",
     "材质工艺": "material_process",
     "数量": "quantity",
     "单位": "unit",
@@ -84,11 +86,15 @@ QUOTE_COLUMN_MAP = {
     "明细备注": "item_remark",
 }
 QUOTE_REQUIRED = ["客户名称", "项目名称", "项目名称(明细)", "数量"]
-HEADER_LABELS = list(QUOTE_COLUMN_MAP.keys())
+HEADER_LABELS = [
+    label
+    for label in QUOTE_COLUMN_MAP
+    if label not in {"产品材质工艺", "材质工艺"}
+]
 
 # Item-only columns for import template (ordered as user specified)
 ITEM_TEMPLATE_HEADERS = [
-    "明细分组", "项目内容", "材质工艺",
+    "明细分组", "项目内容", "产品/材质/工艺",
     "长", "长单位", "宽", "宽单位", "高", "高单位",
     "件数", "面积开关",
     "数量", "单位", "单价",
@@ -99,6 +105,8 @@ ITEM_TEMPLATE_HEADERS = [
 QUOTE_ITEM_TEMPLATE_MAP = {
     "明细分组": "group_name",
     "项目内容": "item_name",
+    "产品/材质/工艺": "material_process",
+    "产品材质工艺": "material_process",
     "材质工艺": "material_process",
     "长": "length",
     "长单位": "length_unit",

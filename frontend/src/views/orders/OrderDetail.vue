@@ -101,7 +101,7 @@
                   <template v-else>{{ row.item.item_name }}</template>
                 </template>
               </el-table-column>
-              <el-table-column label="材质工艺" min-width="120">
+              <el-table-column label="产品/材质/工艺" min-width="150">
                 <template #default="{ row }">
                   <template v-if="row.type === 'item'">{{ row.item.material_process || '-' }}</template>
                 </template>
@@ -640,7 +640,7 @@ function handlePrintOrder() {
   html += '</div>'
   
   // Items table
-  html += '<table class="print-table"><thead><tr><th class="center">序号</th><th>项目内容</th><th>材质工艺</th><th>规格</th><th class="numeric">数量</th><th class="center">单位</th><th class="numeric">单价</th><th class="numeric">小计</th><th>备注</th></tr></thead><tbody>'
+  html += '<table class="print-table"><thead><tr><th class="center">序号</th><th>项目内容</th><th>产品/材质/工艺</th><th>规格</th><th class="numeric">数量</th><th class="center">单位</th><th class="numeric">单价</th><th class="numeric">小计</th><th>备注</th></tr></thead><tbody>'
   const items = o.items || []
   if (items.length === 0) {
     html += '<tr><td colspan="9" class="print-empty">暂无明细</td></tr>'

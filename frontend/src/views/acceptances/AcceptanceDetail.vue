@@ -136,10 +136,10 @@
                 </template>
               </template>
             </el-table-column>
-            <el-table-column label="材质工艺" min-width="120">
+            <el-table-column label="产品/材质/工艺" min-width="150">
               <template #default="{ row }">
                 <template v-if="row.type === 'item'">
-                  <el-input v-if="canEdit" v-model="row.item.material_process" placeholder="材质工艺" />
+                  <el-input v-if="canEdit" v-model="row.item.material_process" placeholder="产品 / 材质 / 工艺" />
                   <span v-else>{{ row.item.material_process || '-' }}</span>
                 </template>
               </template>

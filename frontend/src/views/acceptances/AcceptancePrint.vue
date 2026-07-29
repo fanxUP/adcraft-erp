@@ -32,7 +32,7 @@
           <tr>
             <th style="width: 40px">序号</th>
             <th><div class="wrap-text">项目内容</div></th>
-            <th><div class="wrap-text">材质工艺</div></th>
+            <th><div class="wrap-text">产品/材质/工艺</div></th>
             <th><div class="wrap-text">规格</div></th>
             <th>面积</th>
             <th>数量</th>
