@@ -86,6 +86,10 @@ if [ -n "$EXPECTED_COMMIT" ]; then
   fi
 fi
 
+if [ -n "$BUNDLE" ]; then
+  git update-ref "refs/remotes/origin/${BRANCH}" "$TARGET_COMMIT"
+fi
+
 echo "=== AdCraft ERP 全量部署 ==="
 echo "目标提交：$TARGET_COMMIT"
 
@@ -107,6 +111,12 @@ git clean -ffdx \
   -e backend/.venv \
   -e backend/uploads
 
+for PERSISTENT_PATH in .deployed-commit backend/uploads/; do
+  if ! grep -Fqx "$PERSISTENT_PATH" .git/info/exclude; then
+    printf '%s\n' "$PERSISTENT_PATH" >> .git/info/exclude
+  fi
+done
+
 if [ ! -f .env ]; then
   echo "缺少生产环境配置：$PROJECT_DIR/.env" >&2
   exit 1
@@ -124,7 +134,7 @@ if [ -n "$DIST_ARCHIVE" ]; then
   fi
   rm -rf frontend/dist
   mkdir -p frontend/dist
-  tar -xzf "$DIST_ARCHIVE" -C frontend/dist
+  tar --warning=no-unknown-keyword -xzf "$DIST_ARCHIVE" -C frontend/dist
 else
   NODE_MAJOR="$(node -p 'Number(process.versions.node.split(".")[0])')"
   if [ "$NODE_MAJOR" -lt 20 ]; then
