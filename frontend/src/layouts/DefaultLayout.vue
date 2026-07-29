@@ -102,6 +102,14 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => authStore.user?.id,
+  userId => {
+    if (userId) aiStore.restorePageActionGuide(userId)
+  },
+  { immediate: true },
+)
+
 function handleLogout() {
   chatStore.disconnectWebSocket()
   authStore.logout()

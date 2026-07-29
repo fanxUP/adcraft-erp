@@ -74,7 +74,13 @@ export interface AiPageActionGuide {
   target_status?: string
 }
 
-export type AiPageGuideState = 'idle' | 'locating' | 'active' | 'completed' | 'not_found'
+export type AiPageGuideState =
+  | 'idle'
+  | 'restored'
+  | 'locating'
+  | 'active'
+  | 'completed'
+  | 'not_found'
 
 export interface AiPendingAction {
   id: string

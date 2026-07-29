@@ -18,6 +18,7 @@
       <div class="ai-page-guide-copy">
         <span class="ai-page-guide-eyebrow">{{ stateLabel }}</span>
         <strong>{{ store.activePageGuide.label }}</strong>
+        <small v-if="store.pageGuideState === 'restored'">已恢复上次未完成的流程，可从这里继续。</small>
         <small v-if="store.pageGuideState === 'active'">请操作高亮区域，完成后 AI 会自动核验。</small>
         <small v-else-if="store.pageGuideState === 'not_found'">控件暂未显示，请先处理页面中的阻塞条件。</small>
         <small v-else-if="store.pageGuideState === 'completed'">
@@ -25,6 +26,11 @@
         </small>
       </div>
       <div class="ai-page-guide-actions">
+        <button
+          v-if="store.pageGuideState === 'restored'"
+          type="button"
+          @click="resumeRestoredGuide"
+        >继续引导</button>
         <button
           v-if="store.pageGuideState === 'completed' && store.pageGuideContinuation"
           type="button"
@@ -69,6 +75,7 @@ let revealAttempted = false
 
 const stateLabel = computed(() => ({
   idle: '页面引导',
+  restored: '已恢复引导',
   locating: '正在定位',
   active: '下一步',
   completed: '本步已完成',
@@ -157,6 +164,16 @@ function startLocating() {
   locateTimer = window.setInterval(() => void tryLocate(), 160)
 }
 
+async function resumeRestoredGuide() {
+  const targetPath = store.resumePageActionGuide()
+  if (!targetPath) return
+  if (!isSameWorkflowPath(route.path, targetPath)) {
+    await router.push(targetPath)
+  }
+  await nextTick()
+  startLocating()
+}
+
 async function continueToNextPage() {
   if (completionTimer !== null) {
     window.clearTimeout(completionTimer)
@@ -177,7 +194,7 @@ watch(
   () => store.activePageGuide?.target_key,
   targetKey => {
     clearLocatingResources()
-    if (targetKey) void nextTick(startLocating)
+    if (targetKey && store.pageGuideState !== 'restored') void nextTick(startLocating)
   },
   { immediate: true },
 )

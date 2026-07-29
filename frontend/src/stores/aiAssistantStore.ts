@@ -22,6 +22,11 @@ import {
   getPageGuideContinuation,
   hasPageActionCompleted,
 } from '@/utils/pageActionGuide'
+import {
+  clearPersistedPageGuide,
+  loadPersistedPageGuide,
+  persistPageGuide,
+} from '@/utils/pageGuidePersistence'
 
 export const useAiAssistantStore = defineStore('aiAssistant', () => {
   // UI state
@@ -48,6 +53,8 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   const activePageGuide = ref<AiPageActionGuide | null>(null)
   const pageGuideState = ref<AiPageGuideState>('idle')
   const pageGuideContinuation = ref<AiWorkflowAction | null>(null)
+  let pageGuideOwnerId: string | null = null
+  let pageGuideStorage: Storage | null = null
   let guidanceRequestSequence = 0
 
   // Input state
@@ -380,6 +387,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
             guidance,
           )
           pageGuideState.value = 'completed'
+          syncPersistedPageGuide()
         }
       }
       return guidance
@@ -448,6 +456,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
       ...(action.target_status ? { target_status: action.target_status } : {}),
     }
     pageGuideState.value = 'locating'
+    syncPersistedPageGuide()
     closeDrawer()
     return true
   }
@@ -460,12 +469,70 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     activePageGuide.value = null
     pageGuideState.value = 'idle'
     pageGuideContinuation.value = null
+    syncPersistedPageGuide()
   }
 
   function takePageGuideContinuation() {
     const continuation = pageGuideContinuation.value
     pageGuideContinuation.value = null
     return continuation
+  }
+
+  function getBrowserStorage(): Storage | null {
+    try {
+      return typeof window === 'undefined' ? null : window.localStorage
+    } catch {
+      return null
+    }
+  }
+
+  function continuationToPageGuide(action: AiWorkflowAction): AiPageActionGuide | null {
+    if (!action.target_key) return null
+    return {
+      label: action.label,
+      target_path: action.target_path,
+      target_key: action.target_key,
+      ...(action.target_status ? { target_status: action.target_status } : {}),
+    }
+  }
+
+  function syncPersistedPageGuide() {
+    if (!pageGuideOwnerId || !pageGuideStorage) return
+    const continuationGuide = pageGuideContinuation.value
+      ? continuationToPageGuide(pageGuideContinuation.value)
+      : null
+    const guide = continuationGuide
+      || (pageGuideState.value === 'completed' ? null : activePageGuide.value)
+    if (guide) {
+      persistPageGuide(pageGuideStorage, pageGuideOwnerId, guide)
+    } else {
+      clearPersistedPageGuide(pageGuideStorage, pageGuideOwnerId)
+    }
+  }
+
+  function restorePageActionGuide(ownerId: string, storage = getBrowserStorage()) {
+    const ownerChanged = Boolean(pageGuideOwnerId && pageGuideOwnerId !== ownerId)
+    if (ownerChanged) {
+      activePageGuide.value = null
+      pageGuideContinuation.value = null
+      pageGuideState.value = 'idle'
+    }
+    pageGuideOwnerId = ownerId
+    pageGuideStorage = storage
+    if (!storage) return false
+    const guide = loadPersistedPageGuide(storage, ownerId)
+    if (!guide) return false
+    activePageGuide.value = guide
+    pageGuideContinuation.value = null
+    pageGuideState.value = 'restored'
+    return true
+  }
+
+  function resumePageActionGuide() {
+    if (!activePageGuide.value || pageGuideState.value !== 'restored') return null
+    pageGuideState.value = 'locating'
+    syncPersistedPageGuide()
+    return activePageGuide.value.target_path
   }
 
   async function notifyBusinessMutation() {
@@ -532,7 +599,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     sendMessage, sendMessageStream,
     startWorkflowGuidance, refreshWorkflowGuidance, clearWorkflowGuidance,
     startPageActionGuide, setPageGuideState, clearPageActionGuide,
-    takePageGuideContinuation,
+    takePageGuideContinuation, restorePageActionGuide, resumePageActionGuide,
     notifyBusinessMutation,
     confirmPendingAction, cancelPendingAction,
   }

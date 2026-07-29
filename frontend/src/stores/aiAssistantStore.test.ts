@@ -13,6 +13,16 @@ vi.mock('@/api/aiAssistant', () => ({
 const orderId = '33333333-3333-3333-3333-333333333333'
 const nextOrderId = '44444444-4444-4444-4444-444444444444'
 
+class MemoryStorage implements Storage {
+  private values = new Map<string, string>()
+  get length() { return this.values.size }
+  clear() { this.values.clear() }
+  getItem(key: string) { return this.values.get(key) ?? null }
+  key(index: number) { return [...this.values.keys()][index] ?? null }
+  removeItem(key: string) { this.values.delete(key) }
+  setItem(key: string, value: string) { this.values.set(key, value) }
+}
+
 function guidance(businessId = orderId): AiWorkflowGuidance {
   return {
     business_type: 'order',
@@ -168,5 +178,75 @@ describe('AI assistant proactive workflow guidance', () => {
 
     expect(store.pageGuideState).toBe('completed')
     expect(store.pageGuideContinuation).toEqual(parentOrderAction)
+  })
+
+  it('restores an unfinished page guide after the store is recreated', () => {
+    const storage = new MemoryStorage()
+    const firstStore = useAiAssistantStore()
+    firstStore.restorePageActionGuide('user-a', storage)
+    firstStore.startPageActionGuide(guidance().next_action!)
+
+    setActivePinia(createPinia())
+    const restoredStore = useAiAssistantStore()
+
+    expect(restoredStore.restorePageActionGuide('user-a', storage)).toBe(true)
+    expect(restoredStore.pageGuideState).toBe('restored')
+    expect(restoredStore.activePageGuide?.target_key).toBe('order-status-in_production')
+    expect(restoredStore.resumePageActionGuide()).toBe(`/orders/${orderId}`)
+    expect(restoredStore.pageGuideState).toBe('locating')
+  })
+
+  it('does not carry an in-memory guide into another user account', () => {
+    const storage = new MemoryStorage()
+    const store = useAiAssistantStore()
+    store.restorePageActionGuide('user-a', storage)
+    store.startPageActionGuide(guidance().next_action!)
+
+    expect(store.restorePageActionGuide('user-b', storage)).toBe(false)
+    expect(store.activePageGuide).toBeNull()
+    expect(store.pageGuideState).toBe('idle')
+  })
+
+  it('persists the cross-page continuation as the next guide to resume', async () => {
+    const storage = new MemoryStorage()
+    const taskId = '22222222-2222-2222-2222-222222222222'
+    const taskGuidance: AiWorkflowGuidance = {
+      business_type: 'design_task',
+      business_id: taskId,
+      current_status: 'pending_review',
+      current_step: '设计阶段',
+      blockers: [],
+      next_action: {
+        label: '确认设计稿',
+        target_page: '设计任务详情',
+        target_path: `/design-tasks/${taskId}`,
+        target_status: 'confirmed',
+        target_key: 'task-status-confirmed',
+      },
+      completion_signal: '设计任务状态变为“已确认”',
+      allowed_next_statuses: ['confirmed'],
+    }
+    const parentOrderAction = guidance().next_action!
+    vi.mocked(aiApi.getWorkflowGuidance)
+      .mockResolvedValueOnce(taskGuidance)
+      .mockResolvedValueOnce({
+        ...taskGuidance,
+        current_status: 'confirmed',
+        next_action: parentOrderAction,
+      })
+    const store = useAiAssistantStore()
+    store.restorePageActionGuide('user-a', storage)
+    store.resetPageContext({ business_type: 'design_task', business_id: taskId })
+    store.openDrawer()
+    await vi.waitFor(() => expect(store.activeGuidance).not.toBeNull())
+    store.startPageActionGuide(store.activeGuidance!.next_action!)
+
+    await store.notifyBusinessMutation()
+    setActivePinia(createPinia())
+    const restoredStore = useAiAssistantStore()
+    restoredStore.restorePageActionGuide('user-a', storage)
+
+    expect(restoredStore.activePageGuide?.target_key).toBe('order-status-in_production')
+    expect(restoredStore.activePageGuide?.target_path).toBe(`/orders/${orderId}`)
   })
 })
