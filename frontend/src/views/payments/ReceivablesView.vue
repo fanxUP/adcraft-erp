@@ -210,7 +210,14 @@
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
           <el-button style="margin-left: 12px" @click="fetchPayments">搜索</el-button>
-          <el-button type="danger" style="margin-left: auto" @click="openPaymentDialog()">登记收款</el-button>
+          <el-button
+            data-ai-target="receivable-register-payment"
+            type="danger"
+            style="margin-left: auto"
+            @click="openPaymentDialog()"
+          >
+            登记收款
+          </el-button>
         </div>
 
         <el-table :data="paymentList" v-loading="paymentLoading" stripe style="margin-top: 16px">
@@ -286,12 +293,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { getPayments, createPayment, voidPayment, getCustomerDebt } from '@/api/payments'
 import { getOrders } from '@/api/orders'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { PaymentResponse, OrderListResponse, CustomerResponse, CustomerDebtItem, CustomerDebtOrder } from '@/types/api'
+import { useAiAssistantStore } from '@/stores/aiAssistantStore'
+
+const route = useRoute()
+const aiStore = useAiAssistantStore()
 
 // ── Tab state ──
 
@@ -396,6 +408,7 @@ async function loadOptions() {
   ])
   orderOptions.value = oRes.items
   customerOptions.value = cRes.items
+  applyGuidedOrder()
 }
 
 // ── Shared: 登记收款对话框 ──
@@ -415,11 +428,28 @@ function onOrderSelect(oid: string) {
   if (o) form.customer_id = o.customer_id
 }
 
+function guidedOrderId() {
+  return typeof route.query.order_id === 'string'
+    ? route.query.order_id
+    : ''
+}
+
+function applyGuidedOrder() {
+  const orderId = guidedOrderId()
+  if (!orderId || !orderOptions.value.some(order => order.id === orderId)) return
+  activeTab.value = 'payments'
+  filterOrderId.value = orderId
+  void fetchPayments()
+}
+
 /** Open the payment dialog, optionally pre-filling the order from Tab 1's expanded row */
 function openPaymentDialog(order?: CustomerDebtOrder | OrderListResponse) {
-  if (order) {
-    form.order_id = order.id
-    onOrderSelect(order.id)
+  const selectedOrder = order || orderOptions.value.find(
+    item => item.id === (filterOrderId.value || guidedOrderId()),
+  )
+  if (selectedOrder) {
+    form.order_id = selectedOrder.id
+    onOrderSelect(selectedOrder.id)
   }
   showDialog.value = true
 }
@@ -428,6 +458,7 @@ async function handleCreate() {
   saving.value = true
   try {
     const o = orderOptions.value.find(o => o.id === form.order_id)
+    const paidOrderId = form.order_id
     await createPayment({
       ...form,
       customer_id: form.customer_id || o?.customer_id,
@@ -438,6 +469,7 @@ async function handleCreate() {
     // Refresh both tabs
     fetchPayments()
     fetchDebts()
+    await aiStore.requestWorkflowGuidance('order', paidOrderId, true)
   } catch {
     // handled by interceptor
   } finally { saving.value = false }
@@ -464,6 +496,11 @@ onMounted(() => {
   fetchPayments()
   loadOptions()
 })
+
+watch(
+  () => route.query.order_id,
+  applyGuidedOrder,
+)
 </script>
 
 <style scoped>

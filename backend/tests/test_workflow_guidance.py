@@ -93,7 +93,11 @@ def test_completed_order_with_balance_guides_user_to_receivables():
 
     assert guidance["current_step"] == "收款阶段"
     assert guidance["blockers"] == ["订单尚有 400.00 元未收"]
-    assert guidance["next_action"]["target_path"] == "/receivables"
+    assert guidance["next_action"]["target_path"] == (
+        f"/receivables?order_id={SAMPLE_ORDER_ID}"
+    )
+    assert guidance["next_action"]["target_key"] == "receivable-register-payment"
+    assert guidance["alerts"][0]["action"] == guidance["next_action"]
     assert guidance["completion_signal"] == "订单未收金额变为 0.00 元"
 
 
@@ -167,7 +171,65 @@ def test_order_guidance_reports_actionable_delivery_anomalies():
         "installation_schedule_missing",
     }
     assert guidance["alerts"][0]["severity"] == "danger"
+    alerts_by_code = {
+        alert["code"]: alert
+        for alert in guidance["alerts"]
+    }
+    assert alerts_by_code["task_unassigned"]["action"]["target_key"] == (
+        "task-assignee"
+    )
+    assert alerts_by_code["installation_address_missing"]["action"][
+        "target_key"
+    ] == "installation-address"
+    assert alerts_by_code["installation_schedule_missing"]["action"][
+        "target_key"
+    ] == "installation-schedule"
+    assert all(
+        alert["action"]["target_path"]
+        == "/installation-tasks/44444444-4444-4444-4444-444444444444"
+        for alert in (
+            alerts_by_code["task_unassigned"],
+            alerts_by_code["installation_address_missing"],
+            alerts_by_code["installation_schedule_missing"],
+        )
+    )
     assert guidance["progress"]["current_stage_key"] == "installation"
+
+
+def test_missing_design_file_alert_guides_to_upload_control():
+    guidance = build_workflow_guidance(
+        {
+            "business_type": "order",
+            "business_id": str(SAMPLE_ORDER_ID),
+            "status": "designing",
+            "design_tasks": [
+                {
+                    "id": "22222222-2222-2222-2222-222222222222",
+                    "design_no": "D20260729-0001",
+                    "status": "designing",
+                    "assigned_to": "operator",
+                    "design_file_url": None,
+                }
+            ],
+            "production_tasks": [],
+            "installation_tasks": [],
+            "acceptances": [],
+            "total_amount": 1000,
+            "total_paid": 0,
+        }
+    )
+
+    alert = next(
+        alert
+        for alert in guidance["alerts"]
+        if alert["code"] == "design_file_missing"
+    )
+    assert alert["action"] == {
+        "label": "上传或填写设计稿",
+        "target_page": "设计任务详情",
+        "target_path": "/design-tasks/22222222-2222-2222-2222-222222222222",
+        "target_key": "design-file",
+    }
 
 
 def test_fully_paid_completed_order_marks_every_stage_complete():

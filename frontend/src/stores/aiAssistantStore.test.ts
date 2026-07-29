@@ -252,4 +252,28 @@ describe('AI assistant proactive workflow guidance', () => {
     expect(restoredStore.activePageGuide?.target_key).toBe('order-status-in_production')
     expect(restoredStore.activePageGuide?.target_path).toBe(`/orders/${orderId}`)
   })
+
+  it('verifies and completes a persisted order action from a finance page', async () => {
+    vi.mocked(aiApi.getWorkflowGuidance).mockResolvedValue({
+      ...guidance(),
+      current_status: 'completed',
+      current_step: '流程已完成',
+      next_action: null,
+      completion_signal: '订单已完工且款项已结清',
+      allowed_next_statuses: [],
+    })
+    const store = useAiAssistantStore()
+    store.startPageActionGuide({
+      label: '登记该订单收款',
+      target_page: '应收管理',
+      target_path: `/receivables?order_id=${orderId}`,
+      target_key: 'receivable-register-payment',
+    })
+    store.resetPageContext({ business_type: 'finance' })
+
+    await store.requestWorkflowGuidance('order', orderId, true)
+
+    expect(store.pageGuideState).toBe('completed')
+    expect(store.activeGuidance).toBeNull()
+  })
 })

@@ -48,8 +48,42 @@
       </el-card>
 
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
-        <template #header><span>验收</span></template>
+        <template #header><span>任务信息与验收</span></template>
         <el-form :model="editForm" label-width="120px">
+          <el-form-item label="负责人" data-ai-target="task-assignee">
+            <el-select
+              v-model="editForm.assigned_to"
+              placeholder="选择安装负责人"
+              clearable
+              filterable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="user in userOptions"
+                :key="user.id"
+                :label="user.real_name || user.username"
+                :value="user.id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="安装地址" data-ai-target="installation-address">
+            <el-input v-model="editForm.address" placeholder="填写准确安装地址" />
+          </el-form-item>
+          <el-form-item label="计划安装时间" data-ai-target="installation-schedule">
+            <el-date-picker
+              v-model="editForm.scheduled_at"
+              type="datetime"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+              placeholder="选择计划安装时间"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="联系人">
+            <el-input v-model="editForm.contact_name" />
+          </el-form-item>
+          <el-form-item label="联系电话">
+            <el-input v-model="editForm.contact_phone" />
+          </el-form-item>
           <el-form-item label="验收结果">
             <el-input v-model="editForm.acceptance_result" type="textarea" :rows="3" placeholder="填写验收意见..." />
           </el-form-item>
@@ -92,9 +126,10 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getInstallationTask, updateInstallationTask, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
+import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
-import type { InstallationTaskResponse } from '@/types/api'
+import type { InstallationTaskResponse, UserResponse } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 
 const route = useRoute()
@@ -103,8 +138,16 @@ const loading = ref(false)
 const updating = ref(false)
 const changing = ref(false)
 const task = ref<InstallationTaskResponse | null>(null)
+const userOptions = ref<UserResponse[]>([])
 const statusForm = reactive({ to_status: '', reason: '' })
-const editForm = reactive({ acceptance_result: '' })
+const editForm = reactive({
+  assigned_to: '',
+  address: '',
+  scheduled_at: '',
+  contact_name: '',
+  contact_phone: '',
+  acceptance_result: '',
+})
 
 function statusLabel(s: string) {
   const map: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成' }
@@ -117,13 +160,33 @@ function statusColor(s: string) {
 
 async function fetchTask() {
   loading.value = true
-  try { task.value = await getInstallationTask(route.params.id as string) } finally { loading.value = false }
+  try {
+    const data = await getInstallationTask(route.params.id as string)
+    task.value = data
+    Object.assign(editForm, {
+      assigned_to: data.assigned_to || '',
+      address: data.address || '',
+      scheduled_at: data.scheduled_at || '',
+      contact_name: data.contact_name || '',
+      contact_phone: data.contact_phone || '',
+      acceptance_result: data.acceptance_result || '',
+    })
+  } finally { loading.value = false }
+}
+
+async function loadUsers() {
+  const data = await getUsers({ page_size: 100 })
+  userOptions.value = data.items
 }
 
 async function handleUpdate() {
   updating.value = true
   try {
-    await updateInstallationTask(route.params.id as string, editForm)
+    await updateInstallationTask(route.params.id as string, {
+      ...editForm,
+      assigned_to: editForm.assigned_to || null,
+      scheduled_at: editForm.scheduled_at || null,
+    })
     ElMessage.success('保存成功')
     await fetchTask()
     await aiStore.notifyBusinessMutation()
@@ -165,7 +228,10 @@ async function handleDeleteAttachment(id: string) {
   fetchTask()
 }
 
-onMounted(fetchTask)
+onMounted(() => {
+  void fetchTask()
+  void loadUsers()
+})
 </script>
 
 <style scoped>

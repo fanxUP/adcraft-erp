@@ -48,6 +48,22 @@
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>质检与返工</span></template>
         <el-form :model="editForm" label-width="120px">
+          <el-form-item label="负责人" data-ai-target="task-assignee">
+            <el-select
+              v-model="editForm.assigned_to"
+              placeholder="选择制作负责人"
+              clearable
+              filterable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="user in userOptions"
+                :key="user.id"
+                :label="user.real_name || user.username"
+                :value="user.id"
+              />
+            </el-select>
+          </el-form-item>
           <el-form-item label="质检结果">
             <el-select v-model="editForm.qc_result" style="width: 200px">
               <el-option label="合格" value="pass" />
@@ -97,9 +113,10 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getProductionTask, updateProductionTask, changeProductionTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
+import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
-import type { ProductionTaskResponse } from '@/types/api'
+import type { ProductionTaskResponse, UserResponse } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 
 const route = useRoute()
@@ -108,8 +125,9 @@ const loading = ref(false)
 const updating = ref(false)
 const changing = ref(false)
 const task = ref<ProductionTaskResponse | null>(null)
+const userOptions = ref<UserResponse[]>([])
 const statusForm = reactive({ to_status: '', reason: '' })
-const editForm = reactive({ qc_result: '', rework_reason: '' })
+const editForm = reactive({ assigned_to: '', qc_result: '', rework_reason: '' })
 
 function statusLabel(s: string) {
   const map: Record<string, string> = { pending: '待制作', queued: '排队中', in_progress: '制作中', qc_check: '待质检', rework: '返工', completed: '已完成' }
@@ -122,13 +140,29 @@ function statusColor(s: string) {
 
 async function fetchTask() {
   loading.value = true
-  try { task.value = await getProductionTask(route.params.id as string) } finally { loading.value = false }
+  try {
+    const data = await getProductionTask(route.params.id as string)
+    task.value = data
+    Object.assign(editForm, {
+      assigned_to: data.assigned_to || '',
+      qc_result: data.qc_result || '',
+      rework_reason: data.rework_reason || '',
+    })
+  } finally { loading.value = false }
+}
+
+async function loadUsers() {
+  const data = await getUsers({ page_size: 100 })
+  userOptions.value = data.items
 }
 
 async function handleUpdate() {
   updating.value = true
   try {
-    await updateProductionTask(route.params.id as string, editForm)
+    await updateProductionTask(route.params.id as string, {
+      ...editForm,
+      assigned_to: editForm.assigned_to || null,
+    })
     ElMessage.success('保存成功')
     await fetchTask()
     await aiStore.notifyBusinessMutation()
@@ -169,7 +203,10 @@ async function handleDeleteAttachment(id: string) {
   fetchTask()
 }
 
-onMounted(fetchTask)
+onMounted(() => {
+  void fetchTask()
+  void loadUsers()
+})
 </script>
 
 <style scoped>

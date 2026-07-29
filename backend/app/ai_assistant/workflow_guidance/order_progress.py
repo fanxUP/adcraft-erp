@@ -73,13 +73,36 @@ def _parse_datetime(value) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def _alert(code: str, severity: str, title: str, detail: str) -> dict:
+def _workflow_action(
+    label: str,
+    page: str,
+    path: str,
+    target_key: str,
+) -> dict:
     return {
+        "label": label,
+        "target_page": page,
+        "target_path": path,
+        "target_key": target_key,
+    }
+
+
+def _alert(
+    code: str,
+    severity: str,
+    title: str,
+    detail: str,
+    action: dict | None = None,
+) -> dict:
+    result = {
         "code": code,
         "severity": severity,
         "title": title,
         "detail": detail,
     }
+    if action:
+        result["action"] = action
+    return result
 
 
 def _current_task(snapshot: dict, key: str, terminal_status: str) -> dict | None:
@@ -93,7 +116,10 @@ def _current_task(snapshot: dict, key: str, terminal_status: str) -> dict | None
     )
 
 
-def build_order_alerts(snapshot: dict) -> list[dict]:
+def build_order_alerts(
+    snapshot: dict,
+    next_action: dict | None = None,
+) -> list[dict]:
     status = str(snapshot.get("status") or "")
     if status == "cancelled":
         return [
@@ -117,19 +143,41 @@ def build_order_alerts(snapshot: dict) -> list[dict]:
                 "计划交付时间为 "
                 f"{deadline.astimezone(BUSINESS_TIMEZONE).strftime('%Y-%m-%d %H:%M')}"
                 "，请立即核实施工进度。",
+                next_action,
             )
         )
 
     task_config = {
-        "designing": ("design_tasks", "confirmed", "设计任务"),
-        "in_production": ("production_tasks", "completed", "制作任务"),
-        "in_installation": ("installation_tasks", "completed", "安装任务"),
+        "designing": (
+            "design_tasks",
+            "confirmed",
+            "设计任务",
+            "设计任务详情",
+            "/design-tasks",
+        ),
+        "in_production": (
+            "production_tasks",
+            "completed",
+            "制作任务",
+            "制作任务详情",
+            "/production-tasks",
+        ),
+        "in_installation": (
+            "installation_tasks",
+            "completed",
+            "安装任务",
+            "安装任务详情",
+            "/installation-tasks",
+        ),
     }
     config = task_config.get(status)
     current_task = None
+    task_page = ""
+    task_path = ""
     if config:
-        key, terminal_status, label = config
+        key, terminal_status, label, task_page, prefix = config
         current_task = _current_task(snapshot, key, terminal_status)
+        task_path = f"{prefix}/{current_task.get('id')}" if current_task else ""
         if current_task and not current_task.get("assigned_to"):
             alerts.append(
                 _alert(
@@ -137,6 +185,12 @@ def build_order_alerts(snapshot: dict) -> list[dict]:
                     "warning",
                     f"{label}尚未分配负责人",
                     "分配负责人后，AI 才能继续检查责任人与执行进度。",
+                    _workflow_action(
+                        "分配任务负责人",
+                        task_page,
+                        task_path,
+                        "task-assignee",
+                    ),
                 )
             )
 
@@ -152,6 +206,12 @@ def build_order_alerts(snapshot: dict) -> list[dict]:
                 "warning",
                 "设计稿尚未上传",
                 "上传设计稿后才能提交客户或内部审核。",
+                _workflow_action(
+                    "上传或填写设计稿",
+                    task_page,
+                    task_path,
+                    "design-file",
+                ),
             )
         )
 
@@ -166,6 +226,12 @@ def build_order_alerts(snapshot: dict) -> list[dict]:
                     "warning",
                     "安装地址尚未填写",
                     "补充准确地址后才能安排人员和车辆。",
+                    _workflow_action(
+                        "补充安装地址",
+                        task_page,
+                        task_path,
+                        "installation-address",
+                    ),
                 )
             )
         if not current_task.get("scheduled_at"):
@@ -175,6 +241,12 @@ def build_order_alerts(snapshot: dict) -> list[dict]:
                     "warning",
                     "安装时间尚未安排",
                     "设置计划安装时间，便于协调现场与施工人员。",
+                    _workflow_action(
+                        "安排安装时间",
+                        task_page,
+                        task_path,
+                        "installation-schedule",
+                    ),
                 )
             )
 
@@ -187,6 +259,7 @@ def build_order_alerts(snapshot: dict) -> list[dict]:
                 "warning",
                 "完工订单仍有应收款",
                 f"尚有 {total - paid:.2f} 元未收，请继续跟进回款。",
+                next_action,
             )
         )
     return alerts
@@ -236,5 +309,5 @@ def build_order_progress(snapshot: dict) -> dict:
 
 def attach_order_overview(result: dict, snapshot: dict) -> dict:
     result["progress"] = build_order_progress(snapshot)
-    result["alerts"] = build_order_alerts(snapshot)
+    result["alerts"] = build_order_alerts(snapshot, result.get("next_action"))
     return result

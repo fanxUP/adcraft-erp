@@ -375,20 +375,28 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
       })
       const guidance = parseWorkflowGuidance(response)
       if (!guidance) throw new Error('流程导航数据格式不正确')
-      if (requestKey === getGuidanceContextKey(pageContext.value)) {
+      const isCurrentBusiness = (
+        requestKey === getGuidanceContextKey(pageContext.value)
+      )
+      if (isCurrentBusiness) {
         activeGuidance.value = guidance
         dismissedGuidanceKey.value = null
-        if (
-          activePageGuide.value
-          && hasPageActionCompleted(activePageGuide.value, guidance)
-        ) {
-          pageGuideContinuation.value = getPageGuideContinuation(
-            activePageGuide.value,
-            guidance,
-          )
-          pageGuideState.value = 'completed'
-          syncPersistedPageGuide()
-        }
+      }
+      const canVerifyDetachedGuide = Boolean(
+        activePageGuide.value
+        && activePageGuide.value.target_path.includes(businessId),
+      )
+      if (
+        activePageGuide.value
+        && (isCurrentBusiness || canVerifyDetachedGuide)
+        && hasPageActionCompleted(activePageGuide.value, guidance)
+      ) {
+        pageGuideContinuation.value = getPageGuideContinuation(
+          activePageGuide.value,
+          guidance,
+        )
+        pageGuideState.value = 'completed'
+        syncPersistedPageGuide()
       }
       return guidance
     } catch (e: unknown) {
@@ -598,6 +606,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     loadSessions, switchSession, createNewSession,
     sendMessage, sendMessageStream,
     startWorkflowGuidance, refreshWorkflowGuidance, clearWorkflowGuidance,
+    requestWorkflowGuidance,
     startPageActionGuide, setPageGuideState, clearPageActionGuide,
     takePageGuideContinuation, restorePageActionGuide, resumePageActionGuide,
     notifyBusinessMutation,

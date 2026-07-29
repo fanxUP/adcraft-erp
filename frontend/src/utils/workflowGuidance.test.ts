@@ -51,6 +51,11 @@ describe('workflow guidance helpers', () => {
   it('allows only known in-app workflow routes', () => {
     expect(isSafeWorkflowTarget('/orders/33333333-3333-3333-3333-333333333333')).toBe(true)
     expect(isSafeWorkflowTarget('/receivables')).toBe(true)
+    expect(isSafeWorkflowTarget(
+      '/receivables?order_id=33333333-3333-3333-3333-333333333333',
+    )).toBe(true)
+    expect(isSafeWorkflowTarget('/receivables?order_id=not-a-uuid')).toBe(false)
+    expect(isSafeWorkflowTarget('/receivables?next=https://example.com')).toBe(false)
     expect(isSafeWorkflowTarget('https://example.com/orders/1')).toBe(false)
     expect(isSafeWorkflowTarget('//example.com/orders/1')).toBe(false)
     expect(isSafeWorkflowTarget('/admin/users')).toBe(false)
@@ -104,6 +109,12 @@ describe('workflow guidance helpers', () => {
           severity: 'warning',
           title: '设计任务尚未分配负责人',
           detail: '分配负责人后才能明确责任人',
+          action: {
+            label: '分配任务负责人',
+            target_page: '设计任务详情',
+            target_path: '/design-tasks/22222222-2222-2222-2222-222222222222',
+            target_key: 'task-assignee',
+          },
         },
       ],
     })).toMatchObject({
@@ -116,7 +127,14 @@ describe('workflow guidance helpers', () => {
         ],
       },
       alerts: [
-        { code: 'task_unassigned', severity: 'warning' },
+        {
+          code: 'task_unassigned',
+          severity: 'warning',
+          action: {
+            label: '分配任务负责人',
+            target_key: 'task-assignee',
+          },
+        },
       ],
     })
   })

@@ -49,14 +49,39 @@
           <div class="card-header"><span>更新信息</span></div>
         </template>
         <el-form :model="editForm" label-width="120px">
+          <el-form-item label="负责人" data-ai-target="task-assignee">
+            <el-select
+              v-model="editForm.assigned_to"
+              placeholder="选择设计师"
+              clearable
+              filterable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="user in userOptions"
+                :key="user.id"
+                :label="user.real_name || user.username"
+                :value="user.id"
+              />
+            </el-select>
+          </el-form-item>
           <el-form-item label="设计说明">
             <el-input v-model="editForm.description" type="textarea" :rows="3" />
           </el-form-item>
           <el-form-item label="客户意见">
             <el-input v-model="editForm.client_comments" type="textarea" :rows="3" />
           </el-form-item>
-          <el-form-item label="设计稿URL">
-            <el-input v-model="editForm.design_file_url" placeholder="上传后自动填入" />
+          <el-form-item label="设计稿" data-ai-target="design-file">
+            <div class="design-file-field">
+              <el-input v-model="editForm.design_file_url" placeholder="上传后自动填入，也可粘贴文件链接" />
+              <el-upload
+                :http-request="handleUpload"
+                :show-file-list="false"
+                accept="image/*,.pdf,.ai,.psd,.cdr,.dwg"
+              >
+                <el-button type="danger">上传设计稿</el-button>
+              </el-upload>
+            </div>
           </el-form-item>
           <el-form-item>
             <el-button type="primary" :loading="updating" @click="handleUpdate">保存</el-button>
@@ -68,13 +93,6 @@
         <template #header>
           <div class="card-header">
             <span>附件</span>
-            <el-upload
-              :http-request="handleUpload"
-              :show-file-list="false"
-              accept="image/*,.pdf,.ai,.psd,.cdr,.dwg"
-            >
-              <el-button type="danger" size="small">上传文件</el-button>
-            </el-upload>
           </div>
         </template>
         <el-table :data="task.attachments" stripe size="small">
@@ -101,9 +119,10 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getDesignTask, updateDesignTask, changeDesignTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
+import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
-import type { DesignTaskResponse } from '@/types/api'
+import type { DesignTaskResponse, UserResponse } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 
 const route = useRoute()
@@ -112,8 +131,14 @@ const loading = ref(false)
 const updating = ref(false)
 const changing = ref(false)
 const task = ref<DesignTaskResponse | null>(null)
+const userOptions = ref<UserResponse[]>([])
 const statusForm = reactive({ to_status: '', reason: '' })
-const editForm = reactive({ description: '', client_comments: '', design_file_url: '' })
+const editForm = reactive({
+  assigned_to: '',
+  description: '',
+  client_comments: '',
+  design_file_url: '',
+})
 
 function statusLabel(s: string) {
   const map: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已确认' }
@@ -126,13 +151,30 @@ function statusColor(s: string) {
 
 async function fetchTask() {
   loading.value = true
-  try { task.value = await getDesignTask(route.params.id as string) } finally { loading.value = false }
+  try {
+    const data = await getDesignTask(route.params.id as string)
+    task.value = data
+    Object.assign(editForm, {
+      assigned_to: data.assigned_to || '',
+      description: data.description || '',
+      client_comments: data.client_comments || '',
+      design_file_url: data.design_file_url || '',
+    })
+  } finally { loading.value = false }
+}
+
+async function loadUsers() {
+  const data = await getUsers({ page_size: 100 })
+  userOptions.value = data.items
 }
 
 async function handleUpdate() {
   updating.value = true
   try {
-    await updateDesignTask(route.params.id as string, editForm)
+    await updateDesignTask(route.params.id as string, {
+      ...editForm,
+      assigned_to: editForm.assigned_to || null,
+    })
     ElMessage.success('保存成功')
     await fetchTask()
     await aiStore.notifyBusinessMutation()
@@ -157,7 +199,15 @@ async function handleChangeStatus() {
 
 async function handleUpload(req: UploadRequestOptions) {
   try {
-    await uploadAttachment('design_task', route.params.id as string, req.file, 'design')
+    const attachment = await uploadAttachment(
+      'design_task',
+      route.params.id as string,
+      req.file,
+      'design',
+    )
+    await updateDesignTask(route.params.id as string, {
+      design_file_url: `/uploads/${attachment.file_path}`,
+    })
     ElMessage.success('上传成功')
     await fetchTask()
     await aiStore.notifyBusinessMutation()
@@ -173,11 +223,19 @@ async function handleDeleteAttachment(id: string) {
   fetchTask()
 }
 
-onMounted(fetchTask)
+onMounted(() => {
+  void fetchTask()
+  void loadUsers()
+})
 </script>
 
 <style scoped>
 .page { padding: 0; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.design-file-field { display: flex; width: 100%; gap: 8px; }
+.design-file-field .el-input { flex: 1; }
+@media (max-width: 640px) {
+  .design-file-field { align-items: stretch; flex-direction: column; }
+}
 </style>

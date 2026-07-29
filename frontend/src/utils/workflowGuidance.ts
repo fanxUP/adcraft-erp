@@ -31,6 +31,7 @@ const SAFE_TARGETS = [
   /^\/acceptances$/,
   new RegExp(`^/acceptances/${UUID_SEGMENT}$`),
   /^\/receivables$/,
+  new RegExp(`^/receivables\\?order_id=${UUID_SEGMENT}$`),
 ]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -117,11 +118,13 @@ function parseAlerts(value: unknown): AiWorkflowAlert[] {
     ) {
       continue
     }
+    const alertAction = parseAction(item.action)
     alerts.push({
       code: item.code,
       severity: item.severity as AiWorkflowAlert['severity'],
       title: item.title,
       detail: item.detail,
+      ...(alertAction ? { action: alertAction } : {}),
     })
   }
   return alerts

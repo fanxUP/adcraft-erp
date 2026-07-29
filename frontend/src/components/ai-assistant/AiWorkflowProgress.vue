@@ -48,6 +48,15 @@
       >
         <strong>{{ alert.title }}</strong>
         <span>{{ alert.detail }}</span>
+        <button
+          v-if="alert.action"
+          type="button"
+          class="alert-action"
+          @click="$emit('action', alert.action)"
+        >
+          {{ alert.action.label }}
+          <el-icon><Right /></el-icon>
+        </button>
       </div>
     </div>
   </div>
@@ -55,6 +64,7 @@
 
 <script setup lang="ts">
 import type {
+  AiWorkflowAction,
   AiWorkflowAlert,
   AiWorkflowProgress,
 } from '@/types/aiAssistant'
@@ -62,6 +72,10 @@ import type {
 defineProps<{
   progress: AiWorkflowProgress
   alerts: AiWorkflowAlert[]
+}>()
+
+defineEmits<{
+  action: [action: AiWorkflowAction]
 }>()
 </script>
 
@@ -183,6 +197,28 @@ defineProps<{
 }
 .progress-alert span {
   color: var(--ai-text-secondary, #8888aa);
+}
+.alert-action {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 3px;
+  margin-top: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ai-accent, #f56c6c);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+.alert-action:hover,
+.alert-action:focus-visible {
+  text-decoration: underline;
+}
+.alert-action:focus-visible {
+  outline: 2px solid var(--ai-accent, #f56c6c);
+  outline-offset: 2px;
 }
 .progress-alert.is-danger {
   border-left-color: var(--el-color-danger);

@@ -20,6 +20,7 @@
       v-if="guidance.progress"
       :progress="guidance.progress"
       :alerts="guidance.alerts"
+      @action="goToAction"
     />
 
     <div v-if="visibleBlockers.length" class="workflow-blockers">
@@ -76,6 +77,7 @@ import { useRoute } from 'vue-router'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { isSafeWorkflowTarget } from '@/utils/workflowGuidance'
 import { isSameWorkflowPath } from '@/utils/pageActionGuide'
+import type { AiWorkflowAction } from '@/types/aiAssistant'
 import AiWorkflowProgress from './AiWorkflowProgress.vue'
 
 const store = useAiAssistantStore()
@@ -97,13 +99,17 @@ const canNavigate = computed(() =>
 
 async function goToNextAction() {
   const nextAction = guidance.value.next_action
-  const path = nextAction?.target_path
+  if (nextAction) await goToAction(nextAction)
+}
+
+async function goToAction(action: AiWorkflowAction) {
+  const path = action.target_path
   if (!path || !isSafeWorkflowTarget(path)) {
     ElMessage.error('该导航地址不在系统允许范围内')
     return
   }
-  if (nextAction?.target_key) {
-    store.startPageActionGuide(nextAction)
+  if (action.target_key) {
+    store.startPageActionGuide(action)
   }
   if (!isSameWorkflowPath(route.path, path)) {
     await router.push(path)

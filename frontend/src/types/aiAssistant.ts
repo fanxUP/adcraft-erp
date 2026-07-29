@@ -78,6 +78,7 @@ export interface AiWorkflowAlert {
   severity: 'info' | 'warning' | 'danger'
   title: string
   detail: string
+  action?: AiWorkflowAction
 }
 
 export interface AiWorkflowGuidance {

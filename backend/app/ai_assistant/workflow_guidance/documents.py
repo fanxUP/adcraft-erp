@@ -154,11 +154,17 @@ def build_order_guidance(snapshot: dict) -> dict:
         paid = float(snapshot.get("total_paid") or 0)
         unpaid = max(0.0, total - paid)
         if unpaid > 0:
+            receivable_path = f"/receivables?order_id={order_id}"
             return guidance_result(
                 snapshot,
                 stage_labels[status],
                 [f"订单尚有 {unpaid:.2f} 元未收"],
-                action("跟进并登记收款", "应收管理", "/receivables"),
+                action(
+                    "跟进并登记收款",
+                    "应收管理",
+                    receivable_path,
+                    target_key="receivable-register-payment",
+                ),
                 "订单未收金额变为 0.00 元",
                 ORDER_WORKFLOW,
             )
