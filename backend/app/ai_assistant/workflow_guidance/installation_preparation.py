@@ -2,8 +2,11 @@
 
 from datetime import datetime
 
+from app.ai_assistant.page_capabilities import validate_page_action_target
+
 
 def _action(label: str, path: str, target_key: str, draft: dict | None = None) -> dict:
+    validate_page_action_target(target_key, path)
     result = {
         "label": label,
         "target_page": "安装任务详情",

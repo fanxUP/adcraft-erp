@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build && node scripts/check-bundle-size.mjs",
+    "check:ai-contract": "node scripts/check-ai-page-contract.mjs",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "preview": "vite preview",

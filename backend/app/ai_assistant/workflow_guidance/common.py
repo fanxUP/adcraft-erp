@@ -1,6 +1,8 @@
 """Shared response helpers for workflow guidance."""
 
+from app.ai_assistant.page_capabilities import validate_page_action_target
 from app.domain.workflows import allowed_targets
+
 from .order_progress import attach_order_overview
 
 
@@ -16,6 +18,7 @@ def action(
     if target_status:
         result["target_status"] = target_status
     if target_key:
+        validate_page_action_target(target_key, path)
         result["target_key"] = target_key
     return result
 

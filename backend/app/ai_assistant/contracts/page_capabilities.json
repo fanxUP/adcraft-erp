@@ -1,0 +1,412 @@
+{
+  "version": 1,
+  "guidance_business_types": [
+    "acceptance",
+    "design_task",
+    "installation_task",
+    "order",
+    "production_task",
+    "quote"
+  ],
+  "capabilities": [
+    {
+      "target_key": "acceptance-items",
+      "business_types": ["acceptance", "order"],
+      "routes": [
+        {
+          "name": "AcceptanceDetail",
+          "path": "/acceptances/:id",
+          "marker_files": ["frontend/src/views/acceptances/AcceptanceDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "acceptance-status-accepted",
+      "business_types": ["acceptance", "order"],
+      "routes": [
+        {
+          "name": "AcceptanceDetail",
+          "path": "/acceptances/:id",
+          "marker_files": [
+            "frontend/src/views/acceptances/AcceptanceDetail.vue",
+            "frontend/src/views/acceptances/AcceptanceWorkflow.vue"
+          ]
+        }
+      ]
+    },
+    {
+      "target_key": "acceptance-status-draft",
+      "business_types": ["acceptance", "order"],
+      "routes": [
+        {
+          "name": "AcceptanceDetail",
+          "path": "/acceptances/:id",
+          "marker_files": [
+            "frontend/src/views/acceptances/AcceptanceDetail.vue",
+            "frontend/src/views/acceptances/AcceptanceWorkflow.vue"
+          ]
+        }
+      ]
+    },
+    {
+      "target_key": "acceptance-status-pending",
+      "business_types": ["acceptance", "order"],
+      "routes": [
+        {
+          "name": "AcceptanceDetail",
+          "path": "/acceptances/:id",
+          "marker_files": [
+            "frontend/src/views/acceptances/AcceptanceDetail.vue",
+            "frontend/src/views/acceptances/AcceptanceWorkflow.vue"
+          ]
+        }
+      ]
+    },
+    {
+      "target_key": "design-file",
+      "business_types": ["design_task", "order"],
+      "routes": [
+        {
+          "name": "DesignTaskDetail",
+          "path": "/design-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/DesignTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "installation-address",
+      "business_types": ["installation_task", "order"],
+      "routes": [
+        {
+          "name": "InstallationTaskDetail",
+          "path": "/installation-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/InstallationTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "installation-draft",
+      "business_types": ["installation_task", "order"],
+      "routes": [
+        {
+          "name": "InstallationTaskDetail",
+          "path": "/installation-tasks/:id",
+          "marker_files": [
+            "frontend/src/components/ai-assistant/AiInstallationDraftCard.vue"
+          ]
+        }
+      ]
+    },
+    {
+      "target_key": "installation-schedule",
+      "business_types": ["installation_task", "order"],
+      "routes": [
+        {
+          "name": "InstallationTaskDetail",
+          "path": "/installation-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/InstallationTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "order-create-design",
+      "business_types": ["order"],
+      "routes": [
+        {
+          "name": "OrderDetail",
+          "path": "/orders/:id",
+          "marker_files": ["frontend/src/views/orders/OrderDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "order-create-installation",
+      "business_types": ["order"],
+      "routes": [
+        {
+          "name": "OrderDetail",
+          "path": "/orders/:id",
+          "marker_files": ["frontend/src/views/orders/OrderDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "order-create-production",
+      "business_types": ["order"],
+      "routes": [
+        {
+          "name": "OrderDetail",
+          "path": "/orders/:id",
+          "marker_files": ["frontend/src/views/orders/OrderDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "order-status-completed",
+      "business_types": ["order"],
+      "routes": [
+        {
+          "name": "OrderDetail",
+          "path": "/orders/:id",
+          "marker_files": ["frontend/src/views/orders/OrderWorkflow.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "order-status-confirmed",
+      "business_types": ["order"],
+      "routes": [
+        {
+          "name": "OrderDetail",
+          "path": "/orders/:id",
+          "marker_files": ["frontend/src/views/orders/OrderWorkflow.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "order-status-designing",
+      "business_types": ["order"],
+      "routes": [
+        {
+          "name": "OrderDetail",
+          "path": "/orders/:id",
+          "marker_files": ["frontend/src/views/orders/OrderWorkflow.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "order-status-in_installation",
+      "business_types": ["order"],
+      "routes": [
+        {
+          "name": "OrderDetail",
+          "path": "/orders/:id",
+          "marker_files": ["frontend/src/views/orders/OrderWorkflow.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "order-status-in_production",
+      "business_types": ["order"],
+      "routes": [
+        {
+          "name": "OrderDetail",
+          "path": "/orders/:id",
+          "marker_files": ["frontend/src/views/orders/OrderWorkflow.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "order-status-pending_acceptance",
+      "business_types": ["order"],
+      "routes": [
+        {
+          "name": "OrderDetail",
+          "path": "/orders/:id",
+          "marker_files": ["frontend/src/views/orders/OrderWorkflow.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "quote-status-confirmed",
+      "business_types": ["quote"],
+      "routes": [
+        {
+          "name": "QuoteEdit",
+          "path": "/quotes/:id/edit",
+          "marker_files": ["frontend/src/views/quotes/QuoteWorkflow.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "quote-status-converted",
+      "business_types": ["quote"],
+      "routes": [
+        {
+          "name": "QuoteEdit",
+          "path": "/quotes/:id/edit",
+          "marker_files": ["frontend/src/views/quotes/QuoteWorkflow.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "quote-status-draft",
+      "business_types": ["quote"],
+      "routes": [
+        {
+          "name": "QuoteEdit",
+          "path": "/quotes/:id/edit",
+          "marker_files": ["frontend/src/views/quotes/QuoteWorkflow.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "receivable-register-payment",
+      "business_types": ["order"],
+      "routes": [
+        {
+          "name": "ReceivablesView",
+          "path": "/receivables",
+          "marker_files": ["frontend/src/views/payments/ReceivablesView.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "task-assignee",
+      "business_types": [
+        "design_task",
+        "installation_task",
+        "order",
+        "production_task"
+      ],
+      "routes": [
+        {
+          "name": "DesignTaskDetail",
+          "path": "/design-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/DesignTaskDetail.vue"]
+        },
+        {
+          "name": "ProductionTaskDetail",
+          "path": "/production-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/ProductionTaskDetail.vue"]
+        },
+        {
+          "name": "InstallationTaskDetail",
+          "path": "/installation-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/InstallationTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "task-status-assigned",
+      "business_types": ["installation_task", "order"],
+      "routes": [
+        {
+          "name": "InstallationTaskDetail",
+          "path": "/installation-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/InstallationTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "task-status-completed",
+      "business_types": ["installation_task", "order", "production_task"],
+      "routes": [
+        {
+          "name": "ProductionTaskDetail",
+          "path": "/production-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/ProductionTaskDetail.vue"]
+        },
+        {
+          "name": "InstallationTaskDetail",
+          "path": "/installation-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/InstallationTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "task-status-confirmed",
+      "business_types": ["design_task", "order"],
+      "routes": [
+        {
+          "name": "DesignTaskDetail",
+          "path": "/design-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/DesignTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "task-status-designing",
+      "business_types": ["design_task", "order"],
+      "routes": [
+        {
+          "name": "DesignTaskDetail",
+          "path": "/design-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/DesignTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "task-status-in_progress",
+      "business_types": ["installation_task", "order", "production_task"],
+      "routes": [
+        {
+          "name": "ProductionTaskDetail",
+          "path": "/production-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/ProductionTaskDetail.vue"]
+        },
+        {
+          "name": "InstallationTaskDetail",
+          "path": "/installation-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/InstallationTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "task-status-pending_acceptance",
+      "business_types": ["installation_task", "order"],
+      "routes": [
+        {
+          "name": "InstallationTaskDetail",
+          "path": "/installation-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/InstallationTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "task-status-pending_review",
+      "business_types": ["design_task", "order"],
+      "routes": [
+        {
+          "name": "DesignTaskDetail",
+          "path": "/design-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/DesignTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "task-status-qc_check",
+      "business_types": ["order", "production_task"],
+      "routes": [
+        {
+          "name": "ProductionTaskDetail",
+          "path": "/production-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/ProductionTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "task-status-queued",
+      "business_types": ["order", "production_task"],
+      "routes": [
+        {
+          "name": "ProductionTaskDetail",
+          "path": "/production-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/ProductionTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "task-status-revision",
+      "business_types": ["design_task", "order"],
+      "routes": [
+        {
+          "name": "DesignTaskDetail",
+          "path": "/design-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/DesignTaskDetail.vue"]
+        }
+      ]
+    },
+    {
+      "target_key": "task-status-rework",
+      "business_types": ["order", "production_task"],
+      "routes": [
+        {
+          "name": "ProductionTaskDetail",
+          "path": "/production-tasks/:id",
+          "marker_files": ["frontend/src/views/tasks/ProductionTaskDetail.vue"]
+        }
+      ]
+    }
+  ]
+}

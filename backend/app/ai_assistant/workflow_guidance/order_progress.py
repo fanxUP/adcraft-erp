@@ -3,6 +3,8 @@
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from app.ai_assistant.page_capabilities import validate_page_action_target
+
 from .installation_preparation import build_installation_preparation
 
 
@@ -81,6 +83,7 @@ def _workflow_action(
     path: str,
     target_key: str,
 ) -> dict:
+    validate_page_action_target(target_key, path)
     return {
         "label": label,
         "target_page": page,

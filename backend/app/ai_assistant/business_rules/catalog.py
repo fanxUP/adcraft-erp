@@ -7,6 +7,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from app.ai_assistant.page_capabilities import page_capability_contract_payload
 from app.domain.workflows import (
     ACCEPTANCE_WORKFLOW,
     DESIGN_TASK_WORKFLOW,
@@ -93,7 +94,21 @@ def build_business_rule_catalog() -> tuple[BusinessRuleSpec, ...]:
             },
         )
     ]
-    return tuple(sorted((*workflow_rules, *policy_rules), key=lambda rule: rule.key))
+    contract_rules = [
+        BusinessRuleSpec(
+            key="contract.page_capabilities",
+            title="AI 页面能力契约",
+            rule_type="capability_contract",
+            source="app.ai_assistant.contracts.page_capabilities",
+            payload=page_capability_contract_payload(),
+        )
+    ]
+    return tuple(
+        sorted(
+            (*workflow_rules, *policy_rules, *contract_rules),
+            key=lambda rule: rule.key,
+        )
+    )
 
 
 def business_rule_catalog_digest(
@@ -132,4 +147,9 @@ def render_business_rules_context(
             forbidden = "、".join(rule.payload.get("forbidden_actions", []))
             if forbidden:
                 lines.append(f"- AI 禁止直接执行：{forbidden}。")
+        elif rule.key == "contract.page_capabilities":
+            lines.append("- 页面操作必须使用已登记的 target_key 与 target_path。")
+            lines.append(
+                f"- 当前登记 {len(rule.payload.get('target_keys', []))} 个页面控件。"
+            )
     return "\n".join(lines)
