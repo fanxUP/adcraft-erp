@@ -37,10 +37,9 @@ SYSTEM_PROMPT = """你是一个专业的广告制作报价专家。用户会用�
     {
       "item_name": "项目名称",
       "product_id": null,
-      "material_id": null,
-      "length": 6.0,
-      "width": 2.0,
-      "height": null,
+      "material_process": "产品 / 材质 / 工艺",
+      "width": 6.0,
+      "height": 2.0,
       "quantity": 1,
       "unit": "㎡",
       "unit_price": 150.0,
@@ -63,8 +62,8 @@ SYSTEM_PROMPT = """你是一个专业的广告制作报价专家。用户会用�
 ```
 
 ## 注意事项
-- 面积 = length × width × quantity（当 unit 为 ㎡ 时）
-- 产品ID和材质ID如果匹配到目录中的项目，请填入对应的ID（字符串格式），匹配不到则填null
+- 面积 = width × height × quantity（当 unit 为 ㎡ 时）
+- 产品ID如果匹配到目录中的组合，请填入对应ID；material_process 填写完整的产品/材质/工艺组合
 - key_spec 填写该项目的关键规格描述
 - 总价不需要计算在JSON中，前端会自动计算
 """
@@ -137,7 +136,7 @@ class LLMQuoteAssistant:
                 "items": validated_items,
                 "total_estimate": pricing.get("recommended_price", 0) or
                     sum(i.get("unit_price", 0) * i.get("quantity", 1) *
-                        max(i.get("length", 1) * i.get("width", 1), 1)
+                        max(i.get("width", 1) * i.get("height", 1), 1)
                         for i in validated_items),
                 "confidence": confidence,
                 "similar_quotes_count": len(similar_quotes),
@@ -310,13 +309,15 @@ class LLMQuoteAssistant:
         """Validate and normalize AI-generated items."""
         processed = []
         for item in items:
+            legacy_length = self._to_float(item.get("length"))
+            legacy_width = self._to_float(item.get("width"))
             normalized = {
                 "item_name": item.get("item_name", ""),
                 "product_id": item.get("product_id"),
                 "material_id": item.get("material_id"),
-                "length": self._to_float(item.get("length")),
-                "width": self._to_float(item.get("width")),
-                "height": self._to_float(item.get("height")),
+                "material_process": item.get("material_process"),
+                "width": legacy_length or legacy_width,
+                "height": legacy_width if legacy_length else self._to_float(item.get("height")),
                 "quantity": max(1, self._to_float(item.get("quantity", 1))),
                 "unit": item.get("unit", "㎡"),
                 "unit_price": max(0, self._to_float(item.get("unit_price", 0))),
@@ -393,7 +394,7 @@ class LLMQuoteAssistant:
             score += 0.1
             if all(i.get("product_id") for i in items):
                 score += 0.1
-            if all(i.get("length") and i.get("width") for i in items):
+            if all(i.get("width") and i.get("height") for i in items):
                 score += 0.1
             if all(i.get("unit_price", 0) > 0 for i in items):
                 score += 0.1

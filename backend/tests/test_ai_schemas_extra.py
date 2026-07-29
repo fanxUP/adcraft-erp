@@ -31,13 +31,13 @@ class TestAIQuoteSchemas:
         from app.ai.schemas.ai_quote import DraftQuoteItem
         item = DraftQuoteItem(
             item_name="PVC文化墙",
-            length=6.0,
-            width=2.0,
+            width=6.0,
+            height=2.0,
             quantity=2,
             unit_price=500.0,
         )
-        assert item.length == 6.0
-        assert item.width == 2.0
+        assert item.width == 6.0
+        assert item.height == 2.0
         assert item.quantity == 2
         assert item.unit_price == 500.0
 

@@ -12,7 +12,6 @@ class AIQuoteAssistRequest(BaseModel):
 
 class DraftQuoteItem(BaseModel):
     item_name: str
-    length: float | None = None
     width: float | None = None
     height: float | None = None
     quantity: float = 1
@@ -20,6 +19,7 @@ class DraftQuoteItem(BaseModel):
     product_id: str | None = None
     material_id: str | None = None
     process_id: str | None = None
+    material_process: str | None = None
     unit_price: float | None = None
     design_fee: float = 0
     installation_fee: float = 0

@@ -70,8 +70,6 @@ QUOTE_COLUMN_MAP = {
     "数量": "quantity",
     "单位": "unit",
     "单价": "unit_price",
-    "长": "length",
-    "长单位": "length_unit",
     "宽": "width",
     "宽单位": "width_unit",
     "高": "height",
@@ -95,7 +93,7 @@ HEADER_LABELS = [
 # Item-only columns for import template (ordered as user specified)
 ITEM_TEMPLATE_HEADERS = [
     "明细分组", "项目内容", "产品/材质/工艺",
-    "长", "长单位", "宽", "宽单位", "高", "高单位",
+    "宽", "宽单位", "高", "高单位",
     "件数", "面积开关",
     "数量", "单位", "单价",
     "工艺费", "安装费", "设计费", "运输费",
@@ -108,8 +106,6 @@ QUOTE_ITEM_TEMPLATE_MAP = {
     "产品/材质/工艺": "material_process",
     "产品材质工艺": "material_process",
     "材质工艺": "material_process",
-    "长": "length",
-    "长单位": "length_unit",
     "宽": "width",
     "宽单位": "width_unit",
     "高": "height",
@@ -141,7 +137,7 @@ async def download_quote_template():
     # Sample row 1 — 分项1, full specs, 面积开关=是
     ws.append([
         "分项1", "不锈钢烤漆字", "1.2mm不锈钢+烤漆",
-        "0.5", "m", "0.5", "m", "", "m",
+        "0.5", "m", "0.5", "m",
         "1", "是",
         "2", "个", "350",
         "0", "50", "80", "0",
@@ -150,7 +146,7 @@ async def download_quote_template():
     # Sample row 2 — 分项2, simple item, no area
     ws.append([
         "分项2", "安装人工费", "",
-        "", "", "", "", "", "",
+        "", "", "", "",
         "1", "",
         "1", "项", "2000",
         "0", "0", "0", "0",
@@ -249,8 +245,6 @@ async def import_quotes(
                     "quantity": parse_number(item_row.get("quantity")) or 1,
                     "unit": format_value(item_row.get("unit")),
                     "unit_price": parse_number(item_row.get("unit_price")) or 0,
-                    "length": parse_number(item_row.get("length")),
-                    "length_unit": format_value(item_row.get("length_unit")) or "m",
                     "width": parse_number(item_row.get("width")),
                     "width_unit": format_value(item_row.get("width_unit")) or "m",
                     "height": parse_number(item_row.get("height")),
@@ -264,11 +258,11 @@ async def import_quotes(
                     "remark": format_value(item_row.get("item_remark")),
                 }
 
-                # 面积开关：如果填了值，手动控制；否则根据长宽自动判断
+                # 面积开关：如果填了值，手动控制；否则根据宽高自动判断
                 area_raw = format_value(item_row.get("use_area"))
                 if area_raw:
                     item_data["use_area"] = area_raw.lower() in ("是", "1", "y", "yes", "true")
-                elif item_data["length"] and item_data["width"]:
+                elif item_data["width"] and item_data["height"]:
                     item_data["use_area"] = True
                 else:
                     item_data["use_area"] = False
@@ -474,8 +468,6 @@ async def import_quote_items(
             "quantity": parse_number(row.get("quantity")) or 1,
             "unit": format_value(row.get("unit")),
             "unit_price": parse_number(row.get("unit_price")) or 0,
-            "length": parse_number(row.get("length")),
-            "length_unit": format_value(row.get("length_unit")) or "m",
             "width": parse_number(row.get("width")),
             "width_unit": format_value(row.get("width_unit")) or "m",
             "height": parse_number(row.get("height")),

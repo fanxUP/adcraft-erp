@@ -32,6 +32,14 @@ class CdrQuoteRepository:
         r = await self.db.execute(select(Material).where(Material.id == material_id))
         return r.scalar_one_or_none()
 
+    async def get_material_by_name(self, name: str) -> Material | None:
+        r = await self.db.execute(
+            select(Material)
+            .where(Material.name == name, Material.is_active.is_(True))
+            .limit(1)
+        )
+        return r.scalar_one_or_none()
+
     async def get_process(self, process_id: UUID) -> Process | None:
         r = await self.db.execute(select(Process).where(Process.id == process_id))
         return r.scalar_one_or_none()
@@ -39,6 +47,18 @@ class CdrQuoteRepository:
     async def get_processes(self, ids: list[UUID]) -> list[Process]:
         r = await self.db.execute(select(Process).where(Process.id.in_(ids)))
         return list(r.scalars().all())
+
+    async def get_processes_by_names(self, names: list[str]) -> list[Process]:
+        if not names:
+            return []
+        r = await self.db.execute(
+            select(Process).where(
+                Process.name.in_(names),
+                Process.is_active.is_(True),
+            )
+        )
+        processes = {process.name: process for process in r.scalars().all()}
+        return [processes[name] for name in names if name in processes]
 
     # ── 报价版本 ──
 

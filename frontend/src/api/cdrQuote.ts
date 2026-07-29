@@ -50,14 +50,30 @@ export interface QuoteLineProcessInput {
 export interface QuoteLineInput {
   product_id?: string
   material_id?: string
-  description: string
+  item_name: string
+  description?: string
+  material_process?: string
+  width?: number
+  width_unit?: string
+  height?: number
+  height_unit?: string
   width_mm?: number
   height_mm?: number
   length_m?: number
   quantity?: number
   unit?: string
+  use_area?: boolean
   pieces?: number
   unit_price?: number
+  process_fee?: number
+  installation_fee?: number
+  design_fee?: number
+  transport_fee?: number
+  other_fee?: number
+  remark?: string
+  image_url?: string
+  sort_order?: number
+  group_name?: string
   manual_adjustment?: number
   manual_reason?: string
   processes?: QuoteLineProcessInput[]
@@ -76,14 +92,32 @@ export interface QuoteVersionLine {
   line_no: number
   product_id?: string
   material_id?: string
+  item_name: string
   description: string
+  material_process?: string
+  width?: string
+  width_unit?: string
+  height?: string
+  height_unit?: string
   width_mm?: string
   height_mm?: string
   length_m?: string
   quantity: string
+  unit?: string
+  use_area?: boolean
+  pieces?: string
   unit_price: string
   amount: string
   estimated_cost: string
+  process_fee: string
+  installation_fee: string
+  design_fee: string
+  transport_fee: string
+  other_fee: string
+  remark?: string
+  image_url?: string
+  sort_order: number
+  group_name?: string
   source: string
   requires_approval: boolean
   processes: QuoteLineProcess[]
@@ -186,6 +220,14 @@ export interface CDRQuote extends QuoteListResponse {
   customer?: { name?: string }
 }
 
+export interface CDRQuoteCreate {
+  project_name: string
+  customer_id?: string
+  customer_name?: string
+  tax_rate?: number
+  status?: string
+}
+
 export interface DesignAttachment {
   id: string
   filename: string
@@ -234,6 +276,10 @@ export interface AiAssistResult {
 /** 报价试算 */
 export function calculatePricing(data: PricingRequest) {
   return api.post<PricingResult>('/cdr/pricing/calculate', data)
+}
+
+export function createCDRQuote(data: CDRQuoteCreate) {
+  return api.post<CDRQuote>('/cdr/quotes', data)
 }
 
 /** 创建报价版本 */

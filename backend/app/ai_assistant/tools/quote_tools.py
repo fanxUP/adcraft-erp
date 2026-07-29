@@ -57,17 +57,17 @@ async def create_quote_confirmed(db, user, customer_id, project_name="", items=N
             "unit_price": float(item.get("unit_price", 0)),
             "sort_order": i,
         }
-        for field in ("length", "width", "height"):
+        for field in ("width", "height"):
             if item.get(field):
                 item_data[field] = float(item[field])
-        if item.get("length_unit"):
-            item_data["length_unit"] = item["length_unit"]
         if item.get("width_unit"):
             item_data["width_unit"] = item["width_unit"]
         if item.get("height_unit"):
             item_data["height_unit"] = item["height_unit"]
         if item.get("product_id"):
             item_data["product_id"] = UUID(item["product_id"])
+        if item.get("material_process"):
+            item_data["material_process"] = item["material_process"]
         if item.get("remark"):
             item_data["remark"] = item["remark"]
         if item.get("subtotal_amount"):
@@ -144,17 +144,17 @@ async def add_quote_items(db, user, quote_id, items):
         }
         for fee_key in ("process_fee", "installation_fee", "design_fee", "transport_fee", "other_fee"):
             item_data[fee_key] = Decimal(str(item.get(fee_key, "0")))
-        for field in ("length", "width", "height"):
+        for field in ("width", "height"):
             if item.get(field):
                 item_data[field] = Decimal(str(item[field]))
-        if item.get("length_unit"):
-            item_data["length_unit"] = item["length_unit"]
         if item.get("width_unit"):
             item_data["width_unit"] = item["width_unit"]
         if item.get("height_unit"):
             item_data["height_unit"] = item["height_unit"]
         if item.get("product_id"):
             item_data["product_id"] = UUID(item["product_id"])
+        if item.get("material_process"):
+            item_data["material_process"] = item["material_process"]
         if item.get("remark"):
             item_data["remark"] = item["remark"]
         if item.get("subtotal_amount"):
@@ -253,6 +253,7 @@ def register_quote_tools():
                     "quantity": {"type": "number", "description": "数量"},
                     "unit": {"type": "string", "description": "单位"},
                     "unit_price": {"type": "number", "description": "单价"},
+                    "material_process": {"type": "string", "description": "产品/材质/工艺组合"},
                     "remark": {"type": "string", "description": "备注"}},
                     "required": ["item_name", "quantity", "unit_price"]}}},
             "required": ["quote_id", "items"]},
@@ -286,10 +287,10 @@ def register_quote_tools():
                     "quantity": {"type": "number", "description": "数量"},
                     "unit": {"type": "string", "description": "单位"},
                     "unit_price": {"type": "number", "description": "单价"},
-                    "length": {"type": "number", "description": "长"},
                     "width": {"type": "number", "description": "宽"},
                     "height": {"type": "number", "description": "高"},
-                    "length_unit": {"type": "string", "description": "长度单位"},
+                    "width_unit": {"type": "string", "description": "宽度单位"},
+                    "height_unit": {"type": "string", "description": "高度单位"},
                     "remark": {"type": "string", "description": "备注"}},
                     "required": ["item_name", "quantity", "unit_price"]}},
             "sales_user_id": {"type": "string", "description": "销售员用户ID"},

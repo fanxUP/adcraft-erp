@@ -75,7 +75,7 @@ class AnomalyDetector:
     async def _scan_underpriced_quotes(self) -> list[dict]:
         """Find confirmed quotes where total is potentially below material cost.
 
-        Estimates cost as: sum(item.unit_price * item.length * item.width * item.quantity)
+        Estimates cost as: sum(item.unit_price * item.width * item.height * item.quantity)
         Flags if total_amount < estimated_cost (meaning possible underpricing).
         """
         alerts: list[dict] = []
@@ -94,7 +94,7 @@ class AnomalyDetector:
                 continue
             estimated_cost = 0.0
             for item in quote.items:
-                area = (float(item.length or 0)) * (float(item.width or 0)) * (float(item.quantity or 1))
+                area = (float(item.width or 0)) * (float(item.height or 0)) * (float(item.quantity or 1))
                 estimated_cost += area * float(item.unit_price or 0)
 
             if estimated_cost > 0 and float(quote.total_amount) < estimated_cost:

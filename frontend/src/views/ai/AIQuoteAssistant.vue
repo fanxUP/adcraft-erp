@@ -88,9 +88,8 @@
               <el-table-column prop="item_name" label="项目" min-width="160" />
               <el-table-column label="规格" width="140">
                 <template #default="{ row }">
-                  <template v-if="row.length || row.width">
-                    {{ row.length || '?' }} × {{ row.width || '?' }}
-                    <span v-if="row.height"> × {{ row.height }}</span>
+                  <template v-if="row.width || row.height">
+                    {{ row.width || '?' }} × {{ row.height || '?' }}
                   </template>
                   <span v-else>-</span>
                 </template>
@@ -110,7 +109,7 @@
               </el-table-column>
               <el-table-column label="小计(¥)" width="110">
                 <template #default="{ row }">
-                  {{ formatMoney((row.length || 0) * (row.width || 0) * (row.quantity || 1) * (row.unit_price || 0)) }}
+                  {{ formatMoney((row.width || 0) * (row.height || 0) * (row.quantity || 1) * (row.unit_price || 0)) }}
                 </template>
               </el-table-column>
               <el-table-column label="设计费" width="100">
@@ -164,7 +163,7 @@ const draft = ref<AIQuoteAssistResponse | null>(null)
 const computeTotal = computed(() => {
   if (!draft.value) return 0
   return draft.value.items.reduce((sum, item) => {
-    const area = (item.length || 0) * (item.width || 0) * (item.quantity || 1)
+    const area = (item.width || 0) * (item.height || 0) * (item.quantity || 1)
     const subtotal = area * (item.unit_price || 0)
     return sum + subtotal + (item.design_fee || 0) + (item.installation_fee || 0) + (item.process_fee || 0) + (item.transport_fee || 0) + (item.other_fee || 0)
   }, 0)

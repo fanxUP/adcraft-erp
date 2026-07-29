@@ -129,13 +129,19 @@ class QuoteLine(Base, TimestampMixin):
     product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=True)
     material_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("materials.id"), nullable=True)
     description: Mapped[str] = mapped_column(String(500), nullable=False)
+    material_process: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # 几何/数量
+    width: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    width_unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    height: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    height_unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
     width_mm: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
     height_mm: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
     length_m: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
     quantity: Mapped[float] = mapped_column(Numeric(14, 3), default=1)
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    use_area: Mapped[bool] = mapped_column(Boolean, default=False)
     pieces: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, comment="件数")
 
     # 计费
@@ -143,6 +149,15 @@ class QuoteLine(Base, TimestampMixin):
     unit_price: Mapped[float] = mapped_column(Numeric(14, 4), default=0)
     amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     estimated_cost: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    process_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    installation_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    design_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    transport_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    other_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    group_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # 手工调整
     manual_adjustment: Mapped[float] = mapped_column(Numeric(14, 2), default=0)

@@ -875,7 +875,6 @@ export interface UploadResponse {
 
 export interface DraftQuoteItem {
   item_name: string
-  length?: number
   width?: number
   height?: number
   quantity: number
@@ -883,6 +882,7 @@ export interface DraftQuoteItem {
   product_id?: string
   material_id?: string
   process_id?: string
+  material_process?: string
   unit_price?: number
   design_fee: number
   installation_fee: number

@@ -85,7 +85,7 @@ class QuoteFinder:
             has_material_match = material_ids is None
 
             for item in quote.items:
-                area = (item.length or 0) * (item.width or 0) * (item.quantity or 1)
+                area = (item.width or 0) * (item.height or 0) * (item.quantity or 1)
                 total_area += area
                 if item.material_id and material_ids:
                     if item.material_id in material_ids:
@@ -233,13 +233,17 @@ class QuoteFinder:
 
                 item = {
                     "item_name": product.name,
-                    "length": None,
                     "width": None,
                     "height": None,
                     "quantity": 1,
                     "unit": "㎡",
                     "product_id": pid,
                     "material_id": None,
+                    "material_process": " / ".join(filter(None, [
+                        product.name,
+                        product.material_name,
+                        product.process_name,
+                    ])),
                     "process_id": None,
                     "unit_price": float(product.default_price or 0),
                     "design_fee": 0,
@@ -252,29 +256,17 @@ class QuoteFinder:
                 }
                 draft_items.append(item)
 
-            # Find matching materials
-            mat_result = await self.db.execute(
-                select(Material).where(
-                    Material.name.ilike(f"%{kw}%"),
-                ).limit(2)
-            )
-            for material in mat_result.scalars().all():
-                mid = str(material.id)
-                if len(draft_items) > 0:
-                    draft_items[-1]["material_id"] = mid
-                    draft_items[-1]["unit_price"] = float(material.sale_price or 0)
-
         # If catalog didn't match, create a single generic item from the description
         if not draft_items:
             draft_items.append({
                 "item_name": description[:100],
-                "length": None,
                 "width": None,
                 "height": None,
                 "quantity": 1,
                 "unit": "㎡",
                 "product_id": None,
                 "material_id": None,
+                "material_process": None,
                 "process_id": None,
                 "unit_price": 0,
                 "design_fee": 0,

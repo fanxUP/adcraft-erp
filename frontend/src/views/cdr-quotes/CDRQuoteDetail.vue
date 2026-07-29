@@ -28,18 +28,45 @@
     <!-- 报价明细 -->
     <el-card shadow="never" class="section-card" style="margin-top: 16px">
       <template #header><span>报价明细</span></template>
-      <el-table :data="version?.lines || []" stripe>
+      <el-table :data="version?.lines || []" stripe border>
         <el-table-column label="#" type="index" width="50" />
-        <el-table-column prop="description" label="描述" min-width="200" />
-        <el-table-column prop="width_mm" label="宽(mm)" width="80" />
-        <el-table-column prop="height_mm" label="高(mm)" width="80" />
+        <el-table-column prop="item_name" label="项目内容" min-width="160" />
+        <el-table-column prop="material_process" label="产品/材质/工艺" min-width="220" />
+        <el-table-column label="宽" width="100">
+          <template #default="{ row }">{{ formatDimension(row.width, row.width_unit) }}</template>
+        </el-table-column>
+        <el-table-column label="高" width="100">
+          <template #default="{ row }">{{ formatDimension(row.height, row.height_unit) }}</template>
+        </el-table-column>
+        <el-table-column prop="pieces" label="件数" width="70" />
+        <el-table-column label="面积" width="90">
+          <template #default="{ row }">{{ lineArea(row).toFixed(2) }}㎡</template>
+        </el-table-column>
         <el-table-column prop="quantity" label="数量" width="80" />
+        <el-table-column prop="unit" label="单位" width="70" />
         <el-table-column prop="unit_price" label="单价" width="100">
           <template #default="{ row }">¥{{ Number(row.unit_price || 0).toFixed(2) }}</template>
         </el-table-column>
-        <el-table-column prop="amount" label="金额" width="120">
+        <el-table-column prop="process_fee" label="工艺费" width="90" />
+        <el-table-column prop="installation_fee" label="安装费" width="90" />
+        <el-table-column prop="design_fee" label="设计费" width="90" />
+        <el-table-column prop="transport_fee" label="运输费" width="90" />
+        <el-table-column prop="amount" label="小计" width="120">
           <template #default="{ row }">¥{{ Number(row.amount || 0).toFixed(2) }}</template>
         </el-table-column>
+        <el-table-column label="样图" width="80">
+          <template #default="{ row }">
+            <el-image
+              v-if="row.image_url"
+              :src="row.image_url"
+              :preview-src-list="[row.image_url]"
+              fit="cover"
+              class="line-image"
+            />
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="remark" label="备注" min-width="120" />
         <el-table-column prop="source" label="来源" width="80">
           <template #default="{ row }">
             <el-tag :type="row.source === 'manual' ? 'warning' : 'info'" size="small">
@@ -111,6 +138,7 @@ import {
   type QuoteVersion,
 } from '@/api/cdrQuote'
 import { getErrorMessage } from '@/utils/error'
+import { calcQuoteLineArea } from '@/utils/quoteLineCalculation'
 
 const route = useRoute()
 const router = useRouter()
@@ -119,6 +147,20 @@ const quote = ref<CDRQuote | null>(null)
 const version = ref<QuoteVersion | null>(null)
 const versions = ref<QuoteVersion[]>([])
 const approvals = ref<QuoteApproval[]>([])
+
+function formatDimension(value?: string, unit?: string): string {
+  return value ? `${Number(value)}${unit || 'm'}` : '-'
+}
+
+function lineArea(line: QuoteVersion['lines'][number]): number {
+  return calcQuoteLineArea({
+    width: Number(line.width || 0),
+    width_unit: line.width_unit,
+    height: Number(line.height || 0),
+    height_unit: line.height_unit,
+    pieces: Number(line.pieces || 1),
+  })
+}
 
 function statusType(s: string): string {
   return { draft: 'info', review: 'warning', approved: 'success', rejected: 'danger' }[s] || 'info'
@@ -224,4 +266,5 @@ onMounted(fetchData)
 .summary-item .value.profit-negative { color: var(--el-color-danger); }
 .summary-item.highlight .value { color: var(--ad-red); }
 .trace-detail { font-size: 12px; color: var(--ad-text-secondary); }
+.line-image { width: 36px; height: 36px; border-radius: 4px; }
 </style>

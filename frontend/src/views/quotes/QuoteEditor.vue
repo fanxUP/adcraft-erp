@@ -103,21 +103,6 @@
             </template>
           </template>
         </el-table-column>
-        <el-table-column label="长" width="170">
-          <template #default="{ row }">
-            <template v-if="row.type === 'item'">
-              <div style="display: flex; align-items: center; gap: 4px;">
-                <el-input-number v-model="row.item.length" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" style="width: 90px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" @change="syncAreaQuantity(row.item)" />
-                <el-select v-model="row.item.length_unit" :disabled="isReadonly" size="small" placeholder="选择" style="width: 65px" @change="syncAreaQuantity(row.item)">
-                  <el-option label="选择" value="" disabled />
-                  <el-option label="m" value="m" />
-                  <el-option label="cm" value="cm" />
-                  <el-option label="mm" value="mm" />
-                </el-select>
-              </div>
-            </template>
-          </template>
-        </el-table-column>
         <el-table-column label="宽" width="170">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
@@ -328,6 +313,12 @@ import type { QuoteItemResponse, QuoteDetailResponse, CustomerResponse, ProductR
 import QuotePreview from './QuotePreview.vue'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { applyProductMaterialProcess, formatProductMaterialProcess } from '@/utils/productMaterialProcess'
+import {
+  calcQuoteLineArea,
+  calcQuoteLineSubtotal,
+  migrateLegacyQuoteDimensions,
+  syncQuoteLineAreaQuantity,
+} from '@/utils/quoteLineCalculation'
 
 const route = useRoute()
 const router = useRouter()
@@ -360,8 +351,6 @@ const newItem = (groupName?: string): QuoteItemResponse => ({
   id: '',
   quote_id: '',
   item_name: '',
-  length: undefined,
-  length_unit: '',
   width: undefined,
   width_unit: '',
   height: undefined,
@@ -448,19 +437,8 @@ const isReadonly = computed(() => {
   return quote.value.status === 'converted' || quote.value.status === 'cancelled'
 })
 
-function convertToMeters(value: number, unit: string): number {
-  switch (unit) {
-    case 'cm': return value / 100
-    case 'mm': return value / 1000
-    default: return value // m
-  }
-}
-
 function calcArea(item: QuoteItemResponse) {
-  const length = convertToMeters(item.length || 0, item.length_unit || 'm')
-  const width = convertToMeters(item.width || 0, item.width_unit || 'm')
-  const raw = length * width * (item.pieces || 1)
-  return Math.round(raw * 100) / 100
+  return calcQuoteLineArea(item)
 }
 
 function onAreaToggle(row: QuoteItemResponse, val: boolean) {
@@ -476,22 +454,11 @@ function onAreaToggle(row: QuoteItemResponse, val: boolean) {
 }
 
 function syncAreaQuantity(item: QuoteItemResponse) {
-  // 当长/宽变化时，如果处于面积模式，自动更新数量
-  if (item.use_area) {
-    item.quantity = Math.max(0.01, calcArea(item))
-  }
+  syncQuoteLineAreaQuantity(item)
 }
 
 function calcSubtotal(item: QuoteItemResponse) {
-  const base = item.use_area
-    ? calcArea(item)  // 面积 = 长 × 宽
-    : (item.quantity || 0)
-  return base * (item.unit_price || 0)
-    + (item.process_fee || 0)
-    + (item.installation_fee || 0)
-    + (item.design_fee || 0)
-    + (item.transport_fee || 0)
-    + (item.other_fee || 0)
+  return calcQuoteLineSubtotal(item)
 }
 
 function calcItemSubtotal(item: QuoteItemResponse) {
@@ -672,7 +639,9 @@ async function fetchQuote() {
     contact_person: quote.value.contact_person || '',
     contact_phone: quote.value.contact_phone || '',
   })
-  items.value = quote.value.items?.length ? quote.value.items.map(i => ({ ...i })) : [newItem()]
+  items.value = quote.value.items?.length
+    ? quote.value.items.map(i => migrateLegacyQuoteDimensions({ ...i }))
+    : [newItem()]
   captureCleanSnapshot()
 }
 
@@ -724,8 +693,6 @@ async function doCreateNewQuote(): Promise<QuoteDetailResponse> {
     ...(item.id ? { id: item.id } : {}),
     item_name: item.item_name || '待填写',
     product_id: item.product_id || undefined,
-    length: item.length || undefined,
-    length_unit: item.length_unit || undefined,
     width: item.width || undefined,
     width_unit: item.width_unit || undefined,
     height: item.height || undefined,
@@ -778,8 +745,6 @@ async function handleSave() {
         ...(item.id ? { id: item.id } : {}),
         item_name: item.item_name,
         product_id: item.product_id || undefined,
-        length: item.length || undefined,
-        length_unit: item.length_unit || undefined,
         width: item.width || undefined,
         width_unit: item.width_unit || undefined,
         height: item.height || undefined,

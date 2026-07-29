@@ -51,3 +51,37 @@ def test_ai_business_rule_tables_are_created_by_migration():
         and "op.create_table(" in source
         for source in migration_sources
     )
+
+
+def test_cdr_quote_lines_receive_regular_quote_fields_by_migration():
+    versions_dir = Path(__file__).parents[1] / "alembic" / "versions"
+    migration_sources = [
+        path.read_text(encoding="utf-8")
+        for path in versions_dir.glob("*.py")
+    ]
+
+    assert any(
+        '"quote_lines"' in source
+        and '"material_process"' in source
+        and '"process_fee"' in source
+        and '"group_name"' in source
+        and "op.add_column(" in source
+        for source in migration_sources
+    )
+
+
+def test_existing_quote_length_and_width_are_moved_to_width_and_height():
+    versions_dir = Path(__file__).parents[1] / "alembic" / "versions"
+    migration_sources = [
+        path.read_text(encoding="utf-8")
+        for path in versions_dir.glob("*.py")
+    ]
+
+    assert any(
+        "UPDATE business_document_items AS item" in source
+        and "height = item.width" in source
+        and "width = item.length" in source
+        and "length = NULL" in source
+        and "document.doc_type = 'quote'" in source
+        for source in migration_sources
+    )

@@ -29,6 +29,7 @@ class CdrQuoteConversionService(CdrQuoteServiceBase):
             BusinessDocument, BusinessDocumentItem, BusinessDocumentStatusLog,
         )
         from app.services.number_generator import generate_order_no
+        from app.services.cdr_quote_line_adapter import to_business_document_item_data
 
         # 1. 获取报价 header
         r = await self.db.execute(
@@ -92,21 +93,9 @@ class CdrQuoteConversionService(CdrQuoteServiceBase):
 
         # 5. 复制报价明细行 → BusinessDocumentItem
         for line in (version.lines or []):
-            width_m = float(line.width_mm / 1000) if line.width_mm else None
-            height_m = float(line.height_mm / 1000) if line.height_mm else None
             item = BusinessDocumentItem(
                 document_id=order_doc.id,
-                item_name=line.description,
-                product_id=line.product_id,
-                material_id=line.material_id,
-                width=width_m,
-                width_unit="m" if width_m else None,
-                height=height_m,
-                height_unit="m" if height_m else None,
-                quantity=float(line.quantity or 1),
-                unit=line.unit or "件",
-                unit_price=float(line.unit_price or 0),
-                subtotal_amount=float(line.amount or 0),
+                **to_business_document_item_data(line),
             )
             self.db.add(item)
 

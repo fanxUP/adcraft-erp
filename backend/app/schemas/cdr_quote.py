@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from uuid import UUID
 
 
@@ -125,17 +125,42 @@ class QuoteLineProcessCreate(BaseModel):
 class QuoteLineCreate(BaseModel):
     product_id: UUID | None = None
     material_id: UUID | None = None
-    description: str = Field(..., min_length=1)
+    item_name: str | None = Field(None, min_length=1)
+    description: str | None = Field(None, min_length=1)
+    material_process: str | None = None
+    width: Decimal | None = Field(None, max_digits=12, decimal_places=3)
+    width_unit: str | None = "m"
+    height: Decimal | None = Field(None, max_digits=12, decimal_places=3)
+    height_unit: str | None = "m"
     width_mm: Decimal | None = Field(None, max_digits=12, decimal_places=3)
     height_mm: Decimal | None = Field(None, max_digits=12, decimal_places=3)
     length_m: Decimal | None = Field(None, max_digits=12, decimal_places=3)
     quantity: Decimal = Field(default=Decimal("1"), max_digits=14, decimal_places=3)
     unit: str | None = None
+    use_area: bool = False
     pieces: Decimal | None = Field(None, max_digits=10, decimal_places=2)
     unit_price: Decimal = Field(default=Decimal("0"), max_digits=14, decimal_places=4)
+    process_fee: Decimal = Field(default=Decimal("0"), max_digits=14, decimal_places=2)
+    installation_fee: Decimal = Field(default=Decimal("0"), max_digits=14, decimal_places=2)
+    design_fee: Decimal = Field(default=Decimal("0"), max_digits=14, decimal_places=2)
+    transport_fee: Decimal = Field(default=Decimal("0"), max_digits=14, decimal_places=2)
+    other_fee: Decimal = Field(default=Decimal("0"), max_digits=14, decimal_places=2)
+    remark: str | None = None
+    image_url: str | None = None
+    sort_order: int = 0
+    group_name: str | None = None
     manual_adjustment: Decimal = Field(default=Decimal("0"), max_digits=14, decimal_places=2)
     manual_reason: str | None = None
     processes: list[QuoteLineProcessCreate] = []
+
+    @model_validator(mode="after")
+    def synchronize_item_name(self):
+        name = self.item_name or self.description
+        if not name:
+            raise ValueError("请填写项目内容")
+        self.item_name = name
+        self.description = name
+        return self
 
 
 class QuoteLineUpdate(BaseModel):
@@ -187,17 +212,33 @@ class QuoteLineResponse(BaseModel):
     line_no: int
     product_id: UUID | None
     material_id: UUID | None
+    item_name: str
     description: str
+    material_process: str | None
+    width: Decimal | None
+    width_unit: str | None
+    height: Decimal | None
+    height_unit: str | None
     width_mm: Decimal | None
     height_mm: Decimal | None
     length_m: Decimal | None
     quantity: Decimal
     unit: str | None
+    use_area: bool
     pieces: Decimal | None
     billable_quantity: Decimal
     unit_price: Decimal
     amount: Decimal
     estimated_cost: Decimal
+    process_fee: Decimal
+    installation_fee: Decimal
+    design_fee: Decimal
+    transport_fee: Decimal
+    other_fee: Decimal
+    remark: str | None
+    image_url: str | None
+    sort_order: int
+    group_name: str | None
     manual_adjustment: Decimal
     manual_reason: str | None
     source: str

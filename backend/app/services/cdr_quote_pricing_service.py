@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
+import re
 from uuid import UUID, uuid4
 from typing import Any
 
@@ -13,6 +14,10 @@ from app.services.price_engine import (
     ProductInfo, MaterialInfo, ProcessInfo, CustomerAgreement,
 )
 from app.models.product import Product, Material, Process
+from app.services.cdr_quote_line_adapter import (
+    calculate_regular_line_subtotal,
+    normalize_regular_quote_line,
+)
 
 from app.services.cdr_quote_base_service import CdrQuoteServiceBase
 
@@ -47,34 +52,47 @@ class CdrQuotePricingService(CdrQuoteServiceBase):
         )
 
         material: MaterialInfo | None = None
-        if material_id := data.get("material_id"):
+        material_id = data.get("material_id")
+        mat_db = None
+        if material_id:
             mat_db = await self.repo.get_material(UUID(material_id))
-            if mat_db:
-                material = MaterialInfo(
-                    id=mat_db.id,
-                    name=mat_db.name,
-                    purchase_price=Decimal(str(mat_db.purchase_price or 0)),
-                    sale_price=Decimal(str(mat_db.sale_price or 0)),
-                    loss_rate=Decimal(str(mat_db.loss_rate or 0)),
-                    unit=mat_db.unit,
-                    thickness_mm=Decimal(str(mat_db.thickness_mm)) if mat_db.thickness_mm else None,
-                    sheet_width_mm=Decimal(str(mat_db.sheet_width_mm)) if mat_db.sheet_width_mm else None,
-                    sheet_height_mm=Decimal(str(mat_db.sheet_height_mm)) if mat_db.sheet_height_mm else None,
-                )
+        elif product_db.material_name:
+            mat_db = await self.repo.get_material_by_name(product_db.material_name)
+        if mat_db:
+            material = MaterialInfo(
+                id=mat_db.id,
+                name=mat_db.name,
+                purchase_price=Decimal(str(mat_db.purchase_price or 0)),
+                sale_price=Decimal(str(mat_db.sale_price or 0)),
+                loss_rate=Decimal(str(mat_db.loss_rate or 0)),
+                unit=mat_db.unit,
+                thickness_mm=Decimal(str(mat_db.thickness_mm)) if mat_db.thickness_mm else None,
+                sheet_width_mm=Decimal(str(mat_db.sheet_width_mm)) if mat_db.sheet_width_mm else None,
+                sheet_height_mm=Decimal(str(mat_db.sheet_height_mm)) if mat_db.sheet_height_mm else None,
+            )
 
         processes: list[ProcessInfo] = []
-        if process_ids := data.get("process_ids", []):
+        process_ids = data.get("process_ids", [])
+        procs_db = []
+        if process_ids:
             procs_db = await self.repo.get_processes([UUID(pid) for pid in process_ids])
-            for p in procs_db:
-                processes.append(ProcessInfo(
-                    id=p.id,
-                    name=p.name,
-                    billing_basis=p.billing_basis or "fixed",
-                    default_price=Decimal(str(p.default_price or 0)),
-                    startup_fee=Decimal(str(p.startup_fee or 0)),
-                    min_charge=Decimal(str(p.min_charge or 0)),
-                    standard_hours=Decimal(str(p.standard_hours)) if p.standard_hours else None,
-                ))
+        elif product_db.process_name:
+            process_names = [
+                name.strip()
+                for name in re.split(r"[,，、;/；]+", product_db.process_name)
+                if name.strip()
+            ]
+            procs_db = await self.repo.get_processes_by_names(process_names)
+        for p in procs_db:
+            processes.append(ProcessInfo(
+                id=p.id,
+                name=p.name,
+                billing_basis=p.billing_basis or "fixed",
+                default_price=Decimal(str(p.default_price or 0)),
+                startup_fee=Decimal(str(p.startup_fee or 0)),
+                min_charge=Decimal(str(p.min_charge or 0)),
+                standard_hours=Decimal(str(p.standard_hours)) if p.standard_hours else None,
+            ))
 
         customer_agreement: CustomerAgreement | None = None
         if customer_id := data.get("customer_id"):
@@ -173,25 +191,24 @@ class CdrQuotePricingService(CdrQuoteServiceBase):
 
         lines_data = data.get("lines", [])
         for i, line_data in enumerate(lines_data):
+            normalized = normalize_regular_quote_line(line_data)
             line_dict = {
                 "version_id": version.id,
                 "line_no": i + 1,
                 "product_id": UUID(line_data["product_id"]) if line_data.get("product_id") else None,
                 "material_id": UUID(line_data["material_id"]) if line_data.get("material_id") else None,
-                "description": line_data["description"],
-                "width_mm": Decimal(str(line_data["width_mm"])) if line_data.get("width_mm") else None,
-                "height_mm": Decimal(str(line_data["height_mm"])) if line_data.get("height_mm") else None,
-                "length_m": Decimal(str(line_data["length_m"])) if line_data.get("length_m") else None,
-                "quantity": Decimal(str(line_data.get("quantity", 1))),
-                "unit": line_data.get("unit"),
-                "pieces": Decimal(str(line_data["pieces"])) if line_data.get("pieces") else None,
+                **normalized,
             }
 
             # 对每行执行试算
             calc_data = {
                 "product_id": str(line_dict["product_id"]) if line_dict["product_id"] else None,
                 "material_id": str(line_dict["material_id"]) if line_dict["material_id"] else None,
-                "quantity": line_dict["quantity"],
+                "quantity": (
+                    line_dict["pieces"]
+                    if line_dict["use_area"]
+                    else line_dict["quantity"]
+                ),
                 "width_mm": line_dict["width_mm"],
                 "height_mm": line_dict["height_mm"],
                 "length_m": line_dict["length_m"],
@@ -203,8 +220,14 @@ class CdrQuotePricingService(CdrQuoteServiceBase):
                 calc_result = self._empty_calc_result()
 
             line_dict["billable_quantity"] = Decimal(calc_result["billable_quantity"])
-            line_dict["unit_price"] = Decimal(calc_result["unit_price"])
-            line_dict["amount"] = Decimal(calc_result["subtotal_amount"])
+            automatic_unit_price = Decimal(calc_result["unit_price"])
+            requested_unit_price = normalized["unit_price"]
+            line_dict["unit_price"] = (
+                requested_unit_price
+                if requested_unit_price > 0
+                else automatic_unit_price
+            )
+            line_dict["amount"] = calculate_regular_line_subtotal(line_dict)
             line_dict["estimated_cost"] = Decimal(calc_result["total_cost"])
             line_dict["pricing_trace_json"] = calc_result.get("pricing_trace")
 
@@ -287,14 +310,33 @@ class CdrQuotePricingService(CdrQuoteServiceBase):
                 "id": str(line.id),
                 "line_no": line.line_no,
                 "product_id": str(line.product_id) if line.product_id else None,
+                "material_id": str(line.material_id) if line.material_id else None,
+                "item_name": line.description,
                 "description": line.description,
+                "material_process": line.material_process,
+                "width": str(line.width) if line.width is not None else None,
+                "width_unit": line.width_unit,
+                "height": str(line.height) if line.height is not None else None,
+                "height_unit": line.height_unit,
                 "width_mm": str(line.width_mm) if line.width_mm else None,
                 "height_mm": str(line.height_mm) if line.height_mm else None,
                 "length_m": str(line.length_m) if line.length_m else None,
                 "quantity": str(line.quantity),
+                "unit": line.unit,
+                "use_area": line.use_area,
+                "pieces": str(line.pieces) if line.pieces is not None else None,
                 "unit_price": str(line.unit_price),
                 "amount": str(line.amount),
                 "estimated_cost": str(line.estimated_cost),
+                "process_fee": str(line.process_fee),
+                "installation_fee": str(line.installation_fee),
+                "design_fee": str(line.design_fee),
+                "transport_fee": str(line.transport_fee),
+                "other_fee": str(line.other_fee),
+                "remark": line.remark,
+                "image_url": line.image_url,
+                "sort_order": line.sort_order,
+                "group_name": line.group_name,
                 "source": line.source,
                 "requires_approval": line.requires_approval,
                 "processes": [

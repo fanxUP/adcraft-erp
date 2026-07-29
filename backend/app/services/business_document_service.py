@@ -14,10 +14,6 @@ from app.models.project_cost import ProjectCost
 def _build_spec(item) -> str | None:
     """Build specification string from item dimensions + pieces."""
     parts = []
-    if item.length:
-        v = float(item.length)
-        num = str(int(v)) if v == int(v) else str(v)
-        parts.append(f"{num}{item.length_unit or 'm'}")
     if item.width:
         v = float(item.width)
         num = str(int(v)) if v == int(v) else str(v)
@@ -821,6 +817,7 @@ class BusinessDocumentService:
                     "other_fee": float(it.other_fee),
                     "subtotal_amount": float(it.subtotal_amount),
                     "remark": it.remark,
+                    "image_url": it.image_url,
                     "sort_order": it.sort_order,
                     "group_name": it.group_name,
                     "material_process": it.material_process,
