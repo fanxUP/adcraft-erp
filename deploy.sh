@@ -90,10 +90,14 @@ echo "=== AdCraft ERP 全量部署 ==="
 echo "目标提交：$TARGET_COMMIT"
 
 # 仅备份数据库；代码由 Git 恢复，上传文件是独立持久数据。
-git show "$TARGET_COMMIT:scripts/backup.sh" > /tmp/adcraft-backup-database.sh
-chmod 700 /tmp/adcraft-backup-database.sh
-PROJECT_DIR="$PROJECT_DIR" /tmp/adcraft-backup-database.sh
-rm -f /tmp/adcraft-backup-database.sh
+BACKUP_TOOL_DIR="$(mktemp -d /tmp/adcraft-database-backup.XXXXXX)"
+trap 'rm -rf "$BACKUP_TOOL_DIR"' EXIT
+git archive "$TARGET_COMMIT" scripts/backup.sh scripts/postgres_cli.py \
+  | tar -x -C "$BACKUP_TOOL_DIR"
+chmod 700 "$BACKUP_TOOL_DIR/scripts/backup.sh"
+PROJECT_DIR="$PROJECT_DIR" "$BACKUP_TOOL_DIR/scripts/backup.sh"
+rm -rf "$BACKUP_TOOL_DIR"
+trap - EXIT
 
 git reset --hard "$TARGET_COMMIT"
 git clean -ffdx \
