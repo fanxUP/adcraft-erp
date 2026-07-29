@@ -98,6 +98,8 @@
         <AiInputBox />
       </div>
     </Transition>
+
+    <AiPageActionSpotlight />
   </div>
 </template>
 
@@ -109,6 +111,7 @@ import AiContextBar from './AiContextBar.vue'
 import AiWorkflowGuidanceCard from './AiWorkflowGuidanceCard.vue'
 import AiActionPreview from './AiActionPreview.vue'
 import AiInputBox from './AiInputBox.vue'
+import AiPageActionSpotlight from './AiPageActionSpotlight.vue'
 
 const store = useAiAssistantStore()
 const showHistory = ref(false)

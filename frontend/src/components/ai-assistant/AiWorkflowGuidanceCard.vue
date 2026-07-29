@@ -43,6 +43,7 @@
         :disabled="!canNavigate"
         @click="goToNextAction"
       >
+        <el-icon v-if="guidance.next_action.target_key"><Position /></el-icon>
         {{ guidance.next_action.label }}
         <el-icon class="el-icon--right"><Right /></el-icon>
       </el-button>
@@ -65,11 +66,14 @@
 import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { isSafeWorkflowTarget } from '@/utils/workflowGuidance'
+import { isSameWorkflowPath } from '@/utils/pageActionGuide'
 
 const store = useAiAssistantStore()
 const router = useRouter()
+const route = useRoute()
 const guidance = computed(() => store.activeGuidance!)
 const canNavigate = computed(() =>
   Boolean(
@@ -79,12 +83,18 @@ const canNavigate = computed(() =>
 )
 
 async function goToNextAction() {
-  const path = guidance.value.next_action?.target_path
+  const nextAction = guidance.value.next_action
+  const path = nextAction?.target_path
   if (!path || !isSafeWorkflowTarget(path)) {
     ElMessage.error('该导航地址不在系统允许范围内')
     return
   }
-  await router.push(path)
+  if (nextAction?.target_key) {
+    store.startPageActionGuide(nextAction)
+  }
+  if (!isSameWorkflowPath(route.path, path)) {
+    await router.push(path)
+  }
 }
 </script>
 

@@ -25,6 +25,7 @@ function guidance(businessId = orderId): AiWorkflowGuidance {
       target_page: '订单详情',
       target_path: `/orders/${businessId}`,
       target_status: 'in_production',
+      target_key: 'order-status-in_production',
     },
     completion_signal: '订单状态变为“生产中”',
     allowed_next_statuses: ['in_production'],
@@ -96,5 +97,32 @@ describe('AI assistant proactive workflow guidance', () => {
 
     expect(aiApi.getWorkflowGuidance).toHaveBeenCalledTimes(2)
     expect(store.activeGuidance?.current_step).toBe('生产阶段')
+  })
+
+  it('closes the drawer and marks a page action complete after business progress', async () => {
+    vi.mocked(aiApi.getWorkflowGuidance)
+      .mockResolvedValueOnce(guidance())
+      .mockResolvedValueOnce({
+        ...guidance(),
+        current_status: 'in_production',
+        next_action: {
+          label: '开始制作',
+          target_page: '制作任务详情',
+          target_path: '/production-tasks/22222222-2222-2222-2222-222222222222',
+          target_key: 'task-status-in_progress',
+        },
+      })
+    const store = useAiAssistantStore()
+    store.resetPageContext({ business_type: 'order', business_id: orderId })
+    store.openDrawer()
+    await vi.waitFor(() => expect(store.activeGuidance).not.toBeNull())
+
+    store.startPageActionGuide(store.activeGuidance!.next_action!)
+    expect(store.visible).toBe(false)
+    expect(store.pageGuideState).toBe('locating')
+
+    await store.notifyBusinessMutation()
+
+    expect(store.pageGuideState).toBe('completed')
   })
 })

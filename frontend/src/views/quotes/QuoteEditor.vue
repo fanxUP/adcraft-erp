@@ -307,9 +307,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { uploadAttachment } from '@/api/tasks'
 import type { QuoteItemResponse, QuoteDetailResponse, CustomerResponse } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
+import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 
 const route = useRoute()
 const router = useRouter()
+const aiStore = useAiAssistantStore()
 const isEdit = computed(() => !!route.params.id)
 const saving = ref(false)
 const converting = ref(false)
@@ -803,7 +805,8 @@ async function handleConfirm() {
   await confirmQuote(route.params.id as string)
   ElMessage.success('报价已确认')
   dirty.value = false
-  fetchQuote()
+  await fetchQuote()
+  await aiStore.notifyBusinessMutation()
 }
 
 async function handleConvert() {
@@ -816,7 +819,8 @@ async function handleConvert() {
   try {
     const order = await convertQuoteToOrder(route.params.id as string)
     ElMessage.success('已转为订单')
-    router.push(`/orders/${order.id}`)
+    await aiStore.notifyBusinessMutation()
+    await router.push(`/orders/${order.id}`)
   } finally { converting.value = false }
 }
 
@@ -830,6 +834,7 @@ async function handleRevertToDraft() {
   try {
     quote.value = await revertQuoteToDraft(route.params.id as string)
     ElMessage.success('已撤回为草稿')
+    await aiStore.notifyBusinessMutation()
   } finally { reverting.value = false }
 }
 

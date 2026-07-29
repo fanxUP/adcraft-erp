@@ -9,10 +9,13 @@ def action(
     path: str,
     *,
     target_status: str | None = None,
+    target_key: str | None = None,
 ) -> dict:
     result = {"label": label, "target_page": page, "target_path": path}
     if target_status:
         result["target_status"] = target_status
+    if target_key:
+        result["target_key"] = target_key
     return result
 
 

@@ -51,6 +51,9 @@ function parseAction(value: unknown): AiWorkflowAction | null {
     ...(typeof value.target_status === 'string'
       ? { target_status: value.target_status }
       : {}),
+    ...(typeof value.target_key === 'string'
+      ? { target_key: value.target_key }
+      : {}),
   }
 }
 

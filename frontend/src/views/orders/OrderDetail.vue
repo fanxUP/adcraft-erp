@@ -220,7 +220,13 @@
             <template #header>
               <div class="card-header">
                 <span>设计任务</span>
-                <el-button v-if="authStore.hasAnyRole(['admin', 'designer'])" size="small" type="danger" @click="showDesignDialog = true">创建</el-button>
+                <el-button
+                  v-if="authStore.hasAnyRole(['admin', 'designer'])"
+                  data-ai-target="order-create-design"
+                  size="small"
+                  type="danger"
+                  @click="showDesignDialog = true"
+                >创建</el-button>
               </div>
             </template>
             <el-table :data="designTasks" stripe size="small" v-loading="tasksLoading">
@@ -242,7 +248,13 @@
             <template #header>
               <div class="card-header">
                 <span>制作任务</span>
-                <el-button v-if="authStore.hasAnyRole(['admin', 'production'])" size="small" type="danger" @click="showProdDialog = true">创建</el-button>
+                <el-button
+                  v-if="authStore.hasAnyRole(['admin', 'production'])"
+                  data-ai-target="order-create-production"
+                  size="small"
+                  type="danger"
+                  @click="showProdDialog = true"
+                >创建</el-button>
               </div>
             </template>
             <el-table :data="productionTasks" stripe size="small" v-loading="tasksLoading">
@@ -264,7 +276,13 @@
             <template #header>
               <div class="card-header">
                 <span>安装任务</span>
-                <el-button v-if="authStore.hasAnyRole(['admin', 'installer'])" size="small" type="danger" @click="showInstDialog = true">创建</el-button>
+                <el-button
+                  v-if="authStore.hasAnyRole(['admin', 'installer'])"
+                  data-ai-target="order-create-installation"
+                  size="small"
+                  type="danger"
+                  @click="showInstDialog = true"
+                >创建</el-button>
               </div>
             </template>
             <el-table :data="installationTasks" stripe size="small" v-loading="tasksLoading">
@@ -526,21 +544,24 @@ async function handleCreateDesign() {
   await createDesignTask({ order_id: route.params.id as string, customer_id: order.value.customer_id, project_name: taskForm.project_name || order.value.project_name, assigned_to: taskForm.assigned_to || undefined, description: taskForm.description })
   ElMessage.success('已创建设计任务')
   showDesignDialog.value = false; taskForm.project_name = ''; taskForm.assigned_to = ''; taskForm.description = ''
-  fetchTasks()
+  await fetchTasks()
+  await aiStore.notifyBusinessMutation()
 }
 async function handleCreateProduction() {
   if (!order.value) return
   await createProductionTask({ order_id: route.params.id as string, customer_id: order.value.customer_id, project_name: taskForm.project_name || order.value.project_name, assigned_to: taskForm.assigned_to || undefined, quantity: taskForm.quantity })
   ElMessage.success('已创建制作任务')
   showProdDialog.value = false; taskForm.project_name = ''; taskForm.assigned_to = ''; taskForm.quantity = 1
-  fetchTasks()
+  await fetchTasks()
+  await aiStore.notifyBusinessMutation()
 }
 async function handleCreateInstallation() {
   if (!order.value) return
   await createInstallationTask({ order_id: route.params.id as string, customer_id: order.value.customer_id, project_name: taskForm.project_name || order.value.project_name, assigned_to: taskForm.assigned_to || undefined, address: order.value.installation_address || '' })
   ElMessage.success('已创建安装任务')
   showInstDialog.value = false; taskForm.project_name = ''; taskForm.assigned_to = ''
-  fetchTasks()
+  await fetchTasks()
+  await aiStore.notifyBusinessMutation()
 }
 
 async function handleChangeStatus(to_status: string) {
@@ -563,6 +584,7 @@ async function handleChangeStatus(to_status: string) {
       reason: undefined,
     })
     ElMessage.success(`状态已变更为「${label}」`)
+    await aiStore.notifyBusinessMutation()
   } finally { changing.value = false }
 }
 

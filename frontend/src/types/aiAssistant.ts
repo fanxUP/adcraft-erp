@@ -53,6 +53,7 @@ export interface AiWorkflowAction {
   target_page: string
   target_path: string
   target_status?: string
+  target_key?: string
 }
 
 export interface AiWorkflowGuidance {
@@ -65,6 +66,15 @@ export interface AiWorkflowGuidance {
   completion_signal: string
   allowed_next_statuses: string[]
 }
+
+export interface AiPageActionGuide {
+  label: string
+  target_path: string
+  target_key: string
+  target_status?: string
+}
+
+export type AiPageGuideState = 'idle' | 'locating' | 'active' | 'completed' | 'not_found'
 
 export interface AiPendingAction {
   id: string

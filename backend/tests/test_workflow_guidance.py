@@ -38,6 +38,7 @@ def test_designing_order_guides_user_to_unfinished_design_task():
     assert guidance["next_action"]["target_path"] == (
         "/design-tasks/22222222-2222-2222-2222-222222222222"
     )
+    assert guidance["next_action"]["target_key"] == "task-status-confirmed"
     assert "设计任务 D20260729-0001 待审核确认" in guidance["blockers"]
     assert guidance["allowed_next_statuses"] == [
         "in_production",
@@ -71,6 +72,7 @@ def test_confirmed_design_tasks_unlock_order_production():
     assert guidance["next_action"]["label"] == "进入生产阶段"
     assert guidance["next_action"]["target_path"] == f"/orders/{SAMPLE_ORDER_ID}"
     assert guidance["next_action"]["target_status"] == "in_production"
+    assert guidance["next_action"]["target_key"] == "order-status-in_production"
     assert guidance["completion_signal"] == "订单状态变为“生产中”并生成制作任务"
 
 
@@ -114,6 +116,47 @@ def test_pending_acceptance_guides_user_to_confirm_each_item():
     assert guidance["next_action"]["target_path"] == (
         "/acceptances/55555555-5555-5555-5555-555555555555"
     )
+    assert guidance["next_action"]["target_key"] == "acceptance-items"
+
+
+def test_quote_guidance_identifies_the_exact_workflow_control():
+    guidance = build_workflow_guidance(
+        {
+            "business_type": "quote",
+            "business_id": "11111111-1111-1111-1111-111111111111",
+            "status": "confirmed",
+        }
+    )
+
+    assert guidance["next_action"]["target_key"] == "quote-status-converted"
+
+
+@pytest.mark.parametrize(
+    ("business_type", "status", "target_key"),
+    [
+        ("design_task", "designing", "task-status-pending_review"),
+        ("production_task", "qc_check", "task-status-completed"),
+        ("installation_task", "assigned", "task-status-in_progress"),
+    ],
+)
+def test_task_guidance_identifies_the_target_status_control(
+    business_type,
+    status,
+    target_key,
+):
+    guidance = build_workflow_guidance(
+        {
+            "business_type": business_type,
+            "business_id": "22222222-2222-2222-2222-222222222222",
+            "status": status,
+            "assigned_to": "operator",
+            "design_file_url": "design.png",
+            "address": "测试地址",
+            "scheduled_at": "2026-07-29T09:00:00",
+        }
+    )
+
+    assert guidance["next_action"]["target_key"] == target_key
 
 
 def test_unknown_business_status_returns_safe_guidance():

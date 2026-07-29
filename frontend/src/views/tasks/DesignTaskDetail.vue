@@ -19,7 +19,12 @@
         </el-descriptions>
       </el-card>
 
-      <el-card shadow="never" class="info-card" style="margin-top: 16px">
+      <el-card
+        data-ai-targets="task-status-designing task-status-pending_review task-status-revision task-status-confirmed"
+        shadow="never"
+        class="info-card"
+        style="margin-top: 16px"
+      >
         <template #header><span>变更状态</span></template>
         <el-form :model="statusForm" inline>
           <el-form-item label="目标状态">
@@ -99,8 +104,10 @@ import { getDesignTask, updateDesignTask, changeDesignTaskStatus, uploadAttachme
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import type { DesignTaskResponse } from '@/types/api'
+import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 
 const route = useRoute()
+const aiStore = useAiAssistantStore()
 const loading = ref(false)
 const updating = ref(false)
 const changing = ref(false)
@@ -127,7 +134,8 @@ async function handleUpdate() {
   try {
     await updateDesignTask(route.params.id as string, editForm)
     ElMessage.success('保存成功')
-    fetchTask()
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
   } catch { /* handled */ } finally { updating.value = false }
 }
 
@@ -142,7 +150,8 @@ async function handleChangeStatus() {
     ElMessage.success('状态已变更')
     statusForm.to_status = ''
     statusForm.reason = ''
-    fetchTask()
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
   } catch { /* handled */ } finally { changing.value = false }
 }
 
@@ -150,7 +159,8 @@ async function handleUpload(req: UploadRequestOptions) {
   try {
     await uploadAttachment('design_task', route.params.id as string, req.file, 'design')
     ElMessage.success('上传成功')
-    fetchTask()
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
   } catch { /* handled */ }
 }
 

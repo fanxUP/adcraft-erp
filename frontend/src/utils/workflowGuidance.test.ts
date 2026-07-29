@@ -21,6 +21,7 @@ const guidanceResult: AiToolCallResult = {
       label: '确认设计稿',
       target_page: '设计任务详情',
       target_path: '/design-tasks/22222222-2222-2222-2222-222222222222',
+      target_key: 'task-status-confirmed',
     },
     completion_signal: '设计任务状态变为“已确认”',
     allowed_next_statuses: ['in_production'],
@@ -34,6 +35,7 @@ describe('workflow guidance helpers', () => {
       current_step: '设计阶段',
       next_action: {
         label: '确认设计稿',
+        target_key: 'task-status-confirmed',
       },
     })
   })

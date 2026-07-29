@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type {
   AiMessage,
+  AiPageActionGuide,
+  AiPageGuideState,
   AiPageContext,
   AiPendingAction,
   AiSession,
@@ -15,6 +17,7 @@ import {
   matchesGuidanceContext,
   parseWorkflowGuidance,
 } from '@/utils/workflowGuidance'
+import { hasPageActionCompleted } from '@/utils/pageActionGuide'
 
 export const useAiAssistantStore = defineStore('aiAssistant', () => {
   // UI state
@@ -38,6 +41,8 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
   const guidanceError = ref('')
   const guidanceRequestKey = ref<string | null>(null)
   const dismissedGuidanceKey = ref<string | null>(null)
+  const activePageGuide = ref<AiPageActionGuide | null>(null)
+  const pageGuideState = ref<AiPageGuideState>('idle')
   let guidanceRequestSequence = 0
 
   // Input state
@@ -361,6 +366,12 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
       if (requestKey === getGuidanceContextKey(pageContext.value)) {
         activeGuidance.value = guidance
         dismissedGuidanceKey.value = null
+        if (
+          activePageGuide.value
+          && hasPageActionCompleted(activePageGuide.value, guidance)
+        ) {
+          pageGuideState.value = 'completed'
+        }
       }
       return guidance
     } catch (e: unknown) {
@@ -418,6 +429,33 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     guidanceError.value = ''
   }
 
+  function startPageActionGuide(action: AiWorkflowGuidance['next_action']) {
+    if (!action?.target_key) return false
+    activePageGuide.value = {
+      label: action.label,
+      target_path: action.target_path,
+      target_key: action.target_key,
+      ...(action.target_status ? { target_status: action.target_status } : {}),
+    }
+    pageGuideState.value = 'locating'
+    closeDrawer()
+    return true
+  }
+
+  function setPageGuideState(state: AiPageGuideState) {
+    if (activePageGuide.value) pageGuideState.value = state
+  }
+
+  function clearPageActionGuide() {
+    activePageGuide.value = null
+    pageGuideState.value = 'idle'
+  }
+
+  async function notifyBusinessMutation() {
+    if (!getGuidanceContextKey(pageContext.value)) return null
+    return refreshWorkflowGuidance()
+  }
+
   // Confirm/cancel actions
   async function confirmPendingAction(actionId: string) {
     if (actionSubmitting.value) return null
@@ -469,12 +507,15 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     sessions, currentSessionId, messages, pageContext,
     toolResults, pendingAction, actionSubmitting,
     activeGuidance, guidanceLoading, guidanceError, inputText,
+    activePageGuide, pageGuideState,
     currentSession, hasMessages, isProcessing, canGuideCurrentPage,
     toggleDrawer, openDrawer, closeDrawer, lastActionTimestamp,
     setPageContext, resetPageContext,
     loadSessions, switchSession, createNewSession,
     sendMessage, sendMessageStream,
     startWorkflowGuidance, refreshWorkflowGuidance, clearWorkflowGuidance,
+    startPageActionGuide, setPageGuideState, clearPageActionGuide,
+    notifyBusinessMutation,
     confirmPendingAction, cancelPendingAction,
   }
 })

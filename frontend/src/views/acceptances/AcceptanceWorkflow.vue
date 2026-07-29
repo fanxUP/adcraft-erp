@@ -3,7 +3,7 @@
     <div class="aw-flow">
       <!-- 列1: 草稿 -->
       <div class="aw-col">
-        <div class="aw-card" :class="cardClass('draft')" @click="tryChange('draft')">
+        <div data-ai-target="acceptance-status-draft" class="aw-card" :class="cardClass('draft')" @click="tryChange('draft')">
           <div class="aw-icon" :class="iconClass('draft')">
             <el-icon v-if="isPast('draft')" :size="16"><Check /></el-icon>
             <span v-else>1</span>
@@ -24,7 +24,7 @@
 
       <!-- 列2: 待验收 -->
       <div class="aw-col">
-        <div class="aw-card" :class="cardClass('pending')" @click="tryChange('pending')">
+        <div data-ai-target="acceptance-status-pending" class="aw-card" :class="cardClass('pending')" @click="tryChange('pending')">
           <div class="aw-icon" :class="iconClass('pending')">
             <el-icon v-if="isPast('pending')" :size="16"><Check /></el-icon>
             <span v-else>2</span>
@@ -45,7 +45,7 @@
 
       <!-- 列3: 已验收 -->
       <div class="aw-col">
-        <div class="aw-card" :class="cardClass('accepted')" @click="tryChange('accepted')">
+        <div data-ai-target="acceptance-status-accepted" class="aw-card" :class="cardClass('accepted')" @click="tryChange('accepted')">
           <div class="aw-icon" :class="iconClass('accepted')">
             <el-icon v-if="isPast('accepted')" :size="16"><Check /></el-icon>
             <span v-else>3</span>

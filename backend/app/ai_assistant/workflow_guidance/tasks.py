@@ -97,6 +97,7 @@ def build_task_guidance(snapshot: dict, task_type: str) -> dict:
             config["page"],
             f"{config['prefix']}/{task_id}",
             target_status=target_status,
+            target_key=f"task-status-{target_status}",
         ),
         completion,
         config["workflow"],

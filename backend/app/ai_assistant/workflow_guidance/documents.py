@@ -35,7 +35,13 @@ def build_order_guidance(snapshot: dict) -> dict:
             snapshot,
             stage_labels[status],
             [],
-            action("核对并确认订单", "订单详情", order_path, target_status="confirmed"),
+            action(
+                "核对并确认订单",
+                "订单详情",
+                order_path,
+                target_status="confirmed",
+                target_key="order-status-confirmed",
+            ),
             "订单状态变为“已确认”",
             ORDER_WORKFLOW,
         )
@@ -46,7 +52,12 @@ def build_order_guidance(snapshot: dict) -> dict:
                 snapshot,
                 stage_labels[status],
                 ["尚未创建设计任务"],
-                action("创建并分配设计任务", "订单详情", order_path),
+                action(
+                    "创建并分配设计任务",
+                    "订单详情",
+                    order_path,
+                    target_key="order-create-design",
+                ),
                 "订单下出现设计任务",
                 ORDER_WORKFLOW,
             )
@@ -54,7 +65,13 @@ def build_order_guidance(snapshot: dict) -> dict:
             snapshot,
             stage_labels[status],
             [],
-            action("进入设计阶段", "订单详情", order_path, target_status="designing"),
+            action(
+                "进入设计阶段",
+                "订单详情",
+                order_path,
+                target_status="designing",
+                target_key="order-status-designing",
+            ),
             "订单状态变为“设计中”",
             ORDER_WORKFLOW,
         )
@@ -72,7 +89,12 @@ def build_order_guidance(snapshot: dict) -> dict:
                 snapshot,
                 stage_labels[status],
                 [f"尚未创建{label}任务"],
-                action(f"创建并分配{label}任务", "订单详情", order_path),
+                action(
+                    f"创建并分配{label}任务",
+                    "订单详情",
+                    order_path,
+                    target_key=f"order-create-{task_type.removesuffix('_task')}",
+                ),
                 f"订单下出现{label}任务",
                 ORDER_WORKFLOW,
             )
@@ -89,7 +111,13 @@ def build_order_guidance(snapshot: dict) -> dict:
             snapshot,
             stage_labels[status],
             [],
-            action(next_label, "订单详情", order_path, target_status=target),
+            action(
+                next_label,
+                "订单详情",
+                order_path,
+                target_status=target,
+                target_key=f"order-status-{target}",
+            ),
             completion,
             ORDER_WORKFLOW,
         )
@@ -147,7 +175,13 @@ def build_acceptance_guidance(snapshot: dict) -> dict:
             snapshot,
             "验收阶段",
             blockers,
-            action("完善并提交验收单", "验收单详情", path, target_status="pending"),
+            action(
+                "完善并提交验收单",
+                "验收单详情",
+                path,
+                target_status="pending",
+                target_key="acceptance-status-pending",
+            ),
             "验收单状态变为“待验收”",
             ACCEPTANCE_WORKFLOW,
         )
@@ -163,6 +197,7 @@ def build_acceptance_guidance(snapshot: dict) -> dict:
             "验收单详情",
             path,
             target_status=None if unfinished else "accepted",
+            target_key="acceptance-items" if unfinished else "acceptance-status-accepted",
         )
         return guidance_result(
             snapshot,
@@ -177,7 +212,13 @@ def build_acceptance_guidance(snapshot: dict) -> dict:
             snapshot,
             "验收整改阶段",
             ["验收已驳回，需要完成整改"],
-            action("查看原因并重新整理验收单", "验收单详情", path, target_status="draft"),
+            action(
+                "查看原因并重新整理验收单",
+                "验收单详情",
+                path,
+                target_status="draft",
+                target_key="acceptance-status-draft",
+            ),
             "验收单恢复为草稿，可重新提交",
             ACCEPTANCE_WORKFLOW,
         )
@@ -200,7 +241,13 @@ def build_quote_guidance(snapshot: dict) -> dict:
             snapshot,
             step,
             [],
-            action(label, "报价编辑", path, target_status=target),
+            action(
+                label,
+                "报价编辑",
+                path,
+                target_status=target,
+                target_key=f"quote-status-{target}",
+            ),
             completion,
             QUOTE_WORKFLOW,
         )

@@ -3,7 +3,7 @@
     <div class="qw-flow">
       <!-- 列1: 草稿 -->
       <div class="qw-col">
-        <div class="qw-card" :class="cardClass('draft')" @click="handleCardClick('draft')">
+        <div data-ai-target="quote-status-draft" class="qw-card" :class="cardClass('draft')" @click="handleCardClick('draft')">
           <div class="qw-icon" :class="iconClass('draft')">
             <el-icon v-if="isPast('draft')" :size="16"><Check /></el-icon>
             <span v-else>1</span>
@@ -25,7 +25,7 @@
 
       <!-- 列2: 已确认 -->
       <div class="qw-col">
-        <div class="qw-card" :class="cardClass('confirmed')" @click="handleCardClick('confirmed')">
+        <div data-ai-target="quote-status-confirmed" class="qw-card" :class="cardClass('confirmed')" @click="handleCardClick('confirmed')">
           <div class="qw-icon" :class="iconClass('confirmed')">
             <el-icon v-if="isPast('confirmed')" :size="16"><Check /></el-icon>
             <span v-else>2</span>
@@ -47,7 +47,7 @@
 
       <!-- 列3: 已转订单 -->
       <div class="qw-col">
-        <div class="qw-card" :class="cardClass('converted')" @click="handleCardClick('converted')">
+        <div data-ai-target="quote-status-converted" class="qw-card" :class="cardClass('converted')" @click="handleCardClick('converted')">
           <div class="qw-icon" :class="iconClass('converted')">
             <el-icon v-if="isPast('converted')" :size="16"><Check /></el-icon>
             <span v-else>3</span>

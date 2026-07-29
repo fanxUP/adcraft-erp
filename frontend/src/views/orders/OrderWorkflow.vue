@@ -3,7 +3,7 @@
     <div class="ow-flow">
       <!-- 列1: 确认订单 -->
       <div class="ow-col">
-        <div class="ow-card" :class="cardClass('confirmed')" @click="tryChange('confirmed')">
+        <div data-ai-target="order-status-confirmed" class="ow-card" :class="cardClass('confirmed')" @click="tryChange('confirmed')">
           <div class="ow-icon" :class="iconClass('confirmed')">
             <el-icon v-if="isPast('confirmed')" :size="16"><Check /></el-icon>
             <span v-else>1</span>
@@ -24,7 +24,7 @@
 
       <!-- 列2: 项目执行阶段 -->
       <div class="ow-col ow-col-stack">
-        <div class="ow-card" :class="cardClass('designing')" @click="tryChange('designing')">
+        <div data-ai-target="order-status-designing" class="ow-card" :class="cardClass('designing')" @click="tryChange('designing')">
           <div class="ow-icon" :class="iconClass('designing')">
             <el-icon v-if="isPast('designing')" :size="16"><Check /></el-icon>
             <span v-else>2</span>
@@ -38,7 +38,7 @@
 
         <div class="stack-line" :class="{ 'stack-done': isPast('in_production') || currentStatus === 'in_production' }"></div>
 
-        <div class="ow-card" :class="cardClass('in_production')" @click="tryChange('in_production')">
+        <div data-ai-target="order-status-in_production" class="ow-card" :class="cardClass('in_production')" @click="tryChange('in_production')">
           <div class="ow-icon" :class="iconClass('in_production')">
             <el-icon v-if="isPast('in_production')" :size="16"><Check /></el-icon>
             <span v-else>3</span>
@@ -52,7 +52,7 @@
 
         <div class="stack-line" :class="{ 'stack-done': isPast('in_installation') || currentStatus === 'in_installation' }"></div>
 
-        <div class="ow-card" :class="cardClass('in_installation')" @click="tryChange('in_installation')">
+        <div data-ai-target="order-status-in_installation" class="ow-card" :class="cardClass('in_installation')" @click="tryChange('in_installation')">
           <div class="ow-icon" :class="iconClass('in_installation')">
             <el-icon v-if="isPast('in_installation')" :size="16"><Check /></el-icon>
             <span v-else>4</span>
@@ -66,7 +66,7 @@
 
         <div class="stack-line" :class="{ 'stack-done': isPast('pending_acceptance') || currentStatus === 'pending_acceptance' }"></div>
 
-        <div class="ow-card" :class="cardClass('pending_acceptance')" @click="tryChange('pending_acceptance')">
+        <div data-ai-target="order-status-pending_acceptance" class="ow-card" :class="cardClass('pending_acceptance')" @click="tryChange('pending_acceptance')">
           <div class="ow-icon" :class="iconClass('pending_acceptance')">
             <el-icon v-if="isPast('pending_acceptance')" :size="16"><Check /></el-icon>
             <span v-else>5</span>
@@ -87,7 +87,7 @@
 
       <!-- 列3: 已完成 -->
       <div class="ow-col">
-        <div class="ow-card" :class="cardClass('completed')" @click="tryChange('completed')">
+        <div data-ai-target="order-status-completed" class="ow-card" :class="cardClass('completed')" @click="tryChange('completed')">
           <div class="ow-icon" :class="iconClass('completed')">
             <el-icon v-if="isPast('completed')" :size="16"><Check /></el-icon>
             <span v-else>6</span>

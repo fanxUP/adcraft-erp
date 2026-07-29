@@ -6,10 +6,12 @@
       <div class="header-actions">
         <el-button
           v-if="form.status === 'draft'"
+          data-ai-target="acceptance-status-pending"
           type="primary" @click="handleSubmit"
         >提交验收</el-button>
         <el-button
           v-if="form.status === 'pending'"
+          data-ai-target="acceptance-status-accepted"
           type="success" @click="handleAccept"
         >确认验收</el-button>
         <el-button
@@ -18,6 +20,7 @@
         >驳回</el-button>
         <el-button
           v-if="form.status === 'rejected'"
+          data-ai-target="acceptance-status-draft"
           type="warning" @click="handleBackToDraft"
         >退回草稿</el-button>
       </div>
@@ -104,7 +107,7 @@
       </el-tab-pane>
 
       <!-- 验收明细 -->
-      <el-tab-pane label="验收明细" name="items">
+      <el-tab-pane label="验收明细" name="items" data-ai-target="acceptance-items">
         <el-card>
           <template #header>
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -319,8 +322,10 @@ import type {
 } from '@/types/api'
 import AcceptancePrint from './AcceptancePrint.vue'
 import AcceptanceWorkflow from './AcceptanceWorkflow.vue'
+import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 
 const route = useRoute()
+const aiStore = useAiAssistantStore()
 const activeTab = ref('info')
 const saving = ref(false)
 const statusChanging = ref(false)
@@ -492,7 +497,7 @@ async function handleSave() {
     }
     await updateAcceptance(form.id, payload)
     ElMessage.success('保存成功')
-    loadDetail(form.id)
+    await refreshAfterMutation()
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : '保存失败')
   } finally {
@@ -504,7 +509,7 @@ async function handleSubmit() {
   await ElMessageBox.confirm('确定提交验收？提交后将无法编辑。', '提示')
   await changeAcceptanceStatus(form.id, { to_status: 'pending' })
   ElMessage.success('已提交验收')
-  loadDetail(form.id)
+  await refreshAfterMutation()
 }
 
 async function handleWorkflowChange(toStatus: string) {
@@ -514,7 +519,7 @@ async function handleWorkflowChange(toStatus: string) {
     try {
       await changeAcceptanceStatus(form.id, { to_status: 'pending' })
       ElMessage.success('已提交验收')
-      loadDetail(form.id)
+      await refreshAfterMutation()
     } finally { statusChanging.value = false }
   } else if (toStatus === 'accepted') {
     const { value } = await ElMessageBox.prompt('请输入客户签收人（可选）', '确认验收', {
@@ -527,7 +532,7 @@ async function handleWorkflowChange(toStatus: string) {
     try {
       await changeAcceptanceStatus(form.id, { to_status: 'accepted', accepted_by: value || null })
       ElMessage.success('已确认验收')
-      loadDetail(form.id)
+      await refreshAfterMutation()
     } finally { statusChanging.value = false }
   } else if (toStatus === 'rejected') {
     rejectReason.value = ''
@@ -538,7 +543,7 @@ async function handleWorkflowChange(toStatus: string) {
     try {
       await changeAcceptanceStatus(form.id, { to_status: 'draft' })
       ElMessage.success('已退回草稿')
-      loadDetail(form.id)
+      await refreshAfterMutation()
     } finally { statusChanging.value = false }
   }
 }
@@ -552,7 +557,7 @@ async function handleAccept() {
   })
   await changeAcceptanceStatus(form.id, { to_status: 'accepted', accepted_by: value || null })
   ElMessage.success('已确认验收')
-  loadDetail(form.id)
+  await refreshAfterMutation()
 }
 
 function handleReject() {
@@ -570,7 +575,7 @@ async function confirmReject() {
     await changeAcceptanceStatus(form.id, { to_status: 'rejected', reason: rejectReason.value })
     ElMessage.success('已驳回')
     rejectDialogVisible.value = false
-    loadDetail(form.id)
+    await refreshAfterMutation()
   } finally {
     statusChanging.value = false
   }
@@ -580,7 +585,7 @@ async function handleBackToDraft() {
   await ElMessageBox.confirm('确定退回草稿？退回后可重新编辑。', '提示')
   await changeAcceptanceStatus(form.id, { to_status: 'draft' })
   ElMessage.success('已退回草稿')
-  loadDetail(form.id)
+  await refreshAfterMutation()
 }
 
 async function handleUpload(options: { file: File }) {
@@ -607,6 +612,11 @@ function downloadFile(att: AcceptanceAttachmentResponse) {
 async function loadDetail(id: string) {
   const data = await getAcceptance(id)
   Object.assign(form, data)
+}
+
+async function refreshAfterMutation() {
+  await loadDetail(form.id)
+  await aiStore.notifyBusinessMutation()
 }
 
 const statusLabel = (s: string) => {
