@@ -16,4 +16,14 @@ describe('filterNavigation', () => {
 
     expect(delivery?.children?.map(item => item.label)).toEqual(['安装任务'])
   })
+
+  it('gives administrators access to AI business knowledge health', () => {
+    const system = filterNavigation(navigationItems, ['admin'])
+      .find(item => item.label === '系统管理')
+
+    expect(system?.children).toContainEqual({
+      label: 'AI 业务知识健康',
+      path: '/admin/ai/knowledge-health',
+    })
+  })
 })

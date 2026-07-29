@@ -6,6 +6,61 @@ import type {
   AiWorkflowGuidance,
 } from '@/types/aiAssistant'
 
+export interface AiBusinessRuleSyncLog {
+  status: string
+  catalog_digest: string
+  added_count: number
+  updated_count: number
+  retired_count: number
+  unchanged_count: number
+  created_at: string | null
+}
+
+export interface AiPageContractHealth {
+  version: number
+  source_version: number
+  active_rule_version: number | null
+  database_contract_version: number | null
+  page_count: number
+  capability_count: number
+  semantic_complete_count: number
+  write_capability_count: number
+  all_write_actions_require_confirmation: boolean
+  unknown_permissions: string[]
+  in_sync: boolean
+  added_targets: string[]
+  retired_targets: string[]
+}
+
+export interface AiBusinessRuleStatus {
+  catalog_digest: string
+  in_sync: boolean
+  active_count: number
+  pending: {
+    added_count: number
+    updated_count: number
+    retired_count: number
+    unchanged_count: number
+  }
+  contract: AiPageContractHealth
+  last_sync: AiBusinessRuleSyncLog | null
+  recent_syncs: AiBusinessRuleSyncLog[]
+}
+
+export interface AiBusinessRuleSyncResult {
+  catalog_digest: string
+  in_sync: boolean
+  added_count: number
+  updated_count: number
+  retired_count: number
+  unchanged_count: number
+  details: {
+    added: string[]
+    updated: string[]
+    retired: string[]
+  }
+}
+
 export function sendChatMessage(data: {
   session_id?: string | null
   message: string
@@ -40,6 +95,14 @@ export function getWorkflowGuidance(data: {
   business_id: string
 }) {
   return post<AiWorkflowGuidance>('/ai-assistant/workflow-guidance', data)
+}
+
+export function getBusinessRuleStatus() {
+  return get<AiBusinessRuleStatus>('/ai-assistant/business-rules/status')
+}
+
+export function syncBusinessRules() {
+  return post<AiBusinessRuleSyncResult>('/ai-assistant/business-rules/sync')
 }
 
 export function getSessionMessages(sessionId: string) {

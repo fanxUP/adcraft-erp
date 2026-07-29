@@ -62,6 +62,7 @@ const pageContexts: Record<string, PageContext> = {
   AdminRoleManage: { page: 'admin_roles', business_type: 'admin' },
   AdminSettings: { page: 'admin_settings', business_type: 'admin' },
   AIProviderList: { page: 'ai_providers', business_type: 'admin' },
+  AIKnowledgeHealth: { page: 'ai_knowledge_health', business_type: 'admin' },
   OperationLogList: { page: 'operation_logs', business_type: 'admin' },
   BackupManage: { page: 'backups', business_type: 'admin' },
   NotificationList: { page: 'notifications' },

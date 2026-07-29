@@ -9,6 +9,7 @@ from sqlalchemy import desc, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai_assistant.models import AiBusinessRule, AiBusinessRuleSyncLog
+from app.ai_assistant.page_capabilities import page_capability_health
 
 from .catalog import (
     BusinessRuleSpec,
@@ -21,6 +22,43 @@ from .sync_plan import PersistedRuleState, RuleSyncPlan, build_sync_plan
 logger = logging.getLogger(__name__)
 
 _SYNC_LOCK_ID = 6_240_321_991
+
+
+def build_page_contract_status(
+    source_rules: tuple[BusinessRuleSpec, ...],
+    active_rows: list[AiBusinessRule],
+) -> dict[str, Any]:
+    """Compare the canonical page contract with its active database version."""
+    source_contract = next(
+        rule
+        for rule in source_rules
+        if rule.key == "contract.page_capabilities"
+    )
+    active_contract = next(
+        (
+            row
+            for row in active_rows
+            if row.rule_key == "contract.page_capabilities"
+        ),
+        None,
+    )
+    source_targets = set(source_contract.payload.get("target_keys", []))
+    active_payload = active_contract.payload_json if active_contract else {}
+    active_targets = set(active_payload.get("target_keys", []))
+    return {
+        **page_capability_health(),
+        "source_version": source_contract.payload.get("version"),
+        "active_rule_version": (
+            active_contract.version if active_contract else None
+        ),
+        "database_contract_version": active_payload.get("version"),
+        "in_sync": bool(
+            active_contract
+            and active_contract.content_hash == source_contract.content_hash
+        ),
+        "added_targets": sorted(source_targets - active_targets),
+        "retired_targets": sorted(active_targets - source_targets),
+    }
 
 
 class BusinessRuleSyncService:
@@ -52,18 +90,25 @@ class BusinessRuleSyncService:
         source_rules = build_business_rule_catalog()
         active_rows = await self._active_rules()
         plan = build_sync_plan(source_rules, self._states(active_rows))
-        last_result = await self.db.execute(
+        history_result = await self.db.execute(
             select(AiBusinessRuleSyncLog)
             .order_by(desc(AiBusinessRuleSyncLog.created_at))
-            .limit(1)
+            .limit(10)
         )
-        last_sync = last_result.scalar_one_or_none()
+        sync_logs = list(history_result.scalars().all())
         return {
             "catalog_digest": business_rule_catalog_digest(source_rules),
             "in_sync": plan.in_sync,
             "active_count": len(active_rows),
             "pending": self._plan_counts(plan),
-            "last_sync": self._serialize_sync_log(last_sync),
+            "contract": build_page_contract_status(source_rules, active_rows),
+            "last_sync": self._serialize_sync_log(
+                sync_logs[0] if sync_logs else None
+            ),
+            "recent_syncs": [
+                self._serialize_sync_log(log)
+                for log in sync_logs
+            ],
         }
 
     async def synchronize(self) -> dict[str, Any]:

@@ -37,6 +37,12 @@ export const systemAiCapabilities: PageCapabilityMap = {
     workflowStage: 'ai_administration',
     availableActions: ['查看模型配置', '测试连接', '调整模型路由'],
   },
+  ai_knowledge_health: {
+    title: 'AI 业务知识健康',
+    purpose: '检查AI业务规则、页面能力契约和数据库版本是否同步',
+    workflowStage: 'ai_administration',
+    availableActions: ['查看规则状态', '检查契约覆盖', '同步业务知识'],
+  },
   operation_logs: {
     title: '操作日志',
     purpose: '审计用户对关键业务数据的操作记录',

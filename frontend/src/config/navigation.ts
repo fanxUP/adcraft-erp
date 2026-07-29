@@ -118,6 +118,7 @@ export const navigationItems: NavigationItem[] = [
       { label: '操作日志', path: '/operation-logs' },
       { label: '备份管理', path: '/backups' },
       { label: 'AI 模型中心', path: '/admin/ai/providers' },
+      { label: 'AI 业务知识健康', path: '/admin/ai/knowledge-health' },
     ],
   },
 ]

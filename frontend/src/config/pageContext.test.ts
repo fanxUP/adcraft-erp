@@ -49,4 +49,13 @@ describe('resolvePageContext', () => {
   it('returns an empty context for unknown routes', () => {
     expect(resolvePageContext('Unknown', {})).toEqual({})
   })
+
+  it('describes the AI business knowledge health page', () => {
+    expect(resolvePageContext('AIKnowledgeHealth', {})).toMatchObject({
+      page: 'ai_knowledge_health',
+      page_title: 'AI 业务知识健康',
+      business_type: 'admin',
+      workflow_stage: 'ai_administration',
+    })
+  })
 })

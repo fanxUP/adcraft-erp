@@ -8,7 +8,10 @@ from app.ai_assistant.business_rules.catalog import (
     build_business_rule_catalog,
     render_business_rules_context,
 )
-from app.ai_assistant.business_rules.service import BusinessRuleSyncService
+from app.ai_assistant.business_rules.service import (
+    BusinessRuleSyncService,
+    build_page_contract_status,
+)
 from app.ai_assistant.business_rules.sync_plan import (
     PersistedRuleState,
     build_sync_plan,
@@ -174,6 +177,79 @@ def test_business_rule_models_preserve_versions_and_sync_history():
         "retired_count",
         "details_json",
     } <= set(sync_columns.keys())
+
+
+def test_page_contract_health_reports_database_version_and_target_drift():
+    source_rules = build_business_rule_catalog()
+    source_contract = next(
+        rule
+        for rule in source_rules
+        if rule.key == "contract.page_capabilities"
+    )
+    persisted_targets = [
+        target
+        for target in source_contract.payload["target_keys"]
+        if target != "installation-draft"
+    ]
+    persisted_targets.append("retired-control")
+    active_rows = [
+        SimpleNamespace(
+            rule_key="contract.page_capabilities",
+            version=3,
+            content_hash="outdated",
+            payload_json={
+                "version": 1,
+                "target_keys": persisted_targets,
+            },
+        )
+    ]
+
+    status = build_page_contract_status(source_rules, active_rows)
+
+    assert status["source_version"] == 2
+    assert status["active_rule_version"] == 3
+    assert status["database_contract_version"] == 1
+    assert status["in_sync"] is False
+    assert status["added_targets"] == ["installation-draft"]
+    assert status["retired_targets"] == ["retired-control"]
+
+
+@pytest.mark.asyncio
+async def test_rule_status_includes_contract_health_and_recent_sync_history():
+    source_rules = build_business_rule_catalog()
+    active_rows = [
+        SimpleNamespace(
+            rule_key=rule.key,
+            version=1,
+            content_hash=rule.content_hash,
+            payload_json=rule.payload,
+        )
+        for rule in source_rules
+    ]
+    latest_sync = SimpleNamespace(
+        status="success",
+        catalog_digest="abc123",
+        added_count=1,
+        updated_count=0,
+        retired_count=0,
+        unchanged_count=len(source_rules) - 1,
+        created_at=None,
+    )
+    db = MagicMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            _ScalarRows(active_rows),
+            _ScalarRows([latest_sync]),
+        ]
+    )
+
+    status = await BusinessRuleSyncService(db).build_status()
+
+    assert status["in_sync"] is True
+    assert status["contract"]["in_sync"] is True
+    assert status["contract"]["semantic_complete_count"] == 33
+    assert status["last_sync"]["catalog_digest"] == "abc123"
+    assert len(status["recent_syncs"]) == 1
 
 
 @pytest.mark.asyncio
