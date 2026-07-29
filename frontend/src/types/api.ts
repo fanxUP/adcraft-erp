@@ -255,17 +255,6 @@ export interface ProductResponse {
   created_at?: string
 }
 
-export interface ProductMaterialProcessResponse {
-  id: string
-  product_id: string
-  material_id: string
-  process_id: string
-  material_name: string
-  process_name: string
-  remark?: string
-  is_active: boolean
-}
-
 export interface MaterialResponse {
   id: string
   name: string

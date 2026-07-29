@@ -1,7 +1,6 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.product_repo import ProductRepository
-from app.models.product import Material, Process
 
 
 class ProductService:
@@ -57,47 +56,6 @@ class ProductService:
             "default_price": float(p.default_price), "min_charge": float(p.min_charge),
             "remark": p.remark, "is_active": p.is_active,
             "created_at": p.created_at.isoformat() if p.created_at else None,
-        }
-
-    async def list_product_material_processes(self, product_id: UUID) -> list[dict]:
-        rows = await self.repo.list_product_material_processes(product_id)
-        return [self._product_material_process_to_dict(item, material, process) for item, material, process in rows if item.is_active]
-
-    async def create_product_material_process(self, product_id: UUID, material_id: UUID, process_id: UUID, remark: str | None = None) -> dict:
-        if not await self.repo.get_product_by_id(product_id):
-            raise ValueError("产品不存在")
-        if not await self.repo.get_material_by_id(material_id):
-            raise ValueError("材质不存在")
-        if not await self.repo.get_process_by_id(process_id):
-            raise ValueError("工艺不存在")
-        item = await self.repo.create_product_material_process({
-            "product_id": product_id,
-            "material_id": material_id,
-            "process_id": process_id,
-            "remark": remark,
-        })
-        return {
-            "id": str(item.id), "product_id": str(product_id),
-            "material_id": str(material_id), "process_id": str(process_id),
-            "material_name": (await self.repo.get_material_by_id(material_id)).name,
-            "process_name": (await self.repo.get_process_by_id(process_id)).name,
-            "remark": item.remark, "is_active": item.is_active,
-        }
-
-    async def delete_product_material_process(self, item_id: UUID) -> bool:
-        item = await self.repo.get_product_material_process(item_id)
-        if not item:
-            return False
-        await self.repo.deactivate_product_material_process(item)
-        return True
-
-    @staticmethod
-    def _product_material_process_to_dict(item, material: Material, process: Process) -> dict:
-        return {
-            "id": str(item.id), "product_id": str(item.product_id),
-            "material_id": str(item.material_id), "process_id": str(item.process_id),
-            "material_name": material.name, "process_name": process.name,
-            "remark": item.remark, "is_active": item.is_active,
         }
 
     # Materials

@@ -14,7 +14,6 @@ from app.schemas.product import (
     ProductCategoryCreate, ProductCreate, ProductUpdate,
     MaterialCreate, MaterialUpdate,
     ProcessCreate, ProcessUpdate,
-    ProductMaterialProcessCreate,
 )
 from app.schemas.common import success, success_paginated
 from app.services.product_service import ProductService
@@ -89,6 +88,7 @@ async def create_product(
 
 
 PRODUCT_COLUMN_MAP = {
+    "产品材质工艺": "name",
     "产品名称": "name",
     "单位": "unit",
     "计价方式": "pricing_method",
@@ -96,7 +96,7 @@ PRODUCT_COLUMN_MAP = {
     "最低收费": "min_charge",
     "备注": "remark",
 }
-PRODUCT_REQUIRED = ["产品名称"]
+PRODUCT_REQUIRED = ["产品材质工艺"]
 
 
 @router.post("/import")
@@ -112,7 +112,9 @@ async def import_products(
     content = await file.read()
     rows, header_errors = parse_excel(content, PRODUCT_REQUIRED, PRODUCT_COLUMN_MAP)
     if header_errors:
-        return {"code": 40002, "message": "文件格式错误", "data": {"errors": header_errors}}
+        rows, legacy_header_errors = parse_excel(content, ["产品名称"], PRODUCT_COLUMN_MAP)
+        if legacy_header_errors:
+            return {"code": 40002, "message": "文件格式错误", "data": {"errors": header_errors}}
 
     result = ExcelImportResult()
     result.total_rows = len(rows)
@@ -123,7 +125,7 @@ async def import_products(
             name = format_value(row.get("name"))
             if not name:
                 result.failed += 1
-                result.errors.append({"row": row["_excel_row"], "message": "产品名称不能为空"})
+                result.errors.append({"row": row["_excel_row"], "message": "产品材质工艺不能为空"})
                 continue
 
             unit = format_value(row.get("unit")) or "项"
@@ -162,47 +164,6 @@ async def get_product(
     if not product:
         return {"code": 40401, "message": "产品不存在", "data": None}
     return success(product)
-
-
-@router.get("/{product_id}/material-processes")
-async def list_product_material_processes(
-    product_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    service = ProductService(db)
-    if not await service.get_product(UUID(product_id)):
-        return {"code": 40401, "message": "产品不存在", "data": None}
-    return success(await service.list_product_material_processes(UUID(product_id)))
-
-
-@router.post("/{product_id}/material-processes")
-async def create_product_material_process(
-    product_id: str,
-    data: ProductMaterialProcessCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    service = ProductService(db)
-    try:
-        item = await service.create_product_material_process(
-            UUID(product_id), UUID(data.material_id), UUID(data.process_id), data.remark
-        )
-    except ValueError as exc:
-        return {"code": 40001, "message": str(exc), "data": None}
-    return success(item)
-
-
-@router.delete("/material-processes/{item_id}")
-async def delete_product_material_process(
-    item_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
-):
-    service = ProductService(db)
-    if not await service.delete_product_material_process(UUID(item_id)):
-        return {"code": 40401, "message": "产品材质工艺不存在", "data": None}
-    return success(None)
 
 
 @router.put("/{product_id}")

@@ -1,5 +1,5 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, ProductResponse, ProductCategoryResponse, MaterialResponse, ProcessResponse, ProductMaterialProcessResponse, SuccessResponse, ImportResponse } from '@/types/api'
+import { PaginatedData, ProductResponse, ProductCategoryResponse, MaterialResponse, ProcessResponse, SuccessResponse, ImportResponse } from '@/types/api'
 
 export function getProducts(params: { page?: number; page_size?: number; keyword?: string; category_id?: string }) {
   return get<PaginatedData<ProductResponse>>('/products/', { params })
@@ -27,18 +27,6 @@ export function importProducts(file: File) {
   return post<ImportResponse>('/products/import', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
-}
-
-export function getProductMaterialProcesses(productId: string) {
-  return get<ProductMaterialProcessResponse[]>(`/products/${productId}/material-processes`)
-}
-
-export function createProductMaterialProcess(productId: string, data: { material_id: string; process_id: string; remark?: string }) {
-  return post<ProductMaterialProcessResponse>(`/products/${productId}/material-processes`, data)
-}
-
-export function deleteProductMaterialProcess(id: string) {
-  return del<SuccessResponse>(`/products/material-processes/${id}`)
 }
 
 // Categories

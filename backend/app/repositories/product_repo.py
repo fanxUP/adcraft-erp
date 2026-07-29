@@ -2,7 +2,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-from app.models.product import ProductCategory, Product, Material, Process, ProductMaterialProcess
+from app.models.product import ProductCategory, Product, Material, Process
 
 
 class ProductRepository:
@@ -60,30 +60,6 @@ class ProductRepository:
 
     async def delete_product(self, product: Product) -> None:
         await self.db.delete(product)
-        await self.db.flush()
-
-    async def list_product_material_processes(self, product_id: UUID) -> list[tuple[ProductMaterialProcess, Material, Process]]:
-        result = await self.db.execute(
-            select(ProductMaterialProcess, Material, Process)
-            .join(Material, Material.id == ProductMaterialProcess.material_id)
-            .join(Process, Process.id == ProductMaterialProcess.process_id)
-            .where(ProductMaterialProcess.product_id == product_id)
-            .order_by(Material.name, Process.name)
-        )
-        return list(result.all())
-
-    async def create_product_material_process(self, data: dict) -> ProductMaterialProcess:
-        item = ProductMaterialProcess(**data)
-        self.db.add(item)
-        await self.db.flush()
-        return item
-
-    async def get_product_material_process(self, item_id: UUID) -> ProductMaterialProcess | None:
-        result = await self.db.execute(select(ProductMaterialProcess).where(ProductMaterialProcess.id == item_id))
-        return result.scalar_one_or_none()
-
-    async def deactivate_product_material_process(self, item: ProductMaterialProcess) -> None:
-        item.is_active = False
         await self.db.flush()
 
     # Materials
