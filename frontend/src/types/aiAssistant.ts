@@ -56,6 +56,30 @@ export interface AiWorkflowAction {
   target_key?: string
 }
 
+export type AiWorkflowStepState = 'completed' | 'current' | 'pending' | 'blocked'
+
+export interface AiWorkflowProgressStep {
+  key: string
+  label: string
+  state: AiWorkflowStepState
+  detail: string
+}
+
+export interface AiWorkflowProgress {
+  completed_steps: number
+  total_steps: number
+  percent: number
+  current_stage_key: string
+  steps: AiWorkflowProgressStep[]
+}
+
+export interface AiWorkflowAlert {
+  code: string
+  severity: 'info' | 'warning' | 'danger'
+  title: string
+  detail: string
+}
+
 export interface AiWorkflowGuidance {
   business_type: string
   business_id: string
@@ -65,6 +89,8 @@ export interface AiWorkflowGuidance {
   next_action: AiWorkflowAction | null
   completion_signal: string
   allowed_next_statuses: string[]
+  progress?: AiWorkflowProgress
+  alerts: AiWorkflowAlert[]
 }
 
 export interface AiPageActionGuide {

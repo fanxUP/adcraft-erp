@@ -7,6 +7,7 @@ from app.domain.workflows import (
 )
 
 from .common import action, guidance_result, unknown_guidance
+from .order_progress import attach_order_overview
 from .tasks import build_order_task_guidance
 
 
@@ -146,7 +147,7 @@ def build_order_guidance(snapshot: dict) -> dict:
             business_id=order_id,
             current_status=status,
         )
-        return guidance
+        return attach_order_overview(guidance, snapshot)
 
     if status == "completed":
         total = float(snapshot.get("total_amount") or 0)

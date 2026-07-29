@@ -97,6 +97,128 @@ def test_completed_order_with_balance_guides_user_to_receivables():
     assert guidance["completion_signal"] == "订单未收金额变为 0.00 元"
 
 
+def test_order_guidance_includes_full_delivery_progress():
+    guidance = build_workflow_guidance(
+        {
+            "business_type": "order",
+            "business_id": str(SAMPLE_ORDER_ID),
+            "status": "designing",
+            "design_tasks": [
+                {
+                    "id": "22222222-2222-2222-2222-222222222222",
+                    "design_no": "D20260729-0001",
+                    "status": "confirmed",
+                }
+            ],
+            "production_tasks": [],
+            "installation_tasks": [],
+            "acceptances": [],
+            "total_amount": 1000,
+            "total_paid": 200,
+        }
+    )
+
+    assert guidance["progress"]["completed_steps"] == 1
+    assert guidance["progress"]["total_steps"] == 6
+    assert guidance["progress"]["current_stage_key"] == "design"
+    assert [step["state"] for step in guidance["progress"]["steps"]] == [
+        "completed",
+        "current",
+        "pending",
+        "pending",
+        "pending",
+        "pending",
+    ]
+    assert guidance["progress"]["steps"][1]["detail"] == "1/1 项设计任务已完成"
+    assert guidance["progress"]["steps"][5]["detail"] == "已收 200.00 / 应收 1000.00 元"
+
+
+def test_order_guidance_reports_actionable_delivery_anomalies():
+    guidance = build_workflow_guidance(
+        {
+            "business_type": "order",
+            "business_id": str(SAMPLE_ORDER_ID),
+            "status": "in_installation",
+            "delivery_deadline": "2026-07-28T09:00:00",
+            "installation_address": None,
+            "design_tasks": [{"status": "confirmed"}],
+            "production_tasks": [{"status": "completed"}],
+            "installation_tasks": [
+                {
+                    "id": "44444444-4444-4444-4444-444444444444",
+                    "installation_no": "I20260729-0001",
+                    "status": "pending",
+                    "assigned_to": None,
+                    "address": None,
+                    "scheduled_at": None,
+                }
+            ],
+            "acceptances": [],
+            "total_amount": 1000,
+            "total_paid": 0,
+            "_now": "2026-07-29T09:00:00",
+        }
+    )
+
+    assert {alert["code"] for alert in guidance["alerts"]} == {
+        "delivery_overdue",
+        "task_unassigned",
+        "installation_address_missing",
+        "installation_schedule_missing",
+    }
+    assert guidance["alerts"][0]["severity"] == "danger"
+    assert guidance["progress"]["current_stage_key"] == "installation"
+
+
+def test_fully_paid_completed_order_marks_every_stage_complete():
+    guidance = build_workflow_guidance(
+        {
+            "business_type": "order",
+            "business_id": str(SAMPLE_ORDER_ID),
+            "status": "completed",
+            "design_tasks": [],
+            "production_tasks": [],
+            "installation_tasks": [],
+            "acceptances": [],
+            "total_amount": 1000,
+            "total_paid": 1000,
+        }
+    )
+
+    assert guidance["progress"]["completed_steps"] == 6
+    assert guidance["progress"]["percent"] == 100
+    assert all(
+        step["state"] == "completed"
+        for step in guidance["progress"]["steps"]
+    )
+    assert all(
+        "尚未创建" not in step["detail"]
+        for step in guidance["progress"]["steps"]
+    )
+    assert guidance["alerts"] == []
+
+
+def test_delivery_deadline_uses_local_business_timezone():
+    guidance = build_workflow_guidance(
+        {
+            "business_type": "order",
+            "business_id": str(SAMPLE_ORDER_ID),
+            "status": "pending_confirm",
+            "delivery_deadline": "2026-07-29T08:00:00",
+            "design_tasks": [],
+            "production_tasks": [],
+            "installation_tasks": [],
+            "acceptances": [],
+            "total_amount": 1000,
+            "total_paid": 0,
+            "_now": "2026-07-29T01:00:00+00:00",
+        }
+    )
+
+    assert guidance["alerts"][0]["code"] == "delivery_overdue"
+    assert "2026-07-29 08:00" in guidance["alerts"][0]["detail"]
+
+
 def test_pending_acceptance_guides_user_to_confirm_each_item():
     guidance = build_workflow_guidance(
         {

@@ -30,6 +30,7 @@ function guidance(overrides: Partial<AiWorkflowGuidance> = {}): AiWorkflowGuidan
     },
     completion_signal: '订单状态变为“生产中”',
     allowed_next_statuses: ['in_production'],
+    alerts: [],
     ...overrides,
   }
 }

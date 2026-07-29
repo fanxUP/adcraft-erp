@@ -39,6 +39,7 @@ function guidance(businessId = orderId): AiWorkflowGuidance {
     },
     completion_signal: '订单状态变为“生产中”',
     allowed_next_statuses: ['in_production'],
+    alerts: [],
   }
 }
 
@@ -153,6 +154,7 @@ describe('AI assistant proactive workflow guidance', () => {
       },
       completion_signal: '设计任务状态变为“已确认”',
       allowed_next_statuses: ['confirmed'],
+      alerts: [],
     }
     const parentOrderAction = {
       label: '进入生产阶段',
@@ -225,6 +227,7 @@ describe('AI assistant proactive workflow guidance', () => {
       },
       completion_signal: '设计任务状态变为“已确认”',
       allowed_next_statuses: ['confirmed'],
+      alerts: [],
     }
     const parentOrderAction = guidance().next_action!
     vi.mocked(aiApi.getWorkflowGuidance)

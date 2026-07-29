@@ -16,13 +16,19 @@
       </el-button>
     </header>
 
-    <div v-if="guidance.blockers.length" class="workflow-blockers">
+    <AiWorkflowProgress
+      v-if="guidance.progress"
+      :progress="guidance.progress"
+      :alerts="guidance.alerts"
+    />
+
+    <div v-if="visibleBlockers.length" class="workflow-blockers">
       <div class="workflow-label">
         <el-icon><WarningFilled /></el-icon>
         完成前请处理
       </div>
       <ul>
-        <li v-for="blocker in guidance.blockers" :key="blocker">{{ blocker }}</li>
+        <li v-for="blocker in visibleBlockers" :key="blocker">{{ blocker }}</li>
       </ul>
     </div>
 
@@ -70,11 +76,18 @@ import { useRoute } from 'vue-router'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { isSafeWorkflowTarget } from '@/utils/workflowGuidance'
 import { isSameWorkflowPath } from '@/utils/pageActionGuide'
+import AiWorkflowProgress from './AiWorkflowProgress.vue'
 
 const store = useAiAssistantStore()
 const router = useRouter()
 const route = useRoute()
 const guidance = computed(() => store.activeGuidance!)
+const visibleBlockers = computed(() => guidance.value.blockers.filter(blocker =>
+  !(
+    guidance.value.alerts.some(alert => alert.code === 'receivable_outstanding')
+    && blocker.includes('未收')
+  ),
+))
 const canNavigate = computed(() =>
   Boolean(
     guidance.value.next_action

@@ -4,6 +4,7 @@ import {
   getGuidanceContextKey,
   isSafeWorkflowTarget,
   matchesGuidanceContext,
+  parseWorkflowGuidance,
 } from './workflowGuidance'
 import type { AiPageContext } from '@/types/aiAssistant'
 import type { AiToolCallResult } from '@/types/aiAssistant'
@@ -82,5 +83,49 @@ describe('workflow guidance helpers', () => {
       business_id: '44444444-4444-4444-4444-444444444444',
     })).toBe(false)
     expect(matchesGuidanceContext(null, context)).toBe(false)
+  })
+
+  it('parses additive workflow progress and structured alerts', () => {
+    expect(parseWorkflowGuidance({
+      ...guidanceResult.result,
+      progress: {
+        completed_steps: 1,
+        total_steps: 6,
+        percent: 17,
+        current_stage_key: 'design',
+        steps: [
+          { key: 'order', label: '订单确认', state: 'completed', detail: '订单已确认' },
+          { key: 'design', label: '设计', state: 'current', detail: '设计任务处理中' },
+        ],
+      },
+      alerts: [
+        {
+          code: 'task_unassigned',
+          severity: 'warning',
+          title: '设计任务尚未分配负责人',
+          detail: '分配负责人后才能明确责任人',
+        },
+      ],
+    })).toMatchObject({
+      progress: {
+        completed_steps: 1,
+        current_stage_key: 'design',
+        steps: [
+          { key: 'order', state: 'completed' },
+          { key: 'design', state: 'current' },
+        ],
+      },
+      alerts: [
+        { code: 'task_unassigned', severity: 'warning' },
+      ],
+    })
+  })
+
+  it('keeps old guidance compatible when progress fields are absent', () => {
+    const parsed = parseWorkflowGuidance(guidanceResult.result)
+
+    expect(parsed).not.toBeNull()
+    expect(parsed?.progress).toBeUndefined()
+    expect(parsed?.alerts).toEqual([])
   })
 })

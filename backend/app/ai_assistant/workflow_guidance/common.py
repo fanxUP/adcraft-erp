@@ -1,6 +1,7 @@
 """Shared response helpers for workflow guidance."""
 
 from app.domain.workflows import allowed_targets
+from .order_progress import attach_order_overview
 
 
 def action(
@@ -28,7 +29,7 @@ def guidance_result(
     workflow,
 ) -> dict:
     status = str(snapshot.get("status") or "")
-    return {
+    result = {
         "business_type": snapshot.get("business_type"),
         "business_id": snapshot.get("business_id"),
         "current_status": status,
@@ -38,10 +39,13 @@ def guidance_result(
         "completion_signal": completion_signal,
         "allowed_next_statuses": list(allowed_targets(workflow, status)),
     }
+    if snapshot.get("business_type") == "order":
+        attach_order_overview(result, snapshot)
+    return result
 
 
 def unknown_guidance(snapshot: dict, fallback_path: str) -> dict:
-    return {
+    result = {
         "business_type": snapshot.get("business_type"),
         "business_id": snapshot.get("business_id"),
         "current_status": str(snapshot.get("status") or ""),
@@ -51,3 +55,6 @@ def unknown_guidance(snapshot: dict, fallback_path: str) -> dict:
         "completion_signal": "确认业务状态与系统标准流程一致",
         "allowed_next_statuses": [],
     }
+    if snapshot.get("business_type") == "order":
+        attach_order_overview(result, snapshot)
+    return result

@@ -9,6 +9,7 @@ from app.domain.workflows import (
 )
 
 from .common import action, guidance_result, unknown_guidance
+from .order_progress import attach_order_overview
 
 
 TASK_CONFIGS = {
@@ -147,4 +148,4 @@ def build_order_task_guidance(
             allowed_targets(ORDER_WORKFLOW, str(order_snapshot.get("status") or ""))
         ),
     )
-    return guidance
+    return attach_order_overview(guidance, order_snapshot)
