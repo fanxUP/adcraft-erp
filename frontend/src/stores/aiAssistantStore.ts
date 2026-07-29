@@ -454,7 +454,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
     guidanceError.value = ''
   }
 
-  function startPageActionGuide(action: AiWorkflowGuidance['next_action']) {
+  function startPageActionGuide(action: AiWorkflowAction) {
     if (!action?.target_key) return false
     pageGuideContinuation.value = null
     activePageGuide.value = {
@@ -462,6 +462,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
       target_path: action.target_path,
       target_key: action.target_key,
       ...(action.target_status ? { target_status: action.target_status } : {}),
+      ...(action.draft ? { draft: action.draft } : {}),
     }
     pageGuideState.value = 'locating'
     syncPersistedPageGuide()
@@ -501,6 +502,7 @@ export const useAiAssistantStore = defineStore('aiAssistant', () => {
       target_path: action.target_path,
       target_key: action.target_key,
       ...(action.target_status ? { target_status: action.target_status } : {}),
+      ...(action.draft ? { draft: action.draft } : {}),
     }
   }
 

@@ -16,6 +16,25 @@ export function hasPageActionCompleted(
   guide: AiPageActionGuide,
   guidance: AiWorkflowGuidance,
 ): boolean {
+  const checklist = guidance.checklist
+  if (checklist && guide.target_key === 'installation-draft') {
+    return (
+      checklist.total_items > 0
+      && checklist.completed_items === checklist.total_items
+    )
+  }
+  if (checklist) {
+    const targetByItemKey = {
+      assigned_to: 'task-assignee',
+      address: 'installation-address',
+      scheduled_at: 'installation-schedule',
+    } as const
+    const matchingItem = checklist.items.find(item =>
+      item.action?.target_key === guide.target_key
+      || targetByItemKey[item.key] === guide.target_key,
+    )
+    if (matchingItem) return matchingItem.state === 'completed'
+  }
   if (guide.target_status && guidance.current_status === guide.target_status) {
     return true
   }

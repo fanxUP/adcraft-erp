@@ -54,6 +54,24 @@ export interface AiWorkflowAction {
   target_path: string
   target_status?: string
   target_key?: string
+  draft?: AiFormDraft
+}
+
+export type AiFormDraftFieldKey = 'assigned_to' | 'address' | 'scheduled_at'
+export type AiFormDraftFieldSource = 'order' | 'manual'
+
+export interface AiFormDraftField {
+  key: AiFormDraftFieldKey
+  label: string
+  value: string | null
+  source: AiFormDraftFieldSource
+  hint: string
+}
+
+export interface AiFormDraft {
+  kind: 'installation_task_update'
+  title: string
+  fields: AiFormDraftField[]
 }
 
 export type AiWorkflowStepState = 'completed' | 'current' | 'pending' | 'blocked'
@@ -81,6 +99,22 @@ export interface AiWorkflowAlert {
   action?: AiWorkflowAction
 }
 
+export interface AiWorkflowChecklistItem {
+  key: AiFormDraftFieldKey
+  label: string
+  state: 'completed' | 'pending'
+  detail: string
+  action?: AiWorkflowAction
+}
+
+export interface AiWorkflowChecklist {
+  title: string
+  completed_items: number
+  total_items: number
+  items: AiWorkflowChecklistItem[]
+  draft_action?: AiWorkflowAction
+}
+
 export interface AiWorkflowGuidance {
   business_type: string
   business_id: string
@@ -92,6 +126,7 @@ export interface AiWorkflowGuidance {
   allowed_next_statuses: string[]
   progress?: AiWorkflowProgress
   alerts: AiWorkflowAlert[]
+  checklist?: AiWorkflowChecklist
 }
 
 export interface AiPageActionGuide {
@@ -99,6 +134,7 @@ export interface AiPageActionGuide {
   target_path: string
   target_key: string
   target_status?: string
+  draft?: AiFormDraft
 }
 
 export type AiPageGuideState =

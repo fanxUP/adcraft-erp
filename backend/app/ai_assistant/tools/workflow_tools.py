@@ -77,9 +77,22 @@ async def _load_task_snapshot(db, user, business_type: str, business_id: str) ->
         "installation_task": "completed",
     }[business_type]
     order_id = str(task.get("order_id") or task.get("document_id") or "")
-    if task.get("status") == terminal_status and order_id:
+    if order_id and (
+        business_type == "installation_task"
+        or task.get("status") == terminal_status
+    ):
         order_snapshot = await _load_order_snapshot(db, user, order_id)
-        snapshot["parent_order_guidance"] = build_workflow_guidance(order_snapshot)
+        if business_type == "installation_task":
+            snapshot["order_installation_address"] = order_snapshot.get(
+                "installation_address"
+            )
+            snapshot["order_delivery_deadline"] = order_snapshot.get(
+                "delivery_deadline"
+            )
+        if task.get("status") == terminal_status:
+            snapshot["parent_order_guidance"] = build_workflow_guidance(
+                order_snapshot
+            )
     return snapshot
 
 

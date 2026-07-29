@@ -58,6 +58,75 @@ describe('page action guidance helpers', () => {
     expect(hasPageActionCompleted(guide, guidance({ next_action: null }))).toBe(true)
   })
 
+  it('verifies installation draft completion from checklist state', () => {
+    const draftGuide: AiPageActionGuide = {
+      label: '预览安装准备草稿',
+      target_path: '/installation-tasks/44444444-4444-4444-4444-444444444444',
+      target_key: 'installation-draft',
+    }
+    const checklist = {
+      title: '安装准备清单',
+      completed_items: 2,
+      total_items: 3,
+      items: [
+        { key: 'assigned_to' as const, label: '负责人', state: 'completed' as const, detail: '已完成' },
+        { key: 'address' as const, label: '安装地址', state: 'completed' as const, detail: '已完成' },
+        { key: 'scheduled_at' as const, label: '计划时间', state: 'pending' as const, detail: '待处理' },
+      ],
+    }
+
+    expect(hasPageActionCompleted(
+      draftGuide,
+      guidance({ checklist }),
+    )).toBe(false)
+    expect(hasPageActionCompleted(
+      draftGuide,
+      guidance({
+        checklist: {
+          ...checklist,
+          completed_items: 3,
+          items: checklist.items.map(item => ({ ...item, state: 'completed' as const })),
+        },
+      }),
+    )).toBe(true)
+  })
+
+  it('verifies an installation field action from its matching checklist item', () => {
+    const addressGuide: AiPageActionGuide = {
+      label: '补充安装地址',
+      target_path: '/installation-tasks/44444444-4444-4444-4444-444444444444',
+      target_key: 'installation-address',
+    }
+    const checklist = {
+      title: '安装准备清单',
+      completed_items: 0,
+      total_items: 1,
+      items: [
+        {
+          key: 'address' as const,
+          label: '安装地址',
+          state: 'pending' as const,
+          detail: '待处理',
+          action: {
+            label: '处理安装地址',
+            target_page: '安装任务详情',
+            target_path: addressGuide.target_path,
+            target_key: addressGuide.target_key,
+          },
+        },
+      ],
+    }
+
+    expect(hasPageActionCompleted(addressGuide, guidance({ checklist }))).toBe(false)
+    expect(hasPageActionCompleted(addressGuide, guidance({
+      checklist: {
+        ...checklist,
+        completed_items: 1,
+        items: [{ ...checklist.items[0], state: 'completed' }],
+      },
+    }))).toBe(true)
+  })
+
   it('continues automatically only when the next action moves to another page', () => {
     const parentOrderAction = {
       label: '进入生产阶段',

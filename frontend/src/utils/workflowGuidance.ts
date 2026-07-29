@@ -1,8 +1,12 @@
 import type {
   AiPageContext,
+  AiFormDraft,
+  AiFormDraftField,
   AiToolCallResult,
   AiWorkflowAction,
   AiWorkflowAlert,
+  AiWorkflowChecklist,
+  AiWorkflowChecklistItem,
   AiWorkflowGuidance,
   AiWorkflowProgress,
   AiWorkflowProgressStep,
@@ -48,6 +52,7 @@ function parseAction(value: unknown): AiWorkflowAction | null {
   ) {
     return null
   }
+  const draft = parseWorkflowDraft(value.draft)
   return {
     label: value.label,
     target_page: value.target_page,
@@ -58,11 +63,57 @@ function parseAction(value: unknown): AiWorkflowAction | null {
     ...(typeof value.target_key === 'string'
       ? { target_key: value.target_key }
       : {}),
+    ...(draft ? { draft } : {}),
   }
 }
 
 const WORKFLOW_STEP_STATES = new Set(['completed', 'current', 'pending', 'blocked'])
 const ALERT_SEVERITIES = new Set(['info', 'warning', 'danger'])
+const CHECKLIST_STATES = new Set(['completed', 'pending'])
+const DRAFT_FIELD_KEYS = new Set(['assigned_to', 'address', 'scheduled_at'])
+const DRAFT_FIELD_SOURCES = new Set(['order', 'manual'])
+
+function parseDraftField(value: unknown): AiFormDraftField | null {
+  if (
+    !isRecord(value)
+    || typeof value.key !== 'string'
+    || !DRAFT_FIELD_KEYS.has(value.key)
+    || typeof value.label !== 'string'
+    || (value.value !== null && typeof value.value !== 'string')
+    || typeof value.source !== 'string'
+    || !DRAFT_FIELD_SOURCES.has(value.source)
+    || typeof value.hint !== 'string'
+  ) {
+    return null
+  }
+  return {
+    key: value.key as AiFormDraftField['key'],
+    label: value.label,
+    value: value.value as string | null,
+    source: value.source as AiFormDraftField['source'],
+    hint: value.hint,
+  }
+}
+
+export function parseWorkflowDraft(value: unknown): AiFormDraft | null {
+  if (
+    !isRecord(value)
+    || value.kind !== 'installation_task_update'
+    || typeof value.title !== 'string'
+    || !Array.isArray(value.fields)
+  ) {
+    return null
+  }
+  const fields = value.fields
+    .map(parseDraftField)
+    .filter((field): field is AiFormDraftField => Boolean(field))
+  if (!fields.length) return null
+  return {
+    kind: value.kind,
+    title: value.title,
+    fields,
+  }
+}
 
 function parseProgressStep(value: unknown): AiWorkflowProgressStep | null {
   if (!isRecord(value)) return null
@@ -130,6 +181,50 @@ function parseAlerts(value: unknown): AiWorkflowAlert[] {
   return alerts
 }
 
+function parseChecklistItem(value: unknown): AiWorkflowChecklistItem | null {
+  if (
+    !isRecord(value)
+    || typeof value.key !== 'string'
+    || !DRAFT_FIELD_KEYS.has(value.key)
+    || typeof value.label !== 'string'
+    || typeof value.state !== 'string'
+    || !CHECKLIST_STATES.has(value.state)
+    || typeof value.detail !== 'string'
+  ) {
+    return null
+  }
+  const action = parseAction(value.action)
+  return {
+    key: value.key as AiWorkflowChecklistItem['key'],
+    label: value.label,
+    state: value.state as AiWorkflowChecklistItem['state'],
+    detail: value.detail,
+    ...(action ? { action } : {}),
+  }
+}
+
+function parseChecklist(value: unknown): AiWorkflowChecklist | undefined {
+  if (
+    !isRecord(value)
+    || typeof value.title !== 'string'
+    || typeof value.completed_items !== 'number'
+    || typeof value.total_items !== 'number'
+    || !Array.isArray(value.items)
+  ) {
+    return undefined
+  }
+  const items = value.items.map(parseChecklistItem)
+  if (items.some(item => !item)) return undefined
+  const draftAction = parseAction(value.draft_action)
+  return {
+    title: value.title,
+    completed_items: value.completed_items,
+    total_items: value.total_items,
+    items: items as AiWorkflowChecklistItem[],
+    ...(draftAction?.draft ? { draft_action: draftAction } : {}),
+  }
+}
+
 export function parseWorkflowGuidance(value: unknown): AiWorkflowGuidance | null {
   if (!isRecord(value)) return null
   const requiredStrings = [
@@ -149,6 +244,7 @@ export function parseWorkflowGuidance(value: unknown): AiWorkflowGuidance | null
   const nextAction = parseAction(value.next_action)
   if (value.next_action !== null && !nextAction) return null
   const progress = parseProgress(value.progress)
+  const checklist = parseChecklist(value.checklist)
   return {
     business_type: value.business_type as string,
     business_id: value.business_id as string,
@@ -160,6 +256,7 @@ export function parseWorkflowGuidance(value: unknown): AiWorkflowGuidance | null
     allowed_next_statuses: value.allowed_next_statuses as string[],
     ...(progress ? { progress } : {}),
     alerts: parseAlerts(value.alerts),
+    ...(checklist ? { checklist } : {}),
   }
 }
 

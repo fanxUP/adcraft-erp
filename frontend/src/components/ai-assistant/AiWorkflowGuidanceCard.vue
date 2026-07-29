@@ -23,6 +23,12 @@
       @action="goToAction"
     />
 
+    <AiWorkflowChecklist
+      v-if="guidance.checklist"
+      :checklist="guidance.checklist"
+      @action="goToAction"
+    />
+
     <div v-if="visibleBlockers.length" class="workflow-blockers">
       <div class="workflow-label">
         <el-icon><WarningFilled /></el-icon>
@@ -79,6 +85,7 @@ import { isSafeWorkflowTarget } from '@/utils/workflowGuidance'
 import { isSameWorkflowPath } from '@/utils/pageActionGuide'
 import type { AiWorkflowAction } from '@/types/aiAssistant'
 import AiWorkflowProgress from './AiWorkflowProgress.vue'
+import AiWorkflowChecklist from './AiWorkflowChecklist.vue'
 
 const store = useAiAssistantStore()
 const router = useRouter()

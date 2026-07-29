@@ -9,6 +9,7 @@ from app.domain.workflows import (
 )
 
 from .common import action, guidance_result, unknown_guidance
+from .installation_preparation import build_installation_preparation
 from .order_progress import attach_order_overview
 
 
@@ -95,7 +96,7 @@ def build_task_guidance(snapshot: dict, task_type: str) -> dict:
             blockers.append("尚未安排安装时间")
 
     label, target_status, completion = next_step
-    return guidance_result(
+    guidance = guidance_result(
         snapshot,
         config["step"],
         blockers,
@@ -109,6 +110,14 @@ def build_task_guidance(snapshot: dict, task_type: str) -> dict:
         completion,
         config["workflow"],
     )
+    if task_type == "installation_task":
+        guidance["checklist"] = build_installation_preparation(
+            snapshot,
+            f"{config['prefix']}/{task_id}",
+            order_address=snapshot.get("order_installation_address"),
+            order_deadline=snapshot.get("order_delivery_deadline"),
+        )
+    return guidance
 
 
 def build_order_task_guidance(

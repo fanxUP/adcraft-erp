@@ -139,6 +139,83 @@ describe('workflow guidance helpers', () => {
     })
   })
 
+  it('parses an installation checklist and strictly bounded form draft', () => {
+    const parsed = parseWorkflowGuidance({
+      ...guidanceResult.result,
+      checklist: {
+        title: '安装准备清单',
+        completed_items: 0,
+        total_items: 3,
+        items: [
+          {
+            key: 'address',
+            label: '补充安装地址',
+            state: 'pending',
+            detail: '可引用订单地址',
+            action: {
+              label: '补充安装地址',
+              target_page: '安装任务详情',
+              target_path: '/installation-tasks/44444444-4444-4444-4444-444444444444',
+              target_key: 'installation-address',
+            },
+          },
+        ],
+        draft_action: {
+          label: '预览安装准备草稿',
+          target_page: '安装任务详情',
+          target_path: '/installation-tasks/44444444-4444-4444-4444-444444444444',
+          target_key: 'installation-draft',
+          draft: {
+            kind: 'installation_task_update',
+            title: '安装准备信息草稿',
+            fields: [
+              {
+                key: 'address',
+                label: '安装地址',
+                value: '上海市静安区测试路 88 号',
+                source: 'order',
+                hint: '来自订单安装地址，请现场确认',
+              },
+              {
+                key: 'unexpected_field',
+                label: '越权字段',
+                value: '不应采用',
+                source: 'order',
+                hint: '测试',
+              },
+            ],
+          },
+        },
+      },
+    })
+
+    expect(parsed).toMatchObject({
+      checklist: {
+        title: '安装准备清单',
+        items: [
+          {
+            key: 'address',
+            state: 'pending',
+            action: { target_key: 'installation-address' },
+          },
+        ],
+        draft_action: {
+          target_key: 'installation-draft',
+          draft: {
+            kind: 'installation_task_update',
+            fields: [
+              {
+                key: 'address',
+                value: '上海市静安区测试路 88 号',
+                source: 'order',
+              },
+            ],
+          },
+        },
+      },
+    })
+  })
+
   it('keeps old guidance compatible when progress fields are absent', () => {
     const parsed = parseWorkflowGuidance(guidanceResult.result)
 

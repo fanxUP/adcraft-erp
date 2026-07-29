@@ -3,6 +3,8 @@
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from .installation_preparation import build_installation_preparation
+
 
 STAGES = (
     ("order", "订单确认"),
@@ -216,16 +218,18 @@ def build_order_alerts(
         )
 
     if status == "in_installation" and current_task:
-        if not (
-            current_task.get("address")
-            or snapshot.get("installation_address")
-        ):
+        if not current_task.get("address"):
+            has_order_address = bool(snapshot.get("installation_address"))
             alerts.append(
                 _alert(
                     "installation_address_missing",
                     "warning",
-                    "安装地址尚未填写",
-                    "补充准确地址后才能安排人员和车辆。",
+                    "安装任务地址待补充",
+                    (
+                        "订单已有安装地址，可生成草稿同步到任务并现场确认。"
+                        if has_order_address
+                        else "订单和任务均未填写地址，请补充后再安排人员和车辆。"
+                    ),
                     _workflow_action(
                         "补充安装地址",
                         task_page,
@@ -310,4 +314,13 @@ def build_order_progress(snapshot: dict) -> dict:
 def attach_order_overview(result: dict, snapshot: dict) -> dict:
     result["progress"] = build_order_progress(snapshot)
     result["alerts"] = build_order_alerts(snapshot, result.get("next_action"))
+    if str(snapshot.get("status") or "") == "in_installation":
+        task = _current_task(snapshot, "installation_tasks", "completed")
+        if task and task.get("id"):
+            result["checklist"] = build_installation_preparation(
+                task,
+                f"/installation-tasks/{task['id']}",
+                order_address=snapshot.get("installation_address"),
+                order_deadline=snapshot.get("delivery_deadline"),
+            )
     return result

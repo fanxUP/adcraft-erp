@@ -196,6 +196,90 @@ def test_order_guidance_reports_actionable_delivery_anomalies():
     assert guidance["progress"]["current_stage_key"] == "installation"
 
 
+def test_installation_stage_builds_reviewable_preparation_checklist():
+    task_id = "44444444-4444-4444-4444-444444444444"
+    guidance = build_workflow_guidance(
+        {
+            "business_type": "order",
+            "business_id": str(SAMPLE_ORDER_ID),
+            "status": "in_installation",
+            "installation_address": "上海市静安区测试路 88 号",
+            "delivery_deadline": "2026-08-02T14:30:00",
+            "design_tasks": [{"status": "confirmed"}],
+            "production_tasks": [{"status": "completed"}],
+            "installation_tasks": [
+                {
+                    "id": task_id,
+                    "installation_no": "I20260729-0001",
+                    "status": "pending",
+                    "assigned_to": None,
+                    "address": None,
+                    "scheduled_at": None,
+                }
+            ],
+            "acceptances": [],
+            "total_amount": 1000,
+            "total_paid": 0,
+            "_now": "2026-07-29T09:00:00+08:00",
+        }
+    )
+
+    checklist = guidance["checklist"]
+    assert checklist["title"] == "安装准备清单"
+    assert checklist["completed_items"] == 0
+    assert checklist["total_items"] == 3
+    assert [item["key"] for item in checklist["items"]] == [
+        "assigned_to",
+        "address",
+        "scheduled_at",
+    ]
+    assert all(item["state"] == "pending" for item in checklist["items"])
+    assert checklist["draft_action"]["target_key"] == "installation-draft"
+    assert checklist["draft_action"]["target_path"] == (
+        f"/installation-tasks/{task_id}"
+    )
+    fields = {
+        field["key"]: field
+        for field in checklist["draft_action"]["draft"]["fields"]
+    }
+    assert fields["assigned_to"]["value"] is None
+    assert fields["assigned_to"]["source"] == "manual"
+    assert fields["address"]["value"] == "上海市静安区测试路 88 号"
+    assert fields["address"]["source"] == "order"
+    assert fields["scheduled_at"]["value"] == "2026-08-02T14:30:00"
+    assert fields["scheduled_at"]["source"] == "order"
+
+    alerts = {
+        alert["code"]: alert
+        for alert in guidance["alerts"]
+    }
+    assert alerts["installation_address_missing"]["title"] == (
+        "安装任务地址待补充"
+    )
+
+
+def test_installation_task_guidance_supports_manual_only_draft_fields():
+    guidance = build_workflow_guidance(
+        {
+            "business_type": "installation_task",
+            "business_id": "44444444-4444-4444-4444-444444444444",
+            "status": "pending",
+            "assigned_to": None,
+            "address": None,
+            "scheduled_at": None,
+            "order_installation_address": None,
+            "order_delivery_deadline": None,
+        }
+    )
+
+    checklist = guidance["checklist"]
+    fields = checklist["draft_action"]["draft"]["fields"]
+
+    assert checklist["completed_items"] == 0
+    assert all(field["value"] is None for field in fields)
+    assert all(field["source"] == "manual" for field in fields)
+
+
 def test_missing_design_file_alert_guides_to_upload_control():
     guidance = build_workflow_guidance(
         {
@@ -487,6 +571,59 @@ async def test_completed_task_guidance_loads_parent_order_progress():
 
     assert result["next_action"]["label"] == "进入生产阶段"
     assert result["next_action"]["target_path"] == f"/orders/{SAMPLE_ORDER_ID}"
+
+
+@pytest.mark.asyncio
+async def test_installation_task_guidance_loads_order_values_for_draft():
+    task_id = "44444444-4444-4444-4444-444444444444"
+    task_service = MagicMock()
+    task_service.get_task = AsyncMock(
+        return_value={
+            "id": task_id,
+            "status": "pending",
+            "order_id": str(SAMPLE_ORDER_ID),
+            "assigned_to": None,
+            "address": None,
+            "scheduled_at": None,
+        }
+    )
+    progress = {
+        "order": {
+            "id": str(SAMPLE_ORDER_ID),
+            "status": "in_installation",
+            "installation_address": "上海市静安区测试路 88 号",
+            "delivery_deadline": "2026-08-02T14:30:00",
+            "total_amount": 1000,
+        },
+        "design_tasks": {"items": []},
+        "production_tasks": {"items": []},
+        "installation_tasks": {"items": []},
+        "total_paid": 0,
+    }
+
+    with (
+        patch(
+            "app.services.task_service.InstallationTaskService",
+            return_value=task_service,
+        ),
+        patch(
+            "app.ai_assistant.tools.order_tools.get_order_progress",
+            new=AsyncMock(return_value=progress),
+        ),
+    ):
+        result = await get_workflow_guidance(
+            db=MagicMock(),
+            user=MagicMock(),
+            business_type="installation_task",
+            business_id=task_id,
+        )
+
+    draft_fields = {
+        field["key"]: field
+        for field in result["checklist"]["draft_action"]["draft"]["fields"]
+    }
+    assert draft_fields["address"]["value"] == "上海市静安区测试路 88 号"
+    assert draft_fields["scheduled_at"]["value"] == "2026-08-02T14:30:00"
 
 
 @pytest.mark.asyncio

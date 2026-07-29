@@ -57,6 +57,31 @@ describe('page guide persistence', () => {
     expect(storage.length).toBe(0)
   })
 
+  it('restores a strictly parsed installation form draft', () => {
+    const storage = new MemoryStorage()
+    const draftGuide: AiPageActionGuide = {
+      label: '预览安装准备草稿',
+      target_path: '/installation-tasks/44444444-4444-4444-4444-444444444444',
+      target_key: 'installation-draft',
+      draft: {
+        kind: 'installation_task_update',
+        title: '安装准备信息草稿',
+        fields: [
+          {
+            key: 'address',
+            label: '安装地址',
+            value: '上海市静安区测试路 88 号',
+            source: 'order',
+            hint: '来自订单安装地址，请现场确认',
+          },
+        ],
+      },
+    }
+    persistPageGuide(storage, 'user-a', draftGuide, 1_000)
+
+    expect(loadPersistedPageGuide(storage, 'user-a', 2_000)).toEqual(draftGuide)
+  })
+
   it('removes malformed or unsafe persisted data', () => {
     const storage = new MemoryStorage()
     storage.setItem('adcraft-ai-page-guide:v1:user-a', JSON.stringify({

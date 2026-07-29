@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import * as aiApi from '@/api/aiAssistant'
 import { useAiAssistantStore } from './aiAssistantStore'
-import type { AiWorkflowGuidance } from '@/types/aiAssistant'
+import type {
+  AiWorkflowAction,
+  AiWorkflowGuidance,
+} from '@/types/aiAssistant'
 
 vi.mock('@/api/aiAssistant', () => ({
   getSessions: vi.fn().mockResolvedValue([]),
@@ -196,6 +199,39 @@ describe('AI assistant proactive workflow guidance', () => {
     expect(restoredStore.activePageGuide?.target_key).toBe('order-status-in_production')
     expect(restoredStore.resumePageActionGuide()).toBe(`/orders/${orderId}`)
     expect(restoredStore.pageGuideState).toBe('locating')
+  })
+
+  it('keeps a reviewable form draft when starting a page guide', () => {
+    const store = useAiAssistantStore()
+    const action: AiWorkflowAction = {
+      label: '预览安装准备草稿',
+      target_page: '安装任务详情',
+      target_path: '/installation-tasks/44444444-4444-4444-4444-444444444444',
+      target_key: 'installation-draft',
+      draft: {
+        kind: 'installation_task_update',
+        title: '安装准备信息草稿',
+        fields: [
+          {
+            key: 'address',
+            label: '安装地址',
+            value: '上海市静安区测试路 88 号',
+            source: 'order',
+            hint: '来自订单安装地址，请现场确认',
+          },
+        ],
+      },
+    }
+
+    store.startPageActionGuide(action)
+
+    expect(store.activePageGuide).toMatchObject({
+      target_key: 'installation-draft',
+      draft: {
+        kind: 'installation_task_update',
+        fields: [{ key: 'address' }],
+      },
+    })
   })
 
   it('does not carry an in-memory guide into another user account', () => {

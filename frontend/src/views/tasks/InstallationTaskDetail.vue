@@ -47,6 +47,13 @@
         </el-form>
       </el-card>
 
+      <AiInstallationDraftCard
+        v-if="activeDraft"
+        :draft="activeDraft"
+        :current-values="draftCurrentValues"
+        @apply="handleApplyDraft"
+      />
+
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>任务信息与验收</span></template>
         <el-form :model="editForm" label-width="120px">
@@ -123,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getInstallationTask, updateInstallationTask, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { getUsers } from '@/api/users'
@@ -131,6 +138,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import type { InstallationTaskResponse, UserResponse } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
+import { isSameWorkflowPath } from '@/utils/pageActionGuide'
+import { applyInstallationDraft } from '@/utils/installationDraft'
+import AiInstallationDraftCard from '@/components/ai-assistant/AiInstallationDraftCard.vue'
 
 const route = useRoute()
 const aiStore = useAiAssistantStore()
@@ -148,6 +158,24 @@ const editForm = reactive({
   contact_phone: '',
   acceptance_result: '',
 })
+const activeDraft = computed(() => {
+  const guide = aiStore.activePageGuide
+  if (
+    guide?.draft?.kind !== 'installation_task_update'
+    || !isSameWorkflowPath(route.path, guide.target_path)
+  ) {
+    return null
+  }
+  return guide.draft
+})
+const draftCurrentValues = computed<Record<string, string>>(() => ({
+  assigned_to: (() => {
+    const user = userOptions.value.find(option => option.id === editForm.assigned_to)
+    return user?.real_name || user?.username || editForm.assigned_to
+  })(),
+  address: editForm.address,
+  scheduled_at: editForm.scheduled_at.replace('T', ' '),
+}))
 
 function statusLabel(s: string) {
   const map: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成' }
@@ -191,6 +219,16 @@ async function handleUpdate() {
     await fetchTask()
     await aiStore.notifyBusinessMutation()
   } catch { /* handled */ } finally { updating.value = false }
+}
+
+function handleApplyDraft() {
+  if (!activeDraft.value) return
+  const applied = applyInstallationDraft(editForm, activeDraft.value)
+  if (!applied.length) {
+    ElMessage.warning('草稿中没有可直接填入的内容，请按提示手动完善')
+    return
+  }
+  ElMessage.success(`已填入 ${applied.length} 项建议，请核对后点击保存`)
 }
 
 async function handleChangeStatus() {

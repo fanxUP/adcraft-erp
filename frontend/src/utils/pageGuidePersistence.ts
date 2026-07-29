@@ -1,5 +1,8 @@
 import type { AiPageActionGuide } from '@/types/aiAssistant'
-import { isSafeWorkflowTarget } from '@/utils/workflowGuidance'
+import {
+  isSafeWorkflowTarget,
+  parseWorkflowDraft,
+} from '@/utils/workflowGuidance'
 
 const STORAGE_PREFIX = 'adcraft-ai-page-guide:v1:'
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1_000
@@ -36,6 +39,7 @@ function parseGuide(value: unknown): AiPageActionGuide | null {
   ) {
     return null
   }
+  const draft = parseWorkflowDraft(guide.draft)
   return {
     label: guide.label,
     target_path: guide.target_path,
@@ -43,6 +47,7 @@ function parseGuide(value: unknown): AiPageActionGuide | null {
     ...(typeof guide.target_status === 'string'
       ? { target_status: guide.target_status }
       : {}),
+    ...(draft ? { draft } : {}),
   }
 }
 
