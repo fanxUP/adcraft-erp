@@ -53,7 +53,7 @@
           </div>
         </template>
 
-        <el-descriptions :column="2" border>
+        <el-descriptions :column="descriptionColumns" border>
           <el-descriptions-item label="源契约版本">
             v{{ status.contract.source_version }}
           </el-descriptions-item>
@@ -150,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getBusinessRuleStatus,
@@ -162,6 +162,12 @@ const loading = ref(false)
 const syncing = ref(false)
 const errorMessage = ref('')
 const status = ref<AiBusinessRuleStatus | null>(null)
+const compactViewport = ref(false)
+const descriptionColumns = computed(() => compactViewport.value ? 1 : 2)
+
+function updateViewportState() {
+  compactViewport.value = window.innerWidth <= 600
+}
 
 const semanticCoverage = computed(() => {
   const contract = status.value?.contract
@@ -249,14 +255,25 @@ async function handleSync() {
   }
 }
 
-onMounted(loadStatus)
+onMounted(() => {
+  updateViewportState()
+  window.addEventListener('resize', updateViewportState)
+  void loadStatus()
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', updateViewportState)
+})
 </script>
 
 <style scoped>
 .knowledge-health-page {
   display: grid;
   gap: 16px;
+  min-width: 0;
   color: var(--ad-text);
+}
+.knowledge-health-page :deep(.el-card) {
+  min-width: 0;
 }
 .page-header,
 .card-header,
@@ -343,7 +360,11 @@ code {
     grid-template-columns: 1fr;
   }
   .contract-card :deep(.el-descriptions__body) {
+    max-width: 100%;
     overflow-x: auto;
+  }
+  .knowledge-health-page :deep(.el-table) {
+    max-width: 100%;
   }
 }
 </style>

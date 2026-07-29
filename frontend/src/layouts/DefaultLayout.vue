@@ -1,15 +1,15 @@
 <template>
   <div class="default-layout">
     <el-container>
-      <el-aside :width="sidebarCollapsed ? '64px' : '220px'" class="sidebar">
+      <el-aside :width="navigationCollapsed ? '64px' : '220px'" class="sidebar">
         <div class="logo">
-          <span v-if="!sidebarCollapsed" class="logo-text">AdCraft ERP</span>
+          <span v-if="!navigationCollapsed" class="logo-text">AdCraft ERP</span>
           <span v-else class="logo-short">A</span>
         </div>
         <div class="sidebar-menu-wrap">
         <AppSidebarMenu
           :active-path="route.path"
-          :collapsed="sidebarCollapsed"
+          :collapsed="navigationCollapsed"
           :roles="authStore.roles"
         />
         </div>
@@ -19,14 +19,14 @@
         <el-header class="header">
           <div class="header-left">
             <el-button text @click="appStore.toggleSidebar()">
-              <el-icon :size="20"><Fold v-if="!sidebarCollapsed" /><Expand v-else /></el-icon>
+              <el-icon :size="20"><Fold v-if="!navigationCollapsed" /><Expand v-else /></el-icon>
             </el-button>
           </div>
           <div class="header-right">
             <el-dropdown @command="handleSmartTool">
               <el-button text>
                 <el-icon :size="18"><MagicStick /></el-icon>
-                <span v-if="!sidebarCollapsed">智能工具</span>
+                <span v-if="!navigationCollapsed">智能工具</span>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
@@ -90,6 +90,14 @@ const chatStore = useChatStore()
 const aiStore = useAiAssistantStore()
 
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
+const narrowViewport = ref(false)
+const navigationCollapsed = computed(() =>
+  sidebarCollapsed.value || narrowViewport.value,
+)
+
+function updateViewportState() {
+  narrowViewport.value = window.innerWidth <= 600
+}
 
 // Keep the AI assistant scoped to the current business page.
 watch(
@@ -120,6 +128,8 @@ function handleSmartTool(path: string) {
 }
 
 onMounted(() => {
+  updateViewportState()
+  window.addEventListener('resize', updateViewportState)
   if (authStore.token) {
     chatStore.connectWebSocket(authStore.token)
     chatStore.fetchConversations()
@@ -127,6 +137,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', updateViewportState)
   chatStore.disconnectWebSocket()
 })
 </script>
@@ -213,6 +224,16 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+@media (max-width: 600px) {
+  .header {
+    padding: 0 8px;
+  }
+
+  .header-right {
+    gap: 4px;
+  }
 }
 
 .main-content {
