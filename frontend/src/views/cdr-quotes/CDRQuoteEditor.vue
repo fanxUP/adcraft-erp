@@ -112,24 +112,16 @@
         </el-table-column>
         <el-table-column label="产品/材质/工艺" min-width="280">
           <template #default="{ row, $index }">
-            <div class="stacked-field">
-              <el-select
-                v-model="row.product_id"
-                filterable
-                clearable
-                size="small"
-                placeholder="选择产品/材质/工艺组合"
-                @change="applyProductSelection(row, $index)"
-              >
-                <el-option
-                  v-for="p in products"
-                  :key="p.id"
-                  :label="formatProductMaterialProcess(p)"
-                  :value="p.id"
-                />
-              </el-select>
-              <el-input v-model="row.material_process" size="small" placeholder="可自由输入产品/材质/工艺" />
-            </div>
+            <el-autocomplete
+              v-model="row.material_process"
+              size="small"
+              :fetch-suggestions="(q: string, cb: Function) => queryProductMaterialProcess(q, cb)"
+              placeholder="搜索或输入产品/材质/工艺"
+              style="width: 100%"
+              :trigger-on-focus="true"
+              @select="(opt: any) => onProductSelect(row, opt, $index)"
+              clearable
+            />
           </template>
         </el-table-column>
         <el-table-column label="宽" width="170">
@@ -462,6 +454,31 @@ function applyProductSelection(line: EditorLine, index: number) {
     Object.assign(line, applyProductMaterialProcess(line, selected))
     if (!line.item_name) line.item_name = selected.name
   }
+  onLineChange(index)
+}
+
+
+function queryProductMaterialProcess(queryString: string, cb: (results: { value: string; disabled?: boolean; product?: ProductResponse }[]) => void) {
+  const list = products.value
+  const filtered = queryString
+    ? list.filter(p => {
+        const label = formatProductMaterialProcess(p).toLowerCase()
+        return label.includes(queryString.toLowerCase())
+      })
+    : list
+  cb([
+    ...filtered.map(p => ({ value: formatProductMaterialProcess(p), product: p })),
+  ])
+}
+
+function onProductSelect(line: EditorLine, opt: { value: string; product?: ProductResponse }, index: number) {
+  if (!opt.product) {
+    line.product_id = ''
+    return
+  }
+  Object.assign(line, applyProductMaterialProcess(line, opt.product))
+  line.material_process = opt.value
+  if (!line.item_name) line.item_name = opt.product.name
   onLineChange(index)
 }
 

@@ -61,7 +61,7 @@
       <el-table :data="projects" v-loading="loadingProjects" stripe>
         <el-table-column label="关联编号" width="180">
           <template #default="{ row }">
-            {{ row.orders?.[0]?.order_no || row.quotes?.[0]?.quote_no || '-' }}
+            {{ row.orders?.[0]?.doc_no || row.quotes?.[0]?.doc_no || '-' }}
           </template>
         </el-table-column>
         <el-table-column label="部门/科室" width="130">
@@ -121,8 +121,8 @@
     </el-card>
 
     <!-- 编辑合同对话框 -->
-    <el-dialog v-model="editVisible" title="编辑框架合同" width="650px" :close-on-click-modal="false" @closed="resetEditForm">
-      <el-form :model="editForm" label-width="100px">
+    <el-dialog v-model="editVisible" title="编辑框架合同" width="960px" :close-on-click-modal="false" @closed="resetEditForm">
+      <el-form :model="editForm" label-position="right" label-width="120px">
         <el-form-item label="客户" required>
           <el-select v-model="editForm.customer_id" placeholder="请选择客户" filterable style="width:100%">
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
@@ -160,8 +160,8 @@
     </el-dialog>
 
     <!-- 添加/编辑项目对话框 -->
-    <el-dialog v-model="projectVisible" :title="projectEditingId ? '编辑项目' : '添加项目'" width="600px" :close-on-click-modal="false" @closed="resetProjectForm">
-      <el-form :model="projectForm" label-width="100px">
+    <el-dialog v-model="projectVisible" :title="projectEditingId ? '编辑项目' : '添加项目'" width="960px" :close-on-click-modal="false" @closed="resetProjectForm">
+      <el-form :model="projectForm" label-position="right" label-width="120px">
         <el-form-item label="客户">
           <el-input :model-value="contract?.customer_name" disabled />
         </el-form-item>
@@ -176,14 +176,11 @@
         <el-form-item label="项目金额">
           <el-input-number v-model="projectForm.project_amount" :min="0" :precision="2" style="width:100%" />
         </el-form-item>
-        <el-form-item label="关联订单">
-          <el-select v-model="projectForm.order_id" filterable clearable style="width:100%" @change="onOrderSelect">
-            <el-option v-for="o in availableOrders" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="关联报价">
-          <el-select v-model="projectForm.quote_id" filterable clearable style="width:100%" @change="onQuoteSelect">
-            <el-option v-for="q in availableQuotes" :key="q.id" :label="`${q.quote_no} — ${q.department || '-'} — ${q.project_name} — ¥${(q.total_amount || 0).toFixed(2)}`" :value="q.id" />
+        <el-form-item label="关联报价/订单" >
+          <el-select v-model="projectForm.resource_id" filterable clearable style="width:100%" popper-style="width: auto;" @change="onResourceSelect">
+            <el-option v-for="r in allResources" :key="r.id" :label="`${r.doc_no} — ${r.department || '-'} — ${r.project_name} — ¥${(r.total_amount || 0).toFixed(2)}`" :value="r.id">
+              <span style="white-space: nowrap;">{{ r.doc_type === 'order' ? '【订单】' : '【报价】' }} {{ r.doc_no }} — {{ r.department || '-' }} — {{ r.project_name }} — ¥{{ (r.total_amount || 0).toFixed(2) }}</span>
+            </el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="备注">
@@ -314,7 +311,7 @@ function resetEditForm() {
 
 async function loadCustomersForEdit() {
   try {
-    const data = await getCustomers({ page_size: 500 })
+    const data = await getCustomers({ page_size: 200 })
     customerOptions.value = (data.items as { id: string; name: string }[]).map(c => ({ id: c.id, name: c.name }))
   } catch { /* ignore */ }
 }
@@ -366,13 +363,12 @@ const projectForm = reactive({
   department: '',
   project_name: '',
   project_amount: 0,
-  order_id: '' as string,
-  quote_id: '' as string,
+  resource_id: '' as string,
+  resource_type: '' as string,
   remark: '',
 })
 
-const availableOrders = ref<ContractResourceItem[]>([])
-const availableQuotes = ref<ContractResourceItem[]>([])
+const allResources = ref<ContractResourceItem[]>([])
 const availableProjectNames = ref<string[]>([])
 const pendingProjectAtt = ref<File | null>(null)
 const projectAttFileList = ref<{ name: string; url?: string }[]>([])
@@ -381,28 +377,19 @@ const existingProjectAtt = ref<{ path?: string; name?: string }>({})
 function onProjectAttChange(file: { raw?: File }) { pendingProjectAtt.value = file.raw ?? null }
 function onProjectAttRemove() { pendingProjectAtt.value = null }
 
-function onOrderSelect(val: string) {
-  if (!val) return
-  const o = availableOrders.value.find(o => o.id === val)
-  if (o) {
-    if (!projectForm.project_name) projectForm.project_name = o.project_name
-    if (!projectForm.project_amount) projectForm.project_amount = o.total_amount || 0
-    if (!projectForm.department) projectForm.department = o.department || ''
-  }
-}
-
-function onQuoteSelect(val: string) {
-  if (!val) return
-  const q = availableQuotes.value.find(q => q.id === val)
-  if (q) {
-    if (!projectForm.project_name) projectForm.project_name = q.project_name
-    if (!projectForm.project_amount) projectForm.project_amount = q.total_amount || 0
-    if (!projectForm.department) projectForm.department = q.department || ''
+function onResourceSelect(val: string) {
+  if (!val) { projectForm.resource_type = ''; return }
+  const r = allResources.value.find(r => r.id === val)
+  if (r) {
+    projectForm.resource_type = r.doc_type || ''
+    if (!projectForm.project_name) projectForm.project_name = r.project_name
+    if (!projectForm.project_amount) projectForm.project_amount = r.total_amount || 0
+    if (!projectForm.department) projectForm.department = r.department || ''
   }
 }
 
 function resetProjectForm() {
-  Object.assign(projectForm, { department: '', project_name: '', project_amount: 0, order_id: '', quote_id: '', remark: '' })
+  Object.assign(projectForm, { department: '', project_name: '', project_amount: 0, resource_id: '', resource_type: '', remark: '' })
   pendingProjectAtt.value = null
   projectAttFileList.value = []
   existingProjectAtt.value = {}
@@ -417,8 +404,11 @@ async function loadAvailableResources() {
       contractId,
       projectEditingId.value || undefined  // 编辑时传递当前项目ID
     )
-    availableOrders.value = data.orders
-    availableQuotes.value = data.quotes
+    // 合并订单和报价为统一的资源列表
+    const merged: ContractResourceItem[] = []
+    for (const o of data.orders || []) merged.push({ ...o, doc_type: 'order' })
+    for (const q of data.quotes || []) merged.push({ ...q, doc_type: 'quote' })
+    allResources.value = merged
     availableProjectNames.value = data.project_names || []
   } catch { /* ignore */ }
 }
@@ -437,28 +427,33 @@ async function openEditProject(row: FrameworkContractProjectDetailResponse) {
   projectForm.department = detail.department || ''
   projectForm.project_name = detail.project_name
   projectForm.project_amount = detail.project_amount
-  projectForm.order_id = detail.orders?.[0]?.id || ''
-  projectForm.quote_id = detail.quotes?.[0]?.id || ''
+  // 合并已有关联资源
+  const existingResources: ContractResourceItem[] = []
+  for (const o of detail.orders || []) existingResources.push({ ...o, doc_type: 'order' })
+  for (const q of detail.quotes || []) existingResources.push({ ...q, doc_type: 'quote' })
+  projectForm.resource_id = existingResources[0]?.id || ''
+  projectForm.resource_type = existingResources[0]?.doc_type || ''
   projectForm.remark = detail.remark || ''
   existingProjectAtt.value = { path: detail.attachment_path, name: detail.attachment_name }
   if (detail.attachment_name) {
     projectAttFileList.value = [{ name: detail.attachment_name }]
   }
   await loadAvailableResources()
-  // 编辑时把已关联但不在 available 中的资源加回来（去重）
-  const existingOrderIds = new Set(availableOrders.value.map(o => o.id))
+  // 编辑时把已关联但不在 allResources 中的资源加回来（去重）
+  const existingIds = new Set(allResources.value.map(r => r.id))
   if (detail.orders) {
     for (const o of detail.orders) {
-      if (!existingOrderIds.has(o.id)) {
-        availableOrders.value.push(o as ContractResourceItem)
+      if (!existingIds.has(o.id)) {
+        allResources.value.push({ ...o, doc_type: 'order' } as ContractResourceItem)
+        existingIds.add(o.id)
       }
     }
   }
-  const existingQuoteIds = new Set(availableQuotes.value.map(q => q.id))
   if (detail.quotes) {
     for (const q of detail.quotes) {
-      if (!existingQuoteIds.has(q.id)) {
-        availableQuotes.value.push(q as ContractResourceItem)
+      if (!existingIds.has(q.id)) {
+        allResources.value.push({ ...q, doc_type: 'quote' } as ContractResourceItem)
+        existingIds.add(q.id)
       }
     }
   }
@@ -477,8 +472,8 @@ async function saveProject() {
       department: projectForm.department || null,
       project_name: projectForm.project_name,
       project_amount: projectForm.project_amount || 0,
-      order_ids: projectForm.order_id ? [projectForm.order_id] : [],
-      quote_ids: projectForm.quote_id ? [projectForm.quote_id] : [],
+      order_ids: projectForm.resource_type === 'order' && projectForm.resource_id ? [projectForm.resource_id] : [],
+      quote_ids: projectForm.resource_type === 'quote' && projectForm.resource_id ? [projectForm.resource_id] : [],
       remark: projectForm.remark || null,
     }
     let project: FrameworkContractProjectDetailResponse
@@ -487,8 +482,8 @@ async function saveProject() {
         department: payload.department,
         project_name: payload.project_name,
         project_amount: payload.project_amount,
-        order_ids: projectForm.order_id ? [projectForm.order_id] : [],
-        quote_ids: projectForm.quote_id ? [projectForm.quote_id] : [],
+        order_ids: projectForm.resource_type === 'order' && projectForm.resource_id ? [projectForm.resource_id] : [],
+        quote_ids: projectForm.resource_type === 'quote' && projectForm.resource_id ? [projectForm.resource_id] : [],
         remark: payload.remark,
       })
       if (pendingProjectAtt.value) {

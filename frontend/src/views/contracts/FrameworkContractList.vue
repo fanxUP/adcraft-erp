@@ -74,8 +74,8 @@
     </el-card>
 
     <!-- 新建/编辑 对话框 -->
-    <el-dialog v-model="formVisible" :title="editingId ? '编辑框架合同' : '新建框架合同'" width="650px" :close-on-click-modal="false" @closed="resetForm">
-      <el-form :model="form" label-width="100px">
+    <el-dialog v-model="formVisible" :title="editingId ? '编辑框架合同' : '新建框架合同'" width="960px" :close-on-click-modal="false" @closed="resetForm">
+      <el-form :model="form" label-position="right" label-width="120px">
         <el-form-item label="客户" required>
           <el-select v-model="form.customer_id" placeholder="请选择客户" filterable style="width: 100%">
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
@@ -248,7 +248,7 @@ function resetForm() {
 
 async function loadCustomers() {
   try {
-    const data = await getCustomers({ page_size: 500 })
+    const data = await getCustomers({ page_size: 200 })
     customerOptions.value = (data.items as { id: string; name: string }[]).map(c => ({ id: c.id, name: c.name }))
   } catch { /* ignore */ }
 }

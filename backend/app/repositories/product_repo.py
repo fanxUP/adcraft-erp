@@ -34,7 +34,7 @@ class ProductRepository:
         return result.scalar_one_or_none()
 
     async def list_products(self, skip: int = 0, limit: int = 20, keyword: str | None = None, category_id: UUID | None = None) -> tuple[list[Product], int]:
-        q = select(Product)
+        q = select(Product).where(Product.is_active == True)
         if keyword:
             pattern = f"%{keyword}%"
             q = q.where(or_(
@@ -73,7 +73,7 @@ class ProductRepository:
         return result.scalar_one_or_none()
 
     async def list_materials(self, skip: int = 0, limit: int = 20, keyword: str | None = None) -> tuple[list[Material], int]:
-        q = select(Material)
+        q = select(Material).where(Material.is_active == True)
         if keyword:
             q = q.where(Material.name.ilike(f"%{keyword}%"))
         count_q = select(func.count()).select_from(q.subquery())
@@ -105,7 +105,7 @@ class ProductRepository:
         return result.scalar_one_or_none()
 
     async def list_processes(self, skip: int = 0, limit: int = 20, keyword: str | None = None) -> tuple[list[Process], int]:
-        q = select(Process)
+        q = select(Process).where(Process.is_active == True)
         if keyword:
             q = q.where(Process.name.ilike(f"%{keyword}%"))
         count_q = select(func.count()).select_from(q.subquery())

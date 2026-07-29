@@ -91,25 +91,21 @@
     <el-dialog
       v-model="formVisible"
       :title="isEditing ? '编辑合同' : '新建合同'"
-      width="680px"
+      width="960px"
       :close-on-click-modal="false"
       @close="resetForm"
     >
-      <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px" v-loading="formLoading">
+      <el-form ref="formRef" :model="form" :rules="formRules" label-position="right" label-width="120px" v-loading="formLoading">
         <el-form-item label="客户" prop="customer_id">
           <el-select v-model="form.customer_id" filterable placeholder="搜索选择客户" style="width: 100%" @change="onCustomerChange">
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
-        <el-row :gutter="20">
-          <el-col :span="12">
             <el-form-item label="项目名称" prop="project_name">
               <el-select v-model="form.project_name" allow-create filterable placeholder="输入或选择项目名称" style="width: 100%">
                 <el-option v-for="p in projectOptions" :key="p" :label="p" :value="p" />
               </el-select>
             </el-form-item>
-          </el-col>
-          <el-col :span="12">
             <el-form-item label="合同类型">
               <el-select v-model="form.contract_type" clearable placeholder="请选择" style="width: 100%">
                 <el-option label="制作合同" value="制作合同" />
@@ -118,58 +114,33 @@
                 <el-option label="设计合同" value="设计合同" />
               </el-select>
             </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="20">
-          <el-col :span="12">
             <el-form-item label="合同金额">
               <el-input-number v-model="form.total_amount" :min="0" :precision="2" style="width: 100%" />
             </el-form-item>
-          </el-col>
-          <el-col :span="12">
             <el-form-item label="已收金额">
               <el-input-number v-model="form.paid_amount" :min="0" :precision="2" :disabled="true" style="width: 100%" />
               <div style="font-size: 12px; color: #999; margin-top: 2px;">自动从关联订单的收款计算，不可编辑</div>
             </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="20">
-          <el-col :span="12">
             <el-form-item label="签约日期">
               <el-date-picker v-model="form.sign_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
-          </el-col>
-          <el-col :span="12">
             <el-form-item label="生效日期">
               <el-date-picker v-model="form.start_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="20">
-          <el-col :span="8">
             <el-form-item label="结束日期">
               <el-date-picker v-model="form.end_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
-          </el-col>
-          <el-col :span="8">
             <el-form-item label="我方签约人">
               <el-input v-model="form.our_signatory" placeholder="我方签约人" />
             </el-form-item>
-          </el-col>
-          <el-col :span="8">
             <el-form-item label="客户签约人">
               <el-input v-model="form.customer_signatory" placeholder="客户签约人" />
             </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="关联订单">
-          <el-select v-model="form.order_id" filterable clearable placeholder="选择关联订单" style="width: 100%" @change="onOrderChange">
-            <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="关联报价">
-          <el-select v-model="form.quote_id" filterable clearable placeholder="选择关联报价" style="width: 100%" @change="onQuoteChange">
-            <el-option v-for="q in quoteOptions" :key="q.id" :label="`${q.quote_no} — ${q.department || '-'} — ${q.project_name} — ¥${(q.total_amount || 0).toFixed(2)}`" :value="q.id" />
+        <el-form-item label="关联报价/订单" >
+          <el-select v-model="form.resource_id" filterable clearable placeholder="选择关联报价或订单" style="width: 100%" popper-style="width: auto;" @change="onResourceChange">
+            <el-option v-for="r in allResources" :key="r.id" :label="`${r.doc_no} — ${r.department || '-'} — ${r.project_name} — ¥${(r.total_amount || 0).toFixed(2)}`" :value="r.id">
+              <span style="white-space: nowrap;">{{ r.doc_type === 'order' ? '【订单】' : '【报价】' }} {{ r.doc_no }} — {{ r.department || '-' }} — {{ r.project_name }} — ¥{{ (r.total_amount || 0).toFixed(2) }}</span>
+            </el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="条款内容">
@@ -207,7 +178,7 @@
     </el-dialog>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="detailVisible" title="合同详情" width="680px">
+    <el-dialog v-model="detailVisible" title="合同详情" width="960px">
       <el-descriptions v-if="currentDetail" :column="2" border>
         <el-descriptions-item label="合同编号" :span="2">{{ currentDetail.contract_no }}</el-descriptions-item>
         <el-descriptions-item label="客户名称">{{ currentDetail.customer_name }}</el-descriptions-item>
@@ -355,16 +326,15 @@ const form = reactive({
   customer_signatory: '',
   content: '',
   remark: '',
-  order_id: '' as string,
-  quote_id: '' as string,
+  resource_id: '' as string,
+  resource_type: '' as string,
 })
 const formRules = {
   customer_id: [{ required: true, message: '请选择客户', trigger: 'change' }],
   project_name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
 }
 const customerOptions = ref<Array<{ id: string; name: string }>>([])
-const orderOptions = ref<ContractResourceItem[]>([])
-const quoteOptions = ref<ContractResourceItem[]>([])
+const allResources = ref<ContractResourceItem[]>([])
 const projectOptions = ref<string[]>([])
 
 // Attachment
@@ -422,8 +392,8 @@ function resetForm() {
   form.customer_signatory = ''
   form.content = ''
   form.remark = ''
-  form.order_id = ''
-  form.quote_id = ''
+  form.resource_id = ''
+  form.resource_type = ''
   attFileName.value = ''
   ;pendingContractFile = null
   isEditing.value = false
@@ -432,7 +402,7 @@ function resetForm() {
 
 async function loadAllCustomers() {
   try {
-    const data = await getCustomers({ page_size: 9999 })
+    const data = await getCustomers({ page_size: 200 })
     customerOptions.value = data.items.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }))
   } catch { /* ignore */ }
 }
@@ -440,16 +410,16 @@ async function loadAllCustomers() {
 async function loadResources(customerId?: string, contractId?: string) {
   try {
     const data = await getContractAvailableResources(customerId, contractId)
-    orderOptions.value = data.orders || []
-    quoteOptions.value = data.quotes || []
-    // 从可用订单/报价中提取项目名称列表，排除已被其他合同使用的
+    // 合并订单和报价为统一的资源列表
+    const merged: ContractResourceItem[] = []
+    for (const o of data.orders || []) merged.push({ ...o, doc_type: 'order' })
+    for (const q of data.quotes || []) merged.push({ ...q, doc_type: 'quote' })
+    allResources.value = merged
+    // 从可用资源中提取项目名称列表，排除已被其他合同使用的
     const used = new Set(data.used_project_names || [])
     const names = new Set<string>()
-    for (const o of data.orders || []) {
-      if (o.project_name && !used.has(o.project_name)) names.add(o.project_name)
-    }
-    for (const q of data.quotes || []) {
-      if (q.project_name && !used.has(q.project_name)) names.add(q.project_name)
+    for (const r of merged) {
+      if (r.project_name && !used.has(r.project_name)) names.add(r.project_name)
     }
     projectOptions.value = Array.from(names).sort()
   } catch { /* ignore */ }
@@ -461,35 +431,19 @@ async function onCustomerChange(val: string) {
   if (val) {
     await loadResources(val, isEditing.value ? editingId.value : undefined)
     // 清除不在新客户下的已选项
-    if (form.order_id && !orderOptions.value.find(o => o.id === form.order_id)) {
-      form.order_id = ''
-    }
-    if (form.quote_id && !quoteOptions.value.find(q => q.id === form.quote_id)) {
-      form.quote_id = ''
+    if (form.resource_id && !allResources.value.find(r => r.id === form.resource_id)) {
+      form.resource_id = ''
+      form.resource_type = ''
     }
   }
 }
 
-async function onOrderChange(val: string) {
-  if (!val) return
-  const selected = orderOptions.value.find(o => o.id === val)
+async function onResourceChange(val: string) {
+  if (!val) { form.resource_type = ''; return }
+  const selected = allResources.value.find(r => r.id === val)
   if (selected) {
-    // 未选客户时，从订单自动填充客户
-    if (!form.customer_id && selected.customer_id) {
-      form.customer_id = selected.customer_id
-      form.customer_name = selected.customer_name || ''
-      await loadResources(selected.customer_id, isEditing.value ? editingId.value : undefined)
-    }
-    if (!form.project_name) form.project_name = selected.project_name
-    if (!form.total_amount) form.total_amount = selected.total_amount || 0
-  }
-}
-
-async function onQuoteChange(val: string) {
-  if (!val) return
-  const selected = quoteOptions.value.find(q => q.id === val)
-  if (selected) {
-    // 未选客户时，从报价自动填充客户
+    form.resource_type = selected.doc_type || ''
+    // 未选客户时，从资源自动填充客户
     if (!form.customer_id && selected.customer_id) {
       form.customer_id = selected.customer_id
       form.customer_name = selected.customer_name || ''
@@ -534,8 +488,12 @@ async function handleEdit(row: ContractListResponse) {
     form.customer_signatory = detail.customer_signatory || ''
     form.content = detail.content || ''
     form.remark = detail.remark || ''
-    form.order_id = detail.orders?.[0]?.id || ''
-    form.quote_id = detail.quotes?.[0]?.id || ''
+    // 合并已有关联资源
+    const existingResources: ContractResourceItem[] = []
+    for (const o of detail.orders || []) existingResources.push({ ...o, doc_type: 'order' })
+    for (const q of detail.quotes || []) existingResources.push({ ...q, doc_type: 'quote' })
+    form.resource_id = existingResources[0]?.id || ''
+    form.resource_type = existingResources[0]?.doc_type || ''
     attFileName.value = detail.attachment_name || ''
     await Promise.all([
       loadAllCustomers(),
@@ -567,8 +525,8 @@ async function saveForm() {
       customer_signatory: form.customer_signatory || null,
       content: form.content || null,
       remark: form.remark || null,
-      order_ids: form.order_id ? [form.order_id] : [],
-      quote_ids: form.quote_id ? [form.quote_id] : [],
+      order_ids: form.resource_type === 'order' && form.resource_id ? [form.resource_id] : [],
+      quote_ids: form.resource_type === 'quote' && form.resource_id ? [form.resource_id] : [],
     }
     if (isEditing.value) {
       await updateContract(editingId.value, payload)

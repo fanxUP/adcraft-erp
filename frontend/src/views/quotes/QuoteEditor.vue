@@ -82,25 +82,17 @@
         <el-table-column label="产品/材质/工艺" min-width="280">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
-              <div style="display: flex; flex-direction: column; gap: 4px;">
-                <el-select
-                  v-model="row.item.product_id"
-                  :disabled="isReadonly"
-                  size="small"
-                  filterable
-                  clearable
-                  placeholder="选择产品/材质/工艺组合"
-                  @change="applyProductSelection(row.item)"
-                >
-                  <el-option
-                    v-for="option in productMaterialProcessOptions"
-                    :key="option.id"
-                    :label="formatProductMaterialProcess(option)"
-                    :value="option.id"
-                  />
-                </el-select>
-                <el-input v-model="row.item.material_process" :disabled="isReadonly" size="small" placeholder="可自由输入产品/材质/工艺" />
-              </div>
+              <el-autocomplete
+                v-model="row.item.material_process"
+                :disabled="isReadonly"
+                size="small"
+                :fetch-suggestions="(q: string, cb: Function) => queryProductMaterialProcess(q, cb)"
+                placeholder="搜索或输入产品/材质/工艺"
+                style="width: 100%"
+                :trigger-on-focus="true"
+                @select="(opt: any) => onProductSelect(row.item, opt)"
+                clearable
+              />
             </template>
           </template>
         </el-table-column>
@@ -610,6 +602,28 @@ function applyProductSelection(item: QuoteItemResponse) {
   const selected = productMaterialProcessOptions.value.find(option => option.id === item.product_id)
   if (!selected) return
   Object.assign(item, applyProductMaterialProcess(item, selected))
+}
+
+function queryProductMaterialProcess(queryString: string, cb: (results: { value: string; disabled?: boolean; product?: ProductResponse }[]) => void) {
+  const list = productMaterialProcessOptions.value
+  const filtered = queryString
+    ? list.filter(p => {
+        const label = formatProductMaterialProcess(p).toLowerCase()
+        return label.includes(queryString.toLowerCase())
+      })
+    : list
+  cb([
+    ...filtered.map(p => ({ value: formatProductMaterialProcess(p), product: p })),
+  ])
+}
+
+function onProductSelect(item: QuoteItemResponse, opt: { value: string; product?: ProductResponse }) {
+  if (!opt.product) {
+    item.product_id = undefined
+    return
+  }
+  Object.assign(item, applyProductMaterialProcess(item, opt.product))
+  item.material_process = opt.value
 }
 
 function onCustomerVisible(visible: boolean) {

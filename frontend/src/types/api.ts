@@ -671,6 +671,8 @@ export interface ContractDetailResponse extends ContractListResponse {
 
 export interface ContractResourceItem {
   id: string
+  doc_type?: string
+  doc_no?: string
   order_no?: string
   quote_no?: string
   project_name: string
