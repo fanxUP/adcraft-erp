@@ -18,6 +18,20 @@ export function hasPageActionCompleted(
   return !guidance.next_action || Boolean(nextTargetKey && nextTargetKey !== guide.target_key)
 }
 
+export function getPageGuideCalloutPosition(
+  target: Pick<DOMRect, 'top' | 'bottom' | 'left'>,
+  viewport: { width: number; height: number },
+) {
+  const width = Math.min(320, Math.max(0, viewport.width - 24))
+  const left = Math.max(12, Math.min(target.left, viewport.width - width - 12))
+  const spaceBelow = viewport.height - target.bottom
+  const preferredTop = spaceBelow >= 130
+    ? target.bottom + 14
+    : target.top - 116
+  const top = Math.max(12, Math.min(preferredTop, viewport.height - 112))
+  return { left, top, width }
+}
+
 export interface LocatedPageActionTarget {
   element: HTMLElement
   revealControl: HTMLElement | null

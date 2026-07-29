@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { hasPageActionCompleted, isSameWorkflowPath } from './pageActionGuide'
+import {
+  getPageGuideCalloutPosition,
+  hasPageActionCompleted,
+  isSameWorkflowPath,
+} from './pageActionGuide'
 import type { AiPageActionGuide, AiWorkflowGuidance } from '@/types/aiAssistant'
 
 const guide: AiPageActionGuide = {
@@ -55,5 +59,18 @@ describe('page action guidance helpers', () => {
   it('compares workflow paths without being affected by trailing slashes', () => {
     expect(isSameWorkflowPath('/orders/1/', '/orders/1')).toBe(true)
     expect(isSameWorkflowPath('/orders/1', '/orders/2')).toBe(false)
+  })
+
+  it('keeps the callout inside a narrow viewport', () => {
+    const position = getPageGuideCalloutPosition(
+      { top: 1600, bottom: 1680, left: 240 },
+      { width: 320, height: 800 },
+    )
+
+    expect(position).toEqual({
+      left: 12,
+      top: 688,
+      width: 296,
+    })
   })
 })

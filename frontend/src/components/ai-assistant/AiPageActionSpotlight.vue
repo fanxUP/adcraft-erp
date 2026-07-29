@@ -42,7 +42,10 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { CSSProperties } from 'vue'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
-import { locatePageActionTarget } from '@/utils/pageActionGuide'
+import {
+  getPageGuideCalloutPosition,
+  locatePageActionTarget,
+} from '@/utils/pageActionGuide'
 
 const store = useAiAssistantStore()
 const targetRect = ref<DOMRect | null>(null)
@@ -77,12 +80,10 @@ const calloutStyle = computed<CSSProperties>(() => {
   if (!rect || store.pageGuideState !== 'active') {
     return { right: '24px', bottom: '24px' }
   }
-  const width = 320
-  const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12))
-  const spaceBelow = window.innerHeight - rect.bottom
-  const top = spaceBelow >= 130
-    ? rect.bottom + 14
-    : Math.max(12, rect.top - 116)
+  const { left, top, width } = getPageGuideCalloutPosition(rect, {
+    width: window.innerWidth,
+    height: window.innerHeight,
+  })
   return { left: `${left}px`, top: `${top}px`, width: `${width}px` }
 })
 
