@@ -27,7 +27,7 @@
     <!-- Actions -->
     <div style="margin-bottom: 16px; display: flex; gap: 10px">
       <el-button type="danger" @click="handleCreate" :loading="creating" :disabled="creating">
-        <el-icon><Plus /></el-icon> 创建备份
+        <el-icon><Plus /></el-icon> 创建数据库备份
       </el-button>
       <el-button @click="triggerImport" :loading="importing">
         <el-icon><Upload /></el-icon> 导入备份
@@ -96,7 +96,7 @@
     <!-- Restore confirm dialog -->
     <el-dialog v-model="restoreConfirmVisible" title="确认恢复" width="420px">
       <p style="color: #e6a23c; font-size: 15px; margin-bottom: 12px">
-        ⚠️ 恢复操作将<strong>覆盖</strong>当前数据库和上传文件！
+        ⚠️ 恢复操作将<strong>覆盖</strong>当前数据库！
       </p>
       <p style="color: var(--ad-text); margin-bottom: 8px">备份文件：{{ toRestore?.filename }}</p>
       <p style="color: var(--ad-text-secondary); font-size: 13px">创建时间：{{ formatTime(toRestore?.created_at) }}</p>

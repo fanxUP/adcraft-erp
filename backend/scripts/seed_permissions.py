@@ -27,7 +27,7 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     # System
     {"code": "system:logs", "name": "查看操作日志", "description": "查看系统操作日志"},
     # Backup
-    {"code": "backup:create", "name": "创建备份", "description": "创建数据库和文件备份"},
+    {"code": "backup:create", "name": "创建备份", "description": "创建数据库备份"},
     {"code": "backup:read", "name": "查看备份", "description": "查看备份文件列表"},
     {"code": "backup:restore", "name": "恢复备份", "description": "从备份文件恢复数据"},
     {"code": "backup:delete", "name": "删除备份", "description": "删除备份文件"},

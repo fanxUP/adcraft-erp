@@ -72,7 +72,7 @@ async def create_backup(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_BACKUP_CREATE)),
 ):
-    """Create a full backup (database + uploads)."""
+    """Create a database-only backup."""
     if not BACKUP_SCRIPT.exists():
         return error(50001, f"备份脚本不存在: {BACKUP_SCRIPT}")
 
@@ -126,7 +126,7 @@ async def restore_backup(
 ):
     """Restore from a specific backup file.
 
-    WARNING: This will overwrite the current database and uploads.
+    WARNING: This will overwrite the current database.
     The restore script runs non-interactively from the API (no confirmation prompt).
     No db session is opened — the restore replaces the entire database.
     """
