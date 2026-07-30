@@ -75,3 +75,7 @@ from app.models.ai_health_check import AIHealthCheck
 from app.models.ai_prompt_template import AIPromptTemplate
 from app.models.ai_prompt_version import AIPromptVersion
 from app.models.ai_prompt_execution_log import AIPromptExecutionLog
+from app.models.department import Department
+from app.models.salary import SalaryRecord
+from app.models.employment_history import EmploymentHistory
+from app.models.leave import LeaveRequest
