@@ -31,9 +31,8 @@ def test_invalid_transition_raises_consistent_error():
 
 
 def test_delivery_workflows_are_centralized():
-    assert allowed_targets(PRODUCTION_TASK_WORKFLOW, "qc_check") == (
-        "completed",
-        "rework",
+    assert allowed_targets(PRODUCTION_TASK_WORKFLOW, "rework") == (
+        "in_progress",
     )
     assert allowed_targets(ACCEPTANCE_WORKFLOW, "pending") == (
         "accepted",

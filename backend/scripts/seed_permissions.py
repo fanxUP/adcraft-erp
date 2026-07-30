@@ -71,16 +71,19 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "order:change_status", "name": "变更订单状态", "description": "变更订单状态"},
     # Design task
     {"code": "design_task:read", "name": "查看设计任务", "description": "查看设计任务列表和详情"},
+    {"code": "design_task:delete", "name": "删除设计任务", "group": "设计任务"},
     {"code": "design_task:create", "name": "创建设计任务", "description": "创建新设计任务"},
     {"code": "design_task:update", "name": "编辑设计任务", "description": "编辑设计任务信息"},
     {"code": "design_task:change_status", "name": "变更设计状态", "description": "变更设计任务状态"},
     # Production task
     {"code": "production_task:read", "name": "查看制作任务", "description": "查看制作任务列表和详情"},
+    {"code": "production_task:delete", "name": "删除制作任务", "group": "制作任务"},
     {"code": "production_task:create", "name": "创建制作任务", "description": "创建新制作任务"},
     {"code": "production_task:update", "name": "编辑制作任务", "description": "编辑制作任务信息"},
     {"code": "production_task:change_status", "name": "变更制作状态", "description": "变更制作任务状态"},
     # Installation task
     {"code": "installation_task:read", "name": "查看安装任务", "description": "查看安装任务列表和详情"},
+    {"code": "installation_task:delete", "name": "删除安装任务", "group": "安装任务"},
     {"code": "installation_task:create", "name": "创建安装任务", "description": "创建新安装任务"},
     {"code": "installation_task:update", "name": "编辑安装任务", "description": "编辑安装任务信息"},
     {"code": "installation_task:change_status", "name": "变更安装状态", "description": "变更安装任务状态"},

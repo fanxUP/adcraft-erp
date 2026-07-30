@@ -86,27 +86,43 @@ async def test_acceptance_status_stays_pending_when_order_sync_fails():
 
 @pytest.mark.asyncio
 async def test_acceptance_rejects_unfinished_items():
-    db = MagicMock()
+    """Auto-confirms pending items instead of rejecting (Problem 3 fix)."""
+    db = AsyncMock()
+    db.flush = AsyncMock()
     form = MagicMock()
     form.id = uuid4()
     form.status = "pending"
+    form.accepted_at = None
+    form.document = MagicMock(
+        id=uuid4(),
+        doc_type="order",
+        status="pending_acceptance",
+    )
     form.items = [
         MagicMock(item_name="门头", item_status="accepted"),
-        MagicMock(item_name="灯箱", item_status="pending"),
+        MagicMock(item_name="灯箱", item_status="pending", remark=""),
     ]
 
     with patch(
         "app.services.acceptance_service.AcceptanceRepository"
-    ) as repository_class:
+    ) as repository_class, patch(
+        "app.services.acceptance_service.BusinessDocumentService"
+    ) as service_class:
         repository_class.return_value.get_by_id = AsyncMock(return_value=form)
+        service_class.return_value.change_status = AsyncMock()
 
         service = AcceptanceService(db)
-        with pytest.raises(ValueError, match="仍有未确认的验收明细"):
-            await service.change_status(
-                form.id,
-                "accepted",
-                operated_by=uuid4(),
-            )
+        service._to_detail_dict = MagicMock(return_value={"status": "accepted"})
+        await service.change_status(
+            form.id,
+            "accepted",
+            operated_by=uuid4(),
+        )
+
+    # Pending items should be auto-confirmed, not rejected
+    for item in form.items:
+        assert item.item_status == "accepted", f"Item {item.item_name} not accepted"
+    assert "系统自动确认" in (form.items[1].remark or "")
 
 
 @pytest.mark.asyncio

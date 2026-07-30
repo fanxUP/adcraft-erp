@@ -7,6 +7,9 @@ from uuid import uuid4
 import pytest
 
 from app.services.business_document_service import BusinessDocumentService, ORDER_TRANSITIONS
+from app.models.task import ProductionTask
+from app.models.acceptance import AcceptanceForm
+from app.models.user import User
 from app.services.task_service import DesignTaskService
 from tests.conftest import SAMPLE_CUSTOMER_ID, SAMPLE_ORDER_ID
 
@@ -99,43 +102,51 @@ async def test_order_cannot_complete_without_acceptance_flow(service):
 
 @pytest.mark.asyncio
 async def test_confirmed_design_task_unlocks_order_production(service):
-    order_service, repository, db = service
-    db.flush = AsyncMock()
-    order = make_order(status="designing")
-    repository.get_by_id.return_value = order
+    """DesignTaskService auto-creates production task & advances order on confirmation."""
+    # Patch ProductionTask.__init__ to avoid SQLAlchemy mapper resolution chain
+    with patch.object(ProductionTask, "__init__", return_value=None):
+        order_service, repository, db = service
+        db.flush = AsyncMock()
+        db.add = MagicMock()
+        order = make_order(status="designing")
+        repository.get_by_id.return_value = order
 
-    design_task = MagicMock()
-    design_task.id = uuid4()
-    design_task.document_id = order.id
-    design_task.design_no = "D20260729-0001"
-    design_task.status = "pending"
-    design_task.completed_at = None
+        design_task = MagicMock()
+        design_task.id = uuid4()
+        design_task.document_id = order.id
+        design_task.design_no = "D20260729-0001"
+        design_task.status = "pending"
+        design_task.completed_at = None
 
-    design_service = DesignTaskService(db)
-    design_service.repo = MagicMock()
-    design_service.repo.get_by_id = AsyncMock(return_value=design_task)
-    design_service._to_dict = MagicMock(
-        side_effect=lambda task: {"status": task.status}
-    )
+        call_count = [0]
+        def mock_execute(*a, **kw):
+            call_count[0] += 1
+            r = MagicMock()
+            if call_count[0] == 1:
+                r.scalar.return_value = 0
+            else:
+                r.scalar_one_or_none.return_value = None
+            return r
 
-    await design_service.change_status(design_task.id, "designing")
-    await design_service.change_status(design_task.id, "pending_review")
-    await design_service.change_status(design_task.id, "confirmed")
+        db.execute = AsyncMock(side_effect=mock_execute)
 
-    task_result = MagicMock()
-    task_result.scalars.return_value.all.return_value = [design_task]
-    db.execute.return_value = task_result
-    order_service._auto_create_production_task = AsyncMock()
+        async def mock_db_get(model, doc_id, **kw):
+            return order
+        db.get = AsyncMock(side_effect=mock_db_get)
 
-    result = await order_service.change_status(
-        order.id,
-        "in_production",
-        reason="设计已确认",
-        operated_by=uuid4(),
-    )
+        design_service = DesignTaskService(db)
+        design_service.repo = MagicMock()
+        design_service.repo.get_by_id = AsyncMock(return_value=design_task)
+        design_service._to_dict = MagicMock(
+            side_effect=lambda task: {"status": task.status}
+        )
 
-    assert result["status"] == "in_production"
-    order_service._auto_create_production_task.assert_awaited_once_with(order)
+        await design_service.change_status(design_task.id, "designing")
+        await design_service.change_status(design_task.id, "pending_review")
+        await design_service.change_status(design_task.id, "confirmed")
+
+        assert order.status == "in_production", f"Expected in_production, got {order.status}"
+        db.add.assert_called()
 
 
 @pytest.mark.asyncio

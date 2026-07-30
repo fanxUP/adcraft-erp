@@ -38,27 +38,16 @@ def service(mock_repo):
 # --- Status Transition Tests ---
 
 TRANSITION_TABLE = [
-    ("pending", "queued", True),
     ("pending", "in_progress", True),
-    ("pending", "qc_check", False),
     ("pending", "completed", False),
-    ("queued", "in_progress", True),
-    ("queued", "pending", True),
-    ("queued", "completed", False),
-    ("in_progress", "qc_check", True),
     ("in_progress", "rework", True),
     ("in_progress", "completed", True),
-    ("in_progress", "queued", False),
     ("in_progress", "pending", False),
-    ("qc_check", "completed", True),
-    ("qc_check", "rework", True),
-    ("qc_check", "in_progress", False),
     ("rework", "in_progress", True),
-    ("rework", "qc_check", True),
     ("rework", "completed", False),
     ("completed", "in_progress", False),
     ("completed", "pending", False),
-    ("completed", "queued", False),
+    ("completed", "rework", False),
 ]
 
 
@@ -80,7 +69,7 @@ async def test_status_transitions(service, mock_repo, from_status, to_status, sh
 @pytest.mark.asyncio
 async def test_completed_sets_timestamp(service, mock_repo):
     """Transitioning to 'completed' sets the completed_at timestamp."""
-    task = make_mock_production_task(status="qc_check")
+    task = make_mock_production_task(status="in_progress")
     mock_repo.get_by_id.return_value = task
 
     result = await service.change_status(SAMPLE_TASK_ID, "completed", SAMPLE_USER_ID)
