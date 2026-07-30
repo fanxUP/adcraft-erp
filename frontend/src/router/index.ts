@@ -64,6 +64,7 @@ const routes: RouteRecordRaw[] = [
             { path: "employees", name: "EmployeeList", meta: { roles: ["admin"] }, component: () => import("@/views/employee/EmployeeList.vue") },
             { path: "departments", name: "DepartmentList", meta: { roles: ["admin"] }, component: () => import("@/views/employee/DepartmentList.vue") },
             { path: "salaries", name: "SalaryList", meta: { roles: ["admin"] }, component: () => import("@/views/employee/SalaryList.vue") },
+            { path: "salary-rules", name: "SalaryRuleList", meta: { roles: ["admin"] }, component: () => import("@/views/employee/SalaryRuleList.vue") },
             { path: "employment-histories", name: "EmploymentHistoryList", meta: { roles: ["admin"] }, component: () => import("@/views/employee/EmploymentHistoryList.vue") },
             { path: "leaves", name: "LeaveRequestList", meta: { roles: ["admin"] }, component: () => import("@/views/employee/LeaveRequestList.vue") },
       { path: "attendance/records", name: "AttendanceRecordList", meta: { roles: ["admin"] }, component: () => import("@/views/attendance/AttendanceRecordList.vue") },

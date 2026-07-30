@@ -66,6 +66,7 @@ export const navigationItems: NavigationItem[] = [
       { label: '考勤规则', path: '/attendance/rules' },
       { label: "部门管理", path: "/departments" },
       { label: "工资管理", path: "/salaries" },
+      { label: "工资规则", path: "/salary-rules" },
       { label: "员工履历", path: "/employment-histories" },
       { label: "请假审批", path: "/leaves" },
     ],
