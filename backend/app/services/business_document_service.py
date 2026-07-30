@@ -371,12 +371,7 @@ class BusinessDocumentService:
             if to_status == "cancelled" and float(doc.paid_amount or 0) > 0:
                 raise ValueError("订单已有收款，请先作废相关收款记录后再取消")
             if from_status == "confirmed" and to_status == "designing":
-                # 必须有现存的 DesignTask（已由管理员/系统创建）
-                r = await self.db.execute(
-                    select(DesignTask).where(DesignTask.document_id == doc_id).limit(1)
-                )
-                if not r.scalar_one_or_none():
-                    raise ValueError("请先创建设计任务，再流转到「设计中」状态")
+                pass  # auto-create below
             elif from_status == "designing" and to_status == "in_production":
                 await self._require_all_tasks_completed(
                     doc_id,
@@ -403,8 +398,17 @@ class BusinessDocumentService:
                 raise ValueError("请先添加报价明细再确认报价")
             await self._calculate_quote(doc_id)
 
+
+
         await self.repo.update(doc, {"status": to_status})
         await self.repo.create_status_log(doc_id, from_status, to_status, reason, operated_by)
+
+        # ── 确认订单后自动推进到设计中 ──
+        if doc.doc_type == "order" and to_status == "confirmed":
+            await self._auto_create_design_task(doc)
+            doc.status = "designing"
+            await self.repo.create_status_log(doc_id, "confirmed", "designing", "订单已确认，系统自动推进", operated_by)
+            await self.db.flush()
 
         # 安装完成 → 自动创建验收单，验收通过后才完成订单
         if doc.doc_type == "order" and to_status == "pending_acceptance":
@@ -424,12 +428,6 @@ class BusinessDocumentService:
                 self.db.add(reminder)
                 await self.db.flush()
 
-        # 订单状态转换 → 自动创建任务
-        if doc.doc_type == "order":
-            if to_status == "in_production":
-                await self._auto_create_production_task(doc)
-            elif to_status == "in_installation":
-                await self._auto_create_installation_task(doc)
 
         # 订单取消 → 进回收站
         if doc.doc_type == "order" and to_status == "cancelled":
@@ -585,6 +583,27 @@ class BusinessDocumentService:
             self.db.add(acceptance_item)
 
         await self.db.flush()
+
+    async def _auto_create_design_task(self, doc) -> None:
+        from app.models.task import DesignTask
+        from app.services.number_generator import generate_design_no
+
+        existing = await self.db.execute(
+            select(DesignTask).where(DesignTask.document_id == doc.id)
+        )
+        if existing.scalar_one_or_none():
+            return
+
+        task = DesignTask(
+            design_no=await generate_design_no(self.db),
+            document_id=doc.id,
+            customer_id=doc.customer_id,
+            project_name=doc.project_name,
+            status="pending",
+        )
+        self.db.add(task)
+        await self.db.flush()
+
     async def _auto_create_production_task(self, doc) -> None:
         from app.models.task import ProductionTask
         from app.services.number_generator import generate_production_no
@@ -746,6 +765,27 @@ class BusinessDocumentService:
             doc.gross_profit = doc.total_amount
             # 标记来源报价ID
             doc.source_quote_id = doc.id
+
+            # 清理该文档下残留的孤立任务和验收单，避免阻塞后续自动推进
+            from app.models.acceptance import AcceptanceForm
+            for model_cls in (DesignTask, ProductionTask, InstallationTask):
+                result = await self.db.execute(
+                    select(model_cls).where(
+                        model_cls.document_id == doc_id,
+                        model_cls.status == "pending"
+                    )
+                )
+                for t in result.scalars().all():
+                    t.status = "cancelled"
+            ac_result = await self.db.execute(
+                select(AcceptanceForm).where(
+                    AcceptanceForm.document_id == doc_id,
+                    AcceptanceForm.status == "draft",
+                    AcceptanceForm.deleted_at.is_(None),
+                )
+            )
+            for form in ac_result.scalars().all():
+                form.deleted_at = datetime.now()
         else:  # new_type == "quote"
             doc.doc_no = await generate_quote_no(self.db)
             doc.doc_type = "quote"

@@ -49,11 +49,9 @@ DESIGN_TASK_WORKFLOW: Workflow = {
 }
 
 PRODUCTION_TASK_WORKFLOW: Workflow = {
-    "pending": ("queued", "in_progress"),
-    "queued": ("in_progress", "pending"),
-    "in_progress": ("qc_check", "rework", "completed"),
-    "qc_check": ("completed", "rework"),
-    "rework": ("in_progress", "qc_check"),
+    "pending": ("in_progress",),
+    "in_progress": ("rework", "completed"),
+    "rework": ("in_progress",),
     "completed": (),
     "cancelled": (),
 }

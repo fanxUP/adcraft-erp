@@ -199,6 +199,29 @@ class AcceptanceService:
                 item.image_url = item_data["image_url"]
 
     # ── 删除 ──
+    async def admin_delete_acceptance(self, acceptance_id: UUID, operated_by: UUID) -> None:
+        """管理员删除验收单并回退订单状态。任意状态均可删除。"""
+        form = await self.repo.get_by_id(acceptance_id)
+        if not form:
+            raise ValueError("验收单不存在")
+
+        # Soft-delete the acceptance
+        await self.repo.soft_delete(form)
+
+        # Revert order status
+        doc = form.document
+        if doc and doc.doc_type == "order" and doc.status in ("pending_acceptance", "completed"):
+            from app.services.business_document_service import BusinessDocumentService
+            old_status = doc.status
+            target = "in_installation"
+            order_svc = BusinessDocumentService(self.db, doc_type="order")
+            await order_svc.repo.create_status_log(
+                doc.id, old_status, target,
+                "验收单已被管理员删除，系统自动回退", operated_by,
+            )
+            doc.status = target
+            await self.db.flush()
+
     async def delete_acceptance(self, acceptance_id: UUID):
         form = await self.repo.get_by_id(acceptance_id)
         if not form:
@@ -242,7 +265,10 @@ class AcceptanceService:
                 if item.item_status not in ("accepted", "conditional")
             ]
             if unfinished_items:
-                raise ValueError("仍有未确认的验收明细，请逐项确认后再通过")
+                # 自动确认未验收的明细，减少用户操作步骤
+                for item in unfinished_items:
+                    item.item_status = "accepted"
+                    item.remark = (item.remark or "") + " 系统自动确认"
             # 验收接受 → 自动完成订单
             await self._sync_order_on_acceptance(
                 form,

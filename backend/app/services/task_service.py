@@ -1,5 +1,6 @@
 from datetime import datetime
 from uuid import UUID
+from sqlalchemy import select, func
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -173,9 +174,89 @@ class DesignTaskService:
         if to_status == "confirmed":
             task.completed_at = datetime.now()
         await self.db.flush()
+        # Auto-advance order when all design tasks confirmed
+        if to_status == "confirmed" and task.document_id:
+            from sqlalchemy import func
+            from app.models.business_document import BusinessDocument
+            from app.models.task import DesignTask, ProductionTask
+            from app.services.number_generator import generate_production_no
+            from app.services.business_document_service import BusinessDocumentService
+
+            remaining = (await self.db.execute(
+                select(func.count()).select_from(DesignTask).where(
+                    DesignTask.document_id == task.document_id,
+                    DesignTask.status.not_in(["confirmed", "cancelled"])
+                )
+            )).scalar()
+            if remaining == 0:
+                order = await self.db.get(BusinessDocument, task.document_id)
+                if order and order.status == "designing":
+                    existing_pt = (await self.db.execute(
+                        select(ProductionTask).where(ProductionTask.document_id == task.document_id)
+                    )).scalar_one_or_none()
+                    if not existing_pt:
+                        pt = ProductionTask(
+                            production_no=await generate_production_no(self.db),
+                            document_id=task.document_id,
+                            customer_id=order.customer_id,
+                            project_name=order.project_name,
+                            status="pending",
+                            quantity=1,
+                        )
+                        self.db.add(pt)
+                    order.status = "in_production"
+                    order_svc = BusinessDocumentService(self.db, doc_type="order")
+                    await order_svc.repo.create_status_log(task.document_id, "designing", "in_production",
+                        "设计任务全部完成，系统自动推进", operated_by)
+                    await self.db.flush()
         await _refresh_task_for_response(self.db, task)
         return self._to_dict(task)
 
+    async def delete_task(self, task_id: UUID) -> None:
+        """管理员删除设计任务，回退订单到确认状态。"""
+        task = await self.repo.get_by_id(task_id)
+        if not task:
+            raise ValueError("设计任务不存在")
+
+        doc_id = task.document_id
+        # Hard delete the task
+        await self.db.delete(task)
+
+        # Revert order to confirmed (pre-design state)
+        if doc_id:
+            from app.models.business_document import BusinessDocument
+            from app.models.task import ProductionTask, InstallationTask
+            from app.services.business_document_service import BusinessDocumentService
+
+            order = await self.db.get(BusinessDocument, doc_id)
+            if order and order.doc_type == "order" and order.status in ("designing", "in_production", "in_installation", "pending_acceptance"):
+                # Cancel downstream auto-created tasks
+                for model_cls in (ProductionTask, InstallationTask):
+                    result = await self.db.execute(
+                        select(model_cls).where(model_cls.document_id == doc_id)
+                    )
+                    for t in result.scalars().all():
+                        await self.db.delete(t)
+
+                # Soft-delete acceptance if exists
+                from app.models.acceptance import AcceptanceForm
+                ac_result = await self.db.execute(
+                    select(AcceptanceForm).where(
+                        AcceptanceForm.document_id == doc_id,
+                        AcceptanceForm.deleted_at.is_(None),
+                    )
+                )
+                for form in ac_result.scalars().all():
+                    form.deleted_at = datetime.now()
+
+                # Revert order
+                old_status = order.status
+                order.status = "confirmed"
+                order_svc = BusinessDocumentService(self.db, doc_type="order")
+                await order_svc.repo.create_status_log(doc_id, old_status, "confirmed",
+                    "设计任务已被管理员删除，系统自动回退", None)
+
+        await self.db.flush()
 
 class ProductionTaskService:
     def __init__(self, db: AsyncSession):
@@ -255,9 +336,84 @@ class ProductionTaskService:
         if to_status == "completed":
             task.completed_at = datetime.now()
         await self.db.flush()
+        # Auto-advance order when all production tasks completed
+        if to_status == "completed" and task.document_id:
+            from sqlalchemy import func
+            from app.models.business_document import BusinessDocument
+            from app.models.task import ProductionTask, InstallationTask
+            from app.services.number_generator import generate_installation_no
+            from app.services.business_document_service import BusinessDocumentService
+
+            remaining = (await self.db.execute(
+                select(func.count()).select_from(ProductionTask).where(
+                    ProductionTask.document_id == task.document_id,
+                    ProductionTask.status.not_in(["completed", "cancelled"])
+                )
+            )).scalar()
+            if remaining == 0:
+                order = await self.db.get(BusinessDocument, task.document_id)
+                if order and order.status == "in_production":
+                    existing_it = (await self.db.execute(
+                        select(InstallationTask).where(InstallationTask.document_id == task.document_id)
+                    )).scalar_one_or_none()
+                    if not existing_it:
+                        it = InstallationTask(
+                            installation_no=await generate_installation_no(self.db),
+                            document_id=task.document_id,
+                            customer_id=order.customer_id,
+                            project_name=order.project_name,
+                            status="pending",
+                        )
+                        self.db.add(it)
+                    order.status = "in_installation"
+                    order_svc = BusinessDocumentService(self.db, doc_type="order")
+                    await order_svc.repo.create_status_log(task.document_id, "in_production", "in_installation",
+                        "制作任务全部完成，系统自动推进", operated_by)
+                    await self.db.flush()
         await _refresh_task_for_response(self.db, task)
         return self._to_dict(task)
 
+    async def delete_task(self, task_id: UUID) -> None:
+        """管理员删除制作任务，回退订单到设计中状态。"""
+        task = await self.repo.get_by_id(task_id)
+        if not task:
+            raise ValueError("制作任务不存在")
+
+        doc_id = task.document_id
+        await self.db.delete(task)
+
+        if doc_id:
+            from app.models.business_document import BusinessDocument
+            from app.models.task import InstallationTask
+            from app.services.business_document_service import BusinessDocumentService
+
+            order = await self.db.get(BusinessDocument, doc_id)
+            if order and order.doc_type == "order" and order.status in ("in_production", "in_installation", "pending_acceptance"):
+                # Cancel downstream installation task
+                result = await self.db.execute(
+                    select(InstallationTask).where(InstallationTask.document_id == doc_id)
+                )
+                for t in result.scalars().all():
+                    await self.db.delete(t)
+
+                # Soft-delete acceptance if exists
+                from app.models.acceptance import AcceptanceForm
+                ac_result = await self.db.execute(
+                    select(AcceptanceForm).where(
+                        AcceptanceForm.document_id == doc_id,
+                        AcceptanceForm.deleted_at.is_(None),
+                    )
+                )
+                for form in ac_result.scalars().all():
+                    form.deleted_at = datetime.now()
+
+                old_status = order.status
+                order.status = "designing"
+                order_svc = BusinessDocumentService(self.db, doc_type="order")
+                await order_svc.repo.create_status_log(doc_id, old_status, "designing",
+                    "制作任务已被管理员删除，系统自动回退", None)
+
+        await self.db.flush()
 
 class InstallationTaskService:
     def __init__(self, db: AsyncSession):
@@ -337,9 +493,72 @@ class InstallationTaskService:
         if to_status == "completed":
             task.completed_at = datetime.now()
         await self.db.flush()
+        # Auto-advance order when all installation tasks completed
+        if to_status == "completed" and task.document_id:
+            from sqlalchemy import func
+            from app.models.task import InstallationTask
+            from app.models.business_document import BusinessDocument
+            from app.services.business_document_service import BusinessDocumentService
+
+            remaining = (await self.db.execute(
+                select(func.count()).select_from(InstallationTask).where(
+                    InstallationTask.document_id == task.document_id,
+                    InstallationTask.status.not_in(["completed", "cancelled"])
+                )
+            )).scalar()
+            if remaining == 0:
+                order = await self.db.get(BusinessDocument, task.document_id)
+                if order and order.status == "in_installation":
+                    order_svc = BusinessDocumentService(self.db, doc_type="order")
+                    try:
+                        await order_svc.change_status(
+                            task.document_id, "pending_acceptance",
+                            "安装任务全部完成，系统自动推进", operated_by)
+                    except ValueError:
+                        pass
         await _refresh_task_for_response(self.db, task)
         return self._to_dict(task)
 
+    async def delete_task(self, task_id: UUID) -> None:
+        """管理员删除安装任务，回退订单到生产中状态。"""
+        task = await self.repo.get_by_id(task_id)
+        if not task:
+            raise ValueError("安装任务不存在")
+
+        doc_id = task.document_id
+        await self.db.delete(task)
+
+        if doc_id:
+            from app.models.business_document import BusinessDocument
+            from app.services.business_document_service import BusinessDocumentService
+
+            order = await self.db.get(BusinessDocument, doc_id)
+            if order and order.doc_type == "order" and order.status in ("in_installation", "pending_acceptance"):
+                # Soft-delete acceptance if exists
+                from app.models.acceptance import AcceptanceForm
+                ac_result = await self.db.execute(
+                    select(AcceptanceForm).where(
+                        AcceptanceForm.document_id == doc_id,
+                        AcceptanceForm.deleted_at.is_(None),
+                    )
+                )
+                for form in ac_result.scalars().all():
+                    form.deleted_at = datetime.now()
+
+                old_status = order.status
+                # 如果没有制作任务则回退到设计中，避免看板点击无任务可跳转
+                from app.models.task import ProductionTask
+                pt_count = (await self.db.execute(
+                    select(func.count()).select_from(ProductionTask)
+                    .where(ProductionTask.document_id == doc_id)
+                )).scalar()
+                target = "in_production" if pt_count and pt_count > 0 else "designing"
+                order.status = target
+                order_svc = BusinessDocumentService(self.db, doc_type="order")
+                await order_svc.repo.create_status_log(doc_id, old_status, target,
+                    "安装任务已被管理员删除，系统自动回退", None)
+
+        await self.db.flush()
 
 class AttachmentService:
     def __init__(self, db: AsyncSession):

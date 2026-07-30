@@ -14,6 +14,7 @@ from app.core.permissions import (
     PERM_ACCEPTANCE_READ,
     PERM_ACCEPTANCE_UPDATE,
     require_permission,
+    require_role,
 )
 from app.models.user import User
 from app.schemas.common import success, success_paginated, error
@@ -127,6 +128,20 @@ async def update_acceptance(
     try:
         data = await service.update_acceptance(uuid.UUID(acceptance_id), body.model_dump(exclude_unset=True))
         return success(data)
+    except ValueError as e:
+        return error(40001, str(e))
+
+
+@router.post("/{acceptance_id}/admin-delete")
+async def admin_delete_acceptance(
+    acceptance_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    service = AcceptanceService(db)
+    try:
+        await service.admin_delete_acceptance(uuid.UUID(acceptance_id), current_user.id)
+        return success(None)
     except ValueError as e:
         return error(40001, str(e))
 

@@ -97,6 +97,13 @@ PERM_INSTALLATION_TASK_READ = "installation_task:read"
 PERM_INSTALLATION_TASK_CREATE = "installation_task:create"
 PERM_INSTALLATION_TASK_UPDATE = "installation_task:update"
 PERM_INSTALLATION_TASK_CHANGE_STATUS = "installation_task:change_status"
+PERM_INSTALLATION_TASK_DELETE = "installation_task:delete"
+
+# Production Task Delete
+PERM_PRODUCTION_TASK_DELETE = "production_task:delete"
+
+# Design Task Delete
+PERM_DESIGN_TASK_DELETE = "design_task:delete"
 
 # Payment
 PERM_PAYMENT_READ = "payment:read"

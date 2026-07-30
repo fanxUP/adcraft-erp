@@ -19,30 +19,30 @@
         </el-descriptions>
       </el-card>
 
-      <el-card
-        data-ai-targets="task-status-queued task-status-in_progress task-status-qc_check task-status-rework task-status-completed"
-        shadow="never"
-        class="info-card"
-        style="margin-top: 16px"
-      >
+      <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>变更状态</span></template>
-        <el-form :model="statusForm" inline>
-          <el-form-item label="目标状态">
-            <el-select v-model="statusForm.to_status" style="width: 160px">
-              <el-option label="排队中" value="queued" />
-              <el-option label="制作中" value="in_progress" />
-              <el-option label="待质检" value="qc_check" />
-              <el-option label="返工" value="rework" />
-              <el-option label="已完成" value="completed" />
-            </el-select>
-          </el-form-item>
+        <TaskWorkflow
+          :steps="prodSteps"
+          :current-status="task.status"
+          :workflow="PROD_WORKFLOW"
+          :changing="changing"
+          @change="handleWorkflowChange"
+        />
+        <el-form v-if="showReason" :model="statusForm" inline style="margin-top: 12px">
           <el-form-item label="原因">
-            <el-input v-model="statusForm.reason" style="width: 200px" />
+            <el-input v-model="statusForm.reason" style="width: 240px" />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :loading="changing" @click="handleChangeStatus">变更</el-button>
+            <el-button type="primary" :loading="changing" @click="confirmChange">确认变更</el-button>
+            <el-button @click="cancelChange">取消</el-button>
           </el-form-item>
         </el-form>
+      </el-card>
+      <!-- 管理员删除 -->
+      <el-card v-if="authStore.isAdmin" shadow="never" class="info-card" style="margin-top: 16px; border-color: #ff4d4f;">
+        <template #header><span style="color: #ff4d4f;">危险操作</span></template>
+        <el-button type="danger" :loading="deleting" @click="handleDelete">删除此任务</el-button>
+        <span style="color: #999; margin-left: 12px; font-size: 12px;">删除后订单将回退到设计中状态，下游任务将被清除</span>
       </el-card>
 
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
@@ -110,31 +110,91 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import { getProductionTask, updateProductionTask, changeProductionTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import type { ProductionTaskResponse, UserResponse } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
+import { useAuthStore } from '@/stores/auth'
+import { deleteProductionTask } from '@/api/tasks'
 
 const route = useRoute()
+const router = useRouter()
 const aiStore = useAiAssistantStore()
+const authStore = useAuthStore()
 const loading = ref(false)
 const updating = ref(false)
 const changing = ref(false)
+const deleting = ref(false)
 const task = ref<ProductionTaskResponse | null>(null)
 const userOptions = ref<UserResponse[]>([])
+const pendingTarget = ref('')
 const statusForm = reactive({ to_status: '', reason: '' })
+const showReason = computed(() => {
+  return !!pendingTarget.value && isReasonRequired(pendingTarget.value)
+})
 const editForm = reactive({ assigned_to: '', qc_result: '', rework_reason: '' })
 
+const PROD_WORKFLOW: Record<string, string[]> = {
+  pending: ['in_progress'],
+  in_progress: ['rework', 'completed'],
+  rework: ['in_progress'],
+  completed: [],
+  cancelled: [],
+}
+
+const prodSteps = [
+  { key: 'pending', label: '待制作' },
+  { key: 'in_progress', label: '制作中' },
+  { key: 'rework', label: '返工' },
+  { key: 'completed', label: '已完成' },
+]
+
+function isReasonRequired(status: string) {
+  return status === 'pending' || status.startsWith('cancel')
+}
+
+function handleWorkflowChange(status: string) {
+  pendingTarget.value = status
+  if (isReasonRequired(status)) return
+  doChangeStatus(status, '')
+}
+
+async function doChangeStatus(to_status: string, reason: string) {
+  await ElMessageBox.confirm(`确定将制作任务状态变更为「${prodSteps.find(s => s.key === to_status)?.label || to_status}」？`, '变更状态', {
+    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
+  })
+  changing.value = true
+  try {
+    await changeProductionTaskStatus(route.params.id as string, { to_status, reason })
+    ElMessage.success('状态已变更')
+    pendingTarget.value = ''
+    statusForm.reason = ''
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
+  } catch { /* handled */ } finally { changing.value = false }
+}
+
+async function confirmChange() {
+  if (!pendingTarget.value) return
+  await doChangeStatus(pendingTarget.value, statusForm.reason)
+}
+
+function cancelChange() {
+  pendingTarget.value = ''
+  statusForm.reason = ''
+}
+
 function statusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待制作', queued: '排队中', in_progress: '制作中', qc_check: '待质检', rework: '返工', completed: '已完成', cancelled: '已取消' }
+  const map: Record<string, string> = { pending: '待制作',  in_progress: '制作中',  rework: '返工', completed: '已完成', cancelled: '已取消' }
   return map[s] || s
 }
 function statusColor(s: string) {
-  const map: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success', cancelled: 'info' }
+  const map: Record<string, string> = { pending: 'info',  in_progress: '',  rework: 'danger', completed: 'success', cancelled: 'info' }
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
@@ -169,21 +229,7 @@ async function handleUpdate() {
   } catch { /* handled */ } finally { updating.value = false }
 }
 
-async function handleChangeStatus() {
-  if (!statusForm.to_status) { ElMessage.warning('请选择目标状态'); return }
-  await ElMessageBox.confirm(`确定将制作任务状态变更为「${statusForm.to_status}」？`, '变更状态', {
-    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
-  })
-  changing.value = true
-  try {
-    await changeProductionTaskStatus(route.params.id as string, statusForm)
-    ElMessage.success('状态已变更')
-    statusForm.to_status = ''
-    statusForm.reason = ''
-    await fetchTask()
-    await aiStore.notifyBusinessMutation()
-  } catch { /* handled */ } finally { changing.value = false }
-}
+
 
 async function handleUpload(req: UploadRequestOptions) {
   try {
@@ -201,6 +247,20 @@ async function handleDeleteAttachment(id: string) {
   await deleteAttachment(id)
   ElMessage.success('已删除')
   fetchTask()
+}
+
+async function handleDelete() {
+  await ElMessageBox.confirm(
+    `确定删除制作任务 ${task.value?.production_no || ''}？删除后不可恢复，关联订单将回退到设计中状态。`,
+    '删除任务', { confirmButtonText: '确定删除', cancelButtonText: '取消', type: 'error' }
+  )
+  deleting.value = true
+  try {
+    await deleteProductionTask(route.params.id as string)
+    ElMessage.success('任务已删除')
+    await aiStore.notifyBusinessMutation()
+    router.back()
+  } catch { /* handled */ } finally { deleting.value = false }
 }
 
 onMounted(() => {

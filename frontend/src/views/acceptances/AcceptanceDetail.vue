@@ -3,27 +3,7 @@
     <div class="page-header">
       <el-button text @click="$router.push('/acceptances')" style="font-size: 16px;">← 返回</el-button>
       <h2>{{ form.acceptance_no }}</h2>
-      <div class="header-actions">
-        <el-button
-          v-if="form.status === 'draft'"
-          data-ai-target="acceptance-status-pending"
-          type="primary" @click="handleSubmit"
-        >提交验收</el-button>
-        <el-button
-          v-if="form.status === 'pending'"
-          data-ai-target="acceptance-status-accepted"
-          type="success" @click="handleAccept"
-        >确认验收</el-button>
-        <el-button
-          v-if="form.status === 'pending'"
-          type="danger" @click="handleReject"
-        >驳回</el-button>
-        <el-button
-          v-if="form.status === 'rejected'"
-          data-ai-target="acceptance-status-draft"
-          type="warning" @click="handleBackToDraft"
-        >退回草稿</el-button>
-      </div>
+
     </div>
 
     <el-tabs v-model="activeTab">
@@ -272,6 +252,15 @@
       </el-tab-pane>
     </el-tabs>
 
+    <!-- 管理员删除验收单 -->
+    <el-card v-if="authStore.isAdmin && form.status !== 'draft'" shadow="never" style="margin-top: 16px; border-color: #ff4d4f; background: var(--ad-card);">
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <span style="color: #ff4d4f; font-weight: 600;">危险操作</span>
+        <el-button type="danger" :loading="deleting" @click="handleAdminDelete">删除此验收单</el-button>
+        <span style="color: #999; font-size: 12px;">删除后订单将回退到安装中状态，验收单进入回收站</span>
+      </div>
+    </el-card>
+
     <!-- 保存按钮 -->
     <div class="save-bar" v-if="canEditResult">
       <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
@@ -307,7 +296,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Printer } from '@element-plus/icons-vue'
 import {
@@ -323,15 +312,20 @@ import type {
 import AcceptancePrint from './AcceptancePrint.vue'
 import AcceptanceWorkflow from './AcceptanceWorkflow.vue'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
+import { useAuthStore } from '@/stores/auth'
+import { adminDeleteAcceptance } from '@/api/acceptances'
 
 const route = useRoute()
+const router = useRouter()
 const aiStore = useAiAssistantStore()
+const authStore = useAuthStore()
 const activeTab = ref('info')
 const saving = ref(false)
 const statusChanging = ref(false)
 const showPrint = ref(false)
 const rejectDialogVisible = ref(false)
 const rejectReason = ref('')
+const deleting = ref(false)
 
 const canEditStructure = computed(() => form.status === 'draft' || form.status === 'rejected')
 const canEditResult = computed(() => canEditStructure.value || form.status === 'pending')
@@ -507,13 +501,6 @@ async function handleSave() {
   }
 }
 
-async function handleSubmit() {
-  await ElMessageBox.confirm('确定提交验收？提交后将无法编辑。', '提示')
-  await changeAcceptanceStatus(form.id, { to_status: 'pending' })
-  ElMessage.success('已提交验收')
-  await refreshAfterMutation()
-}
-
 async function handleWorkflowChange(toStatus: string) {
   if (toStatus === 'pending') {
     await ElMessageBox.confirm('确定提交验收？提交后将无法编辑。', '提示')
@@ -524,6 +511,34 @@ async function handleWorkflowChange(toStatus: string) {
       await refreshAfterMutation()
     } finally { statusChanging.value = false }
   } else if (toStatus === 'accepted') {
+    // 先自动将所有待验收项设为通过
+    const pendingItems = form.items.filter(i => !['accepted', 'conditional'].includes(i.item_status))
+    if (pendingItems.length > 0) {
+      pendingItems.forEach(i => { i.item_status = 'accepted' })
+      await updateAcceptance(form.id, {
+        accepted_by: form.accepted_by || null,
+        our_acceptor_id: form.our_acceptor_id || null,
+        remark: form.remark || null,
+        discount_amount: form.discount_amount || 0,
+        advance_amount: form.advance_amount || 0,
+        items: form.items.map((item) => ({
+          id: item.id,
+          item_name: item.item_name,
+          material_process: item.material_process || null,
+          specification: item.specification || null,
+          area: item.area ?? null,
+          quantity: item.quantity || null,
+          unit: item.unit || null,
+          unit_price: item.unit_price ?? null,
+          subtotal: item.subtotal ?? null,
+          image_url: item.image_url || null,
+          order_item_id: item.order_item_id || null,
+          remark: item.remark || null,
+          item_status: item.item_status,
+          group_name: item.group_name || null,
+        })),
+      })
+    }
     const { value } = await ElMessageBox.prompt('请输入客户签收人（可选）', '确认验收', {
       inputPlaceholder: '签收人姓名',
       confirmButtonText: '确认验收',
@@ -550,22 +565,6 @@ async function handleWorkflowChange(toStatus: string) {
   }
 }
 
-async function handleAccept() {
-  const { value } = await ElMessageBox.prompt('请输入客户签收人（可选）', '确认验收', {
-    inputPlaceholder: '签收人姓名',
-    confirmButtonText: '确认验收',
-    cancelButtonText: '取消',
-    inputValue: form.accepted_by || '',
-  })
-  await changeAcceptanceStatus(form.id, { to_status: 'accepted', accepted_by: value || null })
-  ElMessage.success('已确认验收')
-  await refreshAfterMutation()
-}
-
-function handleReject() {
-  rejectReason.value = ''
-  rejectDialogVisible.value = true
-}
 
 async function confirmReject() {
   if (!rejectReason.value.trim()) {
@@ -581,13 +580,6 @@ async function confirmReject() {
   } finally {
     statusChanging.value = false
   }
-}
-
-async function handleBackToDraft() {
-  await ElMessageBox.confirm('确定退回草稿？退回后可重新编辑。', '提示')
-  await changeAcceptanceStatus(form.id, { to_status: 'draft' })
-  ElMessage.success('已退回草稿')
-  await refreshAfterMutation()
 }
 
 async function handleUpload(options: { file: File }) {
@@ -621,6 +613,20 @@ async function refreshAfterMutation() {
   await aiStore.notifyBusinessMutation()
 }
 
+async function handleAdminDelete() {
+  await ElMessageBox.confirm(
+    `确定删除验收单 ${form.acceptance_no}？删除后不可恢复，关联订单将回退到安装中状态。`,
+    '删除验收单', { confirmButtonText: '确定删除', cancelButtonText: '取消', type: 'error' }
+  )
+  deleting.value = true
+  try {
+    await adminDeleteAcceptance(form.id)
+    ElMessage.success('验收单已删除')
+    await aiStore.notifyBusinessMutation()
+    router.push('/acceptances')
+  } catch { /* handled */ } finally { deleting.value = false }
+}
+
 const statusLabel = (s: string) => {
   const map: Record<string, string> = { draft: '草稿', pending: '待验收', accepted: '已验收', rejected: '已驳回' }
   return map[s] || s
@@ -646,7 +652,6 @@ watch(() => route.params.id, async (newId) => {
 .page { padding: 20px; }
 .page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
 .page-header h2 { margin: 0; color: var(--ad-text); flex: 1; }
-.header-actions { display: flex; gap: 8px; }
 .save-bar { margin-top: 20px; display: flex; gap: 12px; }
 .order-info-card { margin-bottom: 0; }
 .order-info-card :deep(.el-descriptions__title) { font-size: 16px; font-weight: 600; }

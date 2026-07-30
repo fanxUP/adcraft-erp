@@ -2,7 +2,6 @@
   <div class="page">
     <div class="page-header">
       <h2>安装任务</h2>
-      <el-button type="danger" @click="dialogVisible = true">创建安装任务</el-button>
     </div>
 
     <div class="search-bar">
@@ -47,61 +46,20 @@
       @change="fetchData"
     />
 
-    <el-dialog v-model="dialogVisible" title="创建安装任务" width="500px" :close-on-click-modal="false">
-      <el-form :model="form" label-width="100px">
-        <el-form-item label="订单">
-          <el-select v-model="form.order_id" placeholder="选择订单" filterable style="width: 100%">
-            <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="项目名称">
-          <el-input v-model="form.project_name" />
-        </el-form-item>
-        <el-form-item label="安装地址">
-          <el-input v-model="form.address" type="textarea" :rows="2" />
-        </el-form-item>
-        <el-form-item label="联系人">
-          <el-input v-model="form.contact_name" />
-        </el-form-item>
-        <el-form-item label="联系电话">
-          <el-input v-model="form.contact_phone" />
-        </el-form-item>
-        <el-form-item label="计划时间">
-          <el-date-picker v-model="form.scheduled_at" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="负责人">
-          <el-select v-model="form.assigned_to" placeholder="选择负责人" clearable style="width: 100%">
-            <el-option v-for="u in userOptions" :key="u.id" :label="u.real_name || u.username" :value="u.id" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleCreate">创建</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { getInstallationTasks, createInstallationTask } from '@/api/tasks'
-import { getOrders } from '@/api/orders'
-import { getUsers } from '@/api/users'
-import { ElMessage } from 'element-plus'
-import { InstallationTaskResponse, OrderListResponse, UserResponse } from '@/types/api'
+import { ref, onMounted } from 'vue'
+import { getInstallationTasks } from '@/api/tasks'
+import { InstallationTaskResponse } from '@/types/api'
 
 const loading = ref(false)
-const saving = ref(false)
 const list = ref<InstallationTaskResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const filterStatus = ref('')
-const dialogVisible = ref(false)
-const orderOptions = ref<OrderListResponse[]>([])
-const userOptions = ref<UserResponse[]>([])
-const form = reactive({ order_id: '', customer_id: '', project_name: '', assigned_to: '', address: '', contact_name: '', contact_phone: '', scheduled_at: '' })
 
 function instStatusLabel(s: string) {
   const map: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成', cancelled: '已取消' }
@@ -121,27 +79,7 @@ async function fetchData() {
   } finally { loading.value = false }
 }
 
-async function loadOptions() {
-  const [ordersRes, usersRes] = await Promise.all([getOrders({ page_size: 100 }), getUsers({ page_size: 100 })])
-  orderOptions.value = ordersRes.items.filter(order =>
-    order.status === 'in_installation'
-  )
-  userOptions.value = usersRes.items
-}
-
-async function handleCreate() {
-  saving.value = true
-  try {
-    const selOrder = orderOptions.value.find(o => o.id === form.order_id)
-    await createInstallationTask({ ...form, customer_id: selOrder?.customer_id || '' })
-    ElMessage.success('创建成功')
-    dialogVisible.value = false
-    Object.assign(form, { order_id: '', customer_id: '', project_name: '', assigned_to: '', address: '', contact_name: '', contact_phone: '', scheduled_at: '' })
-    fetchData()
-  } catch { /* handled */ } finally { saving.value = false }
-}
-
-onMounted(() => { fetchData(); loadOptions() })
+onMounted(() => { fetchData() })
 </script>
 
 <style scoped>

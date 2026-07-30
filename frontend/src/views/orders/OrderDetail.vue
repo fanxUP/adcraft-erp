@@ -220,13 +220,6 @@
             <template #header>
               <div class="card-header">
                 <span>设计任务</span>
-                <el-button
-                  v-if="authStore.hasAnyRole(['admin', 'designer']) && ['confirmed', 'designing'].includes(order.status)"
-                  data-ai-target="order-create-design"
-                  size="small"
-                  type="danger"
-                  @click="showDesignDialog = true"
-                >创建</el-button>
               </div>
             </template>
             <el-table :data="designTasks" stripe size="small" v-loading="tasksLoading">
@@ -248,13 +241,6 @@
             <template #header>
               <div class="card-header">
                 <span>制作任务</span>
-                <el-button
-                  v-if="authStore.hasAnyRole(['admin', 'production']) && order.status === 'in_production'"
-                  data-ai-target="order-create-production"
-                  size="small"
-                  type="danger"
-                  @click="showProdDialog = true"
-                >创建</el-button>
               </div>
             </template>
             <el-table :data="productionTasks" stripe size="small" v-loading="tasksLoading">
@@ -276,13 +262,6 @@
             <template #header>
               <div class="card-header">
                 <span>安装任务</span>
-                <el-button
-                  v-if="authStore.hasAnyRole(['admin', 'installer']) && order.status === 'in_installation'"
-                  data-ai-target="order-create-installation"
-                  size="small"
-                  type="danger"
-                  @click="showInstDialog = true"
-                >创建</el-button>
               </div>
             </template>
             <el-table :data="installationTasks" stripe size="small" v-loading="tasksLoading">
@@ -303,75 +282,22 @@
       </el-tabs>
     </div>
 
-    <el-dialog v-model="showDesignDialog" title="创建设计任务" width="450px" :close-on-click-modal="false">
-      <el-form :model="taskForm" label-width="100px">
-        <el-form-item label="项目名称">
-          <el-input v-model="taskForm.project_name" :placeholder="order?.project_name" />
-        </el-form-item>
-        <el-form-item label="设计师">
-          <el-input v-model="taskForm.assigned_to" placeholder="可选" />
-        </el-form-item>
-        <el-form-item label="说明">
-          <el-input v-model="taskForm.description" type="textarea" :rows="2" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showDesignDialog = false">取消</el-button>
-        <el-button type="danger" @click="handleCreateDesign">创建</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="showProdDialog" title="创建制作任务" width="450px" :close-on-click-modal="false">
-      <el-form :model="taskForm" label-width="100px">
-        <el-form-item label="项目名称">
-          <el-input v-model="taskForm.project_name" :placeholder="order?.project_name" />
-        </el-form-item>
-        <el-form-item label="数量">
-          <el-input-number v-model="taskForm.quantity" :min="1" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="负责人">
-          <el-input v-model="taskForm.assigned_to" placeholder="可选" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showProdDialog = false">取消</el-button>
-        <el-button type="danger" @click="handleCreateProduction">创建</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="showInstDialog" title="创建安装任务" width="450px" :close-on-click-modal="false">
-      <el-form :model="taskForm" label-width="100px">
-        <el-form-item label="项目名称">
-          <el-input v-model="taskForm.project_name" :placeholder="order?.project_name" />
-        </el-form-item>
-        <el-form-item label="负责人">
-          <el-input v-model="taskForm.assigned_to" placeholder="可选" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showInstDialog = false">取消</el-button>
-        <el-button type="danger" @click="handleCreateInstallation">创建</el-button>
-      </template>
-    </el-dialog>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Printer } from '@element-plus/icons-vue'
 import OrderWorkflow from './OrderWorkflow.vue'
 import OrderProjectOverview from './OrderProjectOverview.vue'
 import { useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { getOrder, changeOrderStatus, reopenCompletedOrder, autoCalculateCost } from '@/api/orders'
-import { getDesignTasks, getProductionTasks, getInstallationTasks, createDesignTask, createProductionTask, createInstallationTask } from '@/api/tasks'
+import { getDesignTasks, getProductionTasks, getInstallationTasks } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, OrderDetailResponse, OrderItemResponse } from '@/types/api'
 
 const route = useRoute()
-const authStore = useAuthStore()
 const aiStore = useAiAssistantStore()
 const loading = ref(false)
 const changing = ref(false)
@@ -383,11 +309,7 @@ const activeTab = ref('info')
 const designTasks = ref<DesignTaskResponse[]>([])
 const productionTasks = ref<ProductionTaskResponse[]>([])
 const installationTasks = ref<InstallationTaskResponse[]>([])
-const showDesignDialog = ref(false)
-const showProdDialog = ref(false)
-const showInstDialog = ref(false)
 const autoCostLoading = ref(false)
-const taskForm = reactive({ project_name: '', assigned_to: '' as string | null, description: '', quantity: 1 })
 
 const itemsTotal = computed(() => (order.value?.items || []).reduce((s, i) => s + (i.subtotal_amount || 0), 0))
 const designCompleted = computed(() => designTasks.value.filter(task => task.status === 'confirmed').length)
@@ -537,31 +459,6 @@ async function fetchTasks() {
     ])
     designTasks.value = d.items; productionTasks.value = p.items; installationTasks.value = i.items
   } finally { tasksLoading.value = false }
-}
-
-async function handleCreateDesign() {
-  if (!order.value) return
-  await createDesignTask({ order_id: route.params.id as string, customer_id: order.value.customer_id, project_name: taskForm.project_name || order.value.project_name, assigned_to: taskForm.assigned_to || undefined, description: taskForm.description })
-  ElMessage.success('已创建设计任务')
-  showDesignDialog.value = false; taskForm.project_name = ''; taskForm.assigned_to = ''; taskForm.description = ''
-  await fetchTasks()
-  await aiStore.notifyBusinessMutation()
-}
-async function handleCreateProduction() {
-  if (!order.value) return
-  await createProductionTask({ order_id: route.params.id as string, customer_id: order.value.customer_id, project_name: taskForm.project_name || order.value.project_name, assigned_to: taskForm.assigned_to || undefined, quantity: taskForm.quantity })
-  ElMessage.success('已创建制作任务')
-  showProdDialog.value = false; taskForm.project_name = ''; taskForm.assigned_to = ''; taskForm.quantity = 1
-  await fetchTasks()
-  await aiStore.notifyBusinessMutation()
-}
-async function handleCreateInstallation() {
-  if (!order.value) return
-  await createInstallationTask({ order_id: route.params.id as string, customer_id: order.value.customer_id, project_name: taskForm.project_name || order.value.project_name, assigned_to: taskForm.assigned_to || undefined, address: order.value.installation_address || '' })
-  ElMessage.success('已创建安装任务')
-  showInstDialog.value = false; taskForm.project_name = ''; taskForm.assigned_to = ''
-  await fetchTasks()
-  await aiStore.notifyBusinessMutation()
 }
 
 async function handleChangeStatus(to_status: string) {

@@ -55,4 +55,7 @@ export function uploadAttachment(relatedType: string, relatedId: string, file: F
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
+export function deleteDesignTask(id: string) { return del<SuccessResponse>(`/design-tasks/${id}`) }
+export function deleteProductionTask(id: string) { return del<SuccessResponse>(`/production-tasks/${id}`) }
+export function deleteInstallationTask(id: string) { return del<SuccessResponse>(`/installation-tasks/${id}`) }
 export function deleteAttachment(id: string) { return del<SuccessResponse>(`/attachments/${id}`) }

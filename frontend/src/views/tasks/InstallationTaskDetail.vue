@@ -22,29 +22,30 @@
         </el-descriptions>
       </el-card>
 
-      <el-card
-        data-ai-targets="task-status-assigned task-status-in_progress task-status-pending_acceptance task-status-completed"
-        shadow="never"
-        class="info-card"
-        style="margin-top: 16px"
-      >
+      <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>变更状态</span></template>
-        <el-form :model="statusForm" inline>
-          <el-form-item label="目标状态">
-            <el-select v-model="statusForm.to_status" style="width: 160px">
-              <el-option label="已分配" value="assigned" />
-              <el-option label="安装中" value="in_progress" />
-              <el-option label="待验收" value="pending_acceptance" />
-              <el-option label="已完成" value="completed" />
-            </el-select>
-          </el-form-item>
+        <TaskWorkflow
+          :steps="instSteps"
+          :current-status="task.status"
+          :workflow="INST_WORKFLOW"
+          :changing="changing"
+          @change="handleWorkflowChange"
+        />
+        <el-form v-if="showReason" :model="statusForm" inline style="margin-top: 12px">
           <el-form-item label="原因">
-            <el-input v-model="statusForm.reason" style="width: 200px" />
+            <el-input v-model="statusForm.reason" style="width: 240px" />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :loading="changing" @click="handleChangeStatus">变更</el-button>
+            <el-button type="primary" :loading="changing" @click="confirmChange">确认变更</el-button>
+            <el-button @click="cancelChange">取消</el-button>
           </el-form-item>
         </el-form>
+      </el-card>
+      <!-- 管理员删除 -->
+      <el-card v-if="authStore.isAdmin" shadow="never" class="info-card" style="margin-top: 16px; border-color: #ff4d4f;">
+        <template #header><span style="color: #ff4d4f;">危险操作</span></template>
+        <el-button type="danger" :loading="deleting" @click="handleDelete">删除此任务</el-button>
+        <span style="color: #999; margin-left: 12px; font-size: 12px;">删除后订单将回退到生产中状态，下游任务将被清除</span>
       </el-card>
 
       <AiInstallationDraftCard
@@ -131,25 +132,35 @@
 
 <script setup lang="ts">
 import { computed, ref, reactive, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import { getInstallationTask, updateInstallationTask, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import type { InstallationTaskResponse, UserResponse } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
+import { useAuthStore } from '@/stores/auth'
+import { deleteInstallationTask } from '@/api/tasks'
 import { isSameWorkflowPath } from '@/utils/pageActionGuide'
 import { applyInstallationDraft } from '@/utils/installationDraft'
 import AiInstallationDraftCard from '@/components/ai-assistant/AiInstallationDraftCard.vue'
 
 const route = useRoute()
+const router = useRouter()
 const aiStore = useAiAssistantStore()
+const authStore = useAuthStore()
 const loading = ref(false)
 const updating = ref(false)
 const changing = ref(false)
+const deleting = ref(false)
 const task = ref<InstallationTaskResponse | null>(null)
 const userOptions = ref<UserResponse[]>([])
+const pendingTarget = ref('')
 const statusForm = reactive({ to_status: '', reason: '' })
+const showReason = computed(() => {
+  return !!pendingTarget.value && isReasonRequired(pendingTarget.value)
+})
 const editForm = reactive({
   assigned_to: '',
   address: '',
@@ -177,8 +188,60 @@ const draftCurrentValues = computed<Record<string, string>>(() => ({
   scheduled_at: editForm.scheduled_at.replace('T', ' '),
 }))
 
+const INST_WORKFLOW: Record<string, string[]> = {
+  pending: ['assigned', 'in_progress'],
+  assigned: ['in_progress', 'pending'],
+  in_progress: ['pending_acceptance', 'pending'],
+  pending_acceptance: ['completed', 'in_progress'],
+  completed: [],
+  cancelled: [],
+}
+
+const instSteps = [
+  { key: 'pending', label: '待分配' },
+  { key: 'assigned', label: '已分配' },
+  { key: 'in_progress', label: '安装中' },
+  { key: 'pending_acceptance', label: '工人验收' },
+  { key: 'completed', label: '已完成' },
+]
+
+function isReasonRequired(status: string) {
+  return status === 'pending' || status.startsWith('cancel')
+}
+
+function handleWorkflowChange(status: string) {
+  pendingTarget.value = status
+  if (isReasonRequired(status)) return
+  doChangeStatus(status, '')
+}
+
+async function doChangeStatus(to_status: string, reason: string) {
+  await ElMessageBox.confirm(`确定将安装任务状态变更为「${instSteps.find(s => s.key === to_status)?.label || to_status}」？`, '变更状态', {
+    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
+  })
+  changing.value = true
+  try {
+    await changeInstallationTaskStatus(route.params.id as string, { to_status, reason })
+    ElMessage.success('状态已变更')
+    pendingTarget.value = ''
+    statusForm.reason = ''
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
+  } catch { /* handled */ } finally { changing.value = false }
+}
+
+async function confirmChange() {
+  if (!pendingTarget.value) return
+  await doChangeStatus(pendingTarget.value, statusForm.reason)
+}
+
+function cancelChange() {
+  pendingTarget.value = ''
+  statusForm.reason = ''
+}
+
 function statusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成', cancelled: '已取消' }
+  const map: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '工人验收', completed: '已完成', cancelled: '已取消' }
   return map[s] || s
 }
 function statusColor(s: string) {
@@ -231,21 +294,7 @@ function handleApplyDraft() {
   ElMessage.success(`已填入 ${applied.length} 项建议，请核对后点击保存`)
 }
 
-async function handleChangeStatus() {
-  if (!statusForm.to_status) { ElMessage.warning('请选择目标状态'); return }
-  await ElMessageBox.confirm(`确定将安装任务状态变更为「${statusForm.to_status}」？`, '变更状态', {
-    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
-  })
-  changing.value = true
-  try {
-    await changeInstallationTaskStatus(route.params.id as string, statusForm)
-    ElMessage.success('状态已变更')
-    statusForm.to_status = ''
-    statusForm.reason = ''
-    await fetchTask()
-    await aiStore.notifyBusinessMutation()
-  } catch { /* handled */ } finally { changing.value = false }
-}
+
 
 async function handleUpload(req: UploadRequestOptions) {
   try {
@@ -264,6 +313,20 @@ async function handleDeleteAttachment(id: string) {
   await deleteAttachment(id)
   ElMessage.success('已删除')
   fetchTask()
+}
+
+async function handleDelete() {
+  await ElMessageBox.confirm(
+    `确定删除安装任务 ${task.value?.installation_no || ''}？删除后不可恢复，关联订单将回退到生产中状态。`,
+    '删除任务', { confirmButtonText: '确定删除', cancelButtonText: '取消', type: 'error' }
+  )
+  deleting.value = true
+  try {
+    await deleteInstallationTask(route.params.id as string)
+    ElMessage.success('任务已删除')
+    await aiStore.notifyBusinessMutation()
+    router.back()
+  } catch { /* handled */ } finally { deleting.value = false }
 }
 
 onMounted(() => {

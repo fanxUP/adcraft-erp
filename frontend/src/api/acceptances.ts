@@ -82,6 +82,9 @@ export function updateAcceptance(id: string, data: {
 export function deleteAcceptance(id: string) {
   return del(`/acceptances/${id}`)
 }
+export function adminDeleteAcceptance(id: string) {
+  return post(`/acceptances/${id}/admin-delete`)
+}
 
 export function changeAcceptanceStatus(id: string, data: {
   to_status: string

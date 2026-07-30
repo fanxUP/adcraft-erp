@@ -22,6 +22,7 @@ from app.core.permissions import (
     PERM_PRODUCTION_TASK_UPDATE,
     require_any_permission,
     require_permission,
+    require_role,
 )
 from app.models.user import User
 from app.schemas.common import success, success_paginated
@@ -99,6 +100,20 @@ async def update_design_task(
     return success(task)
 
 
+@design_router.delete("/{task_id}")
+async def delete_design_task(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    service = DesignTaskService(db)
+    try:
+        await service.delete_task(_ensure_uuid(task_id))
+        return success(None)
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
 @design_router.post("/{task_id}/change-status")
 async def change_design_task_status(
     task_id: str,
@@ -167,6 +182,20 @@ async def update_production_task(
     return success(task)
 
 
+@prod_router.delete("/{task_id}")
+async def delete_production_task(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    service = ProductionTaskService(db)
+    try:
+        await service.delete_task(_ensure_uuid(task_id))
+        return success(None)
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
 @prod_router.post("/{task_id}/change-status")
 async def change_production_task_status(
     task_id: str,
@@ -233,6 +262,20 @@ async def update_installation_task(
     service = InstallationTaskService(db)
     task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_none=True))
     return success(task)
+
+
+@inst_router.delete("/{task_id}")
+async def delete_installation_task(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    service = InstallationTaskService(db)
+    try:
+        await service.delete_task(_ensure_uuid(task_id))
+        return success(None)
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
 
 
 @inst_router.post("/{task_id}/change-status")

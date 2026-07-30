@@ -1,96 +1,33 @@
 <template>
   <div class="ow-bar">
     <div class="ow-flow">
-      <!-- 列1: 确认订单 -->
+      <!-- 确认订单 -->
       <div class="ow-col">
-        <div data-ai-target="order-status-confirmed" class="ow-card" :class="cardClass('confirmed')" @click="tryChange('confirmed')">
+        <div class="ow-card" :class="cardClass('confirmed')" @click="tryChange('confirmed')">
           <div class="ow-icon" :class="iconClass('confirmed')">
-            <el-icon v-if="isPast('confirmed')" :size="16"><Check /></el-icon>
+            <el-icon v-if="isPastOrCurrent('confirmed')" :size="16"><Check /></el-icon>
             <span v-else>1</span>
           </div>
           <div class="ow-text">
             <div class="ow-label">确认订单</div>
-            <div v-if="'confirmed' === currentStatus" class="ow-tag cur-tag">当前</div>
+            <div v-if="currentStatus === 'confirmed' || isPast('confirmed')" class="ow-tag done-tag">已确认</div>
             <div v-else-if="isReachable('confirmed')" class="ow-tag ready-tag">可点击</div>
           </div>
         </div>
       </div>
 
-      <!-- 箭头1 -->
-      <div class="ow-conn" :class="{ 'conn-done': isPast('designing') }">
+      <!-- 箭头 -->
+      <div class="ow-conn" :class="{ 'conn-done': isPastOrCurrent('completed') }">
         <div class="ow-line"></div>
         <div class="ow-point">▶</div>
       </div>
 
-      <!-- 列2: 项目执行阶段 -->
-      <div class="ow-col ow-col-stack">
-        <div data-ai-target="order-status-designing" class="ow-card" :class="cardClass('designing')" @click="tryChange('designing')">
-          <div class="ow-icon" :class="iconClass('designing')">
-            <el-icon v-if="isPast('designing')" :size="16"><Check /></el-icon>
-            <span v-else>2</span>
-          </div>
-          <div class="ow-text">
-            <div class="ow-label">设计中</div>
-            <div v-if="'designing' === currentStatus" class="ow-tag cur-tag">当前</div>
-            <div v-else-if="isReachable('designing')" class="ow-tag ready-tag">可点击</div>
-          </div>
-        </div>
-
-        <div class="stack-line" :class="{ 'stack-done': isPast('in_production') || currentStatus === 'in_production' }"></div>
-
-        <div data-ai-target="order-status-in_production" class="ow-card" :class="cardClass('in_production')" @click="tryChange('in_production')">
-          <div class="ow-icon" :class="iconClass('in_production')">
-            <el-icon v-if="isPast('in_production')" :size="16"><Check /></el-icon>
-            <span v-else>3</span>
-          </div>
-          <div class="ow-text">
-            <div class="ow-label">生产中</div>
-            <div v-if="'in_production' === currentStatus" class="ow-tag cur-tag">当前</div>
-            <div v-else-if="isReachable('in_production')" class="ow-tag ready-tag">可点击</div>
-          </div>
-        </div>
-
-        <div class="stack-line" :class="{ 'stack-done': isPast('in_installation') || currentStatus === 'in_installation' }"></div>
-
-        <div data-ai-target="order-status-in_installation" class="ow-card" :class="cardClass('in_installation')" @click="tryChange('in_installation')">
-          <div class="ow-icon" :class="iconClass('in_installation')">
-            <el-icon v-if="isPast('in_installation')" :size="16"><Check /></el-icon>
-            <span v-else>4</span>
-          </div>
-          <div class="ow-text">
-            <div class="ow-label">安装中</div>
-            <div v-if="'in_installation' === currentStatus" class="ow-tag cur-tag">当前</div>
-            <div v-else-if="isReachable('in_installation')" class="ow-tag ready-tag">可点击</div>
-          </div>
-        </div>
-
-        <div class="stack-line" :class="{ 'stack-done': isPast('pending_acceptance') || currentStatus === 'pending_acceptance' }"></div>
-
-        <div data-ai-target="order-status-pending_acceptance" class="ow-card" :class="cardClass('pending_acceptance')" @click="tryChange('pending_acceptance')">
-          <div class="ow-icon" :class="iconClass('pending_acceptance')">
-            <el-icon v-if="isPast('pending_acceptance')" :size="16"><Check /></el-icon>
-            <span v-else>5</span>
-          </div>
-          <div class="ow-text">
-            <div class="ow-label">待验收</div>
-            <div v-if="'pending_acceptance' === currentStatus" class="ow-tag cur-tag">当前</div>
-            <div v-else-if="isReachable('pending_acceptance')" class="ow-tag ready-tag">可点击</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 箭头2 -->
-      <div class="ow-conn" :class="{ 'conn-done': isPast('completed') }">
-        <div class="ow-line"></div>
-        <div class="ow-point">▶</div>
-      </div>
-
-      <!-- 列3: 已完成 -->
+      <!-- 已完成 -->
       <div class="ow-col">
-        <div data-ai-target="order-status-completed" class="ow-card" :class="cardClass('completed')" @click="tryChange('completed')">
+        <div class="ow-card" :class="cardClass('completed')" @click="tryChange('completed')">
           <div class="ow-icon" :class="iconClass('completed')">
-            <el-icon v-if="isPast('completed')" :size="16"><Check /></el-icon>
-            <span v-else>6</span>
+            <el-icon v-if="isPastOrCurrent('completed')" :size="16"><Check /></el-icon>
+            <span v-else>2</span>
           </div>
           <div class="ow-text">
             <div class="ow-label">已完成</div>
@@ -100,18 +37,15 @@
         </div>
       </div>
 
-      <!-- 箭头3 -->
-      <div class="ow-conn" :class="{ 'conn-done': isPast('cancelled') }">
-        <div class="ow-line"></div>
-        <div class="ow-point">▶</div>
-      </div>
+      <!-- 分隔 -->
+      <div class="ow-spacer"></div>
 
-      <!-- 列4: 取消订单 -->
+      <!-- 取消订单 -->
       <div class="ow-col">
         <div class="ow-card" :class="cardClass('cancelled') + ' ' + cancellClass()" @click="tryChange('cancelled')">
           <div class="ow-icon" :class="iconClass('cancelled')">
-            <el-icon v-if="isPast('cancelled')" :size="16"><Close /></el-icon>
-            <span v-else>7</span>
+            <el-icon v-if="isPastOrCurrent('cancelled')" :size="16"><Close /></el-icon>
+            <span v-else>3</span>
           </div>
           <div class="ow-text">
             <div class="ow-label">取消订单</div>
@@ -120,6 +54,13 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- 进度信息 -->
+    <div v-if="progressVisible" class="ow-progress">
+      <span class="progress-label">项目进度:</span>
+      <span class="progress-value">{{ progressLabel }}</span>
+      <span class="progress-detail">{{ progressDetail }}</span>
     </div>
   </div>
 </template>
@@ -137,31 +78,49 @@ const emit = defineEmits<{
   change: [status: string]
 }>()
 
-/** 与后端订单状态机保持一致。 */
-const linearStatuses = [
-  'pending_confirm',
-  'confirmed',
-  'designing',
-  'in_production',
-  'in_installation',
-  'pending_acceptance',
-  'completed',
-  'cancelled',
+const allStatuses = [
+  'pending_confirm', 'confirmed', 'designing', 'in_production',
+  'in_installation', 'pending_acceptance', 'completed', 'cancelled',
 ]
 
 const transitions: Record<string, string[]> = {
   pending_confirm: ['confirmed', 'cancelled'],
-  confirmed: ['designing', 'cancelled'],
-  designing: ['in_production', 'in_installation', 'cancelled'],
-  in_production: ['designing', 'in_installation', 'cancelled'],
-  in_installation: ['designing', 'in_production', 'pending_acceptance', 'cancelled'],
-  pending_acceptance: ['completed', 'in_installation', 'cancelled'],
+  confirmed: ['cancelled'],
+  designing: ['cancelled'],
+  in_production: ['cancelled'],
+  in_installation: ['cancelled'],
+  pending_acceptance: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
 }
 
+const progressLabels: Record<string, string> = {
+  confirmed: '待推进',
+  designing: '设计中',
+  in_production: '生产中',
+  in_installation: '安装中',
+  pending_acceptance: '验收中',
+}
+
+const progressVisible = computed(() => {
+  return ['confirmed', 'designing', 'in_production', 'in_installation', 'pending_acceptance'].includes(props.currentStatus)
+})
+
+const progressLabel = computed(() => progressLabels[props.currentStatus] || '')
+
+const progressDetail = computed(() => {
+  switch (props.currentStatus) {
+    case 'confirmed': return '系统将自动创建设计任务'
+    case 'designing': return '设计任务完成后自动推进到生产'
+    case 'in_production': return '制作任务完成后自动推进到安装'
+    case 'in_installation': return '安装任务完成后自动推进到验收'
+    case 'pending_acceptance': return '验收通过后自动完成订单'
+    default: return ''
+  }
+})
+
 const currentIdx = computed(() => {
-  const idx = linearStatuses.indexOf(props.currentStatus)
+  const idx = allStatuses.indexOf(props.currentStatus)
   return idx >= 0 ? idx : -1
 })
 
@@ -170,8 +129,12 @@ const reachableTargets = computed(() => {
 })
 
 function isPast(status: string): boolean {
-  const idx = linearStatuses.indexOf(status)
+  const idx = allStatuses.indexOf(status)
   return idx >= 0 && idx < currentIdx.value
+}
+
+function isPastOrCurrent(status: string): boolean {
+  return status === props.currentStatus || isPast(status)
 }
 
 function isReachable(status: string): boolean {
@@ -227,11 +190,6 @@ function cancellClass() {
   flex-shrink: 0;
 }
 
-.ow-col-stack {
-  gap: 0;
-}
-
-/* ===== 卡片（统一大小样式） ===== */
 .ow-card {
   display: flex;
   align-items: center;
@@ -279,28 +237,20 @@ function cancellClass() {
   white-space: nowrap;
 }
 .cur-tag { color: #409eff; }
+.done-tag { color: #52c41a; }
 .ready-tag { color: #409eff; }
 
-/* ===== 竖排连接线 ===== */
-.stack-line {
-  width: 2px;
-  height: 8px;
-  background: #e8e8e8;
-  margin: 0 auto;
-  transition: all 0.3s ease;
+.ow-spacer {
+  flex: 1;
+  min-width: 40px;
 }
 
-.stack-done {
-  background: linear-gradient(to bottom, #52c41a, #73d13d);
-}
-
-/* ===== 连接箭头 ===== */
 .ow-conn {
   display: flex;
   align-items: center;
   padding: 0 4px;
   flex-shrink: 0;
-  margin-top: 26px; /* 与第一行卡片对齐 */
+  margin-top: 26px;
 }
 
 .ow-line {
@@ -327,9 +277,34 @@ function cancellClass() {
   color: #73d13d;
 }
 
-/* ===== 卡片状态 ===== */
+/* 进度信息 */
+.ow-progress {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(64,158,255,0.06);
+  border: 1px solid rgba(64,158,255,0.15);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.progress-label {
+  font-size: 13px;
+  color: var(--ad-text-secondary);
+  white-space: nowrap;
+}
+.progress-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #409eff;
+}
+.progress-detail {
+  font-size: 12px;
+  color: var(--ad-text-secondary);
+  margin-left: 4px;
+}
 
-/* 当前 */
+/* 卡片状态 */
 .card-current {
   border-color: #409eff;
   background: linear-gradient(135deg, rgba(64,158,255,0.07), rgba(64,158,255,0.03));
@@ -343,7 +318,6 @@ function cancellClass() {
   box-shadow: 0 2px 8px rgba(64,158,255,0.35);
 }
 
-/* 已完成 */
 .card-done { border-color: transparent; }
 .card-done .ow-label { color: #52c41a; }
 
@@ -353,7 +327,6 @@ function cancellClass() {
   box-shadow: 0 2px 6px rgba(82,196,26,0.3);
 }
 
-/* 可点击 */
 .card-ready {
   border-color: #409eff;
   border-style: dashed;
@@ -374,12 +347,7 @@ function cancellClass() {
   border: 2px solid #409eff;
   cursor: pointer;
 }
-.icon-ready:hover {
-  background: #e6f0ff;
-  box-shadow: 0 0 0 4px rgba(64,158,255,0.15);
-}
 
-/* 不可达 */
 .card-disabled { border-color: #f0f0f0; background: #fafafa; }
 .card-disabled .ow-label { color: #d9d9d9; }
 
@@ -389,7 +357,6 @@ function cancellClass() {
   border: 2px solid #e8e8e8;
 }
 
-/* ===== 取消订单 ===== */
 .card-cancelled {
   border-color: #ff4d4f !important;
   background: linear-gradient(135deg, rgba(255,77,79,0.07), rgba(255,77,79,0.03)) !important;
@@ -400,59 +367,53 @@ function cancellClass() {
 .card-cancelled-ready {
   border-color: #ff4d4f !important;
   border-style: dashed !important;
-  background: rgba(255,77,79,0.03) !important;
   cursor: pointer !important;
 }
-.card-cancelled-ready:hover {
-  background: rgba(255,77,79,0.08) !important;
-  box-shadow: 0 2px 10px rgba(255,77,79,0.1) !important;
-  transform: translateX(3px) !important;
-}
 
-/* ===== 暗色 ===== */
-:root[data-theme="dark"] .icon-disabled {
+/* 暗色主题 */
+:root[data-theme*="dark"] .icon-disabled {
   background: #262626; color: #434343; border-color: #434343;
 }
-:root[data-theme="dark"] .icon-ready {
+:root[data-theme*="dark"] .icon-ready {
   background: rgba(64,158,255,0.12);
 }
-:root[data-theme="dark"] .icon-ready:hover {
-  background: rgba(64,158,255,0.2);
-}
-:root[data-theme="dark"] .card-disabled {
+:root[data-theme*="dark"] .card-disabled {
   border-color: #262626; background: #1a1a1a;
 }
-:root[data-theme="dark"] .card-disabled .ow-label { color: #434343; }
-:root[data-theme="dark"] .card-current {
+:root[data-theme*="dark"] .card-disabled .ow-label { color: #434343; }
+:root[data-theme*="dark"] .card-current {
   background: rgba(64,158,255,0.1);
   box-shadow: 0 0 0 4px rgba(64,158,255,0.12);
 }
-:root[data-theme="dark"] .card-ready {
+:root[data-theme*="dark"] .card-ready {
   background: rgba(64,158,255,0.06);
 }
-:root[data-theme="dark"] .card-ready:hover {
+:root[data-theme*="dark"] .card-ready:hover {
   background: rgba(64,158,255,0.15);
 }
-:root[data-theme="dark"] .card-cancelled {
+:root[data-theme*="dark"] .card-cancelled {
   background: rgba(255,77,79,0.1) !important;
   box-shadow: 0 0 0 4px rgba(255,77,79,0.12) !important;
 }
-:root[data-theme="dark"] .card-cancelled-ready {
+:root[data-theme*="dark"] .card-cancelled-ready {
   background: rgba(255,77,79,0.06) !important;
 }
-:root[data-theme="dark"] .card-cancelled-ready:hover {
+:root[data-theme*="dark"] .card-cancelled-ready:hover {
   background: rgba(255,77,79,0.15) !important;
 }
-:root[data-theme="dark"] .ow-line { background: #434343; }
-:root[data-theme="dark"] .ow-point { color: #595959; }
-:root[data-theme="dark"] .stack-line { background: #434343; }
+:root[data-theme*="dark"] .ow-line { background: #434343; }
+:root[data-theme*="dark"] .ow-point { color: #595959; }
+:root[data-theme*="dark"] .ow-progress {
+  background: rgba(64,158,255,0.08);
+  border-color: rgba(64,158,255,0.2);
+}
 
-/* ===== 小屏 ===== */
 @media (max-width: 800px) {
   .ow-bar { padding: 14px; }
   .ow-card { padding: 8px 12px; min-width: 60px; min-height: 40px; gap: 8px; }
   .ow-line { width: 16px; }
   .ow-conn { padding: 0 2px; }
   .ow-tag { display: none; }
+  .ow-progress { flex-wrap: wrap; }
 }
 </style>
