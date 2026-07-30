@@ -598,11 +598,6 @@ async function loadProductMaterialProcessOptions() {
   productMaterialProcessOptions.value = data.items.filter(item => item.is_active)
 }
 
-function applyProductSelection(item: QuoteItemResponse) {
-  const selected = productMaterialProcessOptions.value.find(option => option.id === item.product_id)
-  if (!selected) return
-  Object.assign(item, applyProductMaterialProcess(item, selected))
-}
 
 function queryProductMaterialProcess(queryString: string, cb: (results: { value: string; disabled?: boolean; product?: ProductResponse }[]) => void) {
   const list = productMaterialProcessOptions.value

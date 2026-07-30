@@ -448,14 +448,6 @@ async function onLineChange(index: number) {
   }
 }
 
-function applyProductSelection(line: EditorLine, index: number) {
-  const selected = products.value.find(product => product.id === line.product_id)
-  if (selected) {
-    Object.assign(line, applyProductMaterialProcess(line, selected))
-    if (!line.item_name) line.item_name = selected.name
-  }
-  onLineChange(index)
-}
 
 
 function queryProductMaterialProcess(queryString: string, cb: (results: { value: string; disabled?: boolean; product?: ProductResponse }[]) => void) {
