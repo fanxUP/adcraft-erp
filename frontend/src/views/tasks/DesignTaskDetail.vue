@@ -42,7 +42,7 @@
 
             <!-- 2. 设计中 -->
             <div class="dtw-col">
-              <div class="dtw-card" :class="dwCard('designing')" @click="dwClick('designing')">
+              <div data-ai-target="task-status-designing" class="dtw-card" :class="dwCard('designing')" @click="dwClick('designing')">
                 <div class="dtw-icon" :class="dwIcon('designing')">
                   <el-icon v-if="dwPast('designing')" :size="16"><Check /></el-icon>
                   <span v-else>2</span>
@@ -60,7 +60,7 @@
             <!-- 3+4. 待确认 / 需修改 (并列) -->
             <div class="dtw-branch">
               <div class="dtw-col">
-                <div class="dtw-card" :class="dwCard('pending_review')" @click="dwClick('pending_review')">
+                <div data-ai-target="task-status-pending_review" class="dtw-card" :class="dwCard('pending_review')" @click="dwClick('pending_review')">
                   <div class="dtw-icon" :class="dwIcon('pending_review')">
                     <el-icon v-if="dwPast('pending_review')" :size="16"><Check /></el-icon>
                     <span v-else>3</span>
@@ -73,7 +73,7 @@
               </div>
               <div class="dtw-branch-sep"></div>
               <div class="dtw-col">
-                <div class="dtw-card" :class="dwCard('revision')" @click="dwClick('revision')">
+                <div data-ai-target="task-status-revision" class="dtw-card" :class="dwCard('revision')" @click="dwClick('revision')">
                   <div class="dtw-icon" :class="dwIcon('revision')">
                     <el-icon v-if="dwPast('revision')" :size="16"><Check /></el-icon>
                     <span v-else>4</span>
@@ -91,7 +91,7 @@
 
             <!-- 5. 已完成 -->
             <div class="dtw-col">
-              <div class="dtw-card" :class="dwCard('confirmed')" @click="dwClick('confirmed')">
+              <div data-ai-target="task-status-confirmed" class="dtw-card" :class="dwCard('confirmed')" @click="dwClick('confirmed')">
                 <div class="dtw-icon" :class="dwIcon('confirmed')">
                   <el-icon v-if="dwPast('confirmed')" :size="16"><Check /></el-icon>
                   <span v-else>5</span>

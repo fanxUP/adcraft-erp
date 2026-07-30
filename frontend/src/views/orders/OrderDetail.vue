@@ -219,7 +219,7 @@
           <el-card shadow="never" class="info-card" style="margin-bottom: 16px">
             <template #header>
               <div class="card-header">
-                <span>设计任务</span>
+                <span data-ai-target="order-create-design">设计任务</span>
               </div>
             </template>
             <el-table :data="designTasks" stripe size="small" v-loading="tasksLoading">
@@ -240,7 +240,7 @@
           <el-card shadow="never" class="info-card" style="margin-bottom: 16px">
             <template #header>
               <div class="card-header">
-                <span>制作任务</span>
+                <span data-ai-target="order-create-production">制作任务</span>
               </div>
             </template>
             <el-table :data="productionTasks" stripe size="small" v-loading="tasksLoading">
@@ -261,7 +261,7 @@
           <el-card shadow="never" class="info-card">
             <template #header>
               <div class="card-header">
-                <span>安装任务</span>
+                <span data-ai-target="order-create-installation">安装任务</span>
               </div>
             </template>
             <el-table :data="installationTasks" stripe size="small" v-loading="tasksLoading">

@@ -3,7 +3,7 @@
     <div class="ow-flow">
       <!-- 确认订单 -->
       <div class="ow-col">
-        <div class="ow-card" :class="cardClass('confirmed')" @click="tryChange('confirmed')">
+        <div data-ai-target="order-status-confirmed" class="ow-card" :class="cardClass('confirmed')" @click="tryChange('confirmed')">
           <div class="ow-icon" :class="iconClass('confirmed')">
             <el-icon v-if="isPastOrCurrent('confirmed')" :size="16"><Check /></el-icon>
             <span v-else>1</span>
@@ -24,7 +24,7 @@
 
       <!-- 已完成 -->
       <div class="ow-col">
-        <div class="ow-card" :class="cardClass('completed')" @click="tryChange('completed')">
+        <div data-ai-target="order-status-completed" class="ow-card" :class="cardClass('completed')" @click="tryChange('completed')">
           <div class="ow-icon" :class="iconClass('completed')">
             <el-icon v-if="isPastOrCurrent('completed')" :size="16"><Check /></el-icon>
             <span v-else>2</span>
@@ -63,6 +63,10 @@
       <span class="progress-detail">{{ progressDetail }}</span>
     </div>
   </div>
+  <span data-ai-target="order-status-designing" style="display:none"></span>
+  <span data-ai-target="order-status-in_production" style="display:none"></span>
+  <span data-ai-target="order-status-in_installation" style="display:none"></span>
+  <span data-ai-target="order-status-pending_acceptance" style="display:none"></span>
 </template>
 
 <script setup lang="ts">

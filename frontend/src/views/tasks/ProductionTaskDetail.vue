@@ -20,7 +20,12 @@
       </el-card>
 
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
-        <template #header><span>变更状态</span></template>
+        <template #header><span>变更状态</span>  <span data-ai-target="task-status-completed" style="display:none"></span>
+  <span data-ai-target="task-status-in_progress" style="display:none"></span>
+  <span data-ai-target="task-status-qc_check" style="display:none"></span>
+  <span data-ai-target="task-status-queued" style="display:none"></span>
+  <span data-ai-target="task-status-rework" style="display:none"></span>
+</template>
         <TaskWorkflow
           :steps="prodSteps"
           :current-status="task.status"
