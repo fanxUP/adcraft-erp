@@ -199,11 +199,11 @@ class DesignTaskService:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
 
         task.status = to_status
-        if to_status == "completed":
+        if to_status in ("completed", "confirmed"):
             task.completed_at = datetime.now()
         await self.db.flush()
         # Auto-advance order when all design tasks completed
-        if to_status == "completed" and task.document_id:
+        if to_status in ("completed", "confirmed") and task.document_id:
             from sqlalchemy import func
             from app.models.business_document import BusinessDocument
             from app.models.task import DesignTask, ProductionTask

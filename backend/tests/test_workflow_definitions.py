@@ -33,12 +33,12 @@ def test_invalid_transition_raises_consistent_error():
 def test_delivery_workflows_are_centralized():
     assert allowed_targets(PRODUCTION_TASK_WORKFLOW, "rework") == (
         "in_progress",
+        "cancelled",
     )
     assert allowed_targets(ACCEPTANCE_WORKFLOW, "pending") == (
         "accepted",
         "rejected",
     )
-
 
 def test_completed_contract_is_terminal():
     from app.domain.workflows import CONTRACT_WORKFLOW

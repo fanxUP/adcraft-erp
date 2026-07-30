@@ -133,6 +133,10 @@ def make_mock_design_task(
     completed_at: datetime | None = None,
     assigned_to: UUID | None = None,
     attachments: list | None = None,
+    order_no: str | None = None,
+    customer_name: str | None = None,
+    department: str | None = None,
+    source: str | None = None,
 ):
     """Create a mock DesignTask-like object for tests."""
     now = datetime.now(timezone.utc)
@@ -150,6 +154,10 @@ def make_mock_design_task(
     task.completed_at = completed_at
     task.assigned_to = assigned_to
     task.attachments = attachments or []
+    task.order_no = order_no
+    task.customer_name = customer_name
+    task.department = department
+    task.source = source
     task.created_at = now
     task.updated_at = now
     return task
@@ -173,6 +181,10 @@ def make_mock_production_task(
     completed_at: datetime | None = None,
     assigned_to: UUID | None = None,
     attachments: list | None = None,
+    order_no: str | None = None,
+    customer_name: str | None = None,
+    department: str | None = None,
+    source: str | None = None,
 ):
     """Create a mock ProductionTask-like object for tests."""
     now = datetime.now(timezone.utc)
@@ -196,5 +208,9 @@ def make_mock_production_task(
     task.assigned_to = assigned_to
     task.attachments = attachments or []
     task.created_at = now
+    task.order_no = order_no
+    task.customer_name = customer_name
+    task.department = department
+    task.source = source
     task.updated_at = now
     return task

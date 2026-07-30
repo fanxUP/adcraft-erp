@@ -137,7 +137,7 @@ async def test_confirmed_design_task_unlocks_order_production(service):
         design_service = DesignTaskService(db)
         design_service.repo = MagicMock()
         design_service.repo.get_by_id = AsyncMock(return_value=design_task)
-        design_service._to_dict = MagicMock(
+        design_service._to_dict = AsyncMock(
             side_effect=lambda task: {"status": task.status}
         )
 

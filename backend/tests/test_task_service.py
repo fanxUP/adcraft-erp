@@ -30,6 +30,10 @@ def service(mock_repo):
     with patch("app.services.task_service.InstallationTaskRepository") as MockRepoClass:
         MockRepoClass.return_value = mock_repo
         db = AsyncMock()
+        # Mock db.execute to return a result that supports .fetchone()
+        mock_exec_result = MagicMock()
+        mock_exec_result.fetchone.return_value = None
+        db.execute.return_value = mock_exec_result
         svc = InstallationTaskService(db)
         # Override the repo created in __init__ with our mock
         svc.repo = mock_repo
@@ -123,7 +127,8 @@ async def test_get_task_not_found(service, mock_repo):
 
 # --- To Dict Serialization ---
 
-def test_to_dict_includes_all_fields(service):
+@pytest.mark.asyncio
+async def test_to_dict_includes_all_fields(service):
     """_to_dict properly serializes a task object."""
     now = datetime.now(timezone.utc)
     task = make_mock_installation_task(
@@ -133,7 +138,7 @@ def test_to_dict_includes_all_fields(service):
         scheduled_at=now,
         completed_at=None,
     )
-    d = service._to_dict(task)
+    d = await service._to_dict(task)
     assert d["id"] == str(SAMPLE_TASK_ID)
     assert d["installation_no"] == "I20260629-0042"
     assert d["status"] == "in_progress"
@@ -142,7 +147,8 @@ def test_to_dict_includes_all_fields(service):
     assert isinstance(d["attachments"], list)
 
 
-def test_to_dict_with_attachments(service):
+@pytest.mark.asyncio
+async def test_to_dict_with_attachments(service):
     """_to_dict serializes attachment objects."""
     att = MagicMock()
     att.id = "att-1"
@@ -158,7 +164,7 @@ def test_to_dict_with_attachments(service):
     att.created_at = datetime.now(timezone.utc)
 
     task = make_mock_installation_task(attachments=[att])
-    d = service._to_dict(task)
+    d = await service._to_dict(task)
     assert len(d["attachments"]) == 1
     assert d["attachments"][0]["filename"] == "photo.jpg"
     assert d["attachments"][0]["file_path"] == "202606/abc.jpg"
@@ -186,7 +192,8 @@ async def test_list_tasks_with_results(service, mock_repo):
     )
     mock_repo.list_tasks.return_value = ([task1, task2], 2)
 
-    tasks, total = await service.list_tasks(page=1, page_size=20)
+    with patch("app.services.task_service._enrich_task_order", side_effect=lambda db, d: d):
+        tasks, total = await service.list_tasks(page=1, page_size=20)
     assert total == 2
     assert len(tasks) == 2
     assert tasks[0]["project_name"] == "任务A"
