@@ -205,22 +205,48 @@ class AcceptanceService:
         if not form:
             raise ValueError("验收单不存在")
 
+        # 获取关联文档（硬删除前先加载，避免软删除后 lazy load 失效）
+        doc_id = form.document_id
+        target_status = None
+        if form.document:
+            doc = form.document
+            if doc.doc_type == "order" and doc.status in ("pending_acceptance", "completed"):
+                target_status = "in_installation"
+
         # Soft-delete the acceptance
         await self.repo.soft_delete(form)
 
         # Revert order status
-        doc = form.document
-        if doc and doc.doc_type == "order" and doc.status in ("pending_acceptance", "completed"):
-            from app.services.business_document_service import BusinessDocumentService
-            old_status = doc.status
-            target = "in_installation"
-            order_svc = BusinessDocumentService(self.db, doc_type="order")
-            await order_svc.repo.create_status_log(
-                doc.id, old_status, target,
-                "验收单已被管理员删除，系统自动回退", operated_by,
+        if target_status and doc_id:
+            from sqlalchemy import select
+            from app.models.business_document import BusinessDocument
+            from app.models.task import InstallationTask
+            result = await self.db.execute(
+                select(BusinessDocument).where(BusinessDocument.id == doc_id)
             )
-            doc.status = target
-            await self.db.flush()
+            doc = result.scalar_one_or_none()
+            if doc:
+                from app.services.business_document_service import BusinessDocumentService
+                old_status = doc.status
+                order_svc = BusinessDocumentService(self.db, doc_type="order")
+                await order_svc.repo.create_status_log(
+                    doc_id, old_status, target_status,
+                    "验收单已被管理员删除，系统自动回退", operated_by,
+                )
+                doc.status = target_status
+
+                # 重置已完成的安装任务为待分配，退回时可重新推进
+                inst_result = await self.db.execute(
+                    select(InstallationTask).where(
+                        InstallationTask.document_id == doc_id,
+                        InstallationTask.status == "completed",
+                    )
+                )
+                for t in inst_result.scalars().all():
+                    t.status = "pending"
+                    t.completed_at = None
+
+                await self.db.flush()
 
     async def delete_acceptance(self, acceptance_id: UUID):
         form = await self.repo.get_by_id(acceptance_id)

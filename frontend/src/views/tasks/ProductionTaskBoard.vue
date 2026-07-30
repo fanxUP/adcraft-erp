@@ -67,6 +67,13 @@ async function handleCardClick(card: OrderListResponse, colKey: string) {
     try {
       const res = await getDesignTasks({ order_id: card.id, page_size: 1 })
       if (res.items.length > 0) {
+        // 设计任务已完成 → 自动跳转到制作任务
+        if (res.items[0].status === 'completed') {
+          const prodRes = await getProductionTasks({ order_id: card.id, page_size: 1 })
+          if (prodRes.items.length > 0) {
+            return window.location.href = '/production-tasks/' + prodRes.items[0].id
+          }
+        }
         return window.location.href = '/design-tasks/' + res.items[0].id
       }
     } catch {}
@@ -74,6 +81,13 @@ async function handleCardClick(card: OrderListResponse, colKey: string) {
     try {
       const res = await getProductionTasks({ order_id: card.id, page_size: 1 })
       if (res.items.length > 0) {
+        // 制作任务已完成 → 自动跳转到安装任务
+        if (res.items[0].status === 'completed') {
+          const instRes = await getInstallationTasks({ order_id: card.id, page_size: 1 })
+          if (instRes.items.length > 0) {
+            return window.location.href = '/installation-tasks/' + instRes.items[0].id
+          }
+        }
         return window.location.href = '/production-tasks/' + res.items[0].id
       }
     } catch {}
@@ -81,6 +95,13 @@ async function handleCardClick(card: OrderListResponse, colKey: string) {
     try {
       const res = await getInstallationTasks({ order_id: card.id, page_size: 1 })
       if (res.items.length > 0) {
+        // 安装任务已完成 → 自动跳转到验收单
+        if (res.items[0].status === 'completed') {
+          const accRes = await getAcceptances({ order_id: card.id, page_size: 1 })
+          if (accRes.items.length > 0) {
+            return window.location.href = '/acceptances/' + accRes.items[0].id
+          }
+        }
         return window.location.href = '/installation-tasks/' + res.items[0].id
       }
     } catch {}

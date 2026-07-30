@@ -312,7 +312,7 @@ const installationTasks = ref<InstallationTaskResponse[]>([])
 const autoCostLoading = ref(false)
 
 const itemsTotal = computed(() => (order.value?.items || []).reduce((s, i) => s + (i.subtotal_amount || 0), 0))
-const designCompleted = computed(() => designTasks.value.filter(task => task.status === 'confirmed').length)
+const designCompleted = computed(() => designTasks.value.filter(task => task.status === 'completed').length)
 const productionCompleted = computed(() => productionTasks.value.filter(task => task.status === 'completed').length)
 const installationCompleted = computed(() => installationTasks.value.filter(task => task.status === 'completed').length)
 
@@ -425,8 +425,8 @@ function statusColor(s: string) {
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
-function designStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已确认', cancelled: '已取消' }; return m[s] || s }
-function designStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
+function designStatusLabel(s: string) { const m: Record<string, string> = { pending: '初始/待分配', pending_review: '待确认', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
+function designStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', pending_review: 'warning', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
 function prodStatusLabel(s: string) { const m: Record<string, string> = { pending: '待制作', queued: '排队中', in_progress: '制作中', qc_check: '待质检', rework: '返工', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
 function prodStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
 function instStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成', cancelled: '已取消' }; return m[s] || s }

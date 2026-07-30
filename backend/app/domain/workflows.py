@@ -40,27 +40,22 @@ ACCEPTANCE_WORKFLOW: Workflow = {
 }
 
 DESIGN_TASK_WORKFLOW: Workflow = {
-    "pending": ("designing",),
-    "designing": ("pending_review", "pending"),
-    "pending_review": ("confirmed", "revision"),
-    "revision": ("designing", "pending_review"),
-    "confirmed": (),
+    "pending": ("pending_review", "cancelled"),
+    "pending_review": ("completed", "cancelled"),
+    "completed": (),
     "cancelled": (),
 }
 
 PRODUCTION_TASK_WORKFLOW: Workflow = {
-    "pending": ("in_progress",),
-    "in_progress": ("rework", "completed"),
-    "rework": ("in_progress",),
+    "pending": ("pending_review", "cancelled"),
+    "pending_review": ("completed", "cancelled"),
     "completed": (),
     "cancelled": (),
 }
 
 INSTALLATION_TASK_WORKFLOW: Workflow = {
-    "pending": ("assigned", "in_progress"),
-    "assigned": ("in_progress", "pending"),
-    "in_progress": ("pending_acceptance", "pending"),
-    "pending_acceptance": ("completed", "in_progress"),
+    "pending": ("pending_review", "cancelled"),
+    "pending_review": ("completed", "cancelled"),
     "completed": (),
     "cancelled": (),
 }

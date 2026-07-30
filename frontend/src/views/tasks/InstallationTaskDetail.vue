@@ -23,11 +23,7 @@
       </el-card>
 
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
-        <template #header><span>变更状态</span>  <span data-ai-target="task-status-assigned" style="display:none"></span>
-  <span data-ai-target="task-status-completed" style="display:none"></span>
-  <span data-ai-target="task-status-in_progress" style="display:none"></span>
-  <span data-ai-target="task-status-pending_acceptance" style="display:none"></span>
-</template>
+        <template #header><span>变更状态</span></template>
         <TaskWorkflow
           :steps="instSteps"
           :current-status="task.status"
@@ -35,15 +31,17 @@
           :changing="changing"
           @change="handleWorkflowChange"
         />
-        <el-form v-if="showReason" :model="statusForm" inline style="margin-top: 12px">
-          <el-form-item label="原因">
-            <el-input v-model="statusForm.reason" style="width: 240px" />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" :loading="changing" @click="confirmChange">确认变更</el-button>
-            <el-button @click="cancelChange">取消</el-button>
-          </el-form-item>
-        </el-form>
+
+      </el-card>
+      <el-card shadow="never" class="info-card" style="margin-top: 16px">
+        <template #header><span>任务分配</span></template>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <el-select v-model="assignTarget" placeholder="选择员工" clearable filterable style="width: 300px">
+            <el-option v-for="emp in employeeOptions" :key="emp.id" :label="emp.name + (emp.employee_no ? '(' + emp.employee_no + ')' : '')" :value="emp.user_id || emp.id" :disabled="!emp.user_id" />
+          </el-select>
+          <el-button type="primary" :loading="assigning" @click="handleAssign">派发</el-button>
+          <span v-if="task?.assigned_to_name" style="color: #999; font-size: 13px;">当前：{{ task.assigned_to_name }}</span>
+        </div>
       </el-card>
       <!-- 管理员删除 -->
       <el-card v-if="authStore.isAdmin" shadow="never" class="info-card" style="margin-top: 16px; border-color: #ff4d4f;">
@@ -143,6 +141,7 @@ import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import type { InstallationTaskResponse, UserResponse } from '@/types/api'
+import { getEmployees } from '@/api/employees'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { useAuthStore } from '@/stores/auth'
 import { deleteInstallationTask } from '@/api/tasks'
@@ -160,11 +159,9 @@ const changing = ref(false)
 const deleting = ref(false)
 const task = ref<InstallationTaskResponse | null>(null)
 const userOptions = ref<UserResponse[]>([])
-const pendingTarget = ref('')
-const statusForm = reactive({ to_status: '', reason: '' })
-const showReason = computed(() => {
-  return !!pendingTarget.value && isReasonRequired(pendingTarget.value)
-})
+const employeeOptions = ref<any[]>([])
+const assignTarget = ref('')
+const assigning = ref(false)
 const editForm = reactive({
   assigned_to: '',
   address: '',
@@ -193,55 +190,43 @@ const draftCurrentValues = computed<Record<string, string>>(() => ({
 }))
 
 const INST_WORKFLOW: Record<string, string[]> = {
-  pending: ['assigned', 'in_progress'],
-  assigned: ['in_progress', 'pending'],
-  in_progress: ['pending_acceptance', 'pending'],
-  pending_acceptance: ['completed', 'in_progress'],
+  pending: ['pending_review', 'cancelled'],
+  pending_review: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
 }
 
 const instSteps = [
-  { key: 'pending', label: '待分配' },
-  { key: 'assigned', label: '已分配' },
-  { key: 'in_progress', label: '安装中' },
-  { key: 'pending_acceptance', label: '工人验收' },
+  { key: 'pending', label: '初始/待分配' },
+  { key: 'pending_review', label: '待确认' },
   { key: 'completed', label: '已完成' },
 ]
 
-function isReasonRequired(status: string) {
-  return status === 'pending' || status.startsWith('cancel')
-}
-
-function handleWorkflowChange(status: string) {
-  pendingTarget.value = status
-  if (isReasonRequired(status)) return
-  doChangeStatus(status, '')
+async function handleWorkflowChange(to_status: string) {
+  const labelMap: Record<string, string> = { pending: '初始/待分配', pending_review: '待确认', completed: '已完成', cancelled: '已取消' }
+  if (to_status === 'cancelled') {
+    const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
+      confirmButtonText: '确定', cancelButtonText: '取消',
+      inputPlaceholder: '取消原因',
+    })
+    if (!reason) return
+    await doChangeStatus(to_status, reason)
+  } else {
+    await ElMessageBox.confirm(`确定将任务状态变更为「${labelMap[to_status]}」？`, '变更状态', {
+      confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
+    })
+    await doChangeStatus(to_status, '')
+  }
 }
 
 async function doChangeStatus(to_status: string, reason: string) {
-  await ElMessageBox.confirm(`确定将安装任务状态变更为「${instSteps.find(s => s.key === to_status)?.label || to_status}」？`, '变更状态', {
-    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
-  })
   changing.value = true
   try {
     await changeInstallationTaskStatus(route.params.id as string, { to_status, reason })
     ElMessage.success('状态已变更')
-    pendingTarget.value = ''
-    statusForm.reason = ''
     await fetchTask()
     await aiStore.notifyBusinessMutation()
   } catch { /* handled */ } finally { changing.value = false }
-}
-
-async function confirmChange() {
-  if (!pendingTarget.value) return
-  await doChangeStatus(pendingTarget.value, statusForm.reason)
-}
-
-function cancelChange() {
-  pendingTarget.value = ''
-  statusForm.reason = ''
 }
 
 function statusLabel(s: string) {
@@ -272,6 +257,25 @@ async function fetchTask() {
 async function loadUsers() {
   const data = await getUsers({ page_size: 100 })
   userOptions.value = data.items
+}
+
+async function loadEmployees() {
+  try {
+    const data = await getEmployees({ page_size: 100, employment_status: 'active' })
+    employeeOptions.value = data.items
+  } catch { /* employees module may not be ready */ }
+}
+
+async function handleAssign() {
+  if (!assignTarget.value) return
+  assigning.value = true
+  try {
+    await updateInstallationTask(route.params.id as string, { assigned_to: assignTarget.value || null })
+    ElMessage.success('已派发')
+    assignTarget.value = ''
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
+  } catch { /* handled */ } finally { assigning.value = false }
 }
 
 async function handleUpdate() {
@@ -336,6 +340,7 @@ async function handleDelete() {
 onMounted(() => {
   void fetchTask()
   void loadUsers()
+  void loadEmployees()
 })
 </script>
 

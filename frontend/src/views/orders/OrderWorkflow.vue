@@ -61,6 +61,7 @@
       <span class="progress-label">项目进度:</span>
       <span class="progress-value">{{ progressLabel }}</span>
       <span class="progress-detail">{{ progressDetail }}</span>
+      <el-button v-if="currentStatus === 'confirmed'" type="primary" size="small" :loading="changing" @click="emit('change', 'designing')">推进到设计</el-button>
     </div>
   </div>
   <span data-ai-target="order-status-designing" style="display:none"></span>

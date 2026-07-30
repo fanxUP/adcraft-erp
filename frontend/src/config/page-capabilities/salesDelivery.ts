@@ -164,7 +164,7 @@ export const salesDeliveryCapabilities: PageCapabilityMap = {
     quickActions: [{ label: '今日制作', prompt: '查询今天的制作任务' }],
   },
   production_task_board: {
-    title: '制作看板',
+    title: '项目看板',
     purpose: '按状态直观查看制作任务并进行排产调度',
     workflowStage: 'production',
     availableActions: ['查看排产状态', '调整任务状态', '查看任务详情'],

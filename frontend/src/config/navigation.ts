@@ -34,7 +34,7 @@ export const navigationItems: NavigationItem[] = [
     children: [
       { label: '设计任务', path: '/design-tasks', roles: ['admin', 'designer'] },
       { label: '制作任务', path: '/production-tasks', roles: ['admin', 'production'] },
-      { label: '制作看板', path: '/production-tasks/board', roles: ['admin', 'production'] },
+      { label: '项目看板', path: '/production-tasks/board', roles: ['admin', 'production'] },
       { label: '安装任务', path: '/installation-tasks', roles: ['admin', 'installer'] },
       { label: '验收管理', path: '/acceptances', roles: SALES_ROLES },
       { label: '外协任务', path: '/outsource/tasks', roles: ['admin', 'production'] },
@@ -54,6 +54,16 @@ export const navigationItems: NavigationItem[] = [
       { label: '成本欠款', path: '/cost-debts' },
       { label: '外协付款', path: '/outsource/payments' },
       { label: '客户对账', path: '/statements' },
+    ],
+  },
+  {
+    label: '人事管理',
+    icon: 'UserFilled',
+    roles: ['admin'],
+    children: [
+      { label: '员工管理', path: '/employees' },
+      { label: '考勤记录', path: '/attendance/records' },
+      { label: '考勤规则', path: '/attendance/rules' },
     ],
   },
   {

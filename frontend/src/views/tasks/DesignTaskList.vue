@@ -16,23 +16,33 @@
       <el-button type="primary" style="margin-left: 12px" @click="fetchData">搜索</el-button>
     </div>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
-      <el-table-column prop="design_no" label="任务编号" width="180" />
-      <el-table-column prop="project_name" label="项目名称" min-width="200" />
-      <el-table-column label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="designStatusColor(row.status)" size="small">{{ designStatusLabel(row.status) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="创建时间" width="180">
-        <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="140">
-        <template #default="{ row }">
-          <el-button text type="primary" @click="$router.push(`/design-tasks/${row.id}`)">详情</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+          <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+        <el-table-column prop="design_no" label="业务单号" width="180" />
+        <el-table-column prop="source" label="来源" width="80" />
+        <el-table-column prop="order_no" label="关联编号" width="180" />
+        <el-table-column prop="customer_name" label="客户" min-width="160" />
+        <el-table-column prop="department" label="部门/科室" width="120" />
+        <el-table-column prop="project_name" label="项目名称" min-width="200" />
+        <el-table-column label="金额" width="100">
+          <template #default="{ row }">{{ row.total_amount ? '¥' + row.total_amount.toFixed(2) : '-' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="designStatusColor(row.status)" size="small">{{ designStatusLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="派发" width="90">
+          <template #default="{ row }">{{ row.assigned_to_name || row.assigned_to || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="创建时间" width="100">
+          <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="100">
+          <template #default="{ row }">
+            <el-button text type="primary" @click="$router.push('/design-tasks/' + row.id)">详情</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
 
     <el-pagination
       v-model:current-page="page"
@@ -60,11 +70,11 @@ const pageSize = ref(20)
 const filterStatus = ref('')
 
 function designStatusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已确认', cancelled: '已取消' }
+  const map: Record<string, string> = { pending: '初始/待分配', pending_review: '待确认', completed: '已完成', cancelled: '已取消' }
   return map[s] || s
 }
 function designStatusColor(s: string) {
-  const map: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success', cancelled: 'info' }
+  const map: Record<string, string> = { pending: 'info', pending_review: 'warning', completed: 'success', cancelled: 'info' }
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 

@@ -18,8 +18,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, type Component } from 'vue'
+import { computed, type Component } from "vue"
 import {
+  Avatar,
+  Clock,
   DataAnalysis,
   List,
   Money,
@@ -28,10 +30,10 @@ import {
   TrendCharts,
   User,
   Van,
-} from '@element-plus/icons-vue'
-import type { NavigationItem } from '@/config/navigation'
+} from "@element-plus/icons-vue"
+import type { NavigationItem } from "@/config/navigation"
 
-defineOptions({ name: 'SidebarNavItem' })
+defineOptions({ name: "SidebarNavItem" })
 
 const props = defineProps<{
   item: NavigationItem
@@ -39,6 +41,8 @@ const props = defineProps<{
 }>()
 
 const icons: Record<string, Component> = {
+  Avatar,
+  Clock,
   DataAnalysis,
   List,
   Money,
@@ -49,7 +53,8 @@ const icons: Record<string, Component> = {
   Van,
 }
 
-const iconComponent = computed(() =>
-  props.item.icon ? icons[props.item.icon] : undefined,
-)
+const iconComponent = computed(() => {
+  if (!props.item.icon) return null
+  return icons[props.item.icon] || null
+})
 </script>

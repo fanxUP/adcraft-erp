@@ -173,3 +173,7 @@ async def generate_acceptance_no(db: AsyncSession) -> str:
 
 async def generate_contract_no(db: AsyncSession) -> str:
     return await _generate_no(db, "CT")
+
+
+async def generate_employee_no(db):
+    return await _generate_no(db, "EMP")

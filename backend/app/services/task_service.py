@@ -1,6 +1,6 @@
 from datetime import datetime
 from uuid import UUID
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +29,33 @@ from app.services.number_generator import (
 
 def _attachment_to_dict(att) -> dict:
     return AttachmentResponse.model_validate(att).model_dump(mode="json")
+
+
+async def _enrich_task_order(db, task_dict: dict) -> dict:
+    """Query order by document_id and add order_no, customer_name, department, total_amount."""
+    doc_id = task_dict.get("document_id") or task_dict.get("order_id")
+    if not doc_id:
+        return task_dict
+    row = (await db.execute(
+        text("SELECT doc_no, customer_name, department, total_amount FROM business_documents WHERE id = :id"),
+        {"id": doc_id},
+    )).fetchone()
+    if row:
+        task_dict["order_no"] = row[0]
+        task_dict["customer_name"] = row[1]
+        task_dict["department"] = row[2]
+        task_dict["total_amount"] = float(row[3]) if row[3] is not None else None
+        task_dict["source"] = "订单"
+    # Resolve assigned_to user name
+    assigned_to = task_dict.get("assigned_to")
+    if assigned_to:
+        user_row = (await db.execute(
+            text("SELECT real_name FROM users WHERE id = :id"),
+            {"id": str(assigned_to)},
+        )).fetchone()
+        if user_row:
+            task_dict["assigned_to_name"] = user_row[0]
+    return task_dict
 
 
 async def _refresh_task_for_response(db: AsyncSession, task) -> None:
@@ -101,20 +128,21 @@ class DesignTaskService:
         self.db = db
         self.repo = DesignTaskRepository(db)
 
-    def _to_dict(self, task) -> dict:
+    async def _to_dict(self, task) -> dict:
         d = DesignTaskResponse.model_validate(task).model_dump(mode="json")
         d["order_id"] = d["document_id"]  # backward-compat alias
+        d = await _enrich_task_order(self.db, d)
         return d
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
         tasks, total = await self.repo.list_tasks(skip=skip, limit=page_size, status=status, order_id=order_id, assigned_to=assigned_to)
-        return [self._to_dict(t) for t in tasks], total
+        return [await self._to_dict(t) for t in tasks], total
 
     async def get_task(self, task_id: UUID) -> dict | None:
         task = await self.repo.get_by_id(task_id)
-        return self._to_dict(task) if task else None
+        return await self._to_dict(task) if task else None
 
     async def create_task(self, data: dict) -> dict:
         data = await _prepare_task_create_data(
@@ -138,7 +166,7 @@ class DesignTaskService:
                 link=f"/design-tasks/{task.id}",
             )
         await _refresh_task_for_response(self.db, task)
-        return self._to_dict(task)
+        return await self._to_dict(task)
 
     async def update_task(self, task_id: UUID, data: dict) -> dict:
         task = await self.repo.get_by_id(task_id)
@@ -159,7 +187,7 @@ class DesignTaskService:
                 link=f"/design-tasks/{task.id}",
             )
         await _refresh_task_for_response(self.db, task)
-        return self._to_dict(task)
+        return await self._to_dict(task)
 
     async def change_status(self, task_id: UUID, to_status: str, operated_by: UUID | None = None) -> dict:
         task = await self.repo.get_by_id(task_id)
@@ -171,11 +199,11 @@ class DesignTaskService:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
 
         task.status = to_status
-        if to_status == "confirmed":
+        if to_status == "completed":
             task.completed_at = datetime.now()
         await self.db.flush()
-        # Auto-advance order when all design tasks confirmed
-        if to_status == "confirmed" and task.document_id:
+        # Auto-advance order when all design tasks completed
+        if to_status == "completed" and task.document_id:
             from sqlalchemy import func
             from app.models.business_document import BusinessDocument
             from app.models.task import DesignTask, ProductionTask
@@ -185,7 +213,7 @@ class DesignTaskService:
             remaining = (await self.db.execute(
                 select(func.count()).select_from(DesignTask).where(
                     DesignTask.document_id == task.document_id,
-                    DesignTask.status.not_in(["confirmed", "cancelled"])
+                    DesignTask.status.not_in(["completed", "cancelled"])
                 )
             )).scalar()
             if remaining == 0:
@@ -210,7 +238,7 @@ class DesignTaskService:
                         "设计任务全部完成，系统自动推进", operated_by)
                     await self.db.flush()
         await _refresh_task_for_response(self.db, task)
-        return self._to_dict(task)
+        return await self._to_dict(task)
 
     async def delete_task(self, task_id: UUID) -> None:
         """管理员删除设计任务，回退订单到确认状态。"""
@@ -251,10 +279,10 @@ class DesignTaskService:
 
                 # Revert order
                 old_status = order.status
-                order.status = "confirmed"
+                order.status = "pending_confirm"
                 order_svc = BusinessDocumentService(self.db, doc_type="order")
                 await order_svc.repo.create_status_log(doc_id, old_status, "confirmed",
-                    "设计任务已被管理员删除，系统自动回退", None)
+                    "设计任务已被管理员删除，系统自动回退到待确认", None)
 
         await self.db.flush()
 
@@ -263,20 +291,21 @@ class ProductionTaskService:
         self.db = db
         self.repo = ProductionTaskRepository(db)
 
-    def _to_dict(self, task) -> dict:
+    async def _to_dict(self, task) -> dict:
         d = ProductionTaskResponse.model_validate(task).model_dump(mode="json")
         d["order_id"] = d["document_id"]  # backward-compat alias
+        d = await _enrich_task_order(self.db, d)
         return d
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
         tasks, total = await self.repo.list_tasks(skip=skip, limit=page_size, status=status, order_id=order_id, assigned_to=assigned_to)
-        return [self._to_dict(t) for t in tasks], total
+        return [await self._to_dict(t) for t in tasks], total
 
     async def get_task(self, task_id: UUID) -> dict | None:
         task = await self.repo.get_by_id(task_id)
-        return self._to_dict(task) if task else None
+        return await self._to_dict(task) if task else None
 
     async def create_task(self, data: dict) -> dict:
         data = await _prepare_task_create_data(
@@ -300,7 +329,7 @@ class ProductionTaskService:
                 link=f"/production-tasks/{task.id}",
             )
         await _refresh_task_for_response(self.db, task)
-        return self._to_dict(task)
+        return await self._to_dict(task)
 
     async def update_task(self, task_id: UUID, data: dict) -> dict:
         task = await self.repo.get_by_id(task_id)
@@ -321,7 +350,7 @@ class ProductionTaskService:
                 link=f"/production-tasks/{task.id}",
             )
         await _refresh_task_for_response(self.db, task)
-        return self._to_dict(task)
+        return await self._to_dict(task)
 
     async def change_status(self, task_id: UUID, to_status: str, operated_by: UUID | None = None) -> dict:
         task = await self.repo.get_by_id(task_id)
@@ -371,7 +400,7 @@ class ProductionTaskService:
                         "制作任务全部完成，系统自动推进", operated_by)
                     await self.db.flush()
         await _refresh_task_for_response(self.db, task)
-        return self._to_dict(task)
+        return await self._to_dict(task)
 
     async def delete_task(self, task_id: UUID) -> None:
         """管理员删除制作任务，回退订单到设计中状态。"""
@@ -420,20 +449,21 @@ class InstallationTaskService:
         self.db = db
         self.repo = InstallationTaskRepository(db)
 
-    def _to_dict(self, task) -> dict:
+    async def _to_dict(self, task) -> dict:
         d = InstallationTaskResponse.model_validate(task).model_dump(mode="json")
         d["order_id"] = d["document_id"]  # backward-compat alias
+        d = await _enrich_task_order(self.db, d)
         return d
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
         tasks, total = await self.repo.list_tasks(skip=skip, limit=page_size, status=status, order_id=order_id, assigned_to=assigned_to)
-        return [self._to_dict(t) for t in tasks], total
+        return [await self._to_dict(t) for t in tasks], total
 
     async def get_task(self, task_id: UUID) -> dict | None:
         task = await self.repo.get_by_id(task_id)
-        return self._to_dict(task) if task else None
+        return await self._to_dict(task) if task else None
 
     async def create_task(self, data: dict) -> dict:
         data = await _prepare_task_create_data(
@@ -457,7 +487,7 @@ class InstallationTaskService:
                 link=f"/installation-tasks/{task.id}",
             )
         await _refresh_task_for_response(self.db, task)
-        return self._to_dict(task)
+        return await self._to_dict(task)
 
     async def update_task(self, task_id: UUID, data: dict) -> dict:
         task = await self.repo.get_by_id(task_id)
@@ -478,7 +508,7 @@ class InstallationTaskService:
                 link=f"/installation-tasks/{task.id}",
             )
         await _refresh_task_for_response(self.db, task)
-        return self._to_dict(task)
+        return await self._to_dict(task)
 
     async def change_status(self, task_id: UUID, to_status: str, operated_by: UUID | None = None) -> dict:
         task = await self.repo.get_by_id(task_id)
@@ -517,7 +547,7 @@ class InstallationTaskService:
                     except ValueError:
                         pass
         await _refresh_task_for_response(self.db, task)
-        return self._to_dict(task)
+        return await self._to_dict(task)
 
     async def delete_task(self, task_id: UUID) -> None:
         """管理员删除安装任务，回退订单到生产中状态。"""

@@ -371,14 +371,14 @@ class BusinessDocumentService:
             if to_status == "cancelled" and float(doc.paid_amount or 0) > 0:
                 raise ValueError("订单已有收款，请先作废相关收款记录后再取消")
             if from_status == "confirmed" and to_status == "designing":
-                pass  # auto-create below
+                await self._auto_create_design_task(doc)
             elif from_status == "designing" and to_status == "in_production":
                 await self._require_all_tasks_completed(
                     doc_id,
                     DesignTask,
                     "design_no",
                     "设计",
-                    terminal_statuses=("confirmed",),
+                    terminal_statuses=("completed",),
                 )
             elif from_status == "in_production" and to_status == "in_installation":
                 await self._require_all_tasks_completed(

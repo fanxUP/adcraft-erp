@@ -253,7 +253,7 @@
     </el-tabs>
 
     <!-- 管理员删除验收单 -->
-    <el-card v-if="authStore.isAdmin && form.status !== 'draft'" shadow="never" style="margin-top: 16px; border-color: #ff4d4f; background: var(--ad-card);">
+    <el-card v-if="authStore.isAdmin" shadow="never" style="margin-top: 16px; border-color: #ff4d4f; background: var(--ad-card);">
       <div style="display: flex; align-items: center; gap: 16px;">
         <span style="color: #ff4d4f; font-weight: 600;">危险操作</span>
         <el-button type="danger" :loading="deleting" @click="handleAdminDelete">删除此验收单</el-button>

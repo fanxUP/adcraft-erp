@@ -180,10 +180,16 @@ export interface DesignTaskResponse {
   design_no: string
   order_id: string
   customer_id: string
+  order_no?: string
+  customer_name?: string
+  department?: string
+  total_amount?: number
+  source?: string
   project_name: string
   status: string
   assigned_to?: string
-  description?: string
+  assigned_to_name?: string
+    description?: string
   design_file_url?: string
   client_comments?: string
   completed_at?: string
@@ -197,6 +203,11 @@ export interface ProductionTaskResponse {
   production_no: string
   order_id: string
   customer_id: string
+  order_no?: string
+  customer_name?: string
+  department?: string
+  total_amount?: number
+  source?: string
   project_name: string
   status: string
   assigned_to?: string
@@ -219,6 +230,11 @@ export interface InstallationTaskResponse {
   installation_no: string
   order_id: string
   customer_id: string
+  order_no?: string
+  customer_name?: string
+  department?: string
+  total_amount?: number
+  source?: string
   project_name: string
   status: string
   assigned_to?: string
