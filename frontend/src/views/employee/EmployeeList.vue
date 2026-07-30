@@ -51,27 +51,51 @@
         <el-form-item label="家庭地址" style="grid-column:1/3"><el-input v-model="form.address" /></el-form-item>
         <el-form-item label="备注" style="grid-column:1/3"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
       </el-form>
+      <template v-if="isEditing">
+        <el-divider />
+        <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+          <strong>附件</strong>
+          <el-upload :http-request="handleUploadAttachment" :show-file-list="false" multiple>
+            <el-button type="danger" size="small">上传附件</el-button>
+          </el-upload>
+        </div>
+        <div v-if="attachments.length" style="display:flex;flex-wrap:wrap;gap:8px">
+          <div v-for="att in attachments" :key="att.id" style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #e4e7ed;border-radius:4px;font-size:13px">
+            <a :href="'/uploads/'+att.file_path" target="_blank" style="color:#409eff;text-decoration:none">{{ att.filename }}</a>
+            <el-button text type="danger" size="small" @click="handleDeleteAttachment(att.id)">删除</el-button>
+          </div>
+        </div>
+        <div v-else style="color:#999;font-size:13px">暂无附件</div>
+      </template>
       <template #footer><el-button @click="showDialog=false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
     </el-dialog>
   </div>
 </template>
 <script setup lang="ts">
 import { ref, onMounted } from "vue"
-import { getEmployees, createEmployee, updateEmployee, deleteEmployee, type EmployeeResponse } from "@/api/employees"
+import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttachments, uploadEmployeeAttachment, deleteEmployeeAttachment, type EmployeeResponse } from "@/api/employees"
+import type { AttachmentResponse } from "@/types/api"
 import { ElMessage, ElMessageBox } from "element-plus"
+import type { UploadRequestOptions } from "element-plus"
+
 const DEPTS = [{value:"design",label:"设计部"},{value:"production",label:"生产部"},{value:"installation",label:"安装部"},{value:"sales",label:"销售部"},{value:"finance",label:"财务部"},{value:"admin",label:"行政部"}]
 const list=ref<EmployeeResponse[]>([]); const loading=ref(false); const page=ref(1); const pageSize=ref(20); const total=ref(0); const keyword=ref(""); const filterDept=ref(""); const filterStatus=ref("")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
+const attachments=ref<AttachmentResponse[]>([])
 const initForm={name:"",phone:"",gender:"",birth_date:"",department:"",position:"",employment_type:"",education:"",id_card:"",hire_date:"",resignation_date:"",employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],base_salary:null,bank_name:"",bank_account:"",address:"",remark:""}
 const form=ref<any>({...initForm})
 const deptLabel=(v:string)=>DEPTS.find(d=>d.value===v)?.label||v
 const typeLabel=(v:string)=>({full_time:"全职",part_time:"兼职",contract:"合同",intern:"实习"})[v]||v||"-"
 const statusLabel=(s:string)=>({active:"在职",resigned:"离职",suspended:"停职"})[s]||s
 const statusColor=(s:string)=>({active:"success",resigned:"info",suspended:"warning"})[s]||"info"
+
 async function fetchData(){loading.value=true;try{const r=await getEmployees({page:page.value,page_size:pageSize.value,keyword:keyword.value||undefined,department:filterDept.value||undefined,employment_status:filterStatus.value||undefined});list.value=r?.items||[];total.value=r?.total||0}finally{loading.value=false}}
-function openCreate(){isEditing.value=false;editId.value="";form.value={...initForm};showDialog.value=true}
-function openEdit(r:EmployeeResponse){isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[]};showDialog.value=true}
+async function loadAttachments(){attachments.value=(await getEmployeeAttachments(editId.value))||[]}
+function openCreate(){isEditing.value=false;editId.value="";attachments.value=[];form.value={...initForm};showDialog.value=true}
+function openEdit(r:EmployeeResponse){isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[]};showDialog.value=true;loadAttachments()}
 async function handleSave(){saving.value=true;try{if(isEditing.value){await updateEmployee(editId.value,form.value);ElMessage.success("已更新")}else{await createEmployee(form.value);ElMessage.success("已创建")}showDialog.value=false;await fetchData()}finally{saving.value=false}}
 async function handleDelete(r:EmployeeResponse){await ElMessageBox.confirm("确定删除？","提示",{type:"warning"});await deleteEmployee(r.id);ElMessage.success("已删除");await fetchData()}
+async function handleUploadAttachment(options: UploadRequestOptions){try{await uploadEmployeeAttachment(editId.value,options.file);ElMessage.success("上传成功");await loadAttachments()}catch{ElMessage.error("上传失败")}}
+async function handleDeleteAttachment(aid:string){await ElMessageBox.confirm("确定删除此附件？","提示",{type:"warning"});await deleteEmployeeAttachment(aid);ElMessage.success("已删除");await loadAttachments()}
 onMounted(fetchData)
 </script>
