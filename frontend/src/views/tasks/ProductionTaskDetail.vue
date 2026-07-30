@@ -120,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive,  onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import { getProductionTask, updateProductionTask, changeProductionTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
@@ -143,7 +143,7 @@ const changing = ref(false)
 const deleting = ref(false)
 const task = ref<ProductionTaskResponse | null>(null)
 const userOptions = ref<UserResponse[]>([])
-const employeeOptions = ref<any[]>([])
+const employeeOptions = ref<{ id: string; name: string; employee_no?: string; user_id?: string | null }[]>([])
 const assignTarget = ref('')
 const assigning = ref(false)
 const editForm = reactive({ assigned_to: '', qc_result: '', rework_reason: '' })

@@ -56,19 +56,21 @@ const list=ref<LeaveRequestItem[]>([]); const employees=ref<EmployeeOption[]>([]
 const page=ref(1); const pageSize=ref(20); const total=ref(0); const fEmp=ref(""); const fStatus=ref(""); const fType=ref("")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const initForm={employee_id:"",leave_type:"annual",start_date:"",end_date:"",duration_days:1,reason:"",remark:""}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form=ref<any>({...initForm})
 const typeLabel=(s:string)=>({annual:"年假",sick:"病假",personal:"事假",maternity:"产假",other:"其他"})[s]||s
 const statusLabel=(s:string)=>({pending:"待审批",approved:"已通过",rejected:"已驳回",cancelled:"已取消"})[s]||s
 const statusColor=(s:string)=>({pending:"info",approved:"success",rejected:"danger",cancelled:"info"})[s]||"info"
 function calcDays(){if(form.value.start_date&&form.value.end_date){const s=new Date(form.value.start_date);const e=new Date(form.value.end_date);const d=Math.ceil((e.getTime()-s.getTime())/(86400000))+1;form.value.duration_days=Math.max(0.5,d)}}
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function fetchData(){loading.value=true;try{const p:any={page:page.value,page_size:pageSize.value};if(fEmp.value)p.employee_id=fEmp.value;if(fStatus.value)p.status=fStatus.value;if(fType.value)p.leave_type=fType.value;const r=await getLeaveRequests(p);list.value=r?.items||[];total.value=r?.total||0}finally{loading.value=false}}
 async function loadEmps(){employees.value=(await getAttendanceEmployees())||[]}
 function openCreate(){isEditing.value=false;editId.value="";form.value={...initForm};showDialog.value=true}
 function openEdit(r:LeaveRequestItem){isEditing.value=true;editId.value=r.id;form.value={...r};showDialog.value=true}
 async function handleSave(){saving.value=true;try{if(isEditing.value){await updateLeaveRequest(editId.value,form.value);ElMessage.success("已更新")}else{await createLeaveRequest(form.value);ElMessage.success("已创建")}showDialog.value=false;await fetchData()}finally{saving.value=false}}
-async function handleApprove(r:LeaveRequestItem){try{await ElMessageBox.confirm("确定通过该请假申请？","审批确认",{type:"info"});await approveLeaveRequest(r.id,{status:"approved"});ElMessage.success("已通过");await fetchData()}catch(e:any){if(e?.message)ElMessage.error(e.message)}}
-async function handleReject(r:LeaveRequestItem){try{await ElMessageBox.confirm("确定驳回该请假申请？","审批确认",{type:"warning"});await approveLeaveRequest(r.id,{status:"rejected"});ElMessage.success("已驳回");await fetchData()}catch(e:any){if(e?.message)ElMessage.error(e.message)}}
+async function handleApprove(r:LeaveRequestItem){try{await ElMessageBox.confirm("确定通过该请假申请？","审批确认",{type:"info"});await approveLeaveRequest(r.id,{status:"approved"});ElMessage.success("已通过");await fetchData()}catch(e:unknown){const m=(e as {message?:string})?.message;if(m)ElMessage.error(m)}}
+async function handleReject(r:LeaveRequestItem){try{await ElMessageBox.confirm("确定驳回该请假申请？","审批确认",{type:"warning"});await approveLeaveRequest(r.id,{status:"rejected"});ElMessage.success("已驳回");await fetchData()}catch(e:unknown){const m=(e as {message?:string})?.message;if(m)ElMessage.error(m)}}
 async function handleDelete(r:LeaveRequestItem){await ElMessageBox.confirm("确定删除此请假申请？","提示",{type:"warning"});await deleteLeaveRequest(r.id);ElMessage.success("已删除");await fetchData()}
 onMounted(()=>{fetchData();loadEmps()})
 </script>

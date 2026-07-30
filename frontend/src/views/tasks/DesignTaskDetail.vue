@@ -75,12 +75,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getDesignTask, updateDesignTask, changeDesignTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
+import { getDesignTask, updateDesignTask, changeDesignTaskStatus } from '@/api/tasks'
 import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { UploadRequestOptions } from 'element-plus'
 import type { DesignTaskResponse, UserResponse } from '@/types/api'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import { getEmployees } from '@/api/employees'
@@ -93,12 +92,11 @@ const router = useRouter()
 const aiStore = useAiAssistantStore()
 const authStore = useAuthStore()
 const loading = ref(false)
-const updating = ref(false)
 const changing = ref(false)
 const deleting = ref(false)
 const task = ref<DesignTaskResponse | null>(null)
 const userOptions = ref<UserResponse[]>([])
-const employeeOptions = ref<any[]>([])
+const employeeOptions = ref<{ id: string; name: string; employee_no?: string; user_id?: string | null }[]>([])
 const assignTarget = ref('')
 const assigning = ref(false)
 const editForm = reactive({
@@ -190,52 +188,8 @@ async function handleAssign() {
     await updateDesignTask(route.params.id as string, { assigned_to: assignTarget.value || null })
     ElMessage.success('已派发')
     assignTarget.value = ''
-    await fetchTask()
-    await aiStore.notifyBusinessMutation()
   } catch { /* handled */ } finally { assigning.value = false }
 }
-
-async function handleUpdate() {
-  updating.value = true
-  try {
-    await updateDesignTask(route.params.id as string, {
-      ...editForm,
-      assigned_to: editForm.assigned_to || null,
-    })
-    ElMessage.success('保存成功')
-    await fetchTask()
-    await aiStore.notifyBusinessMutation()
-  } catch { /* handled */ } finally { updating.value = false }
-}
-
-
-
-async function handleUpload(req: UploadRequestOptions) {
-  try {
-    const attachment = await uploadAttachment(
-      'design_task',
-      route.params.id as string,
-      req.file,
-      'design',
-    )
-    await updateDesignTask(route.params.id as string, {
-      design_file_url: `/uploads/${attachment.file_path}`,
-    })
-    ElMessage.success('上传成功')
-    await fetchTask()
-    await aiStore.notifyBusinessMutation()
-  } catch { /* handled */ }
-}
-
-async function handleDeleteAttachment(id: string) {
-  await ElMessageBox.confirm('确定删除此附件？删除后无法恢复。', '删除附件', {
-    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
-  })
-  await deleteAttachment(id)
-  ElMessage.success('已删除')
-  fetchTask()
-}
-
 async function handleDelete() {
   await ElMessageBox.confirm(
     `确定删除设计任务 ${task.value?.design_no || ''}？删除后不可恢复，关联订单将回退到确认状态。`,

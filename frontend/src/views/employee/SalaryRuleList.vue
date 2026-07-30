@@ -142,6 +142,7 @@ const initForm = {
   attendance_bonus: null, social_insurance: null, housing_fund: null,
   deduction_standard: null, remark: "", employee_name: "",
 }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form = ref<any>({ ...initForm })
 
 /* batch */
@@ -151,10 +152,11 @@ const initBatchForm = {
   employee_ids: [], effective_date: "", base_salary: null, overtime_rate: null,
   commission_rate: null, subsidy_standard: null, social_insurance: null, housing_fund: null,
 }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const batchForm = ref<any>({ ...initBatchForm })
 
 /* ====== helpers ====== */
-const fmt = (v: any) => v != null ? Number(v).toFixed(2) : "-"
+const fmt = (v: unknown) => v != null ? Number(v).toFixed(2) : "-"
 const deptLabel = (eid: string) => {
   const emp = employees.value.find(e => e.id === eid)
   if (!emp || !emp.department) return "-"
@@ -171,6 +173,7 @@ const totalDeduction = computed(() => list.value.reduce((s, r) => s + (r.social_
 async function fetchData() {
   loading.value = true
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const p: any = {}
     if (fEmp.value) p.employee_id = fEmp.value
     const r = await getSalaryRules({ ...p, page: 1, page_size: 200 })
@@ -191,19 +194,6 @@ function openEdit(r: SalaryRuleItem) {
   form.value = { ...r, employee_name: r.employee_name || '' }
   showDialog.value = true
 }
-function openCreate(empId?: string) {
-  isEditing.value = false
-  editId.value = ""
-  const emp = empId ? employees.value.find(e => e.id === empId) : null
-  form.value = {
-    ...initForm,
-    employee_id: empId || "",
-    employee_name: emp ? `${emp.name} (${emp.employee_no})` : "",
-    effective_date: new Date().toISOString().slice(0, 10),
-  }
-  showDialog.value = true
-}
-
 async function handleSave() {
   saving.value = true
   try {
@@ -216,7 +206,7 @@ async function handleSave() {
     }
     showDialog.value = false
     await fetchData()
-  } catch (e: any) { ElMessage.error(e?.message || "保存失败") }
+  } catch (e: unknown) { ElMessage.error((e as { message?: string })?.message || "保存失败") }
   finally { saving.value = false }
 }
 
@@ -241,6 +231,7 @@ async function handleBatchSave() {
   let ok = 0, fail = 0
   for (const eid of batchForm.value.employee_ids) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data: any = {
         employee_id: eid,
         effective_date: batchForm.value.effective_date,

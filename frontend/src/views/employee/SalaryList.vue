@@ -126,10 +126,11 @@ const isEditing = ref(false)
 const saving = ref(false)
 const editId = ref("")
 const initForm = { employee_id: "", month: "", base_salary: 0, overtime_pay: null, bonus: null, commission: null, subsidy: null, deduction: null, net_salary: 0, payment_status: "pending", remark: "" }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form = ref<any>({ ...initForm })
 
 /* ====== helpers ====== */
-const fmt = (v: any) => v != null ? Number(v).toFixed(2) : "-"
+const fmt = (v: unknown) => v != null ? Number(v).toFixed(2) : "-"
 const payLabel = (s: string) => ({ pending: "待核算", calculated: "已核算", paid: "已发放" })[s] || s
 const payColor = (s: string) => ({ pending: "info", calculated: "warning", paid: "success" })[s] || "info"
 const getRowClass = (r: SalaryRecordItem) => r.payment_status === "paid" ? "row-paid" : r.payment_status === "calculated" ? "row-calc" : ""
@@ -156,6 +157,7 @@ const pageTotal = computed(() => {
 async function fetchData() {
   loading.value = true
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const p: any = { page: page.value, page_size: pageSize.value }
     if (fEmp.value) p.employee_id = fEmp.value
     if (fMonth.value) p.month = fMonth.value
@@ -175,7 +177,7 @@ async function handleSave() {
     else { await createSalary(form.value); ElMessage.success("已创建") }
     showDialog.value = false
     await fetchData()
-  } catch (e: any) { ElMessage.error(e?.message || "保存失败") }
+  } catch (e: unknown) { ElMessage.error((e as { message?: string })?.message || "保存失败") }
   finally { saving.value = false }
 }
 async function handleDelete(r: SalaryRecordItem) {

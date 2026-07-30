@@ -83,6 +83,7 @@ const list=ref<EmployeeResponse[]>([]); const loading=ref(false); const page=ref
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const attachments=ref<AttachmentResponse[]>([])
 const initForm={name:"",phone:"",gender:"",birth_date:"",department:"",position:"",employment_type:"",education:"",id_card:"",hire_date:"",resignation_date:"",employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],base_salary:null,bank_name:"",bank_account:"",address:"",remark:""}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form=ref<any>({...initForm})
 const deptLabel=(v:string)=>DEPTS.find(d=>d.value===v)?.label||v
 const typeLabel=(v:string)=>({full_time:"全职",part_time:"兼职",contract:"合同",intern:"实习"})[v]||v||"-"

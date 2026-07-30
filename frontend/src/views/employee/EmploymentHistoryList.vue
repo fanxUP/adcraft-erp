@@ -51,10 +51,12 @@ const list=ref<EmploymentHistoryItem[]>([]); const employees=ref<EmployeeOption[
 const page=ref(1); const pageSize=ref(20); const total=ref(0); const fEmp=ref(""); const fType=ref("")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const initForm={employee_id:"",change_date:"",change_type:"hire",previous_department:"",new_department:"",previous_position:"",new_position:"",reason:"",remark:""}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form=ref<any>({...initForm})
 const typeLabel=(s:string)=>({hire:"入职",promotion:"晋升",transfer:"调岗",resignation:"离职"})[s]||s
 const typeColor=(s:string)=>({hire:"success",promotion:"warning",transfer:"primary",resignation:"danger"})[s]||"info"
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function fetchData(){loading.value=true;try{const p:any={page:page.value,page_size:pageSize.value};if(fEmp.value)p.employee_id=fEmp.value;if(fType.value)p.change_type=fType.value;const r=await getEmploymentHistories(p);list.value=r?.items||[];total.value=r?.total||0}finally{loading.value=false}}
 async function loadEmps(){employees.value=(await getAttendanceEmployees())||[]}
 function openCreate(){isEditing.value=false;editId.value="";form.value={...initForm};showDialog.value=true}

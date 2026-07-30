@@ -32,11 +32,11 @@ import { ref, onMounted } from "vue"
 import { getAttendanceRules, createAttendanceRule, updateAttendanceRule, deleteAttendanceRule, type AttendanceRuleItem } from "@/api/attendance"
 import { ElMessage, ElMessageBox } from "element-plus"
 const rules=ref<AttendanceRuleItem[]>([]); const loading=ref(false); const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false)
-const form=ref<any>({name:"",check_in_time:"09:00",check_out_time:"18:00",department:"",late_threshold:0,early_leave_threshold:0,overtime_rate:1.5,is_active:true})
+const form=ref<Record<string, unknown>>({name:"",check_in_time:"09:00",check_out_time:"18:00",department:"",late_threshold:0,early_leave_threshold:0,overtime_rate:1.5,is_active:true})
 async function fetchData(){loading.value=true;try{rules.value=(await getAttendanceRules())||[]}finally{loading.value=false}}
 function openCreate(){isEditing.value=false;form.value={name:"",check_in_time:"09:00",check_out_time:"18:00",department:"",late_threshold:0,early_leave_threshold:0,overtime_rate:1.5,is_active:true};showDialog.value=true}
 function openEdit(r:AttendanceRuleItem){isEditing.value=true;form.value={...r};showDialog.value=true}
-async function handleSave(){saving.value=true;try{isEditing.value?await updateAttendanceRule(form.value.id,form.value):await createAttendanceRule(form.value);ElMessage.success(isEditing.value?"已更新":"已创建");showDialog.value=false;await fetchData()}finally{saving.value=false}}
+async function handleSave(){saving.value=true;try{if(isEditing.value){await updateAttendanceRule(form.value.id as string,form.value)}else{await createAttendanceRule(form.value)};ElMessage.success(isEditing.value?"已更新":"已创建");showDialog.value=false;await fetchData()}finally{saving.value=false}}
 async function handleDelete(r:AttendanceRuleItem){await ElMessageBox.confirm("确定删除？","提示",{type:"warning"});await deleteAttendanceRule(r.id);ElMessage.success("已删除");await fetchData()}
 onMounted(fetchData)
 </script>

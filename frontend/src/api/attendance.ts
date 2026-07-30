@@ -18,6 +18,6 @@ export function updateAttendanceRule(id: string, data: Partial<AttendanceRuleIte
 export function deleteAttendanceRule(id: string) { return del<SuccessResponse>("/attendance/rules/" + id) }
 export function getAttendanceRecords(params: { page?: number; page_size?: number; employee_id?: string; date_from?: string; date_to?: string }) { return get<PaginatedData<AttendanceRecordItem>>("/attendance/records", { params }) }
 export function createAttendanceRecord(data: { employee_id: string; date: string; check_in_time?: string | null; check_out_time?: string | null; check_in_status?: string; check_out_status?: string; remark?: string | null }) { return post<AttendanceRecordItem>("/attendance/records", data) }
-export function updateAttendanceRecord(id: string, data: any) { return put<AttendanceRecordItem>("/attendance/records/" + id, data) }
+export function updateAttendanceRecord(id: string, data: Record<string, unknown>) { return put<AttendanceRecordItem>("/attendance/records/" + id, data) }
 export function deleteAttendanceRecord(id: string) { return del<SuccessResponse>("/attendance/records/" + id) }
 export function getAttendanceEmployees() { return get<EmployeeOption[]>("/attendance/employees") }

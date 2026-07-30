@@ -32,12 +32,12 @@ import { ElMessage, ElMessageBox } from "element-plus"
 
 const list=ref<DepartmentItem[]>([]); const loading=ref(false)
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
-const form=ref<any>({name:"",code:"",sort_order:0,description:"",is_active:true})
+const form=ref<Record<string, unknown>>({name:"",code:"",sort_order:0,description:"",is_active:true})
 
 async function fetchData(){loading.value=true;try{list.value=(await getDepartments())||[]}finally{loading.value=false}}
 function openCreate(){isEditing.value=false;editId.value="";form.value={name:"",code:"",sort_order:0,description:"",is_active:true};showDialog.value=true}
 function openEdit(r:DepartmentItem){isEditing.value=true;editId.value=r.id;form.value={...r};showDialog.value=true}
-async function handleSave(){saving.value=true;try{if(isEditing.value){await updateDepartment(editId.value,form.value);ElMessage.success("已更新")}else{await createDepartment(form.value);ElMessage.success("已创建")}showDialog.value=false;await fetchData()}catch(e:any){ElMessage.error(e?.message||"操作失败")}finally{saving.value=false}}
-async function handleDelete(r:DepartmentItem){try{await ElMessageBox.confirm("确定删除部门 "+r.name+"？","提示",{type:"warning"});await deleteDepartment(r.id);ElMessage.success("已删除");await fetchData()}catch(e:any){if(e?.message)ElMessage.error(e.message)}}
+async function handleSave(){saving.value=true;try{if(isEditing.value){await updateDepartment(editId.value,form.value);ElMessage.success("已更新")}else{await createDepartment(form.value);ElMessage.success("已创建")}showDialog.value=false;await fetchData()}catch(e:unknown){ElMessage.error((e as {message?:string})?.message||"操作失败")}finally{saving.value=false}}
+async function handleDelete(r:DepartmentItem){try{await ElMessageBox.confirm("确定删除部门 "+r.name+"？","提示",{type:"warning"});await deleteDepartment(r.id);ElMessage.success("已删除");await fetchData()}catch(e:unknown){const m=(e as {message?:string})?.message;if(m)ElMessage.error(m)}}
 onMounted(fetchData)
 </script>

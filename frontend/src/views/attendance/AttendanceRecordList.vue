@@ -138,7 +138,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue"
 import { getAttendanceRecords, createAttendanceRecord, updateAttendanceRecord, getAttendanceEmployees, type AttendanceRecordItem, type EmployeeOption } from "@/api/attendance"
-import { ElMessage, ElMessageBox } from "element-plus"
+import { ElMessage } from "element-plus"
 
 /* ====== state ====== */
 const employees = ref<EmployeeOption[]>([])
@@ -150,7 +150,7 @@ const showDialog = ref(false)
 const isEditing = ref(false)
 const saving = ref(false)
 const editRecord = ref<AttendanceRecordItem | null>(null)
-const form = ref<any>({ employee_id: "", date: "", check_in_time: null, check_out_time: null, check_in_status: "normal", check_out_status: "normal", overtime_hours: null, remark: "" })
+const form = ref<{ employee_id: string; date: string; check_in_time?: string | null; check_out_time?: string | null; check_in_status?: string; check_out_status?: string; overtime_hours?: number | null; remark?: string | null }>({ employee_id: "", date: "", check_in_time: null, check_out_time: null, check_in_status: "normal", check_out_status: "normal", overtime_hours: null, remark: "" })
 const today = new Date()
 const todayDay = today.getDate()
 
@@ -359,7 +359,7 @@ async function handleSave() {
     else { await createAttendanceRecord(form.value); ElMessage.success("已创建") }
     showDialog.value = false
     await fetchData()
-  } catch (e: any) { ElMessage.error(e?.message || "保存失败") }
+  } catch (e: unknown) { ElMessage.error((e as { message?: string })?.message || "保存失败") }
   finally { saving.value = false }
 }
 
