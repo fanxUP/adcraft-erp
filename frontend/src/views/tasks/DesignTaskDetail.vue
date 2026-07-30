@@ -7,12 +7,12 @@
     <div v-if="task" v-loading="loading">
       <h2 style="margin: 16px 0; color: var(--ad-text)">设计任务 {{ task.design_no }}</h2>
 
-      <el-card shadow="never" class="info-card">
+      <el-card data-ai-targets="design-file" shadow="never" class="info-card">
         <el-descriptions :column="2">
           <el-descriptions-item label="任务编号">{{ task.design_no }}</el-descriptions-item>
           <el-descriptions-item label="项目名称">{{ task.project_name }}</el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
+            <el-tag data-ai-targets="task-status-pending_review task-status-designing task-status-confirmed task-status-revision" :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="设计说明">{{ task.description || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户意见">{{ task.client_comments || '-' }}</el-descriptions-item>
@@ -31,7 +31,7 @@
       </el-card>
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>任务分配</span></template>
-        <div style="display: flex; align-items: center; gap: 12px;">
+        <div data-ai-targets="task-assignee" style="display: flex; align-items: center; gap: 12px;">
           <el-select v-model="assignTarget" placeholder="选择员工" clearable filterable style="width: 300px">
             <el-option v-for="emp in employeeOptions" :key="emp.id" :label="emp.name + (emp.employee_no ? '(' + emp.employee_no + ')' : '')" :value="emp.user_id || emp.id" :disabled="!emp.user_id" />
           </el-select>

@@ -12,7 +12,7 @@
           <el-descriptions-item label="任务编号">{{ task.production_no }}</el-descriptions-item>
           <el-descriptions-item label="项目名称">{{ task.project_name }}</el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
+            <el-tag data-ai-targets="task-status-completed task-status-in_progress task-status-qc_check task-status-queued task-status-rework" :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="尺寸">长{{ task.length }}m × 宽{{ task.width }}m × 高{{ task.height }}m</el-descriptions-item>
           <el-descriptions-item label="数量">{{ task.quantity }}</el-descriptions-item>
@@ -40,7 +40,7 @@
       </el-card>
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>任务分配</span></template>
-        <div style="display: flex; align-items: center; gap: 12px;">
+        <div data-ai-targets="task-assignee" style="display: flex; align-items: center; gap: 12px;">
           <el-select v-model="assignTarget" placeholder="选择员工" clearable filterable style="width: 300px">
             <el-option v-for="emp in employeeOptions" :key="emp.id" :label="emp.name + (emp.employee_no ? '(' + emp.employee_no + ')' : '')" :value="emp.user_id || emp.id" :disabled="!emp.user_id" />
           </el-select>
