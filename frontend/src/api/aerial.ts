@@ -43,6 +43,12 @@ export interface AerialPersonnel {
   personnel_type?: string
   status: string
   remark?: string
+  id_card_no?: string
+  id_card_front_url?: string
+  id_card_back_url?: string
+  bank_card_no?: string
+  bank_name?: string
+  bank_account_name?: string
   created_at?: string
   updated_at?: string
 }
@@ -394,6 +400,44 @@ export const updateAerialAttendance = (id: string, data: AerialAttendanceUpdate)
 
 export const deleteAerialAttendance = (id: string) =>
   del(`/aerial/attendance/${id}`)
+
+// ── Personnel Attachment API ─────────────────────────────────────────────────
+
+export interface AerialPersonnelAttachment {
+  id: string
+  personnel_id: string
+  attachment_type: string // id_card / license / qualification / bank_card / insurance / other
+  file_url: string
+  file_name?: string
+  uploaded_by?: string
+  uploaded_at?: string
+  remark?: string
+}
+
+export const uploadAerialPersonnelImage = async (file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await apiClient.post('/aerial/personnel/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return res.data.data as { file_url: string; file_name: string; file_size: number }
+}
+
+export const getAerialPersonnelAttachments = (personnelId: string) =>
+  get<AerialPersonnelAttachment[]>(`/aerial/personnel/${personnelId}/attachments`)
+
+export const createAerialPersonnelAttachment = async (personnelId: string, file: File, attachmentType: string) => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('attachment_type', attachmentType)
+  const res = await apiClient.post(`/aerial/personnel/${personnelId}/attachments`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return res.data.data as AerialPersonnelAttachment
+}
+
+export const deleteAerialPersonnelAttachment = (id: string) =>
+  del(`/aerial/personnel/attachments/${id}`)
 
 // ── Personnel Expense API ─────────────────────────────────────────────────────
 

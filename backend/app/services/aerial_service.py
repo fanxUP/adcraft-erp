@@ -1,6 +1,7 @@
 """高空作业车台账模块 — Service 层"""
 
 import json
+import os
 import random
 import uuid
 from datetime import datetime, date
@@ -9,6 +10,7 @@ from typing import Optional
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.aerial import AerialDailyLedger, AerialAttendanceRecord
 from app.repositories.aerial_repo import AerialRepository
 
@@ -203,6 +205,12 @@ class AerialService:
             "personnel_type": d.personnel_type,
             "status": d.status,
             "remark": d.remark,
+            "id_card_no": d.id_card_no,
+            "id_card_front_url": d.id_card_front_url,
+            "id_card_back_url": d.id_card_back_url,
+            "bank_card_no": d.bank_card_no,
+            "bank_name": d.bank_name,
+            "bank_account_name": d.bank_account_name,
             "created_at": d.created_at.isoformat() if d.created_at else None,
             "updated_at": d.updated_at.isoformat() if d.updated_at else None,
         }
@@ -980,3 +988,61 @@ class AerialService:
         if data.get("overtime_hours") is not None:
             clean["overtime_hours"] = float(data["overtime_hours"])
         return clean
+
+    # ── 人员附件 ─────────────────────────────────────────────────────────────
+
+    async def save_upload_file(self, file):
+        """把上传文件落盘到 {LOCAL_UPLOAD_DIR}/{YYYYMM}/uuid.ext，返回 /uploads/ 相对路径。"""
+        upload_dir = settings.LOCAL_UPLOAD_DIR
+        date_dir = datetime.now().strftime("%Y%m")
+        dest_dir = os.path.join(upload_dir, date_dir)
+        os.makedirs(dest_dir, exist_ok=True)
+        ext = file.filename.rsplit(".", 1)[1] if file.filename and "." in file.filename else ""
+        fn = f"{uuid.uuid4().hex}.{ext}"
+        fp = os.path.join(dest_dir, fn)
+        content = await file.read()
+        with open(fp, "wb") as f:
+            f.write(content)
+        return {
+            "file_url": f"/uploads/{date_dir}/{fn}",
+            "file_name": file.filename or fn,
+            "file_size": len(content),
+        }
+
+    async def list_personnel_attachments(self, personnel_id: str, attachment_type: str = None):
+        items = await self.repo.list_personnel_attachments(personnel_id, attachment_type)
+        return [self._personnel_attachment_to_dict(a) for a in items]
+
+    async def create_personnel_attachment(self, personnel_id: str, file, attachment_type: str = "other", remark: str = ""):
+        obj = await self.repo.get_personnel(uuid.UUID(personnel_id))
+        if not obj:
+            raise ValueError("人员不存在")
+        saved = await self.save_upload_file(file)
+        data = {
+            "personnel_id": uuid.UUID(personnel_id),
+            "attachment_type": attachment_type or "other",
+            "file_url": saved["file_url"],
+            "file_name": saved["file_name"],
+            "remark": remark or None,
+            "uploaded_by": self._user_id(),
+        }
+        att = await self.repo.create_personnel_attachment(data)
+        return self._personnel_attachment_to_dict(att)
+
+    async def delete_personnel_attachment(self, attachment_id: str) -> dict:
+        obj = await self.repo.delete_personnel_attachment(uuid.UUID(attachment_id))
+        if not obj:
+            raise ValueError("附件不存在")
+        return {"id": attachment_id, "deleted": True}
+
+    def _personnel_attachment_to_dict(self, a):
+        return {
+            "id": str(a.id),
+            "personnel_id": str(a.personnel_id),
+            "attachment_type": a.attachment_type,
+            "file_url": a.file_url,
+            "file_name": a.file_name,
+            "uploaded_by": str(a.uploaded_by) if a.uploaded_by else None,
+            "uploaded_at": a.uploaded_at.isoformat() if a.uploaded_at else None,
+            "remark": a.remark,
+        }

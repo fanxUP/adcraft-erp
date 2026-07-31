@@ -53,6 +53,14 @@ class AerialPersonnel(Base, TimestampMixin, SoftDeleteMixin):
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False, comment="状态: active/disabled")
     personnel_type: Mapped[str] = mapped_column(String(32), default="driver", nullable=False, comment="人员类型: driver/assistant/operator")
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+    # 身份证信息
+    id_card_no: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="身份证号")
+    id_card_front_url: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="身份证正面照片")
+    id_card_back_url: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="身份证反面照片")
+    # 银行卡信息
+    bank_card_no: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="银行卡号")
+    bank_name: Mapped[str | None] = mapped_column(String(128), nullable=True, comment="开户行")
+    bank_account_name: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="开户名（户名）")
 
 
 # ── 每日出车台账 ────────────────────────────────────────────────────────────
@@ -372,3 +380,19 @@ class AerialAttendanceRecord(Base, TimestampMixin):
     overtime_hours: Mapped[float | None] = mapped_column(Numeric(5, 1), nullable=True, default=0, comment="加班小时")
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
     source: Mapped[str] = mapped_column(String(16), default="manual_input", nullable=False, comment="来源: manual_input")
+
+
+# ── 人员附件 ─────────────────────────────────────────────────────────────────
+
+class AerialPersonnelAttachment(Base):
+    """高空车人员附件（身份证/驾驶证/资格证/银行卡等照片）"""
+    __tablename__ = "aerial_personnel_attachments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    personnel_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_personnel.id"), nullable=False, comment="关联人员")
+    attachment_type: Mapped[str] = mapped_column(String(32), default="other", nullable=False, comment="附件类型: id_card/license/qualification/bank_card/insurance/other")
+    file_url: Mapped[str] = mapped_column(String(500), nullable=False, comment="文件URL")
+    file_name: Mapped[str | None] = mapped_column(String(256), nullable=True, comment="文件名")
+    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="上传人")
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False, comment="上传时间")
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")

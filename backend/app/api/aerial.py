@@ -3,7 +3,7 @@ import json
 import uuid as _uuid
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -182,6 +182,65 @@ async def delete_personnel(
         return success(result)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@personnel_router.post("/upload")
+async def upload_personnel_image(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_CREATE)),
+    request: Request = None,
+):
+    """上传人员图片（身份证正反面等），返回 /uploads/ 相对 URL"""
+    svc = _svc(db, current_user, request)
+    result = await svc.save_upload_file(file)
+    return success(result)
+
+
+@personnel_router.get("/{personnel_id}/attachments")
+async def list_personnel_attachments(
+    personnel_id: str,
+    attachment_type: str = Query("", description="附件类型过滤"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_READ)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    items = await svc.list_personnel_attachments(personnel_id, attachment_type or None)
+    return success(items)
+
+
+@personnel_router.post("/{personnel_id}/attachments")
+async def create_personnel_attachment(
+    personnel_id: str,
+    file: UploadFile = File(...),
+    attachment_type: str = Form("other"),
+    remark: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_CREATE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    try:
+        result = await svc.create_personnel_attachment(personnel_id, file, attachment_type, remark)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return success(result)
+
+
+@personnel_router.delete("/attachments/{attachment_id}")
+async def delete_personnel_attachment(
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_DELETE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    try:
+        result = await svc.delete_personnel_attachment(attachment_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return success(result)
 
 
 # ── 每日台账 ────────────────────────────────────────────────────────────────
