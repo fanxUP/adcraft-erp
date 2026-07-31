@@ -1,6 +1,7 @@
 import logging
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -10,6 +11,44 @@ from app.services.salary_service import SalaryRecordService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/salaries", tags=["Salaries"])
+
+
+# ── 工资网格（考勤式）：指标列 + 公式 + 单元格 ─────────────────────────────
+
+class SalaryItemCreate(BaseModel):
+    key: str
+    label: str
+    formula: str
+    sort_order: int = 0
+
+
+class SalaryItemUpdate(BaseModel):
+    label: str | None = None
+    formula: str | None = None
+    sort_order: int | None = None
+    is_active: bool | None = None
+
+
+class SalaryGridCell(BaseModel):
+    employee_id: str
+    item_key: str
+    value: float | None = None
+
+
+class SalaryGridPayment(BaseModel):
+    employee_id: str
+    payment_status: str
+
+
+class SalaryGridComputeRequest(BaseModel):
+    month: str
+    employee_ids: list[str] | None = None
+
+
+class SalaryGridSaveRequest(BaseModel):
+    month: str
+    cells: list[SalaryGridCell] | None = None
+    payments: list[SalaryGridPayment] | None = None
 
 
 @router.get("/")
@@ -39,6 +78,72 @@ async def salary_report(month: str, db=Depends(get_db), current_user=Depends(get
     """仿 Excel「工资计算明细表」的月度工资报表。"""
     try:
         return success(await SalaryRecordService(db).report_month(month))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.get("/items")
+async def salary_items(db=Depends(get_db), current_user=Depends(get_current_user)):
+    """工资指标列列表（含停用，按 sort_order 排序）。"""
+    return success(await SalaryRecordService(db).list_items())
+
+
+@router.post("/items")
+async def create_salary_item(data: SalaryItemCreate, db=Depends(get_db),
+                             current_user=Depends(get_current_user)):
+    try:
+        return success(await SalaryRecordService(db).create_item(data.model_dump()))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.put("/items/{item_id}")
+async def update_salary_item(item_id: str, data: SalaryItemUpdate, db=Depends(get_db),
+                             current_user=Depends(get_current_user)):
+    try:
+        return success(await SalaryRecordService(db).update_item(
+            UUID(item_id), data.model_dump(exclude_none=True)))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.delete("/items/{item_id}")
+async def delete_salary_item(item_id: str, db=Depends(get_db), current_user=Depends(get_current_user)):
+    try:
+        await SalaryRecordService(db).delete_item(UUID(item_id))
+        return success(None)
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.get("/grid")
+async def salary_grid(month: str, db=Depends(get_db), current_user=Depends(get_current_user)):
+    """工资网格：指标列 + 全部在职员工行 + 单元格值 + 支付状态。"""
+    try:
+        return success(await SalaryRecordService(db).get_grid(month))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.post("/grid/compute")
+async def salary_grid_compute(data: SalaryGridComputeRequest, db=Depends(get_db),
+                              current_user=Depends(get_current_user)):
+    """按指标公式计算当月（全部或指定员工）工资网格值并落库。"""
+    eids = [UUID(e) for e in data.employee_ids] if data.employee_ids else None
+    try:
+        return success(await SalaryRecordService(db).compute_month(data.month, eids))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.post("/grid/save")
+async def salary_grid_save(data: SalaryGridSaveRequest, db=Depends(get_db),
+                           current_user=Depends(get_current_user)):
+    """保存网格手工修改的单元格与支付状态。"""
+    try:
+        cells = [c.model_dump() for c in (data.cells or [])]
+        payments = [p.model_dump() for p in (data.payments or [])]
+        return success(await SalaryRecordService(db).save_cells(data.month, cells, payments))
     except ValueError as e:
         return {"code": 40001, "message": str(e), "data": None}
 
