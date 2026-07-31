@@ -103,6 +103,21 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
         result = await db.execute(
             select(Contract.contract_no).where(Contract.contract_no.like(pattern)).order_by(Contract.contract_no.desc()).limit(1)
         )
+    elif prefix == "EMP":
+        # 员工工号：纯数字序列（现有格式 001/002/...），取最大值 +1
+        from app.models.employee import Employee
+        result = await db.execute(
+            select(Employee.employee_no).order_by(Employee.employee_no.desc()).limit(1)
+        )
+        last = result.scalar_one_or_none()
+        if last:
+            try:
+                seq = int(last) + 1
+            except ValueError:
+                seq = 1
+        else:
+            seq = 1
+        return f"{seq:03d}"
     else:
         raise ValueError(f"Unknown prefix: {prefix}")
 

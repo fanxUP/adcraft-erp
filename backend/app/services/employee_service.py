@@ -27,7 +27,8 @@ class EmployeeService:
         await self.repo.soft_delete(e); return True
     def _d(self, e):
         return {"id": str(e.id), "employee_no": e.employee_no, "name": e.name, "phone": e.phone,
-            "gender": e.gender, "birth_date": e.birth_date.isoformat() if e.birth_date else None,
+            "gender": e.gender, "ethnicity": e.ethnicity,
+            "birth_date": e.birth_date.isoformat() if e.birth_date else None,
             "department": e.department, "position": e.position,
             "employment_type": e.employment_type, "employment_status": e.employment_status,
             "hire_date": e.hire_date.isoformat() if e.hire_date else None,

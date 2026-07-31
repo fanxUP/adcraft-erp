@@ -30,6 +30,8 @@ def make_mock_personnel(**kwargs):
     p.id = kwargs.get("id", SAMPLE_PERSONNEL_ID)
     p.name = kwargs.get("name", "张师傅")
     p.phone = kwargs.get("phone", None)
+    p.gender = kwargs.get("gender", None)
+    p.ethnicity = kwargs.get("ethnicity", None)
     p.license_no = kwargs.get("license_no", None)
     p.license_type = kwargs.get("license_type", None)
     p.license_expire_date = kwargs.get("license_expire_date", None)

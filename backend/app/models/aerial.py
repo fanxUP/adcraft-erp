@@ -46,6 +46,8 @@ class AerialPersonnel(Base, TimestampMixin, SoftDeleteMixin):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(64), nullable=False, comment="人员姓名")
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="手机号")
+    gender: Mapped[str | None] = mapped_column(String(8), nullable=True, comment="性别: male/female")
+    ethnicity: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="族别")
     license_no: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="驾驶证号")
     license_type: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="驾驶证类型")
     license_expire_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="驾驶证到期日")

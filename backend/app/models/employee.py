@@ -12,6 +12,7 @@ class Employee(Base, TimestampMixin, SoftDeleteMixin):
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     gender: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    ethnicity: Mapped[str | None] = mapped_column(String(32), nullable=True)
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     department: Mapped[str | None] = mapped_column(String(32), nullable=True)
     position: Mapped[str | None] = mapped_column(String(64), nullable=True)

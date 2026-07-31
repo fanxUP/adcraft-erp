@@ -46,6 +46,8 @@ def make_mock_personnel(**kwargs):
     d.id = kwargs.get("id", SAMPLE_PERSONNEL_ID)
     d.name = kwargs.get("name", "张师傅")
     d.phone = kwargs.get("phone", "13800138000")
+    d.gender = kwargs.get("gender", None)
+    d.ethnicity = kwargs.get("ethnicity", None)
     d.license_no = kwargs.get("license_no", "C123456789")
     d.license_type = kwargs.get("license_type", "C1")
     d.license_expire_date = kwargs.get("license_expire_date", datetime(2027, 12, 31))
@@ -315,6 +317,15 @@ async def test_get_personnel_found(service, mock_repo):
 
 
 @pytest.mark.asyncio
+async def test_get_personnel_returns_gender_ethnicity(service, mock_repo):
+    d = make_mock_personnel(gender="male", ethnicity="汉族")
+    mock_repo.get_personnel.return_value = d
+    result = await service.get_personnel(SAMPLE_PERSONNEL_ID)
+    assert result["gender"] == "male"
+    assert result["ethnicity"] == "汉族"
+
+
+@pytest.mark.asyncio
 async def test_get_personnel_not_found(service, mock_repo):
     mock_repo.get_personnel.return_value = None
     with pytest.raises(ValueError, match="人员不存在"):
@@ -349,6 +360,36 @@ async def test_update_personnel(service, mock_repo):
     mock_repo.update_personnel.side_effect = update_side_effect
     result = await service.update_personnel(SAMPLE_PERSONNEL_ID, {"name": "李师傅"})
     assert result["name"] == "李师傅"
+    mock_repo.create_audit_log.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_create_personnel_with_gender_ethnicity(service, mock_repo):
+    d = make_mock_personnel(gender="male", ethnicity="汉族")
+    mock_repo.create_personnel.return_value = d
+    result = await service.create_personnel({"name": "张师傅", "gender": "male", "ethnicity": "汉族"})
+    assert result["gender"] == "male"
+    assert result["ethnicity"] == "汉族"
+    args, _ = mock_repo.create_personnel.call_args
+    assert args[0]["gender"] == "male"
+    assert args[0]["ethnicity"] == "汉族"
+    assert args[0]["license_expire_date"] is None  # service 补的默认值
+
+
+@pytest.mark.asyncio
+async def test_update_personnel_with_gender_ethnicity(service, mock_repo):
+    d = make_mock_personnel()
+    mock_repo.get_personnel.return_value = d
+
+    async def update_side_effect(obj, data):
+        for k, val in data.items():
+            setattr(obj, k, val)
+        return obj
+
+    mock_repo.update_personnel.side_effect = update_side_effect
+    result = await service.update_personnel(SAMPLE_PERSONNEL_ID, {"gender": "female", "ethnicity": "回族"})
+    assert result["gender"] == "female"
+    assert result["ethnicity"] == "回族"
     mock_repo.create_audit_log.assert_called_once()
 
 

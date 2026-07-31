@@ -198,6 +198,8 @@ class AerialService:
             "id": str(d.id),
             "name": d.name,
             "phone": d.phone,
+            "gender": d.gender,
+            "ethnicity": d.ethnicity,
             "license_no": d.license_no,
             "license_type": d.license_type,
             "license_expire_date": d.license_expire_date.isoformat() if d.license_expire_date else None,

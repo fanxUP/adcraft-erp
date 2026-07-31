@@ -8,6 +8,8 @@
     <el-table :data="list" stripe v-loading="loading">
       <el-table-column prop="name" label="姓名" width="240" />
       <el-table-column prop="phone" label="手机号" width="130" />
+      <el-table-column label="性别" width="70"><template #default="{ row }">{{ GENDER_LABELS[row.gender as string] || row.gender || '-' }}</template></el-table-column>
+      <el-table-column prop="ethnicity" label="族别" width="100"><template #default="{ row }">{{ row.ethnicity || '-' }}</template></el-table-column>
       <el-table-column prop="license_no" label="驾驶证号" width="140" />
       <el-table-column prop="license_type" label="驾照类型" width="100" />
       <el-table-column prop="license_expire_date" label="驾照到期" width="110">
@@ -37,6 +39,10 @@
       <el-form :model="form" label-width="90px">
         <el-form-item label="姓名" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="手机号"><el-input v-model="form.phone" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="性别"><el-select v-model="form.gender" clearable style="width: 100%"><el-option v-for="g in GENDER_OPTIONS" :key="g.value" :label="g.label" :value="g.value" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="族别"><el-select v-model="form.ethnicity" clearable filterable style="width: 100%"><el-option v-for="e in ETHNICITY_OPTIONS" :key="e.value" :label="e.label" :value="e.value" /></el-select></el-form-item></el-col>
+        </el-row>
         <el-form-item label="驾驶证号"><el-input v-model="form.license_no" /></el-form-item>
         <el-row :gutter="16">
           <el-col :span="12"><el-form-item label="驾照类型"><el-input v-model="form.license_type" placeholder="A1/B2/C1等" /></el-form-item></el-col>
@@ -116,13 +122,15 @@ import {
   type AerialPersonnelAttachment,
 } from '@/api/aerial'
 import { getErrorMessage } from '@/utils/error'
+import { GENDER_OPTIONS, ETHNICITY_OPTIONS } from '@/config/ethnicity'
 
 const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
 const list = ref<AerialPersonnel[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
 const keyword = ref(''); const editingId = ref<string | null>(null)
+const GENDER_LABELS: Record<string, string> = Object.fromEntries(GENDER_OPTIONS.map((g) => [g.value, g.label]))
 
 const form = reactive({
-  name: '', phone: '', license_no: '', license_type: '', license_expire_date: '', is_external: false, remark: '',
+  name: '', phone: '', gender: '', ethnicity: '', license_no: '', license_type: '', license_expire_date: '', is_external: false, remark: '',
   id_card_no: '', id_card_front_url: '', id_card_back_url: '',
   bank_card_no: '', bank_name: '', bank_account_name: '',
 })
@@ -147,7 +155,7 @@ async function fetchData() {
 function handleCreate() {
   editingId.value = null
   attachments.value = []
-  Object.assign(form, { name: '', phone: '', license_no: '', license_type: '', license_expire_date: '', is_external: false, remark: '', id_card_no: '', id_card_front_url: '', id_card_back_url: '', bank_card_no: '', bank_name: '', bank_account_name: '' })
+  Object.assign(form, { name: '', phone: '', gender: '', ethnicity: '', license_no: '', license_type: '', license_expire_date: '', is_external: false, remark: '', id_card_no: '', id_card_front_url: '', id_card_back_url: '', bank_card_no: '', bank_name: '', bank_account_name: '' })
   dialogVisible.value = true
 }
 
@@ -155,7 +163,7 @@ async function handleEdit(row: AerialPersonnel) {
   editingId.value = row.id
   attachments.value = []
   Object.assign(form, {
-    name: row.name, phone: row.phone, license_no: row.license_no, license_type: row.license_type,
+    name: row.name, phone: row.phone, gender: row.gender || '', ethnicity: row.ethnicity || '', license_no: row.license_no, license_type: row.license_type,
     license_expire_date: row.license_expire_date, is_external: row.is_external, remark: row.remark,
     id_card_no: row.id_card_no || '', id_card_front_url: row.id_card_front_url || '', id_card_back_url: row.id_card_back_url || '',
     bank_card_no: row.bank_card_no || '', bank_name: row.bank_name || '', bank_account_name: row.bank_account_name || '',

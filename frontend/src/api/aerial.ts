@@ -36,6 +36,8 @@ export interface AerialPersonnel {
   id: string
   name: string
   phone?: string
+  gender?: string
+  ethnicity?: string
   license_no?: string
   license_type?: string
   license_expire_date?: string

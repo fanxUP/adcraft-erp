@@ -17,6 +17,7 @@
       <el-table-column prop="name" label="姓名" width="240" />
       <el-table-column prop="phone" label="手机号" width="130" />
       <el-table-column label="性别" width="60"><template #default="{row}">{{ {male:"男",female:"女"} [row.gender] || row.gender || "-" }}</template></el-table-column>
+      <el-table-column prop="ethnicity" label="族别" width="90"><template #default="{row}">{{ row.ethnicity || "-" }}</template></el-table-column>
       <el-table-column label="部门" width="120"><template #default="{row}">{{ deptLabel(row.department) }}</template></el-table-column>
       <el-table-column prop="position" label="职位" width="120" />
       <el-table-column label="聘用类型" width="100"><template #default="{row}">{{ typeLabel(row.employment_type) }}</template></el-table-column>
@@ -32,7 +33,8 @@
       <el-form :model="form" label-width="90px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">
         <el-form-item label="姓名" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="手机号"><el-input v-model="form.phone" /></el-form-item>
-        <el-form-item label="性别"><el-select v-model="form.gender" clearable style="width:100%"><el-option label="男" value="male" /><el-option label="女" value="female" /></el-select></el-form-item>
+        <el-form-item label="性别"><el-select v-model="form.gender" clearable style="width:100%"><el-option v-for="g in GENDER_OPTIONS" :key="g.value" :label="g.label" :value="g.value" /></el-select></el-form-item>
+        <el-form-item label="族别"><el-select v-model="form.ethnicity" clearable filterable style="width:100%"><el-option v-for="e in ETHNICITY_OPTIONS" :key="e.value" :label="e.label" :value="e.value" /></el-select></el-form-item>
         <el-form-item label="出生日期"><el-date-picker v-model="form.birth_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
         <el-form-item label="部门"><el-select v-model="form.department" clearable style="width:100%"><el-option v-for="d in DEPTS" :key="d.value" :label="d.label" :value="d.value" /></el-select></el-form-item>
         <el-form-item label="职位"><el-input v-model="form.position" /></el-form-item>
@@ -77,12 +79,13 @@ import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmploy
 import type { AttachmentResponse } from "@/types/api"
 import { ElMessage, ElMessageBox } from "element-plus"
 import type { UploadRequestOptions } from "element-plus"
+import { GENDER_OPTIONS, ETHNICITY_OPTIONS } from "@/config/ethnicity"
 
 const DEPTS = [{value:"design",label:"设计部"},{value:"production",label:"生产部"},{value:"installation",label:"安装部"},{value:"sales",label:"销售部"},{value:"finance",label:"财务部"},{value:"admin",label:"行政部"}]
 const list=ref<EmployeeResponse[]>([]); const loading=ref(false); const page=ref(1); const pageSize=ref(20); const total=ref(0); const keyword=ref(""); const filterDept=ref(""); const filterStatus=ref("")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const attachments=ref<AttachmentResponse[]>([])
-const initForm={name:"",phone:"",gender:"",birth_date:"",department:"",position:"",employment_type:"",education:"",id_card:"",hire_date:"",resignation_date:"",employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],base_salary:null,bank_name:"",bank_account:"",address:"",remark:""}
+const initForm={name:"",phone:"",gender:"",ethnicity:"",birth_date:"",department:"",position:"",employment_type:"",education:"",id_card:"",hire_date:"",resignation_date:"",employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],base_salary:null,bank_name:"",bank_account:"",address:"",remark:""}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form=ref<any>({...initForm})
 const deptLabel=(v:string)=>DEPTS.find(d=>d.value===v)?.label||v

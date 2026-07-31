@@ -3,7 +3,7 @@ import type { PaginatedData, SuccessResponse } from '@/types/api'
 import type { AttachmentResponse } from '@/types/api'
 
 export interface EmployeeResponse {
-  id: string; employee_no: string; name: string; phone?: string | null; gender?: string | null
+  id: string; employee_no: string; name: string; phone?: string | null; gender?: string | null; ethnicity?: string | null
   birth_date?: string | null; department?: string | null; position?: string | null
   employment_type?: string | null; hire_date?: string | null; resignation_date?: string | null
   employment_status: string; id_card?: string | null; education?: string | null
@@ -13,9 +13,9 @@ export interface EmployeeResponse {
   is_active: boolean; created_at?: string | null
 }
 
-export interface EmployeeCreateInput { name: string; phone?: string | null; gender?: string | null; birth_date?: string | null; department?: string | null; position?: string | null; employment_type?: string | null; hire_date?: string | null; resignation_date?: string | null; employment_status?: string; id_card?: string | null; education?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; skills?: string[]; base_salary?: number | null; bank_name?: string | null; bank_account?: string | null; address?: string | null; user_id?: string | null; remark?: string | null; is_active?: boolean }
+export interface EmployeeCreateInput { name: string; phone?: string | null; gender?: string | null; ethnicity?: string | null; birth_date?: string | null; department?: string | null; position?: string | null; employment_type?: string | null; hire_date?: string | null; resignation_date?: string | null; employment_status?: string; id_card?: string | null; education?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; skills?: string[]; base_salary?: number | null; bank_name?: string | null; bank_account?: string | null; address?: string | null; user_id?: string | null; remark?: string | null; is_active?: boolean }
 
-export interface EmployeeUpdateInput { name?: string | null; phone?: string | null; gender?: string | null; birth_date?: string | null; department?: string | null; position?: string | null; employment_type?: string | null; hire_date?: string | null; resignation_date?: string | null; employment_status?: string | null; id_card?: string | null; education?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; skills?: string[]; base_salary?: number | null; bank_name?: string | null; bank_account?: string | null; address?: string | null; user_id?: string | null; remark?: string | null; is_active?: boolean | null }
+export interface EmployeeUpdateInput { name?: string | null; phone?: string | null; gender?: string | null; ethnicity?: string | null; birth_date?: string | null; department?: string | null; position?: string | null; employment_type?: string | null; hire_date?: string | null; resignation_date?: string | null; employment_status?: string | null; id_card?: string | null; education?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; skills?: string[]; base_salary?: number | null; bank_name?: string | null; bank_account?: string | null; address?: string | null; user_id?: string | null; remark?: string | null; is_active?: boolean | null }
 
 export function getEmployees(params: { page?: number; page_size?: number; keyword?: string; department?: string; employment_status?: string }) { return get<PaginatedData<EmployeeResponse>>('/employees/', { params }) }
 export function createEmployee(data: EmployeeCreateInput) { return post<EmployeeResponse>('/employees/', data) }
