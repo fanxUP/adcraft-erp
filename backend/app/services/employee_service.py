@@ -1,10 +1,18 @@
 import logging
+from datetime import datetime
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.employee_repo import EmployeeRepository
 from app.services.number_generator import generate_employee_no
 
 logger = logging.getLogger(__name__)
+
+def _convert_license_expire_date(data: dict) -> dict:
+    """license_expire_date: 空串/None -> None，ISO 字符串 -> datetime（列是 DateTime）。"""
+    if "license_expire_date" in data:
+        raw = data.get("license_expire_date")
+        data["license_expire_date"] = datetime.fromisoformat(raw) if raw else None
+    return data
 
 class EmployeeService:
     def __init__(self, db: AsyncSession): self.db = db; self.repo = EmployeeRepository(db)
@@ -16,10 +24,12 @@ class EmployeeService:
     async def create_employee(self, data):
         if not data.get("employee_no"):
             data["employee_no"] = await generate_employee_no(self.db)
+        _convert_license_expire_date(data)
         return self._d(await self.repo.create(data))
     async def update_employee(self, eid, data):
         e = await self.repo.get_by_id(eid)
         if not e: raise ValueError("员工不存在")
+        _convert_license_expire_date(data)
         return self._d(await self.repo.update(e, data))
     async def delete_employee(self, eid):
         e = await self.repo.get_by_id(eid)
@@ -34,6 +44,9 @@ class EmployeeService:
             "hire_date": e.hire_date.isoformat() if e.hire_date else None,
             "resignation_date": e.resignation_date.isoformat() if e.resignation_date else None,
             "id_card": e.id_card, "education": e.education,
+            "license_no": e.license_no, "license_type": e.license_type,
+            "license_expire_date": e.license_expire_date.isoformat() if e.license_expire_date else None,
+            "id_card_front_url": e.id_card_front_url, "id_card_back_url": e.id_card_back_url,
             "emergency_contact": e.emergency_contact, "emergency_phone": e.emergency_phone,
             "skills": e.skills if isinstance(e.skills, list) else [],
             "base_salary": float(e.base_salary) if e.base_salary else None,

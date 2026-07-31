@@ -41,6 +41,33 @@
         <el-form-item label="聘用类型"><el-select v-model="form.employment_type" clearable style="width:100%"><el-option label="全职" value="full_time" /><el-option label="兼职" value="part_time" /><el-option label="合同" value="contract" /><el-option label="实习" value="intern" /></el-select></el-form-item>
         <el-form-item label="学历"><el-select v-model="form.education" clearable style="width:100%"><el-option label="初中" value="middle_school" /><el-option label="高中" value="high_school" /><el-option label="中专" value="vocational" /><el-option label="大专" value="college" /><el-option label="本科" value="bachelor" /><el-option label="硕士" value="master" /><el-option label="博士" value="phd" /></el-select></el-form-item>
         <el-form-item label="身份证号"><el-input v-model="form.id_card" /></el-form-item>
+        <el-form-item label="驾驶证号"><el-input v-model="form.license_no" /></el-form-item>
+        <el-form-item label="驾照类型"><el-input v-model="form.license_type" placeholder="A1/B2/C1等" /></el-form-item>
+        <el-form-item label="驾照到期"><el-date-picker v-model="form.license_expire_date" type="date" value-format="YYYY-MM-DDTHH:mm:ss" style="width:100%" /></el-form-item>
+        <el-form-item label="身份证正面">
+          <div class="idcard-slot">
+            <el-upload :http-request="(o: any) => handleUploadIdCard(o, 'front')" :show-file-list="false" accept="image/*">
+              <el-button size="small" type="primary" plain>上传照片</el-button>
+            </el-upload>
+            <template v-if="form.id_card_front_url">
+              <el-image :src="form.id_card_front_url" :preview-src-list="[form.id_card_front_url]" preview-teleported fit="cover" class="idcard-preview" />
+              <el-button size="small" type="danger" link @click="form.id_card_front_url = ''">移除</el-button>
+            </template>
+            <span v-else class="idcard-tip">未上传</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="身份证反面">
+          <div class="idcard-slot">
+            <el-upload :http-request="(o: any) => handleUploadIdCard(o, 'back')" :show-file-list="false" accept="image/*">
+              <el-button size="small" type="primary" plain>上传照片</el-button>
+            </el-upload>
+            <template v-if="form.id_card_back_url">
+              <el-image :src="form.id_card_back_url" :preview-src-list="[form.id_card_back_url]" preview-teleported fit="cover" class="idcard-preview" />
+              <el-button size="small" type="danger" link @click="form.id_card_back_url = ''">移除</el-button>
+            </template>
+            <span v-else class="idcard-tip">未上传</span>
+          </div>
+        </el-form-item>
         <el-form-item label="入职日期"><el-date-picker v-model="form.hire_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
         <el-form-item label="离职日期"><el-date-picker v-model="form.resignation_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
         <el-form-item label="在职状态"><el-select v-model="form.employment_status" style="width:100%"><el-option label="在职" value="active" /><el-option label="离职" value="resigned" /><el-option label="停职" value="suspended" /></el-select></el-form-item>
@@ -57,12 +84,18 @@
         <el-divider />
         <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
           <strong>附件</strong>
-          <el-upload :http-request="handleUploadAttachment" :show-file-list="false" multiple>
-            <el-button type="danger" size="small">上传附件</el-button>
-          </el-upload>
+          <div style="display:flex;gap:8px;align-items:center">
+            <el-select v-model="attCategory" style="width:120px">
+              <el-option v-for="o in ATTACHMENT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+            <el-upload :http-request="handleUploadAttachment" :show-file-list="false" multiple>
+              <el-button type="danger" size="small">上传附件</el-button>
+            </el-upload>
+          </div>
         </div>
         <div v-if="attachments.length" style="display:flex;flex-wrap:wrap;gap:8px">
           <div v-for="att in attachments" :key="att.id" style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #e4e7ed;border-radius:4px;font-size:13px">
+            <el-tag :type="ATTACHMENT_TYPE_TAGS[att.category] || 'info'" size="small" disable-transitions>{{ ATTACHMENT_TYPE_LABELS[att.category] || att.category || '附件' }}</el-tag>
             <a :href="'/uploads/'+att.file_path" target="_blank" style="color:#409eff;text-decoration:none">{{ att.filename }}</a>
             <el-button text type="danger" size="small" @click="handleDeleteAttachment(att.id)">删除</el-button>
           </div>
@@ -75,17 +108,18 @@
 </template>
 <script setup lang="ts">
 import { ref, onMounted } from "vue"
-import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttachments, uploadEmployeeAttachment, deleteEmployeeAttachment, type EmployeeResponse } from "@/api/employees"
+import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttachments, uploadEmployeeAttachment, deleteEmployeeAttachment, uploadEmployeeImage, type EmployeeResponse } from "@/api/employees"
 import type { AttachmentResponse } from "@/types/api"
 import { ElMessage, ElMessageBox } from "element-plus"
 import type { UploadRequestOptions } from "element-plus"
 import { GENDER_OPTIONS, ETHNICITY_OPTIONS } from "@/config/ethnicity"
+import { ATTACHMENT_TYPE_OPTIONS, ATTACHMENT_TYPE_LABELS, ATTACHMENT_TYPE_TAGS } from "@/config/attachment"
 
 const DEPTS = [{value:"design",label:"设计部"},{value:"production",label:"生产部"},{value:"installation",label:"安装部"},{value:"sales",label:"销售部"},{value:"finance",label:"财务部"},{value:"admin",label:"行政部"}]
 const list=ref<EmployeeResponse[]>([]); const loading=ref(false); const page=ref(1); const pageSize=ref(20); const total=ref(0); const keyword=ref(""); const filterDept=ref(""); const filterStatus=ref("")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
-const attachments=ref<AttachmentResponse[]>([])
-const initForm={name:"",phone:"",gender:"",ethnicity:"",birth_date:"",department:"",position:"",employment_type:"",education:"",id_card:"",hire_date:"",resignation_date:"",employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],base_salary:null,bank_name:"",bank_account:"",address:"",remark:""}
+const attachments=ref<AttachmentResponse[]>([]); const attCategory=ref("other")
+const initForm={name:"",phone:"",gender:"",ethnicity:"",birth_date:"",department:"",position:"",employment_type:"",education:"",id_card:"",license_no:"",license_type:"",license_expire_date:"",id_card_front_url:"",id_card_back_url:"",hire_date:"",resignation_date:"",employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],base_salary:null,bank_name:"",bank_account:"",address:"",remark:""}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form=ref<any>({...initForm})
 const deptLabel=(v:string)=>DEPTS.find(d=>d.value===v)?.label||v
@@ -97,9 +131,15 @@ async function fetchData(){loading.value=true;try{const r=await getEmployees({pa
 async function loadAttachments(){attachments.value=(await getEmployeeAttachments(editId.value))||[]}
 function openCreate(){isEditing.value=false;editId.value="";attachments.value=[];form.value={...initForm};showDialog.value=true}
 function openEdit(r:EmployeeResponse){isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[]};showDialog.value=true;loadAttachments()}
-async function handleSave(){saving.value=true;try{if(isEditing.value){await updateEmployee(editId.value,form.value);ElMessage.success("已更新")}else{await createEmployee(form.value);ElMessage.success("已创建")}showDialog.value=false;await fetchData()}finally{saving.value=false}}
+async function handleSave(){saving.value=true;try{if(isEditing.value){await updateEmployee(editId.value,form.value);ElMessage.success("已更新");showDialog.value=false;await fetchData()}else{const r=await createEmployee(form.value);isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[]};ElMessage.success("已创建，可继续上传附件");await loadAttachments()}}finally{saving.value=false}}
 async function handleDelete(r:EmployeeResponse){await ElMessageBox.confirm("确定删除？","提示",{type:"warning"});await deleteEmployee(r.id);ElMessage.success("已删除");await fetchData()}
-async function handleUploadAttachment(options: UploadRequestOptions){try{await uploadEmployeeAttachment(editId.value,options.file);ElMessage.success("上传成功");await loadAttachments()}catch{ElMessage.error("上传失败")}}
+async function handleUploadAttachment(options: UploadRequestOptions){try{await uploadEmployeeAttachment(editId.value,options.file,attCategory.value);ElMessage.success("上传成功");await loadAttachments()}catch{ElMessage.error("上传失败")}}
+async function handleUploadIdCard(options: UploadRequestOptions, slot:'front'|'back'){try{const res=await uploadEmployeeImage(options.file);if(slot==='front')form.value.id_card_front_url=res.file_url;else form.value.id_card_back_url=res.file_url;ElMessage.success("照片已上传")}catch{ElMessage.error("上传失败")}}
 async function handleDeleteAttachment(aid:string){await ElMessageBox.confirm("确定删除此附件？","提示",{type:"warning"});await deleteEmployeeAttachment(aid);ElMessage.success("已删除");await loadAttachments()}
 onMounted(fetchData)
 </script>
+<style scoped>
+.idcard-slot { display:flex; align-items:center; gap:10px; width:100%; }
+.idcard-preview { width:70px; height:46px; border-radius:4px; border:1px solid #e4e7ed; }
+.idcard-tip { color:#c0c4cc; font-size:13px; }
+</style>

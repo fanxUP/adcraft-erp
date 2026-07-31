@@ -123,6 +123,7 @@ import {
 } from '@/api/aerial'
 import { getErrorMessage } from '@/utils/error'
 import { GENDER_OPTIONS, ETHNICITY_OPTIONS } from '@/config/ethnicity'
+import { ATTACHMENT_TYPE_LABELS, ATTACHMENT_TYPE_TAGS } from '@/config/attachment'
 
 const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
 const list = ref<AerialPersonnel[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
@@ -139,12 +140,8 @@ const form = reactive({
 const attachments = ref<AerialPersonnelAttachment[]>([])
 const attCategory = ref('other')
 const attUploading = ref(false)
-const ATT_TYPE_LABELS: Record<string, string> = {
-  id_card: '身份证', license: '驾驶证', qualification: '资格证', bank_card: '银行卡', insurance: '保险', other: '其他',
-}
-const ATT_TYPE_TAGS: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
-  id_card: 'primary', license: 'success', qualification: 'warning', bank_card: 'danger', insurance: 'info', other: 'info',
-}
+const ATT_TYPE_LABELS = ATTACHMENT_TYPE_LABELS
+const ATT_TYPE_TAGS = ATTACHMENT_TYPE_TAGS
 
 async function fetchData() {
   loading.value = true
@@ -176,9 +173,17 @@ async function handleSave() {
   if (!form.name.trim()) return ElMessage.warning('请填写姓名')
   saving.value = true
   try {
-    if (editingId.value) { await updateAerialPersonnel(editingId.value, form); ElMessage.success('修改成功') }
-    else { await createAerialPersonnel(form); ElMessage.success('新增成功') }
-    dialogVisible.value = false; fetchData()
+    if (editingId.value) {
+      await updateAerialPersonnel(editingId.value, form)
+      ElMessage.success('修改成功')
+      dialogVisible.value = false
+      fetchData()
+    } else {
+      const r = await createAerialPersonnel(form)
+      editingId.value = r.id
+      attachments.value = (await getAerialPersonnelAttachments(r.id)) || []
+      ElMessage.success('已新增，可继续上传附件')
+    }
   } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { saving.value = false }
 }
 

@@ -8,6 +8,8 @@ class EmployeeCreate(BaseModel):
     birth_date: Optional[date] = None; department: Optional[str] = None; position: Optional[str] = None
     employment_type: Optional[str] = None; hire_date: Optional[date] = None; resignation_date: Optional[date] = None
     employment_status: str = "active"; id_card: Optional[str] = None; education: Optional[str] = None
+    license_no: Optional[str] = None; license_type: Optional[str] = None; license_expire_date: Optional[str] = None
+    id_card_front_url: Optional[str] = None; id_card_back_url: Optional[str] = None
     emergency_contact: Optional[str] = None; emergency_phone: Optional[str] = None
     skills: Optional[list[str]] = None; base_salary: Optional[float] = None
     bank_name: Optional[str] = None; bank_account: Optional[str] = None; address: Optional[str] = None
@@ -18,6 +20,8 @@ class EmployeeUpdate(BaseModel):
     birth_date: Optional[date] = None; department: Optional[str] = None; position: Optional[str] = None
     employment_type: Optional[str] = None; hire_date: Optional[date] = None; resignation_date: Optional[date] = None
     employment_status: Optional[str] = None; id_card: Optional[str] = None; education: Optional[str] = None
+    license_no: Optional[str] = None; license_type: Optional[str] = None; license_expire_date: Optional[str] = None
+    id_card_front_url: Optional[str] = None; id_card_back_url: Optional[str] = None
     emergency_contact: Optional[str] = None; emergency_phone: Optional[str] = None
     skills: Optional[list[str]] = None; base_salary: Optional[float] = None
     bank_name: Optional[str] = None; bank_account: Optional[str] = None; address: Optional[str] = None
@@ -28,6 +32,8 @@ class EmployeeResponse(BaseModel):
     birth_date: Optional[date] = None; department: Optional[str] = None; position: Optional[str] = None
     employment_type: Optional[str] = None; hire_date: Optional[date] = None; resignation_date: Optional[date] = None
     employment_status: str; id_card: Optional[str] = None; education: Optional[str] = None
+    license_no: Optional[str] = None; license_type: Optional[str] = None; license_expire_date: Optional[str] = None
+    id_card_front_url: Optional[str] = None; id_card_back_url: Optional[str] = None
     emergency_contact: Optional[str] = None; emergency_phone: Optional[str] = None
     skills: Optional[list[str]] = None; base_salary: Optional[float] = None
     bank_name: Optional[str] = None; bank_account: Optional[str] = None; address: Optional[str] = None

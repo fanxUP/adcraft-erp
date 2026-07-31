@@ -23,6 +23,21 @@ async def list_employees(page: int = Query(1,ge=1), page_size: int = Query(20,ge
 async def create_employee(data: EmployeeCreate, db=Depends(get_db), current_user=Depends(get_current_user)):
     return success(await EmployeeService(db).create_employee(data.model_dump()))
 
+@router.post("/upload")
+async def upload_employee_image(file: UploadFile = File(...), db=Depends(get_db), current_user=Depends(get_current_user)):
+    """上传人员图片（身份证正反面等），返回 /uploads/ 相对 URL"""
+    upload_dir = settings.LOCAL_UPLOAD_DIR
+    date_dir = datetime.now(timezone.utc).strftime("%Y%m")
+    dest_dir = f"{upload_dir}/{date_dir}"
+    os.makedirs(dest_dir, exist_ok=True)
+    ext = file.filename.rsplit(".", 1)[1] if file.filename and "." in file.filename else ""
+    fn = f"{_uuid.uuid4().hex}.{ext}"
+    fp = f"{dest_dir}/{fn}"
+    content = await file.read()
+    with open(fp, "wb") as f:
+        f.write(content)
+    return success({"file_url": f"/uploads/{date_dir}/{fn}", "file_name": file.filename or fn, "file_size": len(content)})
+
 @router.get("/{employee_id}")
 async def get_employee(employee_id: str, db=Depends(get_db), current_user=Depends(get_current_user)):
     emp = await EmployeeService(db).get_employee(UUID(employee_id))

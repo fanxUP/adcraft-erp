@@ -26,6 +26,11 @@ def make_mock_employee(**kwargs):
     e.hire_date = kwargs.get("hire_date", date(2024, 3, 1))
     e.resignation_date = kwargs.get("resignation_date", None)
     e.id_card = kwargs.get("id_card", "110101199001011234")
+    e.license_no = kwargs.get("license_no", "C123456789")
+    e.license_type = kwargs.get("license_type", "C1")
+    e.license_expire_date = kwargs.get("license_expire_date", datetime(2027, 6, 30, 0, 0))
+    e.id_card_front_url = kwargs.get("id_card_front_url", "/uploads/202607/front.png")
+    e.id_card_back_url = kwargs.get("id_card_back_url", "/uploads/202607/back.png")
     e.education = kwargs.get("education", "college")
     e.emergency_contact = kwargs.get("emergency_contact", None)
     e.emergency_phone = kwargs.get("emergency_phone", None)
@@ -119,6 +124,85 @@ async def test_update_employee_not_found(service):
     service.repo.get_by_id.return_value = None
     with pytest.raises(ValueError, match="员工不存在"):
         await service.update_employee(SAMPLE_EMPLOYEE_ID, {"ethnicity": "回族"})
+
+
+# ── 驾驶证 + 身份证正反面 ─────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_list_employee_includes_license_idcard(service):
+    service.repo.list.return_value = ([make_mock_employee()], 1)
+    items, total = await service.list_employees()
+    assert total == 1
+    assert items[0]["license_no"] == "C123456789"
+    assert items[0]["license_type"] == "C1"
+    assert items[0]["license_expire_date"] == "2027-06-30T00:00:00"
+    assert items[0]["id_card_front_url"] == "/uploads/202607/front.png"
+    assert items[0]["id_card_back_url"] == "/uploads/202607/back.png"
+
+
+@pytest.mark.asyncio
+async def test_get_employee_returns_license_idcard(service):
+    service.repo.get_by_id.return_value = make_mock_employee()
+    result = await service.get_employee(SAMPLE_EMPLOYEE_ID)
+    assert result["license_no"] == "C123456789"
+    assert result["id_card_front_url"] == "/uploads/202607/front.png"
+    assert result["id_card_back_url"] == "/uploads/202607/back.png"
+
+
+@pytest.mark.asyncio
+async def test_create_employee_passes_license_idcard(service):
+    service.repo.create.return_value = make_mock_employee(license_no="B222222222", license_type="B2",
+                                                          id_card_front_url="/uploads/202607/a.png",
+                                                          id_card_back_url="/uploads/202607/b.png")
+    with patch("app.services.employee_service.generate_employee_no", new=AsyncMock(return_value="EMP100")):
+        result = await service.create_employee({"name": "王小明", "license_no": "B222222222",
+                                                "license_type": "B2", "id_card_front_url": "/uploads/202607/a.png",
+                                                "id_card_back_url": "/uploads/202607/b.png"})
+    assert result["license_no"] == "B222222222"
+    assert result["license_type"] == "B2"
+    assert result["id_card_front_url"] == "/uploads/202607/a.png"
+    assert result["id_card_back_url"] == "/uploads/202607/b.png"
+    args, _ = service.repo.create.call_args
+    assert args[0]["license_no"] == "B222222222"
+    assert args[0]["id_card_back_url"] == "/uploads/202607/b.png"
+
+
+@pytest.mark.asyncio
+async def test_create_employee_converts_license_expire_date(service):
+    service.repo.create.return_value = make_mock_employee()
+    with patch("app.services.employee_service.generate_employee_no", new=AsyncMock(return_value="EMP100")):
+        await service.create_employee({"name": "王小明", "license_expire_date": "2027-06-30T00:00:00"})
+    args, _ = service.repo.create.call_args
+    assert args[0]["license_expire_date"] == datetime(2027, 6, 30, 0, 0)
+
+
+@pytest.mark.asyncio
+async def test_create_employee_license_expire_date_empty_becomes_none(service):
+    service.repo.create.return_value = make_mock_employee()
+    with patch("app.services.employee_service.generate_employee_no", new=AsyncMock(return_value="EMP100")):
+        await service.create_employee({"name": "王小明", "license_expire_date": ""})
+    args, _ = service.repo.create.call_args
+    assert args[0]["license_expire_date"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_employee_sets_license_idcard(service):
+    e = make_mock_employee()
+    service.repo.get_by_id.return_value = e
+
+    async def update_side_effect(obj, data):
+        for k, val in data.items():
+            setattr(obj, k, val)
+        return obj
+
+    service.repo.update.side_effect = update_side_effect
+    result = await service.update_employee(SAMPLE_EMPLOYEE_ID, {"license_no": "D333333333", "license_type": "D",
+                                                                "license_expire_date": "2028-01-15T00:00:00",
+                                                                "id_card_front_url": "/uploads/202607/c.png"})
+    assert result["license_no"] == "D333333333"
+    assert result["license_type"] == "D"
+    assert result["license_expire_date"] == "2028-01-15T00:00:00"
+    assert result["id_card_front_url"] == "/uploads/202607/c.png"
 
 
 # ── 工号生成（EMP 分支回归） ────────────────────────────────────────────────
