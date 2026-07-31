@@ -301,6 +301,10 @@ class CdrQuotePricingService(CdrQuoteServiceBase):
             existing = await self.repo.get_customer_agreement(customer_id, line.product_id)
             agreement_price = existing.price_value if existing else 0
             
+            # 只有产品有默认价时才能可靠判断是否手动定价
+            if product_price <= 0:
+                continue
+            
             # 如果发送的单价与产品默认价和已有协议价都不同 → 用户手动定价
             sent_price = line.unit_price
             if sent_price == product_price or sent_price == agreement_price:

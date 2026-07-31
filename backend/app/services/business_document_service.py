@@ -714,6 +714,10 @@ class BusinessDocumentService:
             existing = await cdr_repo.get_customer_agreement(doc.customer_id, item.product_id)
             agreement_price = existing.price_value if existing else 0
             
+            # 只有产品有默认价时才能可靠判断是否手动定价
+            if product_price <= 0:
+                continue
+            
             # 如果单价与产品默认价和已有协议价都不同 → 用户手动定价
             item_price = item.unit_price
             if item_price == product_price or item_price == agreement_price:
