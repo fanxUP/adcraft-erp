@@ -25,12 +25,13 @@
     <!-- 图例 -->
     <div style="margin-bottom:12px;display:flex;gap:16px;font-size:13px;color:#606266;align-items:center;flex-wrap:wrap">
       <span>图例：</span>
-      <span><span class="legend-dot" style="background:#f0f9eb;border:1px solid #b7eb8f"></span>出勤</span>
-      <span><span class="legend-dot" style="background:#fef0f0;border:1px solid #f56c6c"></span>未出勤</span>
-      <span><span class="legend-dot" style="background:#fdf6ec;border:1px solid #f5d94e"></span>迟到</span>
-      <span><span class="legend-dot" style="background:#d3d3d3;border:1px solid #a0a0a0"></span>矿工</span>
-      <span><span class="legend-dot" style="background:#f0f5ff;border:1px solid #8cb7f5"></span>半天</span>
-      <span><span class="legend-dot" style="background:#f5f7fa;border:1px solid #e4e7ed"></span>休息日</span>
+      <span><span class="legend-dot" style="background:#b7e4c7;border:1px solid #98d2a8"></span>出勤</span>
+      <span><span class="legend-dot" style="background:#a3d0ff;border:1px solid #82b3f0"></span>半天</span>
+      <span><span class="legend-dot" style="background:#ffe69c;border:1px solid #e8c95c"></span>迟到/早退</span>
+      <span><span class="legend-dot" style="background:#f5c2c7;border:1px solid #e29aa0"></span>旷工/缺卡</span>
+      <span><span class="legend-dot" style="background:#fff;border:1px solid #c0c4cc"></span>未出勤</span>
+      <span><span class="legend-dot" style="background:#ffa940;border:1px solid #e09024"></span>加班</span>
+      <span><span class="legend-dot" style="background:#dee2e6;border:1px solid #b8bcc4"></span>休息日</span>
     </div>
 
     <!-- 考勤矩阵表 -->
@@ -50,7 +51,7 @@
             <th class="att-col-stat">迟到</th>
             <th class="att-col-stat">矿工</th>
             <th class="att-col-stat overtime-col">加班<br><span class="overtime-unit">小时</span></th>
-            <th v-for="d in days" :key="d" :class="['att-col-day', { weekend: isWeekend(d), today: d === todayDay && monthMatches }]">{{ d }}</th>
+            <th v-for="d in days" :key="d" :class="['att-col-day', { weekend: isWeekend(d), today: d === todayDay && monthMatches }]">{{ monthDayCN(d) }}<span class="att-day-week">周{{ weekdayCN(d) }}</span></th>
           </tr>
         </thead>
         <tbody>
@@ -64,7 +65,7 @@
             <td class="cell-stat unauth" :class="{ highlight: row.summary.unauth > 0 }">{{ row.summary.unauth || '' }}</td>
             <td class="cell-stat overtime">{{ fmtOvertime(row.summary.overtimeHours) }}</td>
             <td v-for="d in days" :key="d" :class="['cell-day', getDayCellClass(row, d)]" @click="handleCellClick(row.employee, d)">
-              <template v-if="row.days[d]">
+              <template v-if="row.days[d] && !isAbsent(row.days[d])">
                 <div class="day-cell-inner">
                   <div class="day-times">
                     <span class="day-in">{{ fmtTime(row.days[d].check_in_time) }}</span>
@@ -72,6 +73,11 @@
                     <span class="day-out">{{ fmtTime(row.days[d].check_out_time) }}</span>
                   </div>
                   <div v-if="isAbnormal(row.days[d])" class="day-abnormal">{{ getAbnormalLabel(row.days[d]) }}</div>
+                </div>
+              </template>
+              <template v-else-if="row.days[d] && isAbsent(row.days[d]) && row.days[d].overtime_hours">
+                <div class="day-cell-inner">
+                  <div class="day-overtime">{{ fmtOvertime(row.days[d].overtime_hours) }}<span class="day-overtime-unit">h</span></div>
                 </div>
               </template>
               <div v-else class="day-empty">{{ isWeekend(d) ? '休' : '' }}</div>
@@ -250,6 +256,12 @@ const isWeekend = (d: number) => {
   const day = new Date(year, month - 1, d).getDay()
   return day === 0 || day === 6
 }
+const weekdayCN = (d: number) => {
+  const { year, month } = yearMonth.value
+  return ["日", "一", "二", "三", "四", "五", "六"][new Date(year, month - 1, d).getDay()]
+}
+const monthDayCN = (d: number) => `${yearMonth.value.month}月${d}日`
+const isAbsent = (rec: AttendanceRecordItem) => rec.check_in_status === "absent" || rec.check_out_status === "absent"
 const isAbnormal = (rec: AttendanceRecordItem) => (rec.check_in_status !== "normal" && rec.check_in_status !== "half_day") || (rec.check_out_status !== "normal" && rec.check_out_status !== "half_day")
 const getAbnormalLabel = (rec: AttendanceRecordItem) => {
   if (rec.check_in_status === "half_day" || rec.check_out_status === "half_day") return "半天"
@@ -267,6 +279,7 @@ const getDayCellClass = (row: MatrixRow, d: number) => {
     return "day-none"
   }
   if (rec.check_in_status === "half_day" || rec.check_out_status === "half_day") return "day-half"
+  if (rec.check_in_status === "absent" || rec.check_out_status === "absent") return "day-none"
   if (rec.check_in_status === "late" || rec.check_out_status === "early") return "day-warning"
   if (rec.check_in_status === "missed" || rec.check_out_status === "missed") return "day-danger"
   return "day-normal"
@@ -334,6 +347,7 @@ function handlePrint() {
     + '.day-weekend { background: #dee2e6 !important; }'
     + '.cell-stat.present { color: #67c23a; font-weight: 700; }'
     + '.cell-stat.overtime { color: #ffa940; font-weight: 700; }'
+    + '.day-overtime { color: #ffa940; font-weight: 600; }'
     + 'thead { display: table-header-group; } tbody { display: table-row-group; }'
     + 'tr { page-break-inside: avoid; }'
     + '.day-times { font-size: 11px; color: #666; }'
@@ -381,7 +395,8 @@ onMounted(async () => {
 .att-col-dept { min-width: 60px; }
 .att-col-stat { min-width: 42px; width: 42px; text-align: center; }
 .att-col-group { text-align: center; }
-.att-col-day { min-width: 72px; width: 72px; text-align: center; font-size: 14px; padding: 4px 2px !important; }
+.att-col-day { min-width: 72px; width: 72px; text-align: center; font-size: 12px; padding: 4px 2px !important; }
+.att-col-day .att-day-week { display: block; font-size: 11px; font-weight: 400; color: #909399; line-height: 1.4; }
 .cell-center { text-align: center; }
 .cell-name { font-weight: 600; color: #303133; }
 .cell-dept { color: #606266; }
@@ -415,6 +430,8 @@ onMounted(async () => {
 .day-warning .day-abnormal { color: #e6a23c; }
 .day-danger .day-abnormal { color: #f56c6c; }
 .day-empty { text-align: center; color: #dcdfe6; font-size: 14px; }
+.day-overtime { color: #ffa940; font-weight: 600; font-family: "SF Mono", "Courier New", monospace; font-size: 13px; }
+.day-overtime-unit { font-size: 11px; margin-left: 1px; }
 .att-footer td { background: #f5f7fa; font-weight: 600; color: #303133; }
 .att-footer .footer-day { text-align: center; color: #67c23a; font-size: 13px; }
 .legend-dot { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; margin-right: 4px; }
