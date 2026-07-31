@@ -294,9 +294,10 @@ async def test_compute_month_evaluates_formulas(service):
         str(EMP1): {"normal": 20, "half": 0, "missed": 0, "absent": 0, "records": 20, "overtime": 10}})
     service._latest_rule = AsyncMock(return_value=rule)
     service._param_values_for_month = AsyncMock(return_value={})
+    service._grid_values = AsyncMock(return_value={})
     seen = {}
 
-    async def fake_replace(month, eid, vals):
+    async def fake_replace(month, eid, vals, manual_keys=()):
         seen.update(vals)
 
     service._replace_grid_values = fake_replace
@@ -322,10 +323,11 @@ async def test_compute_month_attendance_conditional(service):
     service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule(attendance_bonus=300.0))
     service._param_values_for_month = AsyncMock(return_value={})
+    service._grid_values = AsyncMock(return_value={})
     service._upsert_record = AsyncMock()
     seen = {}
 
-    async def fake_replace(month, eid, vals):
+    async def fake_replace(month, eid, vals, manual_keys=()):
         seen.update(vals)
 
     service._replace_grid_values = fake_replace
@@ -349,6 +351,7 @@ async def test_compute_month_collects_eval_errors(service):
     service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule())
     service._param_values_for_month = AsyncMock(return_value={})
+    service._grid_values = AsyncMock(return_value={})
     service._attendance_stats = AsyncMock(return_value={
         str(EMP1): {"normal": 23, "half": 0, "missed": 0, "absent": 0, "records": 23, "overtime": 0}})
     service._load_employee = AsyncMock(return_value=make_employee())
@@ -514,17 +517,19 @@ async def test_compute_month_skips_manual_items_and_preserves_cells(service):
     service._latest_rule = AsyncMock(return_value=make_rule(base_salary=5000.0))
     service._attendance_stats = AsyncMock(return_value={})
     service._param_values_for_month = AsyncMock(return_value={})
-    service._grid_values = AsyncMock(return_value={(str(EMP1), "hot"): 200.0})
+    service._grid_values = AsyncMock(return_value={(str(EMP1), "hot"): (200.0, "manual")})
     service._upsert_record = AsyncMock()
     seen = {}
 
-    async def fake_replace(month, eid, vals):
+    async def fake_replace(month, eid, vals, manual_keys=()):
         seen.update(vals)
+        seen["_manual"] = set(manual_keys)
 
     service._replace_grid_values = fake_replace
     await service.compute_month("2026-07")
     assert seen["basic"] == 5000.0
     assert seen["hot"] == 200.0  # 手工值保留
+    assert seen["_manual"] == {"hot"}
 
 
 @pytest.mark.asyncio
@@ -536,15 +541,46 @@ async def test_compute_month_injects_month_params(service):
     service._latest_rule = AsyncMock(return_value=make_rule(base_salary=5000.0))
     service._attendance_stats = AsyncMock(return_value={})
     service._param_values_for_month = AsyncMock(return_value={"hot_std": 0.2})
+    service._grid_values = AsyncMock(return_value={})
     service._upsert_record = AsyncMock()
     seen = {}
 
-    async def fake_replace(month, eid, vals):
+    async def fake_replace(month, eid, vals, manual_keys=()):
         seen.update(vals)
 
     service._replace_grid_values = fake_replace
     await service.compute_month("2026-07")
     assert seen["bonus"] == 1000.0  # 5000 * 0.2
+
+
+@pytest.mark.asyncio
+async def test_compute_month_preserves_manually_edited_cell(service):
+    # 用户手动改过 basic=5600（source=manual）→ ⚡计算 不再覆盖它，且依赖列 gross 用钉住值重算
+    items = [
+        {"key": "basic", "formula": "base", "is_active": True},
+        {"key": "gross", "formula": "basic", "is_active": True},
+    ]
+    service.list_items = AsyncMock(return_value=items)
+    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._latest_rule = AsyncMock(return_value=make_rule(base_salary=5000.0))
+    service._attendance_stats = AsyncMock(return_value={})
+    service._param_values_for_month = AsyncMock(return_value={})
+    service._grid_values = AsyncMock(return_value={
+        (str(EMP1), "basic"): (5600.0, "manual"),
+        (str(EMP1), "gross"): (5000.0, "computed"),
+    })
+    service._upsert_record = AsyncMock()
+    seen = {}
+
+    async def fake_replace(month, eid, vals, manual_keys=()):
+        seen.update(vals)
+        seen["_manual"] = set(manual_keys)
+
+    service._replace_grid_values = fake_replace
+    await service.compute_month("2026-07")
+    assert seen["basic"] == 5600.0  # 手工钉住值保留
+    assert seen["gross"] == 5600.0  # 依赖列用钉住值重新计算
+    assert seen["_manual"] == {"basic"}  # 落库时保留 manual 标记，下次也不会被覆盖
 
 
 @pytest.mark.asyncio

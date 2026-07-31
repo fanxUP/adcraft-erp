@@ -228,7 +228,7 @@ async function fetchGrid() {
 async function computeAll() {
   if (!curMonth.value) curMonth.value = new Date().toISOString().slice(0, 7)
   try {
-    await ElMessageBox.confirm("重新计算会覆盖该月所有单元格（包括手工修改），确定继续吗？", "计算工资", { type: "warning" })
+    await ElMessageBox.confirm("重新计算会更新公式列；手工填写或手动改过的格子会保留（想恢复计算，把该格清空后重新计算即可），确定继续吗？", "计算工资", { type: "warning" })
   } catch { return }
   computing.value = true
   try {

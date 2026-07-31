@@ -450,15 +450,19 @@ class SalaryRecordService:
             "work_days": float(work_days),
         }
 
-    async def _grid_values(self, month, item_keys=None):
-        """某月网格值 {(employee_id_str, item_key): float|None}。"""
+    async def _grid_values(self, month, item_keys=None, with_source=False):
+        """某月网格值 {(employee_id_str, item_key): float|None}。
+
+        with_source=True 时值为 (float|None, source)，用于区分手工/计算来源。
+        """
         stmt = select(SalaryGridValue).where(SalaryGridValue.month == month)
         if item_keys:
             stmt = stmt.where(SalaryGridValue.item_key.in_(item_keys))
         r = await self.db.execute(stmt)
         out = {}
         for v in r.scalars().all():
-            out[(str(v.employee_id), v.item_key)] = float(v.value) if v.value is not None else None
+            val = float(v.value) if v.value is not None else None
+            out[(str(v.employee_id), v.item_key)] = (val, v.source) if with_source else val
         return out
 
     async def _upsert_grid_value(self, month, eid: UUID, key, value, source):
@@ -478,16 +482,21 @@ class SalaryRecordService:
                                         value=value, source=source))
         await self.db.flush()
 
-    async def _replace_grid_values(self, month, eid: UUID, vals):
-        """覆盖某员工某月全部网格值（生成用，source=computed）。"""
+    async def _replace_grid_values(self, month, eid: UUID, vals, manual_keys=()):
+        """覆盖某员工某月全部网格值（生成用）。
+
+        manual_keys 中的单元格以 source=manual 落库，保留手工标记，
+        这样下次生成时这些格子不会被重新计算覆盖。
+        """
         await self.db.execute(
             delete(SalaryGridValue).where(
                 SalaryGridValue.month == month, SalaryGridValue.employee_id == eid
             )
         )
         for key, value in vals.items():
+            source = "manual" if key in manual_keys else "computed"
             self.db.add(SalaryGridValue(month=month, employee_id=eid, item_key=key,
-                                        value=value, source="computed"))
+                                        value=value, source=source))
         await self.db.flush()
 
     # 指标 key → salary_records 映射列（生成/手改后同步，让旧报表与发放逻辑继续工作）
@@ -658,7 +667,7 @@ class SalaryRecordService:
 
         targets = employee_ids or [e.id for e in await self._active_employees()]
         att_map = await self._attendance_stats(start, end)
-        manual_cells = await self._grid_values(month, manual_keys) if manual_keys else {}
+        existing = await self._grid_values(month, with_source=True)  # {(eid,key):(value,source)}
 
         computed = 0
         errors = []
@@ -669,20 +678,25 @@ class SalaryRecordService:
             raw = self._rule_vars(rule)
             raw.update(self._attendance_vars(att, work_days))
             raw.update(params)
+
+            # 手工钉住：手工填写列 + 手工改过的单元格，不再参与重新计算
+            preserve = {}
+            for key in active_keys | manual_keys:
+                cell = existing.get((str(eid), key))
+                if cell and cell[0] is not None and (cell[1] == "manual" or key in manual_keys):
+                    preserve[key] = cell[0]
             for k in manual_keys:
-                raw[k] = manual_cells.get((str(eid), k)) or 0.0
-            vals = {}
+                raw[k] = preserve.get(k, 0.0)
+
+            vals = dict(preserve)
             try:
                 for key in order:
+                    if key in preserve:
+                        continue  # 手工钉住，跳过重算
                     vals[key] = round(
                         evaluate_formula(formula_map[key], {**raw, **vals}, active_keys), 2
                     )
-                # 手工填写列保留原有值（⚡计算不覆盖）
-                for k in manual_keys:
-                    v = manual_cells.get((str(eid), k))
-                    if v is not None:
-                        vals[k] = v
-                await self._replace_grid_values(month, eid, vals)
+                await self._replace_grid_values(month, eid, vals, set(preserve))
                 await self._upsert_record(month, eid, vals)
                 computed += 1
             except FormulaError as e:
