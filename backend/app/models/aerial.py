@@ -4,11 +4,11 @@
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean, DateTime, Integer, Numeric, String, Text, ForeignKey, Index, func,
+    Boolean, Date, DateTime, Integer, Numeric, String, Text, ForeignKey, Index, func, text,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -345,3 +345,30 @@ class AerialAgentDraft(Base):
     created_cost_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_vehicle_costs.id"), nullable=True, comment="生成的车辆费用ID")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+# ── 高空作业考勤 ─────────────────────────────────────────────────────────────
+
+class AerialAttendanceRecord(Base, TimestampMixin):
+    """高空车/人员每日出勤记录（独立于出车台账维护，与台账通过日期+对象维度对应）"""
+    __tablename__ = "aerial_attendance_records"
+    __table_args__ = (
+        # 同一车辆同一天仅一条（人员记录 vehicle_id 为空，不受此约束）
+        Index("uq_aerial_att_vehicle_day", "att_date", "vehicle_id", unique=True,
+              postgresql_where=text("target_type = 'vehicle'")),
+        # 同一人员同一天仅一条
+        Index("uq_aerial_att_personnel_day", "att_date", "personnel_id", unique=True,
+              postgresql_where=text("target_type = 'personnel'")),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    att_date: Mapped[date] = mapped_column(Date, nullable=False, comment="考勤日期")
+    target_type: Mapped[str] = mapped_column(String(16), nullable=False, comment="考勤对象类型: vehicle/personnel")
+    vehicle_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_vehicles.id"), nullable=True, comment="车辆ID")
+    personnel_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_personnel.id"), nullable=True, comment="人员ID")
+    status: Mapped[str] = mapped_column(String(16), default="present", nullable=False, comment="状态: present/half_day/overtime/absent/maintenance")
+    check_in_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="出车/开工时间")
+    check_out_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="收车/完工时间")
+    overtime_hours: Mapped[float | None] = mapped_column(Numeric(5, 1), nullable=True, default=0, comment="加班小时")
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+    source: Mapped[str] = mapped_column(String(16), default="manual_input", nullable=False, comment="来源: manual_input")

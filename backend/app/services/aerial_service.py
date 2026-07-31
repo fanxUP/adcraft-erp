@@ -9,7 +9,7 @@ from typing import Optional
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.aerial import AerialDailyLedger
+from app.models.aerial import AerialDailyLedger, AerialAttendanceRecord
 from app.repositories.aerial_repo import AerialRepository
 
 
@@ -905,3 +905,78 @@ class AerialService:
 
     async def get_report_personnel_summary(self, year_month: str):
         return await self.repo.get_personnel_summary(year_month)
+
+    # ── 高空作业考勤 ─────────────────────────────────────────────────────────
+
+    async def list_attendance(self, page=1, page_size=1000, **filters):
+        skip = (page - 1) * page_size
+        items, total = await self.repo.list_attendance(skip=skip, limit=page_size, **filters)
+        return [self._attendance_to_dict(a) for a in items], total
+
+    async def create_attendance(self, data: dict):
+        clean = self._clean_attendance_data(data)
+        entity_id = clean.get("vehicle_id") or clean.get("personnel_id")
+        existing = await self.repo.get_attendance_by_key(clean["target_type"], entity_id, clean["att_date"])
+        if existing:
+            raise ValueError("该对象当日已有考勤记录，请直接编辑")
+        obj = await self.repo.create_attendance(clean)
+        return self._attendance_to_dict(obj)
+
+    async def update_attendance(self, attendance_id: str, data: dict):
+        obj = await self.repo.get_attendance(uuid.UUID(attendance_id))
+        if not obj:
+            raise ValueError("考勤记录不存在")
+        clean = self._clean_attendance_data(data, partial=True)
+        obj = await self.repo.update_attendance(obj, clean)
+        return self._attendance_to_dict(obj)
+
+    async def delete_attendance(self, attendance_id: str) -> dict:
+        obj = await self.repo.get_attendance(uuid.UUID(attendance_id))
+        if not obj:
+            raise ValueError("考勤记录不存在")
+        await self.repo.delete_attendance(obj)
+        return {"id": str(attendance_id)}
+
+    def _attendance_to_dict(self, a):
+        return {
+            "id": str(a.id),
+            "att_date": a.att_date.strftime("%Y-%m-%d") if a.att_date else None,
+            "target_type": a.target_type,
+            "vehicle_id": str(a.vehicle_id) if a.vehicle_id else None,
+            "personnel_id": str(a.personnel_id) if a.personnel_id else None,
+            "status": a.status,
+            "check_in_time": a.check_in_time.isoformat() if a.check_in_time else None,
+            "check_out_time": a.check_out_time.isoformat() if a.check_out_time else None,
+            "overtime_hours": float(a.overtime_hours) if a.overtime_hours else 0,
+            "remark": a.remark,
+            "source": a.source,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "updated_at": a.updated_at.isoformat() if a.updated_at else None,
+        }
+
+    def _clean_attendance_data(self, data: dict, partial=False):
+        _ALLOWED_STATUS = {"present", "half_day", "overtime", "absent", "maintenance"}
+        clean = {}
+        if data.get("att_date"):
+            clean["att_date"] = data["att_date"] if isinstance(data["att_date"], date) else date.fromisoformat(str(data["att_date"])[:10])
+        target_type = data.get("target_type", "personnel")
+        if target_type not in ("vehicle", "personnel"):
+            raise ValueError("target_type 只能是 vehicle/personnel")
+        if "target_type" in data or not partial:
+            clean["target_type"] = target_type
+        if data.get("vehicle_id"):
+            clean["vehicle_id"] = uuid.UUID(str(data["vehicle_id"]))
+        if data.get("personnel_id"):
+            clean["personnel_id"] = uuid.UUID(str(data["personnel_id"]))
+        for f in ("status", "remark", "source"):
+            if f in data:
+                clean[f] = data[f]
+        if "status" in clean and clean["status"] not in _ALLOWED_STATUS:
+            raise ValueError("无效的出勤状态")
+        if data.get("check_in_time"):
+            clean["check_in_time"] = data["check_in_time"] if isinstance(data["check_in_time"], datetime) else datetime.fromisoformat(str(data["check_in_time"]).replace("Z", "+00:00"))
+        if data.get("check_out_time"):
+            clean["check_out_time"] = data["check_out_time"] if isinstance(data["check_out_time"], datetime) else datetime.fromisoformat(str(data["check_out_time"]).replace("Z", "+00:00"))
+        if data.get("overtime_hours") is not None:
+            clean["overtime_hours"] = float(data["overtime_hours"])
+        return clean

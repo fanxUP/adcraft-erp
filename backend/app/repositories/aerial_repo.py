@@ -1,7 +1,7 @@
 """高空作业车台账模块 — Repository 层"""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import select, func, and_, or_
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.aerial import (
     AerialVehicle, AerialPersonnel, AerialDailyLedger, AerialPersonnelExpense,
     AerialPersonnelWage, AerialVehicleCost, AerialSafetyCheck,
-    AerialLedgerAttachment, AerialLedgerAuditLog,
+    AerialLedgerAttachment, AerialLedgerAuditLog, AerialAttendanceRecord,
 )
 
 
@@ -519,3 +519,68 @@ class AerialRepository:
             }
             for r in rows
         ]
+
+    # ── 高空作业考勤 ─────────────────────────────────────────────────────────
+
+    async def list_attendance(
+        self,
+        target_type: Optional[str] = None,
+        vehicle_id: Optional[str] = None,
+        personnel_id: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 1000,
+    ):
+        q = select(AerialAttendanceRecord)
+        if target_type:
+            q = q.where(AerialAttendanceRecord.target_type == target_type)
+        if vehicle_id:
+            q = q.where(AerialAttendanceRecord.vehicle_id == uuid.UUID(vehicle_id))
+        if personnel_id:
+            q = q.where(AerialAttendanceRecord.personnel_id == uuid.UUID(personnel_id))
+        if date_from:
+            q = q.where(AerialAttendanceRecord.att_date >= datetime.fromisoformat(date_from).date())
+        if date_to:
+            q = q.where(AerialAttendanceRecord.att_date <= datetime.fromisoformat(date_to).date())
+        count_q = select(func.count()).select_from(q.subquery())
+        total = (await self.db.execute(count_q)).scalar() or 0
+        q = q.order_by(AerialAttendanceRecord.att_date.desc()).offset(skip).limit(limit)
+        rows = (await self.db.execute(q)).scalars().all()
+        return list(rows), total
+
+    async def get_attendance(self, attendance_id: uuid.UUID):
+        return (await self.db.execute(
+            select(AerialAttendanceRecord).where(AerialAttendanceRecord.id == attendance_id)
+        )).scalar_one_or_none()
+
+    async def get_attendance_by_key(self, target_type: str, entity_id: uuid.UUID, att_date: date):
+        q = select(AerialAttendanceRecord).where(
+            AerialAttendanceRecord.target_type == target_type,
+            AerialAttendanceRecord.att_date == att_date,
+        )
+        if target_type == "vehicle":
+            q = q.where(AerialAttendanceRecord.vehicle_id == entity_id)
+        else:
+            q = q.where(AerialAttendanceRecord.personnel_id == entity_id)
+        return (await self.db.execute(q)).scalar_one_or_none()
+
+    async def create_attendance(self, data: dict):
+        obj = AerialAttendanceRecord(**data)
+        self.db.add(obj)
+        await self.db.flush()
+        await self.db.refresh(obj)
+        return obj
+
+    async def update_attendance(self, obj: AerialAttendanceRecord, data: dict):
+        for k, v in data.items():
+            if v is not None and hasattr(obj, k):
+                setattr(obj, k, v)
+        await self.db.flush()
+        await self.db.refresh(obj)
+        return obj
+
+    async def delete_attendance(self, obj: AerialAttendanceRecord):
+        await self.db.delete(obj)
+        await self.db.flush()
+        return obj

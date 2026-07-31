@@ -104,6 +104,7 @@ export const navigationItems: NavigationItem[] = [
           { label: '经营报表', path: '/aerial-reports', roles: ['admin', 'finance', 'production'] },
           { label: '车辆档案', path: '/aerial-vehicles', roles: ['admin', 'production'] },
           { label: '人员管理', path: '/aerial-personnel', roles: ['admin', 'production'] },
+          { label: '考勤表', path: '/aerial-attendance', roles: ['admin', 'production'] },
           { label: 'Agent 草稿', path: '/aerial-agent-drafts', roles: ['admin', 'finance', 'production'] },
         ],
       },

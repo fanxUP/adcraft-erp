@@ -38,6 +38,7 @@ attachment_router = APIRouter(prefix="/aerial/attachments", tags=["Aerial Attach
 audit_router = APIRouter(prefix="/aerial/audit-logs", tags=["Aerial Audit Logs"])
 dashboard_router = APIRouter(prefix="/aerial/dashboard", tags=["Aerial Dashboard"])
 report_router = APIRouter(prefix="/aerial/reports", tags=["Aerial Reports"])
+attendance_router = APIRouter(prefix="/aerial/attendance", tags=["Aerial Attendance"])
 
 
 def _svc(db, user, request) -> AerialService:
@@ -873,4 +874,71 @@ async def agent_reject_draft(
     result = await svc.reject_draft(_uuid.UUID(draft_id), data.reason)
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "拒绝失败"))
+    return success(result)
+
+
+# ── 高空作业考勤 ─────────────────────────────────────────────────────────────
+
+@attendance_router.get("")
+async def list_attendance(
+    target_type: str = Query("", description="考勤对象类型 vehicle/personnel"),
+    vehicle_id: str = Query("", description="车辆ID"),
+    personnel_id: str = Query("", description="人员ID"),
+    date_from: str = Query("", description="开始日期 YYYY-MM-DD"),
+    date_to: str = Query("", description="结束日期 YYYY-MM-DD"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(1000, ge=1, le=2000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_READ)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    items, total = await svc.list_attendance(
+        page=page, page_size=page_size,
+        target_type=target_type or None, vehicle_id=vehicle_id or None,
+        personnel_id=personnel_id or None, date_from=date_from or None, date_to=date_to or None,
+    )
+    return success_paginated(items, total, page, page_size)
+
+
+@attendance_router.post("")
+async def create_attendance(
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_CREATE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    result = await svc.create_attendance(data)
+    return success(result)
+
+
+@attendance_router.patch("/{attendance_id}")
+async def update_attendance(
+    attendance_id: str,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_UPDATE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    try:
+        result = await svc.update_attendance(attendance_id, data)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return success(result)
+
+
+@attendance_router.delete("/{attendance_id}")
+async def delete_attendance(
+    attendance_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_DELETE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    try:
+        result = await svc.delete_attendance(attendance_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     return success(result)

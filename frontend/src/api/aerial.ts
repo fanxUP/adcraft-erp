@@ -361,6 +361,40 @@ export const approveAerialLedger = (id: string, remark?: string) =>
 export const rejectAerialLedger = (id: string, remark?: string) =>
   post<AerialLedger>(`/aerial/ledgers/${id}/reject`, { remark })
 
+// ── Attendance API ───────────────────────────────────────────────────────────
+
+export interface AerialAttendanceRecord {
+  id: string
+  att_date: string
+  target_type: string // vehicle / personnel
+  vehicle_id?: string
+  personnel_id?: string
+  status: string // present / half_day / overtime / absent / maintenance
+  check_in_time?: string | null
+  check_out_time?: string | null
+  overtime_hours?: number | null
+  remark?: string
+  source?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export type AerialAttendanceCreate = Pick<AerialAttendanceRecord, 'att_date' | 'target_type'> &
+  Partial<Omit<AerialAttendanceRecord, 'id' | 'created_at' | 'updated_at'>>
+export type AerialAttendanceUpdate = Partial<Omit<AerialAttendanceRecord, 'id' | 'created_at' | 'updated_at'>>
+
+export const getAerialAttendance = (params?: AerialQueryParams) =>
+  get<PaginatedData<AerialAttendanceRecord>>('/aerial/attendance', { params })
+
+export const createAerialAttendance = (data: AerialAttendanceCreate) =>
+  post<AerialAttendanceRecord>('/aerial/attendance', data)
+
+export const updateAerialAttendance = (id: string, data: AerialAttendanceUpdate) =>
+  patch<AerialAttendanceRecord>(`/aerial/attendance/${id}`, data)
+
+export const deleteAerialAttendance = (id: string) =>
+  del(`/aerial/attendance/${id}`)
+
 // ── Personnel Expense API ─────────────────────────────────────────────────────
 
 export const getAerialPersonnelExpenses = (params?: AerialQueryParams) =>

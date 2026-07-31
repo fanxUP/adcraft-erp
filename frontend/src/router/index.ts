@@ -91,6 +91,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'aerial-vehicles', name: 'AerialVehicleList', component: () => import('@/views/aerial/AerialVehicleList.vue') },
       { path: 'aerial-personnel', name: 'AerialPersonnelList', component: () => import('@/views/aerial/AerialPersonnelList.vue') },
       { path: 'aerial-agent-drafts', name: 'AerialAgentDraftList', component: () => import('@/views/aerial/AerialAgentDraftList.vue') },
+      { path: 'aerial-attendance', name: 'AerialAttendanceList', component: () => import('@/views/aerial/AerialAttendanceList.vue') },
       { path: 'ai/anomalies', name: 'AnomalyDashboard', component: () => import('@/views/ai/AnomalyDashboard.vue') },
       { path: 'ai/quotes', name: 'AIQuoteAssistant', component: () => import('@/views/ai/AIQuoteAssistant.vue') },
       { path: 'ai/knowledge', name: 'QuoteKnowledgeBase', component: () => import('@/views/ai/QuoteKnowledgeBase.vue') },

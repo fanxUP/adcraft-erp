@@ -164,6 +164,7 @@ app.include_router(aerial.audit_router, prefix="/api/v1")
 app.include_router(aerial.dashboard_router, prefix="/api/v1")
 app.include_router(aerial.report_router, prefix="/api/v1")
 app.include_router(aerial.agent_router, prefix="/api/v1")
+app.include_router(aerial.attendance_router, prefix="/api/v1")
 
 # WebSocket endpoints
 app.add_api_websocket_route("/ws/notifications", notifications.websocket_notifications)
