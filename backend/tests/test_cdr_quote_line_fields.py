@@ -222,6 +222,7 @@ async def test_cdr_version_saves_regular_quote_fields_and_fees():
 
     service.repo.create_line = AsyncMock(side_effect=create_line)
     service.repo.create_audit_log = AsyncMock()
+    service.repo.get_quote = AsyncMock(return_value=None)
     service.calculate = AsyncMock(return_value={
         "billable_quantity": "7.2",
         "unit_price": "100",
