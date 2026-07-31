@@ -58,7 +58,7 @@ import { ElMessage } from 'element-plus'
 import { createProduct } from '@/api/products'
 import type { ProductResponse } from '@/types/api'
 
-const props = defineProps<{ modelValue: boolean }>()
+defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   created: [product: ProductResponse]
@@ -91,7 +91,8 @@ async function handleSave() {
     // Reset form
     Object.assign(form, { name: '', material_name: '', process_name: '', unit: '项', pricing_method: 'quantity', default_price: 0, min_charge: 0, remark: '' })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : (e as any)?.response?.data?.message || '创建失败'
+    const err = e as { response?: { data?: { message?: string } } }
+    const msg = e instanceof Error ? e.message : err?.response?.data?.message || '创建失败'
     ElMessage.error(msg)
   } finally {
     saving.value = false

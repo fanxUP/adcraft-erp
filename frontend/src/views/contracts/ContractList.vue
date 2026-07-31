@@ -225,7 +225,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getContracts, getContract, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment, getContractAvailableResources } from '@/api/contracts'
+import { getContracts, getContract, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment } from '@/api/contracts'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ContractListResponse, ContractDetailResponse } from '@/types/api'
@@ -456,14 +456,6 @@ async function saveForm() {
 // ── Detail dialog ──
 const detailVisible = ref(false)
 const currentDetail = ref<ContractDetailResponse | null>(null)
-
-async function handleDetail(row: ContractListResponse) {
-  try {
-    const detail = await getContract(row.id)
-    currentDetail.value = detail
-    detailVisible.value = true
-  } catch { /* ignore */ }
-}
 
 // ── Status change ──
 const statusDialogVisible = ref(false)

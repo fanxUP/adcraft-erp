@@ -145,7 +145,7 @@
             <template #default="{ row }">{{ [getProductName(row.product_id), getProductField(row.product_id, 'material_name'), getProductField(row.product_id, 'process_name')].filter(Boolean).join(' / ') }}</template>
           </el-table-column>
           <el-table-column label="标准价" width="120">
-            <template #default="{ row }">¥ {{ getProductField(row.product_id, 'default_price')?.toFixed(2) || '-' }}</template>
+            <template #default="{ row }">¥ {{ productDefaultPrice(row.product_id)?.toFixed(2) || '-' }}</template>
           </el-table-column>
           <el-table-column label="客户协议价" width="130">
             <template #default="{ row }">¥ {{ Number(row.price_value).toFixed(2) }}</template>
@@ -305,7 +305,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, reactive, watch, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { Folder, FolderOpened, Collection, User } from '@element-plus/icons-vue'
@@ -383,10 +383,10 @@ function buildTree(raw: CustomerTreeNode[]): TreeNode[] {
 
 function expandTreeNode(node: TreeNode) {
   if (!node.children) return
-  const store = (treeRef.value as any)?.store
+  const store = (treeRef.value as { store?: { nodesMap?: Record<string, { expand(): void }> } } | undefined)?.store
   if (!store) return
   for (const child of node.children) {
-    const n = store.nodesMap[child.id]
+    const n = store.nodesMap?.[child.id]
     if (n) n.expand()
     if (child.children?.length) {
       expandTreeNode(child)
@@ -435,11 +435,6 @@ const allProducts = ref<ProductResponse[]>([])
 function pricingLabel(m: string) {
   const map: Record<string, string> = { area: '按面积', quantity: '按数量', length: '按长度', word_count: '按字数' }
   return map[m] || m
-}
-
-function billingLabel(b: string) {
-  const map: Record<string, string> = { area: '按面积', length: '按长度', quantity: '按数量', hours: '按工时', fixed: '固定价' }
-  return map[b] || b
 }
 
 function formatProductLabel(p: ProductResponse): string {
@@ -518,7 +513,8 @@ async function handleDelete(row: ProductResponse) {
 // ── Batch Pricing ──
 const batchSubmitting = ref(false)
 const batchResult = ref<{ created: number; updated: number; skipped: number } | null>(null)
-const batchCustomers = ref<any[]>([])
+interface BatchCustomer { name?: string; customer_type?: string; level?: number | string }
+const batchCustomers = ref<BatchCustomer[]>([])
 const batchCustomersLoading = ref(false)
 const batchForm = reactive({
   product_ids: [] as string[],
@@ -535,7 +531,7 @@ async function loadBatchCustomers() {
   try {
     // Use the existing customers API to load matching customers
     const api = await import('@/api')
-    const response = await api.default.get<any>('/customers/', {
+    const response = await api.default.get<{ items: BatchCustomer[] }>('/customers/', {
       params: {
         page: 1,
         page_size: 100,
@@ -544,7 +540,7 @@ async function loadBatchCustomers() {
     })
     let customers = response.items || []
     if (selectedNode.value?.level) {
-      customers = customers.filter((c: any) => c.level === selectedNode.value?.level)
+      customers = customers.filter((c: BatchCustomer) => c.level === selectedNode.value?.level)
     }
     batchCustomers.value = customers
   } catch { /* ignore */ }
@@ -591,9 +587,13 @@ function getProductName(pid: string): string {
   return p?.name || pid.slice(0, 8)
 }
 
-function getProductField(pid: string, field: string): any {
+function getProductField(pid: string, field: string): unknown {
   const p = allProducts.value.find(x => x.id === pid)
-  return p ? (p as any)[field] : null
+  return p ? (p as Record<string, unknown>)[field] : null
+}
+function productDefaultPrice(pid: string): number | null {
+  const p = allProducts.value.find(x => x.id === pid)
+  return typeof p?.default_price === 'number' ? p.default_price : null
 }
 
 async function loadCustomerAgreements() {
