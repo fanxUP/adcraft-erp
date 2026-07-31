@@ -198,11 +198,14 @@ class _Evaluator(ast.NodeVisitor):
         raise FormulaError(f"公式包含不允许的语法：{type(node).__name__}")
 
 
-def validate_formula(formula: str, item_keys: Iterable[str] = ()) -> set[str]:
+def validate_formula(formula: str, item_keys: Iterable[str] = (),
+                     extra_keys: Iterable[str] = ()) -> set[str]:
     """校验公式语法与变量名，返回公式引用的指标列 key 集合。
 
     - 语法非法 / 含不允许的节点 → FormulaError
-    - 引用未知变量（非 RAW_VARS 且非指标 key）→ FormulaError
+    - 引用未知变量（非 RAW_VARS 且非指标 key 且非 extra_keys）→ FormulaError
+    extra_keys 供参数 key / 手工填写指标 key 使用（它们不在依赖图里，
+    但公式可以引用它们作为变量）。
     """
     if not formula or not formula.strip():
         raise FormulaError("公式不能为空")
@@ -211,6 +214,7 @@ def validate_formula(formula: str, item_keys: Iterable[str] = ()) -> set[str]:
     except SyntaxError as e:
         raise FormulaError(f"公式语法错误：{e.msg}")
     keys = set(item_keys)
+    allowed = set(extra_keys)
     # 先做节点类型合法性检查 + 收集 Name
     names: list[str] = []
 
@@ -241,7 +245,7 @@ def validate_formula(formula: str, item_keys: Iterable[str] = ()) -> set[str]:
     for n in names:
         if n in FUNCTIONS:
             continue  # max/min/round/abs 是函数名，不是变量
-        if n not in RAW_VARS and n not in keys:
+        if n not in RAW_VARS and n not in keys and n not in allowed:
             raise FormulaError(f"公式引用了未知变量：{n}")
     return {n for n in names if n not in FUNCTIONS and n in keys}
 
@@ -255,16 +259,17 @@ _ALLOWED_NODES = {
 }
 
 
-def build_dependency_order(item_formulas: dict) -> list:
+def build_dependency_order(item_formulas: dict, extra_keys: Iterable[str] = ()) -> list:
     """按公式间依赖对指标 key 做拓扑排序（被依赖的先算）。
 
     item_formulas: {key: formula}。公式引用其他指标 key 形成依赖边。
-    存在循环引用 → FormulaError。
+    extra_keys 为公式可引用的叶子变量（参数 key / 手工填写指标 key），
+    它们不参与依赖图。存在循环引用 → FormulaError。
     """
     keys = set(item_formulas)
     deps: dict = {k: set() for k in keys}
     for k, f in item_formulas.items():
-        for ref in validate_formula(f, keys - {k}):
+        for ref in validate_formula(f, keys - {k}, extra_keys):
             if ref in keys and ref != k:
                 deps[k].add(ref)
 

@@ -293,6 +293,7 @@ async def test_compute_month_evaluates_formulas(service):
     service._attendance_stats = AsyncMock(return_value={
         str(EMP1): {"normal": 20, "half": 0, "missed": 0, "absent": 0, "records": 20, "overtime": 10}})
     service._latest_rule = AsyncMock(return_value=rule)
+    service._param_values_for_month = AsyncMock(return_value={})
     seen = {}
 
     async def fake_replace(month, eid, vals):
@@ -320,6 +321,7 @@ async def test_compute_month_attendance_conditional(service):
     service.list_items = AsyncMock(return_value=items)
     service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule(attendance_bonus=300.0))
+    service._param_values_for_month = AsyncMock(return_value={})
     service._upsert_record = AsyncMock()
     seen = {}
 
@@ -346,6 +348,7 @@ async def test_compute_month_collects_eval_errors(service):
     service.list_items = AsyncMock(return_value=items)
     service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule())
+    service._param_values_for_month = AsyncMock(return_value={})
     service._attendance_stats = AsyncMock(return_value={
         str(EMP1): {"normal": 23, "half": 0, "missed": 0, "absent": 0, "records": 23, "overtime": 0}})
     service._load_employee = AsyncMock(return_value=make_employee())
@@ -444,14 +447,18 @@ async def test_save_cells_payment_status(service):
 @pytest.mark.asyncio
 async def test_create_item_validates_formula(service):
     service._all_item_keys = AsyncMock(return_value=["basic"])
+    service._all_param_keys = AsyncMock(return_value=["commission_rate"])
     service.db = _grid_session()
     item = await service.create_item({"key": "hot", "label": "高温补贴", "formula": "base * 0.1"})
     assert item["key"] == "hot"
     assert item["is_builtin"] is False
+    assert item["is_manual"] is False
     with pytest.raises(ValueError, match="未知变量"):
         await service.create_item({"key": "bad", "label": "错误", "formula": "nope + 1"})
     with pytest.raises(ValueError, match="同名"):
         await service.create_item({"key": "base", "label": "冲突", "formula": "1"})
+    # 公式可引用参数 key
+    await service.create_item({"key": "ok", "label": "正常", "formula": "base * commission_rate"})
 
 
 @pytest.mark.asyncio
@@ -460,9 +467,151 @@ async def test_update_item_and_delete_builtin(service):
     item.id = uuid4()
     item.key = "basic"
     item.is_builtin = True
+    item.is_manual = False
     service._all_item_keys = AsyncMock(return_value=["basic", "net"])
+    service._all_param_keys = AsyncMock(return_value=[])
     service.db = _grid_session(item)
     updated = await service.update_item(item.id, {"formula": "base * 2"})
     assert item.formula == "base * 2"
     with pytest.raises(ValueError, match="内置指标"):
         await service.delete_item(item.id)
+
+
+# ── 手工填写指标 + 每月参数 ───────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_manual_item_skips_formula_validation(service):
+    service._all_item_keys = AsyncMock(return_value=["basic"])
+    service._all_param_keys = AsyncMock(return_value=[])
+    service.db = _grid_session()
+    item = await service.create_item({"key": "hot", "label": "高温补贴", "formula": "", "is_manual": True})
+    assert item["is_manual"] is True
+    assert item["formula"] == ""
+
+
+@pytest.mark.asyncio
+async def test_update_item_switch_to_manual_clears_formula(service):
+    item = MagicMock()
+    item.id = uuid4()
+    item.key = "hot"
+    item.is_manual = False
+    item.formula = "base * 0.1"
+    service.db = _grid_session(item)
+    updated = await service.update_item(item.id, {"is_manual": True})
+    assert updated["is_manual"] is True
+    assert item.formula == ""
+
+
+@pytest.mark.asyncio
+async def test_compute_month_skips_manual_items_and_preserves_cells(service):
+    # 手工填写列不参与公式计算，原有值在 ⚡计算 后保留
+    items = [
+        {"key": "basic", "formula": "base", "is_active": True, "is_manual": False},
+        {"key": "hot", "formula": "", "is_active": True, "is_manual": True},
+    ]
+    service.list_items = AsyncMock(return_value=items)
+    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._latest_rule = AsyncMock(return_value=make_rule(base_salary=5000.0))
+    service._attendance_stats = AsyncMock(return_value={})
+    service._param_values_for_month = AsyncMock(return_value={})
+    service._grid_values = AsyncMock(return_value={(str(EMP1), "hot"): 200.0})
+    service._upsert_record = AsyncMock()
+    seen = {}
+
+    async def fake_replace(month, eid, vals):
+        seen.update(vals)
+
+    service._replace_grid_values = fake_replace
+    await service.compute_month("2026-07")
+    assert seen["basic"] == 5000.0
+    assert seen["hot"] == 200.0  # 手工值保留
+
+
+@pytest.mark.asyncio
+async def test_compute_month_injects_month_params(service):
+    # 公式引用自定义参数 hot_std（非内置变量），当月填 200 → bonus = 5000*0.2
+    items = [{"key": "bonus", "formula": "base * hot_std", "is_active": True}]
+    service.list_items = AsyncMock(return_value=items)
+    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._latest_rule = AsyncMock(return_value=make_rule(base_salary=5000.0))
+    service._attendance_stats = AsyncMock(return_value={})
+    service._param_values_for_month = AsyncMock(return_value={"hot_std": 0.2})
+    service._upsert_record = AsyncMock()
+    seen = {}
+
+    async def fake_replace(month, eid, vals):
+        seen.update(vals)
+
+    service._replace_grid_values = fake_replace
+    await service.compute_month("2026-07")
+    assert seen["bonus"] == 1000.0  # 5000 * 0.2
+
+
+@pytest.mark.asyncio
+async def test_compute_month_all_manual_raises(service):
+    items = [{"key": "hot", "formula": "", "is_active": True, "is_manual": True}]
+    service.list_items = AsyncMock(return_value=items)
+    with pytest.raises(ValueError, match="公式指标"):
+        await service.compute_month("2026-07")
+
+
+@pytest.mark.asyncio
+async def test_create_param_validate_key(service):
+    service._all_item_keys = AsyncMock(return_value=["basic"])
+    service._all_param_keys = AsyncMock(return_value=["commission_rate"])
+    service.db = _grid_session()
+    p = await service.create_param({"key": "hot_std", "label": "高温补贴标准"})
+    assert p["key"] == "hot_std"
+    with pytest.raises(ValueError, match="同名"):
+        await service.create_param({"key": "commission_rate", "label": "重复"})
+    with pytest.raises(ValueError, match="同名"):
+        await service.create_param({"key": "basic", "label": "冲突"})
+
+
+@pytest.mark.asyncio
+async def test_list_params_with_month_value(service):
+    param = MagicMock()
+    param.id = uuid4()
+    param.key = "commission_rate"
+    param.label = "提成系数"
+    param.sort_order = 1
+    val = MagicMock()
+    val.param_id = param.id
+    val.value = 0.05
+    res_params = MagicMock()
+    res_params.scalars.return_value.all.return_value = [param]
+    res_vals = MagicMock()
+    res_vals.scalars.return_value.all.return_value = [val]
+    service.db = MagicMock()
+    service.db.execute = AsyncMock(side_effect=[res_params, res_vals])
+    result = await service.list_params("2026-07")
+    assert result["month"] == "2026-07"
+    assert result["params"][0]["key"] == "commission_rate"
+    assert result["params"][0]["value"] == 0.05
+
+
+@pytest.mark.asyncio
+async def test_save_param_values_upserts_and_clears(service):
+    param = MagicMock()
+    param.id = uuid4()
+    param.key = "commission_rate"
+    existing = MagicMock()
+    existing.value = 0.1
+    res_params = MagicMock()
+    res_params.scalars.return_value.all.return_value = [param]
+    res_row = MagicMock()
+    res_row.scalar_one_or_none.return_value = existing
+    service.db = MagicMock()
+    # 第一次查询参数列表 → 第二次查该参数当月值（upsert）→ 第三次查该参数当月值（清空）
+    service.db.execute = AsyncMock(side_effect=[res_params, res_row, res_row])
+    service.db.flush = AsyncMock()
+    service.db.add = MagicMock()
+    service.db.delete = AsyncMock()
+
+    r = await service.save_param_values("2026-07", [
+        {"key": "commission_rate", "value": 0.05},
+        {"key": "commission_rate", "value": None},
+    ])
+    assert r["saved"] == 1
+    assert existing.value == 0.05
+    service.db.delete.assert_called_once()

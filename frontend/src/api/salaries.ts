@@ -60,6 +60,7 @@ export interface SalaryItem {
   sort_order: number
   is_active: boolean
   is_builtin: boolean
+  is_manual: boolean
 }
 
 export interface SalaryGridRow {
@@ -93,14 +94,51 @@ export interface SalarySaveResult {
 export function getSalaryItems() {
   return get<SalaryItem[]>("/salaries/items")
 }
-export function createSalaryItem(data: { key: string; label: string; formula: string; sort_order: number }) {
+export function createSalaryItem(data: { key: string; label: string; formula: string; sort_order: number; is_manual?: boolean }) {
   return post<SalaryItem>("/salaries/items", data)
 }
-export function updateSalaryItem(id: string, data: { label?: string; formula?: string; sort_order?: number; is_active?: boolean }) {
+export function updateSalaryItem(id: string, data: { label?: string; formula?: string; sort_order?: number; is_active?: boolean; is_manual?: boolean }) {
   return put<SalaryItem>("/salaries/items/" + id, data)
 }
 export function deleteSalaryItem(id: string) {
   return del<unknown>("/salaries/items/" + id)
+}
+
+/* ── 工资参数（每月手工填一个值，公式可引用） ─────────────────────────────── */
+
+export interface SalaryParam {
+  id: string
+  key: string
+  label: string
+  sort_order: number
+  value: number | null
+}
+
+export interface SalaryParamsResult {
+  month: string
+  params: SalaryParam[]
+}
+
+export interface SalaryParamSaveResult {
+  month: string
+  saved: number
+  errors: string[]
+}
+
+export function getSalaryParams(month: string) {
+  return get<SalaryParamsResult>("/salaries/params", { params: { month } })
+}
+export function createSalaryParam(data: { key: string; label: string; sort_order: number }) {
+  return post<{ id: string; key: string; label: string; sort_order: number }>("/salaries/params", data)
+}
+export function updateSalaryParam(id: string, data: { label?: string; sort_order?: number }) {
+  return put<{ id: string; key: string; label: string; sort_order: number }>("/salaries/params/" + id, data)
+}
+export function deleteSalaryParam(id: string) {
+  return del<unknown>("/salaries/params/" + id)
+}
+export function saveSalaryParamValues(month: string, values: { key: string; value: number | null }[]) {
+  return post<SalaryParamSaveResult>("/salaries/params/save", { month, values })
 }
 export function getSalaryGrid(month: string) {
   return get<SalaryGridResult>("/salaries/grid", { params: { month } })

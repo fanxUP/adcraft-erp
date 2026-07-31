@@ -20,6 +20,7 @@ class SalaryItemCreate(BaseModel):
     label: str
     formula: str
     sort_order: int = 0
+    is_manual: bool = False
 
 
 class SalaryItemUpdate(BaseModel):
@@ -27,6 +28,28 @@ class SalaryItemUpdate(BaseModel):
     formula: str | None = None
     sort_order: int | None = None
     is_active: bool | None = None
+    is_manual: bool | None = None
+
+
+class SalaryParamCreate(BaseModel):
+    key: str
+    label: str
+    sort_order: int = 0
+
+
+class SalaryParamUpdate(BaseModel):
+    label: str | None = None
+    sort_order: int | None = None
+
+
+class SalaryParamValueIn(BaseModel):
+    key: str
+    value: float | None = None
+
+
+class SalaryParamSaveRequest(BaseModel):
+    month: str
+    values: list[SalaryParamValueIn] = []
 
 
 class SalaryGridCell(BaseModel):
@@ -144,6 +167,56 @@ async def salary_grid_save(data: SalaryGridSaveRequest, db=Depends(get_db),
         cells = [c.model_dump() for c in (data.cells or [])]
         payments = [p.model_dump() for p in (data.payments or [])]
         return success(await SalaryRecordService(db).save_cells(data.month, cells, payments))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+# ── 工资参数（每月手工填一个值，公式可引用）───────────────────────────────
+
+@router.get("/params")
+async def salary_params(month: str, db=Depends(get_db), current_user=Depends(get_current_user)):
+    """参数定义 + 当月取值。"""
+    try:
+        return success(await SalaryRecordService(db).list_params(month))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.post("/params")
+async def create_salary_param(data: SalaryParamCreate, db=Depends(get_db),
+                              current_user=Depends(get_current_user)):
+    try:
+        return success(await SalaryRecordService(db).create_param(data.model_dump()))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.post("/params/save")
+async def save_salary_params(data: SalaryParamSaveRequest, db=Depends(get_db),
+                             current_user=Depends(get_current_user)):
+    """保存某月参数取值（value=None 表示清空该月取值）。"""
+    try:
+        return success(await SalaryRecordService(db).save_param_values(
+            data.month, [v.model_dump() for v in data.values]))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.put("/params/{param_id}")
+async def update_salary_param(param_id: str, data: SalaryParamUpdate, db=Depends(get_db),
+                              current_user=Depends(get_current_user)):
+    try:
+        return success(await SalaryRecordService(db).update_param(
+            UUID(param_id), data.model_dump(exclude_none=True)))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.delete("/params/{param_id}")
+async def delete_salary_param(param_id: str, db=Depends(get_db), current_user=Depends(get_current_user)):
+    try:
+        await SalaryRecordService(db).delete_param(UUID(param_id))
+        return success(None)
     except ValueError as e:
         return {"code": 40001, "message": str(e), "data": None}
 

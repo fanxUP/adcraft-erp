@@ -22,6 +22,8 @@ class SalaryItem(Base, TimestampMixin):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # 手工填写列：无公式，⚡计算不覆盖，值由用户逐格填写
+    is_manual: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class SalaryGridValue(Base, TimestampMixin):
@@ -43,3 +45,32 @@ class SalaryGridValue(Base, TimestampMixin):
     item_key: Mapped[str] = mapped_column(String(64), nullable=False)
     value: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     source: Mapped[str] = mapped_column(String(16), nullable=False, default="computed")
+
+
+class SalaryParam(Base, TimestampMixin):
+    """工资参数定义：每月手工填一个值，公式里可直接引用其 key。
+
+    例如参数 key=commission_rate、label=提成系数，某月填 0.05，
+    则该月所有员工的公式里 commission_rate 都等于 0.05。
+    """
+    __tablename__ = "salary_params"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    label: Mapped[str] = mapped_column(String(64), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class SalaryParamValue(Base, TimestampMixin):
+    """某月某参数的取值；未填的参数在公式中按 0 处理。"""
+    __tablename__ = "salary_param_values"
+    __table_args__ = (
+        UniqueConstraint("month", "param_id", name="uq_salary_param_month"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    month: Mapped[str] = mapped_column(String(7), nullable=False)  # YYYY-MM
+    param_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("salary_params.id"), nullable=False
+    )
+    value: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)

@@ -87,3 +87,21 @@ def test_validate_returns_referenced_keys():
 def test_validate_function_name_not_unknown_var():
     # max/min/round/abs 是函数名，不算未知变量
     validate_formula("max(0, base - 100)", {"base"})
+
+
+def test_validate_accepts_param_and_manual_keys():
+    # 参数 key / 手工填写指标 key 通过 extra_keys 允许引用
+    refs = validate_formula("base * hot_std + hot_subsidy",
+                            {"base"}, {"hot_std", "hot_subsidy"})
+    assert refs == {"base"}  # 只有指标 key 进入依赖图；参数/手工列是叶子
+    with pytest.raises(FormulaError, match="未知变量"):
+        validate_formula("base * hot_std", {"base"})
+
+
+def test_build_dependency_order_with_extra_keys():
+    # 公式引用参数/手工列 key 不影响拓扑排序（它们不参与依赖图）
+    order = build_dependency_order(
+        {"gross": "basic + hot_subsidy", "basic": "base"},
+        {"hot_subsidy", "commission_rate"},
+    )
+    assert order.index("basic") < order.index("gross")

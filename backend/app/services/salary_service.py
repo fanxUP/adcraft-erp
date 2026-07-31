@@ -9,7 +9,7 @@ from app.repositories.salary_repo import SalaryRecordRepository
 from app.models.employee import Employee
 from app.models.salary_rule import SalaryRule
 from app.models.attendance import AttendanceRecord
-from app.models.salary_grid import SalaryItem, SalaryGridValue
+from app.models.salary_grid import SalaryItem, SalaryGridValue, SalaryParam, SalaryParamValue
 from app.services.salary_formula import (
     FUNCTIONS,
     RAW_VARS,
@@ -337,11 +337,17 @@ class SalaryRecordService:
             "sort_order": i.sort_order,
             "is_active": bool(i.is_active),
             "is_builtin": bool(i.is_builtin),
+            "is_manual": bool(i.is_manual),
         }
 
     async def _all_item_keys(self, exclude=None):
         r = await self.db.execute(select(SalaryItem))
         return [i.key for i in r.scalars().all() if i.key != exclude]
+
+    async def _all_param_keys(self):
+        """全部参数 key（公式可引用的变量名）。"""
+        r = await self.db.execute(select(SalaryParam))
+        return [p.key for p in r.scalars().all()]
 
     async def create_item(self, data):
         key = (data.get("key") or "").strip()
@@ -354,8 +360,13 @@ class SalaryRecordService:
         existing_keys = await self._all_item_keys()
         if key in existing_keys:
             raise ValueError(f"指标 key「{key}」已存在")
-        formula = (data.get("formula") or "0").strip()
-        validate_formula(formula, existing_keys)
+        is_manual = bool(data.get("is_manual"))
+        formula = ""
+        if not is_manual:
+            # 公式可引用其他指标 key + 参数 key；手工填写列无需公式
+            formula = (data.get("formula") or "0").strip()
+            param_keys = await self._all_param_keys()
+            validate_formula(formula, existing_keys, param_keys)
         item = SalaryItem(
             key=key,
             label=(data.get("label") or key).strip(),
@@ -363,6 +374,7 @@ class SalaryRecordService:
             sort_order=int(data.get("sort_order") or 0),
             is_active=True,
             is_builtin=False,
+            is_manual=is_manual,
         )
         self.db.add(item)
         await self.db.flush()
@@ -373,9 +385,14 @@ class SalaryRecordService:
         item = r.scalar_one_or_none()
         if not item:
             raise ValueError("指标不存在")
-        if "formula" in data and data["formula"] is not None:
+        if "is_manual" in data and data["is_manual"] is not None:
+            item.is_manual = bool(data["is_manual"])
+            if item.is_manual:
+                item.formula = ""
+        if "formula" in data and data["formula"] is not None and not item.is_manual:
             other_keys = [k for k in await self._all_item_keys() if k != item.key]
-            validate_formula(data["formula"], other_keys)
+            param_keys = await self._all_param_keys()
+            validate_formula(data["formula"], other_keys, param_keys)
             item.formula = data["formula"]
         if data.get("label") is not None:
             item.label = data["label"]
@@ -506,6 +523,113 @@ class SalaryRecordService:
             })
             await self.repo.create(data)
 
+    # ── 工资参数（每月手工填一个值，公式可引用）──────────────────────────────
+
+    async def _param_values_for_month(self, month) -> dict:
+        """当月参数取值 {key: float}；未填值的参数补 0。"""
+        params = (await self.db.execute(select(SalaryParam))).scalars().all()
+        if not params:
+            return {}
+        pid_map = {p.id: p.key for p in params}
+        r = await self.db.execute(select(SalaryParamValue).where(SalaryParamValue.month == month))
+        vals = {}
+        for v in r.scalars().all():
+            key = pid_map.get(v.param_id)
+            if key:
+                vals[key] = float(v.value) if v.value is not None else 0.0
+        for p in params:
+            vals.setdefault(p.key, 0.0)
+        return vals
+
+    async def list_params(self, month):
+        """参数定义 + 当月取值（未填为 null）。"""
+        self._check_month(month)
+        params = (await self.db.execute(
+            select(SalaryParam).order_by(SalaryParam.sort_order, SalaryParam.created_at)
+        )).scalars().all()
+        r = await self.db.execute(select(SalaryParamValue).where(SalaryParamValue.month == month))
+        value_map = {v.param_id: v for v in r.scalars().all()}
+        out = []
+        for p in params:
+            v = value_map.get(p.id)
+            out.append({
+                "id": str(p.id),
+                "key": p.key,
+                "label": p.label,
+                "sort_order": p.sort_order,
+                "value": float(v.value) if v and v.value is not None else None,
+            })
+        return {"month": month, "params": out}
+
+    async def create_param(self, data):
+        key = (data.get("key") or "").strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            raise ValueError("参数 key 只能包含字母、数字、下划线，且不能以数字开头")
+        if key in RAW_VARS:
+            raise ValueError(f"参数 key「{key}」与系统内置变量同名，请换一个")
+        if key in FUNCTIONS:
+            raise ValueError(f"参数 key「{key}」是函数名，请换一个")
+        if key in await self._all_item_keys():
+            raise ValueError(f"参数 key「{key}」与工资指标同名，请换一个")
+        if key in await self._all_param_keys():
+            raise ValueError(f"参数 key「{key}」已存在")
+        p = SalaryParam(key=key, label=(data.get("label") or key).strip(),
+                        sort_order=int(data.get("sort_order") or 0))
+        self.db.add(p)
+        await self.db.flush()
+        return {"id": str(p.id), "key": p.key, "label": p.label, "sort_order": p.sort_order}
+
+    async def update_param(self, param_id: UUID, data):
+        r = await self.db.execute(select(SalaryParam).where(SalaryParam.id == param_id))
+        p = r.scalar_one_or_none()
+        if not p:
+            raise ValueError("参数不存在")
+        if data.get("label") is not None:
+            p.label = data["label"]
+        if "sort_order" in data and data["sort_order"] is not None:
+            p.sort_order = int(data["sort_order"])
+        await self.db.flush()
+        return {"id": str(p.id), "key": p.key, "label": p.label, "sort_order": p.sort_order}
+
+    async def delete_param(self, param_id: UUID):
+        r = await self.db.execute(select(SalaryParam).where(SalaryParam.id == param_id))
+        p = r.scalar_one_or_none()
+        if not p:
+            raise ValueError("参数不存在")
+        await self.db.execute(delete(SalaryParamValue).where(SalaryParamValue.param_id == param_id))
+        await self.db.delete(p)
+        await self.db.flush()
+        return True
+
+    async def save_param_values(self, month, values):
+        """保存某月参数值：values=[{key, value}]，value=None 表示清空该月取值。"""
+        self._check_month(month)
+        params = {p.key: p.id for p in (await self.db.execute(select(SalaryParam))).scalars().all()}
+        saved = 0
+        errors = []
+        for it in values or []:
+            key = it.get("key")
+            pid = params.get(key)
+            if not pid:
+                errors.append(f"未知参数：{key}")
+                continue
+            value = it.get("value")
+            value = float(value) if value not in (None, "") else None
+            r = await self.db.execute(select(SalaryParamValue).where(
+                SalaryParamValue.month == month, SalaryParamValue.param_id == pid))
+            row = r.scalar_one_or_none()
+            if value is None:
+                if row:
+                    await self.db.delete(row)
+                continue
+            if row:
+                row.value = value
+            else:
+                self.db.add(SalaryParamValue(month=month, param_id=pid, value=value))
+            saved += 1
+        await self.db.flush()
+        return {"month": month, "saved": saved, "errors": errors}
+
     async def compute_month(self, month, employee_ids: list[UUID] | None = None):
         """按指标公式计算当月所有（或指定）员工的工资网格值并落库。
 
@@ -522,12 +646,19 @@ class SalaryRecordService:
         active = [i for i in items if i["is_active"]]
         if not active:
             raise ValueError("请先在「指标设置」中启用至少一个指标")
-        formula_map = {i["key"]: i["formula"] for i in active}
+        manual_keys = {i["key"] for i in active if i.get("is_manual")}
+        computed_items = [i for i in active if not i.get("is_manual")]
+        if not computed_items:
+            raise ValueError("没有公式指标可计算（请把至少一个指标改为公式计算）")
+        formula_map = {i["key"]: i["formula"] for i in computed_items}
         active_keys = set(formula_map)
-        order = build_dependency_order(formula_map)  # 循环引用→FormulaError(ValueError)
+        params = await self._param_values_for_month(month)
+        extra = manual_keys | set(params)
+        order = build_dependency_order(formula_map, extra)  # 循环引用→FormulaError(ValueError)
 
         targets = employee_ids or [e.id for e in await self._active_employees()]
         att_map = await self._attendance_stats(start, end)
+        manual_cells = await self._grid_values(month, manual_keys) if manual_keys else {}
 
         computed = 0
         errors = []
@@ -537,12 +668,20 @@ class SalaryRecordService:
                                          "records": 0, "overtime": 0})
             raw = self._rule_vars(rule)
             raw.update(self._attendance_vars(att, work_days))
+            raw.update(params)
+            for k in manual_keys:
+                raw[k] = manual_cells.get((str(eid), k)) or 0.0
             vals = {}
             try:
                 for key in order:
                     vals[key] = round(
                         evaluate_formula(formula_map[key], {**raw, **vals}, active_keys), 2
                     )
+                # 手工填写列保留原有值（⚡计算不覆盖）
+                for k in manual_keys:
+                    v = manual_cells.get((str(eid), k))
+                    if v is not None:
+                        vals[k] = v
                 await self._replace_grid_values(month, eid, vals)
                 await self._upsert_record(month, eid, vals)
                 computed += 1

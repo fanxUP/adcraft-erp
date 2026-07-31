@@ -7,6 +7,7 @@
         <el-button @click="fetchGrid">刷新</el-button>
         <el-button type="primary" :loading="computing" @click="computeAll">⚡ 计算</el-button>
         <el-button type="warning" @click="openItems">🔧 指标设置</el-button>
+        <el-button type="success" plain @click="openParams">⚙ 参数</el-button>
         <el-button @click="handlePrint">🖨️ 打印</el-button>
       </div>
     </div>
@@ -26,7 +27,9 @@
             <th class="col-fixed">工号</th>
             <th class="col-fixed">姓名</th>
             <th class="col-fixed">部门</th>
-            <th v-for="it in items" :key="it.key" class="col-item" :title="it.formula">{{ it.label }}</th>
+            <th v-for="it in items" :key="it.key" class="col-item" :title="it.is_manual ? '手工填写（⚡计算不覆盖）' : it.formula">
+              {{ it.label }}<span v-if="it.is_manual" class="manual-badge" title="手工填写">手</span>
+            </th>
             <th class="col-status">支付状态</th>
           </tr>
         </thead>
@@ -65,19 +68,27 @@
         <div class="help-grid">
           <span v-for="v in varHints" :key="v.name" class="help-item"><code>{{ v.name }}</code> = {{ v.label }}</span>
         </div>
+        <template v-if="paramHints.length">
+          <div style="font-weight:700;margin:10px 0 6px">本月参数（在「⚙ 参数」中填值，未填按 0）</div>
+          <div class="help-grid">
+            <span v-for="p in paramHints" :key="p.name" class="help-item"><code>{{ p.name }}</code> = {{ p.label }}</span>
+          </div>
+        </template>
         <div style="font-weight:700;margin:10px 0 6px">函数与示例</div>
         <div class="help-examples">
           <div v-for="(ex, i) in examples" :key="i" class="help-ex"><code>{{ ex.split('→')[0] }}</code> → {{ ex.split('→')[1] }}</div>
         </div>
-        <div style="color:#909399;font-size:12px;margin-top:6px">语法为 Python 风格；支持 + - * / % 、比较、and/or/not、<code>A if 条件 else B</code>、max/min/round/abs。改完公式点「保存」，再回到页面点「⚡ 计算」重新生成数值。</div>
+        <div style="color:#909399;font-size:12px;margin-top:6px">语法为 Python 风格；支持 + - * / % 、比较、and/or/not、<code>A if 条件 else B</code>、max/min/round/abs。勾选「手」的指标为手工填写列：无需公式，⚡计算不会覆盖它的值。改完点「保存」，再回到页面点「⚡ 计算」重新生成数值。</div>
       </div>
 
       <div class="items-list">
         <div v-for="(it, idx) in itemsDraft" :key="idx" class="item-row">
           <el-input v-model="it.label" placeholder="指标名称" style="width:110px" />
           <code class="item-key">{{ it.key }}</code>
-          <el-input v-model="it.formula" placeholder="公式" style="flex:1" />
+          <el-input v-model="it.formula" :disabled="it.is_manual" :placeholder="it.is_manual ? '手工填写，无需公式' : '公式'" style="flex:1" />
           <el-input-number v-model="it.sort_order" :controls="false" size="small" style="width:64px" title="排序" />
+          <span style="font-size:12px;color:#909399">手</span>
+          <el-switch v-model="it.is_manual" size="small" title="手工填写（⚡计算不覆盖）" />
           <el-switch v-model="it.is_active" size="small" title="启用" />
           <el-button text type="danger" size="small" :disabled="it.is_builtin" :title="it.is_builtin ? '内置指标不可删除' : '删除'" @click="removeItem(it)">删</el-button>
         </div>
@@ -86,14 +97,44 @@
       <el-divider content-position="left">新增指标</el-divider>
       <div class="item-row new-item">
         <el-input v-model="newItem.label" placeholder="名称，如：高温补贴" style="width:110px" />
-        <el-input v-model="newItem.key" placeholder="key，如：hot_subsidy" style="width:150px" />
-        <el-input v-model="newItem.formula" placeholder="公式，如：200" style="flex:1" />
+        <el-input v-model="newItem.key" placeholder="key，如：hot_subsidy" style="width:140px" />
+        <el-input v-model="newItem.formula" :disabled="newItem.is_manual" :placeholder="newItem.is_manual ? '手工填写，无需公式' : '公式，如：200'" style="flex:1" />
+        <span style="font-size:12px;color:#909399">手</span>
+        <el-switch v-model="newItem.is_manual" size="small" title="手工填写" />
         <el-button type="primary" plain @click="addNewItem">＋ 添加</el-button>
       </div>
 
       <template #footer>
         <el-button @click="showItems = false">取消</el-button>
         <el-button type="primary" :loading="itemsSaving" @click="saveItems">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 工资参数 Dialog：每月填一个值，公式可引用 -->
+    <el-dialog v-model="showParams" title="⚙ 工资参数设置（每月填一个值，公式可引用）" width="640px" top="6vh">
+      <div style="color:#909399;font-size:12px;margin-bottom:10px">
+        参数是每月填一个数的变量，指标公式里可以直接引用它的 key（如提成系数 <code>commission_rate</code>）。当月所有员工的公式都使用这个月的参数值；未填的参数按 0 处理。
+      </div>
+      <div class="items-list">
+        <div v-for="(p, idx) in paramsDraft" :key="idx" class="item-row">
+          <el-input v-model="p.label" placeholder="参数名称" style="width:120px" />
+          <code class="item-key">{{ p.key }}</code>
+          <el-input-number v-model="p.value" :controls="false" :precision="4" :placeholder="'本月值'" style="flex:1" />
+          <el-input-number v-model="p.sort_order" :controls="false" size="small" style="width:64px" title="排序" />
+          <el-button text type="danger" size="small" @click="removeParam(p)">删</el-button>
+        </div>
+      </div>
+
+      <el-divider content-position="left">新增参数</el-divider>
+      <div class="item-row new-item">
+        <el-input v-model="newParam.label" placeholder="名称，如：提成系数" style="width:120px" />
+        <el-input v-model="newParam.key" placeholder="key，如：commission_rate" style="width:170px" />
+        <el-button type="primary" plain @click="addNewParam">＋ 添加</el-button>
+      </div>
+
+      <template #footer>
+        <el-button @click="showParams = false">取消</el-button>
+        <el-button type="primary" :loading="paramsSaving" @click="saveParams">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -104,7 +145,8 @@ import { ref, computed, onMounted } from "vue"
 import {
   getSalaryItems, getSalaryGrid, computeSalaryGrid, saveSalaryGrid,
   updateSalaryItem, createSalaryItem, deleteSalaryItem,
-  type SalaryItem, type SalaryGridRow,
+  getSalaryParams, createSalaryParam, updateSalaryParam, deleteSalaryParam, saveSalaryParamValues,
+  type SalaryItem, type SalaryGridRow, type SalaryParam,
 } from "@/api/salaries"
 import { ElMessage, ElMessageBox } from "element-plus"
 
@@ -201,8 +243,9 @@ async function computeAll() {
 /* ====== 指标设置 ====== */
 const showItems = ref(false)
 const itemsDraft = ref<SalaryItem[]>([])
-const newItem = ref({ key: "", label: "", formula: "", sort_order: 0 })
+const newItem = ref({ key: "", label: "", formula: "", sort_order: 0, is_manual: false })
 const itemsSaving = ref(false)
+const paramHints = ref<{ name: string; label: string }[]>([])
 
 const varHints = [
   { name: "base", label: "基本工资标准(规则)" }, { name: "ot_rate", label: "加班费率(规则)" },
@@ -222,19 +265,29 @@ const examples = [
 ]
 
 async function openItems() {
-  itemsDraft.value = (await getSalaryItems()) || []
+  const [its, pr] = await Promise.all([getSalaryItems(), getSalaryParams(curMonth.value)])
+  itemsDraft.value = its || []
+  paramHints.value = (pr?.params || []).map(p => ({
+    name: p.key,
+    label: `${p.label}${p.value != null ? " = " + p.value : ""}`,
+  }))
   const maxOrder = itemsDraft.value.reduce((m, i) => Math.max(m, i.sort_order), 0)
-  newItem.value = { key: "", label: "", formula: "", sort_order: maxOrder + 1 }
+  newItem.value = { key: "", label: "", formula: "", sort_order: maxOrder + 1, is_manual: false }
   showItems.value = true
 }
 function addNewItem() {
-  if (!newItem.value.label || !newItem.value.key || !newItem.value.formula) {
-    ElMessage.warning("请填写名称、key 和公式")
+  if (!newItem.value.label || !newItem.value.key) {
+    ElMessage.warning("请填写名称和 key")
+    return
+  }
+  if (!newItem.value.is_manual && !newItem.value.formula) {
+    ElMessage.warning("请填写公式，或勾选「手」改为手工填写")
     return
   }
   itemsDraft.value.push({ id: "", key: newItem.value.key, label: newItem.value.label,
-    formula: newItem.value.formula, sort_order: newItem.value.sort_order, is_active: true, is_builtin: false })
-  newItem.value = { key: "", label: "", formula: "", sort_order: newItem.value.sort_order + 1 }
+    formula: newItem.value.formula, sort_order: newItem.value.sort_order,
+    is_active: true, is_builtin: false, is_manual: newItem.value.is_manual })
+  newItem.value = { key: "", label: "", formula: "", sort_order: newItem.value.sort_order + 1, is_manual: false }
 }
 async function removeItem(it: SalaryItem) {
   if (it.is_builtin) return
@@ -250,9 +303,12 @@ async function saveItems() {
   try {
     for (const it of itemsDraft.value) {
       if (it.id) {
-        await updateSalaryItem(it.id, { label: it.label, formula: it.formula, sort_order: it.sort_order, is_active: it.is_active })
+        await updateSalaryItem(it.id, {
+          label: it.label, formula: it.formula, sort_order: it.sort_order,
+          is_active: it.is_active, is_manual: it.is_manual,
+        })
       } else if (it.key) {
-        await createSalaryItem({ key: it.key, label: it.label, formula: it.formula, sort_order: it.sort_order })
+        await createSalaryItem({ key: it.key, label: it.label, formula: it.formula, sort_order: it.sort_order, is_manual: it.is_manual })
       }
     }
     ElMessage.success("指标已保存")
@@ -260,6 +316,58 @@ async function saveItems() {
     await fetchGrid()
   } catch { /* 公式校验错误由 interceptor 提示 */ }
   finally { itemsSaving.value = false }
+}
+
+/* ====== 工资参数 ====== */
+const showParams = ref(false)
+const paramsDraft = ref<SalaryParam[]>([])
+const newParam = ref({ key: "", label: "", sort_order: 0 })
+const paramsSaving = ref(false)
+
+async function openParams() {
+  if (!curMonth.value) curMonth.value = new Date().toISOString().slice(0, 7)
+  const pr = await getSalaryParams(curMonth.value)
+  paramsDraft.value = pr?.params || []
+  const maxOrder = paramsDraft.value.reduce((m, p) => Math.max(m, p.sort_order), 0)
+  newParam.value = { key: "", label: "", sort_order: maxOrder + 1 }
+  showParams.value = true
+}
+function addNewParam() {
+  if (!newParam.value.key || !newParam.value.label) {
+    ElMessage.warning("请填写参数名称和 key")
+    return
+  }
+  paramsDraft.value.push({ id: "", key: newParam.value.key, label: newParam.value.label,
+    sort_order: newParam.value.sort_order, value: null })
+  newParam.value = { key: "", label: "", sort_order: newParam.value.sort_order + 1 }
+}
+async function removeParam(p: SalaryParam) {
+  if (p.id) {
+    try {
+      await ElMessageBox.confirm(`删除参数「${p.label}」？所有月份的取值一并删除。`, "删除参数", { type: "warning" })
+    } catch { return }
+    await deleteSalaryParam(p.id)
+  }
+  paramsDraft.value = paramsDraft.value.filter(x => x !== p)
+}
+async function saveParams() {
+  paramsSaving.value = true
+  try {
+    const values: { key: string; value: number | null }[] = []
+    for (const p of paramsDraft.value) {
+      if (p.id) {
+        await updateSalaryParam(p.id, { label: p.label, sort_order: p.sort_order })
+      } else {
+        const created = await createSalaryParam({ key: p.key, label: p.label, sort_order: p.sort_order })
+        p.id = created.id
+      }
+      values.push({ key: p.key, value: p.value })
+    }
+    await saveSalaryParamValues(curMonth.value, values)
+    ElMessage.success("参数已保存")
+    showParams.value = false
+  } catch { /* interceptor 已提示 */ }
+  finally { paramsSaving.value = false }
 }
 
 /* ====== 打印 ====== */
@@ -294,6 +402,7 @@ onMounted(() => fetchGrid())
 .sal-sheet thead th { background: #f2f2f2; position: sticky; top: 0; z-index: 2; font-weight: 700; color: #303133; text-align: center; }
 .col-fixed { min-width: 60px; }
 .col-item { min-width: 84px; text-align: center; }
+.manual-badge { display: inline-block; margin-left: 3px; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 14px; color: #e6a23c; background: #fdf6ec; border: 1px solid #f3d19e; }
 .col-status { width: 96px; text-align: center; }
 .cell-center { text-align: center; }
 .cell-name { font-weight: 600; color: #303133; min-width: 80px; }
