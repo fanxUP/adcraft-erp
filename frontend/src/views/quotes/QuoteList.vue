@@ -50,16 +50,16 @@
           <el-tag :type="statusColor(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="总金额" width="140">
+      <el-table-column label="总金额" width="120">
         <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
       <el-table-column label="有效期" width="120">
         <template #default="{ row }">{{ row.valid_until || '-' }}</template>
       </el-table-column>
-      <el-table-column label="创建时间" width="180">
+      <el-table-column label="创建时间" width="160">
         <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="300">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" @click="$router.push(`/quotes/${row.id}/edit`)">编辑</el-button>
           <el-button text type="success" @click="handlePreview(row)">预览</el-button>

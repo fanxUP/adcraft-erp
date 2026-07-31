@@ -22,8 +22,7 @@ export const navigationItems: NavigationItem[] = [
       { label: '智能报价', path: '/cdr/quotes' },
       { label: '定价规则', path: '/cdr/price-rules' },
       { label: '客户协议价', path: '/cdr/customer-agreements' },
-      { label: '常规合同', path: '/contracts' },
-      { label: '框架合同', path: '/framework-contracts' },
+      { label: '合同管理', path: '/contracts' },
       { label: '订单管理', path: '/orders' },
     ],
   },
@@ -40,7 +39,7 @@ export const navigationItems: NavigationItem[] = [
       { label: '外协任务', path: '/outsource/tasks', roles: ['admin', 'production'] },
       { label: '外协商', path: '/outsource/vendors', roles: ['admin', 'production'] },
       { label: '库存管理', path: '/inventory', roles: ['admin', 'production'] },
-      { label: '产品/材质/工艺', path: '/products', roles: ['admin', 'designer', 'production'] },
+      { label: '产品/材质/工艺定价', path: '/products', roles: ['admin', 'designer', 'production'] },
     ],
   },
   {

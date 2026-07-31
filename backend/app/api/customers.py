@@ -63,6 +63,17 @@ CUSTOMER_TYPE_VALUES = {"直客", "代理", "同行"}
 CUSTOMER_LEVEL_VALUES = {"A", "B", "C"}
 
 
+
+@router.get("/tree")
+async def get_customer_tree(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get customer type -> level -> customer tree for pricing center navigation."""
+    service = CustomerService(db)
+    tree = await service.get_customer_tree()
+    return success(tree)
+
 @router.post("/import")
 async def import_customers(
     file: UploadFile = File(...),

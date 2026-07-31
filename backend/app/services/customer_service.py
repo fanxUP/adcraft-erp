@@ -45,3 +45,26 @@ class CustomerService:
             return False
         await self.repo.soft_delete(customer)
         return True
+
+    async def get_customer_tree(self) -> list[dict]:
+        """Return customer type -> level -> customers tree structure."""
+        from sqlalchemy import select
+        from app.models.customer import Customer
+        q = select(Customer).where(Customer.deleted_at.is_(None)).order_by(Customer.customer_type, Customer.level, Customer.name)
+        result = await self.db.execute(q)
+        customers = result.scalars().all()
+
+        type_map: dict[str, dict[str, list[dict]]] = {}
+        for c in customers:
+            ct = c.customer_type or "未分类"
+            lv = c.level or "未分级"
+            type_map.setdefault(ct, {}).setdefault(lv, []).append({"id": str(c.id), "name": c.name})
+
+        tree = []
+        for ct in sorted(type_map.keys()):
+            levels = []
+            for lv in sorted(type_map[ct].keys()):
+                custs = type_map[ct][lv]
+                levels.append({"level": lv, "customers": custs, "count": len(custs)})
+            tree.append({"customer_type": ct, "levels": levels, "count": sum(l["count"] for l in levels)})
+        return tree

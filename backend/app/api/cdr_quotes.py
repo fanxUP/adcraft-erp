@@ -214,6 +214,48 @@ async def create_rule_set(
 
 # ── 客户协议价 ──────────────────────────────────────────────────
 
+
+@router.put("/customer-agreements/{agreement_id}")
+async def update_customer_agreement(
+    agreement_id: UUID,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update a customer pricing agreement."""
+    service = CdrQuoteService(db)
+    try:
+        result = await service.update_customer_agreement(agreement_id, data)
+        return success(result)
+    except ValueError as e:
+        return {"code": 40401, "message": str(e), "data": None}
+
+
+@router.delete("/customer-agreements/{agreement_id}")
+async def delete_customer_agreement(
+    agreement_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a customer pricing agreement."""
+    service = CdrQuoteService(db)
+    ok = await service.delete_customer_agreement(agreement_id)
+    if not ok:
+        return {"code": 40401, "message": "协议价记录不存在", "data": None}
+    return success(None)
+
+
+@router.post("/customer-agreements/batch")
+async def batch_customer_agreements(
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Batch create/update customer agreements by customer type/level or customer IDs."""
+    service = CdrQuoteService(db)
+    result = await service.batch_customer_agreements(data)
+    return success(result)
+
 @router.get("/customer-agreements")
 async def list_customer_agreements(
     customer_id: UUID | None = None,

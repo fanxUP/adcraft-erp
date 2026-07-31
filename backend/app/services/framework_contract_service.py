@@ -28,32 +28,40 @@ class FrameworkContractService:
     def _to_detail(self, project) -> dict:
         base = self._to_response(project)
         all_docs = project.documents or []
-        doc_types = {d.doc_type for d in all_docs}
-        if "order" in doc_types and "quote" in doc_types:
-            source = "订单+报价"
-        elif "order" in doc_types:
-            source = "订单"
-        elif "quote" in doc_types:
-            source = "报价"
-        else:
-            source = ""
         base.update({
-            "source": source,
+            "source": "订单" if all_docs else "",
             "documents": [BusinessDocumentService._to_ref(d) for d in all_docs],
-            # Backward-compat: keep orders/quotes split for frontend
             "orders": [BusinessDocumentService._to_ref(d) for d in all_docs if d.doc_type == "order"],
-            "quotes": [BusinessDocumentService._to_ref(d) for d in all_docs if d.doc_type == "quote"],
         })
         return base
 
     def _combine_document_ids(self, data: dict) -> list[UUID]:
-        """Combine order_ids + quote_ids (backward compat) or use document_ids."""
+        """Extract order_ids from the payload. Supports both order_ids and document_ids keys."""
         if "document_ids" in data:
             raw = data.pop("document_ids", [])
             return [UUID(did) for did in (raw or [])]
         order_ids = data.pop("order_ids", [])
-        quote_ids = data.pop("quote_ids", [])
-        return [UUID(oid) for oid in (order_ids or [])] + [UUID(qid) for qid in (quote_ids or [])]
+        return [UUID(oid) for oid in (order_ids or [])]
+
+    async def _validate_order_ids(self, document_ids: list[UUID]) -> None:
+        """Ensure all document IDs belong to orders, not quotes."""
+        if not document_ids:
+            return
+        from sqlalchemy import select, func
+        from app.models.business_document import BusinessDocument
+        result = await self.db.execute(
+            select(BusinessDocument.id, BusinessDocument.doc_type)
+            .where(BusinessDocument.id.in_(document_ids))
+        )
+        docs = {str(row[0]): row[1] for row in result.all()}
+        for did in document_ids:
+            dt = docs.get(str(did))
+            if dt == "quote":
+                raise ValueError(f"不允许将报价单关联到合同: {did}")
+            if dt is None:
+                raise ValueError(f"单据不存在: {did}")
+            if dt != "order":
+                raise ValueError(f"仅允许关联订单，不支持: {dt}")
 
     async def list_projects(self, contract_id: UUID, page: int, page_size: int) -> tuple[list, int]:
         skip = (page - 1) * page_size
@@ -109,6 +117,7 @@ class FrameworkContractService:
         data["contract_id"] = UUID(data["contract_id"])
         data["customer_id"] = UUID(data["customer_id"])
         data["document_ids"] = self._combine_document_ids(data)
+        await self._validate_order_ids(data["document_ids"])
 
         project = await self.repo.create(data)
         project = await self.repo.get_by_id(project.id)
@@ -123,9 +132,10 @@ class FrameworkContractService:
         if not project:
             raise ValueError("框架合同项目不存在")
 
-        has_doc_update = any(k in data for k in ("document_ids", "order_ids", "quote_ids"))
+        has_doc_update = any(k in data for k in ("document_ids", "order_ids"))
         if has_doc_update:
             data["document_ids"] = self._combine_document_ids(data)
+            await self._validate_order_ids(data["document_ids"])
 
         project = await self.repo.update(project, data)
         project = await self.repo.get_by_id(project.id)

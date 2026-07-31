@@ -13,11 +13,11 @@
             <el-table-column prop="name" label="角色" width="120">
               <template #default="{ row }">{{ roleLabel(row.name) }}</template>
             </el-table-column>
-            <el-table-column prop="description" label="说明" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
             <el-table-column label="权限数" width="80" align="center">
               <template #default="{ row }">{{ row.permissions.length }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="130" fixed="right">
+            <el-table-column label="操作" width="200" fixed="right">
               <template #default="{ row }">
                 <el-button text type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button>
                 <el-button v-if="row.name !== 'admin'" text type="danger" size="small" @click.stop="handleDelete(row)">删除</el-button>

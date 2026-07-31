@@ -17,20 +17,20 @@
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
-      <el-table-column prop="vehicle_code" label="车辆编号" width="120" />
+      <el-table-column prop="vehicle_code" label="车辆编号" width="140" />
       <el-table-column prop="plate_number" label="车牌号" width="120" />
-      <el-table-column prop="vehicle_name" label="车辆名称" min-width="150" />
+      <el-table-column prop="vehicle_name" label="车辆名称" min-width="140" />
       <el-table-column label="车辆类型" width="100">
         <template #default="{ row }">{{ vehicleTypeLabel(row.vehicle_type) }}</template>
       </el-table-column>
       <el-table-column prop="brand_model" label="品牌型号" width="140" />
       <el-table-column prop="default_driver_name" label="默认司机" width="100" />
-      <el-table-column label="状态" width="90">
+      <el-table-column label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="220" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" @click="handleEdit(row)">编辑</el-button>
           <el-button v-if="row.status === 'available'" text type="warning" @click="handleDisable(row)">停用</el-button>

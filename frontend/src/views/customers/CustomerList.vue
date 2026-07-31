@@ -19,17 +19,17 @@
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
-      <el-table-column prop="customer_no" label="客户编号" width="160" />
-      <el-table-column prop="name" label="客户名称" min-width="180" />
+      <el-table-column prop="customer_no" label="客户编号" width="180" />
+      <el-table-column prop="name" label="客户名称" min-width="160" />
       <el-table-column label="联系人" width="120">
         <template #default="{ row }">
           {{ row.contacts?.[0]?.name || '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="phone" label="电话" width="140" />
-      <el-table-column prop="customer_type" label="类型" width="80" />
+      <el-table-column prop="phone" label="电话" width="130" />
+      <el-table-column prop="customer_type" label="类型" width="100" />
       <el-table-column prop="level" label="等级" width="80" />
-      <el-table-column label="操作" width="160">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" @click="$router.push(`/customers/${row.id}`)">详情</el-button>
           <el-button text type="danger" @click="handleDelete(row as CustomerResponse)">删除</el-button>
@@ -86,7 +86,7 @@
               <el-tag v-if="row.is_primary" type="danger" size="small">是</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="120">
+          <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row, $index }">
               <el-button text type="primary" size="small" @click="handleEditContact(row, $index)">编辑</el-button>
               <el-button text type="danger" size="small" @click="form.contacts.splice($index, 1)">删除</el-button>

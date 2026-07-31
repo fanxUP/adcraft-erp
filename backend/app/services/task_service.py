@@ -213,7 +213,7 @@ class DesignTaskService:
             remaining = (await self.db.execute(
                 select(func.count()).select_from(DesignTask).where(
                     DesignTask.document_id == task.document_id,
-                    DesignTask.status.not_in(["completed", "cancelled"])
+                    DesignTask.status.not_in(["completed", "cancelled", "confirmed"])
                 )
             )).scalar()
             if remaining == 0:

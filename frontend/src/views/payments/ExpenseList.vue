@@ -24,20 +24,20 @@
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
       <el-table-column prop="expense_no" label="编号" width="180" />
-      <el-table-column prop="category" label="分类" width="120">
+      <el-table-column prop="category" label="分类" width="100">
         <template #default="{ row }">
           <el-tag v-if="row.category" size="small">{{ row.category }}</el-tag>
           <span v-else class="muted">-</span>
         </template>
       </el-table-column>
-      <el-table-column label="金额" width="140">
+      <el-table-column label="金额" width="120">
         <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
       </el-table-column>
       <el-table-column label="日期" width="120">
         <template #default="{ row }">{{ row.expense_date?.slice(0, 10) || '-' }}</template>
       </el-table-column>
-      <el-table-column prop="description" label="说明" min-width="200" show-overflow-tooltip />
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" size="small" @click="openEdit(row as ExpenseResponse)">编辑</el-button>
           <el-button v-if="authStore.isAdmin" text type="danger" size="small" @click="handleDelete(row as ExpenseResponse)">删除</el-button>

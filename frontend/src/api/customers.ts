@@ -34,6 +34,11 @@ export function deleteCustomer(id: string) {
   return del<SuccessResponse>(`/customers/${id}`)
 }
 
+
+export function getCustomerTree() {
+  return get<import('@/types/api').CustomerTreeNode[]>('/customers/tree')
+}
+
 export function importCustomers(file: File) {
   const formData = new FormData()
   formData.append('file', file)

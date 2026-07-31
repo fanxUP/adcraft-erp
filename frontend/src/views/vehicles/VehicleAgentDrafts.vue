@@ -65,27 +65,27 @@
         <el-table-column prop="created_at" label="时间" width="160" :formatter="formatTime" />
         <el-table-column prop="sender_name" label="发送者" width="90" />
         <el-table-column prop="original_content" label="原始消息" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="intent" label="识别意图" width="120">
+        <el-table-column prop="intent" label="识别意图" width="160">
           <template #default="{ row }">
             <el-tag :type="intentTagType(row.intent)" size="small">{{ intentLabel(row.intent) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="confidence" label="置信度" width="90">
+        <el-table-column prop="confidence" label="置信度" width="80">
           <template #default="{ row }">
             {{ Math.round(row.confidence * 100) }}%
           </template>
         </el-table-column>
-        <el-table-column prop="risk_level" label="风险" width="70">
+        <el-table-column prop="risk_level" label="风险" width="80">
           <template #default="{ row }">
             <el-tag :type="riskTagType(row.risk_level)" size="small">{{ row.risk_level }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="80">
+        <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button v-if="row.status === 'pending'" type="success" size="small" @click="handleConfirm(row)">
               确认

@@ -33,10 +33,10 @@
       <el-table-column label="总金额" width="120">
         <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column label="删除时间" width="170">
+      <el-table-column label="删除时间" width="160">
         <template #default="{ row }">{{ row.deleted_at?.replace('T', ' ').slice(0, 19) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="180">
+      <el-table-column label="操作" width="200">
         <template #default="{ row }">
           <el-button text type="success" @click="handleRestore(row as OrderListResponse)">恢复</el-button>
           <el-button text type="warning" @click="handleConvertToQuote(row as OrderListResponse)">转报价</el-button>

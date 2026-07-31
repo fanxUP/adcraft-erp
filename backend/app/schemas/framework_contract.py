@@ -10,7 +10,6 @@ class FrameworkContractProjectCreate(BaseModel):
     department: str | None = None
     remark: str | None = None
     order_ids: list[str] = []
-    quote_ids: list[str] = []
 
 
 class FrameworkContractProjectUpdate(BaseModel):
@@ -19,7 +18,6 @@ class FrameworkContractProjectUpdate(BaseModel):
     department: str | None = None
     remark: str | None = None
     order_ids: list[str] | None = None
-    quote_ids: list[str] | None = None
 
 
 class FrameworkContractProjectResponse(BaseModel):
@@ -39,8 +37,7 @@ class FrameworkContractProjectResponse(BaseModel):
 
 class FrameworkContractProjectDetailResponse(FrameworkContractProjectResponse):
     orders: list["SimpleOrderRef"] = []
-    quotes: list["SimpleQuoteRef"] = []
     model_config = {"from_attributes": True}
 
 
-from app.schemas.contract import SimpleOrderRef, SimpleQuoteRef
+from app.schemas.contract import SimpleOrderRef

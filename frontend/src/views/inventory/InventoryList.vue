@@ -24,7 +24,7 @@
 
       <el-table :data="items" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无库存物料">
         <el-table-column prop="material_name" label="物料名称" min-width="160" />
-        <el-table-column label="分类" width="80">
+        <el-table-column label="分类" width="100">
           <template #default="{ row }">{{ categoryLabel(row.category) }}</template>
         </el-table-column>
         <el-table-column prop="spec" label="规格" width="160" />
@@ -41,7 +41,7 @@
         <el-table-column prop="unit_cost" label="单价" width="100" align="right">
           <template #default="{ row }">¥{{ row.unit_cost?.toFixed(2) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="240">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button text type="success" @click="handleStockIn(row as InventoryItemResponse)">入库</el-button>
             <el-button text type="warning" @click="handleStockOut(row as InventoryItemResponse)">出库</el-button>
@@ -64,7 +64,7 @@
     <template v-else>
       <el-table :data="records" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无出入库记录">
         <el-table-column prop="item_name" label="物料" min-width="160" />
-        <el-table-column label="类型" width="80">
+        <el-table-column label="类型" width="100">
           <template #default="{ row }">
             <el-tag :type="row.record_type === 'in' ? 'success' : 'warning'" size="small">
               {{ row.record_type === 'in' ? '入库' : '出库' }}
@@ -78,8 +78,8 @@
         <el-table-column prop="total_cost" label="总金额" width="120" align="right">
           <template #default="{ row }">¥{{ row.total_cost?.toFixed(2) }}</template>
         </el-table-column>
-        <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="operated_at" label="操作时间" width="180" />
+        <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="operated_at" label="操作时间" width="160" />
       </el-table>
 
       <el-pagination

@@ -91,13 +91,9 @@ async def get_available_resources(
     # Single unified query
     q = select(BusinessDocument).where(
         BusinessDocument.deleted_at.is_(None),
-        BusinessDocument.doc_type.in_(["order", "quote"]),
+        BusinessDocument.doc_type == "order",
         not_(BusinessDocument.id.in_(used_sub)),
         not_(BusinessDocument.id.in_(fw_sub)),
-    )
-    # Exclude cancelled/converted quotes
-    q = q.where(
-        ~((BusinessDocument.doc_type == "quote") & BusinessDocument.status.in_(["converted", "cancelled"]))
     )
     if customer_id:
         q = q.where(BusinessDocument.customer_id == UUID(customer_id))
@@ -106,16 +102,11 @@ async def get_available_resources(
 
     from app.services.business_document_service import BusinessDocumentService
 
-    # Split into orders/quotes for frontend compatibility
-    orders_list, quotes_list = [], []
+    orders_list = []
     for d in docs:
         item = BusinessDocumentService._to_ref(d)
-        # available-resources 额外携带 customer_id
         item["customer_id"] = str(d.customer_id) if d.customer_id else None
-        if d.doc_type == "order":
-            orders_list.append(item)
-        else:
-            quotes_list.append(item)
+        orders_list.append(item)
 
     # Used project names
     from app.models.contract import Contract as ContractModel
@@ -133,7 +124,6 @@ async def get_available_resources(
 
     return success({
         "orders": orders_list,
-        "quotes": quotes_list,
         "used_project_names": used_project_names,
     })
 

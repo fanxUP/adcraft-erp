@@ -34,9 +34,9 @@
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
       <el-table-column prop="order_no" label="订单编号" width="180" />
       <el-table-column prop="customer_name" label="客户名称" width="160" />
-      <el-table-column prop="department" label="部门/科室" width="130" />
+      <el-table-column prop="department" label="部门/科室" width="120" />
       <el-table-column prop="project_name" label="项目名称" min-width="200" />
-      <el-table-column label="状态" width="120">
+      <el-table-column label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="statusColor(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
@@ -44,23 +44,23 @@
       <el-table-column label="总金额" width="120">
         <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column label="已收" width="110">
+      <el-table-column label="已收" width="120">
         <template #default="{ row }">¥ {{ row.paid_amount?.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column label="未收" width="110">
+      <el-table-column label="未收" width="120">
         <template #default="{ row }">¥ {{ row.unpaid_amount?.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column label="毛利" width="100">
+      <el-table-column label="毛利" width="120">
         <template #default="{ row }">
           <span :style="{ color: (row.gross_profit || 0) >= 0 ? '#67c23a' : '#f56c6c' }">
             ¥ {{ row.gross_profit?.toFixed(2) }}
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="创建时间" width="120">
+      <el-table-column label="创建时间" width="160">
         <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="220">
+      <el-table-column label="操作" width="200">
         <template #default="{ row }">
           <div style="display: flex; gap: 8px; justify-content: center;">
             <el-button text type="primary" @click="$router.push(`/orders/${row.id}`)">详情</el-button>

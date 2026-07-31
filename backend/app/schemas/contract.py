@@ -18,8 +18,6 @@ class ContractCreate(BaseModel):
     contract_type: str | None = None
     content: str | None = None
     remark: str | None = None
-    order_ids: list[str] = []
-    quote_ids: list[str] = []
 
 
 class ContractUpdate(BaseModel):
@@ -37,8 +35,6 @@ class ContractUpdate(BaseModel):
     contract_type: str | None = None
     content: str | None = None
     remark: str | None = None
-    order_ids: list[str] | None = None
-    quote_ids: list[str] | None = None
 
 
 class ContractListResponse(CoercedModel):
@@ -68,14 +64,6 @@ class SimpleOrderRef(CoercedModel):
     model_config = {"from_attributes": True}
 
 
-class SimpleQuoteRef(CoercedModel):
-    id: str
-    quote_no: str
-    project_name: str
-    total_amount: float
-
-    model_config = {"from_attributes": True}
-
 
 class ContractDetailResponse(ContractListResponse):
     customer_id: str
@@ -87,7 +75,6 @@ class ContractDetailResponse(ContractListResponse):
     remark: str | None = None
     created_by: str | None = None
     orders: list[SimpleOrderRef] = []
-    quotes: list[SimpleQuoteRef] = []
 
     model_config = {"from_attributes": True}
 

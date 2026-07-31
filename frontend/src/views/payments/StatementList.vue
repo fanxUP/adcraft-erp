@@ -17,13 +17,13 @@
       <el-table-column label="期间" width="240">
         <template #default="{ row }">{{ row.start_date?.slice(0, 10) }} ~ {{ row.end_date?.slice(0, 10) }}</template>
       </el-table-column>
-      <el-table-column label="订单金额" width="140">
+      <el-table-column label="订单金额" width="120">
         <template #default="{ row }">¥ {{ row.total_order_amount?.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column label="已收金额" width="140">
+      <el-table-column label="已收金额" width="120">
         <template #default="{ row }">¥ {{ row.total_paid_amount?.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column label="未收金额" width="140">
+      <el-table-column label="未收金额" width="120">
         <template #default="{ row }">
           <span :style="{ color: row.total_unpaid_amount > 0 ? '#e63946' : '', fontWeight: row.total_unpaid_amount > 0 ? 'bold' : '' }">¥ {{ row.total_unpaid_amount?.toFixed(2) }}</span>
         </template>
@@ -33,7 +33,7 @@
           <el-tag :type="row.status === 'confirmed' ? 'success' : 'info'" size="small">{{ row.status === 'confirmed' ? '已确认' : '草稿' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="120">
+      <el-table-column label="操作" width="200">
         <template #default="{ row }">
           <el-button text type="primary" size="small" @click="$router.push(`/statements/${row.id}`)">详情</el-button>
         </template>

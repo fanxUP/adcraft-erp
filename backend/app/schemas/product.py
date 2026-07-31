@@ -19,7 +19,7 @@ class ProductCategoryResponse(BaseModel):
 
 class ProductCreate(BaseModel):
     category_id: str | None = None
-    name: str
+    name: str | None = None
     material_name: str | None = None
     process_name: str | None = None
     unit: str = "项"
@@ -120,7 +120,10 @@ class ProcessResponse(BaseModel):
     id: str
     name: str
     charge_method: str
+    billing_basis: str | None = None
     default_price: float
+    startup_fee: float = 0
+    min_charge: float = 0
     remark: str | None = None
     is_active: bool
     created_at: datetime | None = None

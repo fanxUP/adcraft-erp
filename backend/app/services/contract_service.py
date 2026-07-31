@@ -109,39 +109,20 @@ class ContractService:
 
     def _to_response(self, contract) -> dict:
         d = ContractListResponse.model_validate(contract).model_dump(mode="json")
-        # Add computed fields from documents
         docs = contract.documents or []
         departments = list({d.department for d in docs if d.department})
         d["department"] = "、".join(departments) if departments else ""
-        doc_types = {d.doc_type for d in docs}
-        if "order" in doc_types and "quote" in doc_types:
-            d["source"] = "订单+报价"
-        elif "order" in doc_types:
-            d["source"] = "订单"
-        elif "quote" in doc_types:
-            d["source"] = "报价"
-        else:
-            d["source"] = ""
+        d["source"] = "订单" if docs else ""
         return d
 
     def _to_detail(self, contract) -> dict:
         d = ContractDetailResponse.model_validate(contract).model_dump(mode="json")
-        # Add computed fields from documents
         docs = contract.documents or []
         departments = list({d.department for d in docs if d.department})
         d["department"] = "、".join(departments) if departments else ""
-        doc_types = {d.doc_type for d in docs}
-        if "order" in doc_types and "quote" in doc_types:
-            d["source"] = "订单+报价"
-        elif "order" in doc_types:
-            d["source"] = "订单"
-        elif "quote" in doc_types:
-            d["source"] = "报价"
-        else:
-            d["source"] = ""
+        d["source"] = "订单" if docs else ""
         d["documents"] = [BusinessDocumentService._to_ref(d) for d in docs]
         d["orders"] = [BusinessDocumentService._to_ref(d) for d in docs if d.doc_type == "order"]
-        d["quotes"] = [BusinessDocumentService._to_ref(d) for d in docs if d.doc_type == "quote"]
         return d
 
     async def list_contracts(
@@ -161,15 +142,16 @@ class ContractService:
         # Batch-calculate paid_amount and framework totals for all contracts in this page
         cids = [c.id for c in contracts]
         paid_map = await self._batch_paid_amounts(cids)
-        fw_ids = [c.id for c in contracts if c.contract_type == "框架合同"]
-        fw_total_map = await self._batch_framework_totals(fw_ids) if fw_ids else {}
+        # 所有合同：金额 = 子项目合计（无子项目则用合同自身金额）
+        all_ids = [c.id for c in contracts]
+        fw_total_map = await self._batch_framework_totals(all_ids) if all_ids else {}
         result = []
         for c in contracts:
             resp = self._to_response(c)
             paid = paid_map.get(c.id, 0.0)
-            # 框架合同：金额 = 子项目合计
-            if c.contract_type == "框架合同":
-                resp["total_amount"] = fw_total_map.get(c.id, 0.0)
+            proj_total = fw_total_map.get(c.id)
+            if proj_total is not None and proj_total > 0:
+                resp["total_amount"] = proj_total
             resp["paid_amount"] = paid
             resp["unpaid_amount"] = max(0, resp["total_amount"] - paid)
             result.append(resp)
@@ -182,28 +164,25 @@ class ContractService:
         # Auto-complete if fully paid
         await self._auto_complete_if_paid([contract])
         result = self._to_detail(contract)
-        # 框架合同：金额 = 子项目合计
-        if contract.contract_type == "框架合同":
-            result["total_amount"] = await self._calc_framework_total(contract_id)
+        # 所有合同：金额 = 子项目合计（无子项目则用合同自身金额）
+        proj_total = await self._calc_framework_total(contract_id)
+        if proj_total > 0:
+            result["total_amount"] = proj_total
         # Override paid_amount with actual payments on linked documents
         result["paid_amount"] = await self._calc_paid_amount(contract_id)
         result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
         return result
 
     def _combine_document_ids(self, data: dict) -> list[UUID]:
-        """Combine order_ids + quote_ids (backward compat) or use document_ids."""
-        # If document_ids provided directly, use it
+        """Extract order_ids from the payload. Supports both order_ids and document_ids keys."""
         if "document_ids" in data:
             raw = data.pop("document_ids", [])
             return [UUID(did) for did in (raw or [])]
-        # Fallback: combine order_ids + quote_ids
         order_ids = data.pop("order_ids", [])
-        quote_ids = data.pop("quote_ids", [])
-        return [UUID(oid) for oid in (order_ids or [])] + [UUID(qid) for qid in (quote_ids or [])]
+        return [UUID(oid) for oid in (order_ids or [])]
 
     async def create_contract(self, data: dict) -> dict:
         data["contract_no"] = await generate_contract_no(self.db)
-        data["document_ids"] = self._combine_document_ids(data)
         if data.get("customer_id"):
             data["customer_id"] = UUID(data["customer_id"])
         # Convert date strings to date objects
@@ -231,7 +210,7 @@ class ContractService:
             raise ValueError("合同不存在")
 
         # Handle document_ids update (also support backward-compat order_ids/quote_ids)
-        has_doc_update = any(k in data for k in ("document_ids", "order_ids", "quote_ids"))
+        has_doc_update = any(k in data for k in ("document_ids", "order_ids"))
         if has_doc_update:
             data["document_ids"] = self._combine_document_ids(data)
 

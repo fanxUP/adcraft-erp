@@ -10,7 +10,7 @@
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="回收站暂无内容">
-      <el-table-column prop="task_no" label="任务编号" width="140" />
+      <el-table-column prop="task_no" label="任务编号" width="180" />
       <el-table-column prop="vendor_name" label="外协商" width="140" />
       <el-table-column label="关联任务" width="160" show-overflow-tooltip>
         <template #default="{ row }">
@@ -18,8 +18,8 @@
           <span v-else style="color: #999">-</span>
         </template>
       </el-table-column>
-      <el-table-column prop="description" label="描述" min-width="150" show-overflow-tooltip />
-      <el-table-column prop="total_amount" label="总金额" width="110" align="right">
+      <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="total_amount" label="总金额" width="120" align="right">
         <template #default="{ row }">¥{{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
       <el-table-column label="原状态" width="100">
@@ -27,10 +27,10 @@
           <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="deleted_at" label="删除时间" width="170">
+      <el-table-column prop="deleted_at" label="删除时间" width="160">
         <template #default="{ row }">{{ row.deleted_at?.replace('T', ' ').slice(0, 19) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="100">
+      <el-table-column label="操作" width="200">
         <template #default="{ row }">
           <el-button text type="success" @click="handleRestore(row)">恢复</el-button>
         </template>

@@ -1,0 +1,270 @@
+<template>
+  <div class="page">
+    <div class="page-header">
+      <h2>报价详情 #{{ quote?.quote_no || '' }}</h2>
+      <div>
+        <el-button @click="$router.push('/cdr/quotes')">返回列表</el-button>
+        <el-button type="primary" @click="handleEdit">编辑</el-button>
+        <el-button type="danger" plain @click="handleDelete" v-if="version?.status === 'draft'">删除</el-button>
+        <el-button :type="'warning'" @click="handleRequestApproval" v-if="version?.status === 'draft'">提交审批</el-button>
+        <el-button type="danger" @click="handleConvertToOrder" v-if="canConvert">转订单</el-button>
+      </div>
+    </div>
+
+    <!-- 基本信息 -->
+    <el-card shadow="never" class="section-card">
+      <el-descriptions :column="3" border>
+        <el-descriptions-item label="报价单号">{{ quote?.quote_no || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="客户">{{ quote?.customer_name || quote?.customer?.name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="状态">
+          <el-tag :type="statusType(version?.status)">{{ statusLabel(version?.status) }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="项目">{{ quote?.project_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="税率">{{ (quote?.tax_rate || 0) * 100 }}%</el-descriptions-item>
+        <el-descriptions-item label="版本">{{ version?.version_no || 1 }}</el-descriptions-item>
+      </el-descriptions>
+    </el-card>
+
+    <!-- 报价明细 -->
+    <el-card shadow="never" class="section-card" style="margin-top: 16px">
+      <template #header><span>报价明细</span></template>
+      <el-table :data="version?.lines || []" stripe border>
+        <el-table-column label="#" type="index" width="50" />
+        <el-table-column prop="item_name" label="项目内容" min-width="160" />
+        <el-table-column prop="material_process" label="产品/材质/工艺" min-width="220" />
+        <el-table-column label="宽" width="100">
+          <template #default="{ row }">{{ formatDimension(row.width, row.width_unit) }}</template>
+        </el-table-column>
+        <el-table-column label="高" width="100">
+          <template #default="{ row }">{{ formatDimension(row.height, row.height_unit) }}</template>
+        </el-table-column>
+        <el-table-column prop="pieces" label="件数" width="70" />
+        <el-table-column label="面积" width="90">
+          <template #default="{ row }">{{ lineArea(row).toFixed(2) }}㎡</template>
+        </el-table-column>
+        <el-table-column prop="quantity" label="数量" width="80" />
+        <el-table-column prop="unit" label="单位" width="70" />
+        <el-table-column prop="unit_price" label="单价" width="100">
+          <template #default="{ row }">¥{{ Number(row.unit_price || 0).toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column prop="process_fee" label="工艺费" width="90" />
+        <el-table-column prop="installation_fee" label="安装费" width="90" />
+        <el-table-column prop="design_fee" label="设计费" width="90" />
+        <el-table-column prop="transport_fee" label="运输费" width="90" />
+        <el-table-column prop="amount" label="小计" width="120">
+          <template #default="{ row }">¥{{ Number(row.amount || 0).toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column label="样图" width="80">
+          <template #default="{ row }">
+            <el-image
+              v-if="row.image_url"
+              :src="row.image_url"
+              :preview-src-list="[row.image_url]"
+              fit="cover"
+              class="line-image"
+            />
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="remark" label="备注" min-width="120" />
+        <el-table-column prop="source" label="来源" width="80">
+          <template #default="{ row }">
+            <el-tag :type="row.source === 'manual' ? 'warning' : 'info'" size="small">
+              {{ row.source === 'manual' ? '手工' : '自动' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
+    <!-- 汇总 -->
+    <el-card shadow="never" class="section-card" style="margin-top: 16px">
+      <el-row :gutter="20">
+        <el-col :span="6"><div class="summary-item"><span class="label">小计</span><span class="value">¥{{ Number(version?.subtotal_amount || 0).toFixed(2) }}</span></div></el-col>
+        <el-col :span="6"><div class="summary-item"><span class="label">预估成本</span><span class="value cost">¥{{ Number(version?.estimated_cost || 0).toFixed(2) }}</span></div></el-col>
+        <el-col :span="6"><div class="summary-item"><span class="label">预估毛利</span><span class="value" :class="profitClass">{{ Number(version?.estimated_profit || 0).toFixed(2) }}</span></div></el-col>
+        <el-col :span="6"><div class="summary-item highlight"><span class="label">合计</span><span class="value">¥{{ Number(version?.total_amount || 0).toFixed(2) }}</span></div></el-col>
+      </el-row>
+    </el-card>
+
+    <!-- 审批记录 -->
+    <el-card shadow="never" class="section-card" style="margin-top: 16px" v-if="approvals.length">
+      <template #header><span>审批记录</span></template>
+      <el-table :data="approvals" stripe>
+        <el-table-column prop="approval_type" label="审批类型" width="140">
+          <template #default="{ row }">{{ approvalTypeLabel(row.approval_type) }}</template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'approved' ? 'success' : row.status === 'rejected' ? 'danger' : 'warning'">
+              {{ { pending: '待审批', approved: '已批准', rejected: '已驳回' }[row.status] || row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="reason" label="原因" min-width="200" />
+        <el-table-column prop="decision_comment" label="审批意见" min-width="200" />
+        <el-table-column prop="created_at" label="申请时间" width="170" />
+      </el-table>
+    </el-card>
+
+    <!-- 版本历史 -->
+    <el-card shadow="never" class="section-card" style="margin-top: 16px" v-if="versions.length > 1">
+      <template #header><span>版本历史</span></template>
+      <el-timeline>
+        <el-timeline-item v-for="v in versions" :key="v.id" :timestamp="v.created_at">
+          <p>版本 {{ v.version_no }} — ¥{{ Number(v.total_amount || 0).toFixed(2) }}</p>
+          <p v-if="v.notes" class="trace-detail">{{ v.notes }}</p>
+        </el-timeline-item>
+      </el-timeline>
+    </el-card>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useAiAssistantStore } from '@/stores/aiAssistantStore'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  getCDRQuote,
+  getLatestVersion,
+  listVersions,
+  listApprovals,
+  requestApproval,
+  convertToOrder,
+  deleteCDRQuote,
+  type CDRQuote,
+  type QuoteApproval,
+  type QuoteVersion,
+} from '@/api/cdrQuote'
+import { getErrorMessage } from '@/utils/error'
+import { calcQuoteLineArea } from '@/utils/quoteLineCalculation'
+
+const route = useRoute()
+const router = useRouter()
+const aiStore = useAiAssistantStore()
+const quote = ref<CDRQuote | null>(null)
+const version = ref<QuoteVersion | null>(null)
+const versions = ref<QuoteVersion[]>([])
+const approvals = ref<QuoteApproval[]>([])
+
+function formatDimension(value?: string, unit?: string): string {
+  return value ? `${Number(value)}${unit || 'm'}` : '-'
+}
+
+function lineArea(line: QuoteVersion['lines'][number]): number {
+  return calcQuoteLineArea({
+    width: Number(line.width || 0),
+    width_unit: line.width_unit,
+    height: Number(line.height || 0),
+    height_unit: line.height_unit,
+    pieces: Number(line.pieces || 1),
+  })
+}
+
+function statusType(s: string): string {
+  return { draft: 'info', review: 'warning', approved: 'success', rejected: 'danger' }[s] || 'info'
+}
+function statusLabel(s: string): string {
+  return { draft: '草稿', review: '复核中', approved: '已批准', rejected: '已驳回' }[s] || s
+}
+function approvalTypeLabel(t: string): string {
+  return { low_margin: '低毛利', over_discount: '超折扣', price_override: '手工改价', high_value: '高金额' }[t] || t
+}
+
+const canConvert = computed(() => {
+  return version.value?.status && !['rejected', 'converted'].includes(version.value.status)
+})
+
+const profitClass = computed(() => {
+  const p = Number(version.value?.estimated_profit || 0)
+  return p >= 0 ? 'profit-positive' : 'profit-negative'
+})
+
+async function fetchData() {
+  const quoteId = route.params.id as string
+  try {
+    quote.value = await getCDRQuote(quoteId)
+    if (quote.value) {
+      aiStore.setPageContext({
+        quote_id: quote.value.id,
+        quote_no: quote.value.quote_no,
+        customer_id: quote.value.customer_id,
+        customer_name: quote.value.customer_name || quote.value.customer?.name || '',
+        project_name: quote.value.project_name,
+      })
+    }
+    version.value = await getLatestVersion(quoteId)
+    if (version.value) {
+      aiStore.setPageContext({ business_status: version.value.status })
+    }
+    versions.value = await listVersions(quoteId)
+    approvals.value = await listApprovals(quoteId).catch(() => [])
+  } catch { /* ignore */ }
+}
+
+function handleEdit() {
+  router.push(`/cdr/quotes/${route.params.id}/edit`)
+}
+
+async function handleRequestApproval() {
+  try {
+    const { value: reason } = await ElMessageBox.prompt('请输入审批原因', '提交审批', {
+      inputType: 'textarea', inputPlaceholder: '如：客户急需、超折扣等',
+    })
+    await requestApproval(route.params.id as string, {
+      approval_type: 'price_override',
+      reason: reason || '',
+    })
+    ElMessage.success('已提交审批')
+    await fetchData()
+  } catch { /* cancelled */ }
+}
+
+async function handleDelete() {
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除报价单 ' + (quote.value?.quote_no || '') + ' 吗？此操作不可恢复。',
+      '删除报价', { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' },
+    )
+    await deleteCDRQuote(route.params.id as string)
+    ElMessage.success('报价单已删除')
+    router.push('/cdr/quotes')
+  } catch (error: unknown) {
+    if (error !== 'cancel') {
+      ElMessage.error(getErrorMessage(error, '删除失败'))
+    }
+  }
+}
+
+async function handleConvertToOrder() {
+  try {
+    await ElMessageBox.confirm(
+      '确认将当前报价转为销售订单？转换后报价状态变为"已转换"，并创建新订单。',
+      '转订单', { type: 'warning', confirmButtonText: '确认转订单', cancelButtonText: '取消' },
+    )
+    const order = await convertToOrder(route.params.id as string)
+    ElMessage.success(`订单 ${order.doc_no} 创建成功`)
+    router.push(`/orders/${order.id}`)
+  } catch (error: unknown) {
+    if (error !== 'cancel') {
+      ElMessage.error(getErrorMessage(error, '转订单失败'))
+    }
+  }
+}
+
+onMounted(fetchData)
+</script>
+
+<style scoped>
+.section-card { margin-bottom: 0; }
+.summary-item { text-align: center; padding: 12px; }
+.summary-item .label { display: block; font-size: 13px; color: var(--ad-text-secondary); margin-bottom: 4px; }
+.summary-item .value { font-size: 22px; font-weight: 700; color: var(--ad-text); }
+.summary-item .value.cost { color: var(--el-color-warning); }
+.summary-item .value.profit-positive { color: var(--el-color-success); }
+.summary-item .value.profit-negative { color: var(--el-color-danger); }
+.summary-item.highlight .value { color: var(--ad-red); }
+.trace-detail { font-size: 12px; color: var(--ad-text-secondary); }
+.line-image { width: 36px; height: 36px; border-radius: 4px; }
+</style>

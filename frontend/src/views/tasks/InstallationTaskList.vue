@@ -18,12 +18,12 @@
 
           <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
         <el-table-column prop="installation_no" label="业务单号" width="180" />
-        <el-table-column prop="source" label="来源" width="80" />
+        <el-table-column prop="source" label="来源" width="100" />
         <el-table-column prop="order_no" label="关联编号" width="180" />
         <el-table-column prop="customer_name" label="客户" min-width="160" />
         <el-table-column prop="department" label="部门/科室" width="120" />
         <el-table-column prop="project_name" label="项目名称" min-width="200" />
-        <el-table-column label="金额" width="100">
+        <el-table-column label="金额" width="120">
           <template #default="{ row }">{{ row.total_amount ? '¥' + row.total_amount.toFixed(2) : '-' }}</template>
         </el-table-column>
         <el-table-column label="状态" width="100">
@@ -34,10 +34,10 @@
         <el-table-column label="派发" width="90">
           <template #default="{ row }">{{ row.assigned_to_name || row.assigned_to || '-' }}</template>
         </el-table-column>
-        <el-table-column label="创建时间" width="100">
+        <el-table-column label="创建时间" width="160">
           <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="100">
+        <el-table-column label="操作" width="200">
           <template #default="{ row }">
             <el-button text type="primary" @click="$router.push('/installation-tasks/' + row.id)">详情</el-button>
           </template>

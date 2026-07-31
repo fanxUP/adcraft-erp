@@ -1,5 +1,7 @@
 """CDR 智能报价兼容外观。"""
 
+from uuid import UUID
+
 from app.services.cdr_quote_conversion_service import CdrQuoteConversionService
 from app.services.cdr_quote_governance_service import CdrQuoteGovernanceService
 from app.services.cdr_quote_integration_service import CdrQuoteIntegrationService

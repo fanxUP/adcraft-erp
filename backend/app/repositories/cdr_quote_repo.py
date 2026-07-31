@@ -243,6 +243,25 @@ class CdrQuoteRepository:
         await self.db.flush()
         return ca
 
+
+    async def update_customer_agreement(self, agreement_id: UUID, data: dict) -> CustomerPriceAgreement | None:
+        ca = await self.db.get(CustomerPriceAgreement, agreement_id)
+        if not ca:
+            return None
+        for key, value in data.items():
+            if value is not None:
+                setattr(ca, key, value)
+        await self.db.flush()
+        return ca
+
+    async def delete_customer_agreement(self, agreement_id: UUID) -> bool:
+        ca = await self.db.get(CustomerPriceAgreement, agreement_id)
+        if not ca:
+            return False
+        await self.db.delete(ca)
+        await self.db.flush()
+        return True
+
     # ── 审批 ──
 
     async def create_approval(self, data: dict) -> QuoteApproval:

@@ -12,7 +12,7 @@
       <el-table-column prop="max_working_height" label="最大高度" width="90" />
       <el-table-column prop="platform_capacity" label="平台承重" width="90" />
       <el-table-column prop="default_personnel_name" label="默认人员" width="100" />
-      <el-table-column prop="status" label="状态" width="80">
+      <el-table-column prop="status" label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="row.status === 'available' ? 'success' : row.status === 'disabled' ? 'danger' : 'warning'" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
@@ -23,7 +23,7 @@
       <el-table-column prop="inspection_expire_date" label="年检到期" width="110">
         <template #default="{ row }"><span :style="{ color: isExpiredSoon(row.inspection_expire_date) ? '#f56c6c' : '' }">{{ row.inspection_expire_date || '-' }}</span></template>
       </el-table-column>
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
           <el-popconfirm title="确定删除该车辆？" @confirm="handleDelete(row)">

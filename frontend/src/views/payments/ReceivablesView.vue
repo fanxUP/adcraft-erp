@@ -56,10 +56,10 @@
                         <div style="margin: 4px 0 4px 24px; font-weight: 600; font-size: 13px;">关联订单</div>
                         <el-table :data="ct.orders" size="small" stripe style="margin: 2px 0 8px 24px; width: calc(100% - 48px)">
                           <el-table-column prop="order_no" label="订单编号" width="180" />
-                          <el-table-column label="部门/科室" width="100">
+                          <el-table-column label="部门/科室" width="120">
                             <template #default="{ row: o }">{{ o.department || '-' }}</template>
                           </el-table-column>
-                          <el-table-column prop="project_name" label="项目名称" min-width="150" />
+                          <el-table-column prop="project_name" label="项目名称" min-width="200" />
                           <el-table-column label="订单金额" width="120">
                             <template #default="{ row: o }">¥ {{ o.total_amount?.toFixed(2) }}</template>
                           </el-table-column>
@@ -71,7 +71,7 @@
                               <span style="color: #e63946; font-weight: 600">¥ {{ o.unpaid_amount?.toFixed(2) }}</span>
                             </template>
                           </el-table-column>
-                          <el-table-column label="状态" width="90">
+                          <el-table-column label="状态" width="100">
                             <template #default="{ row: o }">
                               <el-tag size="small" :type="orderStatusTag(o.status)">{{ orderStatusLabel(o.status) }}</el-tag>
                             </template>
@@ -82,14 +82,14 @@
                         <div style="margin: 4px 0 4px 24px; font-weight: 600; font-size: 13px;">关联报价</div>
                         <el-table :data="ct.quotes" size="small" stripe style="margin: 2px 0 8px 24px; width: calc(100% - 48px)">
                           <el-table-column prop="quote_no" label="报价编号" width="180" />
-                          <el-table-column label="部门/科室" width="100">
+                          <el-table-column label="部门/科室" width="120">
                             <template #default="{ row: o }">{{ o.department || '-' }}</template>
                           </el-table-column>
-                          <el-table-column prop="project_name" label="项目名称" min-width="150" />
+                          <el-table-column prop="project_name" label="项目名称" min-width="200" />
                           <el-table-column label="金额" width="120">
                             <template #default="{ row: q }">¥ {{ q.total_amount?.toFixed(2) }}</template>
                           </el-table-column>
-                          <el-table-column label="状态" width="90">
+                          <el-table-column label="状态" width="100">
                             <template #default="{ row: q }">
                               <el-tag size="small" :type="quoteStatusTag(q.status)">{{ quoteStatusLabel(q.status) }}</el-tag>
                             </template>
@@ -101,24 +101,24 @@
                   <el-table-column prop="contract_no" label="合同编号" width="180" />
                   <el-table-column prop="project_name" label="合同名称" min-width="180" />
                   <el-table-column prop="contract_type" label="合同类型" width="100" />
-                  <el-table-column label="合同金额" width="130">
+                  <el-table-column label="合同金额" width="120">
                     <template #default="{ row: ct }">¥ {{ ct.total_amount?.toFixed(2) }}</template>
                   </el-table-column>
-                  <el-table-column label="已收" width="130">
+                  <el-table-column label="已收" width="120">
                     <template #default="{ row: ct }">¥ {{ ct.paid_amount?.toFixed(2) }}</template>
                   </el-table-column>
-                  <el-table-column label="欠款" width="130">
+                  <el-table-column label="欠款" width="120">
                     <template #default="{ row: ct }">
                       <span style="color: #e63946; font-weight: 600">¥ {{ ct.unpaid_amount?.toFixed(2) }}</span>
                     </template>
                   </el-table-column>
-                  <el-table-column label="类型" width="80">
+                  <el-table-column label="类型" width="100">
                     <template #default="{ row: ct }">
                       <el-tag v-if="ct.contract_type === '框架合同'" type="warning" size="small">框架</el-tag>
                       <el-tag v-else type="primary" size="small">常规</el-tag>
                     </template>
                   </el-table-column>
-                  <el-table-column label="状态" width="80">
+                  <el-table-column label="状态" width="100">
                     <template #default="{ row: ct }">
                       <el-tag size="small" :type="contractStatusTag(ct.status)">{{ contractStatusLabel(ct.status) }}</el-tag>
                     </template>
@@ -131,17 +131,17 @@
                 <template v-if="row.orders?.length">
                   <el-table :data="row.orders" size="small" stripe style="margin: 4px 0 8px 48px; width: calc(100% - 48px)">
                     <el-table-column prop="order_no" label="订单编号" width="180" />
-                    <el-table-column label="部门/科室" width="100">
+                    <el-table-column label="部门/科室" width="120">
                       <template #default="{ row: q }">{{ q.department || '-' }}</template>
                     </el-table-column>
-                    <el-table-column prop="project_name" label="项目名称" min-width="180" />
-                    <el-table-column label="订单金额" width="130">
+                    <el-table-column prop="project_name" label="项目名称" min-width="200" />
+                    <el-table-column label="订单金额" width="120">
                       <template #default="{ row: o }">¥ {{ o.total_amount?.toFixed(2) }}</template>
                     </el-table-column>
-                    <el-table-column label="已收" width="130">
+                    <el-table-column label="已收" width="120">
                       <template #default="{ row: o }">¥ {{ o.paid_amount?.toFixed(2) }}</template>
                     </el-table-column>
-                    <el-table-column label="欠款" width="130">
+                    <el-table-column label="欠款" width="120">
                       <template #default="{ row: o }">
                         <span style="color: #e63946; font-weight: 600">¥ {{ o.unpaid_amount?.toFixed(2) }}</span>
                       </template>
@@ -156,11 +156,11 @@
                 <template v-if="row.quotes?.length">
                   <el-table :data="row.quotes" size="small" stripe style="margin: 4px 0 8px 48px; width: calc(100% - 48px)">
                     <el-table-column prop="quote_no" label="报价编号" width="180" />
-                    <el-table-column label="部门/科室" width="100">
+                    <el-table-column label="部门/科室" width="120">
                       <template #default="{ row: q }">{{ q.department || '-' }}</template>
                     </el-table-column>
-                    <el-table-column prop="project_name" label="项目名称" min-width="180" />
-                    <el-table-column label="金额" width="130">
+                    <el-table-column prop="project_name" label="项目名称" min-width="200" />
+                    <el-table-column label="金额" width="120">
                       <template #default="{ row: q }">¥ {{ q.total_amount?.toFixed(2) }}</template>
                     </el-table-column>
                     <el-table-column label="状态" width="100">
@@ -173,7 +173,7 @@
               </template>
             </template>
           </el-table-column>
-          <el-table-column prop="customer_name" label="客户名称" min-width="180" />
+          <el-table-column prop="customer_name" label="客户名称" min-width="160" />
           <el-table-column label="合同" width="60" align="center">
             <template #default="{ row }">{{ row.contract_count }}</template>
           </el-table-column>
@@ -183,13 +183,13 @@
           <el-table-column label="报价" width="60" align="center">
             <template #default="{ row }">{{ row.quote_count }}</template>
           </el-table-column>
-          <el-table-column label="合同总额" width="140">
+          <el-table-column label="合同总额" width="120">
             <template #default="{ row }">¥ {{ row.total_order_amount?.toFixed(2) }}</template>
           </el-table-column>
-          <el-table-column label="已收金额" width="140">
+          <el-table-column label="已收金额" width="120">
             <template #default="{ row }">¥ {{ row.total_paid?.toFixed(2) }}</template>
           </el-table-column>
-          <el-table-column label="欠款金额" width="140">
+          <el-table-column label="欠款金额" width="120">
             <template #default="{ row }">
               <span style="color: #e63946; font-weight: 600">¥ {{ row.debt_amount?.toFixed(2) }}</span>
             </template>
@@ -202,6 +202,16 @@
 
       <!-- ===== Tab 2: 收款记录 ===== -->
       <el-tab-pane label="收款记录" name="payments">
+        <div class="page-header" style="margin-top: 8px">
+          <span></span>
+          <el-button
+            data-ai-target="receivable-register-payment"
+            type="danger"
+            @click="openPaymentDialog()"
+          >
+            登记收款
+          </el-button>
+        </div>
         <div class="search-bar">
           <el-select v-model="filterOrderId" placeholder="筛选订单" clearable filterable style="width: 240px" @change="fetchPayments">
             <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
@@ -210,21 +220,13 @@
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
           <el-button style="margin-left: 12px" @click="fetchPayments">搜索</el-button>
-          <el-button
-            data-ai-target="receivable-register-payment"
-            type="danger"
-            style="margin-left: auto"
-            @click="openPaymentDialog()"
-          >
-            登记收款
-          </el-button>
         </div>
 
         <el-table :data="paymentList" v-loading="paymentLoading" stripe style="margin-top: 16px">
           <el-table-column prop="payment_no" label="收款编号" width="180" />
-          <el-table-column prop="order_no" label="订单编号" width="160" />
-          <el-table-column prop="customer_name" label="客户名称" width="140" />
-          <el-table-column prop="project_name" label="项目名称" min-width="180" />
+          <el-table-column prop="order_no" label="订单编号" width="180" />
+          <el-table-column prop="customer_name" label="客户名称" width="160" />
+          <el-table-column prop="project_name" label="项目名称" min-width="200" />
           <el-table-column label="金额" width="120">
             <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
           </el-table-column>
@@ -237,8 +239,8 @@
               <el-tag :type="row.is_voided ? 'danger' : 'success'" size="small">{{ row.is_voided ? '已作废' : '有效' }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="remark" label="备注" min-width="160" />
-          <el-table-column label="操作" width="100" fixed="right">
+          <el-table-column prop="remark" label="备注" min-width="180" />
+          <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <el-button v-if="!row.is_voided" text type="danger" size="small" @click="handleVoid(row)">作废</el-button>
             </template>

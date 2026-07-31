@@ -20,7 +20,7 @@
 
     <!-- 任务付款汇总列表 -->
     <el-table :data="taskList" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协任务">
-      <el-table-column prop="task_no" label="任务编号" width="140" />
+      <el-table-column prop="task_no" label="任务编号" width="180" />
       <el-table-column prop="vendor_name" label="外协商" width="140" />
       <el-table-column label="项目" width="160" show-overflow-tooltip>
         <template #default="{ row }">
@@ -28,7 +28,7 @@
           <span v-else style="color: #999">-</span>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="80">
+      <el-table-column label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
@@ -126,7 +126,7 @@
     <!-- 付款记录对话框 -->
     <el-dialog v-model="recordDialogVisible" :title="'付款记录 - ' + (recordTask?.task_no || '')" width="700px" :close-on-click-modal="false">
       <el-table :data="paymentRecords" stripe empty-text="暂无付款记录">
-        <el-table-column prop="payment_no" label="付款编号" width="160" />
+        <el-table-column prop="payment_no" label="付款编号" width="180" />
         <el-table-column prop="amount" label="金额" width="120" align="right">
           <template #default="{ row }">¥{{ row.amount?.toFixed(2) }}</template>
         </el-table-column>
@@ -135,7 +135,7 @@
         </el-table-column>
         <el-table-column prop="payee_company_name" label="收款公司" min-width="150" show-overflow-tooltip />
         <el-table-column prop="paid_at" label="付款日期" width="120" />
-        <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
       </el-table>
       <template #footer>
         <el-button @click="recordDialogVisible = false">关闭</el-button>

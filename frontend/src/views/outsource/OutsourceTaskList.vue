@@ -20,7 +20,7 @@
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协任务">
-      <el-table-column prop="task_no" label="任务编号" width="140" />
+      <el-table-column prop="task_no" label="任务编号" width="180" />
       <el-table-column prop="vendor_name" label="外协商" width="140" />
       <el-table-column label="任务" width="160" show-overflow-tooltip>
         <template #default="{ row }">
@@ -28,8 +28,8 @@
           <span v-else style="color: #999">-</span>
         </template>
       </el-table-column>
-      <el-table-column prop="description" label="描述" min-width="150" show-overflow-tooltip />
-      <el-table-column prop="total_amount" label="总金额" width="110" align="right">
+      <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="total_amount" label="总金额" width="120" align="right">
         <template #default="{ row }">¥{{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
       <el-table-column label="已付" width="100" align="right">
@@ -43,12 +43,12 @@
           <span v-else style="color: var(--el-color-success)">已结清</span>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="80">
+      <el-table-column label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" min-width="240">
+      <el-table-column label="操作" min-width="200" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" @click="handleEdit(row as OutsourceTaskResponse)">编辑</el-button>
           <el-button v-if="row.status === 'pending'" text type="primary" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'in_progress')">开始</el-button>

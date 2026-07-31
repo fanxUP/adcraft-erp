@@ -112,15 +112,13 @@
         </el-table-column>
         <el-table-column label="产品/材质/工艺" min-width="280">
           <template #default="{ row, $index }">
-            <el-autocomplete
+            <el-input
               v-model="row.material_process"
               size="small"
-              :fetch-suggestions="(q: string, cb: Function) => queryProductMaterialProcess(q, cb)"
-              placeholder="搜索或输入产品/材质/工艺"
-              style="width: 100%"
-              :trigger-on-focus="true"
-              @select="(opt: any) => onProductSelect(row, opt, $index)"
+              placeholder="点击选择产品/材质/工艺"
+              @click="openProductPicker(row, $index)"
               clearable
+              @clear="row.use_area = false; row.quantity = 1; row.product_id = ''; row.item_name = ''"
             />
           </template>
         </el-table-column>
@@ -275,6 +273,8 @@
       <el-input v-model="form.notes" type="textarea" :rows="2" placeholder="备注" />
     </el-card>
   </div>
+    <!-- 产品选择面板 -->
+    <ProductPickerDialog v-model="productPickerVisible" :customer-id="form.customer_id" @selected="onProductPicked" />
 </template>
 
 <script setup lang="ts">
@@ -306,6 +306,7 @@ import {
   dimensionToMillimeters,
   syncQuoteLineAreaQuantity,
 } from '@/utils/quoteLineCalculation'
+import ProductPickerDialog from '@/components/ProductPickerDialog.vue'
 
 interface EditorLine {
   product_id: string
@@ -341,6 +342,9 @@ const saving = ref(false)
 
 const customers = ref<CustomerResponse[]>([])
 const products = ref<ProductResponse[]>([])
+const productPickerVisible = ref(false)
+const pendingPickerLine = ref<EditorLine | null>(null)
+const pendingPickerIndex = ref(-1)
 const pricingTrace = ref<PricingTraceStep[]>([])
 const dimensionUnits = ['m', 'cm', 'mm']
 const quoteUnits = ['㎡', 'm', '个', '套', '块', '件', '批', '次', '组', '台']
@@ -450,27 +454,46 @@ async function onLineChange(index: number) {
 
 
 
-function queryProductMaterialProcess(queryString: string, cb: (results: { value: string; disabled?: boolean; product?: ProductResponse }[]) => void) {
-  const list = products.value
-  const filtered = queryString
-    ? list.filter(p => {
-        const label = formatProductMaterialProcess(p).toLowerCase()
-        return label.includes(queryString.toLowerCase())
-      })
-    : list
-  cb([
-    ...filtered.map(p => ({ value: formatProductMaterialProcess(p), product: p })),
-  ])
+
+function openProductPicker(line: EditorLine, index: number) {
+  if (!form.customer_id) {
+    ElMessage.warning('请先选择客户')
+    return
+  }
+  pendingPickerLine.value = line
+  pendingPickerIndex.value = index
+  productPickerVisible.value = true
+}
+
+function onProductPicked(product: ProductResponse) {
+  const line = pendingPickerLine.value
+  const index = pendingPickerIndex.value
+  if (!line) return
+  onProductSelect(line, { value: formatProductMaterialProcess(product), product }, index)
+  onLineChange(index)
+  pendingPickerLine.value = null
+  pendingPickerIndex.value = -1
 }
 
 function onProductSelect(line: EditorLine, opt: { value: string; product?: ProductResponse }, index: number) {
   if (!opt.product) {
     line.product_id = ''
+    line.use_area = false
+    line.quantity = 1
     return
   }
   Object.assign(line, applyProductMaterialProcess(line, opt.product))
   line.material_process = opt.value
-  if (!line.item_name) line.item_name = opt.product.name
+  line.item_name = opt.product.name
+  if (opt.product.pricing_method === 'area') {
+    if (!line.use_area) {
+      line.use_area = true
+      syncQuoteLineAreaQuantity(line)
+    }
+  } else {
+    line.use_area = false
+    line.quantity = 1
+  }
   onLineChange(index)
 }
 

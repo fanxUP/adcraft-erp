@@ -7,7 +7,7 @@
 
     <el-table :data="ruleSets" v-loading="loading" stripe>
       <el-table-column prop="code" label="编码" width="150" />
-      <el-table-column prop="name" label="名称" min-width="200" />
+      <el-table-column prop="name" label="名称" min-width="160" />
       <el-table-column prop="version" label="版本" width="80" />
       <el-table-column prop="status" label="状态" width="100">
         <template #default="{ row }">
@@ -18,8 +18,8 @@
       </el-table-column>
       <el-table-column prop="effective_from" label="生效日期" width="120" />
       <el-table-column prop="effective_to" label="失效日期" width="120" />
-      <el-table-column prop="description" label="说明" min-width="200" />
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column prop="description" label="说明" min-width="180" />
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" @click="viewRules(row)">查看规则</el-button>
         </template>

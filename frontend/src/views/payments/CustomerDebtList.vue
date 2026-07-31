@@ -6,8 +6,8 @@
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无欠款客户">
-      <el-table-column prop="customer_name" label="客户名称" min-width="200" />
-      <el-table-column label="欠款金额" width="180">
+      <el-table-column prop="customer_name" label="客户名称" min-width="160" />
+      <el-table-column label="欠款金额" width="120">
         <template #default="{ row }">
           <span style="color: #e63946; font-weight: bold">¥ {{ row.debt_amount?.toFixed(2) }}</span>
         </template>

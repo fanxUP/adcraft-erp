@@ -37,7 +37,7 @@
 
     <!-- Unified table -->
     <el-table :data="combinedList" v-loading="loading" stripe style="margin-top: 16px" row-key="id">
-      <el-table-column label="来源" width="90" fixed>
+      <el-table-column label="来源" width="100" fixed>
         <template #default="{ row }">
           <el-tag v-if="row._type === 'order'" type="primary" size="small">订单</el-tag>
           <el-tag v-else type="success" size="small">报价</el-tag>
@@ -46,11 +46,11 @@
       <el-table-column label="编号" width="180">
         <template #default="{ row }">{{ row._type === 'order' ? row.order_no : row.quote_no }}</template>
       </el-table-column>
-      <el-table-column prop="project_name" label="项目名称" min-width="180" show-overflow-tooltip />
-      <el-table-column label="客户" min-width="140" show-overflow-tooltip>
+      <el-table-column prop="project_name" label="项目名称" min-width="200" show-overflow-tooltip />
+      <el-table-column label="客户" min-width="160" show-overflow-tooltip>
         <template #default="{ row }">{{ row.customer_name || '-' }}</template>
       </el-table-column>
-      <el-table-column v-if="filterType !== 'quote'" label="状态" width="110">
+      <el-table-column v-if="filterType !== 'quote'" label="状态" width="100">
         <template #default="{ row }">
           <el-tag v-if="row._type === 'order'" :type="statusColor(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
           <span v-else>-</span>
@@ -69,10 +69,10 @@
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="创建时间" width="110">
+      <el-table-column label="创建时间" width="160">
         <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button type="danger" size="small" @click="$router.push(row._type === 'order' ? `/project-costs/${row.id}` : `/quote-costs/${row.id}`)">
             登记成本

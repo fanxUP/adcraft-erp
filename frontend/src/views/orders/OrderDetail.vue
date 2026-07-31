@@ -103,7 +103,7 @@
               </el-table-column>
               <el-table-column label="产品/材质/工艺" min-width="150">
                 <template #default="{ row }">
-                  <template v-if="row.type === 'item'">{{ row.item.material_process || '-' }}</template>
+                  <template v-if="row.type === 'item'">{{ row.item.material_process }}</template>
                 </template>
               </el-table-column>
               <el-table-column label="规格" min-width="140">
@@ -546,7 +546,7 @@ function handlePrintOrder() {
       html += '<tr>'
       html += '<td class="center">' + (i + 1) + '</td>'
       html += '<td>' + (item.item_name || '') + '</td>'
-      html += '<td>' + (item.material_process || '-') + '</td>'
+      html += '<td>' + (item.material_process) + '</td>'
       html += '<td>' + (item.specification || '-') + '</td>'
       html += '<td class="numeric">' + (item.quantity != null ? item.quantity : '') + '</td>'
       html += '<td class="center">' + (item.unit || '-') + '</td>'

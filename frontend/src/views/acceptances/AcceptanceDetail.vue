@@ -120,7 +120,7 @@
               <template #default="{ row }">
                 <template v-if="row.type === 'item'">
                   <el-input v-if="canEditStructure" v-model="row.item.material_process" placeholder="产品 / 材质 / 工艺" />
-                  <span v-else>{{ row.item.material_process || '-' }}</span>
+                  <span v-else>{{ row.item.material_process }}</span>
                 </template>
               </template>
             </el-table-column>

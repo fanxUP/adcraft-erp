@@ -41,12 +41,12 @@
       <el-table :data="backups" v-loading="loading" stripe style="width: 100%" empty-text="暂无备份文件">
         <el-table-column prop="filename" label="文件名" min-width="280" />
         <el-table-column prop="size_display" label="大小" width="100" align="center" />
-        <el-table-column label="创建时间" width="180" align="center">
+        <el-table-column label="创建时间" width="160" align="center">
           <template #default="{ row }">
             {{ formatTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" align="center" fixed="right">
+        <el-table-column label="操作" width="200" align="center" fixed="right">
           <template #default="{ row }">
             <el-button
               type="primary"

@@ -30,37 +30,37 @@
 
     <!-- 列表 -->
     <el-table :data="list" stripe v-loading="loading" style="width: 100%">
-      <el-table-column prop="work_date" label="出车日期" width="100" />
-      <el-table-column prop="ledger_no" label="台账编号" width="160" />
-      <el-table-column prop="name" label="人员" width="80" />
+      <el-table-column prop="work_date" label="出车日期" width="120" />
+      <el-table-column prop="ledger_no" label="台账编号" width="180" />
+      <el-table-column prop="name" label="人员" width="100" />
       <el-table-column prop="customer_name" label="客户" width="120" show-overflow-tooltip />
       <el-table-column prop="work_location" label="作业地点" width="140" show-overflow-tooltip />
       <el-table-column prop="work_content" label="作业内容" width="120" show-overflow-tooltip />
-      <el-table-column prop="receivable_amount" label="应收" width="90" align="right">
+      <el-table-column prop="receivable_amount" label="应收" width="120" align="right">
         <template #default="{ row }">¥{{ row.receivable_amount }}</template>
       </el-table-column>
-      <el-table-column prop="received_amount" label="实收" width="90" align="right">
+      <el-table-column prop="received_amount" label="实收" width="120" align="right">
         <template #default="{ row }">¥{{ row.received_amount }}</template>
       </el-table-column>
-      <el-table-column prop="unpaid_amount" label="未收" width="90" align="right">
+      <el-table-column prop="unpaid_amount" label="未收" width="120" align="right">
         <template #default="{ row }">
           <span :style="{ color: row.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ row.unpaid_amount }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="personnel_wage_amount" label="工资" width="80" align="right">
+      <el-table-column prop="personnel_wage_amount" label="工资" width="120" align="right">
         <template #default="{ row }">¥{{ row.personnel_wage_amount }}</template>
       </el-table-column>
-      <el-table-column prop="gross_profit" label="毛利润" width="90" align="right">
+      <el-table-column prop="gross_profit" label="毛利润" width="120" align="right">
         <template #default="{ row }">
           <span :style="{ color: row.gross_profit >= 0 ? '#67c23a' : '#f56c6c' }">¥{{ row.gross_profit }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="payment_status" label="收款状态" width="90">
+      <el-table-column prop="payment_status" label="收款状态" width="100">
         <template #default="{ row }">
           <el-tag :type="paymentTagType(row.payment_status)" size="small">{{ paymentLabel(row.payment_status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="80">
+      <el-table-column prop="status" label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>

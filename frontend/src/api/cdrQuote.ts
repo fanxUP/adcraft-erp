@@ -325,6 +325,33 @@ export function createRuleSet(data: PriceRuleSetInput) {
   return api.post<Pick<PriceRuleSet, 'id' | 'code' | 'name'>>('/cdr/rule-sets', data)
 }
 
+
+export function updateCustomerAgreement(id: string, data: Partial<CustomerAgreementInput>) {
+  return api.put<Pick<CustomerAgreement, 'id' | 'customer_id'>>(`/cdr/customer-agreements/${id}`, data)
+}
+
+export function deleteCustomerAgreement(id: string) {
+  return api.del(`/cdr/customer-agreements/${id}`)
+}
+
+export interface BatchAgreementInput {
+  customer_type?: string
+  level?: string
+  customer_ids?: string[]
+  product_ids?: string[]
+  pricing_method?: string
+  price_value?: number
+  minimum_charge?: number
+  discount_rate?: number
+  effective_from?: string
+  effective_to?: string
+  overwrite?: boolean
+}
+
+export function batchCustomerAgreements(data: BatchAgreementInput) {
+  return api.post<{ created: number; updated: number; skipped: number }>('/cdr/customer-agreements/batch', data)
+}
+
 export function listCustomerAgreements(customerId?: string) {
   const params = customerId ? { customer_id: customerId } : {}
   return api.get<CustomerAgreement[]>('/cdr/customer-agreements', { params })

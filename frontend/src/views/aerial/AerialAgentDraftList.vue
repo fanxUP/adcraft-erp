@@ -33,7 +33,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="sender_name" label="发送人" width="100" />
-      <el-table-column prop="platform" label="平台" width="90">
+      <el-table-column prop="platform" label="平台" width="100">
         <template #default="{ row }">
           <el-tag size="small">{{ platformLabel(row.platform) }}</el-tag>
         </template>
@@ -49,19 +49,19 @@
           {{ (row.confidence * 100).toFixed(0) }}%
         </template>
       </el-table-column>
-      <el-table-column prop="risk_level" label="风险" width="70">
+      <el-table-column prop="risk_level" label="风险" width="80">
         <template #default="{ row }">
           <el-tag :type="row.risk_level === 'high' ? 'danger' : row.risk_level === 'medium' ? 'warning' : 'success'" size="small">
             {{ row.risk_level }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="90">
+      <el-table-column prop="status" label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="showDetail(row)">详情</el-button>
           <template v-if="row.status === 'pending'">

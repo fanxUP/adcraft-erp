@@ -119,17 +119,12 @@ export const salesDeliveryCapabilities: PageCapabilityMap = {
     workflowStage: 'contract',
     availableActions: ['搜索合同', '新建合同', '查看合同'],
   },
-  framework_contract_list: {
-    title: '框架合同列表',
-    purpose: '管理客户框架合同、额度和有效期',
+
+  contract_detail: {
+    title: '合同详情',
+    purpose: '查看合同条款、管理子项目和关联订单',
     workflowStage: 'contract',
-    availableActions: ['搜索框架合同', '新建框架合同', '查看合同详情'],
-  },
-  framework_contract_detail: {
-    title: '框架合同详情',
-    purpose: '查看框架合同条款、额度使用和关联业务',
-    workflowStage: 'contract',
-    availableActions: ['查看合同条款', '查看额度使用', '更新合同状态'],
+    availableActions: ['查看合同', '添加项目', '编辑合同'],
   },
   acceptance_list: {
     title: '验收列表',

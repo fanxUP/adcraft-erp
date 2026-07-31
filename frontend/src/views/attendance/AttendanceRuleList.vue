@@ -9,7 +9,7 @@
       <el-table-column prop="late_threshold" label="迟到阈值(min)" width="120" />
       <el-table-column prop="overtime_rate" label="加班费率" width="100" />
       <el-table-column label="启用" width="80"><template #default="{row}"><el-tag :type="row.is_active?'success':'info'" size="small">{{row.is_active?"是":"否"}}</el-tag></template></el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
     </el-table>

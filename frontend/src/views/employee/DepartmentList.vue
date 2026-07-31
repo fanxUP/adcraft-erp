@@ -5,11 +5,11 @@
     </div>
     <el-table :data="list" v-loading="loading" stripe>
       <el-table-column prop="code" label="编码" width="120" />
-      <el-table-column prop="name" label="名称" width="150" />
+      <el-table-column prop="name" label="名称" width="120" />
       <el-table-column label="启用" width="80"><template #default="{row}"><el-tag :type="row.is_active?'success':'info'" size="small">{{ row.is_active?'是':'否' }}</el-tag></template></el-table-column>
       <el-table-column prop="sort_order" label="排序" width="70" />
-      <el-table-column prop="description" label="描述" min-width="200" />
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column prop="description" label="描述" min-width="180" />
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
     </el-table>

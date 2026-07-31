@@ -15,13 +15,13 @@
       </div>
     </div>
     <el-table :data="list" v-loading="loading" stripe style="width:100%">
-      <el-table-column label="员工" width="150"><template #default="{row}">{{row.employee_name||row.employee_id}}</template></el-table-column>
-      <el-table-column label="请假类型" width="90"><template #default="{row}"><el-tag size="small">{{typeLabel(row.leave_type)}}</el-tag></template></el-table-column>
-      <el-table-column prop="start_date" label="开始日期" width="110" />
-      <el-table-column prop="end_date" label="结束日期" width="110" />
-      <el-table-column prop="duration_days" label="天数" width="60" />
-      <el-table-column prop="reason" label="事由" min-width="160" show-overflow-tooltip />
-      <el-table-column label="状态" width="90"><template #default="{row}"><el-tag :type="statusColor(row.status)" size="small">{{statusLabel(row.status)}}</el-tag></template></el-table-column>
+      <el-table-column label="员工" width="140"><template #default="{row}">{{row.employee_name||row.employee_id}}</template></el-table-column>
+      <el-table-column label="请假类型" width="100"><template #default="{row}"><el-tag size="small">{{typeLabel(row.leave_type)}}</el-tag></template></el-table-column>
+      <el-table-column prop="start_date" label="开始日期" width="120" />
+      <el-table-column prop="end_date" label="结束日期" width="120" />
+      <el-table-column prop="duration_days" label="天数" width="80" />
+      <el-table-column prop="reason" label="事由" min-width="180" show-overflow-tooltip />
+      <el-table-column label="状态" width="100"><template #default="{row}"><el-tag :type="statusColor(row.status)" size="small">{{statusLabel(row.status)}}</el-tag></template></el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{row}">
           <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>

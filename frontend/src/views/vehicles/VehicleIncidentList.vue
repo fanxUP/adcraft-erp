@@ -63,14 +63,14 @@
           {{ row.plate_number }} {{ row.vehicle_name }}
         </template>
       </el-table-column>
-      <el-table-column prop="incident_type" label="事件类型" width="110">
+      <el-table-column prop="incident_type" label="事件类型" width="100">
         <template #default="{ row }">
           <el-tag :type="getIncidentTypeTag(row.incident_type)" size="small">
             {{ getIncidentTypeLabel(row.incident_type) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="incident_time" label="发生时间" width="120">
+      <el-table-column prop="incident_time" label="发生时间" width="160">
         <template #default="{ row }">
           {{ row.incident_time ? row.incident_time.slice(0, 10) : '-' }}
         </template>
@@ -78,12 +78,12 @@
       <el-table-column prop="location" label="地点" width="150" show-overflow-tooltip />
       <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
       <el-table-column prop="driver_name" label="司机" width="100" />
-      <el-table-column prop="fine_amount" label="罚款" width="100" align="right">
+      <el-table-column prop="fine_amount" label="罚款" width="120" align="right">
         <template #default="{ row }">
           {{ row.fine_amount > 0 ? `¥${row.fine_amount.toFixed(2)}` : '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="repair_amount" label="维修费" width="100" align="right">
+      <el-table-column prop="repair_amount" label="维修费" width="120" align="right">
         <template #default="{ row }">
           {{ row.repair_amount > 0 ? `¥${row.repair_amount.toFixed(2)}` : '-' }}
         </template>

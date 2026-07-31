@@ -27,22 +27,22 @@
 
     <el-card>
       <el-table :data="list" v-loading="loading" stripe>
-        <el-table-column prop="acceptance_no" label="验收单号" min-width="140" />
-        <el-table-column label="来源" width="80">
+        <el-table-column prop="acceptance_no" label="验收单号" min-width="180" />
+        <el-table-column label="来源" width="100">
           <template #default="{ row }">
             <el-tag v-if="row.order_id" type="primary" size="small">订单</el-tag>
             <el-tag v-else-if="row.quote_id" type="success" size="small">报价</el-tag>
             <el-tag v-else type="info" size="small">独立</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="关联编号" min-width="150">
+        <el-table-column label="关联编号" min-width="180">
           <template #default="{ row }">
             {{ row.order_no || row.quote_no || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="customer_name" label="客户" min-width="120" />
+        <el-table-column prop="customer_name" label="客户" min-width="160" />
         <el-table-column prop="department" label="部门/科室" min-width="120" />
-        <el-table-column prop="project_name" label="项目名称" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="project_name" label="项目名称" min-width="200" show-overflow-tooltip />
         <el-table-column label="金额" width="120" align="right">
           <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
         </el-table-column>
@@ -55,7 +55,7 @@
         <el-table-column label="验收日期" width="120">
           <template #default="{ row }">{{ row.accepted_at?.slice(0, 10) || '-' }}</template>
         </el-table-column>
-        <el-table-column label="创建时间" width="120">
+        <el-table-column label="创建时间" width="160">
           <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
@@ -88,22 +88,22 @@
     <!-- 新建验收单 → 选择订单/报价单（合并列表） -->
     <el-dialog v-model="showCreateDialog" title="选择订单或报价单创建验收单" width="900px" :close-on-click-modal="false">
       <el-table :data="availableItems" v-loading="loadingItems" border stripe highlight-current-row @row-dblclick="handleCreateFromItem">
-        <el-table-column label="来源" width="70">
+        <el-table-column label="来源" width="100">
           <template #default="{ row }">
             <el-tag v-if="row.order_no" type="primary" size="small">订单</el-tag>
             <el-tag v-else type="success" size="small">报价</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="编号" min-width="140">
+        <el-table-column label="编号" min-width="180">
           <template #default="{ row }">{{ row.order_no || row.quote_no }}</template>
         </el-table-column>
-        <el-table-column prop="customer_name" label="客户" min-width="120" />
+        <el-table-column prop="customer_name" label="客户" min-width="160" />
         <el-table-column prop="department" label="科室/部门" min-width="100" />
-        <el-table-column prop="project_name" label="项目名称" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="total_amount" label="金额" width="130" align="right">
+        <el-table-column prop="project_name" label="项目名称" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="total_amount" label="金额" width="120" align="right">
           <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="90" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" size="small" @click="handleCreateFromItem(row)">选择</el-button>
           </template>

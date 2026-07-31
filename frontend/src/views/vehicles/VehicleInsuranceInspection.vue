@@ -77,12 +77,12 @@
           {{ row.plate_number }} {{ row.vehicle_name }}
         </template>
       </el-table-column>
-      <el-table-column prop="certificate_type" label="证件类型" width="120">
+      <el-table-column prop="certificate_type" label="证件类型" width="100">
         <template #default="{ row }">
           {{ getCertTypeLabel(row.certificate_type) }}
         </template>
       </el-table-column>
-      <el-table-column prop="certificate_no" label="证件编号" width="150" />
+      <el-table-column prop="certificate_no" label="证件编号" width="180" />
       <el-table-column prop="expire_date" label="到期日期" width="120">
         <template #default="{ row }">
           <span :class="getExpireClass(row)">
@@ -100,14 +100,14 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="amount" label="金额" width="100" align="right">
+      <el-table-column prop="amount" label="金额" width="120" align="right">
         <template #default="{ row }">
           {{ row.amount ? `¥${row.amount.toFixed(2)}` : '-' }}
         </template>
       </el-table-column>
       <el-table-column prop="reminder_days" label="提醒天数" width="90" align="center" />
       <el-table-column prop="driver_name" label="关联司机" width="100" />
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button v-if="canManage" type="primary" link size="small" @click="showEditDialog(row)">编辑</el-button>
           <el-button v-if="canManage" type="danger" link size="small" @click="handleDelete(row)">删除</el-button>

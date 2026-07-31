@@ -16,22 +16,22 @@
       <el-button type="primary" @click="fetchData">搜索</el-button>
     </div>
     <el-table :data="list" stripe v-loading="loading">
-      <el-table-column prop="wage_month" label="月份" width="90" />
-      <el-table-column prop="name" label="人员" width="80" />
-      <el-table-column prop="wage_type" label="工资类型" width="90">
+      <el-table-column prop="wage_month" label="月份" width="100" />
+      <el-table-column prop="name" label="人员" width="100" />
+      <el-table-column prop="wage_type" label="工资类型" width="100">
         <template #default="{ row }">{{ wageTypeLabel(row.wage_type) }}</template>
       </el-table-column>
-      <el-table-column prop="base_wage" label="基础工资" width="90" align="right"><template #default="{ row }">¥{{ row.base_wage }}</template></el-table-column>
-      <el-table-column prop="trip_wage" label="趟次工资" width="90" align="right"><template #default="{ row }">¥{{ row.trip_wage }}</template></el-table-column>
-      <el-table-column prop="allowance_amount" label="补贴" width="80" align="right"><template #default="{ row }">¥{{ row.allowance_amount }}</template></el-table-column>
-      <el-table-column prop="deduction_amount" label="扣款" width="80" align="right"><template #default="{ row }">¥{{ row.deduction_amount }}</template></el-table-column>
-      <el-table-column prop="final_wage_amount" label="最终工资" width="100" align="right"><template #default="{ row }"><b>¥{{ row.final_wage_amount }}</b></template></el-table-column>
-      <el-table-column prop="payment_status" label="支付状态" width="90">
+      <el-table-column prop="base_wage" label="基础工资" width="120" align="right"><template #default="{ row }">¥{{ row.base_wage }}</template></el-table-column>
+      <el-table-column prop="trip_wage" label="趟次工资" width="120" align="right"><template #default="{ row }">¥{{ row.trip_wage }}</template></el-table-column>
+      <el-table-column prop="allowance_amount" label="补贴" width="100" align="right"><template #default="{ row }">¥{{ row.allowance_amount }}</template></el-table-column>
+      <el-table-column prop="deduction_amount" label="扣款" width="100" align="right"><template #default="{ row }">¥{{ row.deduction_amount }}</template></el-table-column>
+      <el-table-column prop="final_wage_amount" label="最终工资" width="120" align="right"><template #default="{ row }"><b>¥{{ row.final_wage_amount }}</b></template></el-table-column>
+      <el-table-column prop="payment_status" label="支付状态" width="100">
         <template #default="{ row }">
           <el-tag :type="row.payment_status === 'paid' ? 'success' : row.payment_status === 'pending_payment' ? 'warning' : 'info'" size="small">{{ payLabel(row.payment_status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button link type="success" size="small" @click="handlePay(row)" v-if="row.payment_status !== 'paid'">标记已发</el-button>
         </template>

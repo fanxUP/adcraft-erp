@@ -26,8 +26,8 @@
       <el-table-column label="支腿" width="70"><template #default="{ row }"><el-tag :type="row.outriggers_ok ? 'success' : 'danger'" size="small">{{ row.outriggers_ok ? '正常' : '异常' }}</el-tag></template></el-table-column>
       <el-table-column label="作业平台" width="80"><template #default="{ row }"><el-tag :type="row.platform_ok ? 'success' : 'danger'" size="small">{{ row.platform_ok ? '正常' : '异常' }}</el-tag></template></el-table-column>
       <el-table-column label="安全带" width="70"><template #default="{ row }"><el-tag :type="row.safety_belt_ok ? 'success' : 'danger'" size="small">{{ row.safety_belt_ok ? '正常' : '异常' }}</el-tag></template></el-table-column>
-      <el-table-column prop="issue_description" label="异常说明" min-width="150" show-overflow-tooltip />
-      <el-table-column prop="checked_at" label="检查时间" width="170" />
+      <el-table-column prop="issue_description" label="异常说明" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="checked_at" label="检查时间" width="160" />
     </el-table>
 
     <el-empty v-if="!loading && checks.length === 0 && selectedLedgerId" description="暂无安全检查记录" />

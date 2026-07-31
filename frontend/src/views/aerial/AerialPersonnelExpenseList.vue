@@ -20,30 +20,30 @@
     </div>
 
     <el-table :data="list" stripe v-loading="loading">
-      <el-table-column prop="expense_date" label="日期" width="100" />
-      <el-table-column prop="name" label="人员" width="80" />
-      <el-table-column prop="expense_type" label="费用类型" width="90">
+      <el-table-column prop="expense_date" label="日期" width="120" />
+      <el-table-column prop="name" label="人员" width="100" />
+      <el-table-column prop="expense_type" label="费用类型" width="100">
         <template #default="{ row }">{{ expenseTypeLabel(row.expense_type) }}</template>
       </el-table-column>
-      <el-table-column prop="amount" label="金额" width="80" align="right">
+      <el-table-column prop="amount" label="金额" width="120" align="right">
         <template #default="{ row }">¥{{ row.amount }}</template>
       </el-table-column>
-      <el-table-column prop="description" label="说明" min-width="150" show-overflow-tooltip />
-      <el-table-column prop="review_status" label="审核状态" width="90">
+      <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="review_status" label="审核状态" width="100">
         <template #default="{ row }">
           <el-tag :type="row.review_status === 'approved' ? 'success' : row.review_status === 'rejected' ? 'danger' : 'warning'" size="small">
             {{ reviewLabel(row.review_status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="reimbursement_status" label="报销状态" width="90">
+      <el-table-column prop="reimbursement_status" label="报销状态" width="100">
         <template #default="{ row }">
           <el-tag :type="row.reimbursement_status === 'reimbursed' ? 'success' : row.reimbursement_status === 'pending_reimbursement' ? 'warning' : 'info'" size="small">
             {{ reimbLabel(row.reimbursement_status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button link type="success" size="small" @click="handleReview(row, 'approved')" v-if="row.review_status === 'pending'">通过</el-button>
           <el-button link type="danger" size="small" @click="handleReview(row, 'rejected')" v-if="row.review_status === 'pending'">驳回</el-button>

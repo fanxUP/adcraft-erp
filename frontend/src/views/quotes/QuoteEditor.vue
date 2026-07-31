@@ -82,16 +82,14 @@
         <el-table-column label="产品/材质/工艺" min-width="280">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">
-              <el-autocomplete
+              <el-input
                 v-model="row.item.material_process"
                 :disabled="isReadonly"
                 size="small"
-                :fetch-suggestions="(q: string, cb: Function) => queryProductMaterialProcess(q, cb)"
-                placeholder="搜索或输入产品/材质/工艺"
-                style="width: 100%"
-                :trigger-on-focus="true"
-                @select="(opt: any) => onProductSelect(row.item, opt)"
+                placeholder="点击选择产品/材质/工艺"
+                @click="openProductPicker(row.item)"
                 clearable
+                @clear="row.item.use_area = false; row.item.quantity = 1; row.item.product_id = undefined; row.item.item_name = ''"
               />
             </template>
           </template>
@@ -290,6 +288,8 @@
       如需修改报价，请先将报价转成草稿
     </div>
   </div>
+    <!-- 产品选择面板 -->
+    <ProductPickerDialog v-model="productPickerVisible" :customer-id="form.customer_id" @selected="onProductPicked" />
 </template>
 
 <script setup lang="ts">
@@ -299,11 +299,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { onBeforeRouteLeave } from 'vue-router'
 import { createQuote, getQuote, updateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft, importQuoteItems, downloadQuoteTemplate } from '@/api/quotes'
 import { getCustomers } from '@/api/customers'
-import { getProducts } from '@/api/products'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { uploadAttachment } from '@/api/tasks'
 import type { QuoteItemResponse, QuoteDetailResponse, CustomerResponse, ProductResponse } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
+import ProductPickerDialog from '@/components/ProductPickerDialog.vue'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { applyProductMaterialProcess, formatProductMaterialProcess } from '@/utils/productMaterialProcess'
 import {
@@ -324,8 +324,9 @@ const importingItems = ref(false)
 const customerSelectRef = ref()
 const quote = ref<QuoteDetailResponse | null>(null)
 const customerOptions = ref<CustomerResponse[]>([])
-const productMaterialProcessOptions = ref<ProductResponse[]>([])
 const previewVisible = ref(false)
+const productPickerVisible = ref(false)
+const pendingPickerItem = ref<QuoteItemResponse | null>(null)
 const quoteId = computed(() => route.params.id as string)
 
 const form = reactive({
@@ -593,32 +594,42 @@ async function loadCustomers() {
   customerOptions.value = data.items
 }
 
-async function loadProductMaterialProcessOptions() {
-  const data = await getProducts({ page: 1, page_size: 100 })
-  productMaterialProcessOptions.value = data.items.filter(item => item.is_active)
+
+function openProductPicker(item: QuoteItemResponse) {
+  if (!form.customer_id) {
+    ElMessage.warning('请先选择客户')
+    return
+  }
+  pendingPickerItem.value = item
+  productPickerVisible.value = true
 }
 
-
-function queryProductMaterialProcess(queryString: string, cb: (results: { value: string; disabled?: boolean; product?: ProductResponse }[]) => void) {
-  const list = productMaterialProcessOptions.value
-  const filtered = queryString
-    ? list.filter(p => {
-        const label = formatProductMaterialProcess(p).toLowerCase()
-        return label.includes(queryString.toLowerCase())
-      })
-    : list
-  cb([
-    ...filtered.map(p => ({ value: formatProductMaterialProcess(p), product: p })),
-  ])
+function onProductPicked(product: ProductResponse) {
+  const item = pendingPickerItem.value
+  if (!item) return
+  onProductSelect(item, { value: formatProductMaterialProcess(product), product })
+  pendingPickerItem.value = null
 }
 
 function onProductSelect(item: QuoteItemResponse, opt: { value: string; product?: ProductResponse }) {
   if (!opt.product) {
     item.product_id = undefined
+    item.use_area = false
+    item.quantity = 1
     return
   }
   Object.assign(item, applyProductMaterialProcess(item, opt.product))
   item.material_process = opt.value
+  item.item_name = opt.product.name
+  if (opt.product.pricing_method === 'area') {
+    if (!item.use_area) {
+      item.use_area = true
+      syncAreaQuantity(item)
+    }
+  } else {
+    item.use_area = false
+    item.quantity = 1
+  }
 }
 
 function onCustomerVisible(visible: boolean) {
@@ -851,7 +862,7 @@ async function handleRevertToDraft() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadCustomers(), loadProductMaterialProcessOptions()])
+  await loadCustomers()
   if (route.params.id) {
     await fetchQuote()
   } else {

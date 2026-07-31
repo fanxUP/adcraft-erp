@@ -45,13 +45,13 @@
               {{ row.fuel_time ? new Date(row.fuel_time).toLocaleString('zh-CN') : '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="amount" label="金额" width="100">
+          <el-table-column prop="amount" label="金额" width="120">
             <template #default="{ row }">
               ¥{{ row.amount?.toFixed(2) }}
             </template>
           </el-table-column>
           <el-table-column prop="liters" label="升数" width="80" />
-          <el-table-column prop="unit_price" label="单价" width="80">
+          <el-table-column prop="unit_price" label="单价" width="100">
             <template #default="{ row }">
               {{ row.unit_price ? `¥${row.unit_price.toFixed(2)}` : '-' }}
             </template>
@@ -76,7 +76,7 @@
               <el-tag :type="fuelStatusType(row.status)" size="small">{{ fuelStatusLabel(row.status) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
+          <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" size="small" @click="viewFuelDetail(row)">详情</el-button>
               <el-button v-if="row.status === 'pending_review' && hasFinanceRole" link type="success" size="small" @click="reviewFuel(row)">审核</el-button>
@@ -130,7 +130,7 @@
               {{ row.plate_number }} {{ row.vehicle_name }}
             </template>
           </el-table-column>
-          <el-table-column prop="maintenance_type" label="类型" width="80">
+          <el-table-column prop="maintenance_type" label="类型" width="100">
             <template #default="{ row }">
               {{ maintenanceTypeLabel(row.maintenance_type) }}
             </template>
@@ -142,7 +142,7 @@
           </el-table-column>
           <el-table-column prop="maintenance_item" label="维修项目" min-width="150" />
           <el-table-column prop="repair_shop" label="维修厂" width="120" />
-          <el-table-column prop="amount" label="金额" width="100">
+          <el-table-column prop="amount" label="金额" width="120">
             <template #default="{ row }">
               ¥{{ row.amount?.toFixed(2) }}
             </template>
@@ -154,7 +154,7 @@
               <el-tag :type="maintStatusType(row.status)" size="small">{{ maintStatusLabel(row.status) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
+          <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" size="small" @click="viewMaintenanceDetail(row)">详情</el-button>
               <el-button v-if="row.status === 'pending_review' && hasFinanceRole" link type="success" size="small" @click="reviewMaintenance(row)">审核</el-button>
@@ -202,7 +202,7 @@
               {{ costTypeLabel(row.cost_type) }}
             </template>
           </el-table-column>
-          <el-table-column prop="amount" label="金额" width="100">
+          <el-table-column prop="amount" label="金额" width="120">
             <template #default="{ row }">
               ¥{{ row.amount?.toFixed(2) }}
             </template>
@@ -213,7 +213,7 @@
             </template>
           </el-table-column>
           <el-table-column prop="source_type" label="来源" width="100" />
-          <el-table-column prop="remark" label="备注" min-width="150" />
+          <el-table-column prop="remark" label="备注" min-width="180" />
           <el-table-column prop="created_at" label="创建时间" width="160">
             <template #default="{ row }">
               {{ row.created_at ? new Date(row.created_at).toLocaleString('zh-CN') : '-' }}

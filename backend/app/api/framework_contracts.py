@@ -97,11 +97,9 @@ async def get_available_projects(
         .where(
             BusinessDocument.deleted_at.is_(None),
             BusinessDocument.customer_id == UUID(customer_id),
-            BusinessDocument.doc_type.in_(["order", "quote"]),
+            BusinessDocument.doc_type == "order",
             not_(BusinessDocument.id.in_(used_sub)),
             not_(BusinessDocument.id.in_(contract_used_sub)),
-            # 排除已转换/已取消的报价
-            ~((BusinessDocument.doc_type == "quote") & BusinessDocument.status.in_(["converted", "cancelled"])),
         )
         .order_by(BusinessDocument.created_at.desc())
         .limit(500)
@@ -110,16 +108,11 @@ async def get_available_projects(
 
     from app.services.business_document_service import BusinessDocumentService
 
-    # 拆分为 orders 和 quotes（保持前端兼容）
-    orders_list, quotes_list = [], []
+    orders_list = []
     for d in docs:
         item = BusinessDocumentService._to_ref(d)
-        # available-projects 额外携带 customer_id
         item["customer_id"] = str(d.customer_id) if d.customer_id else None
-        if d.doc_type == "order":
-            orders_list.append(item)
-        else:
-            quotes_list.append(item)
+        orders_list.append(item)
 
     # 项目名称下拉
     from sqlalchemy import func as sa_func
@@ -136,7 +129,6 @@ async def get_available_projects(
 
     return success({
         "orders": orders_list,
-        "quotes": quotes_list,
         "project_names": project_names,
     })
 

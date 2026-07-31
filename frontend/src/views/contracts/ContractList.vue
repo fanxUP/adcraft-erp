@@ -10,7 +10,7 @@
     <el-card shadow="never" class="filter-card">
       <el-form :model="filters" inline>
         <el-form-item label="关键词">
-          <el-input v-model="filters.keyword" placeholder="合同编号/项目名称/客户" clearable style="width: 200px" @keyup.enter="handleSearch" />
+          <el-input v-model="filters.keyword" placeholder="合同编号/合同名称/客户" clearable style="width: 200px" @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="filters.status" clearable placeholder="全部" style="width: 120px">
@@ -31,15 +31,7 @@
       <el-table-column prop="contract_type" label="合同类型" width="100" />
       <el-table-column prop="customer_name" label="客户名称" width="160" />
       <el-table-column prop="department" label="部门/科室" width="120" />
-      <el-table-column prop="project_name" label="项目名称" min-width="200" />
-      <el-table-column prop="source" label="来源" width="100">
-        <template #default="{ row }">
-          <el-tag v-if="row.source === '订单'" type="primary" size="small">订单</el-tag>
-          <el-tag v-else-if="row.source === '报价'" type="success" size="small">报价</el-tag>
-          <el-tag v-else-if="row.source === '订单+报价'" type="warning" size="small">订单+报价</el-tag>
-          <span v-else>-</span>
-        </template>
-      </el-table-column>
+      <el-table-column prop="project_name" label="合同名称" min-width="200" />
       <el-table-column label="合同金额" width="140">
         <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
@@ -63,9 +55,10 @@
       <el-table-column label="创建时间" width="100">
         <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="280">
+      <el-table-column label="操作" width="320" fixed="right">
         <template #default="{ row }">
-          <el-button text type="primary" @click="handleDetail(row)">详情</el-button>
+          <el-button text type="primary" @click="goDetail(row.id)">详情</el-button>
+          <el-button text type="primary" @click="goDetail(row.id)">管理项目</el-button>
           <el-button text type="success" @click="handleEdit(row)">编辑</el-button>
           <el-button
             text type="warning"
@@ -97,14 +90,12 @@
     >
       <el-form ref="formRef" :model="form" :rules="formRules" label-position="right" label-width="120px" v-loading="formLoading">
         <el-form-item label="客户" prop="customer_id">
-          <el-select v-model="form.customer_id" filterable placeholder="搜索选择客户" style="width: 100%" @change="onCustomerChange">
+          <el-select v-model="form.customer_id" filterable placeholder="搜索选择客户" style="width: 100%" @change="c => { if (c) { const cust = customerOptions.find(o => o.id === c); if (cust) form.customer_name = cust.name } }">
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
-            <el-form-item label="项目名称" prop="project_name">
-              <el-select v-model="form.project_name" allow-create filterable placeholder="输入或选择项目名称" style="width: 100%">
-                <el-option v-for="p in projectOptions" :key="p" :label="p" :value="p" />
-              </el-select>
+            <el-form-item label="合同名称" prop="project_name">
+              <el-input v-model="form.project_name" placeholder="请输入合同名称" style="width: 100%" />
             </el-form-item>
             <el-form-item label="合同类型">
               <el-select v-model="form.contract_type" clearable placeholder="请选择" style="width: 100%">
@@ -112,14 +103,8 @@
                 <el-option label="安装合同" value="安装合同" />
                 <el-option label="综合合同" value="综合合同" />
                 <el-option label="设计合同" value="设计合同" />
+                <el-option label="框架合同" value="框架合同" />
               </el-select>
-            </el-form-item>
-            <el-form-item label="合同金额">
-              <el-input-number v-model="form.total_amount" :min="0" :precision="2" style="width: 100%" />
-            </el-form-item>
-            <el-form-item label="已收金额">
-              <el-input-number v-model="form.paid_amount" :min="0" :precision="2" :disabled="true" style="width: 100%" />
-              <div style="font-size: 12px; color: #999; margin-top: 2px;">自动从关联订单的收款计算，不可编辑</div>
             </el-form-item>
             <el-form-item label="签约日期">
               <el-date-picker v-model="form.sign_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
@@ -136,13 +121,6 @@
             <el-form-item label="客户签约人">
               <el-input v-model="form.customer_signatory" placeholder="客户签约人" />
             </el-form-item>
-        <el-form-item label="关联报价/订单" >
-          <el-select v-model="form.resource_id" filterable clearable placeholder="选择关联报价或订单" style="width: 100%" popper-style="width: auto;" @change="onResourceChange">
-            <el-option v-for="r in allResources" :key="r.id" :label="`${r.doc_no} — ${r.department || '-'} — ${r.project_name} — ¥${(r.total_amount || 0).toFixed(2)}`" :value="r.id">
-              <span style="white-space: nowrap;">{{ r.doc_type === 'order' ? '【订单】' : '【报价】' }} {{ r.doc_no }} — {{ r.department || '-' }} — {{ r.project_name }} — ¥{{ (r.total_amount || 0).toFixed(2) }}</span>
-            </el-option>
-          </el-select>
-        </el-form-item>
         <el-form-item label="条款内容">
           <el-input v-model="form.content" type="textarea" :rows="3" placeholder="合同主要条款内容" />
         </el-form-item>
@@ -182,7 +160,7 @@
       <el-descriptions v-if="currentDetail" :column="2" border>
         <el-descriptions-item label="合同编号" :span="2">{{ currentDetail.contract_no }}</el-descriptions-item>
         <el-descriptions-item label="客户名称">{{ currentDetail.customer_name }}</el-descriptions-item>
-        <el-descriptions-item label="项目名称">{{ currentDetail.project_name }}</el-descriptions-item>
+        <el-descriptions-item label="合同名称">{{ currentDetail.project_name }}</el-descriptions-item>
         <el-descriptions-item label="合同类型">{{ currentDetail.contract_type || '-' }}</el-descriptions-item>
         <el-descriptions-item label="合同金额">¥ {{ currentDetail.total_amount?.toFixed(2) }}</el-descriptions-item>
         <el-descriptions-item label="已收金额">¥ {{ currentDetail.paid_amount?.toFixed(2) }}</el-descriptions-item>
@@ -219,19 +197,6 @@
         </el-table-column>
       </el-table>
       <el-empty v-else description="暂无关联订单" />
-
-      <h4 style="margin: 16px 0 10px">关联报价</h4>
-      <el-table v-if="currentDetail?.quotes?.length" :data="currentDetail.quotes" size="small">
-        <el-table-column prop="quote_no" label="报价编号" width="180" />
-        <el-table-column label="部门/科室" width="120">
-          <template #default="{ row }">{{ row.department || '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="project_name" label="项目名称" min-width="150" />
-        <el-table-column label="金额" width="120">
-          <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-else description="暂无关联报价" />
     </el-dialog>
 
     <!-- 状态变更对话框 -->
@@ -259,10 +224,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { getContracts, getContract, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment, getContractAvailableResources } from '@/api/contracts'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { ContractListResponse, ContractDetailResponse, ContractResourceItem } from '@/types/api'
+import type { ContractListResponse, ContractDetailResponse } from '@/types/api'
 import type { FormInstance } from 'element-plus'
 
 // ── Status helpers ──
@@ -279,6 +245,9 @@ const statusColorMap: Record<string, string> = {
 function statusLabel(s: string) { return statusMap[s] || s }
 function statusColor(s: string) { return statusColorMap[s] || 'info' }
 
+const router = useRouter()
+function goDetail(id: string) { router.push(`/contracts/${id}`) }
+
 // ── List state ──
 const loading = ref(false)
 const list = ref<ContractListResponse[]>([])
@@ -290,7 +259,7 @@ const filters = reactive({ keyword: '', status: '' })
 async function fetchData() {
   loading.value = true
   try {
-    const params: Record<string, unknown> = { page: page.value, page_size: pageSize.value, exclude_contract_type: '框架合同' }
+    const params: Record<string, unknown> = { page: page.value, page_size: pageSize.value }
     if (filters.keyword) params.keyword = filters.keyword
     if (filters.status) params.status = filters.status
     const data = await getContracts(params)
@@ -326,16 +295,13 @@ const form = reactive({
   customer_signatory: '',
   content: '',
   remark: '',
-  resource_id: '' as string,
-  resource_type: '' as string,
 })
 const formRules = {
   customer_id: [{ required: true, message: '请选择客户', trigger: 'change' }],
-  project_name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
+  project_name: [{ required: true, message: '请输入合同名称', trigger: 'blur' }],
 }
 const customerOptions = ref<Array<{ id: string; name: string }>>([])
-const allResources = ref<ContractResourceItem[]>([])
-const projectOptions = ref<string[]>([])
+
 
 // Attachment
 const attFileName = ref('')
@@ -392,8 +358,6 @@ function resetForm() {
   form.customer_signatory = ''
   form.content = ''
   form.remark = ''
-  form.resource_id = ''
-  form.resource_type = ''
   attFileName.value = ''
   ;pendingContractFile = null
   isEditing.value = false
@@ -407,60 +371,10 @@ async function loadAllCustomers() {
   } catch { /* ignore */ }
 }
 
-async function loadResources(customerId?: string, contractId?: string) {
-  try {
-    const data = await getContractAvailableResources(customerId, contractId)
-    // 合并订单和报价为统一的资源列表
-    const merged: ContractResourceItem[] = []
-    for (const o of data.orders || []) merged.push({ ...o, doc_type: 'order' })
-    for (const q of data.quotes || []) merged.push({ ...q, doc_type: 'quote' })
-    allResources.value = merged
-    // 从可用资源中提取项目名称列表，排除已被其他合同使用的
-    const used = new Set(data.used_project_names || [])
-    const names = new Set<string>()
-    for (const r of merged) {
-      if (r.project_name && !used.has(r.project_name)) names.add(r.project_name)
-    }
-    projectOptions.value = Array.from(names).sort()
-  } catch { /* ignore */ }
-}
-
-async function onCustomerChange(val: string) {
-  const c = customerOptions.value.find(c => c.id === val)
-  if (c) form.customer_name = c.name
-  if (val) {
-    await loadResources(val, isEditing.value ? editingId.value : undefined)
-    // 清除不在新客户下的已选项
-    if (form.resource_id && !allResources.value.find(r => r.id === form.resource_id)) {
-      form.resource_id = ''
-      form.resource_type = ''
-    }
-  }
-}
-
-async function onResourceChange(val: string) {
-  if (!val) { form.resource_type = ''; return }
-  const selected = allResources.value.find(r => r.id === val)
-  if (selected) {
-    form.resource_type = selected.doc_type || ''
-    // 未选客户时，从资源自动填充客户
-    if (!form.customer_id && selected.customer_id) {
-      form.customer_id = selected.customer_id
-      form.customer_name = selected.customer_name || ''
-      await loadResources(selected.customer_id, isEditing.value ? editingId.value : undefined)
-    }
-    if (!form.project_name) form.project_name = selected.project_name
-    if (!form.total_amount) form.total_amount = selected.total_amount || 0
-  }
-}
-
 async function handleCreate() {
   resetForm()
   isEditing.value = false
-  await Promise.all([
-    loadAllCustomers(),
-    loadResources(),
-  ])
+  await loadAllCustomers()
   formVisible.value = true
 }
 
@@ -488,17 +402,8 @@ async function handleEdit(row: ContractListResponse) {
     form.customer_signatory = detail.customer_signatory || ''
     form.content = detail.content || ''
     form.remark = detail.remark || ''
-    // 合并已有关联资源
-    const existingResources: ContractResourceItem[] = []
-    for (const o of detail.orders || []) existingResources.push({ ...o, doc_type: 'order' })
-    for (const q of detail.quotes || []) existingResources.push({ ...q, doc_type: 'quote' })
-    form.resource_id = existingResources[0]?.id || ''
-    form.resource_type = existingResources[0]?.doc_type || ''
     attFileName.value = detail.attachment_name || ''
-    await Promise.all([
-      loadAllCustomers(),
-      loadResources(form.customer_id, editingId.value),
-    ])
+    await loadAllCustomers()
   } finally {
     formLoading.value = false
   }
@@ -516,8 +421,8 @@ async function saveForm() {
       project_name: form.project_name,
       contract_type: form.contract_type || null,
       total_amount: form.total_amount,
-      paid_amount: form.paid_amount,
-      unpaid_amount: form.total_amount - form.paid_amount,
+      paid_amount: 0,
+      unpaid_amount: 0,
       sign_date: form.sign_date || null,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
@@ -525,8 +430,8 @@ async function saveForm() {
       customer_signatory: form.customer_signatory || null,
       content: form.content || null,
       remark: form.remark || null,
-      order_ids: form.resource_type === 'order' && form.resource_id ? [form.resource_id] : [],
-      quote_ids: form.resource_type === 'quote' && form.resource_id ? [form.resource_id] : [],
+      order_ids: [],
+
     }
     if (isEditing.value) {
       await updateContract(editingId.value, payload)

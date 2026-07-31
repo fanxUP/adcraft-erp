@@ -12,7 +12,7 @@
       </div>
     </div>
     <el-table :data="list" v-loading="loading" stripe style="width:100%">
-      <el-table-column label="员工" width="150"><template #default="{row}">{{row.employee_name||row.employee_id}}</template></el-table-column>
+      <el-table-column label="员工" width="140"><template #default="{row}">{{row.employee_name||row.employee_id}}</template></el-table-column>
       <el-table-column prop="change_date" label="变动日期" width="120" />
       <el-table-column label="变动类型" width="100"><template #default="{row}"><el-tag :type="typeColor(row.change_type)" size="small">{{typeLabel(row.change_type)}}</el-tag></template></el-table-column>
       <el-table-column label="原部门" width="110"><template #default="{row}">{{row.previous_department||"-"}}</template></el-table-column>
@@ -20,7 +20,7 @@
       <el-table-column label="原职位" width="120"><template #default="{row}">{{row.previous_position||"-"}}</template></el-table-column>
       <el-table-column label="新职位" width="120"><template #default="{row}">{{row.new_position||"-"}}</template></el-table-column>
       <el-table-column prop="reason" label="原因" min-width="150" />
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
     </el-table>

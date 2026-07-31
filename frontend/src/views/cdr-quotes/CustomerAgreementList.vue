@@ -13,7 +13,7 @@
     </div>
 
     <el-table :data="agreements" v-loading="loading" stripe style="margin-top: 16px">
-      <el-table-column label="客户" min-width="150">
+      <el-table-column label="客户" min-width="160">
         <template #default="{ row }">{{ getCustomerName(row.customer_id) }}</template>
       </el-table-column>
       <el-table-column prop="pricing_method" label="计价方式" width="100">
@@ -28,11 +28,17 @@
       </el-table-column>
       <el-table-column prop="effective_from" label="生效日期" width="120" />
       <el-table-column prop="effective_to" label="失效日期" width="120" />
-      <el-table-column prop="remark" label="备注" min-width="150" />
+      <el-table-column prop="remark" label="备注" min-width="180" />
+      <el-table-column label="操作" width="160" fixed="right">
+        <template #default="{ row }">
+          <el-button text type="primary" @click="openEdit(row)">编辑</el-button>
+          <el-button text type="danger" @click="handleDeleteAgreement(row.id)">删除</el-button>
+        </template>
+      </el-table-column>
     </el-table>
 
     <!-- 新建协议弹窗 -->
-    <el-dialog v-model="dialogVisible" title="新建客户协议价" width="550px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑客户协议价' : '新建客户协议价'" width="550px">
       <el-form :model="form" label-width="100px">
         <el-form-item label="客户" required>
           <el-select v-model="form.customer_id" filterable style="width: 100%">
@@ -76,11 +82,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
 import {
   listCustomerAgreements,
   createCustomerAgreement,
+  updateCustomerAgreement,
+  deleteCustomerAgreement,
   type CustomerAgreement,
 } from '@/api/cdrQuote'
 import type { CustomerResponse, PaginatedData } from '@/types/api'
@@ -91,6 +99,7 @@ const agreements = ref<CustomerAgreement[]>([])
 const customers = ref<CustomerResponse[]>([])
 const filterCustomerId = ref('')
 const dialogVisible = ref(false)
+const editingId = ref<string | null>(null)
 
 const discountPercent = computed({
   get: () => Math.round((form.value.discount_rate || 1) * 100),
@@ -129,6 +138,20 @@ async function fetchData() {
 }
 
 async function handleCreate() {
+  if (editingId.value) {
+    // Update existing
+    if (!form.value.customer_id) { ElMessage.warning('请选择客户'); return }
+    submitting.value = true
+    try {
+      await updateCustomerAgreement(editingId.value, { ...form.value, discount_rate: form.value.discount_rate })
+      ElMessage.success('更新成功')
+      dialogVisible.value = false
+      editingId.value = null
+      form.value = { customer_id: '', pricing_method: 'area', price_value: 0, minimum_charge: 0, discount_rate: 1, effective_from: '', effective_to: '', remark: '' }
+      await fetchData()
+    } finally { submitting.value = false }
+    return
+  }
   if (!form.value.customer_id) {
     ElMessage.warning('请选择客户')
     return
@@ -143,6 +166,28 @@ async function handleCreate() {
   } finally {
     submitting.value = false
   }
+}
+
+function openEdit(row: CustomerAgreement) {
+  editingId.value = row.id
+  form.value = {
+    customer_id: row.customer_id,
+    pricing_method: row.pricing_method,
+    price_value: Number(row.price_value),
+    minimum_charge: Number(row.minimum_charge),
+    discount_rate: Number(row.discount_rate),
+    effective_from: row.effective_from,
+    effective_to: row.effective_to || '',
+    remark: row.remark || '',
+  }
+  dialogVisible.value = true
+}
+
+async function handleDeleteAgreement(id: string) {
+  await ElMessageBox.confirm('确认删除该协议价？', '确认', { type: 'warning' })
+  await deleteCustomerAgreement(id)
+  ElMessage.success('已删除')
+  fetchData()
 }
 
 onMounted(() => { fetchCustomers(); fetchData() })

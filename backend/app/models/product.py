@@ -11,7 +11,7 @@ class ProductCategory(Base, TimestampMixin):
     __tablename__ = "product_categories"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     parent_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("product_categories.id"), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 

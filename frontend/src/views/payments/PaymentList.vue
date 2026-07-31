@@ -17,9 +17,9 @@
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
       <el-table-column prop="payment_no" label="收款编号" width="180" />
-      <el-table-column prop="order_no" label="订单编号" width="160" />
-      <el-table-column prop="customer_name" label="客户名称" width="140" />
-      <el-table-column prop="project_name" label="项目名称" min-width="180" />
+      <el-table-column prop="order_no" label="订单编号" width="180" />
+      <el-table-column prop="customer_name" label="客户名称" width="160" />
+      <el-table-column prop="project_name" label="项目名称" min-width="200" />
       <el-table-column label="金额" width="120">
         <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
       </el-table-column>
@@ -33,7 +33,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="remark" label="备注" min-width="180" />
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button v-if="!row.is_voided" text type="danger" size="small" @click="handleVoid(row as PaymentResponse)">作废</el-button>
         </template>

@@ -14,16 +14,16 @@
     </div>
     <el-table :data="list" v-loading="loading" stripe style="width:100%">
       <el-table-column prop="employee_no" label="工号" width="120" />
-      <el-table-column prop="name" label="姓名" width="90" />
+      <el-table-column prop="name" label="姓名" width="240" />
       <el-table-column prop="phone" label="手机号" width="130" />
       <el-table-column label="性别" width="60"><template #default="{row}">{{ {male:"男",female:"女"} [row.gender] || row.gender || "-" }}</template></el-table-column>
-      <el-table-column label="部门" width="100"><template #default="{row}">{{ deptLabel(row.department) }}</template></el-table-column>
+      <el-table-column label="部门" width="120"><template #default="{row}">{{ deptLabel(row.department) }}</template></el-table-column>
       <el-table-column prop="position" label="职位" width="120" />
-      <el-table-column label="聘用类型" width="90"><template #default="{row}">{{ typeLabel(row.employment_type) }}</template></el-table-column>
+      <el-table-column label="聘用类型" width="100"><template #default="{row}">{{ typeLabel(row.employment_type) }}</template></el-table-column>
       <el-table-column label="学历" width="70"><template #default="{row}">{{ row.education || "-" }}</template></el-table-column>
-      <el-table-column prop="hire_date" label="入职日期" width="110" />
-      <el-table-column label="状态" width="75"><template #default="{row}"><el-tag :type="statusColor(row.employment_status)" size="small">{{ statusLabel(row.employment_status) }}</el-tag></template></el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column prop="hire_date" label="入职日期" width="120" />
+      <el-table-column label="状态" width="100"><template #default="{row}"><el-tag :type="statusColor(row.employment_status)" size="small">{{ statusLabel(row.employment_status) }}</el-tag></template></el-table-column>
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
     </el-table>

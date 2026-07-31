@@ -1,0 +1,424 @@
+<template>
+  <div class="ow-bar">
+    <div class="ow-flow">
+      <!-- 确认订单 -->
+      <div class="ow-col">
+        <div data-ai-target="order-status-confirmed" class="ow-card" :class="cardClass('confirmed')" @click="tryChange('confirmed')">
+          <div class="ow-icon" :class="iconClass('confirmed')">
+            <el-icon v-if="isPastOrCurrent('confirmed')" :size="16"><Check /></el-icon>
+            <span v-else>1</span>
+          </div>
+          <div class="ow-text">
+            <div class="ow-label">确认订单</div>
+            <div v-if="currentStatus === 'confirmed' || isPast('confirmed')" class="ow-tag done-tag">已确认</div>
+            <div v-else-if="isReachable('confirmed')" class="ow-tag ready-tag">可点击</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 箭头 -->
+      <div class="ow-conn" :class="{ 'conn-done': isPastOrCurrent('completed') }">
+        <div class="ow-line"></div>
+        <div class="ow-point">▶</div>
+      </div>
+
+      <!-- 已完成 -->
+      <div class="ow-col">
+        <div data-ai-target="order-status-completed" class="ow-card" :class="cardClass('completed')" @click="tryChange('completed')">
+          <div class="ow-icon" :class="iconClass('completed')">
+            <el-icon v-if="isPastOrCurrent('completed')" :size="16"><Check /></el-icon>
+            <span v-else>2</span>
+          </div>
+          <div class="ow-text">
+            <div class="ow-label">已完成</div>
+            <div v-if="'completed' === currentStatus" class="ow-tag cur-tag">当前</div>
+            <div v-else-if="isReachable('completed')" class="ow-tag ready-tag">可点击</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 分隔 -->
+      <div class="ow-spacer"></div>
+
+      <!-- 取消订单 -->
+      <div class="ow-col">
+        <div class="ow-card" :class="cardClass('cancelled') + ' ' + cancellClass()" @click="tryChange('cancelled')">
+          <div class="ow-icon" :class="iconClass('cancelled')">
+            <el-icon v-if="isPastOrCurrent('cancelled')" :size="16"><Close /></el-icon>
+            <span v-else>3</span>
+          </div>
+          <div class="ow-text">
+            <div class="ow-label">取消订单</div>
+            <div v-if="'cancelled' === currentStatus" class="ow-tag cur-tag">已取消</div>
+            <div v-else-if="isReachable('cancelled')" class="ow-tag ready-tag">可点击</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 进度信息 -->
+    <div v-if="progressVisible" class="ow-progress">
+      <span class="progress-label">项目进度:</span>
+      <span class="progress-value">{{ progressLabel }}</span>
+      <span class="progress-detail">{{ progressDetail }}</span>
+      <el-button v-if="currentStatus === 'confirmed'" type="primary" size="small" :loading="changing" @click="emit('change', 'designing')">推进到设计</el-button>
+    </div>
+  </div>
+  <span data-ai-target="order-status-designing" style="display:none"></span>
+  <span data-ai-target="order-status-in_production" style="display:none"></span>
+  <span data-ai-target="order-status-in_installation" style="display:none"></span>
+  <span data-ai-target="order-status-pending_acceptance" style="display:none"></span>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import { Check, Close } from '@element-plus/icons-vue'
+
+const props = defineProps<{
+  currentStatus: string
+  changing: boolean
+}>()
+
+const emit = defineEmits<{
+  change: [status: string]
+}>()
+
+const allStatuses = [
+  'pending_confirm', 'confirmed', 'designing', 'in_production',
+  'in_installation', 'pending_acceptance', 'completed', 'cancelled',
+]
+
+const transitions: Record<string, string[]> = {
+  pending_confirm: ['confirmed', 'cancelled'],
+  confirmed: ['cancelled'],
+  designing: ['cancelled'],
+  in_production: ['cancelled'],
+  in_installation: ['cancelled'],
+  pending_acceptance: ['completed', 'cancelled'],
+  completed: [],
+  cancelled: [],
+}
+
+const progressLabels: Record<string, string> = {
+  confirmed: '待推进',
+  designing: '设计中',
+  in_production: '生产中',
+  in_installation: '安装中',
+  pending_acceptance: '验收中',
+}
+
+const progressVisible = computed(() => {
+  return ['confirmed', 'designing', 'in_production', 'in_installation', 'pending_acceptance'].includes(props.currentStatus)
+})
+
+const progressLabel = computed(() => progressLabels[props.currentStatus] || '')
+
+const progressDetail = computed(() => {
+  switch (props.currentStatus) {
+    case 'confirmed': return '系统将自动创建设计任务'
+    case 'designing': return '设计任务完成后自动推进到生产'
+    case 'in_production': return '制作任务完成后自动推进到安装'
+    case 'in_installation': return '安装任务完成后自动推进到验收'
+    case 'pending_acceptance': return '验收通过后自动完成订单'
+    default: return ''
+  }
+})
+
+const currentIdx = computed(() => {
+  const idx = allStatuses.indexOf(props.currentStatus)
+  return idx >= 0 ? idx : -1
+})
+
+const reachableTargets = computed(() => {
+  return transitions[props.currentStatus] || []
+})
+
+function isPast(status: string): boolean {
+  const idx = allStatuses.indexOf(status)
+  return idx >= 0 && idx < currentIdx.value
+}
+
+function isPastOrCurrent(status: string): boolean {
+  return status === props.currentStatus || isPast(status)
+}
+
+function isReachable(status: string): boolean {
+  return reachableTargets.value.includes(status)
+}
+
+function tryChange(status: string) {
+  if (!isReachable(status) || props.changing) return
+  emit('change', status)
+}
+
+function cardClass(status: string) {
+  if (status === props.currentStatus) return 'card-current'
+  if (isPast(status)) return 'card-done'
+  if (isReachable(status)) return 'card-ready'
+  return 'card-disabled'
+}
+
+function iconClass(status: string) {
+  if (status === props.currentStatus) return 'icon-current'
+  if (isPast(status)) return 'icon-done'
+  if (isReachable(status)) return 'icon-ready'
+  return 'icon-disabled'
+}
+
+function cancellClass() {
+  const s = props.currentStatus
+  if (s === 'cancelled') return 'card-cancelled'
+  if (isReachable('cancelled')) return 'card-cancelled-ready'
+  return ''
+}
+</script>
+
+<style scoped>
+.ow-bar {
+  background: var(--ad-card);
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.ow-flow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.ow-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ow-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 22px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  transition: all 0.25s ease;
+  cursor: default;
+  min-width: 110px;
+  min-height: 52px;
+  box-sizing: border-box;
+}
+
+.ow-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+}
+
+.ow-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ow-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ad-text);
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+
+.ow-tag {
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.cur-tag { color: #409eff; }
+.done-tag { color: #52c41a; }
+.ready-tag { color: #409eff; }
+
+.ow-spacer {
+  flex: 1;
+  min-width: 40px;
+}
+
+.ow-conn {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  flex-shrink: 0;
+  margin-top: 26px;
+}
+
+.ow-line {
+  width: 36px;
+  height: 2px;
+  background: #e8e8e8;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+}
+
+.conn-done .ow-line {
+  background: linear-gradient(to right, #52c41a, #73d13d);
+  height: 3px;
+}
+
+.ow-point {
+  font-size: 12px;
+  color: #d9d9d9;
+  margin-left: -2px;
+  transition: all 0.3s ease;
+}
+
+.conn-done .ow-point {
+  color: #73d13d;
+}
+
+/* 进度信息 */
+.ow-progress {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(64,158,255,0.06);
+  border: 1px solid rgba(64,158,255,0.15);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.progress-label {
+  font-size: 13px;
+  color: var(--ad-text-secondary);
+  white-space: nowrap;
+}
+.progress-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #409eff;
+}
+.progress-detail {
+  font-size: 12px;
+  color: var(--ad-text-secondary);
+  margin-left: 4px;
+}
+
+/* 卡片状态 */
+.card-current {
+  border-color: #409eff;
+  background: linear-gradient(135deg, rgba(64,158,255,0.07), rgba(64,158,255,0.03));
+  box-shadow: 0 0 0 4px rgba(64,158,255,0.08);
+}
+.card-current .ow-label { color: #409eff; }
+
+.icon-current {
+  background: linear-gradient(135deg, #409eff, #66b1ff);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(64,158,255,0.35);
+}
+
+.card-done { border-color: transparent; }
+.card-done .ow-label { color: #52c41a; }
+
+.icon-done {
+  background: linear-gradient(135deg, #52c41a, #73d13d);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(82,196,26,0.3);
+}
+
+.card-ready {
+  border-color: #409eff;
+  border-style: dashed;
+  background: rgba(64,158,255,0.03);
+  cursor: pointer;
+}
+.card-ready:hover {
+  background: rgba(64,158,255,0.08);
+  box-shadow: 0 2px 10px rgba(64,158,255,0.1);
+  transform: translateX(3px);
+}
+.card-ready:active { transform: translateX(0); }
+.card-ready .ow-label { color: #409eff; }
+
+.icon-ready {
+  background: #f0f5ff;
+  color: #409eff;
+  border: 2px solid #409eff;
+  cursor: pointer;
+}
+
+.card-disabled { border-color: #f0f0f0; background: #fafafa; }
+.card-disabled .ow-label { color: #d9d9d9; }
+
+.icon-disabled {
+  background: #f5f5f5;
+  color: #d9d9d9;
+  border: 2px solid #e8e8e8;
+}
+
+.card-cancelled {
+  border-color: #ff4d4f !important;
+  background: linear-gradient(135deg, rgba(255,77,79,0.07), rgba(255,77,79,0.03)) !important;
+  box-shadow: 0 0 0 4px rgba(255,77,79,0.08) !important;
+}
+.card-cancelled .ow-label { color: #ff4d4f !important; }
+
+.card-cancelled-ready {
+  border-color: #ff4d4f !important;
+  border-style: dashed !important;
+  cursor: pointer !important;
+}
+
+/* 暗色主题 */
+:root[data-theme*="dark"] .icon-disabled {
+  background: #262626; color: #434343; border-color: #434343;
+}
+:root[data-theme*="dark"] .icon-ready {
+  background: rgba(64,158,255,0.12);
+}
+:root[data-theme*="dark"] .card-disabled {
+  border-color: #262626; background: #1a1a1a;
+}
+:root[data-theme*="dark"] .card-disabled .ow-label { color: #434343; }
+:root[data-theme*="dark"] .card-current {
+  background: rgba(64,158,255,0.1);
+  box-shadow: 0 0 0 4px rgba(64,158,255,0.12);
+}
+:root[data-theme*="dark"] .card-ready {
+  background: rgba(64,158,255,0.06);
+}
+:root[data-theme*="dark"] .card-ready:hover {
+  background: rgba(64,158,255,0.15);
+}
+:root[data-theme*="dark"] .card-cancelled {
+  background: rgba(255,77,79,0.1) !important;
+  box-shadow: 0 0 0 4px rgba(255,77,79,0.12) !important;
+}
+:root[data-theme*="dark"] .card-cancelled-ready {
+  background: rgba(255,77,79,0.06) !important;
+}
+:root[data-theme*="dark"] .card-cancelled-ready:hover {
+  background: rgba(255,77,79,0.15) !important;
+}
+:root[data-theme*="dark"] .ow-line { background: #434343; }
+:root[data-theme*="dark"] .ow-point { color: #595959; }
+:root[data-theme*="dark"] .ow-progress {
+  background: rgba(64,158,255,0.08);
+  border-color: rgba(64,158,255,0.2);
+}
+
+@media (max-width: 800px) {
+  .ow-bar { padding: 14px; }
+  .ow-card { padding: 8px 12px; min-width: 60px; min-height: 40px; gap: 8px; }
+  .ow-line { width: 16px; }
+  .ow-conn { padding: 0 2px; }
+  .ow-tag { display: none; }
+  .ow-progress { flex-wrap: wrap; }
+}
+</style>

@@ -663,15 +663,6 @@ export interface SimpleOrderRef {
   status?: string
 }
 
-export interface SimpleQuoteRef {
-  id: string
-  quote_no: string
-  project_name: string
-  department?: string
-  total_amount: number
-  status?: string
-}
-
 export interface ContractDetailResponse extends ContractListResponse {
   customer_id: string
   our_signatory?: string
@@ -682,7 +673,6 @@ export interface ContractDetailResponse extends ContractListResponse {
   remark?: string
   created_by?: string
   orders: SimpleOrderRef[]
-  quotes: SimpleQuoteRef[]
 }
 
 export interface ContractResourceItem {
@@ -701,7 +691,6 @@ export interface ContractResourceItem {
 
 export interface ContractAvailableResources {
   orders: ContractResourceItem[]
-  quotes: ContractResourceItem[]
   used_project_names: string[]
 }
 
@@ -723,12 +712,10 @@ export interface FrameworkContractProjectResponse {
 
 export interface FrameworkContractProjectDetailResponse extends FrameworkContractProjectResponse {
   orders: SimpleOrderRef[]
-  quotes: SimpleQuoteRef[]
 }
 
 export interface FrameworkContractAvailableResources {
   orders: ContractResourceItem[]
-  quotes: ContractResourceItem[]
   project_names: string[]
 }
 
@@ -1120,3 +1107,21 @@ export interface AcceptanceDetailResponse extends AcceptanceListResponse {
   items: AcceptanceItemResponse[]
   attachments: AcceptanceAttachmentResponse[]
 }
+
+
+// Customer tree for pricing center navigation
+export interface CustomerTreeCustomer {
+  id: string
+  name: string
+}
+export interface CustomerTreeLevel {
+  level: string
+  customers: CustomerTreeCustomer[]
+  count: number
+}
+export interface CustomerTreeNode {
+  customer_type: string
+  levels: CustomerTreeLevel[]
+  count: number
+}
+

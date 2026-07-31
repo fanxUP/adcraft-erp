@@ -17,10 +17,10 @@
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协商">
-      <el-table-column prop="vendor_no" label="编号" width="150" />
-      <el-table-column prop="name" label="名称" min-width="160" />
+      <el-table-column prop="vendor_no" label="编号" width="180" />
+      <el-table-column prop="name" label="名称" min-width="120" />
       <el-table-column prop="contact_person" label="联系人" width="120" />
-      <el-table-column prop="phone" label="电话" width="140" />
+      <el-table-column prop="phone" label="电话" width="130" />
       <el-table-column label="服务类型" width="100">
         <template #default="{ row }">
           {{ serviceTypeLabel(row.service_type) }}
@@ -33,14 +33,14 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="80">
+      <el-table-column label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">
             {{ row.is_active ? '启用' : '停用' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" @click="handleEdit(row as VendorResponse)">编辑</el-button>
           <el-button text type="danger" @click="handleDelete(row as VendorResponse)">删除</el-button>

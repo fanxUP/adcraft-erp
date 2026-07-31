@@ -14,12 +14,12 @@
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
-      <el-table-column prop="dispatch_no" label="派车单号" width="140" />
-      <el-table-column prop="request_no" label="申请单号" width="140" />
+      <el-table-column prop="dispatch_no" label="派车单号" width="180" />
+      <el-table-column prop="request_no" label="申请单号" width="180" />
       <el-table-column prop="vehicle_name" label="车辆" width="120" />
       <el-table-column prop="plate_number" label="车牌号" width="110" />
-      <el-table-column prop="driver_name" label="司机" width="90" />
-      <el-table-column prop="destination" label="目的地" min-width="150" />
+      <el-table-column prop="driver_name" label="司机" width="100" />
+      <el-table-column prop="destination" label="目的地" min-width="160" />
       <el-table-column label="计划出发" width="160">
         <template #default="{ row }">{{ formatTime(row.planned_start_time) }}</template>
       </el-table-column>

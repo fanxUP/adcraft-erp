@@ -48,14 +48,14 @@
 
     <el-card shadow="never" class="table-card" style="margin-top: 16px">
       <el-table :data="logs" stripe size="small" v-loading="loading" empty-text="暂无操作日志">
-        <el-table-column label="时间" width="170">
+        <el-table-column label="时间" width="160">
           <template #default="{ row }">{{ row.created_at?.slice(0, 19).replace('T', ' ') }}</template>
         </el-table-column>
         <el-table-column prop="user_name" label="操作人" width="100" />
         <el-table-column label="对象" width="100">
           <template #default="{ row }">{{ objectTypeLabel(row.object_type) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="100">
+        <el-table-column label="操作" width="200">
           <template #default="{ row }">
             <el-tag :type="actionTagType(row.action)" size="small">{{ actionLabel(row.action) }}</el-tag>
           </template>
@@ -75,7 +75,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="ip_address" label="IP" width="140" />
-        <el-table-column label="操作" width="80" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" size="small" @click="showDetail(row as OperationLogResponse)">详情</el-button>
           </template>

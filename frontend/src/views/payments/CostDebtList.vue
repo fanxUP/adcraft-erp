@@ -28,10 +28,10 @@
     </el-card>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
-      <el-table-column prop="cost_no" label="成本编号" width="160" />
-      <el-table-column prop="order_no" label="订单编号" width="160" />
-      <el-table-column prop="project_name" label="项目名称" min-width="160" show-overflow-tooltip />
-      <el-table-column prop="customer_name" label="客户" min-width="120" show-overflow-tooltip />
+      <el-table-column prop="cost_no" label="成本编号" width="180" />
+      <el-table-column prop="order_no" label="订单编号" width="180" />
+      <el-table-column prop="project_name" label="项目名称" min-width="200" show-overflow-tooltip />
+      <el-table-column prop="customer_name" label="客户" min-width="160" show-overflow-tooltip />
       <el-table-column label="成本类别" width="120">
         <template #default="{ row }">
           <el-tag size="small">{{ row.category }}</el-tag>
@@ -51,11 +51,11 @@
           <el-tag v-else type="success" size="small">已结清</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="日期" width="110">
+      <el-table-column label="日期" width="120">
         <template #default="{ row }">{{ row.cost_date?.slice(0, 10) || '-' }}</template>
       </el-table-column>
-      <el-table-column prop="description" label="说明" min-width="140" show-overflow-tooltip />
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="!row.is_settled"

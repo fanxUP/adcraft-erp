@@ -1,27 +1,10 @@
 import { apiClient, get, post, put, del } from './index'
 import type {
   PaginatedData,
-  ContractListResponse,
   FrameworkContractProjectDetailResponse,
   FrameworkContractAvailableResources,
   SuccessResponse,
 } from '@/types/api'
-
-// ── 框架合同列表（委托 contracts API，带 contract_type 过滤） ──
-
-export function getFrameworkContracts(params: {
-  page?: number
-  page_size?: number
-  status?: string
-  keyword?: string
-  customer_id?: string
-}) {
-  return get<PaginatedData<ContractListResponse>>('/contracts/', {
-    params: { ...params, contract_type: '框架合同' },
-  })
-}
-
-// 复用 contracts.ts 的 getContract / updateContract / deleteContract / changeContractStatus 等
 
 // ── 框架合同项目 CRUD ──
 

@@ -22,7 +22,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="phone" label="手机号" width="130" />
-      <el-table-column prop="license_type" label="驾驶证类型" width="110" />
+      <el-table-column prop="license_type" label="驾驶证类型" width="100" />
       <el-table-column label="驾驶证到期" width="120">
         <template #default="{ row }">
           <span :class="{ 'text-danger': isExpiredSoon(row.license_expire_date) }">
@@ -30,12 +30,12 @@
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="80">
+      <el-table-column label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">{{ row.status === 'active' ? '启用' : '停用' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" @click="handleEdit(row)">编辑</el-button>
           <el-button v-if="row.status === 'active'" text type="warning" @click="handleDisable(row)">停用</el-button>

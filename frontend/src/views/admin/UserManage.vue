@@ -8,14 +8,14 @@
     <el-table :data="list" v-loading="loading" stripe>
       <el-table-column prop="username" label="用户名" width="140" />
       <el-table-column prop="real_name" label="姓名" width="120" />
-      <el-table-column prop="phone" label="手机号" width="140" />
+      <el-table-column prop="phone" label="手机号" width="130" />
       <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
       <el-table-column label="角色" width="200">
         <template #default="{ row }">
           <el-tag v-for="r in row.roles" :key="r" size="small" style="margin-right: 4px">{{ roleLabel(r) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="80">
+      <el-table-column label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag>
         </template>

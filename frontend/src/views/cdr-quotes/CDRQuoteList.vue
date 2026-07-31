@@ -8,8 +8,8 @@
     </div>
 
     <el-table :data="quotes" v-loading="loading" stripe>
-      <el-table-column prop="quote_no" label="报价单号" width="160" />
-      <el-table-column label="客户" min-width="150">
+      <el-table-column prop="quote_no" label="报价单号" width="180" />
+      <el-table-column label="客户" min-width="160">
         <template #default="{ row }">{{ row.customer_name || row.customer?.name || '-' }}</template>
       </el-table-column>
       <el-table-column prop="project_name" label="项目名称" min-width="200" />
@@ -23,7 +23,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="created_at" label="创建时间" width="170" />
+      <el-table-column prop="created_at" label="创建时间" width="160" />
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" @click="viewDetail(row)">详情</el-button>

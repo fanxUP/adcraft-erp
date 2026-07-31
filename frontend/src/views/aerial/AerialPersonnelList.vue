@@ -6,20 +6,20 @@
       <el-button type="primary" @click="fetchData">搜索</el-button>
     </div>
     <el-table :data="list" stripe v-loading="loading">
-      <el-table-column prop="name" label="姓名" width="100" />
+      <el-table-column prop="name" label="姓名" width="240" />
       <el-table-column prop="phone" label="手机号" width="130" />
       <el-table-column prop="license_no" label="驾驶证号" width="140" />
-      <el-table-column prop="license_type" label="驾照类型" width="80" />
+      <el-table-column prop="license_type" label="驾照类型" width="100" />
       <el-table-column prop="license_expire_date" label="驾照到期" width="110">
         <template #default="{ row }"><span :style="{ color: isExpiredSoon(row.license_expire_date) ? '#f56c6c' : '' }">{{ row.license_expire_date || '-' }}</span></template>
       </el-table-column>
-      <el-table-column prop="is_external" label="外协" width="60">
+      <el-table-column prop="is_external" label="外协" width="80">
         <template #default="{ row }"><el-tag :type="row.is_external ? 'warning' : 'info'" size="small">{{ row.is_external ? '外协' : '内部' }}</el-tag></template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="80">
+      <el-table-column prop="status" label="状态" width="100">
         <template #default="{ row }"><el-tag :type="row.status === 'active' ? 'success' : 'danger'" size="small">{{ row.status === 'active' ? '在职' : '停用' }}</el-tag></template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
           <el-button link :type="row.status === 'active' ? 'danger' : 'success'" size="small" @click="handleToggle(row)">{{ row.status === 'active' ? '停用' : '启用' }}</el-button>

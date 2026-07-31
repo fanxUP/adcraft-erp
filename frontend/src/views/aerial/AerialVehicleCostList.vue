@@ -12,18 +12,18 @@
       <el-button type="primary" @click="fetchData">搜索</el-button>
     </div>
     <el-table :data="list" stripe v-loading="loading">
-      <el-table-column prop="cost_date" label="日期" width="100" />
+      <el-table-column prop="cost_date" label="日期" width="120" />
       <el-table-column prop="cost_type" label="费用类型" width="100"><template #default="{ row }">{{ costTypeLabel(row.cost_type) }}</template></el-table-column>
-      <el-table-column prop="amount" label="金额" width="90" align="right"><template #default="{ row }">¥{{ row.amount }}</template></el-table-column>
+      <el-table-column prop="amount" label="金额" width="120" align="right"><template #default="{ row }">¥{{ row.amount }}</template></el-table-column>
       <el-table-column prop="plate_number" label="车辆" width="100" />
-      <el-table-column prop="allocation_type" label="分摊方式" width="90"><template #default="{ row }">{{ allocLabel(row.allocation_type) }}</template></el-table-column>
-      <el-table-column prop="review_status" label="审核" width="80">
+      <el-table-column prop="allocation_type" label="分摊方式" width="100"><template #default="{ row }">{{ allocLabel(row.allocation_type) }}</template></el-table-column>
+      <el-table-column prop="review_status" label="审核" width="100">
         <template #default="{ row }">
           <el-tag :type="row.review_status === 'approved' ? 'success' : row.review_status === 'rejected' ? 'danger' : 'warning'" size="small">{{ reviewLabel(row.review_status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button link type="success" size="small" @click="handleReview(row, 'approved')" v-if="row.review_status === 'pending'">通过</el-button>
           <el-button link type="danger" size="small" @click="handleReview(row, 'rejected')" v-if="row.review_status === 'pending'">驳回</el-button>

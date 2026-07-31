@@ -129,6 +129,9 @@ class ProductService:
     def _process_to_dict(self, pr) -> dict:
         return {
             "id": str(pr.id), "name": pr.name, "charge_method": pr.charge_method,
-            "default_price": float(pr.default_price), "remark": pr.remark, "is_active": pr.is_active,
+            "billing_basis": pr.billing_basis, "default_price": float(pr.default_price),
+            "startup_fee": float(pr.startup_fee) if pr.startup_fee else 0,
+            "min_charge": float(pr.min_charge) if pr.min_charge else 0,
+            "remark": pr.remark, "is_active": pr.is_active,
             "created_at": pr.created_at.isoformat() if pr.created_at else None,
         }

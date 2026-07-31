@@ -26,11 +26,11 @@
 
     <!-- 派车单列表 -->
     <el-table :data="dispatchList" stripe border style="width: 100%">
-      <el-table-column prop="dispatch_no" label="派车单号" width="140" />
+      <el-table-column prop="dispatch_no" label="派车单号" width="180" />
       <el-table-column prop="vehicle_name" label="车辆" width="120" />
       <el-table-column prop="plate_number" label="车牌号" width="110" />
       <el-table-column prop="driver_name" label="司机" width="100" />
-      <el-table-column prop="destination" label="目的地" min-width="150" />
+      <el-table-column prop="destination" label="目的地" min-width="160" />
       <el-table-column prop="planned_start_time" label="计划出发" width="160">
         <template #default="{ row }">
           {{ row.planned_start_time ? formatTime(row.planned_start_time) : '-' }}
@@ -66,7 +66,7 @@
           <el-tag :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="260" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="handleViewTrip(row)">查看</el-button>
           <el-button v-if="row.status === 'assigned'" size="small" type="success" @click="handleStartTrip(row)">出车</el-button>
