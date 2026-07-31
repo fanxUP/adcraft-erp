@@ -35,3 +35,17 @@ export function deleteSalary(id: string) {
 export function generateSalaries(month: string, employee_ids?: string[]) {
   return post<SalaryGenerateResult>("/salaries/generate", { month, employee_ids })
 }
+
+export interface SalaryReportRow {
+  employee_no: string | null; department: string | null; employee_name: string | null
+  attend_days: number; missed_days: number; attendance_bonus: number; performance: number; absent_days: number
+  base_salary: number; overtime_hours: number; overtime_pay: number; total_salary: number
+  performance_wage: number; meal_subsidy: number; attendance_phone_subsidy: number
+  gross: number; social_deduction: number; net_salary: number; social_insurance: number; actual_gross: number
+  remark: string | null; prev_month_net: number | null
+}
+export interface SalaryReportResult { month: string; title: string; rows: SalaryReportRow[] }
+
+export function getSalaryReport(month: string) {
+  return get<SalaryReportResult>("/salaries/report", { params: { month } })
+}

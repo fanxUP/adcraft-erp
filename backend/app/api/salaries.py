@@ -34,6 +34,15 @@ async def generate_salaries(data: SalaryGenerateRequest, db=Depends(get_db), cur
     return success(await SalaryRecordService(db).generate_month(data.month, eids))
 
 
+@router.get("/report")
+async def salary_report(month: str, db=Depends(get_db), current_user=Depends(get_current_user)):
+    """仿 Excel「工资计算明细表」的月度工资报表。"""
+    try:
+        return success(await SalaryRecordService(db).report_month(month))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
 @router.get("/{salary_id}")
 async def get_salary(salary_id: str, db=Depends(get_db), current_user=Depends(get_current_user)):
     s = await SalaryRecordService(db).get_record(UUID(salary_id))

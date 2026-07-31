@@ -131,3 +131,132 @@ async def test_generate_month_invalid_month_raises(service):
     with pytest.raises(ValueError, match="YYYY-MM"):
         await service.generate_month("2026/07")
     service.repo.create.assert_not_called()
+
+
+# ── 工资报表 report_month ────────────────────────────────────────────────────
+
+def make_record(**kwargs):
+    r = MagicMock()
+    r.id = kwargs.get("id", uuid4())
+    r.employee_id = kwargs.get("employee_id", EMP1)
+    r.month = kwargs.get("month", "2026-07")
+    r.base_salary = kwargs.get("base_salary", 5000.0)
+    r.overtime_pay = kwargs.get("overtime_pay", 0.0)
+    r.bonus = kwargs.get("bonus", None)
+    r.commission = kwargs.get("commission", None)
+    r.subsidy = kwargs.get("subsidy", None)
+    r.deduction = kwargs.get("deduction", None)
+    r.net_salary = kwargs.get("net_salary", 0.0)
+    r.payment_status = kwargs.get("payment_status", "pending")
+    r.remark = kwargs.get("remark", None)
+    return r
+
+
+def make_employee(**kwargs):
+    e = MagicMock()
+    e.id = kwargs.get("id", EMP1)
+    e.employee_no = kwargs.get("employee_no", "E001")
+    e.name = kwargs.get("name", "张三")
+    e.department = kwargs.get("department", "design")
+    return e
+
+
+def _setup_report(service, records, prev_records=None, employees=None, rule=None, att=None):
+    """mock 报表依赖：repo.list(当月, 上月) + 员工/规则/考勤查询。"""
+    prev_records = prev_records if prev_records is not None else []
+    employees = employees if employees is not None else [make_employee() for _ in records]
+    service.repo.list = AsyncMock(side_effect=[(records, len(records)), (prev_records, len(prev_records))])
+    service._load_employee = AsyncMock(side_effect=employees)
+    service._latest_rule = AsyncMock(return_value=rule if rule is not None else make_rule())
+    service._attendance_stats = AsyncMock(return_value=att or {})
+    return service
+
+
+@pytest.mark.asyncio
+async def test_report_month_returns_row_fields(service):
+    record = make_record(base_salary=5000.0, overtime_pay=100.0, remark="备注")
+    rule = make_rule(attendance_bonus=300.0, bonus_standard=200.0, subsidy_standard=50.0,
+                     social_insurance=500.0, housing_fund=300.0, deduction_standard=100.0)
+    att = {str(EMP1): {"normal": 20, "half": 2, "missed": 0, "absent": 1,
+                       "records": 23, "overtime": 10.5}}
+    _setup_report(service, [record], rule=rule, att=att)
+
+    result = await service.report_month("2026-07")
+    assert result["month"] == "2026-07"
+    assert result["title"] == "2026年7月份工资计算明细表"
+    row = result["rows"][0]
+    assert row["employee_no"] == "E001"
+    assert row["department"] == "design"
+    assert row["employee_name"] == "张三"
+    assert row["attend_days"] == 21.0  # 20 + 0.5*2
+    assert row["missed_days"] == 0
+    non_weekend = sum(1 for d in range(1, 32) if date(2026, 7, d).weekday() < 5)
+    assert row["absent_days"] == max(0, non_weekend - 23) + 1
+    assert row["attendance_bonus"] == 300.0
+    assert row["performance"] == 200.0
+    assert row["base_salary"] == 5000.0
+    assert row["overtime_hours"] == 10.5
+    assert row["overtime_pay"] == 100.0
+    assert row["total_salary"] == 5100.0  # 5000+100
+    assert row["performance_wage"] == 200.0
+    assert row["meal_subsidy"] == 50.0
+    assert row["attendance_phone_subsidy"] == 300.0
+    assert row["gross"] == 5650.0  # 5100+200+50+300
+    assert row["social_deduction"] == 900.0  # 500+300+100
+    assert row["net_salary"] == 4750.0  # 5650-900
+    assert row["social_insurance"] == 500.0
+    assert row["actual_gross"] == 4750.0
+    assert row["remark"] == "备注"
+    assert row["prev_month_net"] is None
+
+
+@pytest.mark.asyncio
+async def test_report_month_uses_prev_month_net(service):
+    record = make_record(base_salary=5000.0)
+    prev_record = make_record(employee_id=EMP1, month="2026-06", net_salary=4800.0)
+    _setup_report(service, [record], prev_records=[prev_record],
+                  att={str(EMP1): {"normal": 20, "half": 0, "missed": 0, "absent": 0,
+                                   "records": 20, "overtime": 0}})
+    result = await service.report_month("2026-07")
+    assert result["rows"][0]["prev_month_net"] == 4800.0
+
+
+@pytest.mark.asyncio
+async def test_report_month_no_rule_and_no_attendance_zero(service):
+    record = make_record(base_salary=5000.0)
+    _setup_report(service, [record], rule=None, att={})
+    result = await service.report_month("2026-07")
+    row = result["rows"][0]
+    assert row["attendance_bonus"] == 0.0
+    assert row["performance"] == 0.0
+    assert row["meal_subsidy"] == 0.0
+    assert row["social_deduction"] == 0.0
+    assert row["attend_days"] == 0
+    assert row["gross"] == 5000.0
+    assert row["net_salary"] == 5000.0
+
+
+@pytest.mark.asyncio
+async def test_report_month_sorts_rows_by_department(service):
+    r1 = make_record(employee_id=EMP1, base_salary=5000.0)
+    r2 = make_record(employee_id=EMP2, base_salary=6000.0)
+    emp1 = make_employee(id=EMP1, name="张三", department="design")
+    emp2 = make_employee(id=EMP2, name="李四", department="admin")
+    _setup_report(service, [r1, r2], employees=[emp1, emp2], att={})
+    result = await service.report_month("2026-07")
+    assert [r["department"] for r in result["rows"]] == ["admin", "design"]
+    assert [r["employee_name"] for r in result["rows"]] == ["李四", "张三"]
+
+
+@pytest.mark.asyncio
+async def test_report_month_empty_returns_no_rows(service):
+    _setup_report(service, [])
+    result = await service.report_month("2026-07")
+    assert result["rows"] == []
+
+
+@pytest.mark.asyncio
+async def test_report_month_invalid_month_raises(service):
+    _setup_report(service, [])
+    with pytest.raises(ValueError, match="YYYY-MM"):
+        await service.report_month("2026/07")
