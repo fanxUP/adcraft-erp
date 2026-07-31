@@ -36,6 +36,7 @@ def make_rule(**kwargs):
 def service():
     repo = MagicMock()
     repo.create = AsyncMock()
+    repo.update = AsyncMock()
     with patch("app.services.salary_service.SalaryRecordRepository") as MockRepo:
         MockRepo.return_value = repo
         svc = SalaryRecordService(MagicMock())
@@ -161,7 +162,7 @@ def make_employee(**kwargs):
     return e
 
 
-def _setup_report(service, records, prev_records=None, employees=None, rule=None, att=None):
+def _setup_report(service, records, prev_records=None, employees=None, rule=None, att=None, att_grid=None):
     """mock 报表依赖：repo.list(当月, 上月) + 员工/规则/考勤查询。"""
     prev_records = prev_records if prev_records is not None else []
     employees = employees if employees is not None else [make_employee() for _ in records]
@@ -169,6 +170,7 @@ def _setup_report(service, records, prev_records=None, employees=None, rule=None
     service._load_employee = AsyncMock(side_effect=employees)
     service._latest_rule = AsyncMock(return_value=rule if rule is not None else make_rule())
     service._attendance_stats = AsyncMock(return_value=att or {})
+    service._grid_values = AsyncMock(return_value=att_grid or {})
     return service
 
 
@@ -260,3 +262,207 @@ async def test_report_month_invalid_month_raises(service):
     _setup_report(service, [])
     with pytest.raises(ValueError, match="YYYY-MM"):
         await service.report_month("2026/07")
+
+
+# ── 工资网格 compute/get_grid/save_cells / 指标 CRUD ────────────────────────
+
+def _grid_session(item=None):
+    """mock AsyncSession：execute 返回 item，支持 add/flush/delete。"""
+    s = MagicMock()
+    res = MagicMock()
+    res.scalar_one_or_none.return_value = item
+    s.execute = AsyncMock(return_value=res)
+    s.add = MagicMock()
+    s.flush = AsyncMock()
+    s.delete = AsyncMock()
+    return s
+
+
+@pytest.mark.asyncio
+async def test_compute_month_evaluates_formulas(service):
+    items = [
+        {"key": "basic", "formula": "base", "is_active": True},
+        {"key": "overtime_pay", "formula": "ot_hours * (base / 21.75 / 8) * (ot_rate or 1.5)", "is_active": True},
+        {"key": "deduction", "formula": "social + housing", "is_active": True},
+        {"key": "gross", "formula": "basic + overtime_pay", "is_active": True},
+        {"key": "net", "formula": "max(0, gross - deduction)", "is_active": True},
+    ]
+    rule = make_rule(base_salary=5000.0, overtime_rate=2.0)
+    service.list_items = AsyncMock(return_value=items)
+    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._attendance_stats = AsyncMock(return_value={
+        str(EMP1): {"normal": 20, "half": 0, "missed": 0, "absent": 0, "records": 20, "overtime": 10}})
+    service._latest_rule = AsyncMock(return_value=rule)
+    seen = {}
+
+    async def fake_replace(month, eid, vals):
+        seen.update(vals)
+
+    service._replace_grid_values = fake_replace
+    service._upsert_record = AsyncMock()
+
+    result = await service.compute_month("2026-07")
+    assert result["computed"] == 1
+    assert result["errors"] == []
+    hourly = 5000 / 21.75 / 8
+    assert seen["basic"] == 5000.0
+    assert seen["overtime_pay"] == round(10 * hourly * 2, 2)
+    assert seen["deduction"] == 0.0
+    assert seen["gross"] == round(5000 + seen["overtime_pay"], 2)
+    assert seen["net"] == seen["gross"]
+    service._upsert_record.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_compute_month_attendance_conditional(service):
+    items = [{"key": "att_bonus", "formula": "att_bonus if (missed_days == 0 and absent_days == 0) else 0",
+              "is_active": True}]
+    service.list_items = AsyncMock(return_value=items)
+    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._latest_rule = AsyncMock(return_value=make_rule(attendance_bonus=300.0))
+    service._upsert_record = AsyncMock()
+    seen = {}
+
+    async def fake_replace(month, eid, vals):
+        seen.update(vals)
+
+    service._replace_grid_values = fake_replace
+    # 有旷工 → 不发全勤
+    service._attendance_stats = AsyncMock(return_value={
+        str(EMP1): {"normal": 20, "half": 0, "missed": 1, "absent": 0, "records": 21, "overtime": 0}})
+    await service.compute_month("2026-07")
+    assert seen["att_bonus"] == 0.0
+    # 全勤 → 发全勤
+    service._attendance_stats = AsyncMock(return_value={
+        str(EMP1): {"normal": 23, "half": 0, "missed": 0, "absent": 0, "records": 23, "overtime": 0}})
+    await service.compute_month("2026-07")
+    assert seen["att_bonus"] == 300.0
+
+
+@pytest.mark.asyncio
+async def test_compute_month_collects_eval_errors(service):
+    # 公式合法但该员工触发除零 → 计入 errors，不中断
+    items = [{"key": "x", "formula": "100 / (work_days - records)", "is_active": True}]
+    service.list_items = AsyncMock(return_value=items)
+    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._latest_rule = AsyncMock(return_value=make_rule())
+    service._attendance_stats = AsyncMock(return_value={
+        str(EMP1): {"normal": 23, "half": 0, "missed": 0, "absent": 0, "records": 23, "overtime": 0}})
+    service._load_employee = AsyncMock(return_value=make_employee())
+    service._replace_grid_values = AsyncMock()
+    service._upsert_record = AsyncMock()
+    result = await service.compute_month("2026-07")
+    assert result["computed"] == 0
+    assert len(result["errors"]) == 1
+    assert "除数为 0" in result["errors"][0]
+
+
+@pytest.mark.asyncio
+async def test_upsert_record_creates_when_missing(service):
+    service._existing_record = AsyncMock(return_value=None)
+    await service._upsert_record("2026-07", EMP1,
+                                 {"basic": 5000, "overtime_pay": 100, "bonus": 200,
+                                  "subsidy": 50, "deduction": 900, "net": 4450})
+    data = service.repo.create.call_args[0][0]
+    assert data["employee_id"] == EMP1
+    assert data["month"] == "2026-07"
+    assert data["base_salary"] == 5000.0
+    assert data["net_salary"] == 4450.0
+    assert data["payment_status"] == "pending"
+    service.repo.update.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_upsert_record_updates_existing(service):
+    service._existing_record = AsyncMock(return_value=make_record(net_salary=1000))
+    await service._upsert_record("2026-07", EMP1,
+                                 {"basic": 6000, "overtime_pay": 0, "bonus": 0,
+                                  "subsidy": 0, "deduction": 0, "net": 6000})
+    data = service.repo.update.call_args[0][1]
+    assert data["base_salary"] == 6000.0
+    assert data["net_salary"] == 6000.0
+    service.repo.create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_grid_returns_items_and_rows(service):
+    service.list_items = AsyncMock(return_value=[
+        {"key": "basic", "label": "基本工资", "formula": "base", "sort_order": 1,
+         "is_active": True, "is_builtin": True, "id": "1"},
+        {"key": "net", "label": "实发工资", "formula": "max(0, gross - deduction)", "sort_order": 2,
+         "is_active": True, "is_builtin": True, "id": "2"},
+    ])
+    service._active_employees = AsyncMock(return_value=[make_employee()])
+    service._grid_values = AsyncMock(return_value={(str(EMP1), "basic"): 5000.0})
+    service.repo.list = AsyncMock(return_value=([make_record(net_salary=4400.0, payment_status="paid")], 1))
+
+    result = await service.get_grid("2026-07")
+    assert result["month"] == "2026-07"
+    assert len(result["items"]) == 2
+    row = result["rows"][0]
+    assert row["employee_no"] == "E001"
+    assert row["values"]["basic"] == 5000.0
+    assert row["values"]["net"] is None
+    assert row["payment_status"] == "paid"
+
+
+@pytest.mark.asyncio
+async def test_save_cells_persists_manual_and_syncs_record(service):
+    service.list_items = AsyncMock(return_value=[
+        {"key": "basic", "is_active": True}, {"key": "net", "is_active": True},
+        {"key": "custom", "is_active": True}])
+    upserted = {}
+
+    async def fake_upsert(month, eid, key, value, source):
+        upserted[key] = (value, source)
+
+    service._upsert_grid_value = fake_upsert
+    service._grid_values = AsyncMock(return_value={(str(EMP1), "basic"): 5500.0})
+    service._existing_record = AsyncMock(return_value=make_record())
+
+    result = await service.save_cells("2026-07",
+                                      cells=[{"employee_id": str(EMP1), "item_key": "basic", "value": 5500}])
+    assert result["saved"] == 1
+    assert upserted["basic"] == (5500.0, "manual")
+    service.repo.update.assert_called_once()
+    assert service.repo.update.call_args[0][1]["base_salary"] == 5500.0
+
+
+@pytest.mark.asyncio
+async def test_save_cells_payment_status(service):
+    service.list_items = AsyncMock(return_value=[])
+    existing = make_record(payment_status="pending")
+    service._existing_record = AsyncMock(return_value=existing)
+    result = await service.save_cells("2026-07",
+                                      payments=[{"employee_id": str(EMP1), "payment_status": "paid"}])
+    assert result["saved"] == 0
+    data = service.repo.update.call_args[0][1]
+    assert data["payment_status"] == "paid"
+    assert data["paid_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_create_item_validates_formula(service):
+    service._all_item_keys = AsyncMock(return_value=["basic"])
+    service.db = _grid_session()
+    item = await service.create_item({"key": "hot", "label": "高温补贴", "formula": "base * 0.1"})
+    assert item["key"] == "hot"
+    assert item["is_builtin"] is False
+    with pytest.raises(ValueError, match="未知变量"):
+        await service.create_item({"key": "bad", "label": "错误", "formula": "nope + 1"})
+    with pytest.raises(ValueError, match="同名"):
+        await service.create_item({"key": "base", "label": "冲突", "formula": "1"})
+
+
+@pytest.mark.asyncio
+async def test_update_item_and_delete_builtin(service):
+    item = MagicMock()
+    item.id = uuid4()
+    item.key = "basic"
+    item.is_builtin = True
+    service._all_item_keys = AsyncMock(return_value=["basic", "net"])
+    service.db = _grid_session(item)
+    updated = await service.update_item(item.id, {"formula": "base * 2"})
+    assert item.formula == "base * 2"
+    with pytest.raises(ValueError, match="内置指标"):
+        await service.delete_item(item.id)

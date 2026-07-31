@@ -49,3 +49,69 @@ export interface SalaryReportResult { month: string; title: string; rows: Salary
 export function getSalaryReport(month: string) {
   return get<SalaryReportResult>("/salaries/report", { params: { month } })
 }
+
+/* ── 工资网格（考勤式）：指标列 + 可编辑公式 + 单元格 ─────────────────── */
+
+export interface SalaryItem {
+  id: string
+  key: string
+  label: string
+  formula: string
+  sort_order: number
+  is_active: boolean
+  is_builtin: boolean
+}
+
+export interface SalaryGridRow {
+  employee_id: string
+  employee_no: string | null
+  employee_name: string
+  department: string | null
+  values: Record<string, number | null>
+  payment_status: string | null
+  paid_at: string | null
+}
+
+export interface SalaryGridResult {
+  month: string
+  items: SalaryItem[]
+  rows: SalaryGridRow[]
+}
+
+export interface SalaryComputeResult {
+  month: string
+  computed: number
+  errors: string[]
+}
+
+export interface SalarySaveResult {
+  month: string
+  saved: number
+  errors: string[]
+}
+
+export function getSalaryItems() {
+  return get<SalaryItem[]>("/salaries/items")
+}
+export function createSalaryItem(data: { key: string; label: string; formula: string; sort_order: number }) {
+  return post<SalaryItem>("/salaries/items", data)
+}
+export function updateSalaryItem(id: string, data: { label?: string; formula?: string; sort_order?: number; is_active?: boolean }) {
+  return put<SalaryItem>("/salaries/items/" + id, data)
+}
+export function deleteSalaryItem(id: string) {
+  return del<unknown>("/salaries/items/" + id)
+}
+export function getSalaryGrid(month: string) {
+  return get<SalaryGridResult>("/salaries/grid", { params: { month } })
+}
+export function computeSalaryGrid(month: string, employee_ids?: string[]) {
+  return post<SalaryComputeResult>("/salaries/grid/compute", { month, employee_ids })
+}
+export function saveSalaryGrid(
+  month: string,
+  cells?: { employee_id: string; item_key: string; value: number | null }[],
+  payments?: { employee_id: string; payment_status: string }[],
+) {
+  return post<SalarySaveResult>("/salaries/grid/save", { month, cells, payments })
+}

@@ -3,266 +3,313 @@
     <div class="page-header">
       <h2>💰 工资表</h2>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <el-input v-model="fMonth" placeholder="月份 YYYY-MM" style="width:150px" clearable @change="fetchData" />
-        <el-select v-model="fEmp" placeholder="全部员工" clearable filterable style="width:200px" @change="fetchData">
-          <el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" />
-        </el-select>
-        <el-select v-model="fStatus" placeholder="支付状态" clearable style="width:120px" @change="fetchData">
-          <el-option label="待核算" value="pending" /><el-option label="已核算" value="calculated" /><el-option label="已发放" value="paid" />
-        </el-select>
-        <el-button @click="fetchData">刷新</el-button>
-        <el-button type="warning" @click="openGenerate">⚡ 按规则生成</el-button>
-        <el-button type="danger" @click="openCreate">录入工资</el-button>
+        <el-date-picker v-model="curMonth" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:160px" @change="fetchGrid" />
+        <el-button @click="fetchGrid">刷新</el-button>
+        <el-button type="primary" :loading="computing" @click="computeAll">⚡ 计算</el-button>
+        <el-button type="warning" @click="openItems">🔧 指标设置</el-button>
+        <el-button @click="handlePrint">🖨️ 打印</el-button>
       </div>
     </div>
 
     <!-- 汇总 -->
     <el-row :gutter="16" style="margin-bottom:16px">
-      <el-col :span="6"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#409eff">{{list.length}}</div><div style="font-size:13px;color:#909399;margin-top:4px">记录数</div></div></el-card></el-col>
-      <el-col :span="6"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#67c23a">{{totalBase.toFixed(2)}}</div><div style="font-size:13px;color:#909399;margin-top:4px">基本工资合计</div></div></el-card></el-col>
-      <el-col :span="6"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#e6a23c">{{totalGross.toFixed(2)}}</div><div style="font-size:13px;color:#909399;margin-top:4px">应发合计</div></div></el-card></el-col>
-      <el-col :span="6"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#f56c6c">{{totalNet.toFixed(2)}}</div><div style="font-size:13px;color:#909399;margin-top:4px">实发合计</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#409eff">{{ rows.length }}</div><div style="font-size:13px;color:#909399;margin-top:4px">员工数</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#e6a23c">{{ fmtVal(totals.gross) }}</div><div style="font-size:13px;color:#909399;margin-top:4px">应发合计</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#f56c6c">{{ fmtVal(totals.net) }}</div><div style="font-size:13px;color:#909399;margin-top:4px">实发合计</div></div></el-card></el-col>
     </el-row>
 
-    <!-- 工资表 -->
-    <div class="sheet-wrapper" :style="{ maxHeight: 'calc(100vh - 320px)' }">
-      <table class="sal-sheet" v-if="list.length">
+    <!-- 工资网格 -->
+    <div class="sheet-wrapper" v-loading="loading">
+      <table class="sal-sheet" v-if="rows.length">
         <thead>
-          <tr class="sal-header-top">
-            <th rowspan="2" class="sal-col-sm">#</th>
-            <th rowspan="2" class="sal-col-emp">工号</th>
-            <th rowspan="2" class="sal-col-emp">姓名</th>
-            <th rowspan="2" class="sal-col-month">月份</th>
-            <th colspan="5" class="sal-col-group">应发工资</th>
-            <th rowspan="2" class="sal-col-num">扣款</th>
-            <th rowspan="2" class="sal-col-num">实发工资</th>
-            <th rowspan="2" class="sal-col-status">支付状态</th>
-            <th rowspan="2" class="sal-col-op">操作</th>
-          </tr>
-          <tr class="sal-header-bottom">
-            <th class="sal-col-num">基本工资</th>
-            <th class="sal-col-num">加班费</th>
-            <th class="sal-col-num">奖金</th>
-            <th class="sal-col-num">提成</th>
-            <th class="sal-col-num">补贴</th>
+          <tr class="sal-header">
+            <th class="col-fixed">工号</th>
+            <th class="col-fixed">姓名</th>
+            <th class="col-fixed">部门</th>
+            <th v-for="it in items" :key="it.key" class="col-item" :title="it.formula">{{ it.label }}</th>
+            <th class="col-status">支付状态</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, i) in list" :key="row.id" :class="getRowClass(row)">
-            <td class="cell-center">{{ i + 1 }}</td>
-            <td>{{ row.employee_no || '-' }}</td>
-            <td class="cell-name">{{ row.employee_name || '-' }}</td>
-            <td class="cell-month">{{ row.month }}</td>
-            <td class="cell-num">{{ fmt(row.base_salary) }}</td>
-            <td class="cell-num">{{ fmt(row.overtime_pay) }}</td>
-            <td class="cell-num">{{ fmt(row.bonus) }}</td>
-            <td class="cell-num">{{ fmt(row.commission) }}</td>
-            <td class="cell-num">{{ fmt(row.subsidy) }}</td>
-            <td class="cell-num deduction">{{ fmt(row.deduction) }}</td>
-            <td class="cell-num net"><strong>{{ fmt(row.net_salary) }}</strong></td>
-            <td class="cell-center">
-              <el-tag :type="payColor(row.payment_status)" size="small">{{ payLabel(row.payment_status) }}</el-tag>
+          <tr v-for="row in rows" :key="row.employee_id">
+            <td class="cell-center">{{ row.employee_no || '' }}</td>
+            <td class="cell-name">{{ row.employee_name }}</td>
+            <td class="cell-center">{{ deptLabel(row.department) }}</td>
+            <td v-for="it in items" :key="it.key" class="cell-num" @click="startEdit(row, it.key)">
+              <el-input-number v-if="isEditing(row, it.key)" v-model="editVal" :controls="false" :precision="2"
+                size="small" autofocus style="width:92px" @change="commitEdit(row, it.key)" @blur="clearEdit" />
+              <span v-else :class="{ 'cell-strong': it.key === 'gross' || it.key === 'net' }">{{ fmtVal(row.values[it.key]) }}</span>
             </td>
-            <td class="cell-op">
-              <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-              <el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+            <td class="cell-center">
+              <el-select :model-value="row.payment_status || 'pending'" size="small" style="width:96px" @change="savePayment(row, $event)">
+                <el-option label="待核算" value="pending" /><el-option label="已核算" value="calculated" /><el-option label="已发放" value="paid" />
+              </el-select>
             </td>
           </tr>
         </tbody>
         <tfoot>
           <tr class="sal-footer">
-            <td colspan="4" class="cell-footer-label">本页合计</td>
-            <td class="cell-num">{{ fmt(pageTotal.base_salary) }}</td>
-            <td class="cell-num">{{ fmt(pageTotal.overtime_pay) }}</td>
-            <td class="cell-num">{{ fmt(pageTotal.bonus) }}</td>
-            <td class="cell-num">{{ fmt(pageTotal.commission) }}</td>
-            <td class="cell-num">{{ fmt(pageTotal.subsidy) }}</td>
-            <td class="cell-num deduction">{{ fmt(pageTotal.deduction) }}</td>
-            <td class="cell-num net"><strong>{{ fmt(pageTotal.net_salary) }}</strong></td>
-            <td colspan="2"></td>
+            <td colspan="3" class="cell-footer-label">合计</td>
+            <td v-for="it in items" :key="it.key" class="cell-num">{{ fmtVal(totals[it.key]) }}</td>
+            <td></td>
           </tr>
         </tfoot>
       </table>
-      <el-empty v-else description="暂无数据" :image-size="80" />
+      <el-empty v-else description="暂无员工" :image-size="80" />
     </div>
 
-    <!-- 按规则生成 Dialog -->
-    <el-dialog v-model="showGenDialog" title="⚡ 按规则生成工资" width="520px">
-      <el-form :model="genForm" label-width="80px">
-        <el-form-item label="月份" required>
-          <el-date-picker v-model="genForm.month" type="month" value-format="YYYY-MM" style="width:100%" placeholder="选择要生成的月份" />
-        </el-form-item>
-        <el-form-item label="员工">
-          <el-select v-model="genForm.employee_ids" multiple filterable collapse-tags style="width:100%" placeholder="默认全部在职员工，可取消勾选">
-            <el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" />
-          </el-select>
-        </el-form-item>
-        <div style="color:#909399;font-size:12px;line-height:1.7">
-          按工资规则自动计算：基本工资=规则基本工资；加班费=当月考勤加班工时×时薪×加班费率；奖金=奖金标准；补贴=补贴标准；扣款=社保+公积金+其他扣款。无规则的员工、以及已有记录（不覆盖）会自动跳过。
+    <!-- 指标设置 Dialog -->
+    <el-dialog v-model="showItems" title="🔧 工资指标设置（每列一个公式）" width="760px" top="4vh">
+      <div class="items-help">
+        <div style="font-weight:700;margin-bottom:6px">可用变量</div>
+        <div class="help-grid">
+          <span v-for="v in varHints" :key="v.name" class="help-item"><code>{{ v.name }}</code> = {{ v.label }}</span>
         </div>
-      </el-form>
-      <template #footer><el-button @click="showGenDialog=false">取消</el-button><el-button type="primary" :loading="genLoading" @click="handleGenerate">生成</el-button></template>
-    </el-dialog>
+        <div style="font-weight:700;margin:10px 0 6px">函数与示例</div>
+        <div class="help-examples">
+          <div v-for="(ex, i) in examples" :key="i" class="help-ex"><code>{{ ex.split('→')[0] }}</code> → {{ ex.split('→')[1] }}</div>
+        </div>
+        <div style="color:#909399;font-size:12px;margin-top:6px">语法为 Python 风格；支持 + - * / % 、比较、and/or/not、<code>A if 条件 else B</code>、max/min/round/abs。改完公式点「保存」，再回到页面点「⚡ 计算」重新生成数值。</div>
+      </div>
 
-    <!-- Dialog -->
-    <el-dialog v-model="showDialog" :title="isEditing?'编辑工资':'录入工资'" width="640px">
-      <el-form :model="form" label-width="100px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
-        <el-form-item label="员工" v-if="!isEditing" required><el-select v-model="form.employee_id" filterable style="width:100%"><el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" /></el-select></el-form-item>
-        <el-form-item label="月份" required><el-input v-model="form.month" placeholder="YYYY-MM" style="width:100%" /></el-form-item>
-        <el-form-item label="基本工资"><el-input-number v-model="form.base_salary" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="加班费"><el-input-number v-model="form.overtime_pay" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="奖金"><el-input-number v-model="form.bonus" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="提成"><el-input-number v-model="form.commission" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="补贴"><el-input-number v-model="form.subsidy" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="扣款"><el-input-number v-model="form.deduction" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="实发工资" required><el-input-number v-model="form.net_salary" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="支付状态"><el-select v-model="form.payment_status" style="width:100%"><el-option label="待核算" value="pending" /><el-option label="已核算" value="calculated" /><el-option label="已发放" value="paid" /></el-select></el-form-item>
-        <el-form-item label="备注" style="grid-column:1/3"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
-      </el-form>
-      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
+      <div class="items-list">
+        <div v-for="(it, idx) in itemsDraft" :key="idx" class="item-row">
+          <el-input v-model="it.label" placeholder="指标名称" style="width:110px" />
+          <code class="item-key">{{ it.key }}</code>
+          <el-input v-model="it.formula" placeholder="公式" style="flex:1" />
+          <el-input-number v-model="it.sort_order" :controls="false" size="small" style="width:64px" title="排序" />
+          <el-switch v-model="it.is_active" size="small" title="启用" />
+          <el-button text type="danger" size="small" :disabled="it.is_builtin" :title="it.is_builtin ? '内置指标不可删除' : '删除'" @click="removeItem(it)">删</el-button>
+        </div>
+      </div>
+
+      <el-divider content-position="left">新增指标</el-divider>
+      <div class="item-row new-item">
+        <el-input v-model="newItem.label" placeholder="名称，如：高温补贴" style="width:110px" />
+        <el-input v-model="newItem.key" placeholder="key，如：hot_subsidy" style="width:150px" />
+        <el-input v-model="newItem.formula" placeholder="公式，如：200" style="flex:1" />
+        <el-button type="primary" plain @click="addNewItem">＋ 添加</el-button>
+      </div>
+
+      <template #footer>
+        <el-button @click="showItems = false">取消</el-button>
+        <el-button type="primary" :loading="itemsSaving" @click="saveItems">保存</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue"
-import { getSalaries, createSalary, updateSalary, deleteSalary, generateSalaries, type SalaryRecordItem } from "@/api/salaries"
-import { getAttendanceEmployees, type EmployeeOption } from "@/api/attendance"
+import {
+  getSalaryItems, getSalaryGrid, computeSalaryGrid, saveSalaryGrid,
+  updateSalaryItem, createSalaryItem, deleteSalaryItem,
+  type SalaryItem, type SalaryGridRow,
+} from "@/api/salaries"
 import { ElMessage, ElMessageBox } from "element-plus"
 
 /* ====== state ====== */
-const list = ref<SalaryRecordItem[]>([])
-const employees = ref<EmployeeOption[]>([])
+const curMonth = ref("")
+const items = ref<SalaryItem[]>([])
+const rows = ref<SalaryGridRow[]>([])
 const loading = ref(false)
-const page = ref(1)
-const pageSize = ref(50)
-const total = ref(0)
-const fEmp = ref("")
-const fMonth = ref("")
-const fStatus = ref("")
-const showDialog = ref(false)
-const isEditing = ref(false)
-const saving = ref(false)
-const editId = ref("")
-const initForm = { employee_id: "", month: "", base_salary: 0, overtime_pay: null, bonus: null, commission: null, subsidy: null, deduction: null, net_salary: 0, payment_status: "pending", remark: "" }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const form = ref<any>({ ...initForm })
-
-/* ====== 按规则生成 ====== */
-const showGenDialog = ref(false)
-const genLoading = ref(false)
-const genForm = ref<{ month: string; employee_ids: string[] }>({ month: "", employee_ids: [] })
-
-function openGenerate() {
-  genForm.value = {
-    month: fMonth.value || new Date().toISOString().slice(0, 7),
-    employee_ids: employees.value.map((e) => e.id),
-  }
-  showGenDialog.value = true
-}
-
-async function handleGenerate() {
-  if (!genForm.value.month) return ElMessage.warning("请选择月份")
-  if (!employees.value.length) return ElMessage.warning("暂无可生成的员工")
-  if (!genForm.value.employee_ids.length) return ElMessage.warning("请至少选择一名员工")
-  genLoading.value = true
-  try {
-    const allIds = employees.value.map((e) => e.id)
-    const empIds = genForm.value.employee_ids.length === allIds.length ? undefined : genForm.value.employee_ids
-    const r = await generateSalaries(genForm.value.month, empIds)
-    const parts = [`已生成 ${r.created} 条`]
-    if (r.skipped_exists) parts.push(`跳过已有 ${r.skipped_exists} 条`)
-    if (r.skipped_no_rule) parts.push(`无规则跳过 ${r.skipped_no_rule} 人`)
-    if (r.errors?.length) parts.push(`失败 ${r.errors.length} 人`)
-    ElMessage.success(parts.join("；"))
-    showGenDialog.value = false
-    await fetchData()
-  } catch (e: unknown) { ElMessage.error((e as { message?: string })?.message || "生成失败") }
-  finally { genLoading.value = false }
-}
-
-/* ====== helpers ====== */
-const fmt = (v: unknown) => v != null ? Number(v).toFixed(2) : "-"
-const payLabel = (s: string) => ({ pending: "待核算", calculated: "已核算", paid: "已发放" })[s] || s
-const payColor = (s: string) => ({ pending: "info", calculated: "warning", paid: "success" })[s] || "info"
-const getRowClass = (r: SalaryRecordItem) => r.payment_status === "paid" ? "row-paid" : r.payment_status === "calculated" ? "row-calc" : ""
+const computing = ref(false)
 
 /* ====== totals ====== */
-const totalBase = computed(() => list.value.reduce((s, r) => s + (r.base_salary || 0), 0))
-const totalGross = computed(() => list.value.reduce((s, r) => s + (r.base_salary || 0) + (r.overtime_pay || 0) + (r.bonus || 0) + (r.commission || 0) + (r.subsidy || 0), 0))
-const totalNet = computed(() => list.value.reduce((s, r) => s + (r.net_salary || 0), 0))
-const pageTotal = computed(() => {
-  const t = { base_salary: 0, overtime_pay: 0, bonus: 0, commission: 0, subsidy: 0, deduction: 0, net_salary: 0 }
-  for (const r of list.value) {
-    t.base_salary += r.base_salary || 0
-    t.overtime_pay += r.overtime_pay || 0
-    t.bonus += r.bonus || 0
-    t.commission += r.commission || 0
-    t.subsidy += r.subsidy || 0
-    t.deduction += r.deduction || 0
-    t.net_salary += r.net_salary || 0
+const totals = computed<Record<string, number>>(() => {
+  const t: Record<string, number> = {}
+  for (const it of items.value) {
+    let sum = 0
+    for (const r of rows.value) {
+      const v = r.values[it.key]
+      if (v != null) sum += v
+    }
+    t[it.key] = sum
   }
   return t
 })
 
-/* ====== data ====== */
-async function fetchData() {
-  loading.value = true
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const p: any = { page: page.value, page_size: pageSize.value }
-    if (fEmp.value) p.employee_id = fEmp.value
-    if (fMonth.value) p.month = fMonth.value
-    if (fStatus.value) p.payment_status = fStatus.value
-    const r = await getSalaries(p)
-    list.value = r?.items || []
-    total.value = r?.total || 0
-  } finally { loading.value = false }
-}
-async function loadEmps() { employees.value = (await getAttendanceEmployees()) || [] }
-function openCreate() { isEditing.value = false; editId.value = ""; form.value = { ...initForm }; showDialog.value = true }
-function openEdit(r: SalaryRecordItem) { isEditing.value = true; editId.value = r.id; form.value = { ...r }; showDialog.value = true }
-async function handleSave() {
-  saving.value = true
-  try {
-    if (isEditing.value) { await updateSalary(editId.value, form.value); ElMessage.success("已更新") }
-    else { await createSalary(form.value); ElMessage.success("已创建") }
-    showDialog.value = false
-    await fetchData()
-  } catch (e: unknown) { ElMessage.error((e as { message?: string })?.message || "保存失败") }
-  finally { saving.value = false }
-}
-async function handleDelete(r: SalaryRecordItem) {
-  await ElMessageBox.confirm("确定删除此工资记录？", "提示", { type: "warning" })
-  await deleteSalary(r.id)
-  ElMessage.success("已删除")
-  await fetchData()
+/* ====== helpers ====== */
+const fmtVal = (v: number | null | undefined) => (v == null ? "" : Number(v).toFixed(2))
+const deptLabel = (v?: string | null) => {
+  if (!v) return ""
+  const m: Record<string, string> = { design: "设计部", production: "生产部", installation: "安装部", sales: "销售部", finance: "财务部", admin: "行政部" }
+  return m[v] || v
 }
 
-onMounted(() => { fetchData(); loadEmps() })
+/* ====== 单元格编辑 ====== */
+const editingCell = ref<{ rowId: string; key: string } | null>(null)
+const editVal = ref<number | null>(null)
+
+function startEdit(row: SalaryGridRow, key: string) {
+  editingCell.value = { rowId: row.employee_id, key }
+  editVal.value = row.values[key] ?? null
+}
+function isEditing(row: SalaryGridRow, key: string) {
+  return editingCell.value?.rowId === row.employee_id && editingCell.value?.key === key
+}
+function clearEdit() {
+  editingCell.value = null
+}
+async function commitEdit(row: SalaryGridRow, key: string) {
+  const old = row.values[key] ?? null
+  const v = editVal.value
+  editingCell.value = null
+  if (v === old) return
+  try {
+    await saveSalaryGrid(curMonth.value, [{ employee_id: row.employee_id, item_key: key, value: v }])
+    row.values[key] = v
+  } catch { /* interceptor 已提示 */ }
+}
+
+/* ====== 支付状态 ====== */
+async function savePayment(row: SalaryGridRow, status: string) {
+  try {
+    await saveSalaryGrid(curMonth.value, undefined, [{ employee_id: row.employee_id, payment_status: status }])
+    row.payment_status = status
+    row.paid_at = status === "paid" ? new Date().toISOString() : null
+  } catch { /* interceptor 已提示 */ }
+}
+
+/* ====== 数据 ====== */
+async function fetchGrid() {
+  if (!curMonth.value) curMonth.value = new Date().toISOString().slice(0, 7)
+  loading.value = true
+  try {
+    const [it, g] = await Promise.all([getSalaryItems(), getSalaryGrid(curMonth.value)])
+    items.value = (it || []).filter(i => i.is_active).sort((a, b) => a.sort_order - b.sort_order)
+    rows.value = g?.rows || []
+  } catch { /* interceptor 已提示 */ }
+  finally { loading.value = false }
+}
+
+async function computeAll() {
+  if (!curMonth.value) curMonth.value = new Date().toISOString().slice(0, 7)
+  try {
+    await ElMessageBox.confirm("重新计算会覆盖该月所有单元格（包括手工修改），确定继续吗？", "计算工资", { type: "warning" })
+  } catch { return }
+  computing.value = true
+  try {
+    const r = await computeSalaryGrid(curMonth.value)
+    ElMessage.success(`已计算 ${r.computed} 人${r.errors?.length ? `，失败 ${r.errors.length} 人` : ""}`)
+    if (r.errors?.length) ElMessage.warning(r.errors.join("；"))
+    await fetchGrid()
+  } catch { /* interceptor 已提示 */ }
+  finally { computing.value = false }
+}
+
+/* ====== 指标设置 ====== */
+const showItems = ref(false)
+const itemsDraft = ref<SalaryItem[]>([])
+const newItem = ref({ key: "", label: "", formula: "", sort_order: 0 })
+const itemsSaving = ref(false)
+
+const varHints = [
+  { name: "base", label: "基本工资标准(规则)" }, { name: "ot_rate", label: "加班费率(规则)" },
+  { name: "bonus_std", label: "绩效标准(规则)" }, { name: "subsidy_std", label: "伙食补助标准(规则)" },
+  { name: "att_bonus", label: "全勤奖标准(规则)" }, { name: "social", label: "社保(规则)" },
+  { name: "housing", label: "公积金(规则)" }, { name: "ded_std", label: "其他扣款(规则)" },
+  { name: "ot_hours", label: "当月加班工时" }, { name: "attend_days", label: "出勤天数" },
+  { name: "half_days", label: "半天数" }, { name: "missed_days", label: "旷工天数" },
+  { name: "absent_days", label: "未出勤天数" }, { name: "records", label: "有考勤记录天数" },
+  { name: "work_days", label: "月内非周末天数" },
+]
+const examples = [
+  "ot_hours * (base / 21.75 / 8) * (ot_rate or 1.5) → 加班费",
+  "att_bonus if (missed_days == 0 and absent_days == 0) else 0 → 全勤奖",
+  "max(0, gross - deduction) → 实发工资",
+  "200 if attend_days >= work_days else 100 → 出勤满勤的阶梯补贴",
+]
+
+async function openItems() {
+  itemsDraft.value = (await getSalaryItems()) || []
+  const maxOrder = itemsDraft.value.reduce((m, i) => Math.max(m, i.sort_order), 0)
+  newItem.value = { key: "", label: "", formula: "", sort_order: maxOrder + 1 }
+  showItems.value = true
+}
+function addNewItem() {
+  if (!newItem.value.label || !newItem.value.key || !newItem.value.formula) {
+    ElMessage.warning("请填写名称、key 和公式")
+    return
+  }
+  itemsDraft.value.push({ id: "", key: newItem.value.key, label: newItem.value.label,
+    formula: newItem.value.formula, sort_order: newItem.value.sort_order, is_active: true, is_builtin: false })
+  newItem.value = { key: "", label: "", formula: "", sort_order: newItem.value.sort_order + 1 }
+}
+async function removeItem(it: SalaryItem) {
+  if (it.is_builtin) return
+  if (!it.id) { itemsDraft.value = itemsDraft.value.filter(x => x !== it); return }
+  try {
+    await ElMessageBox.confirm(`删除指标「${it.label}」？该指标的历史单元格值也会一并删除。`, "删除指标", { type: "warning" })
+  } catch { return }
+  await deleteSalaryItem(it.id)
+  itemsDraft.value = itemsDraft.value.filter(x => x.id !== it.id)
+}
+async function saveItems() {
+  itemsSaving.value = true
+  try {
+    for (const it of itemsDraft.value) {
+      if (it.id) {
+        await updateSalaryItem(it.id, { label: it.label, formula: it.formula, sort_order: it.sort_order, is_active: it.is_active })
+      } else if (it.key) {
+        await createSalaryItem({ key: it.key, label: it.label, formula: it.formula, sort_order: it.sort_order })
+      }
+    }
+    ElMessage.success("指标已保存")
+    showItems.value = false
+    await fetchGrid()
+  } catch { /* 公式校验错误由 interceptor 提示 */ }
+  finally { itemsSaving.value = false }
+}
+
+/* ====== 打印 ====== */
+function handlePrint() {
+  if (!rows.value.length) { ElMessage.warning("暂无数据可打印"); return }
+  const hdrs = ["工号", "姓名", "部门", ...items.value.map(i => i.label), "支付状态"]
+  let html = "<table><thead><tr>" + hdrs.map(h => `<th>${h}</th>`).join("") + "</tr></thead><tbody>"
+  for (const r of rows.value) {
+    const cells = [r.employee_no || "", r.employee_name, deptLabel(r.department) || "",
+      ...items.value.map(i => fmtVal(r.values[i.key])),
+      ({ pending: "待核算", calculated: "已核算", paid: "已发放" })[r.payment_status || "pending"]]
+    html += "<tr>" + cells.map(c => `<td>${c}</td>`).join("") + "</tr>"
+  }
+  html += "</tbody><tfoot><tr><td colspan=\"3\">合计</td>"
+  html += items.value.map(i => `<td>${fmtVal(totals.value[i.key])}</td>`).join("")
+  html += "<td></td></tr></tfoot></table>"
+  const style = "<style>@page{size:A4 landscape;margin:8mm}body{font-family:\"PingFang SC\",\"Microsoft YaHei\",sans-serif;margin:0}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #999;padding:3px 6px;text-align:center}thead{display:table-header-group}th{background:#f2f2f2}tfoot td{background:#d6e4f0;font-weight:700}</style>"
+  const win = window.open("", "_blank")
+  if (win) {
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>工资表 ${curMonth.value}</title>${style}</head><body><h2 style="text-align:center">${curMonth.value} 工资表</h2>${html}</body></html>`)
+    win.document.close()
+  }
+}
+
+onMounted(() => fetchGrid())
 </script>
 
 <style scoped>
-.sheet-wrapper { overflow-x: auto; overflow-y: auto; border: 1px solid #e4e7ed; border-radius: 4px; background: #fff; padding-bottom: 14px; }
+.sheet-wrapper { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 300px); border: 1px solid #e4e7ed; border-radius: 4px; background: #fff; padding-bottom: 14px; }
 .sal-sheet { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
-.sal-sheet th, .sal-sheet td { border: 1px solid #e4e7ed; padding: 6px 8px; }
-.sal-sheet thead th { background: #f5f7fa; position: sticky; top: 0; z-index: 2; font-weight: 600; color: #303133; }
-.sal-col-sm { width: 40px; text-align: center; }
-.sal-col-emp { min-width: 70px; }
-.sal-col-month { width: 80px; text-align: center; }
-.sal-col-group { text-align: center; background: #eef1f6 !important; }
-.sal-col-num { min-width: 85px; text-align: right; }
-.sal-col-status { width: 80px; text-align: center; }
-.sal-col-op { width: 100px; text-align: center; }
+.sal-sheet th, .sal-sheet td { border: 1px solid #e4e7ed; padding: 5px 6px; }
+.sal-sheet thead th { background: #f2f2f2; position: sticky; top: 0; z-index: 2; font-weight: 700; color: #303133; text-align: center; }
+.col-fixed { min-width: 60px; }
+.col-item { min-width: 84px; text-align: center; }
+.col-status { width: 96px; text-align: center; }
 .cell-center { text-align: center; }
-.cell-name { font-weight: 600; color: #303133; }
-.cell-month { text-align: center; font-family: "SF Mono", "Courier New", monospace; color: #606266; }
-.cell-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; color: #606266; }
-.cell-num.deduction { color: #f56c6c; }
-.cell-num.net { color: #67c23a; font-size: 14px; }
-.cell-op { text-align: center; }
-.row-paid { background: #f0f9eb; }
-.row-calc { background: #fdf6ec; }
-.sal-footer td { background: #eef1f6; font-weight: 700; color: #303133; }
-.cell-footer-label { text-align: right; font-weight: 700; padding-right: 12px; }
+.cell-name { font-weight: 600; color: #303133; min-width: 80px; }
+.cell-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; color: #606266; min-width: 84px; cursor: cell; }
+.cell-num:hover { background: #f5f7fa; }
+.cell-strong { font-weight: 700; color: #0b7a1b; }
+.sal-footer td { background: #d6e4f0; font-weight: 700; color: #303133; }
+.cell-footer-label { text-align: right; font-weight: 700; padding-right: 10px; }
+.items-help { background: #f5f7fa; border: 1px solid #e4e7ed; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
+.help-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 12px; }
+.help-item { font-size: 12px; color: #606266; }
+.help-item code, .help-ex code { background: #fff; border: 1px solid #dcdfe6; border-radius: 3px; padding: 0 4px; font-size: 12px; color: #409eff; }
+.help-examples { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.help-ex { font-size: 12px; color: #606266; }
+.items-list { max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.item-row { display: flex; align-items: center; gap: 8px; }
+.item-key { min-width: 80px; font-size: 12px; color: #909399; }
+.new-item { margin-top: 4px; }
 </style>
