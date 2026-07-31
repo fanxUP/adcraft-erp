@@ -31,6 +31,7 @@
     <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10,20,50]" :total="total" layout="total,sizes,prev,pager,next" style="margin-top:16px" @change="fetchData" />
     <el-dialog v-model="showDialog" :title="isEditing?'编辑员工':'新建员工'" width="820px" top="5vh">
       <el-form :model="form" label-width="90px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">
+        <el-divider content-position="left" style="grid-column:1/3;margin:0 0 4px">基本信息</el-divider>
         <el-form-item label="姓名" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="手机号"><el-input v-model="form.phone" /></el-form-item>
         <el-form-item label="性别"><el-select v-model="form.gender" clearable style="width:100%"><el-option v-for="g in GENDER_OPTIONS" :key="g.value" :label="g.label" :value="g.value" /></el-select></el-form-item>
@@ -40,6 +41,8 @@
         <el-form-item label="职位"><el-input v-model="form.position" /></el-form-item>
         <el-form-item label="聘用类型"><el-select v-model="form.employment_type" clearable style="width:100%"><el-option label="全职" value="full_time" /><el-option label="兼职" value="part_time" /><el-option label="合同" value="contract" /><el-option label="实习" value="intern" /></el-select></el-form-item>
         <el-form-item label="学历"><el-select v-model="form.education" clearable style="width:100%"><el-option label="初中" value="middle_school" /><el-option label="高中" value="high_school" /><el-option label="中专" value="vocational" /><el-option label="大专" value="college" /><el-option label="本科" value="bachelor" /><el-option label="硕士" value="master" /><el-option label="博士" value="phd" /></el-select></el-form-item>
+        <el-form-item label="在职状态"><el-select v-model="form.employment_status" style="width:100%"><el-option label="在职" value="active" /><el-option label="离职" value="resigned" /><el-option label="停职" value="suspended" /></el-select></el-form-item>
+        <el-divider content-position="left" style="grid-column:1/3;margin:8px 0 4px">证件信息</el-divider>
         <el-form-item label="身份证号"><el-input v-model="form.id_card" /></el-form-item>
         <el-form-item label="驾驶证号"><el-input v-model="form.license_no" /></el-form-item>
         <el-form-item label="驾照类型"><el-input v-model="form.license_type" placeholder="A1/B2/C1等" /></el-form-item>
@@ -68,9 +71,9 @@
             <span v-else class="idcard-tip">未上传</span>
           </div>
         </el-form-item>
+        <el-divider content-position="left" style="grid-column:1/3;margin:8px 0 4px">工作信息</el-divider>
         <el-form-item label="入职日期"><el-date-picker v-model="form.hire_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
         <el-form-item label="离职日期"><el-date-picker v-model="form.resignation_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
-        <el-form-item label="在职状态"><el-select v-model="form.employment_status" style="width:100%"><el-option label="在职" value="active" /><el-option label="离职" value="resigned" /><el-option label="停职" value="suspended" /></el-select></el-form-item>
         <el-form-item label="紧急联系人"><el-input v-model="form.emergency_contact" /></el-form-item>
         <el-form-item label="紧急联系电话"><el-input v-model="form.emergency_phone" /></el-form-item>
         <el-form-item label="技能标签"><el-select v-model="form.skills" multiple filterable allow-create default-first-option style="width:100%" placeholder="输入技能后回车添加"><el-option v-for="s in form.skills || []" :key="s" :label="s" :value="s" /></el-select></el-form-item>
