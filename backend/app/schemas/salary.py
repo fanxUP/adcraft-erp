@@ -49,3 +49,9 @@ class SalaryRecordResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     model_config = {"from_attributes": True}
+
+
+class SalaryGenerateRequest(BaseModel):
+    """按工资规则自动生成工资表的请求。employee_ids 为空时生成全部在职员工。"""
+    month: str
+    employee_ids: Optional[list[str]] = None

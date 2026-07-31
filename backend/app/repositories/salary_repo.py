@@ -12,6 +12,12 @@ class SalaryRecordRepository:
         r = await self.db.execute(select(SalaryRecord).where(SalaryRecord.id == sid))
         return r.scalar_one_or_none()
 
+    async def get_by_employee_month(self, employee_id: UUID, month: str):
+        r = await self.db.execute(
+            select(SalaryRecord).where(SalaryRecord.employee_id == employee_id, SalaryRecord.month == month)
+        )
+        return r.scalars().first()
+
     async def list(self, skip=0, limit=20, employee_id=None, month=None, payment_status=None):
         q = select(SalaryRecord)
         if employee_id:

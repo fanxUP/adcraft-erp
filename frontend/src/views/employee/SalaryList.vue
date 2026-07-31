@@ -11,6 +11,7 @@
           <el-option label="待核算" value="pending" /><el-option label="已核算" value="calculated" /><el-option label="已发放" value="paid" />
         </el-select>
         <el-button @click="fetchData">刷新</el-button>
+        <el-button type="warning" @click="openGenerate">⚡ 按规则生成</el-button>
         <el-button type="danger" @click="openCreate">录入工资</el-button>
       </div>
     </div>
@@ -85,6 +86,24 @@
       <el-empty v-else description="暂无数据" :image-size="80" />
     </div>
 
+    <!-- 按规则生成 Dialog -->
+    <el-dialog v-model="showGenDialog" title="⚡ 按规则生成工资" width="520px">
+      <el-form :model="genForm" label-width="80px">
+        <el-form-item label="月份" required>
+          <el-date-picker v-model="genForm.month" type="month" value-format="YYYY-MM" style="width:100%" placeholder="选择要生成的月份" />
+        </el-form-item>
+        <el-form-item label="员工">
+          <el-select v-model="genForm.employee_ids" multiple filterable collapse-tags style="width:100%" placeholder="默认全部在职员工，可取消勾选">
+            <el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" />
+          </el-select>
+        </el-form-item>
+        <div style="color:#909399;font-size:12px;line-height:1.7">
+          按工资规则自动计算：基本工资=规则基本工资；加班费=当月考勤加班工时×时薪×加班费率；奖金=奖金标准；补贴=补贴标准；扣款=社保+公积金+其他扣款。无规则的员工、以及已有记录（不覆盖）会自动跳过。
+        </div>
+      </el-form>
+      <template #footer><el-button @click="showGenDialog=false">取消</el-button><el-button type="primary" :loading="genLoading" @click="handleGenerate">生成</el-button></template>
+    </el-dialog>
+
     <!-- Dialog -->
     <el-dialog v-model="showDialog" :title="isEditing?'编辑工资':'录入工资'" width="640px">
       <el-form :model="form" label-width="100px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
@@ -107,7 +126,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue"
-import { getSalaries, createSalary, updateSalary, deleteSalary, type SalaryRecordItem } from "@/api/salaries"
+import { getSalaries, createSalary, updateSalary, deleteSalary, generateSalaries, type SalaryRecordItem } from "@/api/salaries"
 import { getAttendanceEmployees, type EmployeeOption } from "@/api/attendance"
 import { ElMessage, ElMessageBox } from "element-plus"
 
@@ -128,6 +147,39 @@ const editId = ref("")
 const initForm = { employee_id: "", month: "", base_salary: 0, overtime_pay: null, bonus: null, commission: null, subsidy: null, deduction: null, net_salary: 0, payment_status: "pending", remark: "" }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form = ref<any>({ ...initForm })
+
+/* ====== 按规则生成 ====== */
+const showGenDialog = ref(false)
+const genLoading = ref(false)
+const genForm = ref<{ month: string; employee_ids: string[] }>({ month: "", employee_ids: [] })
+
+function openGenerate() {
+  genForm.value = {
+    month: fMonth.value || new Date().toISOString().slice(0, 7),
+    employee_ids: employees.value.map((e) => e.id),
+  }
+  showGenDialog.value = true
+}
+
+async function handleGenerate() {
+  if (!genForm.value.month) return ElMessage.warning("请选择月份")
+  if (!employees.value.length) return ElMessage.warning("暂无可生成的员工")
+  if (!genForm.value.employee_ids.length) return ElMessage.warning("请至少选择一名员工")
+  genLoading.value = true
+  try {
+    const allIds = employees.value.map((e) => e.id)
+    const empIds = genForm.value.employee_ids.length === allIds.length ? undefined : genForm.value.employee_ids
+    const r = await generateSalaries(genForm.value.month, empIds)
+    const parts = [`已生成 ${r.created} 条`]
+    if (r.skipped_exists) parts.push(`跳过已有 ${r.skipped_exists} 条`)
+    if (r.skipped_no_rule) parts.push(`无规则跳过 ${r.skipped_no_rule} 人`)
+    if (r.errors?.length) parts.push(`失败 ${r.errors.length} 人`)
+    ElMessage.success(parts.join("；"))
+    showGenDialog.value = false
+    await fetchData()
+  } catch (e: unknown) { ElMessage.error((e as { message?: string })?.message || "生成失败") }
+  finally { genLoading.value = false }
+}
 
 /* ====== helpers ====== */
 const fmt = (v: unknown) => v != null ? Number(v).toFixed(2) : "-"

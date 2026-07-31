@@ -1,11 +1,19 @@
 import logging
 from uuid import UUID
+from datetime import date
+from calendar import monthrange
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from app.repositories.salary_repo import SalaryRecordRepository
 from app.models.employee import Employee
-from sqlalchemy import select
+from app.models.salary_rule import SalaryRule
+from app.models.attendance import AttendanceRecord
 
 logger = logging.getLogger(__name__)
+
+# 月计薪天数 / 每日小时数，用于把月基本工资换算成时薪
+MONTHLY_WORK_DAYS = 21.75
+DAILY_WORK_HOURS = 8
 
 
 class SalaryRecordService:
@@ -73,6 +81,110 @@ class SalaryRecordService:
             }
             created.append(self._d(await self.repo.create(data)))
         return created
+
+    # ── 按工资规则自动生成工资表 ────────────────────────────────────────────
+
+    async def _active_employees(self):
+        """在职员工（离职/停职不参与生成）。"""
+        r = await self.db.execute(
+            select(Employee).where(Employee.employment_status == "active", Employee.deleted_at.is_(None))
+        )
+        return r.scalars().all()
+
+    async def _latest_rule(self, employee_id: UUID, cutoff: date):
+        """员工在 cutoff 之前生效的最新工资规则。"""
+        r = await self.db.execute(
+            select(SalaryRule)
+            .where(SalaryRule.employee_id == employee_id, SalaryRule.effective_date <= cutoff)
+            .order_by(SalaryRule.effective_date.desc())
+        )
+        return r.scalars().first()
+
+    async def _existing_record(self, employee_id: UUID, month: str):
+        return await self.repo.get_by_employee_month(employee_id, month)
+
+    async def _monthly_overtime_hours(self, employee_id: UUID, start: date, end: date) -> float:
+        r = await self.db.execute(
+            select(func.coalesce(func.sum(AttendanceRecord.overtime_hours), 0))
+            .where(
+                AttendanceRecord.employee_id == employee_id,
+                AttendanceRecord.date >= start,
+                AttendanceRecord.date <= end,
+            )
+        )
+        return float(r.scalar() or 0)
+
+    async def generate_month(self, month: str, employee_ids: list[UUID] | None = None) -> dict:
+        """按工资规则自动生成指定月份的工资记录。
+
+        口径（生成后可手工微调）：
+          base_salary   = 规则.base_salary
+          overtime_pay  = 当月考勤加班工时 × 时薪 × 加班费率（时薪 = base / 21.75 / 8）
+          bonus         = 规则.bonus_standard（缺省 0）
+          commission    = 0（无数据源）
+          subsidy       = 规则.subsidy_standard（缺省 0）
+          deduction     = 社保 + 公积金 + 其他扣款标准
+          net_salary    = base + overtime + bonus + commission + subsidy − deduction（不小于 0）
+
+        无规则的员工跳过；该月已有记录的员工跳过（不覆盖）。
+        返回 {month, created, skipped_no_rule, skipped_exists, errors}。
+        """
+        if len(month) != 7 or month[4] != "-" or not month[:4].isdigit() or not month[5:].isdigit():
+            raise ValueError("月份格式应为 YYYY-MM")
+        year, mon = int(month[:4]), int(month[5:])
+        start = date(year, mon, 1)
+        end = date(year, mon, monthrange(year, mon)[1])
+
+        targets = employee_ids if employee_ids else [e.id for e in await self._active_employees()]
+
+        created = 0
+        skipped_no_rule = 0
+        skipped_exists = 0
+        errors = []
+        for eid in targets:
+            rule = await self._latest_rule(eid, end)
+            if rule is None:
+                skipped_no_rule += 1
+                continue
+            if await self._existing_record(eid, month):
+                skipped_exists += 1
+                continue
+
+            base = float(rule.base_salary or 0)
+            overtime_hours = await self._monthly_overtime_hours(eid, start, end)
+            rate = float(rule.overtime_rate) if rule.overtime_rate else 1.5
+            overtime_pay = round(overtime_hours * (base / MONTHLY_WORK_DAYS / DAILY_WORK_HOURS) * rate, 2)
+            bonus = float(rule.bonus_standard or 0)
+            subsidy = float(rule.subsidy_standard or 0)
+            deduction = (float(rule.social_insurance or 0)
+                         + float(rule.housing_fund or 0)
+                         + float(rule.deduction_standard or 0))
+            net = round(base + overtime_pay + bonus + subsidy - deduction, 2)
+            if net < 0:
+                net = 0.0
+
+            data = {
+                "employee_id": eid,
+                "month": month,
+                "base_salary": base,
+                "overtime_pay": overtime_pay,
+                "bonus": bonus,
+                "commission": 0,
+                "subsidy": subsidy,
+                "deduction": deduction,
+                "net_salary": net,
+                "payment_status": "pending",
+            }
+            await self.repo.create(data)
+            created += 1
+
+        return {
+            "month": month,
+            "created": created,
+            "skipped_no_rule": skipped_no_rule,
+            "skipped_exists": skipped_exists,
+            "errors": errors,
+        }
 
     def _d(self, r):
         return {

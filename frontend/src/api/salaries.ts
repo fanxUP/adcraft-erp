@@ -9,6 +9,14 @@ export interface SalaryRecordItem {
   remark?: string | null; created_at?: string | null; updated_at?: string | null
 }
 
+export interface SalaryGenerateResult {
+  month: string
+  created: number
+  skipped_no_rule: number
+  skipped_exists: number
+  errors: string[]
+}
+
 export function getSalaries(params: { page?: number; page_size?: number; employee_id?: string; month?: string; payment_status?: string }) {
   return get<PaginatedData<SalaryRecordItem>>("/salaries/", { params })
 }
@@ -23,4 +31,7 @@ export function updateSalary(id: string, data: Partial<SalaryRecordItem>) {
 }
 export function deleteSalary(id: string) {
   return del<SuccessResponse>("/salaries/" + id)
+}
+export function generateSalaries(month: string, employee_ids?: string[]) {
+  return post<SalaryGenerateResult>("/salaries/generate", { month, employee_ids })
 }

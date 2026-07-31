@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.schemas.salary import SalaryRecordCreate, SalaryRecordUpdate
+from app.schemas.salary import SalaryRecordCreate, SalaryRecordUpdate, SalaryGenerateRequest
 from app.schemas.common import success, success_paginated
 from app.services.salary_service import SalaryRecordService
 
@@ -25,6 +25,13 @@ async def list_salaries(page: int = Query(1, ge=1), page_size: int = Query(20, g
 @router.post("/")
 async def create_salary(data: SalaryRecordCreate, db=Depends(get_db), current_user=Depends(get_current_user)):
     return success(await SalaryRecordService(db).create_record(data.model_dump()))
+
+
+@router.post("/generate")
+async def generate_salaries(data: SalaryGenerateRequest, db=Depends(get_db), current_user=Depends(get_current_user)):
+    """按工资规则自动生成指定月份的工资记录（全部在职，或指定的员工子集）。"""
+    eids = [UUID(e) for e in data.employee_ids] if data.employee_ids else None
+    return success(await SalaryRecordService(db).generate_month(data.month, eids))
 
 
 @router.get("/{salary_id}")
