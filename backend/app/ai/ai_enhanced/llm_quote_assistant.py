@@ -251,31 +251,43 @@ class LLMQuoteAssistant:
     # ── Customer context ──
 
     async def _build_customer_context(self, customer_id: str | None) -> str | None:
-        """Build customer-specific context including pricing agreements."""
+        """Build customer-specific context with recent deal prices."""
         if not customer_id:
             return None
 
         lines: list[str] = []
 
         try:
-            # Check if customer has pricing agreements
             cust_uuid = UUID(customer_id)
-            from app.models.cdr_quote import CustomerPriceAgreement
+            from app.models.business_document import BusinessDocument, BusinessDocumentItem
             result = await self.db.execute(
-                select(CustomerPriceAgreement).where(
-                    CustomerPriceAgreement.customer_id == cust_uuid,
-                    # effective now
+                select(
+                    BusinessDocumentItem.product_id,
+                    BusinessDocumentItem.item_name,
+                    BusinessDocumentItem.unit_price,
+                    BusinessDocumentItem.created_at,
                 )
+                .join(BusinessDocument, BusinessDocument.id == BusinessDocumentItem.document_id)
+                .where(
+                    BusinessDocument.customer_id == cust_uuid,
+                    BusinessDocumentItem.product_id.isnot(None),
+                    BusinessDocumentItem.unit_price > 0,
+                    BusinessDocument.deleted_at.is_(None),
+                )
+                .order_by(BusinessDocumentItem.created_at.desc())
+                .limit(50)
             )
-            agreements = result.scalars().all()
-            if agreements:
-                lines.append("--- 客户定价协议 ---")
-                for a in agreements:
-                    lines.append(
-                        f"- 产品ID: {a.product_id}，计价方式: {a.pricing_method}"
-                        f"，价格: ¥{float(a.price_value):.2f}"
-                        f"{'，折扣率: ' + str(float(a.discount_rate) * 100) + '%' if a.discount_rate != 1.0 else ''}"
-                    )
+            rows = result.all()
+            seen: set = set()
+            for product_id, item_name, unit_price, _created in rows:
+                if product_id in seen:
+                    continue
+                seen.add(product_id)
+                lines.append(f"- {item_name or product_id}: ¥{float(unit_price):.2f}")
+                if len(seen) >= 20:
+                    break
+            if lines:
+                lines.insert(0, "--- 客户最近成交价 ---")
         except Exception:
             pass
 

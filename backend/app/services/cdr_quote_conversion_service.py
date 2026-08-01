@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.cdr_quote_repo import CdrQuoteRepository
 from app.services.price_engine import (
     PriceEngine, CalculateRequest, CalculateResult,
-    ProductInfo, MaterialInfo, ProcessInfo, CustomerAgreement,
+    ProductInfo, MaterialInfo, ProcessInfo,
 )
 from app.models.product import Product, Material, Process
 

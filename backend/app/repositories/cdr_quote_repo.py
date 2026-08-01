@@ -7,8 +7,6 @@ from sqlalchemy import select, func, update, delete
 from sqlalchemy.orm import selectinload
 
 from app.models.cdr_quote import (
-    PriceRuleSet, CdrPriceRule,
-    CustomerPriceAgreement,
     QuoteVersion, QuoteLine, QuoteLineProcess,
     QuoteApproval, QuoteAuditLog,
     CdrDevice, CdrCaptureSession, DrawingSnapshot, QuoteGeometry,
@@ -169,98 +167,50 @@ class CdrQuoteRepository:
         await self.db.flush()
         return lp
 
-    # ── 规则集 ──
+    # ── 客户记忆价（最近成交/报价单价） ──
 
-    async def create_rule_set(self, data: dict) -> PriceRuleSet:
-        rs = PriceRuleSet(**data)
-        self.db.add(rs)
-        await self.db.flush()
-        return rs
+    async def get_last_deal_price(self, customer_id: UUID, product_id: UUID) -> Decimal | None:
+        """取该客户对该产品最近一次成交/报价明细的单价（记忆价）。
 
-    async def get_rule_set(self, rule_set_id: UUID) -> PriceRuleSet | None:
-        r = await self.db.execute(
-            select(PriceRuleSet).options(selectinload(PriceRuleSet.rules)).where(PriceRuleSet.id == rule_set_id)
-        )
-        return r.scalar_one_or_none()
+        来源：business_document_items（订单+普通报价）与 quote_lines（智能报价），
+        取 created_at 最新的一条。软删除单据不参与。
+        """
+        from sqlalchemy import union_all, desc
+        from app.models.business_document import BusinessDocument, BusinessDocumentItem
 
-    async def list_rule_sets(self) -> list[PriceRuleSet]:
-        r = await self.db.execute(
-            select(PriceRuleSet).order_by(PriceRuleSet.created_at.desc())
-        )
-        return list(r.scalars().all())
-
-    async def get_active_rule_set(self) -> PriceRuleSet | None:
-        """获取当前生效的已发布规则集。"""
-        from datetime import date
-        today = date.today().isoformat()
-        r = await self.db.execute(
-            select(PriceRuleSet)
-            .options(selectinload(PriceRuleSet.rules))
-            .where(PriceRuleSet.status == "published")
+        item_stmt = (
+            select(
+                BusinessDocumentItem.unit_price.label("price"),
+                BusinessDocumentItem.created_at.label("ts"),
+            )
+            .join(BusinessDocument, BusinessDocument.id == BusinessDocumentItem.document_id)
             .where(
-                (PriceRuleSet.effective_from.is_(None)) | (PriceRuleSet.effective_from <= today)
+                BusinessDocument.customer_id == customer_id,
+                BusinessDocumentItem.product_id == product_id,
+                BusinessDocumentItem.unit_price > 0,
+                BusinessDocument.deleted_at.is_(None),
             )
+        )
+        line_stmt = (
+            select(
+                QuoteLine.unit_price.label("price"),
+                QuoteLine.created_at.label("ts"),
+            )
+            .join(QuoteVersion, QuoteVersion.id == QuoteLine.version_id)
+            .join(BusinessDocument, BusinessDocument.id == QuoteVersion.quote_id)
             .where(
-                (PriceRuleSet.effective_to.is_(None)) | (PriceRuleSet.effective_to >= today)
+                BusinessDocument.customer_id == customer_id,
+                QuoteLine.product_id == product_id,
+                QuoteLine.unit_price > 0,
+                BusinessDocument.deleted_at.is_(None),
             )
-            .order_by(PriceRuleSet.version.desc())
-            .limit(1)
         )
-        return r.scalar_one_or_none()
-
-    # ── 客户协议价 ──
-
-    async def get_customer_agreement(
-        self, customer_id: UUID, product_id: UUID | None = None
-    ) -> CustomerPriceAgreement | None:
-        """查找匹配的客户协议价。"""
-        from datetime import date
-        today = date.today().isoformat()
-        q = select(CustomerPriceAgreement).where(
-            CustomerPriceAgreement.customer_id == customer_id,
-            (CustomerPriceAgreement.effective_from <= today),
-            (CustomerPriceAgreement.effective_to.is_(None)) | (CustomerPriceAgreement.effective_to >= today),
-        )
-        if product_id:
-            q = q.where(
-                (CustomerPriceAgreement.product_id == product_id) | (CustomerPriceAgreement.product_id.is_(None))
-            )
-        q = q.order_by(CustomerPriceAgreement.product_id.desc()).limit(1)
-        r = await self.db.execute(q)
-        return r.scalar_one_or_none()
-
-    async def list_customer_agreements(self, customer_id: UUID | None = None) -> list[CustomerPriceAgreement]:
-        q = select(CustomerPriceAgreement)
-        if customer_id:
-            q = q.where(CustomerPriceAgreement.customer_id == customer_id)
-        q = q.order_by(CustomerPriceAgreement.created_at.desc())
-        r = await self.db.execute(q)
-        return list(r.scalars().all())
-
-    async def create_customer_agreement(self, data: dict) -> CustomerPriceAgreement:
-        ca = CustomerPriceAgreement(**data)
-        self.db.add(ca)
-        await self.db.flush()
-        return ca
-
-
-    async def update_customer_agreement(self, agreement_id: UUID, data: dict) -> CustomerPriceAgreement | None:
-        ca = await self.db.get(CustomerPriceAgreement, agreement_id)
-        if not ca:
+        stmt = union_all(item_stmt, line_stmt).order_by(desc("ts")).limit(1)
+        r = await self.db.execute(stmt)
+        price = r.scalar_one_or_none()
+        if price is None:
             return None
-        for key, value in data.items():
-            if value is not None:
-                setattr(ca, key, value)
-        await self.db.flush()
-        return ca
-
-    async def delete_customer_agreement(self, agreement_id: UUID) -> bool:
-        ca = await self.db.get(CustomerPriceAgreement, agreement_id)
-        if not ca:
-            return False
-        await self.db.delete(ca)
-        await self.db.flush()
-        return True
+        return Decimal(str(price))
 
     # ── 审批 ──
 

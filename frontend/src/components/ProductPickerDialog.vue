@@ -36,16 +36,6 @@
           <template v-else>-</template>
         </template>
       </el-table-column>
-      <el-table-column label="协议价" width="120" align="right">
-        <template #default="{ row }">
-          <template v-if="agreementMap.has(row.id)">
-            ¥{{ Number(agreementMap.get(row.id)!.price_value).toFixed(2) }}
-          </template>
-          <template v-else>
-            <span style="color: #c0c4cc;">-</span>
-          </template>
-        </template>
-      </el-table-column>
       <el-table-column label="操作" width="80" align="center">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click.stop="openEdit(row)">
@@ -113,11 +103,10 @@ import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getProducts, updateProduct } from '@/api/products'
 import { formatProductMaterialProcess } from '@/utils/productMaterialProcess'
-import { listCustomerAgreements, type CustomerAgreement } from '@/api/cdrQuote'
 import ProductCreateDialog from './ProductCreateDialog.vue'
 import type { ProductResponse } from '@/types/api'
 
-const props = defineProps<{ modelValue: boolean; customerId?: string }>()
+defineProps<{ modelValue: boolean; customerId?: string }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   selected: [product: ProductResponse]
@@ -137,7 +126,6 @@ const products = ref<ProductResponse[]>([])
 const loading = ref(false)
 const page = ref(1)
 const total = ref(0)
-const agreementMap = ref<Map<string, CustomerAgreement>>(new Map())
 
 const createVisible = ref(false)
 const editVisible = ref(false)
@@ -185,32 +173,10 @@ function onDialogOpen() {
   keyword.value = ''
   page.value = 1
   fetchProducts()
-  if (props.customerId) {
-    loadAgreements()
-  }
-}
-
-async function loadAgreements() {
-  try {
-    const list = await listCustomerAgreements(props.customerId!)
-    const map = new Map<string, CustomerAgreement>()
-    for (const a of list) {
-      if (a.product_id && !map.has(a.product_id)) {
-        map.set(a.product_id, a)
-      }
-    }
-    agreementMap.value = map
-  } catch {
-    agreementMap.value = new Map()
-  }
 }
 
 function onRowClick(row: ProductResponse) {
-  const agreement = agreementMap.value.get(row.id)
-  const merged = agreement
-    ? { ...row, default_price: Number(agreement.price_value) || row.default_price, min_charge: Number(agreement.minimum_charge) || row.min_charge, pricing_method: agreement.pricing_method || row.pricing_method }
-    : row
-  emit('selected', merged)
+  emit('selected', row)
   emit('update:modelValue', false)
 }
 
