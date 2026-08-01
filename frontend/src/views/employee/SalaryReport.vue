@@ -6,6 +6,7 @@
         <el-date-picker v-model="curMonth" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:160px" @change="fetchData" />
         <el-button @click="fetchData">刷新</el-button>
         <el-button type="primary" @click="handlePrint">🖨️ 打印</el-button>
+        <el-button type="success" plain @click="handlePrintAll">🧾 打印工资条</el-button>
       </div>
     </div>
 
@@ -20,6 +21,7 @@
                   :class="h.key === 'no' || h.key === 'dept' || h.key === 'name' ? 'col-fixed' : 'col-item'">
                 {{ h.label }}<span v-if="h.is_manual" class="manual-badge" title="手工填写">手</span>
               </th>
+              <th v-if="ri === 0" class="no-print" rowspan="3">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -32,6 +34,7 @@
                 <td v-else-if="c.type === 'remark'" class="c-center">{{ row.remark || '' }}</td>
                 <td v-else class="c-center">{{ ({ pending: '待核算', calculated: '已核算', paid: '已发放' })[row.payment_status || 'pending'] }}</td>
               </template>
+              <td class="no-print ops-cell"><el-button size="small" type="primary" plain @click="openPayslip(row)">工资条</el-button></td>
             </tr>
           </tbody>
           <tfoot>
@@ -41,12 +44,21 @@
                 <td v-else-if="c.type === 'item'" class="c-num">{{ fmtVal(totals[c.key]) }}</td>
                 <td v-else class="c-center"></td>
               </template>
+              <td class="no-print"></td>
             </tr>
           </tfoot>
         </table>
         <el-empty v-else description="该月暂无工资记录，请先在「工资管理」计算生成" />
       </div>
     </div>
+
+    <el-dialog v-model="payslipDialog" :title="dialogTitle" width="780px" top="4vh" @closed="payslipRow = null">
+      <iframe ref="payslipFrame" class="payslip-frame" :srcdoc="payslipDoc"></iframe>
+      <template #footer>
+        <el-button @click="payslipDialog = false">关闭</el-button>
+        <el-button type="primary" @click="printPayslipFromDialog">🖨️ 打印工资条</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -54,7 +66,8 @@
 import { ref, computed, onMounted } from "vue"
 import { getSalaryGrid, type SalaryItem, type SalaryGridRow } from "@/api/salaries"
 import { buildCols, buildHeaderRows, gridTotals, fmtVal, deptLabel, isStrong, type Col, type HCell } from "@/composables/useSalaryGrid"
-import { ElMessage } from "element-plus"
+import { buildPayslipDocument, DEFAULT_COMPANY, payslipMonthLabel, type PayslipMeta } from "@/composables/usePayslip"
+import { ElMessage, ElMessageBox } from "element-plus"
 
 /* ====== state ====== */
 const curMonth = ref("")
@@ -103,6 +116,7 @@ function handlePrint() {
     + '.rep-total td { background: #d6e4f0 !important; font-weight: 700; }'
     + '.c-num { text-align: right !important; font-family: "Courier New", monospace; }'
     + '.c-num.c-strong { color: #0b7a1b !important; }'
+    + '.no-print { display: none !important; }'
     + '</style>'
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + title.value + '</title>'
     + styleTag
@@ -116,6 +130,41 @@ function handlePrint() {
 }
 
 onMounted(() => fetchData())
+
+/* ====== 工资条：单员工弹窗预览 + 批量打印（数据均来自已加载的 grid items/rows，后端零改动） ====== */
+const payslipDialog = ref(false)
+const payslipRow = ref<SalaryGridRow | null>(null)
+const payslipFrame = ref<HTMLIFrameElement | null>(null)
+
+const dialogTitle = computed(() =>
+  payslipRow.value ? `${DEFAULT_COMPANY} ${payslipMonthLabel(curMonth.value)} 工资条` : "工资条")
+
+const payslipDoc = computed(() =>
+  payslipRow.value
+    ? buildPayslipDocument([{ month: curMonth.value, company: DEFAULT_COMPANY, employee: payslipRow.value, items: items.value }], { autoPrint: false })
+    : "")
+
+function openPayslip(row: SalaryGridRow) {
+  payslipRow.value = row
+  payslipDialog.value = true
+}
+
+function printPayslipFromDialog() {
+  payslipFrame.value?.contentWindow?.print()
+}
+
+async function handlePrintAll() {
+  if (!rows.value.length) { ElMessage.warning("该月暂无工资记录，无法打印工资条"); return }
+  try {
+    await ElMessageBox.confirm(`将打印 ${rows.value.length} 位员工的工资条（每人一页 A4），是否继续？`, "批量打印工资条", { type: "info" })
+  } catch { return }
+  const metas: PayslipMeta[] = rows.value.map(r => ({
+    month: curMonth.value, company: DEFAULT_COMPANY, employee: r, items: items.value,
+  }))
+  const html = buildPayslipDocument(metas, { autoPrint: true })
+  const win = window.open("", "_blank")
+  if (win) { win.document.write(html); win.document.close() }
+}
 </script>
 
 <style scoped>
@@ -134,4 +183,6 @@ onMounted(() => fetchData())
 .c-num.c-strong { color: #0b7a1b; }
 .rep-total td { background: #d6e4f0; font-weight: 700; color: #303133; }
 .c-total-label { text-align: right; padding-right: 10px; }
+.ops-cell { text-align: center; }
+.payslip-frame { width: 100%; height: 560px; border: 1px solid #dcdfe6; border-radius: 4px; background: #fff; }
 </style>
