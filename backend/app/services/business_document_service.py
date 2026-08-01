@@ -878,7 +878,54 @@ class BusinessDocumentService:
         if not doc:
             raise ValueError("回收站中未找到该单据")
         await self.repo.restore(doc)
+        # 订单取消会连带取消下游任务、软删验收单，恢复时一并还原，避免交付链卡死
+        if doc.doc_type == "order":
+            await self._restore_delivery_chain(doc_id)
+        doc.status = await self._pre_cancel_status(doc)
+        await self.db.flush()
         return self._to_detail(doc)
+
+    async def _pre_cancel_status(self, doc) -> str:
+        """取消前状态：取最近一次进入 cancelled 的状态日志的 from_status，取不到则回退到初始可流转状态。"""
+        from app.models.business_document import BusinessDocumentStatusLog
+
+        result = await self.db.execute(
+            select(BusinessDocumentStatusLog)
+            .where(
+                BusinessDocumentStatusLog.document_id == doc.id,
+                BusinessDocumentStatusLog.to_status == "cancelled",
+            )
+            .order_by(BusinessDocumentStatusLog.operated_at.desc())
+            .limit(1)
+        )
+        log = result.scalar_one_or_none()
+        if log and log.from_status:
+            return log.from_status
+        return "pending_confirm" if doc.doc_type == "order" else "draft"
+
+    async def _restore_delivery_chain(self, doc_id: UUID) -> None:
+        """还原取消对交付链的影响：被取消的任务重置为可推进状态，被软删的验收单恢复。"""
+        for model in (DesignTask, ProductionTask, InstallationTask):
+            result = await self.db.execute(
+                select(model).where(
+                    model.document_id == doc_id,
+                    model.status == "cancelled",
+                )
+            )
+            for task in result.scalars().all():
+                task.status = "pending"
+
+        from app.models.acceptance import AcceptanceForm
+
+        result = await self.db.execute(
+            select(AcceptanceForm).where(
+                AcceptanceForm.document_id == doc_id,
+                AcceptanceForm.deleted_at.isnot(None),
+            )
+        )
+        for form in result.scalars().all():
+            form.deleted_at = None
+        await self.db.flush()
 
     # ═══════════════════════════════════════════
     # 明细

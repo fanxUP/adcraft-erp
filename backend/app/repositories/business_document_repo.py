@@ -171,7 +171,6 @@ class BusinessDocumentRepository:
 
     async def restore(self, doc: BusinessDocument) -> None:
         doc.deleted_at = None
-        doc.status = "cancelled"  # 恢复的订单默认为已取消
         await self.db.flush()
 
     # ── 明细 ──

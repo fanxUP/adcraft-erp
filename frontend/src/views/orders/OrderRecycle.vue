@@ -110,7 +110,7 @@ function handleReset() {
 }
 
 async function handleRestore(row: OrderListResponse) {
-  await ElMessageBox.confirm(`确定恢复订单「${row.order_no}」？恢复后状态为已取消。`, '恢复订单', {
+  await ElMessageBox.confirm(`确定恢复订单「${row.order_no}」？将还原到取消前状态，并恢复被取消的任务与验收单。`, '恢复订单', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
