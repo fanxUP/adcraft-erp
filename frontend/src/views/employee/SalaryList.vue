@@ -574,9 +574,9 @@ onMounted(() => fetchGrid())
 .manual-badge { display: inline-block; margin-left: 3px; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 14px; color: #e6a23c; background: #fdf6ec; border: 1px solid #f3d19e; }
 .cell-center { text-align: center; }
 .cell-name { font-weight: 600; color: #303133; min-width: 96px; }
-.cell-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; color: #303133; min-width: 100px; cursor: cell; }
+.cell-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; font-weight: 700; color: #000; min-width: 100px; cursor: cell; }
 .cell-num:hover { background: #f5f7fa; }
-.cell-strong { font-weight: 700; color: #0b7a1b; }
+.cell-strong { font-weight: 700; color: #000; }
 .sal-footer td { background: #E0E0E0; font-weight: 700; color: #000; }
 .cell-footer-label { text-align: right; font-weight: 700; padding-right: 10px; }
 .items-help { background: #f5f7fa; border: 1px solid #e4e7ed; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
