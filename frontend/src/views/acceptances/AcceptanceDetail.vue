@@ -622,7 +622,6 @@ async function handleAdminDelete() {
   try {
     await adminDeleteAcceptance(form.id)
     ElMessage.success('验收单已删除')
-    await aiStore.notifyBusinessMutation()
     router.push('/acceptances')
   } catch { /* handled */ } finally { deleting.value = false }
 }
