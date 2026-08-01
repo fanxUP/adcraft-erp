@@ -61,7 +61,7 @@
         </div>
       </template>
 
-      <el-table :data="displayRows" stripe border :row-class-name="rowClassName">
+      <el-table :data="displayRows" stripe border scrollbar-always-on :row-class-name="rowClassName">
         <el-table-column label="项目内容" min-width="160">
           <template #default="{ row }">
             <template v-if="row.type === 'group-header'">
@@ -891,4 +891,8 @@ watch(() => route.params.id, async (newId) => {
 
 /* 修复 el-input-number 默认宽度(120px)超出窄列的问题 */
 :deep(.el-table .el-input-number) { width: 100%; }
+
+/* 出现横向滚动时，滚动条始终可见，且与最后一行、表格底部边框保持间距 */
+:deep(.el-table.el-table--scrollable-x .el-scrollbar__view) { padding-bottom: 12px; }
+:deep(.el-table.el-table--scrollable-x .el-table__body-wrapper) { margin-bottom: 8px; }
 </style>

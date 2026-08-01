@@ -29,6 +29,7 @@ import {
   Tools,
   TrendCharts,
   User,
+  UserFilled,
   Van,
 } from "@element-plus/icons-vue"
 import type { NavigationItem } from "@/config/navigation"
@@ -50,6 +51,7 @@ const icons: Record<string, Component> = {
   Tools,
   TrendCharts,
   User,
+  UserFilled,
   Van,
 }
 
