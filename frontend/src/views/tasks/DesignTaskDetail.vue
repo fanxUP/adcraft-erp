@@ -199,7 +199,6 @@ async function handleDelete() {
   try {
     await deleteDesignTask(route.params.id as string)
     ElMessage.success('任务已删除')
-    await aiStore.notifyBusinessMutation()
     router.push('/projects/board')
   } catch { /* handled */ } finally { deleting.value = false }
 }

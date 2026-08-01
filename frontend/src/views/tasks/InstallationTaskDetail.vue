@@ -332,7 +332,6 @@ async function handleDelete() {
   try {
     await deleteInstallationTask(route.params.id as string)
     ElMessage.success('任务已删除')
-    await aiStore.notifyBusinessMutation()
     router.back()
   } catch { /* handled */ } finally { deleting.value = false }
 }
