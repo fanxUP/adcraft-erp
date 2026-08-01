@@ -66,7 +66,7 @@
 import { ref, computed, onMounted } from "vue"
 import { getSalaryGrid, type SalaryItem, type SalaryGridRow } from "@/api/salaries"
 import { buildCols, buildHeaderRows, gridTotals, fmtVal, deptLabel, isStrong, type Col, type HCell } from "@/composables/useSalaryGrid"
-import { buildPayslipDocument, DEFAULT_COMPANY, payslipMonthLabel, type PayslipMeta } from "@/composables/usePayslip"
+import { buildPayslipDocument, payslipMonthLabel, type PayslipMeta } from "@/composables/usePayslip"
 import { ElMessage, ElMessageBox } from "element-plus"
 
 /* ====== state ====== */
@@ -137,11 +137,11 @@ const payslipRow = ref<SalaryGridRow | null>(null)
 const payslipFrame = ref<HTMLIFrameElement | null>(null)
 
 const dialogTitle = computed(() =>
-  payslipRow.value ? `${DEFAULT_COMPANY} ${payslipMonthLabel(curMonth.value)} 工资条` : "工资条")
+  payslipRow.value ? `${payslipMonthLabel(curMonth.value)} 工资条` : "工资条")
 
 const payslipDoc = computed(() =>
   payslipRow.value
-    ? buildPayslipDocument([{ month: curMonth.value, company: DEFAULT_COMPANY, employee: payslipRow.value, items: items.value }], { autoPrint: false })
+    ? buildPayslipDocument([{ month: curMonth.value, employee: payslipRow.value, items: items.value }], { autoPrint: false })
     : "")
 
 function openPayslip(row: SalaryGridRow) {
@@ -159,7 +159,7 @@ async function handlePrintAll() {
     await ElMessageBox.confirm(`将打印 ${rows.value.length} 位员工的工资条（每人一页 A4），是否继续？`, "批量打印工资条", { type: "info" })
   } catch { return }
   const metas: PayslipMeta[] = rows.value.map(r => ({
-    month: curMonth.value, company: DEFAULT_COMPANY, employee: r, items: items.value,
+    month: curMonth.value, employee: r, items: items.value,
   }))
   const html = buildPayslipDocument(metas, { autoPrint: true })
   const win = window.open("", "_blank")

@@ -8,13 +8,10 @@ import { deptLabel } from "./useSalaryGrid"
 
 export interface PayslipMeta {
   month: string            // "2026-08"
-  company: string          // 公司名（打印标题用）
   employee: SalaryGridRow  // 按 employee_id 过滤后的单行
   items: SalaryItem[]      // 该月指标列（含 group1/group2 分区信息）
   position?: string        // 岗位（grid 无此字段，默认显示 "—"）
 }
-
-export const DEFAULT_COMPANY = "XX建设工程有限公司" // 占位，待用户提供真实公司名
 
 const PAYMENT_LABEL: Record<string, string> = { pending: "待核算", calculated: "已核算", paid: "已发放" }
 const GROUP_ORDER = ["应发金额", "应扣金额", "代缴部分"]
@@ -64,7 +61,7 @@ function pickValue(values: Record<string, number | null>, items: SalaryItem[], k
 
 /** 单张工资条正文（不含 html/head/style），批量时逐张拼接 */
 export function buildPayslipSection(meta: PayslipMeta): string {
-  const { company, employee, position } = meta
+  const { employee, position } = meta
   const label = payslipMonthLabel(meta.month)
   const dept = deptLabel(employee.department) || "—"
   const pay = PAYMENT_LABEL[employee.payment_status || "pending"] || "待核算"
@@ -82,7 +79,7 @@ export function buildPayslipSection(meta: PayslipMeta): string {
   ).join("")
 
   return `<div class="payslip">` +
-    `<div class="ps-title">${esc(company)} ${label}工资条</div>` +
+    `<div class="ps-title">${label}工资条</div>` +
     `<div class="ps-sub">（工资确认单）</div>` +
     `<div class="ps-info">` +
       `<span>工号：<b>${esc(employee.employee_no || "—")}</b></span>` +
