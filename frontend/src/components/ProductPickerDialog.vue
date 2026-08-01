@@ -106,7 +106,7 @@ import { formatProductMaterialProcess } from '@/utils/productMaterialProcess'
 import ProductCreateDialog from './ProductCreateDialog.vue'
 import type { ProductResponse } from '@/types/api'
 
-const props = defineProps<{ modelValue: boolean; customerId?: string }>()
+defineProps<{ modelValue: boolean; customerId?: string }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   selected: [product: ProductResponse]
