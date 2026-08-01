@@ -27,17 +27,14 @@
         <thead>
           <tr>
             <th class="col-sm">#</th>
-            <th class="col-emp">工号</th>
-            <th class="col-emp">姓名</th>
-            <th class="col-dept">部门</th>
-            <th class="col-date">生效日期</th>
-            <th class="col-num">月工资标准</th>
-            <th class="col-num">社保金额</th>
+            <th v-for="c in sortableCols" :key="c.key" :class="[c.cls, 'sortable', { 'sort-active': sortKey === c.key }]" @click="setSort(c.key)">
+              {{ c.label }}<span v-if="sortKey === c.key" class="sort-arrow">{{ sortDir === 'asc' ? '▲' : '▼' }}</span>
+            </th>
             <th class="col-op">操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, i) in list" :key="row.id">
+          <tr v-for="(row, i) in sortedList" :key="row.id">
             <td class="cell-center">{{ i + 1 }}</td>
             <td>{{ row.employee_no || '-' }}</td>
             <td class="cell-name">{{ row.employee_name || '-' }}</td>
@@ -133,6 +130,44 @@ const deptLabel = (eid: string) => {
   return d ? d.label : emp.department
 }
 
+/* ====== sorting ====== */
+const sortableCols = [
+  { key: "employee_no", label: "工号", cls: "col-emp" },
+  { key: "employee_name", label: "姓名", cls: "col-emp" },
+  { key: "department", label: "部门", cls: "col-dept" },
+  { key: "effective_date", label: "生效日期", cls: "col-date" },
+  { key: "base_salary", label: "月工资标准", cls: "col-num" },
+  { key: "social_insurance", label: "社保金额", cls: "col-num" },
+] as const
+const sortKey = ref<string>("")
+const sortDir = ref<"asc" | "desc">("asc")
+
+const sortVal = (row: SalaryRuleItem, key: string): string | number => {
+  switch (key) {
+    case "employee_no": return row.employee_no || ""
+    case "employee_name": return row.employee_name || ""
+    case "department": return deptLabel(row.employee_id)
+    case "effective_date": return row.effective_date || ""
+    case "base_salary": return row.base_salary ?? 0
+    case "social_insurance": return row.social_insurance ?? 0
+    default: return ""
+  }
+}
+function setSort(key: string) {
+  if (sortKey.value === key) sortDir.value = sortDir.value === "asc" ? "desc" : "asc"
+  else { sortKey.value = key; sortDir.value = "asc" }
+}
+const sortedList = computed(() => {
+  if (!sortKey.value) return list.value
+  const dir = sortDir.value === "asc" ? 1 : -1
+  return [...list.value].sort((a, b) => {
+    const va = sortVal(a, sortKey.value), vb = sortVal(b, sortKey.value)
+    if (va < vb) return -dir
+    if (va > vb) return dir
+    return 0
+  })
+})
+
 /* ====== totals ====== */
 const totalBase = computed(() => list.value.reduce((s, r) => s + (r.base_salary || 0), 0))
 const totalDeduction = computed(() => list.value.reduce((s, r) => s + (r.social_insurance || 0), 0))
@@ -224,6 +259,10 @@ onMounted(() => { loadEmps(); fetchData() })
 .rule-sheet { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
 .rule-sheet th, .rule-sheet td { border: 1px solid #e4e7ed; padding: 6px 8px; }
 .rule-sheet thead th { background: #f5f7fa; position: sticky; top: 0; z-index: 2; font-weight: 600; color: #303133; }
+.rule-sheet th.sortable { cursor: pointer; user-select: none; }
+.rule-sheet th.sortable:hover { color: #409eff; }
+.rule-sheet th.sort-active { color: #409eff; }
+.sort-arrow { margin-left: 3px; font-size: 10px; }
 .col-sm { width: 40px; text-align: center; }
 .col-emp { min-width: 70px; }
 .col-dept { width: 75px; text-align: center; }
