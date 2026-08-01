@@ -374,8 +374,8 @@ const itemsDraft = ref<SalaryItem[]>([])
 const newItem = ref({ key: "", label: "", formula: "", sort_order: 0, is_manual: false, group1: null as string | null, group2: null as string | null })
 const itemsSaving = ref(false)
 const paramHints = ref<{ name: string; label: string }[]>([])
-const group1Options = ["应发金额", "应扣金额", "代缴部分"]
-const group2Options = ["基本部分", "绩效部分", "未出勤"]
+const group1Options = ["应发金额", "应扣金额"]
+const group2Options = ["基本部分", "绩效部分", "考勤栏", "代缴费用"]
 
 const varHints = [
   { name: "base", label: "基本工资标准(规则)" }, { name: "ot_rate", label: "加班费率(规则)" },
@@ -527,7 +527,7 @@ function handlePrint() {
     return "<td></td>"
   }).join("")
   html += "</tr></tfoot></table>"
-  const style = "<style>@page{size:A4 landscape;margin:8mm}body{font-family:\"PingFang SC\",\"Microsoft YaHei\",sans-serif;margin:0}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #999;padding:3px 5px;text-align:center}thead{display:table-header-group}th{background:#f2f2f2}tfoot td{background:#d6e4f0;font-weight:700}</style>"
+  const style = "<style>@page{size:A4 landscape;margin:8mm}body{font-family:\"PingFang SC\",\"Microsoft YaHei\",sans-serif;margin:0}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #999;padding:3px 5px;text-align:center}thead{display:table-header-group}thead tr:nth-child(1) th{background:#5B9BD5;color:#fff}thead tr:nth-child(2) th{background:#D9E7F5;color:#1F3864}thead tr:nth-child(3) th{background:#EDF3FA;color:#1F3864}tfoot td{background:#D9E7F5;font-weight:700}</style>"
   const win = window.open("", "_blank")
   if (win) {
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>工资表 ${curMonth.value}</title>${style}</head><body><h2 style="text-align:center">${curMonth.value} 工资表</h2>${html}</body></html>`)
@@ -543,7 +543,10 @@ onMounted(() => fetchGrid())
 .sal-sheet { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
 .sal-sheet th, .sal-sheet td { border: 1px solid #e4e7ed; padding: 5px 6px; }
 .sal-sheet thead { position: sticky; top: 0; z-index: 2; }
-.sal-sheet thead th { background: #f2f2f2; font-weight: 700; color: #303133; text-align: center; }
+.sal-sheet thead th { font-weight: 700; text-align: center; }
+.sal-sheet thead tr.sal-hdr-1 th { background: #5B9BD5; color: #fff; }
+.sal-sheet thead tr.sal-hdr-2 th { background: #D9E7F5; color: #1F3864; }
+.sal-sheet thead tr.sal-hdr-3 th { background: #EDF3FA; color: #1F3864; }
 .col-fixed { min-width: 60px; }
 .col-item { min-width: 84px; text-align: center; }
 .manual-badge { display: inline-block; margin-left: 3px; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 14px; color: #e6a23c; background: #fdf6ec; border: 1px solid #f3d19e; }
@@ -552,7 +555,7 @@ onMounted(() => fetchGrid())
 .cell-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; color: #606266; min-width: 84px; cursor: cell; }
 .cell-num:hover { background: #f5f7fa; }
 .cell-strong { font-weight: 700; color: #0b7a1b; }
-.sal-footer td { background: #d6e4f0; font-weight: 700; color: #303133; }
+.sal-footer td { background: #D9E7F5; font-weight: 700; color: #303133; }
 .cell-footer-label { text-align: right; font-weight: 700; padding-right: 10px; }
 .items-help { background: #f5f7fa; border: 1px solid #e4e7ed; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
 .help-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 12px; }

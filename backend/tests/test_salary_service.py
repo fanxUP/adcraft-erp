@@ -780,3 +780,39 @@ async def test_save_cells_remark(service):
     assert result["saved"] == 0
     data = service.repo.update.call_args[0][1]
     assert data["remark"] == "旷工扣款"
+
+
+@pytest.mark.asyncio
+async def test_att_std_uses_rule_standard_not_award(service):
+    # 全勤300(att_std) 取规则标准 att_bonus；全勤奖(att_award) 随考勤条件。
+    # key 改名（att_bonus→att_award）后，att_std 的依赖才不会错误路由到全勤奖 item。
+    items = [
+        {"key": "att_std", "formula": "att_bonus", "is_active": True, "is_manual": False},
+        {"key": "att_award",
+         "formula": "att_bonus if (missed_days == 0 and absent_days == 0) else 0",
+         "is_active": True, "is_manual": False},
+    ]
+    service.list_items = AsyncMock(return_value=items)
+    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._latest_rule = AsyncMock(return_value=make_rule(attendance_bonus=300.0))
+    service._param_values_for_month = AsyncMock(return_value={})
+    service._grid_values = AsyncMock(return_value={})
+    service._upsert_record = AsyncMock()
+    seen = {}
+
+    async def fake_replace(month, eid, vals, manual_keys=()):
+        seen.update(vals)
+
+    service._replace_grid_values = fake_replace
+    # 有旷工 → 全勤奖=0，但 全勤300 标准仍是 300
+    service._attendance_stats = AsyncMock(return_value={
+        str(EMP1): {"normal": 20, "half": 0, "missed": 1, "absent": 0, "records": 21, "overtime": 0}})
+    await service.compute_month("2026-07")
+    assert seen["att_std"] == 300.0
+    assert seen["att_award"] == 0.0
+    # 全勤 → 两者都是 300
+    service._attendance_stats = AsyncMock(return_value={
+        str(EMP1): {"normal": 23, "half": 0, "missed": 0, "absent": 0, "records": 23, "overtime": 0}})
+    await service.compute_month("2026-07")
+    assert seen["att_std"] == 300.0
+    assert seen["att_award"] == 300.0

@@ -252,8 +252,8 @@ class SalaryRecordService:
         # 月内非周末天数（未出勤天数 = 无记录的非周末天数 + absent 记录数）
         non_weekend = sum(1 for d in range(1, end.day + 1) if date(year, mon, d).weekday() < 5)
 
-        # 全勤/话费补助优先取工资网格算出的值（无则回退工资规则标准）
-        att_grid = await self._grid_values(month, ["att_bonus"])
+        # 全勤奖优先取工资网格算出的值（无则回退工资规则标准）
+        att_grid = await self._grid_values(month, ["att_award"])
 
         rows = []
         for r in records:
@@ -270,7 +270,7 @@ class SalaryRecordService:
                            else (float(rule.bonus_standard) if rule and rule.bonus_standard else 0.0))
             meal = (float(r.subsidy) if r.subsidy is not None
                     else (float(rule.subsidy_standard) if rule and rule.subsidy_standard else 0.0))
-            attendance_bonus = att_grid.get((str(eid), "att_bonus"))
+            attendance_bonus = att_grid.get((str(eid), "att_award"))
             if attendance_bonus is None:
                 attendance_bonus = (float(rule.attendance_bonus) if rule and rule.attendance_bonus else 0.0)
             social = float(rule.social_insurance) if rule and rule.social_insurance else 0.0
