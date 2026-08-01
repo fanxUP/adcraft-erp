@@ -107,6 +107,33 @@ export function deleteSalaryItem(id: string) {
   return del<unknown>("/salaries/items/" + id)
 }
 
+/* ── 工资指标设置模板（命名保存的指标快照，一键应用）──────────────────────── */
+
+export interface SalaryItemSnapshot {
+  key: string; label: string; formula: string; sort_order: number
+  is_active: boolean; is_manual: boolean; group1: string | null; group2: string | null
+}
+
+export interface SalaryItemTemplate {
+  id: string; name: string; item_count: number
+}
+
+export function getSalaryTemplates() {
+  return get<SalaryItemTemplate[]>("/salaries/templates")
+}
+export function createSalaryTemplate(name: string, items: SalaryItemSnapshot[]) {
+  return post<SalaryItemTemplate>("/salaries/templates", { name, items })
+}
+export function updateSalaryTemplate(id: string, data: { name?: string; items?: SalaryItemSnapshot[] }) {
+  return put<SalaryItemTemplate>("/salaries/templates/" + id, data)
+}
+export function deleteSalaryTemplate(id: string) {
+  return del<unknown>("/salaries/templates/" + id)
+}
+export function applySalaryTemplate(id: string) {
+  return post<SalaryItem[]>("/salaries/templates/" + id + "/apply")
+}
+
 /* ── 工资参数（每月手工填一个值，公式可引用） ─────────────────────────────── */
 
 export interface SalaryParam {

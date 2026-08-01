@@ -1,7 +1,7 @@
 import uuid
 
 from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
@@ -29,6 +29,19 @@ class SalaryItem(Base, TimestampMixin):
     # 三层分组表头：group1=一级组（应发金额/应扣金额/代缴部分），group2=二级组（基本部分/绩效部分/未出勤）
     group1: Mapped[str | None] = mapped_column(String(64), nullable=True)
     group2: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class SalaryItemTemplate(Base, TimestampMixin):
+    """工资指标设置模板：命名保存的指标配置快照，可一键应用覆盖当前指标。
+
+    items 为 JSON 数组，每个元素形如 _item_d 但去掉 id/is_builtin：
+    {key, label, formula, sort_order, is_active, is_manual, group1, group2}。
+    """
+    __tablename__ = "salary_item_templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    items: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
 
 
 class SalaryGridValue(Base, TimestampMixin):

@@ -9,7 +9,7 @@ from app.repositories.salary_repo import SalaryRecordRepository
 from app.models.employee import Employee
 from app.models.salary_rule import SalaryRule
 from app.models.attendance import AttendanceRecord
-from app.models.salary_grid import SalaryItem, SalaryGridValue, SalaryParam, SalaryParamValue
+from app.models.salary_grid import SalaryItem, SalaryItemTemplate, SalaryGridValue, SalaryParam, SalaryParamValue
 from app.services.salary_formula import (
     FUNCTIONS,
     RAW_VARS,
@@ -422,6 +422,144 @@ class SalaryRecordService:
         await self.db.delete(item)
         await self.db.flush()
         return True
+
+    # ── 指标设置模板 ───────────────────────────────────────────────────────
+
+    async def _validate_template_items(self, raw_items):
+        """校验指标快照并清洗：key 合法唯一、公式可解析（引用模板内其他 key + 参数）。"""
+        items = []
+        keys = []
+        param_keys = await self._all_param_keys()
+        for it in raw_items or []:
+            key = (it.get("key") or "").strip()
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+                raise ValueError(f"指标 key「{key}」只能包含字母、数字、下划线，且不能以数字开头")
+            if key in keys:
+                raise ValueError(f"模板内指标 key「{key}」重复")
+            keys.append(key)
+            items.append({
+                "key": key,
+                "label": (it.get("label") or key).strip(),
+                "formula": "" if it.get("is_manual") else (it.get("formula") or "0").strip(),
+                "sort_order": int(it.get("sort_order") or 0),
+                "is_active": bool(it.get("is_active", True)),
+                "is_manual": bool(it.get("is_manual")),
+                "group1": it.get("group1") or None,
+                "group2": it.get("group2") or None,
+            })
+        for it in items:
+            if not it["is_manual"]:
+                others = [k for k in keys if k != it["key"]]
+                validate_formula(it["formula"], others, param_keys)
+        return items
+
+    async def list_templates(self):
+        r = await self.db.execute(select(SalaryItemTemplate).order_by(SalaryItemTemplate.name))
+        return [self._template_d(t) for t in r.scalars().all()]
+
+    def _template_d(self, t):
+        return {"id": str(t.id), "name": t.name, "item_count": len(t.items or [])}
+
+    async def create_template(self, name, raw_items):
+        name = (name or "").strip()
+        if not name:
+            raise ValueError("模板名称不能为空")
+        if len(name) > 100:
+            raise ValueError("模板名称过长")
+        r = await self.db.execute(select(SalaryItemTemplate).where(SalaryItemTemplate.name == name))
+        if r.scalar_one_or_none():
+            raise ValueError(f"模板「{name}」已存在")
+        items = await self._validate_template_items(raw_items)
+        if not items:
+            raise ValueError("模板至少需要一个指标")
+        t = SalaryItemTemplate(name=name, items=items)
+        self.db.add(t)
+        await self.db.flush()
+        return self._template_d(t)
+
+    async def update_template(self, template_id, name=None, raw_items=None):
+        r = await self.db.execute(select(SalaryItemTemplate).where(SalaryItemTemplate.id == template_id))
+        t = r.scalar_one_or_none()
+        if not t:
+            raise ValueError("模板不存在")
+        if name is not None:
+            name = (name or "").strip()
+            if not name:
+                raise ValueError("模板名称不能为空")
+            dup = await self.db.execute(select(SalaryItemTemplate).where(
+                SalaryItemTemplate.name == name, SalaryItemTemplate.id != template_id))
+            if dup.scalar_one_or_none():
+                raise ValueError(f"模板「{name}」已存在")
+            t.name = name
+        if raw_items is not None:
+            items = await self._validate_template_items(raw_items)
+            if not items:
+                raise ValueError("模板至少需要一个指标")
+            t.items = items
+        await self.db.flush()
+        return self._template_d(t)
+
+    async def delete_template(self, template_id):
+        r = await self.db.execute(select(SalaryItemTemplate).where(SalaryItemTemplate.id == template_id))
+        t = r.scalar_one_or_none()
+        if not t:
+            raise ValueError("模板不存在")
+        await self.db.delete(t)
+        await self.db.flush()
+        return True
+
+    async def apply_template(self, template_id):
+        """把模板快照应用为当前指标配置：命中更新、未命中停用（保留数据）、缺的创建。"""
+        r = await self.db.execute(select(SalaryItemTemplate).where(SalaryItemTemplate.id == template_id))
+        t = r.scalar_one_or_none()
+        if not t:
+            raise ValueError("模板不存在")
+        items = t.items or []
+        if not items:
+            raise ValueError("模板为空，无法应用")
+        cur = await self.db.execute(select(SalaryItem))
+        current_items = cur.scalars().all()
+        existing_keys = {i.key for i in current_items}
+        # 预校验（防御旧数据/手工写入），全部通过才变更。
+        # 已有指标 key 可能与系统变量同名（历史内置列，正常）；只禁止「新建」保留字 key。
+        param_keys = await self._all_param_keys()
+        tpl_keys = [i["key"] for i in items]
+        for it in items:
+            key = it["key"]
+            if key not in existing_keys and (key in RAW_VARS or key in FUNCTIONS):
+                raise ValueError(f"模板中指标 key「{key}」与系统内置变量/函数同名，无法新建")
+            if not it.get("is_manual"):
+                others = [k for k in tpl_keys if k != key]
+                validate_formula(it.get("formula") or "0", others, param_keys)
+        tpl_by_key = {i["key"]: i for i in items}
+        for item in current_items:
+            tpl = tpl_by_key.get(item.key)
+            if tpl is None:
+                item.is_active = False
+            else:
+                item.label = tpl.get("label") or item.key
+                item.is_manual = bool(tpl.get("is_manual"))
+                item.formula = "" if item.is_manual else (tpl.get("formula") or "0")
+                item.sort_order = int(tpl.get("sort_order") or 0)
+                item.is_active = bool(tpl.get("is_active", True))
+                item.group1 = tpl.get("group1") or None
+                item.group2 = tpl.get("group2") or None
+        for it in items:
+            if it["key"] in existing_keys:
+                continue
+            self.db.add(SalaryItem(
+                key=it["key"],
+                label=it.get("label") or it["key"],
+                formula="" if it.get("is_manual") else (it.get("formula") or "0"),
+                sort_order=int(it.get("sort_order") or 0),
+                is_active=bool(it.get("is_active", True)),
+                is_builtin=False,
+                is_manual=bool(it.get("is_manual")),
+                group1=it.get("group1") or None,
+                group2=it.get("group2") or None,
+            ))
+        await self.db.flush()
+        return await self.list_items()
 
     def _rule_vars(self, rule):
         """工资规则数值 → 公式原始变量（无规则/缺省一律 0）。"""

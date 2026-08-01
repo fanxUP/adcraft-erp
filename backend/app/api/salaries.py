@@ -232,6 +232,76 @@ async def delete_salary_param(param_id: str, db=Depends(get_db), current_user=De
         return {"code": 40001, "message": str(e), "data": None}
 
 
+# ── 工资指标设置模板（命名保存的指标快照，一键应用）────────────────────────
+
+class SalaryTemplateItem(BaseModel):
+    key: str
+    label: str = ""
+    formula: str = "0"
+    sort_order: int = 0
+    is_active: bool = True
+    is_manual: bool = False
+    group1: str | None = None
+    group2: str | None = None
+
+
+class SalaryTemplateCreate(BaseModel):
+    name: str
+    items: list[SalaryTemplateItem]
+
+
+class SalaryTemplateUpdate(BaseModel):
+    name: str | None = None
+    items: list[SalaryTemplateItem] | None = None
+
+
+@router.get("/templates")
+async def salary_templates(db=Depends(get_db), current_user=Depends(get_current_user)):
+    """指标设置模板列表（id/名称/列数）。"""
+    return success(await SalaryRecordService(db).list_templates())
+
+
+@router.post("/templates")
+async def create_salary_template(data: SalaryTemplateCreate, db=Depends(get_db),
+                                 current_user=Depends(get_current_user)):
+    try:
+        return success(await SalaryRecordService(db).create_template(
+            data.name, [i.model_dump() for i in data.items]))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.put("/templates/{template_id}")
+async def update_salary_template(template_id: str, data: SalaryTemplateUpdate, db=Depends(get_db),
+                                 current_user=Depends(get_current_user)):
+    try:
+        items = [i.model_dump() for i in data.items] if data.items is not None else None
+        return success(await SalaryRecordService(db).update_template(
+            UUID(template_id), data.name, items))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.delete("/templates/{template_id}")
+async def delete_salary_template(template_id: str, db=Depends(get_db),
+                                 current_user=Depends(get_current_user)):
+    try:
+        await SalaryRecordService(db).delete_template(UUID(template_id))
+        return success(None)
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
+@router.post("/templates/{template_id}/apply")
+async def apply_salary_template(template_id: str, db=Depends(get_db),
+                                current_user=Depends(get_current_user)):
+    """应用模板：命中更新、未命中停用（保留数据）、缺的创建，返回应用后的指标列表。"""
+    try:
+        return success(await SalaryRecordService(db).apply_template(UUID(template_id)))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+
+
 @router.get("/{salary_id}")
 async def get_salary(salary_id: str, db=Depends(get_db), current_user=Depends(get_current_user)):
     s = await SalaryRecordService(db).get_record(UUID(salary_id))

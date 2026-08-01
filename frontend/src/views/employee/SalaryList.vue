@@ -92,6 +92,17 @@
         </div>
       </div>
 
+      <div class="tpl-bar">
+        <span style="font-size:13px;font-weight:700">模板</span>
+        <el-select v-model="curTemplateId" size="small" clearable filterable placeholder="选择模板" style="width:220px">
+          <el-option v-for="t in templates" :key="t.id" :label="t.name + '（' + t.item_count + ' 列）'" :value="t.id" />
+        </el-select>
+        <el-button size="small" type="primary" plain :disabled="!curTemplateId" @click="applyTemplate">应用</el-button>
+        <el-button size="small" :disabled="!curTemplateId" @click="renameTemplate">重命名</el-button>
+        <el-button size="small" type="danger" plain :disabled="!curTemplateId" @click="deleteTemplate">删除</el-button>
+        <el-button size="small" type="warning" plain @click="saveAsTemplate">💾 存为模板</el-button>
+      </div>
+
       <div class="items-list">
         <div v-for="(it, idx) in itemsDraft" :key="idx" class="item-row">
           <el-input v-model="it.label" placeholder="指标名称" style="width:104px" />
@@ -168,8 +179,9 @@ import { ref, computed, onMounted } from "vue"
 import {
   getSalaryItems, getSalaryGrid, computeSalaryGrid, saveSalaryGrid,
   updateSalaryItem, createSalaryItem, deleteSalaryItem,
+  getSalaryTemplates, createSalaryTemplate, updateSalaryTemplate, deleteSalaryTemplate, applySalaryTemplate,
   getSalaryParams, createSalaryParam, updateSalaryParam, deleteSalaryParam, saveSalaryParamValues,
-  type SalaryItem, type SalaryGridRow, type SalaryParam,
+  type SalaryItem, type SalaryItemTemplate, type SalaryItemSnapshot, type SalaryGridRow, type SalaryParam,
 } from "@/api/salaries"
 import { ElMessage, ElMessageBox } from "element-plus"
 
@@ -398,6 +410,8 @@ const showItems = ref(false)
 const itemsDraft = ref<SalaryItem[]>([])
 const newItem = ref({ key: "", label: "", formula: "", sort_order: 0, is_manual: false, group1: null as string | null, group2: null as string | null })
 const itemsSaving = ref(false)
+const templates = ref<SalaryItemTemplate[]>([])
+const curTemplateId = ref<string>("")
 const paramHints = ref<{ name: string; label: string }[]>([])
 const group1Options = ["应发金额", "应扣金额"]
 const group2Options = ["基本部分", "绩效部分", "考勤栏", "代缴费用"]
@@ -420,8 +434,9 @@ const examples = [
 ]
 
 async function openItems() {
-  const [its, pr] = await Promise.all([getSalaryItems(), getSalaryParams(curMonth.value)])
+  const [its, pr, tpls] = await Promise.all([getSalaryItems(), getSalaryParams(curMonth.value), getSalaryTemplates()])
   itemsDraft.value = its || []
+  templates.value = tpls || []
   paramHints.value = (pr?.params || []).map(p => ({
     name: p.key,
     label: `${p.label}${p.value != null ? " = " + p.value : ""}`,
@@ -473,6 +488,84 @@ async function saveItems() {
     await fetchGrid()
   } catch { /* 公式校验错误由 interceptor 提示 */ }
   finally { itemsSaving.value = false }
+}
+
+/* ====== 指标设置模板 ====== */
+
+function snapshotDraft(): SalaryItemSnapshot[] {
+  // 模板 = 当前启用的列布局；停用列不入模板（应用时模板外的列统一停用）
+  return itemsDraft.value.filter(it => it.is_active).map(it => ({
+    key: it.key, label: it.label, formula: it.formula, sort_order: it.sort_order,
+    is_active: it.is_active, is_manual: it.is_manual,
+    group1: it.group1 || null, group2: it.group2 || null,
+  }))
+}
+
+async function saveAsTemplate() {
+  const snap = snapshotDraft()
+  if (!snap.length) { ElMessage.warning("当前没有可保存的指标"); return }
+  let name: string
+  try {
+    const r = await ElMessageBox.prompt("模板名称", "存为模板", { inputValidator: (v: string) => (v || "").trim() ? true : "名称不能为空" })
+    name = (r.value || "").trim()
+  } catch { return }
+  const exist = templates.value.find(t => t.name === name)
+  try {
+    if (exist) {
+      const ok = await ElMessageBox.confirm(`模板「${name}」已存在，覆盖？`, "提示", { type: "warning" }).catch(() => false)
+      if (!ok) return
+      await updateSalaryTemplate(exist.id, { items: snap })
+      ElMessage.success("模板已更新")
+    } else {
+      await createSalaryTemplate(name, snap)
+      ElMessage.success("模板已保存")
+    }
+  } catch { return }
+  templates.value = (await getSalaryTemplates()) || []
+  curTemplateId.value = exist ? exist.id : ""
+}
+
+async function applyTemplate() {
+  if (!curTemplateId.value) return
+  const t = templates.value.find(x => x.id === curTemplateId.value)
+  const ok = await ElMessageBox.confirm(
+    `应用模板「${t?.name}」会用模板里的指标替换当前配置；当前有但模板里没有的列会停用隐藏（历史数值保留）。应用后请重新⚡计算。`,
+    "应用模板", { type: "warning" }).catch(() => false)
+  if (!ok) return
+  try {
+    await applySalaryTemplate(curTemplateId.value)
+    ElMessage.success("模板已应用")
+    showItems.value = false
+    await fetchGrid()
+  } catch { /* 后端错误由 interceptor 提示 */ }
+}
+
+async function renameTemplate() {
+  if (!curTemplateId.value) return
+  const t = templates.value.find(x => x.id === curTemplateId.value)
+  let name: string
+  try {
+    const r = await ElMessageBox.prompt("新名称", "重命名模板", { inputValue: t?.name, inputValidator: (v: string) => (v || "").trim() ? true : "名称不能为空" })
+    name = (r.value || "").trim()
+  } catch { return }
+  try {
+    await updateSalaryTemplate(curTemplateId.value, { name })
+    ElMessage.success("已重命名")
+  } catch { return }
+  templates.value = (await getSalaryTemplates()) || []
+}
+
+async function deleteTemplate() {
+  if (!curTemplateId.value) return
+  const t = templates.value.find(x => x.id === curTemplateId.value)
+  const ok = await ElMessageBox.confirm(`删除模板「${t?.name}」？`, "删除模板", { type: "warning" }).catch(() => false)
+  if (!ok) return
+  try {
+    await deleteSalaryTemplate(curTemplateId.value)
+    ElMessage.success("模板已删除")
+  } catch { return }
+  curTemplateId.value = ""
+  templates.value = (await getSalaryTemplates()) || []
 }
 
 /* ====== 工资参数 ====== */
@@ -585,6 +678,7 @@ onMounted(() => fetchGrid())
 .help-item code, .help-ex code { background: #fff; border: 1px solid #dcdfe6; border-radius: 3px; padding: 0 4px; font-size: 12px; color: #409eff; }
 .help-examples { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
 .help-ex { font-size: 12px; color: #606266; }
+.tpl-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .items-list { max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .item-row { display: flex; align-items: center; gap: 8px; }
 .item-key { min-width: 80px; font-size: 12px; color: #909399; }

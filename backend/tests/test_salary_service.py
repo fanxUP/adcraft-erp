@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.models.salary_grid import SalaryItem
 from app.services.salary_service import SalaryRecordService
 
 EMP1 = uuid4()
@@ -816,3 +817,176 @@ async def test_att_std_uses_rule_standard_not_award(service):
     await service.compute_month("2026-07")
     assert seen["att_std"] == 300.0
     assert seen["att_award"] == 300.0
+
+
+# ── 指标设置模板（命名保存 + 一键应用）─────────────────────────────────────
+
+def _tpl(**kw):
+    t = MagicMock()
+    t.id = kw.get("id", uuid4())
+    t.name = kw.get("name", "正式版")
+    t.items = kw.get("items", [])
+    return t
+
+
+def _res(scalar=None, scalars=None):
+    res = MagicMock()
+    res.scalar_one_or_none.return_value = scalar
+    res.scalars.return_value.all.return_value = scalars
+    return res
+
+
+def _item_mock(key, **kw):
+    it = MagicMock()
+    it.id = kw.get("id", uuid4())
+    it.key = key
+    it.is_builtin = kw.get("is_builtin", False)
+    it.is_active = kw.get("is_active", True)
+    return it
+
+
+SNAP_FULL = [
+    {"key": "basic", "label": "基本工资", "formula": "base", "sort_order": 1, "is_active": True, "is_manual": False, "group1": "应发金额", "group2": None},
+    {"key": "net", "label": "实发工资", "formula": "max(0, basic - social)", "sort_order": 2, "is_active": True, "is_manual": False, "group1": None, "group2": None},
+    {"key": "hot", "label": "高温补贴", "formula": "200", "sort_order": 3, "is_active": True, "is_manual": True, "group1": None, "group2": None},
+]
+
+
+@pytest.mark.asyncio
+async def test_list_templates(service):
+    service.db = MagicMock()
+    service.db.execute = AsyncMock(return_value=_res(scalars=[_tpl(name="正式版", items=[{"key": "a"}, {"key": "b"}]),
+                                                          _tpl(name="简化版", items=[{"key": "a"}])]))
+    out = await service.list_templates()
+    assert len(out) == 2
+    assert out[0]["name"] == "正式版" and out[0]["item_count"] == 2
+    assert out[1]["name"] == "简化版" and out[1]["item_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_create_template_validates(service):
+    service._all_param_keys = AsyncMock(return_value=["commission_rate"])
+    service.db = MagicMock()
+    service.db.execute = AsyncMock(return_value=_res(scalar=None))  # 无同名
+    service.db.add = MagicMock()
+    service.db.flush = AsyncMock()
+    tpl = await service.create_template("正式版", list(SNAP_FULL))
+    assert tpl["name"] == "正式版"
+    assert tpl["item_count"] == 3
+    with pytest.raises(ValueError, match="只能包含"):
+        await service.create_template("坏key", [{"key": "1bad", "label": "x", "formula": "1"}])
+    with pytest.raises(ValueError, match="重复"):
+        await service.create_template("重复key", [
+            {"key": "a", "label": "x", "formula": "1"},
+            {"key": "a", "label": "y", "formula": "1"},
+        ])
+    with pytest.raises(ValueError, match="未知变量"):
+        await service.create_template("坏公式", [{"key": "bad", "label": "x", "formula": "nope + 1"}])
+
+
+@pytest.mark.asyncio
+async def test_create_template_duplicate_name(service):
+    service.db = MagicMock()
+    service.db.execute = AsyncMock(return_value=_res(scalar=_tpl(name="正式版")))
+    with pytest.raises(ValueError, match="已存在"):
+        await service.create_template("正式版", list(SNAP_FULL))
+
+
+@pytest.mark.asyncio
+async def test_update_and_delete_template(service):
+    t = _tpl(name="旧名", items=[{"key": "basic", "label": "x", "formula": "1"}])
+    s = MagicMock()
+    s.execute = AsyncMock(side_effect=[_res(scalar=t), _res(scalar=None), _res(scalar=t)])  # 查重返回 None
+    s.add = MagicMock()
+    s.flush = AsyncMock()
+    s.delete = AsyncMock()
+    service.db = s
+    updated = await service.update_template(t.id, name="新名")
+    assert t.name == "新名"
+    assert updated["name"] == "新名"
+    await service.delete_template(t.id)
+    service.db.delete.assert_called_with(t)
+
+
+@pytest.mark.asyncio
+async def test_apply_template_reconciles(service):
+    t = _tpl(name="正式版", items=list(SNAP_FULL))
+    basic = _item_mock("basic", is_builtin=True, is_active=True)      # 命中模板 → 更新
+    gone = _item_mock("old_extra", is_active=True)                    # 不在模板 → 停用
+    gone_builtin = _item_mock("attend_days", is_builtin=True, is_active=True)  # 内置不在模板 → 停用
+    s = MagicMock()
+    s.execute = AsyncMock(return_value=_res(scalar=t, scalars=[basic, gone, gone_builtin]))
+    s.add = MagicMock()
+    s.flush = AsyncMock()
+    service.db = s
+    service._all_param_keys = AsyncMock(return_value=[])
+    service.list_items = AsyncMock(return_value=[{"key": "basic"}])
+    out = await service.apply_template(t.id)
+    # 命中模板的现有指标被更新（is_builtin 保持）
+    assert basic.label == "基本工资"
+    assert basic.formula == "base"
+    assert basic.sort_order == 1
+    assert basic.is_active is True
+    assert basic.is_builtin is True
+    # 不在模板的指标停用（保留数据）
+    assert gone.is_active is False
+    assert gone_builtin.is_active is False
+    # 模板新增的指标被创建（非内置；手工列公式清空）
+    added = {c.args[0].key: c.args[0] for c in s.add.call_args_list if isinstance(c.args[0], SalaryItem)}
+    assert set(added) == {"net", "hot"}
+    assert added["net"].is_builtin is False and added["net"].formula == "max(0, basic - social)"
+    assert added["hot"].is_manual is True and added["hot"].formula == ""
+    # 返回应用后的指标列表
+    assert out == [{"key": "basic"}]
+
+
+@pytest.mark.asyncio
+async def test_apply_template_invalid_formula_blocks(service):
+    t = _tpl(name="坏模板", items=[{"key": "bad", "label": "x", "formula": "nope + 1", "sort_order": 1, "is_active": True, "is_manual": False, "group1": None, "group2": None}])
+    s = MagicMock()
+    s.execute = AsyncMock(return_value=_res(scalar=t, scalars=[]))
+    s.add = MagicMock()
+    s.flush = AsyncMock()
+    service.db = s
+    service._all_param_keys = AsyncMock(return_value=[])
+    with pytest.raises(ValueError, match="未知变量"):
+        await service.apply_template(t.id)
+    s.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_apply_template_keeps_existing_reserved_key_item(service):
+    # 现有指标 key 与系统变量同名（历史内置列，如 missed_days/absent_days/social）→ 应用应正常更新
+    t = _tpl(name="正式版", items=[
+        {"key": "missed_days", "label": "旷工", "formula": "missed_days", "sort_order": 1, "is_active": True, "is_manual": False, "group1": None, "group2": None},
+    ])
+    missed = _item_mock("missed_days", is_builtin=True, is_active=True)
+    s = MagicMock()
+    s.execute = AsyncMock(return_value=_res(scalar=t, scalars=[missed]))
+    s.add = MagicMock()
+    s.flush = AsyncMock()
+    service.db = s
+    service._all_param_keys = AsyncMock(return_value=[])
+    service.list_items = AsyncMock(return_value=[{"key": "missed_days"}])
+    out = await service.apply_template(t.id)
+    assert missed.label == "旷工"
+    assert missed.is_active is True
+    assert out == [{"key": "missed_days"}]
+    s.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_apply_template_refuses_new_reserved_key(service):
+    # 模板里"新建"一个与系统变量同名的 key（库里不存在）→ 拒绝
+    t = _tpl(name="坏模板", items=[
+        {"key": "base", "label": "新列", "formula": "1", "sort_order": 1, "is_active": True, "is_manual": False, "group1": None, "group2": None},
+    ])
+    s = MagicMock()
+    s.execute = AsyncMock(return_value=_res(scalar=t, scalars=[]))
+    s.add = MagicMock()
+    s.flush = AsyncMock()
+    service.db = s
+    service._all_param_keys = AsyncMock(return_value=[])
+    with pytest.raises(ValueError, match="无法新建"):
+        await service.apply_template(t.id)
+    s.add.assert_not_called()
