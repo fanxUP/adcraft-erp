@@ -21,6 +21,8 @@ class SalaryItemCreate(BaseModel):
     formula: str
     sort_order: int = 0
     is_manual: bool = False
+    group1: str | None = None
+    group2: str | None = None
 
 
 class SalaryItemUpdate(BaseModel):
@@ -29,6 +31,8 @@ class SalaryItemUpdate(BaseModel):
     sort_order: int | None = None
     is_active: bool | None = None
     is_manual: bool | None = None
+    group1: str | None = None
+    group2: str | None = None
 
 
 class SalaryParamCreate(BaseModel):
@@ -63,6 +67,11 @@ class SalaryGridPayment(BaseModel):
     payment_status: str
 
 
+class SalaryGridRemark(BaseModel):
+    employee_id: str
+    remark: str | None = None
+
+
 class SalaryGridComputeRequest(BaseModel):
     month: str
     employee_ids: list[str] | None = None
@@ -72,6 +81,7 @@ class SalaryGridSaveRequest(BaseModel):
     month: str
     cells: list[SalaryGridCell] | None = None
     payments: list[SalaryGridPayment] | None = None
+    remarks: list[SalaryGridRemark] | None = None
 
 
 @router.get("/")
@@ -162,11 +172,12 @@ async def salary_grid_compute(data: SalaryGridComputeRequest, db=Depends(get_db)
 @router.post("/grid/save")
 async def salary_grid_save(data: SalaryGridSaveRequest, db=Depends(get_db),
                            current_user=Depends(get_current_user)):
-    """保存网格手工修改的单元格与支付状态。"""
+    """保存网格手工修改的单元格、支付状态与备注。"""
     try:
         cells = [c.model_dump() for c in (data.cells or [])]
         payments = [p.model_dump() for p in (data.payments or [])]
-        return success(await SalaryRecordService(db).save_cells(data.month, cells, payments))
+        remarks = [r.model_dump() for r in (data.remarks or [])]
+        return success(await SalaryRecordService(db).save_cells(data.month, cells, payments, remarks))
     except ValueError as e:
         return {"code": 40001, "message": str(e), "data": None}
 

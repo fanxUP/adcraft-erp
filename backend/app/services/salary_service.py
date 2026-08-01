@@ -338,6 +338,8 @@ class SalaryRecordService:
             "is_active": bool(i.is_active),
             "is_builtin": bool(i.is_builtin),
             "is_manual": bool(i.is_manual),
+            "group1": i.group1,
+            "group2": i.group2,
         }
 
     async def _all_item_keys(self, exclude=None):
@@ -375,6 +377,8 @@ class SalaryRecordService:
             is_active=True,
             is_builtin=False,
             is_manual=is_manual,
+            group1=data.get("group1") or None,
+            group2=data.get("group2") or None,
         )
         self.db.add(item)
         await self.db.flush()
@@ -400,6 +404,10 @@ class SalaryRecordService:
             item.sort_order = int(data["sort_order"])
         if "is_active" in data and data["is_active"] is not None:
             item.is_active = bool(data["is_active"])
+        if "group1" in data:
+            item.group1 = data["group1"] or None
+        if "group2" in data:
+            item.group2 = data["group2"] or None
         await self.db.flush()
         return self._item_d(item)
 
@@ -726,15 +734,17 @@ class SalaryRecordService:
                 "department": e.department,
                 "values": {it["key"]: gv_map.get((eid, it["key"])) for it in items},
                 "payment_status": rec.payment_status if rec else None,
+                "remark": rec.remark if rec else None,
                 "paid_at": rec.paid_at.isoformat() if rec and rec.paid_at else None,
             })
         return {"month": month, "items": items, "rows": rows}
 
-    async def save_cells(self, month, cells=None, payments=None):
-        """保存网格手工修改的单元格与支付状态。
+    async def save_cells(self, month, cells=None, payments=None, remarks=None):
+        """保存网格手工修改的单元格、支付状态与备注。
 
-        cells: [{employee_id, item_key, value}]；payments: [{employee_id, payment_status}]。
-        单元格写 salary_grid_values(source=manual)，映射列同步 salary_records。
+        cells: [{employee_id, item_key, value}]；payments: [{employee_id, payment_status}]；
+        remarks: [{employee_id, remark}]。
+        单元格写 salary_grid_values(source=manual)，映射列/备注同步 salary_records。
         """
         self._check_month(month)
         items = await self.list_items()
@@ -790,6 +800,18 @@ class SalaryRecordService:
                     "employee_id": eid, "month": month,
                     "base_salary": 0, "net_salary": 0,
                     "payment_status": status, "commission": 0,
+                })
+        for rm in remarks or []:
+            eid = UUID(rm["employee_id"])
+            existing = await self._existing_record(eid, month)
+            if existing:
+                await self.repo.update(existing, {"remark": rm.get("remark")})
+            else:
+                await self.repo.create({
+                    "employee_id": eid, "month": month,
+                    "base_salary": 0, "net_salary": 0,
+                    "payment_status": "pending", "commission": 0,
+                    "remark": rm.get("remark"),
                 })
         return {"month": month, "saved": saved, "errors": errors}
 

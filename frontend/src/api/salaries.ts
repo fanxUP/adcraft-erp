@@ -61,6 +61,8 @@ export interface SalaryItem {
   is_active: boolean
   is_builtin: boolean
   is_manual: boolean
+  group1: string | null
+  group2: string | null
 }
 
 export interface SalaryGridRow {
@@ -70,6 +72,7 @@ export interface SalaryGridRow {
   department: string | null
   values: Record<string, number | null>
   payment_status: string | null
+  remark: string | null
   paid_at: string | null
 }
 
@@ -94,10 +97,10 @@ export interface SalarySaveResult {
 export function getSalaryItems() {
   return get<SalaryItem[]>("/salaries/items")
 }
-export function createSalaryItem(data: { key: string; label: string; formula: string; sort_order: number; is_manual?: boolean }) {
+export function createSalaryItem(data: { key: string; label: string; formula: string; sort_order: number; is_manual?: boolean; group1?: string | null; group2?: string | null }) {
   return post<SalaryItem>("/salaries/items", data)
 }
-export function updateSalaryItem(id: string, data: { label?: string; formula?: string; sort_order?: number; is_active?: boolean; is_manual?: boolean }) {
+export function updateSalaryItem(id: string, data: { label?: string; formula?: string; sort_order?: number; is_active?: boolean; is_manual?: boolean; group1?: string | null; group2?: string | null }) {
   return put<SalaryItem>("/salaries/items/" + id, data)
 }
 export function deleteSalaryItem(id: string) {
@@ -150,6 +153,7 @@ export function saveSalaryGrid(
   month: string,
   cells?: { employee_id: string; item_key: string; value: number | null }[],
   payments?: { employee_id: string; payment_status: string }[],
+  remarks?: { employee_id: string; remark: string | null }[],
 ) {
-  return post<SalarySaveResult>("/salaries/grid/save", { month, cells, payments })
+  return post<SalarySaveResult>("/salaries/grid/save", { month, cells, payments, remarks })
 }

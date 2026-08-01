@@ -10,8 +10,10 @@ from app.models.base import Base, TimestampMixin
 class SalaryItem(Base, TimestampMixin):
     """工资指标定义（网格的一列）：key + 标签 + 可编辑公式。
 
-    预置 11 个内置指标（is_builtin=true），允许新增自定义指标列。
+    预置内置指标（is_builtin=true），允许新增自定义指标列。
     公式为 Python 风格表达式（见 app/services/salary_formula.py）。
+    group1/group2 用于三层分组表头（应发金额→基本部分/绩效部分/未出勤…），
+    为空表示独立列（占满三层高度）。
     """
     __tablename__ = "salary_items"
 
@@ -24,6 +26,9 @@ class SalaryItem(Base, TimestampMixin):
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # 手工填写列：无公式，⚡计算不覆盖，值由用户逐格填写
     is_manual: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # 三层分组表头：group1=一级组（应发金额/应扣金额/代缴部分），group2=二级组（基本部分/绩效部分/未出勤）
+    group1: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    group2: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class SalaryGridValue(Base, TimestampMixin):

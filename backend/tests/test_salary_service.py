@@ -651,3 +651,132 @@ async def test_save_param_values_upserts_and_clears(service):
     assert r["saved"] == 1
     assert existing.value == 0.05
     service.db.delete.assert_called_once()
+
+
+# ── 三层分组表头：分组字段 + 新公式链 ───────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_item_accepts_groups(service):
+    service._all_item_keys = AsyncMock(return_value=["basic"])
+    service._all_param_keys = AsyncMock(return_value=[])
+    service.db = _grid_session()
+    item = await service.create_item({
+        "key": "other_base", "label": "其他", "formula": "", "is_manual": True,
+        "group1": "应发金额", "group2": "基本部分"})
+    assert item["group1"] == "应发金额"
+    assert item["group2"] == "基本部分"
+    # 无分组 → None
+    item2 = await service.create_item({"key": "last_net", "label": "上月实发工资",
+                                       "formula": "", "is_manual": True})
+    assert item2["group1"] is None
+    assert item2["group2"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_item_accepts_groups(service):
+    item = MagicMock()
+    item.id = uuid4()
+    item.key = "custom"
+    item.is_manual = False
+    service._all_item_keys = AsyncMock(return_value=["custom"])
+    service._all_param_keys = AsyncMock(return_value=[])
+    service.db = _grid_session(item)
+    updated = await service.update_item(item.id, {"group1": "应扣金额", "group2": ""})
+    assert updated["group1"] == "应扣金额"
+    assert item.group2 is None  # 空串清空
+
+
+@pytest.mark.asyncio
+async def test_compute_month_new_formula_chain(service):
+    # 标准工资表口径：基本部分合计→应发合计→应扣合计→实发
+    items = [
+        {"key": "basic", "formula": "base", "is_active": True, "is_manual": False},
+        {"key": "overtime_pay", "formula": "ot_hours * (base / 21.75 / 8) * (ot_rate or 1.5)",
+         "is_active": True, "is_manual": False},
+        {"key": "att_bonus", "formula": "att_bonus if (missed_days == 0 and absent_days == 0) else 0",
+         "is_active": True, "is_manual": False},
+        {"key": "subsidy", "formula": "subsidy_std", "is_active": True, "is_manual": False},
+        {"key": "other_base", "formula": "", "is_active": True, "is_manual": True},
+        {"key": "base_total", "formula": "basic + overtime_pay + att_bonus + subsidy + other_base",
+         "is_active": True, "is_manual": False},
+        {"key": "bonus", "formula": "bonus_std", "is_active": True, "is_manual": False},
+        {"key": "other_bonus", "formula": "", "is_active": True, "is_manual": True},
+        {"key": "bonus_total", "formula": "bonus + other_bonus", "is_active": True, "is_manual": False},
+        {"key": "absent_days", "formula": "absent_days", "is_active": True, "is_manual": False},
+        {"key": "absent_deduction", "formula": "absent_days * (base / 21.75)",
+         "is_active": True, "is_manual": False},
+        {"key": "gross", "formula": "base_total + bonus_total - absent_deduction",
+         "is_active": True, "is_manual": False},
+        {"key": "social", "formula": "social", "is_active": True, "is_manual": False},
+        {"key": "other_deduction", "formula": "", "is_active": True, "is_manual": True},
+        {"key": "deduction", "formula": "social + other_deduction", "is_active": True, "is_manual": False},
+        {"key": "net", "formula": "max(0, gross - deduction)", "is_active": True, "is_manual": False},
+    ]
+    service.list_items = AsyncMock(return_value=items)
+    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._latest_rule = AsyncMock(return_value=make_rule(
+        base_salary=5000.0, bonus_standard=1000.0, subsidy_standard=300.0, social_insurance=200.0))
+    service._attendance_stats = AsyncMock(return_value={
+        str(EMP1): {"normal": 23, "half": 0, "missed": 0, "absent": 0, "records": 23, "overtime": 0}})
+    service._param_values_for_month = AsyncMock(return_value={})
+    service._grid_values = AsyncMock(return_value={})
+    service._upsert_record = AsyncMock()
+    seen = {}
+
+    async def fake_replace(month, eid, vals, manual_keys=()):
+        seen.update(vals)
+
+    service._replace_grid_values = fake_replace
+    await service.compute_month("2026-07")
+    assert seen["basic"] == 5000.0
+    assert seen["subsidy"] == 300.0
+    assert seen["bonus"] == 1000.0
+    assert seen["base_total"] == 5300.0  # 5000 + 0 + 0 + 300 + 0
+    assert seen["bonus_total"] == 1000.0
+    assert seen["absent_days"] == 0.0
+    assert seen["absent_deduction"] == 0.0
+    assert seen["gross"] == 6300.0  # 5300 + 1000 - 0
+    assert seen["deduction"] == 200.0
+    assert seen["net"] == 6100.0  # 6300 - 200
+
+
+@pytest.mark.asyncio
+async def test_compute_month_pins_manual_other_and_recomputes_total(service):
+    # 手工填了其他(other_base)=100 → 钉住；合计(base_total) 用钉住值重算
+    items = [
+        {"key": "basic", "formula": "base", "is_active": True},
+        {"key": "other_base", "formula": "", "is_active": True, "is_manual": True},
+        {"key": "base_total", "formula": "basic + other_base", "is_active": True},
+    ]
+    service.list_items = AsyncMock(return_value=items)
+    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._latest_rule = AsyncMock(return_value=make_rule(base_salary=5000.0))
+    service._attendance_stats = AsyncMock(return_value={})
+    service._param_values_for_month = AsyncMock(return_value={})
+    service._grid_values = AsyncMock(return_value={
+        (str(EMP1), "other_base"): (100.0, "manual"),
+    })
+    service._upsert_record = AsyncMock()
+    seen = {}
+
+    async def fake_replace(month, eid, vals, manual_keys=()):
+        seen.update(vals)
+        seen["_manual"] = set(manual_keys)
+
+    service._replace_grid_values = fake_replace
+    await service.compute_month("2026-07")
+    assert seen["other_base"] == 100.0  # 手工钉住值保留
+    assert seen["base_total"] == 5100.0  # 5000 + 100
+    assert seen["_manual"] == {"other_base"}
+
+
+@pytest.mark.asyncio
+async def test_save_cells_remark(service):
+    service.list_items = AsyncMock(return_value=[])
+    existing = make_record()
+    service._existing_record = AsyncMock(return_value=existing)
+    result = await service.save_cells("2026-07",
+                                      remarks=[{"employee_id": str(EMP1), "remark": "旷工扣款"}])
+    assert result["saved"] == 0
+    data = service.repo.update.call_args[0][1]
+    assert data["remark"] == "旷工扣款"
