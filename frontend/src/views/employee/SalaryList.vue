@@ -27,6 +27,7 @@
             <th v-for="(h, hi) in hrow" :key="ri + '-' + hi"
                 :colspan="h.colspan" :rowspan="h.rowspan"
                 :class="h.key === 'no' || h.key === 'dept' || h.key === 'name' ? 'col-fixed' : 'col-item'"
+                :style="hdrStyle(h, ri)"
                 :title="h.formula ? (h.is_manual ? '手工填写（⚡计算不覆盖）' : h.formula) : ''">
               {{ h.label }}<span v-if="h.is_manual" class="manual-badge" title="手工填写">手</span>
             </th>
@@ -218,6 +219,28 @@ interface HCell {
   key?: string
   formula?: string
   is_manual?: boolean
+}
+
+// 顶层每组一种浅色（黑字可读），用于区分工资表各大块边界
+const HDR_BG: Record<string, string> = {
+  no: "#EEEEEE", dept: "#EEEEEE", name: "#EEEEEE",      // 工号/部门/姓名
+  missed_days: "#F8BBD0",                                // 旷工 粉
+  att_std: "#FFE0B2",                                    // 全勤300 琥珀
+  perf_std: "#FFF9C4",                                   // 绩效300 黄
+  basic: "#C8E6C9",                                      // 月工资标准 绿
+  "g:应发金额": "#B3E5FC",                                // 应发金额 浅蓝
+  "g:应扣金额": "#E1BEE7",                                // 应扣金额 紫
+  net: "#B2DFDB",                                        // 实发工资 青
+  __remark: "#D7CCC8",                                   // 备注 棕
+  __payment: "#C5CAE9",                                  // 支付状态 靛
+  last_net: "#FFCCBC",                                   // 上月实发工资 深橙
+}
+function hdrBg(h: HCell, ri: number): string {
+  if (ri === 0) return HDR_BG[h.key || ""] ?? "#F0F0F0"  // 顶层：每组独立色
+  return ri === 1 ? "#F0F0F0" : "#FFFFFF"                // 二级浅灰 / 叶子白
+}
+function hdrStyle(h: HCell, ri: number) {
+  return { background: hdrBg(h, ri), color: "#000" }
 }
 
 const headerRows = computed<HCell[][]>(() => {
@@ -505,11 +528,11 @@ async function saveParams() {
 /* ====== 打印 ====== */
 function handlePrint() {
   if (!rows.value.length) { ElMessage.warning("暂无数据可打印"); return }
-  const attr = (h: HCell) => `${h.colspan > 1 ? ` colspan="${h.colspan}"` : ""}${h.rowspan > 1 ? ` rowspan="${h.rowspan}"` : ""}`
+  const attr = (h: HCell, ri: number) => `${h.colspan > 1 ? ` colspan="${h.colspan}"` : ""}${h.rowspan > 1 ? ` rowspan="${h.rowspan}"` : ""} style="background:${hdrBg(h, ri)};color:#000"`
   let html = "<table><thead>"
-  for (const hrow of headerRows.value) {
-    html += "<tr>" + hrow.map(h => `<th${attr(h)}>${h.label}${h.is_manual ? "手" : ""}</th>`).join("") + "</tr>"
-  }
+  headerRows.value.forEach((hrow, ri) => {
+    html += "<tr>" + hrow.map(h => `<th${attr(h, ri)}>${h.label}${h.is_manual ? "手" : ""}</th>`).join("") + "</tr>"
+  })
   html += "</thead><tbody>"
   for (const r of rows.value) {
     const cells = cols.value.map(c => {
@@ -527,7 +550,7 @@ function handlePrint() {
     return "<td></td>"
   }).join("")
   html += "</tr></tfoot></table>"
-  const style = "<style>@page{size:A4 landscape;margin:8mm}body{font-family:\"PingFang SC\",\"Microsoft YaHei\",sans-serif;margin:0}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #999;padding:3px 5px;text-align:center}thead{display:table-header-group}thead tr:nth-child(1) th{background:#5B9BD5;color:#fff}thead tr:nth-child(2) th{background:#D9E7F5;color:#1F3864}thead tr:nth-child(3) th{background:#EDF3FA;color:#1F3864}tfoot td{background:#D9E7F5;font-weight:700}</style>"
+  const style = "<style>@page{size:A4 landscape;margin:8mm}body{font-family:\"PingFang SC\",\"Microsoft YaHei\",sans-serif;margin:0}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #999;padding:3px 5px;text-align:center}thead{display:table-header-group}th{color:#000}tfoot td{background:#E0E0E0;font-weight:700;color:#000}</style>"
   const win = window.open("", "_blank")
   if (win) {
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>工资表 ${curMonth.value}</title>${style}</head><body><h2 style="text-align:center">${curMonth.value} 工资表</h2>${html}</body></html>`)
@@ -541,12 +564,9 @@ onMounted(() => fetchGrid())
 <style scoped>
 .sheet-wrapper { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 300px); border: 1px solid #e4e7ed; border-radius: 4px; background: #fff; padding-bottom: 14px; }
 .sal-sheet { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
-.sal-sheet th, .sal-sheet td { border: 1px solid #e4e7ed; padding: 5px 6px; }
+.sal-sheet th, .sal-sheet td { border: 1px solid #999; padding: 5px 6px; }
 .sal-sheet thead { position: sticky; top: 0; z-index: 2; }
-.sal-sheet thead th { font-weight: 700; text-align: center; }
-.sal-sheet thead tr.sal-hdr-1 th { background: #5B9BD5; color: #fff; }
-.sal-sheet thead tr.sal-hdr-2 th { background: #D9E7F5; color: #1F3864; }
-.sal-sheet thead tr.sal-hdr-3 th { background: #EDF3FA; color: #1F3864; }
+.sal-sheet thead th { font-weight: 700; text-align: center; color: #000; }
 .col-fixed { min-width: 60px; }
 .col-item { min-width: 84px; text-align: center; }
 .manual-badge { display: inline-block; margin-left: 3px; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 14px; color: #e6a23c; background: #fdf6ec; border: 1px solid #f3d19e; }
@@ -555,7 +575,7 @@ onMounted(() => fetchGrid())
 .cell-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; color: #606266; min-width: 84px; cursor: cell; }
 .cell-num:hover { background: #f5f7fa; }
 .cell-strong { font-weight: 700; color: #0b7a1b; }
-.sal-footer td { background: #D9E7F5; font-weight: 700; color: #303133; }
+.sal-footer td { background: #E0E0E0; font-weight: 700; color: #000; }
 .cell-footer-label { text-align: right; font-weight: 700; padding-right: 10px; }
 .items-help { background: #f5f7fa; border: 1px solid #e4e7ed; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
 .help-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 12px; }
