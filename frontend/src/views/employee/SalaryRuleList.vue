@@ -294,8 +294,8 @@ onMounted(async () => { await loadEmps(); await fetchData() })
 
 <style scoped>
 .sheet-wrapper { overflow-x: auto; overflow-y: auto; border: 1px solid #e4e7ed; border-radius: 4px; background: #fff; padding-bottom: 14px; }
-.rule-sheet { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
-.rule-sheet th, .rule-sheet td { border: 1px solid #e4e7ed; padding: 6px 8px; }
+.rule-sheet { width: 100%; border-collapse: collapse; font-size: 15px; white-space: nowrap; }
+.rule-sheet th, .rule-sheet td { border: 1px solid #e4e7ed; padding: 7px 10px; }
 .rule-sheet thead th { background: #f5f7fa; position: sticky; top: 0; z-index: 2; font-weight: 600; color: #303133; }
 .rule-sheet th.sortable { cursor: pointer; user-select: none; }
 .rule-sheet th.sortable:hover { color: #409eff; }
