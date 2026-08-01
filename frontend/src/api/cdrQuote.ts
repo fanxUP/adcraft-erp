@@ -153,6 +153,59 @@ export interface QuoteApproval {
   decided_at?: string
 }
 
+export interface PriceRuleInput {
+  code: string
+  name: string
+  priority?: number
+  conditions_json?: Record<string, unknown>
+  actions_json?: Record<string, unknown>
+  conflict_policy?: string
+}
+
+export interface PriceRuleSetInput {
+  code: string
+  name: string
+  effective_from?: string
+  effective_to?: string
+  description?: string
+  rules?: PriceRuleInput[]
+}
+
+export interface PriceRuleSet extends PriceRuleSetInput {
+  id: string
+  version: number
+  status: string
+}
+
+export interface CustomerAgreementInput {
+  customer_id: string
+  product_id?: string
+  material_id?: string
+  process_id?: string
+  pricing_method: string
+  price_value: number
+  minimum_charge?: number
+  discount_rate?: number
+  effective_from: string
+  effective_to?: string
+  remark?: string
+}
+
+export interface CustomerAgreement {
+  id: string
+  customer_id: string
+  product_id?: string
+  material_id?: string
+  process_id?: string
+  pricing_method: string
+  price_value: string
+  minimum_charge: string
+  discount_rate: string
+  effective_from: string
+  effective_to?: string
+  remark?: string
+}
+
 export interface CDRAuditLog {
   id: string
   actor_id?: string
@@ -262,6 +315,50 @@ export function approveQuote(approvalId: string, comment?: string) {
 
 export function rejectQuote(approvalId: string, comment?: string) {
   return api.post<{ status: string }>(`/cdr/approvals/${approvalId}/reject`, { comment })
+}
+
+export function listRuleSets() {
+  return api.get<PriceRuleSet[]>('/cdr/rule-sets')
+}
+
+export function createRuleSet(data: PriceRuleSetInput) {
+  return api.post<Pick<PriceRuleSet, 'id' | 'code' | 'name'>>('/cdr/rule-sets', data)
+}
+
+
+export function updateCustomerAgreement(id: string, data: Partial<CustomerAgreementInput>) {
+  return api.put<Pick<CustomerAgreement, 'id' | 'customer_id'>>(`/cdr/customer-agreements/${id}`, data)
+}
+
+export function deleteCustomerAgreement(id: string) {
+  return api.del(`/cdr/customer-agreements/${id}`)
+}
+
+export interface BatchAgreementInput {
+  customer_type?: string
+  level?: string
+  customer_ids?: string[]
+  product_ids?: string[]
+  pricing_method?: string
+  price_value?: number
+  minimum_charge?: number
+  discount_rate?: number
+  effective_from?: string
+  effective_to?: string
+  overwrite?: boolean
+}
+
+export function batchCustomerAgreements(data: BatchAgreementInput) {
+  return api.post<{ created: number; updated: number; skipped: number }>('/cdr/customer-agreements/batch', data)
+}
+
+export function listCustomerAgreements(customerId?: string) {
+  const params = customerId ? { customer_id: customerId } : {}
+  return api.get<CustomerAgreement[]>('/cdr/customer-agreements', { params })
+}
+
+export function createCustomerAgreement(data: CustomerAgreementInput) {
+  return api.post<Pick<CustomerAgreement, 'id' | 'customer_id'>>('/cdr/customer-agreements', data)
 }
 
 export function listAuditLogs(quoteId: string) {

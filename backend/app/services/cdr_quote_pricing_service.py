@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.cdr_quote_repo import CdrQuoteRepository
 from app.services.price_engine import (
     PriceEngine, CalculateRequest, CalculateResult,
-    ProductInfo, MaterialInfo, ProcessInfo,
+    ProductInfo, MaterialInfo, ProcessInfo, CustomerAgreement,
 )
 from app.models.product import Product, Material, Process
 from app.services.cdr_quote_line_adapter import (
@@ -94,15 +94,22 @@ class CdrQuotePricingService(CdrQuoteServiceBase):
                 standard_hours=Decimal(str(p.standard_hours)) if p.standard_hours else None,
             ))
 
-        last_deal_price: Decimal | None = None
+        customer_agreement: CustomerAgreement | None = None
         if customer_id := data.get("customer_id"):
-            last_deal_price = await self.repo.get_last_deal_price(UUID(customer_id), product.id)
+            ca = await self.repo.get_customer_agreement(UUID(customer_id), product.id)
+            if ca:
+                customer_agreement = CustomerAgreement(
+                    pricing_method=ca.pricing_method,
+                    price_value=Decimal(str(ca.price_value)),
+                    minimum_charge=Decimal(str(ca.minimum_charge)),
+                    discount_rate=Decimal(str(ca.discount_rate)),
+                )
 
         return CalculateRequest(
             product=product,
             material=material,
             processes=processes,
-            last_deal_price=last_deal_price,
+            customer_agreement=customer_agreement,
             width_mm=Decimal(str(data["width_mm"])) if data.get("width_mm") else None,
             height_mm=Decimal(str(data["height_mm"])) if data.get("height_mm") else None,
             length_m=Decimal(str(data["length_m"])) if data.get("length_m") else None,
@@ -251,6 +258,9 @@ class CdrQuotePricingService(CdrQuoteServiceBase):
         # 重新计算版本汇总
         await self._recalc_version_totals(version.id)
 
+        # 自动同步客户协议价
+        await self._sync_customer_agreements(quote_id, created_lines)
+
         # 审计日志
         await self.repo.create_audit_log({
             "quote_id": quote_id,
@@ -262,6 +272,60 @@ class CdrQuotePricingService(CdrQuoteServiceBase):
 
         return self._version_to_dict(version)
 
+
+    async def _sync_customer_agreements(self, quote_id: UUID, lines: list) -> None:
+        """对于用户手动重新定价的行，自动保存为客户协议价。"""
+        from datetime import date
+        
+        # 获取报价的客户ID
+        quote = await self.repo.get_quote(quote_id)
+        if not quote or not quote.customer_id:
+            return
+        
+        customer_id = quote.customer_id
+        
+        for line in lines:
+            if not line.product_id:
+                continue
+            if not line.unit_price or line.unit_price <= 0:
+                continue
+            
+            # 获取产品默认单价
+            product = await self.repo.get_product(line.product_id)
+            if not product:
+                continue
+            
+            product_price = product.default_price or 0
+            
+            # 检查已有协议价
+            existing = await self.repo.get_customer_agreement(customer_id, line.product_id)
+            agreement_price = existing.price_value if existing else 0
+            
+            # 只有产品有默认价时才能可靠判断是否手动定价
+            if product_price <= 0:
+                continue
+            
+            # 如果发送的单价与产品默认价和已有协议价都不同 → 用户手动定价
+            sent_price = line.unit_price
+            if sent_price == product_price or sent_price == agreement_price:
+                continue  # 不是手动定价，跳过
+            
+            # 创建或更新协议价
+            agreement_data = {
+                "customer_id": customer_id,
+                "product_id": line.product_id,
+                "pricing_method": product.pricing_method or "quantity",
+                "price_value": sent_price,
+                "minimum_charge": existing.minimum_charge if existing else (product.min_charge or 0),
+                "discount_rate": existing.discount_rate if existing else Decimal("1"),
+                "effective_from": str(date.today()),
+                "effective_to": None,
+            }
+            
+            if existing:
+                await self.repo.update_customer_agreement(existing.id, agreement_data)
+            else:
+                await self.repo.create_customer_agreement(agreement_data)
 
     async def _recalc_version_totals(self, version_id: UUID) -> None:
         """重新计算版本汇总金额。"""

@@ -101,6 +101,18 @@ export const salesDeliveryCapabilities: PageCapabilityMap = {
     workflowStage: 'quote',
     availableActions: ['编辑报价明细', '计算报价', '保存新版本'],
   },
+  price_rules: {
+    title: '定价规则',
+    purpose: '维护智能报价使用的材料、工艺和计价规则',
+    workflowStage: 'pricing',
+    availableActions: ['查询定价规则', '新增规则', '调整规则'],
+  },
+  customer_agreements: {
+    title: '客户协议价',
+    purpose: '维护特定客户适用的协议价格和生效范围',
+    workflowStage: 'pricing',
+    availableActions: ['查询协议价', '新增协议价', '调整协议价'],
+  },
   contract_list: {
     title: '合同列表',
     purpose: '查询和维护订单相关的常规合同',

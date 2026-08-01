@@ -182,6 +182,7 @@ class QuoteLineUpdate(BaseModel):
 
 
 class QuoteVersionCreate(BaseModel):
+    pricing_rule_set_id: UUID | None = None
     notes: str | None = None
     lines: list[QuoteLineCreate] = []
 
@@ -281,6 +282,39 @@ class CdrCaptureSessionCreate(BaseModel):
     warnings: dict | None = None
 
 
+# ── 客户协议价 ──────────────────────────────────────────────────
+
+
+class CustomerPriceAgreementCreate(BaseModel):
+    customer_id: UUID
+    product_id: UUID | None = None
+    material_id: UUID | None = None
+    process_id: UUID | None = None
+    pricing_method: str = "quantity"
+    price_value: Decimal = Field(..., max_digits=14, decimal_places=4)
+    minimum_charge: Decimal = Field(default=Decimal("0"), max_digits=14, decimal_places=2)
+    discount_rate: Decimal = Field(default=Decimal("1"), max_digits=8, decimal_places=4)
+    effective_from: str
+    effective_to: str | None = None
+    remark: str | None = None
+
+
+class CustomerPriceAgreementResponse(BaseModel):
+    id: UUID
+    customer_id: UUID
+    product_id: UUID | None
+    material_id: UUID | None
+    process_id: UUID | None
+    pricing_method: str
+    price_value: Decimal
+    minimum_charge: Decimal
+    discount_rate: Decimal
+    effective_from: str
+    effective_to: str | None
+    remark: str | None
+    created_at: datetime | None = None
+
+
 # ── 审批 ────────────────────────────────────────────────────────
 
 
@@ -301,6 +335,55 @@ class QuoteApprovalResponse(BaseModel):
     decision_comment: str | None
     created_at: datetime | None = None
     decided_at: datetime | None = None
+
+
+# ── 规则集/规则 ─────────────────────────────────────────────────
+
+
+class PriceRuleCreate(BaseModel):
+    code: str
+    name: str
+    priority: int = 0
+    conditions_json: dict = {}
+    actions_json: dict = {}
+    conflict_policy: str = "higher_priority_wins"
+
+
+class PriceRuleSetCreate(BaseModel):
+    code: str
+    name: str
+    effective_from: str | None = None
+    effective_to: str | None = None
+    description: str | None = None
+    rules: list[PriceRuleCreate] = []
+
+
+class PriceRuleSetResponse(BaseModel):
+    id: UUID
+    code: str
+    name: str
+    version: int
+    status: str
+    effective_from: str | None
+    effective_to: str | None
+    description: str | None
+    published_by: UUID | None
+    published_at: datetime | None
+    created_at: datetime | None = None
+    rules: list["PriceRuleResponse"] = []
+
+
+class PriceRuleResponse(BaseModel):
+    id: UUID
+    rule_set_id: UUID
+    code: str
+    name: str
+    priority: int
+    conditions_json: dict
+    actions_json: dict
+    conflict_policy: str
+    active: bool
+    created_at: datetime | None = None
 
 
 # ── Phase 8: AI报价助手 ──────────────────────────────────────────

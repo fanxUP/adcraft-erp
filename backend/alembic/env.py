@@ -9,7 +9,8 @@ from app.models.user import User, Role, Permission
 from app.models.customer import Customer, CustomerContact
 from app.models.product import ProductCategory, Product, Material, Process, PriceRule, MaterialPriceVersion
 from app.models.cdr_quote import (
-    QuoteVersion, QuoteLine, QuoteLineProcess,
+    PriceRuleSet, CdrPriceRule,
+    CustomerPriceAgreement, QuoteVersion, QuoteLine, QuoteLineProcess,
     QuoteApproval, QuoteAuditLog, CdrDevice, CdrCaptureSession, DrawingSnapshot,
     QuoteGeometry,
 )
