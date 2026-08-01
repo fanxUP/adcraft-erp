@@ -241,7 +241,7 @@ function hdrBg(h: HCell, ri: number): string {
 }
 function hdrStyle(h: HCell, ri: number) {
   const st: Record<string, string> = { background: hdrBg(h, ri), color: "#000" }
-  if (ri === 0) st.borderRight = "3px solid #222" // 顶层每组右侧加粗分隔线，边界一目了然
+  if (ri === 0) st.borderRight = "3px solid #111" // 顶层每组右侧加粗分隔线，边界一目了然
   return st
 }
 
@@ -530,7 +530,7 @@ async function saveParams() {
 /* ====== 打印 ====== */
 function handlePrint() {
   if (!rows.value.length) { ElMessage.warning("暂无数据可打印"); return }
-  const attr = (h: HCell, ri: number) => `${h.colspan > 1 ? ` colspan="${h.colspan}"` : ""}${h.rowspan > 1 ? ` rowspan="${h.rowspan}"` : ""} style="background:${hdrBg(h, ri)};color:#000${ri === 0 ? ";border-right:3px solid #222" : ""}"`
+  const attr = (h: HCell, ri: number) => `${h.colspan > 1 ? ` colspan="${h.colspan}"` : ""}${h.rowspan > 1 ? ` rowspan="${h.rowspan}"` : ""} style="background:${hdrBg(h, ri)};color:#000${ri === 0 ? ";border-right:3px solid #111" : ""}"`
   let html = "<table><thead>"
   headerRows.value.forEach((hrow, ri) => {
     html += "<tr>" + hrow.map(h => `<th${attr(h, ri)}>${h.label}${h.is_manual ? "手" : ""}</th>`).join("") + "</tr>"
@@ -552,7 +552,7 @@ function handlePrint() {
     return "<td></td>"
   }).join("")
   html += "</tr></tfoot></table>"
-  const style = "<style>@page{size:A4 landscape;margin:8mm}body{font-family:\"PingFang SC\",\"Microsoft YaHei\",sans-serif;margin:0}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:2px solid #666;padding:3px 5px;text-align:center}thead{display:table-header-group}thead th{border-color:#444}th{color:#000}tfoot td{background:#E0E0E0;font-weight:700;color:#000}</style>"
+  const style = "<style>@page{size:A4 landscape;margin:8mm}body{font-family:\"PingFang SC\",\"Microsoft YaHei\",sans-serif;margin:0}table{width:100%;border-collapse:separate;border-spacing:0;font-size:10px}th,td{border:2px solid #666;padding:3px 5px;text-align:center}thead{display:table-header-group}thead th{border-color:#333}th{color:#000}tfoot td{background:#E0E0E0;font-weight:700;color:#000}</style>"
   const win = window.open("", "_blank")
   if (win) {
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>工资表 ${curMonth.value}</title>${style}</head><body><h2 style="text-align:center">${curMonth.value} 工资表</h2>${html}</body></html>`)
@@ -565,10 +565,10 @@ onMounted(() => fetchGrid())
 
 <style scoped>
 .sheet-wrapper { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 300px); border: 1px solid #e4e7ed; border-radius: 4px; background: #fff; padding-bottom: 14px; }
-.sal-sheet { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
+.sal-sheet { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; white-space: nowrap; }
 .sal-sheet th, .sal-sheet td { border: 2px solid #666; padding: 5px 6px; }
 .sal-sheet thead { position: sticky; top: 0; z-index: 2; }
-.sal-sheet thead th { font-weight: 700; text-align: center; color: #000; border-color: #444; }
+.sal-sheet thead th { font-weight: 700; text-align: center; color: #000; border-color: #333; }
 .col-fixed { min-width: 60px; }
 .col-item { min-width: 84px; text-align: center; }
 .manual-badge { display: inline-block; margin-left: 3px; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 14px; color: #e6a23c; background: #fdf6ec; border: 1px solid #f3d19e; }
