@@ -41,7 +41,7 @@
               </td>
               <td v-else-if="c.type === 'item'" class="cell-num" @click="startEdit(row, c.key)">
                 <el-input-number v-if="isEditing(row, c.key)" v-model="editVal" :controls="false" :precision="2"
-                  size="small" autofocus style="width:92px" @change="commitEdit(row, c.key)" @blur="clearEdit" />
+                  size="small" autofocus style="width:112px" @change="commitEdit(row, c.key)" @blur="clearEdit" />
                 <span v-else :class="{ 'cell-strong': isStrong(c.key) }">{{ fmtVal(row.values[c.key]) }}</span>
               </td>
               <td v-else-if="c.type === 'remark'" class="cell-center">
@@ -565,16 +565,16 @@ onMounted(() => fetchGrid())
 
 <style scoped>
 .sheet-wrapper { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 300px); border: 1px solid #e4e7ed; border-radius: 4px; background: #fff; padding-bottom: 14px; }
-.sal-sheet { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; white-space: nowrap; }
+.sal-sheet { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 15px; white-space: nowrap; }
 .sal-sheet th, .sal-sheet td { border: 2px solid #666; padding: 5px 6px; }
 .sal-sheet thead { position: sticky; top: 0; z-index: 2; }
 .sal-sheet thead th { font-weight: 700; text-align: center; color: #000; border-color: #333; }
-.col-fixed { min-width: 60px; }
-.col-item { min-width: 84px; text-align: center; }
+.col-fixed { min-width: 72px; }
+.col-item { min-width: 100px; text-align: center; }
 .manual-badge { display: inline-block; margin-left: 3px; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 14px; color: #e6a23c; background: #fdf6ec; border: 1px solid #f3d19e; }
 .cell-center { text-align: center; }
-.cell-name { font-weight: 600; color: #303133; min-width: 80px; }
-.cell-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; color: #606266; min-width: 84px; cursor: cell; }
+.cell-name { font-weight: 600; color: #303133; min-width: 96px; }
+.cell-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; color: #303133; min-width: 100px; cursor: cell; }
 .cell-num:hover { background: #f5f7fa; }
 .cell-strong { font-weight: 700; color: #0b7a1b; }
 .sal-footer td { background: #E0E0E0; font-weight: 700; color: #000; }
