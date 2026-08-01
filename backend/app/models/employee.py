@@ -30,7 +30,6 @@ class Employee(Base, TimestampMixin, SoftDeleteMixin):
     emergency_contact: Mapped[str | None] = mapped_column(String(64), nullable=True)
     emergency_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     skills: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    base_salary: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     bank_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     bank_account: Mapped[str | None] = mapped_column(String(64), nullable=True)
     address: Mapped[str | None] = mapped_column(String, nullable=True)

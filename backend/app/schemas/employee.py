@@ -11,7 +11,7 @@ class EmployeeCreate(BaseModel):
     license_no: Optional[str] = None; license_type: Optional[str] = None; license_expire_date: Optional[str] = None
     id_card_front_url: Optional[str] = None; id_card_back_url: Optional[str] = None
     emergency_contact: Optional[str] = None; emergency_phone: Optional[str] = None
-    skills: Optional[list[str]] = None; base_salary: Optional[float] = None
+    skills: Optional[list[str]] = None
     bank_name: Optional[str] = None; bank_account: Optional[str] = None; address: Optional[str] = None
     user_id: Optional[str] = None; remark: Optional[str] = None; is_active: bool = True
 
@@ -23,7 +23,7 @@ class EmployeeUpdate(BaseModel):
     license_no: Optional[str] = None; license_type: Optional[str] = None; license_expire_date: Optional[str] = None
     id_card_front_url: Optional[str] = None; id_card_back_url: Optional[str] = None
     emergency_contact: Optional[str] = None; emergency_phone: Optional[str] = None
-    skills: Optional[list[str]] = None; base_salary: Optional[float] = None
+    skills: Optional[list[str]] = None
     bank_name: Optional[str] = None; bank_account: Optional[str] = None; address: Optional[str] = None
     user_id: Optional[str] = None; remark: Optional[str] = None; is_active: Optional[bool] = None
 
@@ -35,7 +35,7 @@ class EmployeeResponse(BaseModel):
     license_no: Optional[str] = None; license_type: Optional[str] = None; license_expire_date: Optional[str] = None
     id_card_front_url: Optional[str] = None; id_card_back_url: Optional[str] = None
     emergency_contact: Optional[str] = None; emergency_phone: Optional[str] = None
-    skills: Optional[list[str]] = None; base_salary: Optional[float] = None
+    skills: Optional[list[str]] = None
     bank_name: Optional[str] = None; bank_account: Optional[str] = None; address: Optional[str] = None
     user_id: Optional[str] = None; remark: Optional[str] = None; is_active: bool
     created_at: Optional[datetime] = None

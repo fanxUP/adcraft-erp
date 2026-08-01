@@ -49,7 +49,6 @@ class EmployeeService:
             "id_card_front_url": e.id_card_front_url, "id_card_back_url": e.id_card_back_url,
             "emergency_contact": e.emergency_contact, "emergency_phone": e.emergency_phone,
             "skills": e.skills if isinstance(e.skills, list) else [],
-            "base_salary": float(e.base_salary) if e.base_salary else None,
             "bank_name": e.bank_name, "bank_account": e.bank_account, "address": e.address,
             "user_id": str(e.user_id) if e.user_id else None,
             "remark": e.remark, "is_active": e.is_active,

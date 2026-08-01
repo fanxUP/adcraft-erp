@@ -3,10 +3,10 @@
     <div class="page-header">
       <h2>⚙️ 工资规则</h2>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <el-select v-model="fEmp" placeholder="全部员工" clearable filterable style="width:200px" @change="fetchData">
+        <el-select v-model="fEmp" placeholder="全部员工" clearable filterable style="width:200px">
           <el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" />
         </el-select>
-        <el-select v-model="fDept" placeholder="部门筛选" clearable style="width:130px" @change="fetchData">
+        <el-select v-model="fDept" placeholder="部门筛选" clearable style="width:130px">
           <el-option v-for="d in DEPTS" :key="d.value" :label="d.label" :value="d.value" />
         </el-select>
         <el-button @click="fetchData">刷新</el-button>
@@ -16,7 +16,7 @@
 
     <!-- 汇总 -->
     <el-row :gutter="16" style="margin-bottom:16px">
-      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#409eff">{{list.length}}</div><div style="font-size:13px;color:#909399;margin-top:4px">已设置规则人数</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#409eff">{{setRows.length}}</div><div style="font-size:13px;color:#909399;margin-top:4px">已设置规则人数</div></div></el-card></el-col>
       <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#67c23a">{{totalBase.toFixed(2)}}</div><div style="font-size:13px;color:#909399;margin-top:4px">月工资标准合计/月</div></div></el-card></el-col>
       <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#f56c6c">{{totalDeduction.toFixed(2)}}</div><div style="font-size:13px;color:#909399;margin-top:4px">社保金额合计/月</div></div></el-card></el-col>
     </el-row>
@@ -43,8 +43,11 @@
             <td class="cell-num"><strong>{{ fmt(row.base_salary) }}</strong></td>
             <td class="cell-num deduction">{{ fmt(row.social_insurance) }}</td>
             <td class="cell-op">
-              <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-              <el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+              <template v-if="row.id">
+                <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+                <el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+              </template>
+              <el-button v-else text type="primary" size="small" @click="openAdd(row)">设置</el-button>
             </td>
           </tr>
         </tbody>
@@ -88,14 +91,24 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue"
-import { getSalaryRules, createSalaryRule, updateSalaryRule, deleteSalaryRule, type SalaryRuleItem } from "@/api/salaryRules"
+import { getSalaryRules, createSalaryRule, updateSalaryRule, deleteSalaryRule } from "@/api/salaryRules"
 import { getAttendanceEmployees, type EmployeeOption } from "@/api/attendance"
 import { ElMessage, ElMessageBox } from "element-plus"
 
 const DEPTS = [{ value: "design", label: "设计部" }, { value: "production", label: "生产部" }, { value: "installation", label: "安装部" }, { value: "sales", label: "销售部" }, { value: "finance", label: "财务部" }, { value: "admin", label: "行政部" }]
 
 /* ====== state ====== */
-const list = ref<SalaryRuleItem[]>([])
+interface RuleRow {
+  employee_id: string
+  employee_no: string
+  employee_name: string
+  id?: string
+  effective_date: string
+  base_salary?: number | null
+  social_insurance?: number | null
+  remark?: string
+}
+const list = ref<RuleRow[]>([])
 const employees = ref<EmployeeOption[]>([])
 const loading = ref(false)
 const fEmp = ref("")
@@ -142,7 +155,7 @@ const sortableCols = [
 const sortKey = ref<string>("employee_no")
 const sortDir = ref<"asc" | "desc">("asc")
 
-const sortVal = (row: SalaryRuleItem, key: string): string | number => {
+const sortVal = (row: RuleRow, key: string): string | number => {
   switch (key) {
     case "employee_no": return row.employee_no || ""
     case "employee_name": return row.employee_name || ""
@@ -157,10 +170,21 @@ function setSort(key: string) {
   if (sortKey.value === key) sortDir.value = sortDir.value === "asc" ? "desc" : "asc"
   else { sortKey.value = key; sortDir.value = "asc" }
 }
+
+/* ====== filters / sorted ====== */
+const filteredList = computed(() => {
+  let rows = list.value
+  if (fEmp.value) rows = rows.filter(r => r.employee_id === fEmp.value)
+  if (fDept.value) {
+    const deptEmps = employees.value.filter(e => e.department === fDept.value).map(e => e.id)
+    rows = rows.filter(r => deptEmps.includes(r.employee_id))
+  }
+  return rows
+})
 const sortedList = computed(() => {
-  if (!sortKey.value) return list.value
+  if (!sortKey.value) return filteredList.value
   const dir = sortDir.value === "asc" ? 1 : -1
-  return [...list.value].sort((a, b) => {
+  return [...filteredList.value].sort((a, b) => {
     const va = sortVal(a, sortKey.value), vb = sortVal(b, sortKey.value)
     if (va < vb) return -dir
     if (va > vb) return dir
@@ -169,32 +193,45 @@ const sortedList = computed(() => {
 })
 
 /* ====== totals ====== */
-const totalBase = computed(() => list.value.reduce((s, r) => s + (r.base_salary || 0), 0))
-const totalDeduction = computed(() => list.value.reduce((s, r) => s + (r.social_insurance || 0), 0))
+const setRows = computed(() => filteredList.value.filter(r => r.id))
+const totalBase = computed(() => setRows.value.reduce((s, r) => s + (r.base_salary || 0), 0))
+const totalDeduction = computed(() => setRows.value.reduce((s, r) => s + (r.social_insurance || 0), 0))
 
 /* ====== data ====== */
 async function fetchData() {
   loading.value = true
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const p: any = {}
-    if (fEmp.value) p.employee_id = fEmp.value
-    const r = await getSalaryRules({ ...p, page: 1, page_size: 200 })
-    list.value = r?.items || []
-
-    // If department filter is active, filter client-side
-    if (fDept.value) {
-      const deptEmps = employees.value.filter(e => e.department === fDept.value).map(e => e.id)
-      list.value = list.value.filter(item => deptEmps.includes(item.employee_id))
-    }
+    // 名单（在职员工）+ 规则合并：未设规则员工也展示，操作列显示「设置」
+    const r = await getSalaryRules({ page: 1, page_size: 200 })
+    const rules = r?.items || []
+    const ruleMap = new Map(rules.map(x => [x.employee_id, x]))
+    list.value = employees.value.map(e => {
+      const rule = ruleMap.get(e.id)
+      return {
+        employee_id: e.id,
+        employee_no: e.employee_no,
+        employee_name: e.name,
+        id: rule?.id,
+        effective_date: rule?.effective_date ?? "",
+        base_salary: rule?.base_salary ?? null,
+        social_insurance: rule?.social_insurance ?? null,
+        remark: rule?.remark ?? "",
+      }
+    })
   } finally { loading.value = false }
 }
 async function loadEmps() { employees.value = (await getAttendanceEmployees()) || [] }
 
-function openEdit(r: SalaryRuleItem) {
+function openEdit(r: RuleRow) {
   isEditing.value = true
-  editId.value = r.id
+  editId.value = r.id || ""
   form.value = { ...r, employee_name: r.employee_name || '' }
+  showDialog.value = true
+}
+function openAdd(r: RuleRow) {
+  isEditing.value = false
+  editId.value = ""
+  form.value = { ...initForm, employee_id: r.employee_id, employee_name: r.employee_name }
   showDialog.value = true
 }
 async function handleSave() {
@@ -213,7 +250,8 @@ async function handleSave() {
   finally { saving.value = false }
 }
 
-async function handleDelete(r: SalaryRuleItem) {
+async function handleDelete(r: RuleRow) {
+  if (!r.id) return
   await ElMessageBox.confirm("确定删除此工资规则？", "提示", { type: "warning" })
   await deleteSalaryRule(r.id)
   ElMessage.success("已删除")
@@ -251,7 +289,7 @@ async function handleBatchSave() {
   await fetchData()
 }
 
-onMounted(() => { loadEmps(); fetchData() })
+onMounted(async () => { await loadEmps(); await fetchData() })
 </script>
 
 <style scoped>

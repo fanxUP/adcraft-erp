@@ -77,7 +77,6 @@
         <el-form-item label="紧急联系人"><el-input v-model="form.emergency_contact" /></el-form-item>
         <el-form-item label="紧急联系电话"><el-input v-model="form.emergency_phone" /></el-form-item>
         <el-form-item label="技能标签"><el-select v-model="form.skills" multiple filterable allow-create default-first-option style="width:100%" placeholder="输入技能后回车添加"><el-option v-for="s in form.skills || []" :key="s" :label="s" :value="s" /></el-select></el-form-item>
-        <el-form-item label="基本工资"><el-input-number v-model="form.base_salary" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="开户行"><el-input v-model="form.bank_name" /></el-form-item>
         <el-form-item label="银行账号"><el-input v-model="form.bank_account" /></el-form-item>
         <el-form-item label="家庭地址" style="grid-column:1/3"><el-input v-model="form.address" /></el-form-item>
@@ -122,7 +121,7 @@ const DEPTS = [{value:"design",label:"设计部"},{value:"production",label:"生
 const list=ref<EmployeeResponse[]>([]); const loading=ref(false); const page=ref(1); const pageSize=ref(20); const total=ref(0); const keyword=ref(""); const filterDept=ref(""); const filterStatus=ref("")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const attachments=ref<AttachmentResponse[]>([]); const attCategory=ref("other")
-const initForm={name:"",phone:"",gender:"",ethnicity:"",birth_date:"",department:"",position:"",employment_type:"",education:"",id_card:"",license_no:"",license_type:"",license_expire_date:"",id_card_front_url:"",id_card_back_url:"",hire_date:"",resignation_date:"",employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],base_salary:null,bank_name:"",bank_account:"",address:"",remark:""}
+const initForm={name:"",phone:"",gender:"",ethnicity:"",birth_date:"",department:"",position:"",employment_type:"",education:"",id_card:"",license_no:"",license_type:"",license_expire_date:"",id_card_front_url:"",id_card_back_url:"",hire_date:"",resignation_date:"",employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],bank_name:"",bank_account:"",address:"",remark:""}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form=ref<any>({...initForm})
 const deptLabel=(v:string)=>DEPTS.find(d=>d.value===v)?.label||v
