@@ -28,7 +28,6 @@ const pageContexts: Record<string, PageContext> = {
   CDRQuoteDetail: { page: 'cdr_quote_detail', business_type: 'quote' },
   CDRQuoteEdit: { page: 'cdr_quote_edit', business_type: 'quote' },
   PriceRuleList: { page: 'price_rules', business_type: 'price' },
-  CustomerAgreementList: { page: 'customer_agreements', business_type: 'price' },
   ContractList: { page: 'contract_list', business_type: 'contract' },
   ContractDetail: { page: 'contract_detail', business_type: 'contract' },
   AcceptanceList: { page: 'acceptance_list', business_type: 'acceptance' },

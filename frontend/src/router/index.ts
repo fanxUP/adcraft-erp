@@ -106,7 +106,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'cdr/quotes/:id', name: 'CDRQuoteDetail', component: () => import('@/views/cdr-quotes/CDRQuoteDetail.vue') },
       { path: 'cdr/quotes/:id/edit', name: 'CDRQuoteEdit', component: () => import('@/views/cdr-quotes/CDRQuoteEditor.vue') },
       { path: 'cdr/price-rules', name: 'PriceRuleList', component: () => import('@/views/cdr-quotes/PriceRuleList.vue') },
-      { path: 'cdr/customer-agreements', name: 'CustomerAgreementList', component: () => import('@/views/cdr-quotes/CustomerAgreementList.vue') },
     ],
   },
   {
