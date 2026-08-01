@@ -6,7 +6,6 @@ from sqlalchemy import select
 
 from app.domain.workflows import ORDER_WORKFLOW, QUOTE_WORKFLOW, allowed_targets
 from app.repositories.business_document_repo import BusinessDocumentRepository
-from app.repositories.cdr_quote_repo import CdrQuoteRepository
 from app.models.task import DesignTask, ProductionTask, InstallationTask
 from app.models.outsource import OutsourceTask
 from app.models.project_cost import ProjectCost
@@ -117,8 +116,6 @@ class BusinessDocumentService:
             await self._calculate_quote(doc.id)
         # Refresh to load relationships (e.g. customer) in async context
         await self.db.refresh(doc, ["customer", "items", "status_logs"])
-        # 自动同步客户协议价
-        await self._sync_customer_agreements(doc)
         return self._to_detail(doc)
 
     # ═══════════════════════════════════════════
@@ -161,8 +158,6 @@ class BusinessDocumentService:
         # 报价更新后重新计算金额
         if updated.doc_type == "quote":
             await self._calculate_quote(doc_id)
-            # 自动同步客户协议价
-            await self._sync_customer_agreements(updated)
 
         # 同步外协任务
         if data.get("project_name") or data.get("total_amount"):
@@ -685,60 +680,6 @@ class BusinessDocumentService:
     # 报价计算
     # ═══════════════════════════════════════════
 
-
-    async def _sync_customer_agreements(self, doc) -> None:
-        """对于用户手动重新定价的明细行，自动保存为客户协议价。"""
-        from datetime import date
-        
-        if not doc.customer_id:
-            return
-        if not doc.items:
-            return
-        
-        cdr_repo = CdrQuoteRepository(self.db)
-        
-        for item in doc.items:
-            if not item.product_id:
-                continue
-            if not item.unit_price or item.unit_price <= 0:
-                continue
-            
-            # 获取产品默认单价
-            product = await cdr_repo.get_product(item.product_id)
-            if not product:
-                continue
-            
-            product_price = product.default_price or 0
-            
-            # 检查已有协议价
-            existing = await cdr_repo.get_customer_agreement(doc.customer_id, item.product_id)
-            agreement_price = existing.price_value if existing else 0
-            
-            # 只有产品有默认价时才能可靠判断是否手动定价
-            if product_price <= 0:
-                continue
-            
-            # 如果单价与产品默认价和已有协议价都不同 → 用户手动定价
-            item_price = item.unit_price
-            if item_price == product_price or item_price == agreement_price:
-                continue  # 不是手动定价，跳过
-            
-            # 创建或更新协议价
-            agreement_data = {
-                "customer_id": doc.customer_id,
-                "product_id": item.product_id,
-                "pricing_method": product.pricing_method or "quantity",
-                "price_value": item_price,
-                "minimum_charge": existing.minimum_charge if existing else (product.min_charge or 0),
-                "discount_rate": existing.discount_rate if existing else Decimal("1"),
-                "effective_from": str(date.today()),
-                "effective_to": None,
-            }
-            
-            if existing:
-                await cdr_repo.update_customer_agreement(existing.id, agreement_data)
-            else:
-                await cdr_repo.create_customer_agreement(agreement_data)
 
     async def _calculate_quote(self, doc_id: UUID) -> None:
         doc = await self.repo.get_by_id(doc_id)

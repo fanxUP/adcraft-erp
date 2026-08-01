@@ -88,14 +88,11 @@ class LLMQuoteAssistant:
             # 1. Build context blocks
             catalog = await self._build_catalog_context()
             pricing_history = await self._build_pricing_history()
-            customer_ctx = await self._build_customer_context(customer_id)
 
             # 2. Build the AI prompt
             context_parts = [catalog]
             if pricing_history:
                 context_parts.append(pricing_history)
-            if customer_ctx:
-                context_parts.append(customer_ctx)
             context_str = "\n\n".join(context_parts)
 
             user_prompt = (
@@ -247,39 +244,6 @@ class LLMQuoteAssistant:
             )
 
         return "\n".join(lines)
-
-    # ── Customer context ──
-
-    async def _build_customer_context(self, customer_id: str | None) -> str | None:
-        """Build customer-specific context including pricing agreements."""
-        if not customer_id:
-            return None
-
-        lines: list[str] = []
-
-        try:
-            # Check if customer has pricing agreements
-            cust_uuid = UUID(customer_id)
-            from app.models.cdr_quote import CustomerPriceAgreement
-            result = await self.db.execute(
-                select(CustomerPriceAgreement).where(
-                    CustomerPriceAgreement.customer_id == cust_uuid,
-                    # effective now
-                )
-            )
-            agreements = result.scalars().all()
-            if agreements:
-                lines.append("--- 客户定价协议 ---")
-                for a in agreements:
-                    lines.append(
-                        f"- 产品ID: {a.product_id}，计价方式: {a.pricing_method}"
-                        f"，价格: ¥{float(a.price_value):.2f}"
-                        f"{'，折扣率: ' + str(float(a.discount_rate) * 100) + '%' if a.discount_rate != 1.0 else ''}"
-                    )
-        except Exception:
-            pass
-
-        return "\n".join(lines) if lines else None
 
     # ── Response parsing ──
 

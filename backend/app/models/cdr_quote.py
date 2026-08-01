@@ -17,67 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, SoftDeleteMixin
 
 
-# ── 1. 定价规则引擎 ─────────────────────────────────────────────
-
-
-class PriceRuleSet(Base, TimestampMixin):
-    """定价规则集——分组和版本控制。"""
-    __tablename__ = "price_rule_sets"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    version: Mapped[int] = mapped_column(Integer, default=1)
-    status: Mapped[str] = mapped_column(String(32), default="draft", comment="draft | published | archived")
-    effective_from: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="YYYY-MM-DD")
-    effective_to: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="YYYY-MM-DD")
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    published_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    rules: Mapped[list["CdrPriceRule"]] = relationship(back_populates="rule_set", lazy="selectin", cascade="all, delete-orphan")
-
-
-class CdrPriceRule(Base, TimestampMixin):
-    """定价规则——触发条件 + 计算动作。"""
-    __tablename__ = "cdr_price_rules"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    rule_set_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("price_rule_sets.id"), nullable=False)
-    code: Mapped[str] = mapped_column(String(64), nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    priority: Mapped[int] = mapped_column(Integer, default=0)
-    conditions_json: Mapped[dict] = mapped_column(JSONB, default=dict, comment="触发条件列表")
-    actions_json: Mapped[dict] = mapped_column(JSONB, default=dict, comment="计算动作列表")
-    conflict_policy: Mapped[str] = mapped_column(String(32), default="higher_priority_wins", comment="冲突策略")
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
-
-    rule_set: Mapped["PriceRuleSet"] = relationship(back_populates="rules")
-
-
-# ── 2. 客户协议价 ───────────────────────────────────────────────
-
-
-class CustomerPriceAgreement(Base, TimestampMixin):
-    """客户专项价格协议。"""
-    __tablename__ = "customer_price_agreements"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False)
-    product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=True)
-    material_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("materials.id"), nullable=True)
-    process_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("processes.id"), nullable=True)
-    pricing_method: Mapped[str] = mapped_column(String(32), nullable=False, comment="area | length | quantity | fixed")
-    price_value: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False)
-    minimum_charge: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    discount_rate: Mapped[float] = mapped_column(Numeric(8, 4), default=1.0, comment="折扣率：0.8=打8折")
-    effective_from: Mapped[str] = mapped_column(String(32), nullable=False, comment="YYYY-MM-DD")
-    effective_to: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="YYYY-MM-DD")
-    approved_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    remark: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-
-# ── 3. 报价核心 ─────────────────────────────────────────────────
+# ── 1. 报价核心 ─────────────────────────────────────────────────
 
 
 class QuoteVersion(Base, TimestampMixin):
@@ -93,9 +33,6 @@ class QuoteVersion(Base, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=False
     )
     version_no: Mapped[int] = mapped_column(Integer, nullable=False)
-    pricing_rule_set_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("price_rule_sets.id"), nullable=True
-    )
     status: Mapped[str] = mapped_column(String(32), default="draft", comment="draft | review | approved | rejected")
 
     # 金额汇总
@@ -191,7 +128,7 @@ class QuoteLineProcess(Base, TimestampMixin):
     line: Mapped["QuoteLine"] = relationship(back_populates="processes")
 
 
-# ── 4. 审批与审计 ───────────────────────────────────────────────
+# ── 2. 审批与审计 ───────────────────────────────────────────────
 
 
 class QuoteApproval(Base, TimestampMixin):
@@ -227,7 +164,7 @@ class QuoteAuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
-# ── 5. CDR 设备与图稿采集 ────────────────────────────────────────
+# ── 3. CDR 设备与图稿采集 ────────────────────────────────────────
 
 
 class CdrDevice(Base, TimestampMixin):

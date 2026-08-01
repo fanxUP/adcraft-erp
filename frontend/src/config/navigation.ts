@@ -20,8 +20,6 @@ export const navigationItems: NavigationItem[] = [
       { label: '客户管理', path: '/customers' },
       { label: '常规报价', path: '/quotes' },
       { label: '智能报价', path: '/cdr/quotes' },
-      { label: '定价规则', path: '/cdr/price-rules' },
-      { label: '客户协议价', path: '/cdr/customer-agreements' },
       { label: '合同管理', path: '/contracts' },
       { label: '订单管理', path: '/orders' },
     ],
