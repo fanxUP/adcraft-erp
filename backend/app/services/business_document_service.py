@@ -161,6 +161,9 @@ class BusinessDocumentService:
         # 报价更新后重新计算金额
         if updated.doc_type == "quote":
             await self._calculate_quote(doc_id)
+            # 重新加载明细，确保协议价同步读取的是本次更新后的最新价格
+            # （repo.update 只是替换了行，不会刷新内存中的 doc.items 集合）
+            updated.items = await self.repo.get_items(doc_id)
             # 自动同步客户协议价
             await self._sync_customer_agreements(updated)
 
