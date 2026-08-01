@@ -276,8 +276,8 @@ async function handleBatchSave() {
       const data: any = {
         employee_id: eid,
         effective_date: batchForm.value.effective_date,
-        base_salary: batchForm.value.base_salary ?? 0,
       }
+      if (batchForm.value.base_salary != null) data.base_salary = batchForm.value.base_salary
       if (batchForm.value.social_insurance != null) data.social_insurance = batchForm.value.social_insurance
       await createSalaryRule(data)
       ok++

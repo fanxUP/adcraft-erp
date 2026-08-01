@@ -78,7 +78,7 @@ class SalaryRuleService:
             "employee_id": str(r.employee_id),
             "effective_date": r.effective_date.isoformat() if r.effective_date else None,
             "base_salary": float(r.base_salary) if r.base_salary else 0,
-            "social_insurance": float(r.social_insurance) if r.social_insurance else None,
+            "social_insurance": float(r.social_insurance) if r.social_insurance is not None else None,
             "remark": r.remark,
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "updated_at": r.updated_at.isoformat() if r.updated_at else None,
