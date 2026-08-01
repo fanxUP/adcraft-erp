@@ -32,17 +32,15 @@
             <th rowspan="2" class="col-emp">姓名</th>
             <th rowspan="2" class="col-dept">部门</th>
             <th rowspan="2" class="col-date">生效日期</th>
-            <th colspan="5" class="col-group">应发标准</th>
-            <th colspan="3" class="col-group">扣款标准</th>
+            <th colspan="4" class="col-group">应发标准</th>
+            <th colspan="2" class="col-group">扣款标准</th>
             <th rowspan="2" class="col-op">操作</th>
           </tr>
           <tr>
             <th class="col-num">基本工资</th>
             <th class="col-num">加班费率</th>
-            <th class="col-num">奖金标准</th>
             <th class="col-num">提成比例</th>
             <th class="col-num">补贴标准</th>
-            <th class="col-num">全勤奖</th>
             <th class="col-num">社保</th>
             <th class="col-num">公积金</th>
           </tr>
@@ -56,10 +54,8 @@
             <td class="cell-date">{{ row.effective_date }}</td>
             <td class="cell-num"><strong>{{ fmt(row.base_salary) }}</strong></td>
             <td class="cell-num">{{ row.overtime_rate != null ? row.overtime_rate + 'x' : '-' }}</td>
-            <td class="cell-num">{{ fmt(row.bonus_standard) }}</td>
             <td class="cell-num">{{ row.commission_rate != null ? row.commission_rate + '%' : '-' }}</td>
             <td class="cell-num">{{ fmt(row.subsidy_standard) }}</td>
-            <td class="cell-num">{{ fmt(row.attendance_bonus) }}</td>
             <td class="cell-num deduction">{{ fmt(row.social_insurance) }}</td>
             <td class="cell-num deduction">{{ fmt(row.housing_fund) }}</td>
             <td class="cell-op">
@@ -79,10 +75,8 @@
         <el-form-item label="生效日期" required><el-date-picker v-model="form.effective_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
         <el-form-item label="基本工资 (元)"><el-input-number v-model="form.base_salary" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="加班费率 (倍)"><el-input-number v-model="form.overtime_rate" :min="1" :max="3" :step="0.1" :precision="1" style="width:100%" placeholder="默认1.5" /></el-form-item>
-        <el-form-item label="奖金标准 (元)"><el-input-number v-model="form.bonus_standard" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="提成比例 (%)"><el-input-number v-model="form.commission_rate" :min="0" :max="100" :precision="1" style="width:100%" /></el-form-item>
         <el-form-item label="补贴标准 (元/月)"><el-input-number v-model="form.subsidy_standard" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="全勤奖 (元)"><el-input-number v-model="form.attendance_bonus" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="社保扣款 (元)"><el-input-number v-model="form.social_insurance" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="公积金扣款 (元)"><el-input-number v-model="form.housing_fund" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="其他扣款 (元)"><el-input-number v-model="form.deduction_standard" :min="0" :precision="2" style="width:100%" /></el-form-item>
@@ -138,8 +132,8 @@ const editId = ref("")
 
 const initForm = {
   employee_id: "", effective_date: "", base_salary: 0, overtime_rate: null,
-  bonus_standard: null, commission_rate: null, subsidy_standard: null,
-  attendance_bonus: null, social_insurance: null, housing_fund: null,
+  commission_rate: null, subsidy_standard: null,
+  social_insurance: null, housing_fund: null,
   deduction_standard: null, remark: "", employee_name: "",
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

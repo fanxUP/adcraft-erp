@@ -9,10 +9,8 @@ export interface SalaryRuleItem {
   effective_date: string
   base_salary: number
   overtime_rate?: number | null
-  bonus_standard?: number | null
   commission_rate?: number | null
   subsidy_standard?: number | null
-  attendance_bonus?: number | null
   social_insurance?: number | null
   housing_fund?: number | null
   deduction_standard?: number | null

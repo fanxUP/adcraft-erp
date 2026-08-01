@@ -23,10 +23,8 @@ def make_rule(**kwargs):
     r.effective_date = kwargs.get("effective_date", date(2026, 1, 1))
     r.base_salary = kwargs.get("base_salary", 5000.0)
     r.overtime_rate = kwargs.get("overtime_rate", 1.5)
-    r.bonus_standard = kwargs.get("bonus_standard", None)
     r.commission_rate = kwargs.get("commission_rate", None)
     r.subsidy_standard = kwargs.get("subsidy_standard", None)
-    r.attendance_bonus = kwargs.get("attendance_bonus", None)
     r.social_insurance = kwargs.get("social_insurance", None)
     r.housing_fund = kwargs.get("housing_fund", None)
     r.deduction_standard = kwargs.get("deduction_standard", None)
@@ -86,7 +84,7 @@ async def test_generate_month_creates_record_with_rule_components(service):
 
 @pytest.mark.asyncio
 async def test_generate_month_computes_overtime_and_bonus(service):
-    rule = make_rule(base_salary=5000.0, overtime_rate=2.0, bonus_standard=200.0)
+    rule = make_rule(base_salary=5000.0, overtime_rate=2.0)
     await _patch_queries(service, rule=rule, overtime=10.0)
     result = await service.generate_month("2026-07")
     assert result["created"] == 1
@@ -94,8 +92,8 @@ async def test_generate_month_computes_overtime_and_bonus(service):
     hourly = 5000.0 / 21.75 / 8
     expected_overtime = round(10.0 * hourly * 2.0, 2)
     assert data["overtime_pay"] == expected_overtime
-    assert data["bonus"] == 200.0
-    assert data["net_salary"] == round(5000.0 + expected_overtime + 200.0, 2)
+    assert data["bonus"] == 0.0  # 绩效标准已从规则移除，恒 0
+    assert data["net_salary"] == round(5000.0 + expected_overtime, 2)
 
 
 @pytest.mark.asyncio
@@ -178,7 +176,7 @@ def _setup_report(service, records, prev_records=None, employees=None, rule=None
 @pytest.mark.asyncio
 async def test_report_month_returns_row_fields(service):
     record = make_record(base_salary=5000.0, overtime_pay=100.0, remark="备注")
-    rule = make_rule(attendance_bonus=300.0, bonus_standard=200.0, subsidy_standard=50.0,
+    rule = make_rule(subsidy_standard=50.0,
                      social_insurance=500.0, housing_fund=300.0, deduction_standard=100.0)
     att = {str(EMP1): {"normal": 20, "half": 2, "missed": 0, "absent": 1,
                        "records": 23, "overtime": 10.5}}
@@ -195,20 +193,20 @@ async def test_report_month_returns_row_fields(service):
     assert row["missed_days"] == 0
     non_weekend = sum(1 for d in range(1, 32) if date(2026, 7, d).weekday() < 5)
     assert row["absent_days"] == max(0, non_weekend - 23) + 1
-    assert row["attendance_bonus"] == 300.0
-    assert row["performance"] == 200.0
+    assert row["attendance_bonus"] == 0.0  # 全勤标准已从规则移除，回退 0
+    assert row["performance"] == 0.0  # 绩效标准已从规则移除，回退 0
     assert row["base_salary"] == 5000.0
     assert row["overtime_hours"] == 10.5
     assert row["overtime_pay"] == 100.0
     assert row["total_salary"] == 5100.0  # 5000+100
-    assert row["performance_wage"] == 200.0
+    assert row["performance_wage"] == 0.0  # 绩效标准已从规则移除
     assert row["meal_subsidy"] == 50.0
-    assert row["attendance_phone_subsidy"] == 300.0
-    assert row["gross"] == 5650.0  # 5100+200+50+300
+    assert row["attendance_phone_subsidy"] == 0.0  # 全勤标准已从规则移除
+    assert row["gross"] == 5150.0  # 5100+0+50+0
     assert row["social_deduction"] == 900.0  # 500+300+100
-    assert row["net_salary"] == 4750.0  # 5650-900
+    assert row["net_salary"] == 4250.0  # 5150-900
     assert row["social_insurance"] == 500.0
-    assert row["actual_gross"] == 4750.0
+    assert row["actual_gross"] == 4250.0
     assert row["remark"] == "备注"
     assert row["prev_month_net"] is None
 
@@ -322,7 +320,7 @@ async def test_compute_month_attendance_conditional(service):
               "is_active": True}]
     service.list_items = AsyncMock(return_value=items)
     service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
-    service._latest_rule = AsyncMock(return_value=make_rule(attendance_bonus=300.0))
+    service._latest_rule = AsyncMock(return_value=make_rule())
     service._param_values_for_month = AsyncMock(return_value={})
     service._grid_values = AsyncMock(return_value={})
     service._upsert_record = AsyncMock()
@@ -337,11 +335,11 @@ async def test_compute_month_attendance_conditional(service):
         str(EMP1): {"normal": 20, "half": 0, "missed": 1, "absent": 0, "records": 21, "overtime": 0}})
     await service.compute_month("2026-07")
     assert seen["att_bonus"] == 0.0
-    # 全勤 → 发全勤
+    # 全勤 → 条件为真，但 att_bonus 已无规则来源恒 0
     service._attendance_stats = AsyncMock(return_value={
         str(EMP1): {"normal": 23, "half": 0, "missed": 0, "absent": 0, "records": 23, "overtime": 0}})
     await service.compute_month("2026-07")
-    assert seen["att_bonus"] == 300.0
+    assert seen["att_bonus"] == 0.0
 
 
 @pytest.mark.asyncio
@@ -716,7 +714,7 @@ async def test_compute_month_new_formula_chain(service):
     service.list_items = AsyncMock(return_value=items)
     service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule(
-        base_salary=5000.0, bonus_standard=1000.0, subsidy_standard=300.0, social_insurance=200.0))
+        base_salary=5000.0, subsidy_standard=300.0, social_insurance=200.0))
     service._attendance_stats = AsyncMock(return_value={
         str(EMP1): {"normal": 23, "half": 0, "missed": 0, "absent": 0, "records": 23, "overtime": 0}})
     service._param_values_for_month = AsyncMock(return_value={})
@@ -731,14 +729,14 @@ async def test_compute_month_new_formula_chain(service):
     await service.compute_month("2026-07")
     assert seen["basic"] == 5000.0
     assert seen["subsidy"] == 300.0
-    assert seen["bonus"] == 1000.0
+    assert seen["bonus"] == 0.0  # 绩效标准已从规则移除，恒 0
     assert seen["base_total"] == 5300.0  # 5000 + 0 + 0 + 300 + 0
-    assert seen["bonus_total"] == 1000.0
+    assert seen["bonus_total"] == 0.0  # 0 + 0
     assert seen["absent_days"] == 0.0
     assert seen["absent_deduction"] == 0.0
-    assert seen["gross"] == 6300.0  # 5300 + 1000 - 0
+    assert seen["gross"] == 5300.0  # 5300 + 0 - 0
     assert seen["deduction"] == 200.0
-    assert seen["net"] == 6100.0  # 6300 - 200
+    assert seen["net"] == 5100.0  # 5300 - 200
 
 
 @pytest.mark.asyncio
@@ -781,42 +779,6 @@ async def test_save_cells_remark(service):
     assert result["saved"] == 0
     data = service.repo.update.call_args[0][1]
     assert data["remark"] == "旷工扣款"
-
-
-@pytest.mark.asyncio
-async def test_att_std_uses_rule_standard_not_award(service):
-    # 全勤300(att_std) 取规则标准 att_bonus；全勤奖(att_award) 随考勤条件。
-    # key 改名（att_bonus→att_award）后，att_std 的依赖才不会错误路由到全勤奖 item。
-    items = [
-        {"key": "att_std", "formula": "att_bonus", "is_active": True, "is_manual": False},
-        {"key": "att_award",
-         "formula": "att_bonus if (missed_days == 0 and absent_days == 0) else 0",
-         "is_active": True, "is_manual": False},
-    ]
-    service.list_items = AsyncMock(return_value=items)
-    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
-    service._latest_rule = AsyncMock(return_value=make_rule(attendance_bonus=300.0))
-    service._param_values_for_month = AsyncMock(return_value={})
-    service._grid_values = AsyncMock(return_value={})
-    service._upsert_record = AsyncMock()
-    seen = {}
-
-    async def fake_replace(month, eid, vals, manual_keys=()):
-        seen.update(vals)
-
-    service._replace_grid_values = fake_replace
-    # 有旷工 → 全勤奖=0，但 全勤300 标准仍是 300
-    service._attendance_stats = AsyncMock(return_value={
-        str(EMP1): {"normal": 20, "half": 0, "missed": 1, "absent": 0, "records": 21, "overtime": 0}})
-    await service.compute_month("2026-07")
-    assert seen["att_std"] == 300.0
-    assert seen["att_award"] == 0.0
-    # 全勤 → 两者都是 300
-    service._attendance_stats = AsyncMock(return_value={
-        str(EMP1): {"normal": 23, "half": 0, "missed": 0, "absent": 0, "records": 23, "overtime": 0}})
-    await service.compute_month("2026-07")
-    assert seen["att_std"] == 300.0
-    assert seen["att_award"] == 300.0
 
 
 # ── 指标设置模板（命名保存 + 一键应用）─────────────────────────────────────

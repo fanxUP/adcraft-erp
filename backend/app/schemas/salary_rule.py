@@ -8,10 +8,8 @@ class SalaryRuleCreate(BaseModel):
     effective_date: date
     base_salary: float = 0
     overtime_rate: Optional[float] = None
-    bonus_standard: Optional[float] = None
     commission_rate: Optional[float] = None
     subsidy_standard: Optional[float] = None
-    attendance_bonus: Optional[float] = None
     social_insurance: Optional[float] = None
     housing_fund: Optional[float] = None
     deduction_standard: Optional[float] = None
@@ -22,10 +20,8 @@ class SalaryRuleUpdate(BaseModel):
     effective_date: Optional[date] = None
     base_salary: Optional[float] = None
     overtime_rate: Optional[float] = None
-    bonus_standard: Optional[float] = None
     commission_rate: Optional[float] = None
     subsidy_standard: Optional[float] = None
-    attendance_bonus: Optional[float] = None
     social_insurance: Optional[float] = None
     housing_fund: Optional[float] = None
     deduction_standard: Optional[float] = None
@@ -40,10 +36,8 @@ class SalaryRuleResponse(BaseModel):
     effective_date: date
     base_salary: float
     overtime_rate: Optional[float] = None
-    bonus_standard: Optional[float] = None
     commission_rate: Optional[float] = None
     subsidy_standard: Optional[float] = None
-    attendance_bonus: Optional[float] = None
     social_insurance: Optional[float] = None
     housing_fund: Optional[float] = None
     deduction_standard: Optional[float] = None

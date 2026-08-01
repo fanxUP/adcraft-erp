@@ -157,7 +157,7 @@ class SalaryRecordService:
         口径（生成后可手工微调）：
           base_salary   = 规则.base_salary
           overtime_pay  = 当月考勤加班工时 × 时薪 × 加班费率（时薪 = base / 21.75 / 8）
-          bonus         = 规则.bonus_standard（缺省 0）
+          bonus         = 0（规则已不再提供绩效标准，需手工填或改用其他列）
           commission    = 0（无数据源）
           subsidy       = 规则.subsidy_standard（缺省 0）
           deduction     = 社保 + 公积金 + 其他扣款标准
@@ -191,7 +191,7 @@ class SalaryRecordService:
             overtime_hours = await self._monthly_overtime_hours(eid, start, end)
             rate = float(rule.overtime_rate) if rule.overtime_rate else 1.5
             overtime_pay = round(overtime_hours * (base / MONTHLY_WORK_DAYS / DAILY_WORK_HOURS) * rate, 2)
-            bonus = float(rule.bonus_standard or 0)
+            bonus = 0.0  # 绩效标准已从工资规则移除，无数据源
             subsidy = float(rule.subsidy_standard or 0)
             deduction = (float(rule.social_insurance or 0)
                          + float(rule.housing_fund or 0)
@@ -266,13 +266,12 @@ class SalaryRecordService:
             base = float(r.base_salary or 0)
             overtime_pay = float(r.overtime_pay or 0)
             # 绩效/伙食优先取工资记录值（工资网格生成/手改时已同步），无则回退规则标准
-            performance = (float(r.bonus) if r.bonus is not None
-                           else (float(rule.bonus_standard) if rule and rule.bonus_standard else 0.0))
+            performance = (float(r.bonus) if r.bonus is not None else 0.0)  # 绩效标准已从规则移除，回退 0
             meal = (float(r.subsidy) if r.subsidy is not None
                     else (float(rule.subsidy_standard) if rule and rule.subsidy_standard else 0.0))
             attendance_bonus = att_grid.get((str(eid), "att_award"))
             if attendance_bonus is None:
-                attendance_bonus = (float(rule.attendance_bonus) if rule and rule.attendance_bonus else 0.0)
+                attendance_bonus = 0.0  # 全勤奖标准已从规则移除，回退 0
             social = float(rule.social_insurance) if rule and rule.social_insurance else 0.0
             housing = float(rule.housing_fund) if rule and rule.housing_fund else 0.0
             other_ded = float(rule.deduction_standard) if rule and rule.deduction_standard else 0.0
@@ -572,10 +571,10 @@ class SalaryRecordService:
         return {
             "base": f(rule.base_salary),
             "ot_rate": f(rule.overtime_rate),
-            "bonus_std": f(rule.bonus_standard),
+            "bonus_std": 0.0,  # 绩效标准已从工资规则移除，恒为 0
             "commission_rate": f(rule.commission_rate),
             "subsidy_std": f(rule.subsidy_standard),
-            "att_bonus": f(rule.attendance_bonus),
+            "att_bonus": 0.0,  # 全勤奖标准已从工资规则移除，恒为 0
             "social": f(rule.social_insurance),
             "housing": f(rule.housing_fund),
             "ded_std": f(rule.deduction_standard),
