@@ -121,7 +121,7 @@ onMounted(() => fetchData())
 <style scoped>
 .report-sheet { background: #fff; border: 1px solid #e4e7ed; border-radius: 4px; padding: 12px; }
 .report-title { text-align: center; font-size: 22px; font-weight: 700; font-family: Songti, "SimSun", serif; padding: 6px 0 12px; border-bottom: 2px solid #333; margin-bottom: 10px; color: #303133; }
-.report-scroll { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 220px); }
+.report-scroll { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 220px); padding-bottom: 14px; }
 .rep-sheet { width: 100%; border-collapse: collapse; white-space: nowrap; }
 .rep-sheet th, .rep-sheet td { border: 1px solid #b0b0b0; padding: 3px 5px; font-size: 12px; }
 .rep-sheet thead th { background: #f2f2f2; font-weight: 700; color: #303133; text-align: center; line-height: 1.35; }
