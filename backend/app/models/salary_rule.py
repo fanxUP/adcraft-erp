@@ -1,6 +1,6 @@
 import uuid
 from datetime import date
-from sqlalchemy import Date, Numeric, String, Text, ForeignKey
+from sqlalchemy import Date, Numeric, String, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin
@@ -8,6 +8,7 @@ from app.models.base import Base, TimestampMixin
 
 class SalaryRule(Base, TimestampMixin):
     __tablename__ = "salary_rules"
+    __table_args__ = (UniqueConstraint("employee_id", name="uq_salary_rules_employee"),)  # 一人一条
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     employee_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("employees.id"), nullable=False)
     effective_date: Mapped[date] = mapped_column(Date, nullable=False)

@@ -53,6 +53,10 @@ class SalaryRuleService:
     async def create_rule(self, data):
         if isinstance(data.get("employee_id"), str):
             data["employee_id"] = UUID(data["employee_id"])
+        existing = await self.repo.get_by_employee(data["employee_id"])
+        if existing:
+            # 一人一条：同员工已有规则则覆盖更新，不新增记录
+            return self._to_dict(await self.repo.update(existing[0], data))
         return self._to_dict(await self.repo.create(data))
 
     async def update_rule(self, rid: UUID, data):

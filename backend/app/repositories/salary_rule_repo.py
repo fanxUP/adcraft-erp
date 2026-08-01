@@ -41,6 +41,7 @@ class SalaryRuleRepository:
             if v is not None:
                 setattr(obj, k, v)
         await self.db.flush()
+        await self.db.refresh(obj)  # 服务端 onupdate(func.now()) 会过期 updated_at，需异步刷新
         return obj
 
     async def delete(self, obj):
