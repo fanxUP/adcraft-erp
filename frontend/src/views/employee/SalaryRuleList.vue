@@ -139,7 +139,7 @@ const sortableCols = [
   { key: "base_salary", label: "月工资标准", cls: "col-num" },
   { key: "social_insurance", label: "社保金额", cls: "col-num" },
 ] as const
-const sortKey = ref<string>("")
+const sortKey = ref<string>("employee_no")
 const sortDir = ref<"asc" | "desc">("asc")
 
 const sortVal = (row: SalaryRuleItem, key: string): string | number => {
