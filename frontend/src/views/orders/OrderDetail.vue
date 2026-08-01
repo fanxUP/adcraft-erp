@@ -481,7 +481,8 @@ async function handleChangeStatus(to_status: string) {
       reason: undefined,
     })
     ElMessage.success(`状态已变更为「${label}」`)
-    await aiStore.notifyBusinessMutation()
+    // 取消会软删订单进回收站，导航刷新查不到已删订单，跳过
+    if (to_status !== 'cancelled') await aiStore.notifyBusinessMutation()
   } finally { changing.value = false }
 }
 
