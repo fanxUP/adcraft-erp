@@ -16,10 +16,9 @@
 
     <!-- 汇总 -->
     <el-row :gutter="16" style="margin-bottom:16px">
-      <el-col :span="6"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#409eff">{{list.length}}</div><div style="font-size:13px;color:#909399;margin-top:4px">已设置规则人数</div></div></el-card></el-col>
-      <el-col :span="6"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#67c23a">{{totalBase.toFixed(2)}}</div><div style="font-size:13px;color:#909399;margin-top:4px">基本工资合计/月</div></div></el-card></el-col>
-      <el-col :span="6"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#e6a23c">{{totalSubsidy.toFixed(2)}}</div><div style="font-size:13px;color:#909399;margin-top:4px">补贴合计/月</div></div></el-card></el-col>
-      <el-col :span="6"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#f56c6c">{{totalDeduction.toFixed(2)}}</div><div style="font-size:13px;color:#909399;margin-top:4px">社保公积金扣款合计/月</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#409eff">{{list.length}}</div><div style="font-size:13px;color:#909399;margin-top:4px">已设置规则人数</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#67c23a">{{totalBase.toFixed(2)}}</div><div style="font-size:13px;color:#909399;margin-top:4px">月工资标准合计/月</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#f56c6c">{{totalDeduction.toFixed(2)}}</div><div style="font-size:13px;color:#909399;margin-top:4px">社保金额合计/月</div></div></el-card></el-col>
     </el-row>
 
     <!-- 工资规则表 -->
@@ -27,22 +26,14 @@
       <table class="rule-sheet" v-if="list.length">
         <thead>
           <tr>
-            <th rowspan="2" class="col-sm">#</th>
-            <th rowspan="2" class="col-emp">工号</th>
-            <th rowspan="2" class="col-emp">姓名</th>
-            <th rowspan="2" class="col-dept">部门</th>
-            <th rowspan="2" class="col-date">生效日期</th>
-            <th colspan="4" class="col-group">应发标准</th>
-            <th colspan="2" class="col-group">扣款标准</th>
-            <th rowspan="2" class="col-op">操作</th>
-          </tr>
-          <tr>
-            <th class="col-num">基本工资</th>
-            <th class="col-num">加班费率</th>
-            <th class="col-num">提成比例</th>
-            <th class="col-num">补贴标准</th>
-            <th class="col-num">社保</th>
-            <th class="col-num">公积金</th>
+            <th class="col-sm">#</th>
+            <th class="col-emp">工号</th>
+            <th class="col-emp">姓名</th>
+            <th class="col-dept">部门</th>
+            <th class="col-date">生效日期</th>
+            <th class="col-num">月工资标准</th>
+            <th class="col-num">社保金额</th>
+            <th class="col-op">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -53,11 +44,7 @@
             <td>{{ deptLabel(row.employee_id) }}</td>
             <td class="cell-date">{{ row.effective_date }}</td>
             <td class="cell-num"><strong>{{ fmt(row.base_salary) }}</strong></td>
-            <td class="cell-num">{{ row.overtime_rate != null ? row.overtime_rate + 'x' : '-' }}</td>
-            <td class="cell-num">{{ row.commission_rate != null ? row.commission_rate + '%' : '-' }}</td>
-            <td class="cell-num">{{ fmt(row.subsidy_standard) }}</td>
             <td class="cell-num deduction">{{ fmt(row.social_insurance) }}</td>
-            <td class="cell-num deduction">{{ fmt(row.housing_fund) }}</td>
             <td class="cell-op">
               <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
               <el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button>
@@ -73,13 +60,8 @@
       <el-form :model="form" label-width="110px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">
         <el-form-item label="员工" v-if="!isEditing"><el-select v-model="form.employee_id" filterable style="width:100%"><el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" /></el-select></el-form-item>
         <el-form-item label="生效日期" required><el-date-picker v-model="form.effective_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
-        <el-form-item label="基本工资 (元)"><el-input-number v-model="form.base_salary" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="加班费率 (倍)"><el-input-number v-model="form.overtime_rate" :min="1" :max="3" :step="0.1" :precision="1" style="width:100%" placeholder="默认1.5" /></el-form-item>
-        <el-form-item label="提成比例 (%)"><el-input-number v-model="form.commission_rate" :min="0" :max="100" :precision="1" style="width:100%" /></el-form-item>
-        <el-form-item label="补贴标准 (元/月)"><el-input-number v-model="form.subsidy_standard" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="社保扣款 (元)"><el-input-number v-model="form.social_insurance" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="公积金扣款 (元)"><el-input-number v-model="form.housing_fund" :min="0" :precision="2" style="width:100%" /></el-form-item>
-        <el-form-item label="其他扣款 (元)"><el-input-number v-model="form.deduction_standard" :min="0" :precision="2" style="width:100%" /></el-form-item>
+        <el-form-item label="月工资标准 (元)"><el-input-number v-model="form.base_salary" :min="0" :precision="2" style="width:100%" /></el-form-item>
+        <el-form-item label="社保金额 (元)"><el-input-number v-model="form.social_insurance" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="备注" style="grid-column:1/3"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="showDialog=false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
@@ -98,12 +80,8 @@
         </el-form-item>
         <el-divider>统一设置以下标准（留空则不修改）</el-divider>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <el-form-item label="基本工资"><el-input-number v-model="batchForm.base_salary" :min="0" :precision="2" style="width:100%" /></el-form-item>
-          <el-form-item label="补贴标准"><el-input-number v-model="batchForm.subsidy_standard" :min="0" :precision="2" style="width:100%" /></el-form-item>
-          <el-form-item label="加班费率"><el-input-number v-model="batchForm.overtime_rate" :min="1" :max="3" :step="0.1" :precision="1" style="width:100%" /></el-form-item>
-          <el-form-item label="提成比例"><el-input-number v-model="batchForm.commission_rate" :min="0" :max="100" :precision="1" style="width:100%" /></el-form-item>
-          <el-form-item label="社保扣款"><el-input-number v-model="batchForm.social_insurance" :min="0" :precision="2" style="width:100%" /></el-form-item>
-          <el-form-item label="公积金扣款"><el-input-number v-model="batchForm.housing_fund" :min="0" :precision="2" style="width:100%" /></el-form-item>
+          <el-form-item label="月工资标准"><el-input-number v-model="batchForm.base_salary" :min="0" :precision="2" style="width:100%" /></el-form-item>
+          <el-form-item label="社保金额"><el-input-number v-model="batchForm.social_insurance" :min="0" :precision="2" style="width:100%" /></el-form-item>
         </div>
       </el-form>
       <template #footer><el-button @click="showBatchDialog=false">取消</el-button><el-button type="primary" @click="handleBatchSave" :loading="batchSaving">批量保存</el-button></template>
@@ -131,10 +109,8 @@ const saving = ref(false)
 const editId = ref("")
 
 const initForm = {
-  employee_id: "", effective_date: "", base_salary: 0, overtime_rate: null,
-  commission_rate: null, subsidy_standard: null,
-  social_insurance: null, housing_fund: null,
-  deduction_standard: null, remark: "", employee_name: "",
+  employee_id: "", effective_date: "", base_salary: 0,
+  social_insurance: null, remark: "", employee_name: "",
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form = ref<any>({ ...initForm })
@@ -143,8 +119,7 @@ const form = ref<any>({ ...initForm })
 const showBatchDialog = ref(false)
 const batchSaving = ref(false)
 const initBatchForm = {
-  employee_ids: [], effective_date: "", base_salary: null, overtime_rate: null,
-  commission_rate: null, subsidy_standard: null, social_insurance: null, housing_fund: null,
+  employee_ids: [], effective_date: "", base_salary: null, social_insurance: null,
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const batchForm = ref<any>({ ...initBatchForm })
@@ -160,8 +135,7 @@ const deptLabel = (eid: string) => {
 
 /* ====== totals ====== */
 const totalBase = computed(() => list.value.reduce((s, r) => s + (r.base_salary || 0), 0))
-const totalSubsidy = computed(() => list.value.reduce((s, r) => s + (r.subsidy_standard || 0), 0))
-const totalDeduction = computed(() => list.value.reduce((s, r) => s + (r.social_insurance || 0) + (r.housing_fund || 0), 0))
+const totalDeduction = computed(() => list.value.reduce((s, r) => s + (r.social_insurance || 0), 0))
 
 /* ====== data ====== */
 async function fetchData() {
@@ -231,11 +205,7 @@ async function handleBatchSave() {
         effective_date: batchForm.value.effective_date,
         base_salary: batchForm.value.base_salary ?? 0,
       }
-      if (batchForm.value.overtime_rate != null) data.overtime_rate = batchForm.value.overtime_rate
-      if (batchForm.value.commission_rate != null) data.commission_rate = batchForm.value.commission_rate
-      if (batchForm.value.subsidy_standard != null) data.subsidy_standard = batchForm.value.subsidy_standard
       if (batchForm.value.social_insurance != null) data.social_insurance = batchForm.value.social_insurance
-      if (batchForm.value.housing_fund != null) data.housing_fund = batchForm.value.housing_fund
       await createSalaryRule(data)
       ok++
     } catch { fail++ }
@@ -258,7 +228,6 @@ onMounted(() => { loadEmps(); fetchData() })
 .col-emp { min-width: 70px; }
 .col-dept { width: 75px; text-align: center; }
 .col-date { width: 100px; text-align: center; }
-.col-group { text-align: center; background: #eef1f6 !important; }
 .col-num { min-width: 85px; text-align: right; }
 .col-op { width: 100px; text-align: center; }
 .cell-center { text-align: center; }

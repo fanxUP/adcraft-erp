@@ -156,11 +156,11 @@ class SalaryRecordService:
 
         口径（生成后可手工微调）：
           base_salary   = 规则.base_salary
-          overtime_pay  = 当月考勤加班工时 × 时薪 × 加班费率（时薪 = base / 21.75 / 8）
+          overtime_pay  = 当月考勤加班工时 × 时薪 × 1.5（时薪 = base / 21.75 / 8；加班费率已从规则移除，固定 1.5）
           bonus         = 0（规则已不再提供绩效标准，需手工填或改用其他列）
           commission    = 0（无数据源）
-          subsidy       = 规则.subsidy_standard（缺省 0）
-          deduction     = 社保 + 公积金 + 其他扣款标准
+          subsidy       = 0（补贴标准已从规则移除）
+          deduction     = 规则.social_insurance（社保金额）
           net_salary    = base + overtime + bonus + commission + subsidy − deduction（不小于 0）
 
         无规则的员工跳过；该月已有记录的员工跳过（不覆盖）。
@@ -189,13 +189,11 @@ class SalaryRecordService:
 
             base = float(rule.base_salary or 0)
             overtime_hours = await self._monthly_overtime_hours(eid, start, end)
-            rate = float(rule.overtime_rate) if rule.overtime_rate else 1.5
+            rate = 1.5  # 加班费率已从工资规则移除，固定 1.5
             overtime_pay = round(overtime_hours * (base / MONTHLY_WORK_DAYS / DAILY_WORK_HOURS) * rate, 2)
             bonus = 0.0  # 绩效标准已从工资规则移除，无数据源
-            subsidy = float(rule.subsidy_standard or 0)
-            deduction = (float(rule.social_insurance or 0)
-                         + float(rule.housing_fund or 0)
-                         + float(rule.deduction_standard or 0))
+            subsidy = 0.0  # 补贴标准已从工资规则移除
+            deduction = float(rule.social_insurance or 0)  # 仅社保金额
             net = round(base + overtime_pay + bonus + subsidy - deduction, 2)
             if net < 0:
                 net = 0.0
@@ -230,9 +228,9 @@ class SalaryRecordService:
 
         列口径：
           出勤天数/旷工/未出勤天数/加班小时 来自当月考勤；
-          全勤/绩效/伙食补助/社保/社保扣款 来自月末前生效的最新工资规则；
+          社保/社保扣款 来自月末前生效的最新工资规则（规则只保留 月工资标准/社保金额）；
           基本工资/加班费/备注 来自工资记录；上月 来自上月工资记录。
-          应发 = 基本+加班费+绩效+伙食+全勤话费；实发 = 应发 − 社保扣款。
+          应发 = 基本+加班费；实发 = 应发 − 社保金额。
         """
         if len(month) != 7 or month[4] != "-" or not month[:4].isdigit() or not month[5:].isdigit():
             raise ValueError("月份格式应为 YYYY-MM")
@@ -267,20 +265,17 @@ class SalaryRecordService:
             overtime_pay = float(r.overtime_pay or 0)
             # 绩效/伙食优先取工资记录值（工资网格生成/手改时已同步），无则回退规则标准
             performance = (float(r.bonus) if r.bonus is not None else 0.0)  # 绩效标准已从规则移除，回退 0
-            meal = (float(r.subsidy) if r.subsidy is not None
-                    else (float(rule.subsidy_standard) if rule and rule.subsidy_standard else 0.0))
+            meal = float(r.subsidy) if r.subsidy is not None else 0.0  # 补贴标准已从规则移除，回退 0
             attendance_bonus = att_grid.get((str(eid), "att_award"))
             if attendance_bonus is None:
                 attendance_bonus = 0.0  # 全勤奖标准已从规则移除，回退 0
-            social = float(rule.social_insurance) if rule and rule.social_insurance else 0.0
-            housing = float(rule.housing_fund) if rule and rule.housing_fund else 0.0
-            other_ded = float(rule.deduction_standard) if rule and rule.deduction_standard else 0.0
+            social = float(rule.social_insurance) if rule and rule.social_insurance else 0.0  # 社保金额
 
             attend_days = att["normal"] + att["half"] * 0.5
             absent_days = max(0, non_weekend - att["records"]) + att["absent"]
             total_salary = round(base + overtime_pay, 2)
             gross = round(total_salary + performance + meal + attendance_bonus, 2)
-            social_deduction = round(social + housing + other_ded, 2)
+            social_deduction = round(social, 2)
             net = round(gross - social_deduction, 2)
             if net < 0:
                 net = 0.0
@@ -570,14 +565,14 @@ class SalaryRecordService:
                      "att_bonus", "social", "housing", "ded_std")}
         return {
             "base": f(rule.base_salary),
-            "ot_rate": f(rule.overtime_rate),
+            "ot_rate": 0.0,  # 加班费率已从工资规则移除，恒为 0
             "bonus_std": 0.0,  # 绩效标准已从工资规则移除，恒为 0
-            "commission_rate": f(rule.commission_rate),
-            "subsidy_std": f(rule.subsidy_standard),
+            "commission_rate": 0.0,  # 提成比例已从工资规则移除，恒为 0
+            "subsidy_std": 0.0,  # 补贴标准已从工资规则移除，恒为 0
             "att_bonus": 0.0,  # 全勤奖标准已从工资规则移除，恒为 0
             "social": f(rule.social_insurance),
-            "housing": f(rule.housing_fund),
-            "ded_std": f(rule.deduction_standard),
+            "housing": 0.0,  # 公积金已从工资规则移除，恒为 0
+            "ded_std": 0.0,  # 其他扣款已从工资规则移除，恒为 0
         }
 
     def _attendance_vars(self, att, work_days):

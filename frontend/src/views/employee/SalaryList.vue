@@ -277,10 +277,10 @@ const group1Options = ["应发金额", "应扣金额"]
 const group2Options = ["基本部分", "绩效部分", "考勤栏", "代缴费用"]
 
 const varHints = [
-  { name: "base", label: "基本工资标准(规则)" }, { name: "ot_rate", label: "加班费率(规则)" },
-  { name: "bonus_std", label: "绩效标准(规则已删,恒0)" }, { name: "subsidy_std", label: "伙食补助标准(规则)" },
-  { name: "att_bonus", label: "全勤奖标准(规则已删,恒0)" }, { name: "social", label: "社保(规则)" },
-  { name: "housing", label: "公积金(规则)" }, { name: "ded_std", label: "其他扣款(规则)" },
+  { name: "base", label: "月工资标准(规则)" }, { name: "ot_rate", label: "加班费率(规则已删,恒0)" },
+  { name: "bonus_std", label: "绩效标准(规则已删,恒0)" }, { name: "subsidy_std", label: "伙食补助标准(规则已删,恒0)" },
+  { name: "att_bonus", label: "全勤奖标准(规则已删,恒0)" }, { name: "social", label: "社保金额(规则)" },
+  { name: "housing", label: "公积金(规则已删,恒0)" }, { name: "ded_std", label: "其他扣款(规则已删,恒0)" },
   { name: "ot_hours", label: "当月加班工时" }, { name: "attend_days", label: "出勤天数" },
   { name: "half_days", label: "半天数" }, { name: "missed_days", label: "旷工天数" },
   { name: "absent_days", label: "未出勤天数" }, { name: "records", label: "有考勤记录天数" },

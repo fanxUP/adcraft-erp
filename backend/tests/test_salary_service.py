@@ -22,12 +22,7 @@ def make_rule(**kwargs):
     r.employee_id = kwargs.get("employee_id", EMP1)
     r.effective_date = kwargs.get("effective_date", date(2026, 1, 1))
     r.base_salary = kwargs.get("base_salary", 5000.0)
-    r.overtime_rate = kwargs.get("overtime_rate", 1.5)
-    r.commission_rate = kwargs.get("commission_rate", None)
-    r.subsidy_standard = kwargs.get("subsidy_standard", None)
     r.social_insurance = kwargs.get("social_insurance", None)
-    r.housing_fund = kwargs.get("housing_fund", None)
-    r.deduction_standard = kwargs.get("deduction_standard", None)
     return r
 
 
@@ -63,8 +58,7 @@ async def test_generate_month_skips_employee_without_rule(service):
 
 @pytest.mark.asyncio
 async def test_generate_month_creates_record_with_rule_components(service):
-    rule = make_rule(base_salary=5000.0, subsidy_standard=300.0, social_insurance=500.0,
-                     housing_fund=300.0, deduction_standard=100.0)
+    rule = make_rule(base_salary=5000.0, social_insurance=500.0)
     await _patch_queries(service, rule=rule)
     result = await service.generate_month("2026-07")
     assert result["created"] == 1
@@ -73,24 +67,24 @@ async def test_generate_month_creates_record_with_rule_components(service):
     assert data["employee_id"] == EMP1
     assert data["month"] == "2026-07"
     assert data["base_salary"] == 5000.0
-    assert data["subsidy"] == 300.0
-    assert data["deduction"] == 900.0
+    assert data["subsidy"] == 0.0  # 补贴标准已从规则移除，恒 0
+    assert data["deduction"] == 500.0  # 仅社保金额
     assert data["overtime_pay"] == 0.0
     assert data["bonus"] == 0.0
     assert data["commission"] == 0
-    assert data["net_salary"] == 5000.0 + 300.0 - 900.0
+    assert data["net_salary"] == 5000.0 - 500.0
     assert data["payment_status"] == "pending"
 
 
 @pytest.mark.asyncio
 async def test_generate_month_computes_overtime_and_bonus(service):
-    rule = make_rule(base_salary=5000.0, overtime_rate=2.0)
+    rule = make_rule(base_salary=5000.0)
     await _patch_queries(service, rule=rule, overtime=10.0)
     result = await service.generate_month("2026-07")
     assert result["created"] == 1
     data = service.repo.create.call_args[0][0]
     hourly = 5000.0 / 21.75 / 8
-    expected_overtime = round(10.0 * hourly * 2.0, 2)
+    expected_overtime = round(10.0 * hourly * 1.5, 2)  # 加班费率已从规则移除，固定 1.5
     assert data["overtime_pay"] == expected_overtime
     assert data["bonus"] == 0.0  # 绩效标准已从规则移除，恒 0
     assert data["net_salary"] == round(5000.0 + expected_overtime, 2)
@@ -176,8 +170,7 @@ def _setup_report(service, records, prev_records=None, employees=None, rule=None
 @pytest.mark.asyncio
 async def test_report_month_returns_row_fields(service):
     record = make_record(base_salary=5000.0, overtime_pay=100.0, remark="备注")
-    rule = make_rule(subsidy_standard=50.0,
-                     social_insurance=500.0, housing_fund=300.0, deduction_standard=100.0)
+    rule = make_rule(social_insurance=500.0)
     att = {str(EMP1): {"normal": 20, "half": 2, "missed": 0, "absent": 1,
                        "records": 23, "overtime": 10.5}}
     _setup_report(service, [record], rule=rule, att=att)
@@ -200,13 +193,13 @@ async def test_report_month_returns_row_fields(service):
     assert row["overtime_pay"] == 100.0
     assert row["total_salary"] == 5100.0  # 5000+100
     assert row["performance_wage"] == 0.0  # 绩效标准已从规则移除
-    assert row["meal_subsidy"] == 50.0
+    assert row["meal_subsidy"] == 0.0  # 补贴标准已从规则移除，回退 0
     assert row["attendance_phone_subsidy"] == 0.0  # 全勤标准已从规则移除
-    assert row["gross"] == 5150.0  # 5100+0+50+0
-    assert row["social_deduction"] == 900.0  # 500+300+100
-    assert row["net_salary"] == 4250.0  # 5150-900
+    assert row["gross"] == 5100.0  # 5000+100+0+0
+    assert row["social_deduction"] == 500.0  # 仅社保金额
+    assert row["net_salary"] == 4600.0  # 5100-500
     assert row["social_insurance"] == 500.0
-    assert row["actual_gross"] == 4250.0
+    assert row["actual_gross"] == 4600.0
     assert row["remark"] == "备注"
     assert row["prev_month_net"] is None
 
@@ -286,7 +279,7 @@ async def test_compute_month_evaluates_formulas(service):
         {"key": "gross", "formula": "basic + overtime_pay", "is_active": True},
         {"key": "net", "formula": "max(0, gross - deduction)", "is_active": True},
     ]
-    rule = make_rule(base_salary=5000.0, overtime_rate=2.0)
+    rule = make_rule(base_salary=5000.0)
     service.list_items = AsyncMock(return_value=items)
     service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._attendance_stats = AsyncMock(return_value={
@@ -307,7 +300,7 @@ async def test_compute_month_evaluates_formulas(service):
     assert result["errors"] == []
     hourly = 5000 / 21.75 / 8
     assert seen["basic"] == 5000.0
-    assert seen["overtime_pay"] == round(10 * hourly * 2, 2)
+    assert seen["overtime_pay"] == round(10 * hourly * 1.5, 2)  # ot_rate 已从规则移除恒 0 → (ot_rate or 1.5)=1.5
     assert seen["deduction"] == 0.0
     assert seen["gross"] == round(5000 + seen["overtime_pay"], 2)
     assert seen["net"] == seen["gross"]
@@ -714,7 +707,7 @@ async def test_compute_month_new_formula_chain(service):
     service.list_items = AsyncMock(return_value=items)
     service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule(
-        base_salary=5000.0, subsidy_standard=300.0, social_insurance=200.0))
+        base_salary=5000.0, social_insurance=200.0))
     service._attendance_stats = AsyncMock(return_value={
         str(EMP1): {"normal": 23, "half": 0, "missed": 0, "absent": 0, "records": 23, "overtime": 0}})
     service._param_values_for_month = AsyncMock(return_value={})
@@ -728,15 +721,15 @@ async def test_compute_month_new_formula_chain(service):
     service._replace_grid_values = fake_replace
     await service.compute_month("2026-07")
     assert seen["basic"] == 5000.0
-    assert seen["subsidy"] == 300.0
+    assert seen["subsidy"] == 0.0  # 补贴标准已从规则移除，恒 0
     assert seen["bonus"] == 0.0  # 绩效标准已从规则移除，恒 0
-    assert seen["base_total"] == 5300.0  # 5000 + 0 + 0 + 300 + 0
+    assert seen["base_total"] == 5000.0  # 5000 + 0 + 0 + 0 + 0
     assert seen["bonus_total"] == 0.0  # 0 + 0
     assert seen["absent_days"] == 0.0
     assert seen["absent_deduction"] == 0.0
-    assert seen["gross"] == 5300.0  # 5300 + 0 - 0
+    assert seen["gross"] == 5000.0  # 5000 + 0 - 0
     assert seen["deduction"] == 200.0
-    assert seen["net"] == 5100.0  # 5300 - 200
+    assert seen["net"] == 4800.0  # 5000 - 200
 
 
 @pytest.mark.asyncio
