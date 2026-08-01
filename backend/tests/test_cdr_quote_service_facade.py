@@ -17,6 +17,7 @@ def test_cdr_quote_service_preserves_domain_interfaces():
         "calculate",
         "create_quote_version",
         "request_approval",
+        "create_rule_set",
         "convert_to_order",
         "save_quote_geometry",
         "register_device",

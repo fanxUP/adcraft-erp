@@ -7,6 +7,8 @@ from sqlalchemy import select, func, update, delete
 from sqlalchemy.orm import selectinload
 
 from app.models.cdr_quote import (
+    PriceRuleSet, CdrPriceRule,
+    CustomerPriceAgreement,
     QuoteVersion, QuoteLine, QuoteLineProcess,
     QuoteApproval, QuoteAuditLog,
     CdrDevice, CdrCaptureSession, DrawingSnapshot, QuoteGeometry,
@@ -166,6 +168,99 @@ class CdrQuoteRepository:
         self.db.add(lp)
         await self.db.flush()
         return lp
+
+    # ── 规则集 ──
+
+    async def create_rule_set(self, data: dict) -> PriceRuleSet:
+        rs = PriceRuleSet(**data)
+        self.db.add(rs)
+        await self.db.flush()
+        return rs
+
+    async def get_rule_set(self, rule_set_id: UUID) -> PriceRuleSet | None:
+        r = await self.db.execute(
+            select(PriceRuleSet).options(selectinload(PriceRuleSet.rules)).where(PriceRuleSet.id == rule_set_id)
+        )
+        return r.scalar_one_or_none()
+
+    async def list_rule_sets(self) -> list[PriceRuleSet]:
+        r = await self.db.execute(
+            select(PriceRuleSet).order_by(PriceRuleSet.created_at.desc())
+        )
+        return list(r.scalars().all())
+
+    async def get_active_rule_set(self) -> PriceRuleSet | None:
+        """获取当前生效的已发布规则集。"""
+        from datetime import date
+        today = date.today().isoformat()
+        r = await self.db.execute(
+            select(PriceRuleSet)
+            .options(selectinload(PriceRuleSet.rules))
+            .where(PriceRuleSet.status == "published")
+            .where(
+                (PriceRuleSet.effective_from.is_(None)) | (PriceRuleSet.effective_from <= today)
+            )
+            .where(
+                (PriceRuleSet.effective_to.is_(None)) | (PriceRuleSet.effective_to >= today)
+            )
+            .order_by(PriceRuleSet.version.desc())
+            .limit(1)
+        )
+        return r.scalar_one_or_none()
+
+    # ── 客户协议价 ──
+
+    async def get_customer_agreement(
+        self, customer_id: UUID, product_id: UUID | None = None
+    ) -> CustomerPriceAgreement | None:
+        """查找匹配的客户协议价。"""
+        from datetime import date
+        today = date.today().isoformat()
+        q = select(CustomerPriceAgreement).where(
+            CustomerPriceAgreement.customer_id == customer_id,
+            (CustomerPriceAgreement.effective_from <= today),
+            (CustomerPriceAgreement.effective_to.is_(None)) | (CustomerPriceAgreement.effective_to >= today),
+        )
+        if product_id:
+            q = q.where(
+                (CustomerPriceAgreement.product_id == product_id) | (CustomerPriceAgreement.product_id.is_(None))
+            )
+        q = q.order_by(CustomerPriceAgreement.product_id.desc()).limit(1)
+        r = await self.db.execute(q)
+        return r.scalar_one_or_none()
+
+    async def list_customer_agreements(self, customer_id: UUID | None = None) -> list[CustomerPriceAgreement]:
+        q = select(CustomerPriceAgreement)
+        if customer_id:
+            q = q.where(CustomerPriceAgreement.customer_id == customer_id)
+        q = q.order_by(CustomerPriceAgreement.created_at.desc())
+        r = await self.db.execute(q)
+        return list(r.scalars().all())
+
+    async def create_customer_agreement(self, data: dict) -> CustomerPriceAgreement:
+        ca = CustomerPriceAgreement(**data)
+        self.db.add(ca)
+        await self.db.flush()
+        return ca
+
+
+    async def update_customer_agreement(self, agreement_id: UUID, data: dict) -> CustomerPriceAgreement | None:
+        ca = await self.db.get(CustomerPriceAgreement, agreement_id)
+        if not ca:
+            return None
+        for key, value in data.items():
+            if value is not None:
+                setattr(ca, key, value)
+        await self.db.flush()
+        return ca
+
+    async def delete_customer_agreement(self, agreement_id: UUID) -> bool:
+        ca = await self.db.get(CustomerPriceAgreement, agreement_id)
+        if not ca:
+            return False
+        await self.db.delete(ca)
+        await self.db.flush()
+        return True
 
     # ── 审批 ──
 

@@ -68,11 +68,21 @@ class ProcessInfo:
 
 
 @dataclass
+class CustomerAgreement:
+    """客户协议价（从 DB 加载）。"""
+    pricing_method: str
+    price_value: Decimal
+    minimum_charge: Decimal
+    discount_rate: Decimal
+
+
+@dataclass
 class CalculateRequest:
     """报价计算请求。"""
     product: ProductInfo
     material: MaterialInfo | None = None
     processes: list[ProcessInfo] = field(default_factory=list)
+    customer_agreement: CustomerAgreement | None = None
     customer_level: str | None = None
 
     # 几何参数
@@ -393,16 +403,20 @@ class PriceEngine:
         return cost.quantize(self.ROUND_PRECISION)
 
     def _resolve_unit_price(self, req: CalculateRequest) -> Decimal:
-        """确定单价（优先级：手工价 > 材料售价 > 产品默认价）。"""
+        """确定单价（优先级：手工价 > 客户协议价 > 产品默认价）。"""
         # 1. 手工输入单价
         if req.manual_unit_price is not None:
             return req.manual_unit_price
 
-        # 2. 材料售价（材料计价时）
+        # 2. 客户协议价
+        if req.customer_agreement:
+            return req.customer_agreement.price_value
+
+        # 3. 材料售价（材料计价时）
         if req.material and req.material.sale_price > 0:
             return req.material.sale_price
 
-        # 3. 产品默认价
+        # 4. 产品默认价
         if req.product.default_price > 0:
             return req.product.default_price
 
@@ -410,6 +424,10 @@ class PriceEngine:
 
     def _get_min_charge(self, req: CalculateRequest) -> Decimal:
         """获取最低消费。"""
+        # 客户协议价中的最低消费优先级最高
+        if req.customer_agreement and req.customer_agreement.minimum_charge > 0:
+            return req.customer_agreement.minimum_charge
+
         if req.product.min_charge > 0:
             return req.product.min_charge
 
@@ -417,6 +435,10 @@ class PriceEngine:
 
     def _resolve_discount_rate(self, req: CalculateRequest) -> Decimal:
         """确定折扣率。"""
+        # 客户协议折扣率
+        if req.customer_agreement and req.customer_agreement.discount_rate < Decimal("1"):
+            return req.customer_agreement.discount_rate
+
         # 客户输入折扣率
         if req.customer_discount_rate < Decimal("1"):
             return req.customer_discount_rate

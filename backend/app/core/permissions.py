@@ -194,7 +194,9 @@ PERM_CDR_QUOTE_VIEW_PROFIT = "cdr_quote:view_profit"
 PERM_CDR_QUOTE_ADJUST_PRICE = "cdr_quote:adjust_price"
 PERM_CDR_QUOTE_APPROVE = "cdr_quote:approve"
 PERM_CDR_QUOTE_CONVERT = "cdr_quote:convert"
+PERM_CDR_RULE_SET_PUBLISH = "cdr_rule_set:publish"
 PERM_CDR_DEVICE_MANAGE = "cdr_device:manage"
+PERM_CDR_CUSTOMER_AGREEMENT_MANAGE = "cdr_customer_agreement:manage"
 
 
 # ── Role name constants ───────────────────────────────────────────────────
