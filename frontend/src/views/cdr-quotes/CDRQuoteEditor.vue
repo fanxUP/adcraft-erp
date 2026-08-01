@@ -101,7 +101,7 @@
         </div>
       </template>
 
-      <el-table :data="lines" stripe border>
+      <el-table :data="lines" stripe border scrollbar-always-on>
         <el-table-column label="#" width="50">
           <template #default="{ $index }">{{ $index + 1 }}</template>
         </el-table-column>
@@ -759,4 +759,8 @@ onMounted(async () => {
 .area-field { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .image-field { display: flex; align-items: center; gap: 4px; }
 .image-field :deep(.el-image) { width: 32px; height: 32px; border-radius: 4px; }
+
+/* 出现横向滚动时，滚动条始终可见，且与最后一行、表格底部边框保持间距 */
+:deep(.el-table.el-table--scrollable-x .el-scrollbar__view) { padding-bottom: 12px; }
+:deep(.el-table.el-table--scrollable-x .el-table__body-wrapper) { margin-bottom: 8px; }
 </style>
