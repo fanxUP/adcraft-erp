@@ -13,6 +13,7 @@
       <el-table-column prop="cost_type" label="费用类型" width="100"><template #default="{ row }">{{ costTypeLabel(row.cost_type) }}</template></el-table-column>
       <el-table-column prop="amount" label="金额" width="120" align="right"><template #default="{ row }">¥{{ row.amount }}</template></el-table-column>
       <el-table-column prop="plate_number" label="车辆" width="100" />
+      <el-table-column prop="payer_name" label="支付人" width="100" />
       <el-table-column prop="allocation_type" label="分摊方式" width="100"><template #default="{ row }">{{ allocLabel(row.allocation_type) }}</template></el-table-column>
       <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
     </el-table>
