@@ -1,4 +1,4 @@
-import { get, post, put, del, apiClient } from './index'
+import { get, post, put, del } from './index'
 import type { PaginatedData, SuccessResponse } from '@/types/api'
 import type { AttachmentResponse } from '@/types/api'
 
@@ -28,10 +28,9 @@ export function deleteEmployee(id: string) { return del<SuccessResponse>('/emplo
 export async function uploadEmployeeImage(file: File) {
   const form = new FormData()
   form.append('file', file)
-  const res = await apiClient.post('/employees/upload', form, {
+  return post<{ file_url: string; file_name: string; file_size: number }>('/employees/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
-  return res.data.data as { file_url: string; file_name: string; file_size: number }
 }
 
 export function getEmployeeAttachments(id: string) { return get<AttachmentResponse[]>('/employees/' + id + '/attachments') }
@@ -41,11 +40,10 @@ export async function uploadEmployeeAttachment(id: string, file: File, category?
   form.append('file', file)
   const params: Record<string, string> = {}
   if (category) params.category = category
-  const res = await apiClient.post('/employees/' + id + '/attachments', form, {
+  return post<AttachmentResponse>('/employees/' + id + '/attachments', form, {
     params,
     headers: { 'Content-Type': 'multipart/form-data' },
   })
-  return res.data.data as AttachmentResponse
 }
 
 export function deleteEmployeeAttachment(attachmentId: string) { return del<SuccessResponse>('/employees/attachments/' + attachmentId) }
