@@ -53,6 +53,12 @@
                 />
               </el-select>
             </el-form-item>
+            <el-form-item label="联系人：">
+              <el-input v-model="form.contact_person" placeholder="联系人" style="width: 220px" />
+            </el-form-item>
+            <el-form-item label="联系电话：">
+              <el-input v-model="form.contact_phone" placeholder="联系电话" style="width: 220px" />
+            </el-form-item>
             <el-form-item label="备注：">
               <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="备注" />
             </el-form-item>
@@ -471,6 +477,8 @@ async function handleSave() {
     const payload = {
       accepted_by: form.accepted_by || null,
       our_acceptor_id: form.our_acceptor_id || null,
+      contact_person: form.contact_person || null,
+      contact_phone: form.contact_phone || null,
       remark: form.remark || null,
       discount_amount: form.discount_amount || 0,
       advance_amount: form.advance_amount || 0,

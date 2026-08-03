@@ -176,7 +176,7 @@ async def test_pending_acceptance_can_save_existing_item_results():
         remark=None,
         image_url=None,
     )
-    form = MagicMock(status="pending", items=[item])
+    form = MagicMock(status="pending", items=[item], contact_person=None, contact_phone=None)
 
     with patch(
         "app.services.acceptance_service.AcceptanceRepository"

@@ -26,6 +26,11 @@ class CostEntry(BaseModel):
     cost_amount: float
 
 
+class ContactEntry(BaseModel):
+    contact_person: str | None = None
+    contact_phone: str | None = None
+
+
 @router.get("/")
 async def list_orders(
     page: int = Query(1, ge=1),
@@ -173,6 +178,23 @@ async def restore_order(
                             OBJ_ORDER, oid, "restore",
                             ip_address=request.client.host if request.client else None,
                             after_data={"status": "cancelled"})
+        return success(order)
+    except ValueError as e:
+        return error(40401, str(e))
+
+
+@router.put("/{order_id}/contact")
+async def update_order_contact(
+    order_id: str,
+    data: ContactEntry,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
+):
+    service = BusinessDocumentService(db, doc_type='order')
+    try:
+        order = await service.update_order_contact(
+            UUID(order_id), data.contact_person, data.contact_phone
+        )
         return success(order)
     except ValueError as e:
         return error(40401, str(e))

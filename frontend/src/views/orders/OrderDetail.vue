@@ -36,8 +36,21 @@
              <el-descriptions-item label="状态">
                 <el-tag :type="statusColor(order.status)">{{ statusLabel(order.status) }}</el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="联系人">{{ order.contact_person || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="联系电话">{{ order.contact_phone || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="联系人">
+                <el-input v-if="contactEditing" v-model="contactDraft.person" size="small" style="width: 140px" placeholder="联系人" />
+                <template v-else>{{ order.contact_person || '-' }}</template>
+              </el-descriptions-item>
+              <el-descriptions-item label="联系电话">
+                <div v-if="contactEditing" style="display: flex; align-items: center; gap: 8px">
+                  <el-input v-model="contactDraft.phone" size="small" style="width: 140px" placeholder="联系电话" />
+                  <el-button size="small" type="primary" :loading="contactSaving" @click="handleSaveContact">保存</el-button>
+                  <el-button size="small" @click="cancelContactEdit">取消</el-button>
+                </div>
+                <template v-else>
+                  {{ order.contact_phone || '-' }}
+                  <el-button v-if="order.status !== 'cancelled'" size="small" text type="primary" style="margin-left: 8px" @click="startContactEdit">编辑</el-button>
+                </template>
+              </el-descriptions-item>
               <el-descriptions-item label="总金额">¥ {{ order.total_amount?.toFixed(2) }}</el-descriptions-item>
               <el-descriptions-item label="已收金额">¥ {{ order.paid_amount?.toFixed(2) }}</el-descriptions-item>
               <el-descriptions-item label="未收金额">¥ {{ order.unpaid_amount?.toFixed(2) }}</el-descriptions-item>
@@ -286,13 +299,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Printer } from '@element-plus/icons-vue'
 import OrderWorkflow from './OrderWorkflow.vue'
 import OrderProjectOverview from './OrderProjectOverview.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
-import { getOrder, changeOrderStatus, reopenCompletedOrder, autoCalculateCost } from '@/api/orders'
+import { getOrder, changeOrderStatus, reopenCompletedOrder, autoCalculateCost, updateOrderContact } from '@/api/orders'
 import { getDesignTasks, getProductionTasks, getInstallationTasks } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, OrderDetailResponse, OrderItemResponse } from '@/types/api'
@@ -311,6 +324,31 @@ const designTasks = ref<DesignTaskResponse[]>([])
 const productionTasks = ref<ProductionTaskResponse[]>([])
 const installationTasks = ref<InstallationTaskResponse[]>([])
 const autoCostLoading = ref(false)
+const contactEditing = ref(false)
+const contactSaving = ref(false)
+const contactDraft = reactive({ person: '', phone: '' })
+
+function startContactEdit() {
+  contactDraft.person = order.value?.contact_person || ''
+  contactDraft.phone = order.value?.contact_phone || ''
+  contactEditing.value = true
+}
+function cancelContactEdit() {
+  contactEditing.value = false
+}
+async function handleSaveContact() {
+  contactSaving.value = true
+  try {
+    order.value = await updateOrderContact(route.params.id as string, {
+      contact_person: contactDraft.person || null,
+      contact_phone: contactDraft.phone || null,
+    })
+    contactEditing.value = false
+    ElMessage.success('联系人已更新')
+  } catch (e: unknown) {
+    ElMessage.error(e instanceof Error ? e.message : '保存失败')
+  } finally { contactSaving.value = false }
+}
 
 const itemsTotal = computed(() => (order.value?.items || []).reduce((s, i) => s + (i.subtotal_amount || 0), 0))
 const designCompleted = computed(() => designTasks.value.filter(task => task.status === 'completed').length)

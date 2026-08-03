@@ -112,7 +112,11 @@ class AcceptanceService:
         if not items_data and doc_id:
             await self._copy_doc_items(form.id, doc_id)
 
-        return self._to_detail_dict(await self.repo.get_by_id(form.id))
+        form = await self.repo.get_by_id(form.id)
+        # 反向同步：验收单填了联系人则自动存入客户管理
+        await self._sync_contact_to_customer(form)
+
+        return self._to_detail_dict(form)
 
     async def _copy_doc_items(self, acceptance_id: UUID, doc_id: UUID) -> None:
         """统一从 business_document 复制明细（取代 _copy_order_items + _copy_quote_items）。"""
@@ -161,12 +165,13 @@ class AcceptanceService:
 
         items_data = data.pop("items", None)
         if form.status == "pending":
-            for field in ("accepted_by", "our_acceptor_id", "remark"):
+            for field in ("accepted_by", "our_acceptor_id", "remark", "contact_person", "contact_phone"):
                 if field in data:
                     setattr(form, field, data[field])
             if items_data is not None:
                 self._update_pending_item_results(form, items_data)
             await self.db.flush()
+            await self._sync_contact_to_customer(form)
             return self._to_detail_dict(
                 await self.repo.get_by_id(acceptance_id)
             )
@@ -177,6 +182,7 @@ class AcceptanceService:
             update_dict["items"] = items_data
 
         form = await self.repo.update(form, update_dict)
+        await self._sync_contact_to_customer(form)
         return self._to_detail_dict(form)
 
     @staticmethod
@@ -352,7 +358,7 @@ class AcceptanceService:
     # ── 序列化（统一访问 form.document） ──
     @staticmethod
     def _doc_info(form: AcceptanceForm):
-        """从统一 document 关系中提取显示信息。"""
+        """从关联单据提取显示信息；联系人为验收单自有字段，不再从订单/报价继承。"""
         d = form.document
         if not d:
             return {
@@ -362,8 +368,8 @@ class AcceptanceService:
                 "customer_name": None,
                 "customer_phone": None,
                 "customer_address": None,
-                "contact_person": None,
-                "contact_phone": None,
+                "contact_person": form.contact_person,
+                "contact_phone": form.contact_phone,
                 "project_name": None,
                 "department": None,
                 "order_date": None,
@@ -378,21 +384,30 @@ class AcceptanceService:
             ),
             "customer_phone": d.customer.phone if (is_order and d.customer) else None,
             "customer_address": d.customer.address if (is_order and d.customer) else None,
-            "contact_person": d.contact_person or (
-                AcceptanceService._primary_contact(d.customer) if (is_order and d.customer) else None
-            ),
-            "contact_phone": d.contact_phone,
+            "contact_person": form.contact_person,
+            "contact_phone": form.contact_phone,
             "project_name": d.project_name,
             "department": d.department,
             "order_date": d.created_at.isoformat() if (is_order and d.created_at) else None,
         }
 
-    @staticmethod
-    def _primary_contact(customer) -> str | None:
-        if not customer or not customer.contacts:
-            return None
-        primary = next((c for c in customer.contacts if c.is_primary), None)
-        return primary.name if primary else (customer.contacts[0].name if customer.contacts else None)
+    async def _sync_contact_to_customer(self, form: AcceptanceForm) -> None:
+        """验收单保存时反向同步：填了联系人则自动存入客户管理的联系人列表（按客户+姓名 upsert）。"""
+        contact_person = (form.contact_person or "").strip()
+        if not contact_person or not form.document_id:
+            return
+        doc = form.document
+        if doc is None:
+            result = await self.db.execute(
+                select(BusinessDocument).where(BusinessDocument.id == form.document_id)
+            )
+            doc = result.scalar_one_or_none()
+        if not doc or not doc.customer_id:
+            return
+        from app.repositories.customer_repo import CustomerRepository
+        await CustomerRepository(self.db).upsert_contact(
+            doc.customer_id, contact_person, form.contact_phone
+        )
 
     def _to_list_dict(self, form: AcceptanceForm) -> dict:
         info = self._doc_info(form)

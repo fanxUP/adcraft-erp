@@ -90,8 +90,9 @@ class CdrQuoteConversionService(CdrQuoteServiceBase):
             project_name=quote_doc.project_name,
             sales_user_id=quote_doc.sales_user_id,
             department=quote_doc.department,
-            contact_person=quote_doc.contact_person,
-            contact_phone=quote_doc.contact_phone,
+            # 联系人不再从报价单继承：订单/报价/验收各看各的联系人，订单联系人由订单编辑填写
+            contact_person=None,
+            contact_phone=None,
             status="pending_confirm",
             total_amount=total_amount,
             paid_amount=Decimal("0"),

@@ -41,6 +41,8 @@ export function createAcceptance(data: {
   quote_id?: string   // backward compat
   accepted_by?: string
   our_acceptor_id?: string
+  contact_person?: string
+  contact_phone?: string
   remark?: string
   items?: Array<{
     item_name: string
@@ -56,6 +58,8 @@ export function createAcceptance(data: {
 export function updateAcceptance(id: string, data: {
   accepted_by?: string | null
   our_acceptor_id?: string | null
+  contact_person?: string | null
+  contact_phone?: string | null
   remark?: string | null
   discount_amount?: number
   advance_amount?: number

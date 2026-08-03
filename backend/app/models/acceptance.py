@@ -20,6 +20,9 @@ class AcceptanceForm(Base, TimestampMixin, SoftDeleteMixin):
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     accepted_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     our_acceptor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    # 验收单自己的联系人（不再从关联订单/报价继承，由验收方填写）
+    contact_person: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     reject_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     discount_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)

@@ -33,6 +33,8 @@ class AcceptanceCreate(BaseModel):
     quote_id: str | None = None   # backward compat
     accepted_by: str | None = None
     our_acceptor_id: str | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
     remark: str | None = None
     items: list[dict] = []
 
@@ -40,6 +42,8 @@ class AcceptanceCreate(BaseModel):
 class AcceptanceUpdate(BaseModel):
     accepted_by: str | None = None
     our_acceptor_id: str | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
     remark: str | None = None
     items: list[dict] | None = None
 

@@ -1,4 +1,4 @@
-import { get, post, del } from './index'
+import { get, post, put, del } from './index'
 import { PaginatedData, OrderListResponse, OrderDetailResponse, QuoteDetailResponse } from '@/types/api'
 
 export function getOrders(params: { page?: number; page_size?: number; status?: string; customer_id?: string; keyword?: string }) {
@@ -39,4 +39,8 @@ export function restoreOrder(id: string) {
 
 export function convertOrderToQuote(id: string) {
   return post<QuoteDetailResponse>(`/orders/${id}/convert-to-quote`)
+}
+
+export function updateOrderContact(id: string, data: { contact_person?: string | null; contact_phone?: string | null }) {
+  return put<OrderDetailResponse>(`/orders/${id}/contact`, data)
 }

@@ -689,6 +689,27 @@ class BusinessDocumentService:
         breakdown = await OrderCostAggregationService(self.db).calculate(doc_id)
         return await self.set_cost(doc_id, float(breakdown.total))
 
+    async def update_order_contact(self, doc_id: UUID, contact_person: str | None, contact_phone: str | None) -> dict:
+        """更新订单联系人（联系人独立填写，不再随报价单传递），保存时反向同步到客户管理。
+
+        注意：repo.update 会跳过 None 值，清空联系人必须直接赋值属性。
+        """
+        doc = await self.repo.get_by_id(doc_id)
+        if not doc:
+            raise ValueError("单据不存在")
+        if doc.doc_type != "order":
+            raise ValueError("仅订单可设置联系人")
+        contact_person = (contact_person or "").strip() or None
+        contact_phone = (contact_phone or "").strip() or None
+        doc.contact_person = contact_person
+        doc.contact_phone = contact_phone
+        await self.db.flush()
+        await self._sync_contact_to_customer(doc, {
+            "contact_person": contact_person,
+            "contact_phone": contact_phone,
+        })
+        return self._to_detail(doc)
+
     # ═══════════════════════════════════════════
     # 报价计算
     # ═══════════════════════════════════════════
@@ -833,6 +854,9 @@ class BusinessDocumentService:
             doc.doc_type = "order"
             doc.status = "pending_confirm"
             # 重置报价专有字段
+            # 联系人不再随报价带过来：订单/报价/验收各看各的联系人
+            doc.contact_person = None
+            doc.contact_phone = None
             doc.discount_amount = 0
             doc.tax_rate = 0
             doc.tax_amount = 0
