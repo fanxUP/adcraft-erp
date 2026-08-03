@@ -111,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { getDashboard } from '@/api/payments'
 import { getOrders } from '@/api/orders'
 import { getDesignTasks, getProductionTasks, getInstallationTasks } from '@/api/tasks'
@@ -193,9 +193,22 @@ async function handleCardClick(card: OrderListResponse, colKey: string) {
   window.location.href = '/orders/' + card.id
 }
 
+// 从详情页返回时浏览器可能走 bfcache 恢复页面（onMounted 不再触发），
+// 需要监听 pageshow 在恢复时重新拉取看板数据，避免删除任务后卡片仍显示旧数据。
+function handlePageShow(e: PageTransitionEvent) {
+  if (e.persisted) {
+    fetchBoardData()
+  }
+}
+
 onMounted(() => {
   fetchData()
   fetchBoardData()
+  window.addEventListener('pageshow', handlePageShow)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pageshow', handlePageShow)
 })
 </script>
 
