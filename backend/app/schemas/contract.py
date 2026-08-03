@@ -18,6 +18,7 @@ class ContractCreate(BaseModel):
     contract_type: str | None = None
     content: str | None = None
     remark: str | None = None
+    order_ids: list[str] = []
 
 
 class ContractUpdate(BaseModel):

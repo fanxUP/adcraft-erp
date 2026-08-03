@@ -694,6 +694,18 @@ export interface ContractAvailableResources {
   used_project_names: string[]
 }
 
+export interface OrderWithoutContractItem {
+  id: string
+  order_no?: string
+  customer_id?: string
+  customer_name?: string
+  project_name: string
+  department?: string
+  status?: string
+  total_amount?: number
+  created_at?: string
+}
+
 // ---- Framework Contract ----
 
 export interface FrameworkContractProjectResponse {

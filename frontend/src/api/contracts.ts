@@ -1,5 +1,5 @@
 import { apiClient, get, post, put, del } from './index'
-import type { PaginatedData, ContractListResponse, ContractDetailResponse, ContractAvailableResources, SuccessResponse } from '@/types/api'
+import type { PaginatedData, ContractListResponse, ContractDetailResponse, ContractAvailableResources, OrderWithoutContractItem, SuccessResponse } from '@/types/api'
 
 export function getContracts(params: {
   page?: number
@@ -55,4 +55,8 @@ export function getContractAvailableResources(customerId?: string, contractId?: 
   if (customerId) params.customer_id = customerId
   if (contractId) params.contract_id = contractId
   return get<ContractAvailableResources>('/contracts/available-resources', { params })
+}
+
+export function getOrdersWithoutContract(params: { page?: number; page_size?: number; keyword?: string }) {
+  return get<PaginatedData<OrderWithoutContractItem>>('/contracts/orders-without-contract', { params })
 }

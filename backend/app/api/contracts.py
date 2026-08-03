@@ -128,6 +128,20 @@ async def get_available_resources(
     })
 
 
+@router.get("/orders-without-contract")
+async def list_orders_without_contract(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
+):
+    """未建立合同的订单列表（未关联任何合同/框架合同项目，排除已取消）。"""
+    service = ContractService(db)
+    items, total = await service.list_orders_without_contract(page, page_size, keyword)
+    return success_paginated(items, total, page, page_size)
+
+
 @router.get("/{contract_id}")
 async def get_contract(
     contract_id: str,

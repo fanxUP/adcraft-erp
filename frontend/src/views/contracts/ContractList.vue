@@ -80,6 +80,48 @@
       @change="fetchData"
     />
 
+    <!-- 未建立合同订单 -->
+    <el-card shadow="never" style="margin-top: 16px">
+      <template #header>
+        <div class="unlinked-header">
+          <span>未建立合同订单</span>
+          <el-input v-model="unlinkedKeyword" placeholder="单号/客户/项目搜索" clearable size="small" style="width: 200px" @keyup.enter="fetchUnlinkedOrders" @clear="fetchUnlinkedOrders" />
+        </div>
+      </template>
+      <el-table :data="unlinkedOrders" v-loading="unlinkedLoading" size="small" stripe>
+        <el-table-column prop="order_no" label="订单编号" width="160" />
+        <el-table-column prop="customer_name" label="客户" width="140" show-overflow-tooltip />
+        <el-table-column prop="project_name" label="项目名称" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="department" label="部门" width="110" show-overflow-tooltip />
+        <el-table-column label="金额" width="110" align="right">
+          <template #default="{ row }">¥ {{ (row.total_amount || 0).toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag :type="orderStatusColor(row.status)" size="small">{{ orderStatusLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="创建日期" width="110">
+          <template #default="{ row }">{{ row.created_at?.slice(0, 10) || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" fixed="right">
+          <template #default="{ row }">
+            <el-button text type="primary" size="small" @click="handleCreateForOrder(row)">新建合同</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-pagination
+        v-if="unlinkedTotal > 0"
+        v-model:current-page="unlinkedPage"
+        v-model:page-size="unlinkedPageSize"
+        :page-sizes="[5, 10, 20, 50]"
+        :total="unlinkedTotal"
+        layout="total, sizes, prev, pager, next"
+        style="margin-top: 12px; justify-content: flex-end"
+        @change="fetchUnlinkedOrders"
+      />
+    </el-card>
+
     <!-- 新建/编辑合同对话框 -->
     <el-dialog
       v-model="formVisible"
@@ -225,10 +267,10 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getContracts, getContract, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment } from '@/api/contracts'
+import { getContracts, getContract, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment, getOrdersWithoutContract } from '@/api/contracts'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { ContractListResponse, ContractDetailResponse } from '@/types/api'
+import type { ContractListResponse, ContractDetailResponse, OrderWithoutContractItem } from '@/types/api'
 import type { FormInstance } from 'element-plus'
 
 // ── Status helpers ──
@@ -273,7 +315,59 @@ async function fetchData() {
 function handleSearch() { page.value = 1; fetchData() }
 function handleReset() { filters.keyword = ''; filters.status = ''; page.value = 1; fetchData() }
 
-onMounted(fetchData)
+// ── 未建立合同订单 ──
+const unlinkedOrders = ref<OrderWithoutContractItem[]>([])
+const unlinkedTotal = ref(0)
+const unlinkedPage = ref(1)
+const unlinkedPageSize = ref(10)
+const unlinkedLoading = ref(false)
+const unlinkedKeyword = ref('')
+// 从「未建立合同订单」发起的创建：当前要关联的订单 id
+let pendingOrderId = ''
+
+const orderStatusLabelMap: Record<string, string> = {
+  pending_confirm: '待确认', confirmed: '已确认', designing: '设计中',
+  in_production: '生产中', in_installation: '安装中', pending_acceptance: '待验收',
+  completed: '已完成', cancelled: '已取消',
+}
+const orderStatusColorMap: Record<string, string> = {
+  pending_confirm: 'warning', confirmed: 'info', designing: '', in_production: '',
+  in_installation: '', pending_acceptance: 'warning', completed: 'success', cancelled: 'danger',
+}
+function orderStatusLabel(s: string) { return orderStatusLabelMap[s] || s }
+function orderStatusColor(s: string) { return orderStatusColorMap[s] || 'info' }
+
+async function fetchUnlinkedOrders() {
+  unlinkedLoading.value = true
+  try {
+    const params: Record<string, unknown> = { page: unlinkedPage.value, page_size: unlinkedPageSize.value }
+    if (unlinkedKeyword.value) params.keyword = unlinkedKeyword.value
+    const data = await getOrdersWithoutContract(params)
+    unlinkedOrders.value = data.items
+    unlinkedTotal.value = data.total
+  } finally {
+    unlinkedLoading.value = false
+  }
+}
+
+function handleCreateForOrder(row: OrderWithoutContractItem) {
+  resetForm()
+  pendingOrderId = row.id
+  form.customer_id = row.customer_id || ''
+  form.customer_name = row.customer_name || ''
+  form.project_name = row.project_name || ''
+  form.total_amount = row.total_amount || 0
+  if (form.customer_id && form.customer_name) {
+    customerOptions.value = [{ id: form.customer_id, name: form.customer_name }]
+  }
+  loadAllCustomers()
+  formVisible.value = true
+}
+
+onMounted(() => {
+  fetchData()
+  fetchUnlinkedOrders()
+})
 
 // ── Create / Edit form ──
 const formVisible = ref(false)
@@ -360,6 +454,7 @@ function resetForm() {
   form.remark = ''
   attFileName.value = ''
   ;pendingContractFile = null
+  pendingOrderId = ''
   isEditing.value = false
   editingId.value = ''
 }
@@ -430,7 +525,7 @@ async function saveForm() {
       customer_signatory: form.customer_signatory || null,
       content: form.content || null,
       remark: form.remark || null,
-      order_ids: [],
+      order_ids: pendingOrderId ? [pendingOrderId] : [],
 
     }
     if (isEditing.value) {
@@ -446,8 +541,10 @@ async function saveForm() {
       }
       ElMessage.success('合同创建成功')
     }
+    pendingOrderId = ''
     formVisible.value = false
     fetchData()
+    fetchUnlinkedOrders()
   } catch { /* error handled by interceptor */ } finally {
     formLoading.value = false
   }
@@ -521,3 +618,7 @@ async function handleDelete(row: ContractListResponse) {
   fetchData()
 }
 </script>
+
+<style scoped>
+.unlinked-header { display: flex; justify-content: space-between; align-items: center; }
+</style>

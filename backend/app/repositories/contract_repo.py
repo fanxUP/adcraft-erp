@@ -1,7 +1,7 @@
 from uuid import UUID, uuid4
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import not_, select, func
 from sqlalchemy.orm import selectinload
 
 from app.models.contract import Contract, ContractDocument
@@ -51,6 +51,37 @@ class ContractRepository:
         total = (await self.db.execute(count_q)).scalar()
 
         q = q.order_by(Contract.created_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all()), total
+
+    async def list_orders_without_contract(
+        self,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: str | None = None,
+    ) -> tuple[list["BusinessDocument"], int]:
+        """返回未被任何合同/框架合同项目关联的订单（排除已取消）。"""
+        from app.models.business_document import BusinessDocument
+        from app.models.framework_contract import FrameworkContractProjectDocument
+
+        used_sub = select(ContractDocument.document_id)
+        fw_sub = select(FrameworkContractProjectDocument.document_id)
+        q = select(BusinessDocument).where(
+            BusinessDocument.deleted_at.is_(None),
+            BusinessDocument.doc_type == "order",
+            BusinessDocument.status != "cancelled",
+            not_(BusinessDocument.id.in_(used_sub)),
+            not_(BusinessDocument.id.in_(fw_sub)),
+        )
+        if keyword:
+            q = q.where(
+                BusinessDocument.doc_no.ilike(f"%{keyword}%")
+                | BusinessDocument.customer_name.ilike(f"%{keyword}%")
+                | BusinessDocument.project_name.ilike(f"%{keyword}%")
+            )
+
+        total = (await self.db.execute(select(func.count()).select_from(q.subquery()))).scalar()
+        q = q.order_by(BusinessDocument.created_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(q)
         return list(result.scalars().all()), total
 

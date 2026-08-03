@@ -157,6 +157,22 @@ class ContractService:
             result.append(resp)
         return result, total
 
+    async def list_orders_without_contract(
+        self, page: int, page_size: int, keyword: str | None = None
+    ) -> tuple[list, int]:
+        """未被任何合同/框架合同项目关联的订单（用于「未建立合同订单」列表）。"""
+        skip = (page - 1) * page_size
+        docs, total = await self.repo.list_orders_without_contract(
+            skip=skip, limit=page_size, keyword=keyword
+        )
+        result = []
+        for d in docs:
+            item = BusinessDocumentService._to_ref(d)
+            item["customer_id"] = str(d.customer_id) if d.customer_id else None
+            item["created_at"] = d.created_at.isoformat() if d.created_at else None
+            result.append(item)
+        return result, total
+
     async def get_contract(self, contract_id: UUID) -> dict | None:
         contract = await self.repo.get_by_id(contract_id)
         if not contract:
@@ -183,6 +199,8 @@ class ContractService:
 
     async def create_contract(self, data: dict) -> dict:
         data["contract_no"] = await generate_contract_no(self.db)
+        if "order_ids" in data or "document_ids" in data:
+            data["document_ids"] = self._combine_document_ids(data)
         if data.get("customer_id"):
             data["customer_id"] = UUID(data["customer_id"])
         # Convert date strings to date objects
