@@ -194,6 +194,6 @@ onMounted(async () => {
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
 .att-upload-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
-.att-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.att-list { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .att-link { text-decoration: none; }
 </style>
