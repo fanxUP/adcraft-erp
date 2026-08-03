@@ -134,7 +134,7 @@ class AcceptanceService:
                 specification=spec,
                 quantity=float(item.quantity) if item.quantity else None,
                 unit=item.unit,
-                area=float(item.area) if item.area else None,
+                area=float(item.area) if item.use_area and item.area else None,
                 unit_price=float(item.unit_price) if item.unit_price else None,
                 subtotal=float(item.subtotal_amount) if item.subtotal_amount is not None and float(item.subtotal_amount) > 0 else (float(item.unit_price or 0) * float(item.quantity or 0)),
                 item_status="pending",

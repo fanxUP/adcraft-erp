@@ -123,7 +123,7 @@
               </el-table-column>
               <el-table-column label="面积" width="80">
                 <template #default="{ row }">
-                  <template v-if="row.type === 'item'">{{ row.item.area != null ? row.item.area.toFixed(2) : '-' }}</template>
+                  <template v-if="row.type === 'item'">{{ row.item.use_area && row.item.area != null ? row.item.area.toFixed(2) : '-' }}</template>
                 </template>
               </el-table-column>
               <el-table-column label="数量" width="70">

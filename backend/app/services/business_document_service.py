@@ -580,7 +580,7 @@ class BusinessDocumentService:
                 specification=spec,
                 quantity=float(item.quantity) if item.quantity else None,
                 unit=item.unit,
-                area=float(item.area) if item.area else None,
+                area=float(item.area) if item.use_area and item.area else None,
                 unit_price=float(item.unit_price) if item.unit_price else None,
                 subtotal=float(item.subtotal_amount) if item.subtotal_amount else None,
                 item_status="pending",

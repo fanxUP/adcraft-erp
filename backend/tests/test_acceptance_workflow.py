@@ -8,6 +8,14 @@ import pytest
 from app.services.acceptance_service import AcceptanceService
 from app.repositories.acceptance_repo import normalize_acceptance_item_data
 
+# 导入全部模型模块，注册完整 SQLAlchemy mapper registry（与 main.py 启动时一致）
+import importlib
+import pkgutil
+import app.models
+for _m in pkgutil.iter_modules(app.models.__path__):
+    if _m.name != "base":
+        importlib.import_module(f"app.models.{_m.name}")
+
 
 @pytest.mark.asyncio
 async def test_acceptance_sync_uses_authenticated_operator():
@@ -214,3 +222,56 @@ def test_acceptance_item_alias_is_normalized_for_persistence():
     assert normalized["document_item_id"] == document_item_id
     assert "order_item_id" not in normalized
     assert "id" not in normalized
+
+
+
+
+@pytest.mark.asyncio
+async def test_copy_doc_items_skips_area_when_not_area_priced():
+    """use_area=False（按数量计价）的明细复制到验收单时 area 应为 None。"""
+    from types import SimpleNamespace
+
+    from app.models.acceptance import AcceptanceItem
+
+    def make_item(item_name: str, *, use_area: bool, area):
+        return SimpleNamespace(
+            id=uuid4(),
+            item_name=item_name,
+            material_process=None,
+            width=None,
+            height=None,
+            pieces=1,
+            width_unit=None,
+            height_unit=None,
+            quantity=1,
+            unit="个",
+            area=area,
+            unit_price=50,
+            subtotal_amount=300,
+            group_name=None,
+            remark=None,
+            image_url=None,
+            use_area=use_area,
+        )
+
+    doc = SimpleNamespace(
+        items=[
+            make_item("面积计价", use_area=True, area=0.24),
+            make_item("数量计价", use_area=False, area=0.24),
+        ]
+    )
+
+    db = MagicMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = doc
+    db.execute = AsyncMock(return_value=result)
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+
+    service = AcceptanceService(db)
+    await service._copy_doc_items(uuid4(), uuid4())
+
+    added = {call.args[0].item_name: call.args[0] for call in db.add.call_args_list}
+    assert added["面积计价"].area == 0.24
+    assert added["数量计价"].area is None
+    assert isinstance(added["面积计价"], AcceptanceItem)
