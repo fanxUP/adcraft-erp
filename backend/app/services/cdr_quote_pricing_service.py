@@ -196,6 +196,15 @@ class CdrQuotePricingService(CdrQuoteServiceBase):
             }
         version = await self.repo.create_version(version_data)
 
+        # 反向同步联系人：单据里填的联系人自动存入客户管理的联系人列表
+        if contact_person and contact_person.strip():
+            quote = await self.repo.get_quote(quote_id)
+            if quote and quote.customer_id:
+                from app.repositories.customer_repo import CustomerRepository
+                await CustomerRepository(self.db).upsert_contact(
+                    quote.customer_id, contact_person, contact_phone
+                )
+
         lines_data = data.get("lines", [])
         created_lines = []
         for i, line_data in enumerate(lines_data):

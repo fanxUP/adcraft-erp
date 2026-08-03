@@ -92,9 +92,7 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="联系人">
-              <el-select v-model="form.contact_person" filterable allow-create default-first-option placeholder="选择联系人或输入" style="width: 100%" @change="handleContactChange">
-                <el-option v-for="c in contactOptions" :key="c.id" :label="c.name" :value="c.name" />
-              </el-select>
+              <el-input v-model="form.contact_person" placeholder="联系人" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -292,12 +290,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
 import { uploadAttachment } from '@/api/tasks'
-import { getCustomer } from '@/api/customers'
 import { calculatePricing, createCDRQuote, createQuoteVersion, getLatestVersion, getCDRQuote,
   uploadDesignFile, listDesignAttachments, deleteDesignAttachment,
   parseSvgAttachment, aiAssistFromDescription,
@@ -310,7 +307,6 @@ import { calculatePricing, createCDRQuote, createQuoteVersion, getLatestVersion,
 } from '@/api/cdrQuote'
 import type {
   CustomerResponse,
-  ContactResponse,
   PaginatedData,
   ProductResponse,
 } from '@/types/api'
@@ -357,7 +353,6 @@ const isEdit = computed(() => !!route.params.id)
 const saving = ref(false)
 
 const customers = ref<CustomerResponse[]>([])
-const contactOptions = ref<ContactResponse[]>([])
 const products = ref<ProductResponse[]>([])
 const productPickerVisible = ref(false)
 const pendingPickerLine = ref<EditorLine | null>(null)
@@ -442,34 +437,6 @@ async function fetchLookups() {
     products.value = (prodRes.items || []).filter(item => item.is_active)
   } catch { /* ignore */ }
 }
-
-// 联系人下拉：加载所选客户的已存联系人（客户管理里添加的）
-async function loadCustomerContacts(customerId: string) {
-  const isExisting = customers.value.some(c => c.id === customerId)
-  if (!customerId || !isExisting) {
-    contactOptions.value = []
-    return
-  }
-  try {
-    const customer = await getCustomer(customerId)
-    contactOptions.value = customer.contacts || []
-  } catch {
-    contactOptions.value = []
-  }
-}
-
-function handleContactChange(name: string) {
-  const c = contactOptions.value.find(c => c.name === name)
-  if (c?.phone) form.contact_phone = c.phone
-}
-
-watch(() => form.customer_id, (val) => {
-  if (!val) {
-    contactOptions.value = []
-    return
-  }
-  void loadCustomerContacts(String(val))
-})
 
 async function onLineChange(index: number) {
   const line = lines.value[index]

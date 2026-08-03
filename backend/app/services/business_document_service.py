@@ -119,6 +119,8 @@ class BusinessDocumentService:
         await self.db.refresh(doc, ["customer", "items", "status_logs"])
         # 自动同步客户协议价
         await self._sync_customer_agreements(doc)
+        # 反向同步联系人：单据里填的联系人自动存入客户管理的联系人列表
+        await self._sync_contact_to_customer(doc, data)
         return self._to_detail(doc)
 
     # ═══════════════════════════════════════════
@@ -166,6 +168,9 @@ class BusinessDocumentService:
             updated.items = await self.repo.get_items(doc_id)
             # 自动同步客户协议价
             await self._sync_customer_agreements(updated)
+
+        # 反向同步联系人：单据里填的联系人自动存入客户管理的联系人列表
+        await self._sync_contact_to_customer(updated, data)
 
         # 同步外协任务
         if data.get("project_name") or data.get("total_amount"):
@@ -688,6 +693,16 @@ class BusinessDocumentService:
     # 报价计算
     # ═══════════════════════════════════════════
 
+
+    async def _sync_contact_to_customer(self, doc, data: dict) -> None:
+        """单据保存时反向同步：填了联系人则自动存入客户管理的联系人列表（按客户+姓名 upsert）。"""
+        contact_person = data.get("contact_person")
+        if not doc.customer_id or not contact_person:
+            return
+        from app.repositories.customer_repo import CustomerRepository
+        await CustomerRepository(self.db).upsert_contact(
+            doc.customer_id, contact_person, data.get("contact_phone")
+        )
 
     async def _sync_customer_agreements(self, doc) -> None:
         """对于用户手动重新定价的明细行，自动保存为客户协议价。"""

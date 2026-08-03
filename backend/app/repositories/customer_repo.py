@@ -58,6 +58,30 @@ class CustomerRepository:
         await self.db.flush()
         return customer
 
+    async def upsert_contact(self, customer_id: UUID, name: str, phone: str | None = None) -> CustomerContact | None:
+        """按 (客户, 姓名) 查找联系人：存在则更新电话，不存在则新增。
+
+        供单据保存时反向同步：单据里填的联系人自动存入客户管理的联系人列表。
+        """
+        name = (name or "").strip()
+        if not name:
+            return None
+        result = await self.db.execute(
+            select(CustomerContact).where(
+                CustomerContact.customer_id == customer_id,
+                CustomerContact.name == name,
+            )
+        )
+        contact = result.scalar_one_or_none()
+        if contact:
+            if phone:
+                contact.phone = phone
+        else:
+            contact = CustomerContact(customer_id=customer_id, name=name, phone=phone)
+            self.db.add(contact)
+        await self.db.flush()
+        return contact
+
     async def soft_delete(self, customer: Customer) -> Customer:
         customer.deleted_at = datetime.now()
         await self.db.flush()

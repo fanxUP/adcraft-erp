@@ -20,9 +20,7 @@
           <el-input v-model="form.department" :disabled="isReadonly" placeholder="如：宣传部、办公室" style="width: 260px" />
         </el-form-item>
         <el-form-item label="联系人">
-          <el-select v-model="form.contact_person" filterable allow-create default-first-option :disabled="isReadonly" placeholder="选择联系人或输入" style="width: 160px" @change="handleContactChange">
-            <el-option v-for="c in contactOptions" :key="c.id" :label="c.name" :value="c.name" />
-          </el-select>
+          <el-input v-model="form.contact_person" :disabled="isReadonly" placeholder="联系人" style="width: 160px" />
         </el-form-item>
         <el-form-item label="联系电话">
           <el-input v-model="form.contact_phone" :disabled="isReadonly" placeholder="手机/电话" style="width: 160px" />
@@ -300,10 +298,10 @@ import QuoteWorkflow from './QuoteWorkflow.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { onBeforeRouteLeave } from 'vue-router'
 import { createQuote, getQuote, updateQuote, confirmQuote, convertQuoteToOrder, revertQuoteToDraft, importQuoteItems, downloadQuoteTemplate } from '@/api/quotes'
-import { getCustomers, getCustomer } from '@/api/customers'
+import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { uploadAttachment } from '@/api/tasks'
-import type { QuoteItemResponse, QuoteDetailResponse, CustomerResponse, ContactResponse, ProductResponse } from '@/types/api'
+import type { QuoteItemResponse, QuoteDetailResponse, CustomerResponse, ProductResponse } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
 import ProductPickerDialog from '@/components/ProductPickerDialog.vue'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
@@ -326,7 +324,6 @@ const importingItems = ref(false)
 const customerSelectRef = ref()
 const quote = ref<QuoteDetailResponse | null>(null)
 const customerOptions = ref<CustomerResponse[]>([])
-const contactOptions = ref<ContactResponse[]>([])
 const previewVisible = ref(false)
 const productPickerVisible = ref(false)
 const pendingPickerItem = ref<QuoteItemResponse | null>(null)
@@ -596,34 +593,6 @@ async function loadCustomers() {
   const data = await getCustomers({ page_size: 100 })
   customerOptions.value = data.items
 }
-
-// 联系人下拉：加载所选客户的已存联系人（客户管理里添加的）
-async function loadCustomerContacts(customerId: string) {
-  if (!customerId || !isExistingCustomer(customerId)) {
-    contactOptions.value = []
-    return
-  }
-  try {
-    const customer = await getCustomer(customerId)
-    contactOptions.value = customer.contacts || []
-  } catch {
-    contactOptions.value = []
-  }
-}
-
-function handleContactChange(name: string) {
-  const c = contactOptions.value.find(c => c.name === name)
-  if (c?.phone) form.contact_phone = c.phone
-}
-
-watch(() => form.customer_id, (val) => {
-  if (!val) {
-    contactOptions.value = []
-    return
-  }
-  void loadCustomerContacts(String(val))
-})
-
 
 function openProductPicker(item: QuoteItemResponse) {
   if (!form.customer_id) {
