@@ -1,5 +1,5 @@
 <template>
-  <el-config-provider :locale="zhCn">
+  <el-config-provider :locale="zhCn" :dialog="{ closeOnClickModal: false }">
     <UpdateNotification />
     <router-view />
   </el-config-provider>
