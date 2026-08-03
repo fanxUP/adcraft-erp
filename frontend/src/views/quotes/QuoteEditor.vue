@@ -842,7 +842,8 @@ async function handleConvert() {
   try {
     const order = await convertQuoteToOrder(route.params.id as string)
     ElMessage.success('已转为订单')
-    await aiStore.notifyBusinessMutation()
+    // 转单后同一条单据已变为订单，旧报价上下文刷新流程引导会报"报价单不存在"，
+    // 这里不刷新，跳转到订单页后页面上下文会自动更新为订单再触发引导
     await router.push(`/orders/${order.id}`)
   } finally { converting.value = false }
 }
