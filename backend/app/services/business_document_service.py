@@ -190,7 +190,43 @@ class BusinessDocumentService:
             if tasks:
                 await self.db.flush()
 
+        # 订单保存后同步关联框架合同项目的 项目名称/部门 为订单最新值（金额不自动覆盖）
+        if updated.doc_type == "order":
+            await self._sync_framework_contract_projects(updated)
+
         return self._to_detail(updated)
+
+    async def _sync_framework_contract_projects(self, doc) -> None:
+        """订单保存后自动同步关联框架合同项目的 项目名称/部门 为订单最新值。
+
+        框架合同项目行存的是创建时的快照，订单后续修改不会自动反映到合同项目列表，
+        这里在订单更新时把项目的 项目名称/部门 同步为订单最新值；项目金额不覆盖（人工调整优先）。
+        """
+        from app.models.framework_contract import (
+            FrameworkContractProject,
+            FrameworkContractProjectDocument,
+        )
+        projects = (await self.db.execute(
+            select(FrameworkContractProject)
+            .join(
+                FrameworkContractProjectDocument,
+                FrameworkContractProjectDocument.project_id == FrameworkContractProject.id,
+            )
+            .where(
+                FrameworkContractProjectDocument.document_id == doc.id,
+                FrameworkContractProject.deleted_at.is_(None),
+            )
+        )).scalars().all()
+        changed = False
+        for p in projects:
+            if (p.project_name or "") != (doc.project_name or ""):
+                p.project_name = doc.project_name
+                changed = True
+            if (p.department or "") != (doc.department or ""):
+                p.department = doc.department
+                changed = True
+        if changed:
+            await self.db.flush()
 
     # ═══════════════════════════════════════════
     # 删除

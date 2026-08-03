@@ -281,3 +281,64 @@ async def test_auto_calculate_cost(service):
 
     assert order["cost_amount"] == 4000
     assert order["gross_profit"] == 6000
+
+
+# ─────────────────────────────────────────────
+# 订单保存 → 自动同步关联框架合同项目的 项目名称/部门
+# ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_order_update_syncs_linked_framework_contract_projects():
+    """订单保存后，关联框架合同项目的 项目名称/部门 同步为订单最新值（金额不覆盖）。"""
+    from app.services.business_document_service import BusinessDocumentService
+
+    db = MagicMock()
+    doc = make_order(project_name="奖牌制作", department="督察科")
+    project1 = MagicMock(project_name="奖牌制作", department="监管科")
+    project2 = MagicMock(project_name="奖牌制作", department="政治部人事科")
+
+    outsource_result = MagicMock()
+    outsource_result.scalars.return_value.all.return_value = []
+    projects_result = MagicMock()
+    projects_result.scalars.return_value.all.return_value = [project1, project2]
+    db.execute = AsyncMock(side_effect=[outsource_result, projects_result])
+    db.flush = AsyncMock()
+
+    service = BusinessDocumentService(db, doc_type="order")
+    service.repo.get_by_id = AsyncMock(return_value=doc)
+    service.repo.update = AsyncMock(side_effect=lambda d, data: d)
+    service._sync_contact_to_customer = AsyncMock()
+    service._to_detail = MagicMock(return_value={})
+
+    await service.update(doc.id, {"project_name": "奖牌制作", "department": "督察科"})
+
+    assert project1.project_name == "奖牌制作"
+    assert project1.department == "督察科"
+    assert project2.department == "督察科"
+    db.flush.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_order_update_skips_sync_when_no_linked_project():
+    """订单无关联框架合同项目时，同步静默跳过，不抛错。"""
+    from app.services.business_document_service import BusinessDocumentService
+
+    db = MagicMock()
+    doc = make_order(project_name="奖牌制作", department="督察科")
+
+    outsource_result = MagicMock()
+    outsource_result.scalars.return_value.all.return_value = []
+    projects_result = MagicMock()
+    projects_result.scalars.return_value.all.return_value = []
+    db.execute = AsyncMock(side_effect=[outsource_result, projects_result])
+    db.flush = AsyncMock()
+
+    service = BusinessDocumentService(db, doc_type="order")
+    service.repo.get_by_id = AsyncMock(return_value=doc)
+    service.repo.update = AsyncMock(side_effect=lambda d, data: d)
+    service._sync_contact_to_customer = AsyncMock()
+    service._to_detail = MagicMock(return_value={})
+
+    await service.update(doc.id, {"project_name": "奖牌制作", "department": "督察科"})
+
+    db.flush.assert_not_awaited()
