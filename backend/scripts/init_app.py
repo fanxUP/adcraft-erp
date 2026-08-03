@@ -8,7 +8,6 @@ Idempotent — safe to run multiple times.
 
 import asyncio
 import os
-import secrets
 import sys
 from pathlib import Path
 from uuid import uuid4
@@ -33,8 +32,8 @@ ROLES = [
     {"name": "finance", "description": "财务人员，管理收款和对账"},
 ]
 
-# 初始管理员密码：优先取环境变量 ADMIN_INIT_PASSWORD；未设置则随机生成，避免把默认口令写进代码库
-_ADMIN_INIT_PASSWORD = os.environ.get("ADMIN_INIT_PASSWORD") or secrets.token_urlsafe(16)
+# 初始管理员密码：优先取环境变量 ADMIN_INIT_PASSWORD，默认 admin123（首次登录后请立即修改）
+_ADMIN_INIT_PASSWORD = os.environ.get("ADMIN_INIT_PASSWORD", "admin123")
 ADMIN_USER = {
     "username": "admin",
     "password": _ADMIN_INIT_PASSWORD,

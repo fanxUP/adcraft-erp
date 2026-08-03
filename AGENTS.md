@@ -58,7 +58,7 @@ cd frontend && node node_modules/vite/bin/vite.js --host 0.0.0.0 --port 5173
 | 前端页面 | http://localhost:5173 |
 | 后端 API | http://localhost:8000/api/v1 |
 | API 文档 | http://localhost:8000/api/docs |
-| 管理员登录 | admin（密码不写入代码库，见部署配置） |
+| 管理员登录 | admin / admin123（首次登录后请修改） |
 
 ### pip 安装问题处理
 
