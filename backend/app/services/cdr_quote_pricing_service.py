@@ -187,6 +187,13 @@ class CdrQuotePricingService(CdrQuoteServiceBase):
             "created_by": created_by,
             "notes": data.get("notes"),
         }
+        # 联系人写入快照，编辑时从最新版本回填
+        contact_person = data.get("contact_person")
+        contact_phone = data.get("contact_phone")
+        if contact_person or contact_phone:
+            version_data["snapshot_json"] = {
+                "customer_contact": {"name": contact_person, "phone": contact_phone}
+            }
         version = await self.repo.create_version(version_data)
 
         lines_data = data.get("lines", [])
@@ -421,6 +428,8 @@ class CdrQuotePricingService(CdrQuoteServiceBase):
             "estimated_cost": str(version.estimated_cost),
             "estimated_profit": str(version.estimated_profit),
             "estimated_margin": str(version.estimated_margin),
+            "contact_person": (getattr(version, "snapshot_json", None) or {}).get("customer_contact", {}).get("name"),
+            "contact_phone": (getattr(version, "snapshot_json", None) or {}).get("customer_contact", {}).get("phone"),
             "notes": version.notes,
             "created_by": str(version.created_by) if version.created_by else None,
             "created_at": version.created_at.isoformat() if version.created_at else None,

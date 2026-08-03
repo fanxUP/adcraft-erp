@@ -133,6 +133,8 @@ export interface QuoteVersion {
   estimated_cost: string
   estimated_profit: string
   estimated_margin: string
+  contact_person?: string
+  contact_phone?: string
   notes?: string
   created_by?: string
   created_at?: string
@@ -285,7 +287,7 @@ export function createCDRQuote(data: CDRQuoteCreate) {
 /** 创建报价版本 */
 export function createQuoteVersion(
   quoteId: string,
-  data: { notes?: string; lines: QuoteLineInput[] },
+  data: { contact_person?: string; contact_phone?: string; notes?: string; lines: QuoteLineInput[] },
 ) {
   return api.post<QuoteVersion>(`/cdr/quotes/${quoteId}/versions`, data)
 }

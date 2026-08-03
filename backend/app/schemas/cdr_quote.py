@@ -183,6 +183,8 @@ class QuoteLineUpdate(BaseModel):
 
 class QuoteVersionCreate(BaseModel):
     pricing_rule_set_id: UUID | None = None
+    contact_person: str | None = None
+    contact_phone: str | None = None
     notes: str | None = None
     lines: list[QuoteLineCreate] = []
 
@@ -200,6 +202,8 @@ class QuoteVersionResponse(BaseModel):
     estimated_cost: Decimal
     estimated_profit: Decimal
     estimated_margin: Decimal
+    contact_person: str | None = None
+    contact_phone: str | None = None
     notes: str | None
     created_by: UUID | None
     created_at: datetime | None = None
