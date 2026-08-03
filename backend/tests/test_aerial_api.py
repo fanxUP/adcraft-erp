@@ -221,9 +221,9 @@ class TestAerialPermissionMapping:
         ]
         assert len(update_endpoints) == 7
 
-    def test_delete_permissions_for_void_endpoints(self):
-        """Void/delete endpoints should use PERM_AERIAL_DELETE."""
-        delete_endpoints = ["void_ledger", "delete_attachment"]
+    def test_delete_permissions_for_delete_endpoints(self):
+        """Delete endpoints should use PERM_AERIAL_DELETE."""
+        delete_endpoints = ["delete_ledger", "delete_attachment"]
         assert len(delete_endpoints) == 2
 
     def test_approve_permissions_for_approval_endpoints(self):

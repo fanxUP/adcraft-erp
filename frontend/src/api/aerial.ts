@@ -360,8 +360,8 @@ export const createAerialLedger = (data: AerialLedgerCreate) =>
 export const updateAerialLedger = (id: string, data: AerialLedgerUpdate) =>
   patch<AerialLedger>(`/aerial/ledgers/${id}`, data)
 
-export const voidAerialLedger = (id: string, reason: string) =>
-  post<AerialLedger>(`/aerial/ledgers/${id}/void`, { reason })
+export const deleteAerialLedger = (id: string) =>
+  del(`/aerial/ledgers/${id}`)
 
 export const approveAerialLedger = (id: string, remark?: string) =>
   post<AerialLedger>(`/aerial/ledgers/${id}/approve`, { remark })

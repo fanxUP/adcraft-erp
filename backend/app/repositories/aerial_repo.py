@@ -4,14 +4,14 @@ import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.aerial import (
     AerialVehicle, AerialPersonnel, AerialDailyLedger, AerialPersonnelExpense,
     AerialPersonnelWage, AerialVehicleCost, AerialSafetyCheck,
     AerialLedgerAttachment, AerialLedgerAuditLog, AerialAttendanceRecord,
-    AerialPersonnelAttachment,
+    AerialPersonnelAttachment, AerialAgentDraft,
 )
 
 
@@ -163,6 +163,22 @@ class AerialRepository:
         await self.db.flush()
         await self.db.refresh(obj)
         return obj
+
+    async def delete_ledger(self, obj: AerialDailyLedger):
+        """硬删除台账，并清理所有指向它的子表记录（子表外键无级联）。"""
+        ledger_id = obj.id
+        for model in (
+            AerialLedgerAttachment, AerialSafetyCheck, AerialPersonnelExpense,
+            AerialPersonnelWage, AerialVehicleCost, AerialLedgerAuditLog,
+        ):
+            await self.db.execute(delete(model).where(model.ledger_id == ledger_id))
+        await self.db.execute(
+            update(AerialAgentDraft)
+            .where(AerialAgentDraft.created_ledger_id == ledger_id)
+            .values(created_ledger_id=None)
+        )
+        await self.db.execute(delete(AerialDailyLedger).where(AerialDailyLedger.id == ledger_id))
+        await self.db.flush()
 
     async def count_ledgers_today(self, dt) -> int:
         from datetime import date as date_type

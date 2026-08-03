@@ -436,18 +436,14 @@ async def test_create_ledger(service, mock_repo):
 
 
 @pytest.mark.asyncio
-async def test_void_ledger(service, mock_repo):
+async def test_delete_ledger(service, mock_repo):
     l = make_mock_ledger()
     mock_repo.get_ledger.return_value = l
+    mock_repo.delete_ledger = AsyncMock()
 
-    async def update_side_effect(obj, data):
-        for k, val in data.items():
-            setattr(obj, k, val)
-        return obj
+    result = await service.delete_ledger(SAMPLE_LEDGER_ID)
 
-    mock_repo.update_ledger.side_effect = update_side_effect
-    result = await service.void_ledger(SAMPLE_LEDGER_ID, "测试作废")
-    assert result["status"] == "cancelled"
+    mock_repo.delete_ledger.assert_awaited_once_with(l)
     mock_repo.create_audit_log.assert_called_once()
 
 

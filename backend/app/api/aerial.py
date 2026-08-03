@@ -308,17 +308,19 @@ async def update_ledger(
     return success(result)
 
 
-@ledger_router.post("/{ledger_id}/void")
-async def void_ledger(
+@ledger_router.delete("/{ledger_id}")
+async def delete_ledger(
     ledger_id: str,
-    data: dict,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_AERIAL_DELETE)),
     request: Request = None,
 ):
     svc = _svc(db, current_user, request)
-    result = await svc.void_ledger(ledger_id, data.get("reason", ""))
-    return success(result)
+    try:
+        result = await svc.delete_ledger(ledger_id)
+        return success(result)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @ledger_router.post("/{ledger_id}/approve")

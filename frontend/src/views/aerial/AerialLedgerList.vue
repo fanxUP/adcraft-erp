@@ -64,7 +64,7 @@
           <el-button link type="primary" size="small" @click="handleEdit(row)" v-if="row.status !== 'cancelled'">编辑</el-button>
           <el-button link type="success" size="small" @click="handleApprove(row)" v-if="row.audit_status === 'pending' && row.status !== 'cancelled'">审核</el-button>
           <el-button link type="warning" size="small" @click="handleReject(row)" v-if="row.audit_status === 'pending' && row.status !== 'cancelled'">驳回</el-button>
-          <el-button link type="danger" size="small" @click="handleVoid(row)" v-if="row.status !== 'cancelled'">作废</el-button>
+          <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -276,7 +276,7 @@ import { ref, reactive, onMounted, defineComponent, h } from 'vue'
 import { ElMessage, ElMessageBox, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import {
   getAerialLedgers, getAerialLedger, createAerialLedger, updateAerialLedger,
-  voidAerialLedger, approveAerialLedger, rejectAerialLedger,
+  deleteAerialLedger, approveAerialLedger, rejectAerialLedger,
   getAerialVehicles, getAerialPersonnel, getAerialAuditLogs,
   exportAerialLedgers,
   type AerialAuditLog,
@@ -443,12 +443,11 @@ async function handleReject(row: AerialLedger) {
   } catch {}
 }
 
-async function handleVoid(row: AerialLedger) {
+async function handleDelete(row: AerialLedger) {
   try {
-    const { value } = await ElMessageBox.prompt('请输入作废原因', '作废台账', { inputType: 'textarea' })
-    if (!value?.trim()) return ElMessage.warning('请填写作废原因')
-    await voidAerialLedger(row.id, value)
-    ElMessage.success('已作废')
+    await ElMessageBox.confirm('删除后不可恢复，确定删除该台账？', '删除确认', { type: 'warning' })
+    await deleteAerialLedger(row.id)
+    ElMessage.success('删除成功')
     fetchData()
   } catch {}
 }

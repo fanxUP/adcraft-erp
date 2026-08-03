@@ -19,7 +19,6 @@ from app.repositories.aerial_repo import AerialRepository
 ACTION_CREATE = "create"
 ACTION_UPDATE = "update"
 ACTION_DELETE = "delete"
-ACTION_VOID = "void"
 ACTION_APPROVE = "approve"
 ACTION_REJECT = "reject"
 ACTION_REVIEW = "review"
@@ -324,23 +323,15 @@ class AerialService:
 
         return self._ledger_to_dict(obj)
 
-    async def void_ledger(self, ledger_id: str, reason: str):
+    async def delete_ledger(self, ledger_id: str) -> dict:
         obj = await self.repo.get_ledger(uuid.UUID(ledger_id))
         if not obj:
             raise ValueError("台账不存在")
-        if obj.status == "cancelled":
-            raise ValueError("台账已作废")
 
         before = self._ledger_to_dict(obj)
-        obj = await self.repo.update_ledger(obj, {
-            "status": "cancelled",
-            "voided_by": self._user_id(),
-            "voided_at": datetime.now(),
-            "void_reason": reason,
-        })
-
-        await self._log(obj.id, ACTION_VOID, "ledger", obj.id, before=before, after=self._ledger_to_dict(obj), remark=reason)
-        return self._ledger_to_dict(obj)
+        await self.repo.delete_ledger(obj)
+        await self._log(None, ACTION_DELETE, target_type="ledger", target_id=obj.id, before=before)
+        return before
 
     async def approve_ledger(self, ledger_id: str, remark: str = ""):
         obj = await self.repo.get_ledger(uuid.UUID(ledger_id))
