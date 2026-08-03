@@ -16,7 +16,7 @@ cp config/env.example .env
 docker compose up -d
 ```
 
-访问 http://localhost | 默认管理员：admin / admin123
+访问 http://localhost | 默认管理员：admin（初始密码由环境变量 ADMIN_INIT_PASSWORD 设置）
 
 ## 前端开发
 
