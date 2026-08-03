@@ -29,7 +29,8 @@
     </div>
 
     <!-- 列表 -->
-    <el-table :data="list" stripe v-loading="loading" style="width: 100%">
+    <div class="table-wrap">
+    <el-table :data="list" stripe v-loading="loading" style="width: 100%; min-width: 1540px">
       <el-table-column prop="work_date" label="出车日期" width="120" />
       <el-table-column prop="ledger_no" label="台账编号" width="180" />
       <el-table-column prop="name" label="人员" width="100" />
@@ -45,14 +46,6 @@
       <el-table-column prop="unpaid_amount" label="未收" width="120" align="right">
         <template #default="{ row }">
           <span :style="{ color: row.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ row.unpaid_amount }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="personnel_wage_amount" label="工资" width="120" align="right">
-        <template #default="{ row }">¥{{ row.personnel_wage_amount }}</template>
-      </el-table-column>
-      <el-table-column prop="gross_profit" label="毛利润" width="120" align="right">
-        <template #default="{ row }">
-          <span :style="{ color: row.gross_profit >= 0 ? '#67c23a' : '#f56c6c' }">¥{{ row.gross_profit }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="payment_status" label="收款状态" width="100">
@@ -75,6 +68,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <el-pagination
       v-model:current-page="page" v-model:page-size="pageSize"
@@ -539,4 +533,5 @@ onMounted(() => {
 <style scoped>
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .search-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.table-wrap { overflow-x: auto; }
 </style>
