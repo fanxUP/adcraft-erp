@@ -12,6 +12,7 @@ const FINANCE_ROLES = ['admin', 'finance']
 
 export const navigationItems: NavigationItem[] = [
   { label: '工作台', path: '/', icon: 'DataAnalysis' },
+  { label: '项目看板', path: '/production-tasks/board', icon: 'Grid', roles: ['admin', 'production'] },
   {
     label: '客户与销售',
     icon: 'User',
@@ -32,7 +33,6 @@ export const navigationItems: NavigationItem[] = [
     children: [
       { label: '设计任务', path: '/design-tasks', roles: ['admin', 'designer'] },
       { label: '制作任务', path: '/production-tasks', roles: ['admin', 'production'] },
-      { label: '项目看板', path: '/production-tasks/board', roles: ['admin', 'production'] },
       { label: '安装任务', path: '/installation-tasks', roles: ['admin', 'installer'] },
       { label: '验收管理', path: '/acceptances', roles: SALES_ROLES },
       { label: '外协任务', path: '/outsource/tasks', roles: ['admin', 'production'] },

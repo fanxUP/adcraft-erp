@@ -26,4 +26,23 @@ describe('filterNavigation', () => {
       path: '/admin/ai/knowledge-health',
     })
   })
+
+  it('places 项目看板 as a top-level item right below 工作台 for production roles', () => {
+    const items = filterNavigation(navigationItems, ['production'])
+    const index = items.findIndex(item => item.label === '项目看板')
+
+    expect(index).toBeGreaterThanOrEqual(0)
+    expect(items[index - 1]?.label).toBe('工作台')
+    expect(items[index]).toMatchObject({
+      label: '项目看板',
+      path: '/production-tasks/board',
+      icon: 'Grid',
+    })
+  })
+
+  it('hides 项目看板 from sales roles', () => {
+    const labels = filterNavigation(navigationItems, ['sales']).map(item => item.label)
+
+    expect(labels).not.toContain('项目看板')
+  })
 })
