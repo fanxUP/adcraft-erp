@@ -411,10 +411,9 @@ export interface AerialPersonnelAttachment {
 export const uploadAerialPersonnelImage = async (file: File) => {
   const form = new FormData()
   form.append('file', file)
-  const res = await apiClient.post('/aerial/personnel/upload', form, {
+  return post<{ file_url: string; file_name: string; file_size: number }>('/aerial/personnel/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
-  return res.data.data as { file_url: string; file_name: string; file_size: number }
 }
 
 export const getAerialPersonnelAttachments = (personnelId: string) =>
@@ -424,10 +423,9 @@ export const createAerialPersonnelAttachment = async (personnelId: string, file:
   const form = new FormData()
   form.append('file', file)
   form.append('attachment_type', attachmentType)
-  const res = await apiClient.post(`/aerial/personnel/${personnelId}/attachments`, form, {
+  return post<AerialPersonnelAttachment>(`/aerial/personnel/${personnelId}/attachments`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
-  return res.data.data as AerialPersonnelAttachment
 }
 
 export const deleteAerialPersonnelAttachment = (id: string) =>
@@ -453,10 +451,9 @@ export const createAerialVehicleAttachment = async (vehicleId: string, file: Fil
   const form = new FormData()
   form.append('file', file)
   form.append('attachment_type', attachmentType)
-  const res = await apiClient.post(`/aerial/vehicles/${vehicleId}/attachments`, form, {
+  return post<AerialVehicleAttachment>(`/aerial/vehicles/${vehicleId}/attachments`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
-  return res.data.data as AerialVehicleAttachment
 }
 
 export const deleteAerialVehicleAttachment = (id: string) =>
