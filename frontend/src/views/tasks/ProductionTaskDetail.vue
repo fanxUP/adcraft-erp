@@ -149,20 +149,21 @@ const assigning = ref(false)
 const editForm = reactive({ assigned_to: '', qc_result: '', rework_reason: '' })
 
 const PROD_WORKFLOW: Record<string, string[]> = {
-  pending: ['pending_review', 'cancelled'],
-  pending_review: ['completed', 'cancelled'],
+  pending: ['in_progress', 'cancelled'],
+  in_progress: ['completed', 'rework', 'cancelled'],
+  rework: ['in_progress', 'cancelled'],
   completed: [],
   cancelled: [],
 }
 
 const prodSteps = [
-  { key: 'pending', label: '初始/待分配' },
-  { key: 'pending_review', label: '待确认' },
+  { key: 'pending', label: '待制作' },
+  { key: 'in_progress', label: '制作中' },
   { key: 'completed', label: '已完成' },
 ]
 
 async function handleWorkflowChange(to_status: string) {
-  const labelMap: Record<string, string> = { pending: '初始/待分配', pending_review: '待确认', completed: '已完成', cancelled: '已取消' }
+  const labelMap: Record<string, string> = { pending: '待制作', in_progress: '制作中', rework: '返工', completed: '已完成', cancelled: '已取消' }
   if (to_status === 'cancelled') {
     const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
       confirmButtonText: '确定', cancelButtonText: '取消',

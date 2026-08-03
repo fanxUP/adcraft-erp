@@ -190,20 +190,24 @@ const draftCurrentValues = computed<Record<string, string>>(() => ({
 }))
 
 const INST_WORKFLOW: Record<string, string[]> = {
-  pending: ['pending_review', 'cancelled'],
-  pending_review: ['completed', 'cancelled'],
+  pending: ['assigned', 'in_progress', 'cancelled'],
+  assigned: ['in_progress', 'pending', 'cancelled'],
+  in_progress: ['pending_acceptance', 'pending', 'cancelled'],
+  pending_acceptance: ['completed', 'in_progress', 'cancelled'],
   completed: [],
   cancelled: [],
 }
 
 const instSteps = [
-  { key: 'pending', label: '初始/待分配' },
-  { key: 'pending_review', label: '待确认' },
+  { key: 'pending', label: '待分配' },
+  { key: 'assigned', label: '已分配' },
+  { key: 'in_progress', label: '安装中' },
+  { key: 'pending_acceptance', label: '待验收' },
   { key: 'completed', label: '已完成' },
 ]
 
 async function handleWorkflowChange(to_status: string) {
-  const labelMap: Record<string, string> = { pending: '初始/待分配', pending_review: '待确认', completed: '已完成', cancelled: '已取消' }
+  const labelMap: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成', cancelled: '已取消' }
   if (to_status === 'cancelled') {
     const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
       confirmButtonText: '确定', cancelButtonText: '取消',

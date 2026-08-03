@@ -107,20 +107,23 @@ const editForm = reactive({
 })
 
 const DESIGN_WORKFLOW: Record<string, string[]> = {
-  pending: ['pending_review', 'cancelled'],
-  pending_review: ['completed', 'cancelled'],
-  completed: [],
+  pending: ['designing', 'cancelled'],
+  designing: ['pending_review', 'pending', 'cancelled'],
+  pending_review: ['confirmed', 'revision', 'cancelled'],
+  revision: ['designing', 'pending_review', 'cancelled'],
+  confirmed: ['cancelled'],
   cancelled: [],
 }
 
 const designSteps = [
-  { key: 'pending', label: '初始/待分配' },
+  { key: 'pending', label: '待分配' },
+  { key: 'designing', label: '设计中' },
   { key: 'pending_review', label: '待确认' },
-  { key: 'completed', label: '已完成' },
+  { key: 'confirmed', label: '已完成' },
 ]
 
 async function handleWorkflowChange(to_status: string) {
-  const labelMap: Record<string, string> = { pending: '初始/待分配', pending_review: '待确认', completed: '已完成', cancelled: '已取消' }
+  const labelMap: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已完成', cancelled: '已取消' }
   if (to_status === 'cancelled') {
     const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
       confirmButtonText: '确定', cancelButtonText: '取消',
