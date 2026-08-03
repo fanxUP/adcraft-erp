@@ -19,9 +19,22 @@ async def _get_quote_service_and_detail(db, business_id: str):
 
     service = BusinessDocumentService(db, doc_type="quote")
     quote = await service.get_by_id(UUID(business_id))
-    if not quote:
-        raise ValueError("报价单不存在")
-    return service, quote
+    if quote:
+        return service, quote
+
+    # 报价转订单后同一条单据的 doc_type 会变为 order，get_by_id 按 quote 过滤
+    # 查不到，这里直接按 ID 定位单据，给出明确提示而不是报"不存在"
+    from sqlalchemy import select
+
+    from app.models.business_document import BusinessDocument
+
+    result = await db.execute(
+        select(BusinessDocument).where(BusinessDocument.id == UUID(business_id))
+    )
+    doc = result.scalar_one_or_none()
+    if doc is not None and doc.doc_type == "order":
+        raise ValueError(f"该报价已转为订单 {doc.doc_no}，请勿重复操作")
+    raise ValueError("报价单不存在")
 
 
 def _ensure_live_status(
