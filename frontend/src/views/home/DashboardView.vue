@@ -59,10 +59,15 @@
     <el-row :gutter="16">
       <el-col :span="12">
         <el-card shadow="never" class="info-card">
-          <template #header><span>逾期订单</span></template>
-          <div style="text-align: center; padding: 20px 0">
-            <div style="font-size: 36px; font-weight: bold; font-size: 16px; color: #e63946">{{ data.overdue_order_count }}</div>
-            <div style="color: var(--ad-text-secondary); margin-top: 4px">逾期订单数</div>
+          <template #header><span>报价单</span></template>
+          <div v-if="!quoteList.length" style="text-align: center; padding: 20px; color: var(--ad-text-secondary)">暂无报价单</div>
+          <div v-for="item in quoteList" :key="item.id" class="debt-row quote-row" @click="goQuote(item)">
+            <el-tag size="small" :type="quoteStatusColor(item.status)" class="quote-status">{{ quoteStatusLabel(item.status) }}</el-tag>
+            <span class="debt-name">
+              <div>{{ item.quote_no }}</div>
+              <div class="quote-sub">{{ item.customer_name || item.project_name }}</div>
+            </span>
+            <span class="debt-amount" style="color: var(--ad-text)">¥ {{ item.total_amount?.toFixed(2) }}</span>
           </div>
         </el-card>
       </el-col>
@@ -116,7 +121,8 @@ import { getDashboard } from '@/api/payments'
 import { getOrders } from '@/api/orders'
 import { getDesignTasks, getProductionTasks, getInstallationTasks } from '@/api/tasks'
 import { getAcceptances } from '@/api/acceptances'
-import type { CustomerDebtItem, OrderListResponse } from '@/types/api'
+import { getQuotes } from '@/api/quotes'
+import type { CustomerDebtItem, OrderListResponse, QuoteListResponse } from '@/types/api'
 
 const loading = ref(false)
 const data = reactive({
@@ -124,9 +130,10 @@ const data = reactive({
   month_order_amount: 0, month_payment_amount: 0,
   month_unpaid_amount: 0,
   pending_design_count: 0, pending_production_count: 0, pending_installation_count: 0,
-  overdue_order_count: 0,
   customer_debt_ranking: [] as CustomerDebtItem[],
 })
+
+const quoteList = ref<QuoteListResponse[]>([])
 
 const boardLoading = ref(false)
 const allProjects = ref<OrderListResponse[]>([])
@@ -158,6 +165,27 @@ async function fetchData() {
     const d = await getDashboard()
     Object.assign(data, d)
   } finally { loading.value = false }
+}
+
+async function fetchQuotes() {
+  try {
+    const r = await getQuotes({ page_size: 5 })
+    quoteList.value = r.items || []
+  } catch { /* 报价单拉取失败不阻塞驾驶舱 */ }
+}
+
+function quoteStatusLabel(s: string) {
+  const map: Record<string, string> = { draft: '草稿', confirmed: '已确认', converted: '已转订单', cancelled: '已作废' }
+  return map[s] || s
+}
+
+function quoteStatusColor(s: string) {
+  const map: Record<string, string> = { draft: 'info', confirmed: 'success', converted: 'primary', cancelled: 'danger' }
+  return map[s] || 'info'
+}
+
+function goQuote(item: QuoteListResponse) {
+  window.location.href = `/quotes/${item.id}/edit`
 }
 
 async function handleCardClick(card: OrderListResponse, colKey: string) {
@@ -203,6 +231,7 @@ function handlePageShow(e: PageTransitionEvent) {
 
 onMounted(() => {
   fetchData()
+  fetchQuotes()
   fetchBoardData()
   window.addEventListener('pageshow', handlePageShow)
 })
@@ -229,6 +258,10 @@ onBeforeUnmount(() => {
 .task-card .stat-value { font-size: 32px; margin-top: 4px; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .debt-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--ad-border); }
+.quote-row { cursor: pointer; }
+.quote-row:hover { background: var(--ad-border); }
+.quote-status { width: 60px; justify-content: center; margin-right: 12px; flex-shrink: 0; }
+.quote-sub { font-size: 12px; color: var(--ad-text-secondary); }
 .debt-rank { width: 28px; height: 28px; background: #e63946; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; font-size: 16px; margin-right: 12px; }
 .debt-name { flex: 1; color: var(--ad-text); }
 .debt-amount { font-weight: bold; font-size: 16px; color: #e63946; }
