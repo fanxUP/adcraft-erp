@@ -433,6 +433,35 @@ export const createAerialPersonnelAttachment = async (personnelId: string, file:
 export const deleteAerialPersonnelAttachment = (id: string) =>
   del(`/aerial/personnel/attachments/${id}`)
 
+// ── Vehicle Attachment API ──────────────────────────────────────────────────
+
+export interface AerialVehicleAttachment {
+  id: string
+  vehicle_id: string
+  attachment_type: string // license / registration / insurance / inspection / maintenance / other
+  file_url: string
+  file_name?: string
+  uploaded_by?: string
+  uploaded_at?: string
+  remark?: string
+}
+
+export const getAerialVehicleAttachments = (vehicleId: string) =>
+  get<AerialVehicleAttachment[]>(`/aerial/vehicles/${vehicleId}/attachments`)
+
+export const createAerialVehicleAttachment = async (vehicleId: string, file: File, attachmentType: string) => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('attachment_type', attachmentType)
+  const res = await apiClient.post(`/aerial/vehicles/${vehicleId}/attachments`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return res.data.data as AerialVehicleAttachment
+}
+
+export const deleteAerialVehicleAttachment = (id: string) =>
+  del(`/aerial/vehicles/attachments/${id}`)
+
 // ── Personnel Expense API ─────────────────────────────────────────────────────
 
 export const getAerialPersonnelExpenses = (params?: AerialQueryParams) =>

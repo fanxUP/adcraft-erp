@@ -172,6 +172,19 @@ def make_mock_user(**kwargs):
     return u
 
 
+def make_mock_vehicle_attachment(**kwargs):
+    a = MagicMock()
+    a.id = kwargs.get("id", SAMPLE_VEHICLE_ID)
+    a.vehicle_id = kwargs.get("vehicle_id", SAMPLE_VEHICLE_ID)
+    a.attachment_type = kwargs.get("attachment_type", "insurance")
+    a.file_url = kwargs.get("file_url", "/uploads/202608/abc123.pdf")
+    a.file_name = kwargs.get("file_name", "保单.pdf")
+    a.uploaded_by = kwargs.get("uploaded_by", SAMPLE_USER_ID)
+    a.uploaded_at = kwargs.get("uploaded_at", datetime.now(timezone.utc))
+    a.remark = kwargs.get("remark", None)
+    return a
+
+
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
 @pytest.fixture
@@ -210,6 +223,9 @@ def mock_repo():
     repo.list_attachments = AsyncMock(return_value=[])
     repo.create_attachment = AsyncMock()
     repo.delete_attachment = AsyncMock()
+    repo.list_vehicle_attachments = AsyncMock(return_value=[])
+    repo.create_vehicle_attachment = AsyncMock()
+    repo.delete_vehicle_attachment = AsyncMock()
     repo.create_audit_log = AsyncMock()
     repo.list_audit_logs = AsyncMock(return_value=([], 0))
     return repo
@@ -566,3 +582,105 @@ async def test_create_cost(service, mock_repo):
     })
     assert result["cost_type"] == "fuel"
     assert result["amount"] == 500.0
+
+
+# ── Vehicle Attachment tests ─────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_list_vehicle_attachments(service, mock_repo):
+    a = make_mock_vehicle_attachment()
+    mock_repo.list_vehicle_attachments.return_value = [a]
+    items = await service.list_vehicle_attachments(SAMPLE_VEHICLE_ID)
+    assert len(items) == 1
+    assert items[0]["vehicle_id"] == SAMPLE_VEHICLE_ID
+    assert items[0]["attachment_type"] == "insurance"
+    assert items[0]["file_url"] == "/uploads/202608/abc123.pdf"
+    mock_repo.list_vehicle_attachments.assert_awaited_once_with(SAMPLE_VEHICLE_ID, None)
+
+
+@pytest.mark.asyncio
+async def test_create_vehicle_attachment(service, mock_repo):
+    saved = {"file_url": "/uploads/202608/def456.pdf", "file_name": "行驶证.jpg"}
+    a = make_mock_vehicle_attachment(
+        attachment_type="license", file_url=saved["file_url"], file_name=saved["file_name"],
+    )
+
+    async def create_side_effect(data):
+        return make_mock_vehicle_attachment(
+            vehicle_id=data["vehicle_id"],
+            attachment_type=data["attachment_type"],
+            file_url=data["file_url"],
+            file_name=data["file_name"],
+            remark=data.get("remark"),
+        )
+
+    mock_repo.get_vehicle.return_value = make_mock_vehicle()
+    mock_repo.create_vehicle_attachment.side_effect = create_side_effect
+
+    file = MagicMock()
+    file.filename = "行驶证.jpg"
+    async def read_side_effect():
+        return b"data"
+    file.read = read_side_effect
+    with patch.object(service, "save_upload_file", return_value=saved) as mock_save:
+        result = await service.create_vehicle_attachment(SAMPLE_VEHICLE_ID, file, "license", "主险")
+    mock_save.assert_awaited_once_with(file)
+    assert result["attachment_type"] == "license"
+    assert result["file_url"] == "/uploads/202608/def456.pdf"
+    assert result["file_name"] == "行驶证.jpg"
+    assert result["remark"] == "主险"
+    assert result["uploaded_by"] == str(SAMPLE_USER_ID)
+    mock_repo.get_vehicle.assert_awaited_once_with(uuid.UUID(SAMPLE_VEHICLE_ID))
+
+
+@pytest.mark.asyncio
+async def test_create_vehicle_attachment_vehicle_not_found(service, mock_repo):
+    mock_repo.get_vehicle.return_value = None
+    file = MagicMock()
+    file.filename = "x.pdf"
+    async def read_side_effect():
+        return b"x"
+    file.read = read_side_effect
+    with pytest.raises(ValueError, match="车辆不存在"):
+        await service.create_vehicle_attachment(SAMPLE_VEHICLE_ID, file, "other", "")
+    mock_repo.create_vehicle_attachment.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_vehicle_attachment_default_type(service, mock_repo):
+    saved = {"file_url": "/uploads/202608/ghi789.jpg", "file_name": "车辆照片.jpg"}
+    mock_repo.get_vehicle.return_value = make_mock_vehicle()
+
+    async def create_side_effect(data):
+        return make_mock_vehicle_attachment(
+            attachment_type=data["attachment_type"],
+            file_url=data["file_url"],
+            file_name=data["file_name"],
+        )
+
+    mock_repo.create_vehicle_attachment.side_effect = create_side_effect
+    file = MagicMock()
+    file.filename = "车辆照片.jpg"
+    async def read_side_effect():
+        return b"data"
+    file.read = read_side_effect
+    with patch.object(service, "save_upload_file", return_value=saved):
+        result = await service.create_vehicle_attachment(SAMPLE_VEHICLE_ID, file, "", "")
+    assert result["attachment_type"] == "other"
+    assert result["file_name"] == "车辆照片.jpg"
+
+
+@pytest.mark.asyncio
+async def test_delete_vehicle_attachment(service, mock_repo):
+    a = make_mock_vehicle_attachment()
+    mock_repo.delete_vehicle_attachment.return_value = a
+    result = await service.delete_vehicle_attachment(a.id)
+    assert result["deleted"] is True
+    mock_repo.delete_vehicle_attachment.assert_awaited_once_with(uuid.UUID(a.id))
+
+
+@pytest.mark.asyncio
+async def test_delete_vehicle_attachment_not_found(service, mock_repo):
+    mock_repo.delete_vehicle_attachment.return_value = None
+    with pytest.raises(ValueError, match="附件不存在"):
+        await service.delete_vehicle_attachment(SAMPLE_VEHICLE_ID)

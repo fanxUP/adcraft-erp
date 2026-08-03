@@ -11,7 +11,7 @@ from app.models.aerial import (
     AerialVehicle, AerialPersonnel, AerialDailyLedger, AerialPersonnelExpense,
     AerialPersonnelWage, AerialVehicleCost, AerialSafetyCheck,
     AerialLedgerAttachment, AerialLedgerAuditLog, AerialAttendanceRecord,
-    AerialPersonnelAttachment, AerialAgentDraft,
+    AerialPersonnelAttachment, AerialAgentDraft, AerialVehicleAttachment,
 )
 
 
@@ -601,6 +601,32 @@ class AerialRepository:
     async def delete_personnel_attachment(self, attachment_id: uuid.UUID):
         obj = (await self.db.execute(
             select(AerialPersonnelAttachment).where(AerialPersonnelAttachment.id == attachment_id)
+        )).scalar_one_or_none()
+        if obj:
+            await self.db.delete(obj)
+            await self.db.flush()
+        return obj
+
+    # ── 车辆附件 ─────────────────────────────────────────────────────────────
+
+    async def list_vehicle_attachments(self, vehicle_id: str, attachment_type: Optional[str] = None):
+        q = select(AerialVehicleAttachment).where(AerialVehicleAttachment.vehicle_id == uuid.UUID(vehicle_id))
+        if attachment_type:
+            q = q.where(AerialVehicleAttachment.attachment_type == attachment_type)
+        q = q.order_by(AerialVehicleAttachment.uploaded_at.desc())
+        rows = (await self.db.execute(q)).scalars().all()
+        return list(rows)
+
+    async def create_vehicle_attachment(self, data: dict):
+        obj = AerialVehicleAttachment(**data)
+        self.db.add(obj)
+        await self.db.flush()
+        await self.db.refresh(obj)
+        return obj
+
+    async def delete_vehicle_attachment(self, attachment_id: uuid.UUID):
+        obj = (await self.db.execute(
+            select(AerialVehicleAttachment).where(AerialVehicleAttachment.id == attachment_id)
         )).scalar_one_or_none()
         if obj:
             await self.db.delete(obj)

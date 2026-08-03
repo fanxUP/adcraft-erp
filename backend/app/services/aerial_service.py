@@ -972,3 +972,43 @@ class AerialService:
             "uploaded_at": a.uploaded_at.isoformat() if a.uploaded_at else None,
             "remark": a.remark,
         }
+
+    # ── 车辆附件 ─────────────────────────────────────────────────────────────
+
+    async def list_vehicle_attachments(self, vehicle_id: str, attachment_type: str = None):
+        items = await self.repo.list_vehicle_attachments(vehicle_id, attachment_type)
+        return [self._vehicle_attachment_to_dict(a) for a in items]
+
+    async def create_vehicle_attachment(self, vehicle_id: str, file, attachment_type: str = "other", remark: str = ""):
+        obj = await self.repo.get_vehicle(uuid.UUID(vehicle_id))
+        if not obj:
+            raise ValueError("车辆不存在")
+        saved = await self.save_upload_file(file)
+        data = {
+            "vehicle_id": uuid.UUID(vehicle_id),
+            "attachment_type": attachment_type or "other",
+            "file_url": saved["file_url"],
+            "file_name": saved["file_name"],
+            "remark": remark or None,
+            "uploaded_by": self._user_id(),
+        }
+        att = await self.repo.create_vehicle_attachment(data)
+        return self._vehicle_attachment_to_dict(att)
+
+    async def delete_vehicle_attachment(self, attachment_id: str) -> dict:
+        obj = await self.repo.delete_vehicle_attachment(uuid.UUID(attachment_id))
+        if not obj:
+            raise ValueError("附件不存在")
+        return {"id": attachment_id, "deleted": True}
+
+    def _vehicle_attachment_to_dict(self, a):
+        return {
+            "id": str(a.id),
+            "vehicle_id": str(a.vehicle_id),
+            "attachment_type": a.attachment_type,
+            "file_url": a.file_url,
+            "file_name": a.file_name,
+            "uploaded_by": str(a.uploaded_by) if a.uploaded_by else None,
+            "uploaded_at": a.uploaded_at.isoformat() if a.uploaded_at else None,
+            "remark": a.remark,
+        }

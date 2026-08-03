@@ -114,6 +114,52 @@ async def delete_vehicle(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.get("/{vehicle_id}/attachments")
+async def list_vehicle_attachments(
+    vehicle_id: str,
+    attachment_type: str = Query("", description="附件类型过滤"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_READ)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    items = await svc.list_vehicle_attachments(vehicle_id, attachment_type or None)
+    return success(items)
+
+
+@router.post("/{vehicle_id}/attachments")
+async def create_vehicle_attachment(
+    vehicle_id: str,
+    file: UploadFile = File(...),
+    attachment_type: str = Form("other"),
+    remark: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_CREATE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    try:
+        result = await svc.create_vehicle_attachment(vehicle_id, file, attachment_type, remark)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return success(result)
+
+
+@router.delete("/attachments/{attachment_id}")
+async def delete_vehicle_attachment(
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_DELETE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    try:
+        result = await svc.delete_vehicle_attachment(attachment_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return success(result)
+
+
 # ── 人员 ──────────────────────────────────────────────────────────────────
 
 @personnel_router.get("")

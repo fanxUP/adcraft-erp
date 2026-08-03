@@ -20,3 +20,26 @@ export const ATTACHMENT_TYPE_TAGS: Record<string, 'primary' | 'success' | 'warni
   insurance: 'info',
   other: 'info',
 }
+
+// 高空车档案附件分类（行驶证/登记证/保险单/年检/保养等）
+export const VEHICLE_ATTACHMENT_TYPE_OPTIONS = [
+  { label: '行驶证', value: 'license' },
+  { label: '登记证', value: 'registration' },
+  { label: '保险单', value: 'insurance' },
+  { label: '年检', value: 'inspection' },
+  { label: '保养记录', value: 'maintenance' },
+  { label: '其他', value: 'other' },
+]
+
+export const VEHICLE_ATTACHMENT_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  VEHICLE_ATTACHMENT_TYPE_OPTIONS.map((o) => [o.value, o.label]),
+)
+
+export const VEHICLE_ATTACHMENT_TYPE_TAGS: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
+  license: 'success',
+  registration: 'primary',
+  insurance: 'info',
+  inspection: 'warning',
+  maintenance: 'danger',
+  other: 'info',
+}

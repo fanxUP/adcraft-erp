@@ -60,6 +60,23 @@
           </el-select>
         </el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" /></el-form-item>
+        <template v-if="editingId">
+          <el-divider content-position="left">附件</el-divider>
+          <div class="att-upload-row">
+            <el-select v-model="attCategory" style="width: 120px">
+              <el-option v-for="(label, val) in VEH_ATT_LABELS" :key="val" :label="label" :value="val" />
+            </el-select>
+            <el-upload :http-request="handleUploadAttachment" :show-file-list="false" :disabled="attUploading">
+              <el-button type="primary" plain size="small" :loading="attUploading">上传附件</el-button>
+            </el-upload>
+          </div>
+          <div v-if="attachments.length" class="att-list">
+            <el-tag v-for="att in attachments" :key="att.id" :type="VEH_ATT_TAGS[att.attachment_type] || 'info'" closable @close="handleDeleteAttachment(att.id)">
+              <a :href="att.file_url" target="_blank" class="att-link">{{ VEH_ATT_LABELS[att.attachment_type] || att.attachment_type }}·{{ att.file_name }}</a>
+            </el-tag>
+          </div>
+          <div v-else style="color: #909399; font-size: 13px">暂无附件</div>
+        </template>
       </el-form>
       <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
     </el-dialog>
@@ -68,22 +85,35 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadRequestOptions } from 'element-plus'
 import {
   getAerialVehicles,
   createAerialVehicle,
   updateAerialVehicle,
   deleteAerialVehicle,
   getAerialPersonnel,
+  getAerialVehicleAttachments,
+  createAerialVehicleAttachment,
+  deleteAerialVehicleAttachment,
   type AerialPersonnel,
   type AerialVehicle,
+  type AerialVehicleAttachment,
 } from '@/api/aerial'
+import { VEHICLE_ATTACHMENT_TYPE_LABELS, VEHICLE_ATTACHMENT_TYPE_TAGS } from '@/config/attachment'
 import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
 const list = ref<AerialVehicle[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
 const keyword = ref(''); const editingId = ref<string | null>(null)
 const personnelOptions = ref<AerialPersonnel[]>([])
+
+// 附件
+const attachments = ref<AerialVehicleAttachment[]>([])
+const attCategory = ref('other')
+const attUploading = ref(false)
+const VEH_ATT_LABELS = VEHICLE_ATTACHMENT_TYPE_LABELS
+const VEH_ATT_TAGS = VEHICLE_ATTACHMENT_TYPE_TAGS
 
 const form = reactive({
   plate_number: '', vehicle_name: '', brand_model: '', max_working_height: '', platform_capacity: '',
@@ -98,14 +128,17 @@ async function fetchData() {
 
 function handleCreate() {
   editingId.value = null
+  attachments.value = []
   Object.assign(form, { plate_number: '', vehicle_name: '', brand_model: '', max_working_height: '', platform_capacity: '', insurance_expire_date: '', inspection_expire_date: '', maintenance_due_date: '', default_personnel_id: '', remark: '' })
   dialogVisible.value = true
 }
 
-function handleEdit(row: AerialVehicle) {
+async function handleEdit(row: AerialVehicle) {
   editingId.value = row.id
+  attachments.value = []
   Object.assign(form, { plate_number: row.plate_number, vehicle_name: row.vehicle_name, brand_model: row.brand_model, max_working_height: row.max_working_height, platform_capacity: row.platform_capacity, insurance_expire_date: row.insurance_expire_date, inspection_expire_date: row.inspection_expire_date, maintenance_due_date: row.maintenance_due_date, default_personnel_id: row.default_personnel_id || '', remark: row.remark })
   dialogVisible.value = true
+  try { attachments.value = (await getAerialVehicleAttachments(row.id)) || [] } catch (e: unknown) { ElMessage.error(getErrorMessage(e)) }
 }
 
 async function handleSave() {
@@ -121,6 +154,27 @@ async function handleSave() {
 
 async function handleDelete(row: AerialVehicle) {
   try { await deleteAerialVehicle(row.id); ElMessage.success('删除成功'); fetchData() } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) }
+}
+
+// ── 附件上传/删除 ──────────────────────────────────────────────────────────
+
+async function handleUploadAttachment(options: UploadRequestOptions) {
+  if (!editingId.value) return
+  attUploading.value = true
+  try {
+    await createAerialVehicleAttachment(editingId.value, options.file, attCategory.value)
+    ElMessage.success('上传成功')
+    attachments.value = (await getAerialVehicleAttachments(editingId.value)) || []
+  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { attUploading.value = false }
+}
+
+async function handleDeleteAttachment(aid: string) {
+  try { await ElMessageBox.confirm('确定删除该附件？', '确认') } catch { return }
+  try {
+    await deleteAerialVehicleAttachment(aid)
+    ElMessage.success('删除成功')
+    if (editingId.value) attachments.value = (await getAerialVehicleAttachments(editingId.value)) || []
+  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) }
 }
 
 function statusLabel(s: string) { return { available: '可用', in_use: '使用中', maintenance: '维修中', disabled: '已停用', scrapped: '已报废' }[s] || s }
@@ -139,4 +193,7 @@ onMounted(async () => {
 <style scoped>
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+.att-upload-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.att-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.att-link { text-decoration: none; }
 </style>
