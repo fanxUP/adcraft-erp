@@ -7,6 +7,7 @@ export function getContracts(params: {
   status?: string
   keyword?: string
   customer_id?: string
+  contract_type?: string
   exclude_contract_type?: string
 }) {
   return get<PaginatedData<ContractListResponse>>('/contracts/', { params })

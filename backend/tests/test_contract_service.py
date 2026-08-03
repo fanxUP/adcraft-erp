@@ -150,7 +150,7 @@ async def test_create_contract_without_order_ids(contract_service):
     assert "document_ids" not in data
 
 
-# ── link_orders_to_contract：把订单追加关联到已有合同 ────────────────────────
+# ── link_orders_to_contract：把订单加入框架合同（自动建子项目） ─────────────
 
 def make_mock_contract(**kwargs):
     """模拟一条 contract。"""
@@ -159,68 +159,97 @@ def make_mock_contract(**kwargs):
     c.contract_type = kwargs.get("contract_type", "制作合同")
     c.status = kwargs.get("status", "draft")
     c.total_amount = kwargs.get("total_amount", 100.0)
+    c.customer_id = kwargs.get("customer_id", SAMPLE_CUSTOMER_UUID)
+    c.customer_name = kwargs.get("customer_name", "测试客户")
     return c
 
 
 @pytest.mark.asyncio
 async def test_link_orders_to_contract(contract_service):
+    """框架合同目标：对每个订单调用 _add_order_as_project。"""
     service, repo = contract_service
-    contract = make_mock_contract()
-    repo.get_by_id = AsyncMock(return_value=contract)
-    repo.link_orders = AsyncMock(return_value=contract)
+    contract = make_mock_contract(contract_type="框架合同")
+    repo.get_by_id = AsyncMock(side_effect=[contract, contract])
     service._load_linkable_orders = AsyncMock(return_value=[SAMPLE_ORDER_UUID])
+    service._add_order_as_project = AsyncMock()
     service._auto_complete_if_paid = AsyncMock()
     service._to_detail = MagicMock(return_value={"id": str(contract.id), "total_amount": 100.0})
+    service._calc_framework_total = AsyncMock(return_value=100.0)
     service._calc_paid_amount = AsyncMock(return_value=50.0)
 
     result = await service.link_orders_to_contract(contract.id, [str(SAMPLE_ORDER_UUID)])
 
     service._load_linkable_orders.assert_awaited_once_with([SAMPLE_ORDER_UUID], contract.id)
-    repo.link_orders.assert_awaited_once_with(contract, [SAMPLE_ORDER_UUID])
+    service._add_order_as_project.assert_awaited_once_with(contract, SAMPLE_ORDER_UUID)
     assert result["total_amount"] == 100.0
 
 
 @pytest.mark.asyncio
 async def test_link_orders_to_contract_no_linkable(contract_service):
-    """全部订单已关联目标合同时，不调用 repo.link_orders，幂等返回。"""
+    """全部订单已关联目标合同时，不建子项目，幂等返回。"""
     service, repo = contract_service
-    contract = make_mock_contract()
-    repo.get_by_id = AsyncMock(return_value=contract)
-    repo.link_orders = AsyncMock(return_value=contract)
+    contract = make_mock_contract(contract_type="框架合同")
+    repo.get_by_id = AsyncMock(side_effect=[contract, contract])
     service._load_linkable_orders = AsyncMock(return_value=[])
+    service._add_order_as_project = AsyncMock()
     service._auto_complete_if_paid = AsyncMock()
     service._to_detail = MagicMock(return_value={"id": str(contract.id), "total_amount": 100.0})
+    service._calc_framework_total = AsyncMock(return_value=100.0)
     service._calc_paid_amount = AsyncMock(return_value=0.0)
 
     result = await service.link_orders_to_contract(contract.id, [str(SAMPLE_ORDER_UUID)])
 
-    repo.link_orders.assert_not_awaited()
+    service._add_order_as_project.assert_not_awaited()
     assert result["total_amount"] == 100.0
 
 
 @pytest.mark.asyncio
-async def test_link_orders_framework_rejected(contract_service):
+async def test_link_orders_normal_contract_rejected(contract_service):
+    """普通合同目标被拒绝（加入合同仅支持框架合同）。"""
     service, repo = contract_service
-    contract = make_mock_contract(contract_type="框架合同")
+    contract = make_mock_contract()  # 制作合同
     repo.get_by_id = AsyncMock(return_value=contract)
-    repo.link_orders = AsyncMock(return_value=contract)
+    service._add_order_as_project = AsyncMock()
 
     with pytest.raises(ValueError):
         await service.link_orders_to_contract(contract.id, [str(SAMPLE_ORDER_UUID)])
 
-    repo.link_orders.assert_not_awaited()
+    service._add_order_as_project.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_link_orders_contract_missing(contract_service):
     service, repo = contract_service
     repo.get_by_id = AsyncMock(return_value=None)
-    repo.link_orders = AsyncMock()
 
     with pytest.raises(ValueError):
         await service.link_orders_to_contract(SAMPLE_ORDER_UUID, [str(SAMPLE_ORDER_UUID)])
 
-    repo.link_orders.assert_not_awaited()
+
+@pytest.mark.asyncio
+async def test_add_order_as_project(contract_service):
+    """_add_order_as_project 用订单信息调用 FrameworkContractService.create_project。"""
+    service, repo = contract_service
+    contract = make_mock_contract(contract_type="框架合同")
+    order = make_mock_order()  # SAMPLE_ORDER_UUID
+
+    def make_order_result():
+        r = MagicMock()
+        r.scalar_one_or_none.return_value = order
+        return r
+
+    service.db.execute = AsyncMock(return_value=make_order_result())
+
+    with patch("app.services.framework_contract_service.FrameworkContractService") as fw_class:
+        fw_instance = fw_class.return_value
+        fw_instance.create_project = AsyncMock()
+        await service._add_order_as_project(contract, SAMPLE_ORDER_UUID)
+
+    payload = fw_instance.create_project.await_args.args[0]
+    assert payload["contract_id"] == str(contract.id)
+    assert payload["order_ids"] == [str(SAMPLE_ORDER_UUID)]
+    assert payload["project_name"] == order.project_name
+    assert payload["project_amount"] == float(order.total_amount or 0)
 
 
 @pytest.mark.asyncio
@@ -233,13 +262,14 @@ async def test_load_linkable_orders(contract_service):
         r.scalars.return_value.all.return_value = rows
         return r
 
-    # 查询顺序：订单 → 其他合同已关联 → 框架项目已关联 → 目标合同已关联
+    # 查询顺序：订单 → 其他合同已关联 → 其他框架项目已关联 → 目标 contract_documents → 目标框架项目
     orders_result = make_result([order])
     other_result = make_result([])
-    fw_result = make_result([])
+    fw_other_result = make_result([])
     target_result = make_result([UUID("11111111-1111-1111-1111-111111111111")])  # 目标已关联另一条
+    fw_target_result = make_result([])
     service.db.execute = AsyncMock(
-        side_effect=[orders_result, other_result, fw_result, target_result]
+        side_effect=[orders_result, other_result, fw_other_result, target_result, fw_target_result]
     )
 
     linkable = await service._load_linkable_orders([SAMPLE_ORDER_UUID], UUID("22222222-2222-2222-2222-222222222222"))

@@ -215,12 +215,14 @@
             remote
             :remote-method="fetchLinkContracts"
             :loading="linkLoading"
-            placeholder="搜索选择目标合同（同客户、非框架）"
+            placeholder="搜索选择目标框架合同（同客户）"
             style="width: 100%"
           >
             <el-option v-for="c in linkContractOptions" :key="c.id" :label="`${c.contract_no} — ${c.project_name} — ¥${c.total_amount.toFixed(2)}`" :value="c.id" />
           </el-select>
         </el-form-item>
+        <el-alert v-if="linkForm.contract_id" type="info" :closable="false" show-icon style="margin-top: 8px"
+          title="确认后将以该订单自动创建子项目并关联到框架合同" />
       </el-form>
       <template #footer>
         <el-button @click="linkVisible = false">取消</el-button>
@@ -395,7 +397,7 @@ function handleCreateForOrder(row: OrderWithoutContractItem) {
   formVisible.value = true
 }
 
-// ── 加入合同（追加关联到已有合同） ──
+// ── 加入合同（把订单加入框架合同：自动建子项目） ──
 const linkVisible = ref(false)
 const linkLoading = ref(false)
 const linkOrder = ref<OrderWithoutContractItem | null>(null)
@@ -405,7 +407,8 @@ const linkForm = reactive({ contract_id: '' })
 async function fetchLinkContracts(keyword?: string) {
   linkLoading.value = true
   try {
-    const params: Record<string, unknown> = { page_size: 50, exclude_contract_type: '框架合同' }
+    // 「加入合同」仅支持框架合同：只列出同客户的框架合同
+    const params: Record<string, unknown> = { page_size: 50, contract_type: '框架合同' }
     if (linkOrder.value?.customer_id) params.customer_id = linkOrder.value.customer_id
     if (keyword) params.keyword = keyword
     const data = await getContracts(params)

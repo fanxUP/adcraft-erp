@@ -77,16 +77,24 @@ async def get_available_resources(
     If customer_id is provided, only return resources for that customer."""
     from sqlalchemy import select, not_
     from app.models.business_document import BusinessDocument
-    from app.models.contract import ContractDocument
-    from app.models.framework_contract import FrameworkContractProjectDocument
+    from app.models.contract import Contract, ContractDocument
+    from app.models.framework_contract import FrameworkContractProject, FrameworkContractProjectDocument
 
-    # Documents already in any contract (exclude current if editing)
-    used_sub = select(ContractDocument.document_id)
+    # Documents already in any (non-deleted) contract (exclude current if editing)
+    used_sub = (
+        select(ContractDocument.document_id)
+        .join(Contract, Contract.id == ContractDocument.contract_id)
+        .where(Contract.deleted_at.is_(None))
+    )
     if contract_id:
         used_sub = used_sub.where(ContractDocument.contract_id != UUID(contract_id))
 
-    # Also exclude docs in framework contract projects
-    fw_sub = select(FrameworkContractProjectDocument.document_id)
+    # Also exclude docs in (non-deleted) framework contract projects
+    fw_sub = (
+        select(FrameworkContractProjectDocument.document_id)
+        .join(FrameworkContractProject, FrameworkContractProject.id == FrameworkContractProjectDocument.project_id)
+        .where(FrameworkContractProject.deleted_at.is_(None))
+    )
 
     # Single unified query
     q = select(BusinessDocument).where(

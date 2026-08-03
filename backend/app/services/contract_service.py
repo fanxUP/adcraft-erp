@@ -174,11 +174,14 @@ class ContractService:
         return result, total
 
     async def _load_linkable_orders(self, uids: list[UUID], contract_id: UUID) -> list[UUID]:
-        """校验并返回可追加关联的订单 id（跳过目标合同已关联的，拒绝已关联其他合同/框架项目的）。"""
+        """校验并返回可关联的订单 id（跳过目标合同已关联的，拒绝已关联其他合同/框架项目的）。
+
+        只统计未删除合同/框架项目的关联：软删除合同不再占用订单。
+        """
         from sqlalchemy import select
         from app.models.business_document import BusinessDocument
-        from app.models.contract import ContractDocument
-        from app.models.framework_contract import FrameworkContractProjectDocument
+        from app.models.contract import Contract, ContractDocument
+        from app.models.framework_contract import FrameworkContractProject, FrameworkContractProjectDocument
 
         result = await self.db.execute(
             select(BusinessDocument).where(
@@ -194,28 +197,35 @@ class ContractService:
         if missing:
             raise ValueError(f"订单不存在、已删除或已取消: {[str(m) for m in missing]}")
 
-        # 已关联到其他合同
+        # 已关联到其他（未删除）合同
         other = await self.db.execute(
-            select(ContractDocument.document_id).where(
+            select(ContractDocument.document_id)
+            .join(Contract, Contract.id == ContractDocument.contract_id)
+            .where(
                 ContractDocument.document_id.in_(uids),
                 ContractDocument.contract_id != contract_id,
+                Contract.deleted_at.is_(None),
             )
         )
         other_linked = {row for row in other.scalars().all()}
         if other_linked:
             raise ValueError(f"订单已关联其他合同: {[str(o) for o in other_linked]}")
 
-        # 已关联到框架合同项目
-        fw = await self.db.execute(
-            select(FrameworkContractProjectDocument.document_id).where(
-                FrameworkContractProjectDocument.document_id.in_(uids)
+        # 已关联到其他框架合同的子项目（未删除）
+        fw_other = await self.db.execute(
+            select(FrameworkContractProjectDocument.document_id)
+            .join(FrameworkContractProject, FrameworkContractProject.id == FrameworkContractProjectDocument.project_id)
+            .where(
+                FrameworkContractProjectDocument.document_id.in_(uids),
+                FrameworkContractProject.contract_id != contract_id,
+                FrameworkContractProject.deleted_at.is_(None),
             )
         )
-        fw_linked = {row for row in fw.scalars().all()}
-        if fw_linked:
-            raise ValueError(f"订单已关联框架合同项目: {[str(o) for o in fw_linked]}")
+        fw_other_linked = {row for row in fw_other.scalars().all()}
+        if fw_other_linked:
+            raise ValueError(f"订单已关联其他框架合同: {[str(o) for o in fw_other_linked]}")
 
-        # 跳过目标合同已关联的（幂等）
+        # 跳过目标合同已关联的（幂等）：contract_documents + 目标框架合同的子项目
         target = await self.db.execute(
             select(ContractDocument.document_id).where(
                 ContractDocument.contract_id == contract_id,
@@ -223,29 +233,63 @@ class ContractService:
             )
         )
         target_linked = {row for row in target.scalars().all()}
+
+        fw_target = await self.db.execute(
+            select(FrameworkContractProjectDocument.document_id)
+            .join(FrameworkContractProject, FrameworkContractProject.id == FrameworkContractProjectDocument.project_id)
+            .where(
+                FrameworkContractProjectDocument.document_id.in_(uids),
+                FrameworkContractProject.contract_id == contract_id,
+                FrameworkContractProject.deleted_at.is_(None),
+            )
+        )
+        target_linked |= {row for row in fw_target.scalars().all()}
         return [u for u in uids if u not in target_linked]
 
     async def link_orders_to_contract(self, contract_id: UUID, order_ids: list[str]) -> dict:
-        """把订单追加关联到已有合同（不改合同金额，仅新建 contract_documents 关联）。"""
+        """把订单加入框架合同：自动为每个订单创建子项目并关联（普通合同不支持）。"""
         contract = await self.repo.get_by_id(contract_id)
         if not contract:
             raise ValueError("合同不存在")
-        if contract.contract_type == "框架合同":
-            raise ValueError("框架合同请通过「管理项目」关联订单")
+        if contract.contract_type != "框架合同":
+            raise ValueError("普通合同请通过「新建合同」关联订单")
 
         uids = [UUID(oid) for oid in order_ids]
         linkable = await self._load_linkable_orders(uids, contract_id)
         if linkable:
-            contract = await self.repo.link_orders(contract, linkable)
-            # 集合此前已被 selectinload 加载，直接 add 关联不会更新；expire 后重新查询
-            self.db.expire(contract, ["documents"])
+            for oid in linkable:
+                await self._add_order_as_project(contract, oid)
         contract = await self.repo.get_by_id(contract.id)
         # Auto-complete if fully paid
         await self._auto_complete_if_paid([contract])
         result = self._to_detail(contract)
+        result["total_amount"] = await self._calc_framework_total(contract.id)
         result["paid_amount"] = await self._calc_paid_amount(contract.id)
         result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
         return result
+
+    async def _add_order_as_project(self, contract, order_id: UUID) -> None:
+        """把订单作为子项目加入框架合同（复用框架项目服务：建子项目 + 关联订单 + 同步合同金额）。"""
+        from sqlalchemy import select
+        from app.models.business_document import BusinessDocument
+        from app.services.framework_contract_service import FrameworkContractService
+
+        result = await self.db.execute(
+            select(BusinessDocument).where(BusinessDocument.id == order_id)
+        )
+        order = result.scalar_one_or_none()
+        if not order:
+            return
+        fw_service = FrameworkContractService(self.db)
+        await fw_service.create_project({
+            "contract_id": str(contract.id),
+            "customer_id": str(contract.customer_id or order.customer_id),
+            "customer_name": contract.customer_name or order.customer_name,
+            "department": order.department,
+            "project_name": order.project_name,
+            "project_amount": float(order.total_amount or 0),
+            "order_ids": [str(order.id)],
+        })
 
     async def get_contract(self, contract_id: UUID) -> dict | None:
         contract = await self.repo.get_by_id(contract_id)

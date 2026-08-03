@@ -60,12 +60,21 @@ class ContractRepository:
         limit: int = 20,
         keyword: str | None = None,
     ) -> tuple[list["BusinessDocument"], int]:
-        """返回未被任何合同/框架合同项目关联的订单（排除已取消）。"""
+        """返回未被任何（未删除）合同/框架合同项目关联的订单（排除已取消）。"""
         from app.models.business_document import BusinessDocument
-        from app.models.framework_contract import FrameworkContractProjectDocument
+        from app.models.framework_contract import FrameworkContractProject, FrameworkContractProjectDocument
 
-        used_sub = select(ContractDocument.document_id)
-        fw_sub = select(FrameworkContractProjectDocument.document_id)
+        # 只统计未删除合同/框架项目的关联：软删除合同不再占用订单
+        used_sub = (
+            select(ContractDocument.document_id)
+            .join(Contract, Contract.id == ContractDocument.contract_id)
+            .where(Contract.deleted_at.is_(None))
+        )
+        fw_sub = (
+            select(FrameworkContractProjectDocument.document_id)
+            .join(FrameworkContractProject, FrameworkContractProject.id == FrameworkContractProjectDocument.project_id)
+            .where(FrameworkContractProject.deleted_at.is_(None))
+        )
         q = select(BusinessDocument).where(
             BusinessDocument.deleted_at.is_(None),
             BusinessDocument.doc_type == "order",
@@ -118,12 +127,5 @@ class ContractRepository:
 
     async def soft_delete(self, contract: Contract) -> Contract:
         contract.deleted_at = datetime.now()
-        await self.db.flush()
-        return contract
-
-    async def link_orders(self, contract: Contract, document_ids: list[UUID]) -> Contract:
-        """把订单纯追加关联到合同（不触碰合同已有的 contract_documents 关联）。"""
-        for did in document_ids:
-            self.db.add(ContractDocument(contract_id=contract.id, document_id=did))
         await self.db.flush()
         return contract
