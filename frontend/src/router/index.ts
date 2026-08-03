@@ -13,6 +13,7 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
     children: [
       { path: '', name: 'Home', component: () => import('@/views/home/DashboardView.vue') },
+      { path: 'profile', name: 'ProfileCenter', component: () => import('@/views/profile/ProfileCenter.vue') },
       { path: 'customers', name: 'CustomerList', component: () => import('@/views/customers/CustomerList.vue') },
       { path: 'customers/:id', name: 'CustomerDetail', component: () => import('@/views/customers/CustomerDetail.vue') },
       { path: 'products', name: 'ProductManage', component: () => import('@/views/products/ProductManage.vue') },
