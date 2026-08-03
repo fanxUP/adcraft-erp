@@ -22,7 +22,7 @@ from app.core.permissions import (
     require_permission,
 )
 from app.models.user import User
-from app.schemas.contract import ContractCreate, ContractUpdate, ContractStatusChange
+from app.schemas.contract import ContractCreate, ContractUpdate, ContractStatusChange, ContractLinkOrders
 from app.schemas.common import success, success_paginated
 from app.services.contract_service import ContractService
 from app.services.operation_log_service import (
@@ -208,6 +208,26 @@ async def change_contract_status(
     contract = await service.change_status(cid, data.to_status, data.reason)
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_CONTRACT, cid, "change_status",
+                        ip_address=request.client.host if request.client else None,
+                        before_data=before, after_data=contract)
+    return success(contract)
+
+
+@router.post("/{contract_id}/orders")
+async def link_orders(
+    contract_id: str,
+    data: ContractLinkOrders,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_UPDATE)),
+):
+    """把订单追加关联到已有合同（不改合同金额，纯追加 contract_documents）。"""
+    service = ContractService(db)
+    cid = UUID(contract_id)
+    before = await service.get_contract(cid)
+    contract = await service.link_orders_to_contract(cid, data.order_ids)
+    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
+                        OBJ_CONTRACT, cid, ACTION_UPDATE,
                         ip_address=request.client.host if request.client else None,
                         before_data=before, after_data=contract)
     return success(contract)

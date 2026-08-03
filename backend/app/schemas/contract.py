@@ -83,3 +83,8 @@ class ContractDetailResponse(ContractListResponse):
 class ContractStatusChange(BaseModel):
     to_status: str
     reason: str | None = None
+
+
+class ContractLinkOrders(BaseModel):
+    """把订单追加关联到已有合同（纯追加，不影响合同已有单据关联）。"""
+    order_ids: list[str] = []

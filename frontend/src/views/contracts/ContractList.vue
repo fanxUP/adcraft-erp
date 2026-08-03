@@ -104,9 +104,10 @@
         <el-table-column label="创建日期" width="110">
           <template #default="{ row }">{{ row.created_at?.slice(0, 10) || '-' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" size="small" @click="handleCreateForOrder(row)">新建合同</el-button>
+            <el-button text type="success" size="small" @click="handleLinkForOrder(row)">加入合同</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -197,6 +198,36 @@
       </template>
     </el-dialog>
 
+    <!-- 加入合同对话框 -->
+    <el-dialog v-model="linkVisible" title="加入合同" width="600px" :close-on-click-modal="false">
+      <el-descriptions v-if="linkOrder" :column="2" border size="small" style="margin-bottom: 16px">
+        <el-descriptions-item label="订单编号">{{ linkOrder.order_no }}</el-descriptions-item>
+        <el-descriptions-item label="客户">{{ linkOrder.customer_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="项目名称" :span="2">{{ linkOrder.project_name }}</el-descriptions-item>
+        <el-descriptions-item label="金额">¥ {{ (linkOrder.total_amount || 0).toFixed(2) }}</el-descriptions-item>
+        <el-descriptions-item label="状态">{{ orderStatusLabel(linkOrder.status) }}</el-descriptions-item>
+      </el-descriptions>
+      <el-form :model="linkForm" label-width="80px">
+        <el-form-item label="目标合同" required>
+          <el-select
+            v-model="linkForm.contract_id"
+            filterable
+            remote
+            :remote-method="fetchLinkContracts"
+            :loading="linkLoading"
+            placeholder="搜索选择目标合同（同客户、非框架）"
+            style="width: 100%"
+          >
+            <el-option v-for="c in linkContractOptions" :key="c.id" :label="`${c.contract_no} — ${c.project_name} — ¥${c.total_amount.toFixed(2)}`" :value="c.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="linkVisible = false">取消</el-button>
+        <el-button type="primary" :loading="linkLoading" @click="confirmLink">确认加入</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 详情对话框 -->
     <el-dialog v-model="detailVisible" title="合同详情" width="960px" :close-on-click-modal="false">
       <el-descriptions v-if="currentDetail" :column="2" border>
@@ -267,7 +298,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getContracts, getContract, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment, getOrdersWithoutContract } from '@/api/contracts'
+import { getContracts, getContract, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment, getOrdersWithoutContract, linkOrdersToContract } from '@/api/contracts'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ContractListResponse, ContractDetailResponse, OrderWithoutContractItem } from '@/types/api'
@@ -362,6 +393,52 @@ function handleCreateForOrder(row: OrderWithoutContractItem) {
   }
   loadAllCustomers()
   formVisible.value = true
+}
+
+// ── 加入合同（追加关联到已有合同） ──
+const linkVisible = ref(false)
+const linkLoading = ref(false)
+const linkOrder = ref<OrderWithoutContractItem | null>(null)
+const linkContractOptions = ref<ContractListResponse[]>([])
+const linkForm = reactive({ contract_id: '' })
+
+async function fetchLinkContracts(keyword?: string) {
+  linkLoading.value = true
+  try {
+    const params: Record<string, unknown> = { page_size: 50, exclude_contract_type: '框架合同' }
+    if (linkOrder.value?.customer_id) params.customer_id = linkOrder.value.customer_id
+    if (keyword) params.keyword = keyword
+    const data = await getContracts(params)
+    linkContractOptions.value = data.items
+  } finally {
+    linkLoading.value = false
+  }
+}
+
+function handleLinkForOrder(row: OrderWithoutContractItem) {
+  linkOrder.value = row
+  linkForm.contract_id = ''
+  linkContractOptions.value = []
+  linkVisible.value = true
+  fetchLinkContracts('')
+}
+
+async function confirmLink() {
+  if (!linkForm.contract_id) {
+    ElMessage.warning('请选择目标合同')
+    return
+  }
+  if (!linkOrder.value) return
+  linkLoading.value = true
+  try {
+    await linkOrdersToContract(linkForm.contract_id, [linkOrder.value.id])
+    ElMessage.success('已加入合同')
+    linkVisible.value = false
+    fetchData()
+    fetchUnlinkedOrders()
+  } catch { /* handled by interceptor */ } finally {
+    linkLoading.value = false
+  }
 }
 
 onMounted(() => {

@@ -120,3 +120,10 @@ class ContractRepository:
         contract.deleted_at = datetime.now()
         await self.db.flush()
         return contract
+
+    async def link_orders(self, contract: Contract, document_ids: list[UUID]) -> Contract:
+        """把订单纯追加关联到合同（不触碰合同已有的 contract_documents 关联）。"""
+        for did in document_ids:
+            self.db.add(ContractDocument(contract_id=contract.id, document_id=did))
+        await self.db.flush()
+        return contract

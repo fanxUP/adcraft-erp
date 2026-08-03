@@ -148,3 +148,122 @@ async def test_create_contract_without_order_ids(contract_service):
     # 无 order_ids 时不设置 document_ids，repo.create 内部默认空列表；无残留键
     assert "order_ids" not in data
     assert "document_ids" not in data
+
+
+# ── link_orders_to_contract：把订单追加关联到已有合同 ────────────────────────
+
+def make_mock_contract(**kwargs):
+    """模拟一条 contract。"""
+    c = MagicMock()
+    c.id = kwargs.get("id", UUID("22222222-2222-2222-2222-222222222222"))
+    c.contract_type = kwargs.get("contract_type", "制作合同")
+    c.status = kwargs.get("status", "draft")
+    c.total_amount = kwargs.get("total_amount", 100.0)
+    return c
+
+
+@pytest.mark.asyncio
+async def test_link_orders_to_contract(contract_service):
+    service, repo = contract_service
+    contract = make_mock_contract()
+    repo.get_by_id = AsyncMock(return_value=contract)
+    repo.link_orders = AsyncMock(return_value=contract)
+    service._load_linkable_orders = AsyncMock(return_value=[SAMPLE_ORDER_UUID])
+    service._auto_complete_if_paid = AsyncMock()
+    service._to_detail = MagicMock(return_value={"id": str(contract.id), "total_amount": 100.0})
+    service._calc_paid_amount = AsyncMock(return_value=50.0)
+
+    result = await service.link_orders_to_contract(contract.id, [str(SAMPLE_ORDER_UUID)])
+
+    service._load_linkable_orders.assert_awaited_once_with([SAMPLE_ORDER_UUID], contract.id)
+    repo.link_orders.assert_awaited_once_with(contract, [SAMPLE_ORDER_UUID])
+    assert result["total_amount"] == 100.0
+
+
+@pytest.mark.asyncio
+async def test_link_orders_to_contract_no_linkable(contract_service):
+    """全部订单已关联目标合同时，不调用 repo.link_orders，幂等返回。"""
+    service, repo = contract_service
+    contract = make_mock_contract()
+    repo.get_by_id = AsyncMock(return_value=contract)
+    repo.link_orders = AsyncMock(return_value=contract)
+    service._load_linkable_orders = AsyncMock(return_value=[])
+    service._auto_complete_if_paid = AsyncMock()
+    service._to_detail = MagicMock(return_value={"id": str(contract.id), "total_amount": 100.0})
+    service._calc_paid_amount = AsyncMock(return_value=0.0)
+
+    result = await service.link_orders_to_contract(contract.id, [str(SAMPLE_ORDER_UUID)])
+
+    repo.link_orders.assert_not_awaited()
+    assert result["total_amount"] == 100.0
+
+
+@pytest.mark.asyncio
+async def test_link_orders_framework_rejected(contract_service):
+    service, repo = contract_service
+    contract = make_mock_contract(contract_type="框架合同")
+    repo.get_by_id = AsyncMock(return_value=contract)
+    repo.link_orders = AsyncMock(return_value=contract)
+
+    with pytest.raises(ValueError):
+        await service.link_orders_to_contract(contract.id, [str(SAMPLE_ORDER_UUID)])
+
+    repo.link_orders.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_link_orders_contract_missing(contract_service):
+    service, repo = contract_service
+    repo.get_by_id = AsyncMock(return_value=None)
+    repo.link_orders = AsyncMock()
+
+    with pytest.raises(ValueError):
+        await service.link_orders_to_contract(SAMPLE_ORDER_UUID, [str(SAMPLE_ORDER_UUID)])
+
+    repo.link_orders.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_load_linkable_orders(contract_service):
+    service, repo = contract_service
+    order = make_mock_order()
+
+    def make_result(rows):
+        r = MagicMock()
+        r.scalars.return_value.all.return_value = rows
+        return r
+
+    # 查询顺序：订单 → 其他合同已关联 → 框架项目已关联 → 目标合同已关联
+    orders_result = make_result([order])
+    other_result = make_result([])
+    fw_result = make_result([])
+    target_result = make_result([UUID("11111111-1111-1111-1111-111111111111")])  # 目标已关联另一条
+    service.db.execute = AsyncMock(
+        side_effect=[orders_result, other_result, fw_result, target_result]
+    )
+
+    linkable = await service._load_linkable_orders([SAMPLE_ORDER_UUID], UUID("22222222-2222-2222-2222-222222222222"))
+
+    # SAMPLE_ORDER_UUID 未被目标关联 → 返回；另一条已被关联 → 排除
+    assert linkable == [SAMPLE_ORDER_UUID]
+
+
+@pytest.mark.asyncio
+async def test_load_linkable_orders_linked_elsewhere(contract_service):
+    """订单已关联其他合同时抛错。"""
+    service, repo = contract_service
+    order = make_mock_order()
+
+    def make_result(rows):
+        r = MagicMock()
+        r.scalars.return_value.all.return_value = rows
+        return r
+
+    orders_result = make_result([order])
+    other_result = make_result([SAMPLE_ORDER_UUID])
+    service.db.execute = AsyncMock(
+        side_effect=[orders_result, other_result]
+    )
+
+    with pytest.raises(ValueError):
+        await service._load_linkable_orders([SAMPLE_ORDER_UUID], UUID("22222222-2222-2222-2222-222222222222"))

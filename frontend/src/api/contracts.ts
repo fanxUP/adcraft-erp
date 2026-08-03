@@ -7,6 +7,7 @@ export function getContracts(params: {
   status?: string
   keyword?: string
   customer_id?: string
+  exclude_contract_type?: string
 }) {
   return get<PaginatedData<ContractListResponse>>('/contracts/', { params })
 }
@@ -59,4 +60,8 @@ export function getContractAvailableResources(customerId?: string, contractId?: 
 
 export function getOrdersWithoutContract(params: { page?: number; page_size?: number; keyword?: string }) {
   return get<PaginatedData<OrderWithoutContractItem>>('/contracts/orders-without-contract', { params })
+}
+
+export function linkOrdersToContract(contractId: string, orderIds: string[]) {
+  return post<ContractDetailResponse>(`/contracts/${contractId}/orders`, { order_ids: orderIds })
 }
