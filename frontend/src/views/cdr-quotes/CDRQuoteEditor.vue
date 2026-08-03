@@ -92,14 +92,14 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="联系人">
-              <el-select v-model="form.contact_person" filterable allow-create default-first-option placeholder="选择联系人或输入" style="width: 100%" @change="handleContactChange">
+              <el-select v-model="form.contact_person" filterable allow-create default-first-option autocomplete="off" placeholder="选择联系人或输入" style="width: 100%" @change="handleContactChange">
                 <el-option v-for="c in contactOptions" :key="c.id" :label="c.name" :value="c.name" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="联系电话">
-              <el-input v-model="form.contact_phone" placeholder="手机/电话" />
+              <el-input v-model="form.contact_phone" autocomplete="off" placeholder="手机/电话" />
             </el-form-item>
           </el-col>
         </el-row>
