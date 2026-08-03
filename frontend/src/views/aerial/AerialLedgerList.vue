@@ -58,12 +58,10 @@
           <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="操作" width="160" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="handleDetail(row)">详情</el-button>
           <el-button link type="primary" size="small" @click="handleEdit(row)" v-if="row.status !== 'cancelled'">编辑</el-button>
-          <el-button link type="success" size="small" @click="handleApprove(row)" v-if="row.audit_status === 'pending' && row.status !== 'cancelled'">审核</el-button>
-          <el-button link type="warning" size="small" @click="handleReject(row)" v-if="row.audit_status === 'pending' && row.status !== 'cancelled'">驳回</el-button>
           <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
@@ -255,7 +253,7 @@
         <el-tab-pane label="成本与利润">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="人员工资">¥{{ detailData.personnel_wage_amount }}</el-descriptions-item>
-            <el-descriptions-item label="已审核报销">¥{{ detailData.reimbursement_amount }}</el-descriptions-item>
+            <el-descriptions-item label="报销金额">¥{{ detailData.reimbursement_amount }}</el-descriptions-item>
             <el-descriptions-item label="车辆直接费用">¥{{ detailData.vehicle_direct_cost }}</el-descriptions-item>
             <el-descriptions-item label="毛利润">
               <span :style="{ color: detailData.gross_profit >= 0 ? '#67c23a' : '#f56c6c' }">¥{{ detailData.gross_profit }}</span>
@@ -276,7 +274,7 @@ import { ref, reactive, onMounted, defineComponent, h } from 'vue'
 import { ElMessage, ElMessageBox, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import {
   getAerialLedgers, getAerialLedger, createAerialLedger, updateAerialLedger,
-  deleteAerialLedger, approveAerialLedger, rejectAerialLedger,
+  deleteAerialLedger,
   getAerialVehicles, getAerialPersonnel, getAerialAuditLogs,
   exportAerialLedgers,
   type AerialAuditLog,
@@ -422,25 +420,6 @@ async function handleDetail(row: AerialLedger) {
   } catch (error: unknown) {
     ElMessage.error(getErrorMessage(error, '加载详情失败'))
   }
-}
-
-async function handleApprove(row: AerialLedger) {
-  try {
-    await ElMessageBox.confirm('确定审核通过此台账？', '审核确认')
-    await approveAerialLedger(row.id)
-    ElMessage.success('审核通过')
-    fetchData()
-  } catch {}
-}
-
-async function handleReject(row: AerialLedger) {
-  try {
-    const { value } = await ElMessageBox.prompt('请输入驳回原因', '驳回台账', { inputType: 'textarea' })
-    if (!value?.trim()) return ElMessage.warning('请填写驳回原因')
-    await rejectAerialLedger(row.id, value)
-    ElMessage.success('已驳回')
-    fetchData()
-  } catch {}
 }
 
 async function handleDelete(row: AerialLedger) {

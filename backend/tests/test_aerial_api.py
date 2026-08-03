@@ -13,7 +13,6 @@ from app.core.permissions import (
     PERM_AERIAL_DELETE,
     PERM_AERIAL_FINANCE,
     PERM_AERIAL_WAGE,
-    PERM_AERIAL_APPROVE,
 )
 
 def _make_role(name: str, permission_codes: list[str]) -> MagicMock:
@@ -57,9 +56,6 @@ class TestAerialPermissionConstants:
 
     def test_wage_constant(self):
         assert PERM_AERIAL_WAGE == "aerial:wage"
-
-    def test_approve_constant(self):
-        assert PERM_AERIAL_APPROVE == "aerial:approve"
 
 
 # ── Permission enforcement ──────────────────────────────────────────────────
@@ -118,30 +114,22 @@ class TestAerialPermissionEnforcement:
         user = _make_user([role])
         assert await self._check(PERM_AERIAL_WAGE, user) is True
 
-    async def test_user_with_aerial_approve_passes(self):
-        role = _make_role("manager", [PERM_AERIAL_APPROVE])
-        user = _make_user([role])
-        assert await self._check(PERM_AERIAL_APPROVE, user) is True
-
     async def test_admin_with_all_aerial_permissions(self):
         """Admin role with all aerial permissions passes all checks."""
         admin = _make_role("admin", [
             PERM_AERIAL_READ, PERM_AERIAL_CREATE, PERM_AERIAL_UPDATE,
             PERM_AERIAL_DELETE, PERM_AERIAL_FINANCE, PERM_AERIAL_WAGE,
-            PERM_AERIAL_APPROVE,
         ])
         user = _make_user([admin])
         for perm in [PERM_AERIAL_READ, PERM_AERIAL_CREATE, PERM_AERIAL_UPDATE,
-                     PERM_AERIAL_DELETE, PERM_AERIAL_FINANCE, PERM_AERIAL_WAGE,
-                     PERM_AERIAL_APPROVE]:
+                     PERM_AERIAL_DELETE, PERM_AERIAL_FINANCE, PERM_AERIAL_WAGE]:
             assert await self._check(perm, user) is True
 
     async def test_user_with_no_roles_fails_all(self):
         """User with no roles fails all aerial permission checks."""
         user = _make_user([])
         for perm in [PERM_AERIAL_READ, PERM_AERIAL_CREATE, PERM_AERIAL_UPDATE,
-                     PERM_AERIAL_DELETE, PERM_AERIAL_FINANCE, PERM_AERIAL_WAGE,
-                     PERM_AERIAL_APPROVE]:
+                     PERM_AERIAL_DELETE, PERM_AERIAL_FINANCE, PERM_AERIAL_WAGE]:
             assert await self._check(perm, user) is False
 
     async def test_role_based_permission_check(self):
@@ -152,7 +140,6 @@ class TestAerialPermissionEnforcement:
         admin = _make_role("admin", [
             PERM_AERIAL_READ, PERM_AERIAL_CREATE, PERM_AERIAL_UPDATE,
             PERM_AERIAL_DELETE, PERM_AERIAL_FINANCE, PERM_AERIAL_WAGE,
-            PERM_AERIAL_APPROVE,
         ])
 
         # Viewer can only read
@@ -161,13 +148,12 @@ class TestAerialPermissionEnforcement:
         assert await self._check(PERM_AERIAL_CREATE, viewer_user) is False
         assert await self._check(PERM_AERIAL_FINANCE, viewer_user) is False
 
-        # Operator can CRUD but not finance/approve
+        # Operator can CRUD but not finance
         operator_user = _make_user([operator])
         assert await self._check(PERM_AERIAL_READ, operator_user) is True
         assert await self._check(PERM_AERIAL_CREATE, operator_user) is True
         assert await self._check(PERM_AERIAL_UPDATE, operator_user) is True
         assert await self._check(PERM_AERIAL_FINANCE, operator_user) is False
-        assert await self._check(PERM_AERIAL_APPROVE, operator_user) is False
 
         # Finance can read + finance
         finance_user = _make_user([finance])
@@ -178,8 +164,7 @@ class TestAerialPermissionEnforcement:
         # Admin can do everything
         admin_user = _make_user([admin])
         for perm in [PERM_AERIAL_READ, PERM_AERIAL_CREATE, PERM_AERIAL_UPDATE,
-                     PERM_AERIAL_DELETE, PERM_AERIAL_FINANCE, PERM_AERIAL_WAGE,
-                     PERM_AERIAL_APPROVE]:
+                     PERM_AERIAL_DELETE, PERM_AERIAL_FINANCE, PERM_AERIAL_WAGE]:
             assert await self._check(perm, admin_user) is True
 
 
@@ -216,20 +201,14 @@ class TestAerialPermissionMapping:
         """PATCH/POST update endpoints should use PERM_AERIAL_UPDATE."""
         update_endpoints = [
             "update_vehicle", "update_personnel", "update_ledger",
-            "review_expense", "review_cost",
             "agent_confirm_draft", "agent_reject_draft",
         ]
-        assert len(update_endpoints) == 7
+        assert len(update_endpoints) == 5
 
     def test_delete_permissions_for_delete_endpoints(self):
         """Delete endpoints should use PERM_AERIAL_DELETE."""
         delete_endpoints = ["delete_ledger", "delete_attachment"]
         assert len(delete_endpoints) == 2
-
-    def test_approve_permissions_for_approval_endpoints(self):
-        """Approve/reject ledger endpoints should use PERM_AERIAL_APPROVE."""
-        approve_endpoints = ["approve_ledger", "reject_ledger"]
-        assert len(approve_endpoints) == 2
 
     def test_finance_permissions_for_payment_endpoints(self):
         """Payment/reimbursement endpoints should use PERM_AERIAL_FINANCE."""

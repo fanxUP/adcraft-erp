@@ -17,7 +17,6 @@ from app.core.permissions import (
     PERM_AERIAL_DELETE,
     PERM_AERIAL_FINANCE,
     PERM_AERIAL_WAGE,
-    PERM_AERIAL_APPROVE,
 )
 from app.models.user import User
 from app.schemas.aerial import AerialAgentMessageIngest, AerialAgentDraftConfirm, AerialAgentDraftReject
@@ -253,7 +252,6 @@ async def list_ledgers(
     customer_name: str = Query(""),
     work_location: str = Query(""),
     payment_status: str = Query(""),
-    audit_status: str = Query(""),
     status: str = Query(""),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -266,7 +264,7 @@ async def list_ledgers(
         page=page, page_size=page_size,
         date_from=date_from, date_to=date_to, personnel_id=personnel_id,
         customer_name=customer_name, work_location=work_location,
-        payment_status=payment_status, audit_status=audit_status, status=status,
+        payment_status=payment_status, status=status,
     )
     return success_paginated(items, total, page, page_size)
 
@@ -323,32 +321,6 @@ async def delete_ledger(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@ledger_router.post("/{ledger_id}/approve")
-async def approve_ledger(
-    ledger_id: str,
-    data: dict = {},
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_AERIAL_APPROVE)),
-    request: Request = None,
-):
-    svc = _svc(db, current_user, request)
-    result = await svc.approve_ledger(ledger_id, data.get("remark", ""))
-    return success(result)
-
-
-@ledger_router.post("/{ledger_id}/reject")
-async def reject_ledger(
-    ledger_id: str,
-    data: dict = {},
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_AERIAL_APPROVE)),
-    request: Request = None,
-):
-    svc = _svc(db, current_user, request)
-    result = await svc.reject_ledger(ledger_id, data.get("remark", ""))
-    return success(result)
-
-
 # ── 人员垫付 ──────────────────────────────────────────────────────────────
 
 @expense_router.get("")
@@ -357,7 +329,6 @@ async def list_expenses(
     date_to: str = Query(""),
     personnel_id: str = Query(""),
     expense_type: str = Query(""),
-    review_status: str = Query(""),
     reimbursement_status: str = Query(""),
     ledger_id: str = Query(""),
     page: int = Query(1, ge=1),
@@ -370,7 +341,7 @@ async def list_expenses(
     items, total = await svc.list_expenses(
         page=page, page_size=page_size,
         date_from=date_from, date_to=date_to, personnel_id=personnel_id,
-        expense_type=expense_type, review_status=review_status,
+        expense_type=expense_type,
         reimbursement_status=reimbursement_status, ledger_id=ledger_id,
     )
     return success_paginated(items, total, page, page_size)
@@ -385,19 +356,6 @@ async def create_expense(
 ):
     svc = _svc(db, current_user, request)
     result = await svc.create_expense(data)
-    return success(result)
-
-
-@expense_router.post("/{expense_id}/review")
-async def review_expense(
-    expense_id: str,
-    data: dict,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_AERIAL_UPDATE)),
-    request: Request = None,
-):
-    svc = _svc(db, current_user, request)
-    result = await svc.review_expense(expense_id, data["status"], data.get("remark", ""))
     return success(result)
 
 
@@ -465,7 +423,6 @@ async def list_costs(
     date_to: str = Query(""),
     cost_type: str = Query(""),
     aerial_vehicle_id: str = Query(""),
-    review_status: str = Query(""),
     ledger_id: str = Query(""),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -477,7 +434,7 @@ async def list_costs(
     items, total = await svc.list_costs(
         page=page, page_size=page_size,
         date_from=date_from, date_to=date_to, cost_type=cost_type,
-        aerial_vehicle_id=aerial_vehicle_id, review_status=review_status, ledger_id=ledger_id,
+        aerial_vehicle_id=aerial_vehicle_id, ledger_id=ledger_id,
     )
     return success_paginated(items, total, page, page_size)
 
@@ -491,19 +448,6 @@ async def create_cost(
 ):
     svc = _svc(db, current_user, request)
     result = await svc.create_cost(data)
-    return success(result)
-
-
-@cost_router.post("/{cost_id}/review")
-async def review_cost(
-    cost_id: str,
-    data: dict,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_AERIAL_UPDATE)),
-    request: Request = None,
-):
-    svc = _svc(db, current_user, request)
-    result = await svc.review_cost(cost_id, data["status"], data.get("remark", ""))
     return success(result)
 
 

@@ -291,8 +291,6 @@ export interface AerialReceivablesReport {
 }
 
 export interface AerialReimbursementsReport {
-  pending_review: AerialPersonnelExpense[]
-  pending_review_total: number
   pending_reimbursement: AerialPersonnelExpense[]
   pending_reimbursement_total: number
 }
@@ -362,12 +360,6 @@ export const updateAerialLedger = (id: string, data: AerialLedgerUpdate) =>
 
 export const deleteAerialLedger = (id: string) =>
   del(`/aerial/ledgers/${id}`)
-
-export const approveAerialLedger = (id: string, remark?: string) =>
-  post<AerialLedger>(`/aerial/ledgers/${id}/approve`, { remark })
-
-export const rejectAerialLedger = (id: string, remark?: string) =>
-  post<AerialLedger>(`/aerial/ledgers/${id}/reject`, { remark })
 
 // ── Attendance API ───────────────────────────────────────────────────────────
 
@@ -449,9 +441,6 @@ export const getAerialPersonnelExpenses = (params?: AerialQueryParams) =>
 export const createAerialPersonnelExpense = (data: AerialPersonnelExpenseCreate) =>
   post<AerialPersonnelExpense>('/aerial/personnel-expenses', data)
 
-export const reviewAerialPersonnelExpense = (id: string, status: string, remark?: string) =>
-  post<AerialPersonnelExpense>(`/aerial/personnel-expenses/${id}/review`, { status, remark })
-
 export const reimburseAerialPersonnelExpense = (id: string, remark?: string) =>
   post<AerialPersonnelExpense>(`/aerial/personnel-expenses/${id}/reimburse`, { remark })
 
@@ -473,9 +462,6 @@ export const getAerialVehicleCosts = (params?: AerialQueryParams) =>
 
 export const createAerialVehicleCost = (data: AerialVehicleCostCreate) =>
   post<AerialVehicleCost>('/aerial/vehicle-costs', data)
-
-export const reviewAerialVehicleCost = (id: string, status: string, remark?: string) =>
-  post<AerialVehicleCost>(`/aerial/vehicle-costs/${id}/review`, { status, remark })
 
 // ── Safety Check API ───────────────────────────────────────────────────────
 

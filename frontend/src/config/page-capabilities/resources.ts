@@ -72,20 +72,20 @@ export const resourceCapabilities: PageCapabilityMap = {
     title: '高空车看板',
     purpose: '汇总高空作业车出车、收入、成本和待处理事项',
     workflowStage: 'aerial_overview',
-    availableActions: ['查看今日出车', '查看待审核事项', '查看经营概况'],
+    availableActions: ['查看今日出车', '查看经营概况'],
     quickActions: [{ label: '今日出车', prompt: '今天高空车出车情况' }],
   },
   aerial_ledgers: {
     title: '高空车出车台账',
     purpose: '登记和核对高空车作业、人员、收入及回款',
     workflowStage: 'aerial_ledger',
-    availableActions: ['查询出车台账', '新增台账', '审核台账'],
+    availableActions: ['查询出车台账', '新增台账'],
   },
   aerial_personnel_expenses: {
     title: '高空车垫付报销',
-    purpose: '登记和审核高空车人员垫付费用',
+    purpose: '登记高空车人员垫付费用',
     workflowStage: 'aerial_finance',
-    availableActions: ['查询垫付', '提交报销', '审核报销'],
+    availableActions: ['查询垫付', '提交报销'],
   },
   aerial_personnel_wages: {
     title: '高空车人员工资',
@@ -97,7 +97,7 @@ export const resourceCapabilities: PageCapabilityMap = {
     title: '高空车车辆费用',
     purpose: '登记高空作业车辆相关运营成本',
     workflowStage: 'aerial_finance',
-    availableActions: ['查询车辆成本', '登记费用', '审核费用'],
+    availableActions: ['查询车辆成本', '登记费用'],
   },
   aerial_safety_checks: {
     title: '高空车安全检查',

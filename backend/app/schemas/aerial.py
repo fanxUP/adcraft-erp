@@ -164,11 +164,6 @@ class AerialPersonnelExpenseUpdate(BaseModel):
     description: Optional[str] = None
 
 
-class AerialExpenseReview(BaseModel):
-    status: str  # approved / rejected
-    remark: Optional[str] = None
-
-
 class AerialExpenseReimburse(BaseModel):
     remark: Optional[str] = None
 
@@ -234,11 +229,6 @@ class AerialVehicleCostUpdate(BaseModel):
     receipt_url: Optional[str] = None
     allocation_type: Optional[str] = None
     allocation_month: Optional[str] = None
-    remark: Optional[str] = None
-
-
-class AerialCostReview(BaseModel):
-    status: str  # approved / rejected
     remark: Optional[str] = None
 
 

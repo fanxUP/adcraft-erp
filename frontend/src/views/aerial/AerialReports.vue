@@ -34,14 +34,6 @@
 
       <!-- 待报销 -->
       <el-tab-pane label="待报销" name="reimbursements">
-        <h4>待审核垫付</h4>
-        <el-table :data="reimbursements.pending_review || []" stripe v-loading="loading" size="small" style="margin-bottom: 20px">
-          <el-table-column prop="expense_date" label="日期" width="100" />
-          <el-table-column prop="name" label="人员" width="80" />
-          <el-table-column prop="expense_type" label="类型" width="80" />
-          <el-table-column prop="amount" label="金额" width="80" align="right"><template #default="{ row }">¥{{ row.amount }}</template></el-table-column>
-          <el-table-column prop="description" label="说明" min-width="150" />
-        </el-table>
         <h4>待报销垫付</h4>
         <el-table :data="reimbursements.pending_reimbursement || []" stripe v-loading="loading" size="small">
           <el-table-column prop="expense_date" label="日期" width="100" />
@@ -104,8 +96,6 @@ const personnelMonth = ref(new Date().toISOString().slice(0, 7))
 const monthlyData = ref<AerialSummary | null>(null)
 const receivables = ref<AerialReceivablesReport>({ items: [], total: 0, total_unpaid: 0 })
 const reimbursements = ref<AerialReimbursementsReport>({
-  pending_review: [],
-  pending_review_total: 0,
   pending_reimbursement: [],
   pending_reimbursement_total: 0,
 })

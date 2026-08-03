@@ -182,7 +182,6 @@ PERM_AERIAL_UPDATE = "aerial:update"
 PERM_AERIAL_DELETE = "aerial:delete"
 PERM_AERIAL_FINANCE = "aerial:finance"
 PERM_AERIAL_WAGE = "aerial:wage"
-PERM_AERIAL_APPROVE = "aerial:approve"
 
 # CDR 智能报价
 PERM_CDR_QUOTE_READ = "cdr_quote:read"

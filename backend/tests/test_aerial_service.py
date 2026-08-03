@@ -1,6 +1,7 @@
 """Tests for AerialService: vehicles, personnel, ledgers, expenses, wages, costs."""
 
 import json
+import uuid
 from datetime import datetime, timezone, date
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -447,38 +448,6 @@ async def test_delete_ledger(service, mock_repo):
     mock_repo.create_audit_log.assert_called_once()
 
 
-@pytest.mark.asyncio
-async def test_approve_ledger(service, mock_repo):
-    l = make_mock_ledger(audit_status="pending")
-    mock_repo.get_ledger.return_value = l
-
-    async def update_side_effect(obj, data):
-        for k, val in data.items():
-            setattr(obj, k, val)
-        return obj
-
-    mock_repo.update_ledger.side_effect = update_side_effect
-    result = await service.approve_ledger(SAMPLE_LEDGER_ID, "审核通过")
-    assert result["audit_status"] == "approved"
-    mock_repo.create_audit_log.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_reject_ledger(service, mock_repo):
-    l = make_mock_ledger(audit_status="pending")
-    mock_repo.get_ledger.return_value = l
-
-    async def update_side_effect(obj, data):
-        for k, val in data.items():
-            setattr(obj, k, val)
-        return obj
-
-    mock_repo.update_ledger.side_effect = update_side_effect
-    result = await service.reject_ledger(SAMPLE_LEDGER_ID, "信息不完整")
-    assert result["audit_status"] == "rejected"
-    mock_repo.create_audit_log.assert_called_once()
-
-
 # ── Expense tests ───────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -494,7 +463,15 @@ async def test_create_expense(service, mock_repo):
     e = make_mock_expense()
     mock_repo.get_ledger.return_value = make_mock_ledger()
     mock_repo.get_personnel.return_value = make_mock_personnel()
-    mock_repo.create_expense.return_value = e
+
+    async def create_side_effect(data):
+        for k, val in data.items():
+            setattr(e, k, val)
+        return e
+
+    mock_repo.create_expense.side_effect = create_side_effect
+    service._sum_expenses_for_ledger = AsyncMock(return_value=200.0)
+    mock_repo.update_ledger = AsyncMock()
     result = await service.create_expense({
         "ledger_id": SAMPLE_LEDGER_ID,
         "personnel_id": SAMPLE_PERSONNEL_ID,
@@ -504,28 +481,15 @@ async def test_create_expense(service, mock_repo):
     })
     assert result["expense_type"] == "fuel"
     assert result["amount"] == 200.0
-
-
-@pytest.mark.asyncio
-async def test_review_expense_approve(service, mock_repo):
-    e = make_mock_expense(review_status="pending")
-    mock_repo.get_expense.return_value = e
-
-    async def update_side_effect(obj, data):
-        for k, val in data.items():
-            setattr(obj, k, val)
-        return obj
-
-    mock_repo.update_expense.side_effect = update_side_effect
-    service._sum_expenses_for_ledger = AsyncMock(return_value=150.0)
-    result = await service.review_expense(SAMPLE_EXPENSE_ID, "approved", "审核通过")
-    assert result["review_status"] == "approved"
-    mock_repo.create_audit_log.assert_called_once()
+    # 创建即登记：垫付直接进入待报销状态，并重算台账报销金额
+    assert result["reimbursement_status"] == "pending_reimbursement"
+    service._sum_expenses_for_ledger.assert_awaited_once_with(uuid.UUID(SAMPLE_LEDGER_ID))
+    mock_repo.update_ledger.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_reimburse_expense(service, mock_repo):
-    e = make_mock_expense(review_status="approved", reimbursement_status="pending_reimbursement")
+    e = make_mock_expense(reimbursement_status="pending_reimbursement")
     mock_repo.get_expense.return_value = e
 
     async def update_side_effect(obj, data):
@@ -602,18 +566,3 @@ async def test_create_cost(service, mock_repo):
     })
     assert result["cost_type"] == "fuel"
     assert result["amount"] == 500.0
-
-
-@pytest.mark.asyncio
-async def test_review_cost(service, mock_repo):
-    c = make_mock_cost(review_status="pending")
-    mock_repo.get_cost.return_value = c
-
-    async def update_side_effect(obj, data):
-        for k, val in data.items():
-            setattr(obj, k, val)
-        return obj
-
-    mock_repo.update_cost.side_effect = update_side_effect
-    result = await service.review_cost(SAMPLE_COST_ID, "approved", "审核通过")
-    assert result["review_status"] == "approved"

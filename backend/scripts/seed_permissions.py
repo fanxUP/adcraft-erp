@@ -142,11 +142,10 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     # Aerial work platform (高空作业车台账)
     {"code": "aerial:read", "name": "查看高空车台账", "description": "查看高空作业车档案、台账、驾驶员、费用等信息"},
     {"code": "aerial:create", "name": "创建高空车台账", "description": "创建高空车台账记录、驾驶员、费用、安全检查等"},
-    {"code": "aerial:update", "name": "编辑高空车台账", "description": "编辑和审核高空车台账记录"},
-    {"code": "aerial:delete", "name": "删除高空车台账", "description": "作废台账或删除附件"},
+    {"code": "aerial:update", "name": "编辑高空车台账", "description": "编辑高空车台账记录"},
+    {"code": "aerial:delete", "name": "删除高空车台账", "description": "删除台账或附件"},
     {"code": "aerial:finance", "name": "高空车财务操作", "description": "报销驾驶员垫付费用、发放工资"},
     {"code": "aerial:wage", "name": "管理高空车工资", "description": "创建和管理驾驶员工资记录"},
-    {"code": "aerial:approve", "name": "审核高空车台账", "description": "审批和驳回台账记录"},
     # AI Features
     {"code": "ai_quote:read", "name": "AI报价助手", "description": "使用AI智能报价功能"},
     {"code": "ai_anomaly:read", "name": "智能异常提醒", "description": "查看AI异常检测结果"},
@@ -229,7 +228,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "report:read",
         "ai_quote:read", "ai_anomaly:read", "ai_knowledge:read", "ai_report:read",
         "vehicle:read", "finance:review",
-        "aerial:read", "aerial:finance", "aerial:approve",
+        "aerial:read", "aerial:finance",
     ],
 }
 

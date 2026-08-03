@@ -9,9 +9,6 @@
       <el-select v-model="filters.personnel_id" placeholder="人员" clearable style="width: 120px">
         <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
       </el-select>
-      <el-select v-model="filters.review_status" placeholder="审核状态" clearable style="width: 120px">
-        <el-option label="待审核" value="pending" /><el-option label="已通过" value="approved" /><el-option label="已驳回" value="rejected" />
-      </el-select>
       <el-select v-model="filters.reimbursement_status" placeholder="报销状态" clearable style="width: 120px">
         <el-option label="未报销" value="unpaid" /><el-option label="待报销" value="pending_reimbursement" /><el-option label="已报销" value="reimbursed" />
       </el-select>
@@ -29,13 +26,6 @@
         <template #default="{ row }">¥{{ row.amount }}</template>
       </el-table-column>
       <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="review_status" label="审核状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.review_status === 'approved' ? 'success' : row.review_status === 'rejected' ? 'danger' : 'warning'" size="small">
-            {{ reviewLabel(row.review_status) }}
-          </el-tag>
-        </template>
-      </el-table-column>
       <el-table-column prop="reimbursement_status" label="报销状态" width="100">
         <template #default="{ row }">
           <el-tag :type="row.reimbursement_status === 'reimbursed' ? 'success' : row.reimbursement_status === 'pending_reimbursement' ? 'warning' : 'info'" size="small">
@@ -43,11 +33,9 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="操作" width="130" fixed="right">
         <template #default="{ row }">
-          <el-button link type="success" size="small" @click="handleReview(row, 'approved')" v-if="row.review_status === 'pending'">通过</el-button>
-          <el-button link type="danger" size="small" @click="handleReview(row, 'rejected')" v-if="row.review_status === 'pending'">驳回</el-button>
-          <el-button link type="primary" size="small" @click="handleReimburse(row)" v-if="row.review_status === 'approved' && row.reimbursement_status === 'pending_reimbursement'">标记已报销</el-button>
+          <el-button link type="primary" size="small" @click="handleReimburse(row)" v-if="row.reimbursement_status === 'pending_reimbursement'">标记已报销</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -61,7 +49,6 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getAerialPersonnelExpenses,
-  reviewAerialPersonnelExpense,
   reimburseAerialPersonnelExpense,
   getAerialPersonnel,
   type AerialPersonnel,
@@ -76,7 +63,7 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const personnelOptions = ref<AerialPersonnel[]>([])
-const filters = reactive({ dateRange: [] as string[], personnel_id: '', review_status: '', reimbursement_status: '' })
+const filters = reactive({ dateRange: [] as string[], personnel_id: '', reimbursement_status: '' })
 
 async function fetchData() {
   loading.value = true
@@ -84,7 +71,6 @@ async function fetchData() {
     const params: AerialQueryParams = { page: page.value, page_size: pageSize.value }
     if (filters.dateRange?.length === 2) { params.date_from = filters.dateRange[0]; params.date_to = filters.dateRange[1] }
     if (filters.personnel_id) params.personnel_id = filters.personnel_id
-    if (filters.review_status) params.review_status = filters.review_status
     if (filters.reimbursement_status) params.reimbursement_status = filters.reimbursement_status
     const res = await getAerialPersonnelExpenses(params)
     list.value = res.items || []; total.value = res.total || 0
@@ -92,16 +78,8 @@ async function fetchData() {
 }
 
 function resetFilters() {
-  filters.dateRange = []; filters.personnel_id = ''; filters.review_status = ''; filters.reimbursement_status = ''
+  filters.dateRange = []; filters.personnel_id = ''; filters.reimbursement_status = ''
   page.value = 1; fetchData()
-}
-
-async function handleReview(row: AerialPersonnelExpense, status: string) {
-  try {
-    await ElMessageBox.confirm(`确定${status === 'approved' ? '通过' : '驳回'}此垫付记录？`, '审核')
-    await reviewAerialPersonnelExpense(row.id, status)
-    ElMessage.success('操作成功'); fetchData()
-  } catch {}
 }
 
 async function handleReimburse(row: AerialPersonnelExpense) {
@@ -116,7 +94,6 @@ function expenseTypeLabel(t: string) {
   const m: Record<string, string> = { fuel: '油费', toll: '过路费', parking: '停车费', meal: '餐费', temporary_repair: '临时维修', material: '材料', other: '其他' }
   return m[t] || t
 }
-function reviewLabel(s: string) { return { pending: '待审核', approved: '已通过', rejected: '已驳回' }[s] || s }
 function reimbLabel(s: string) { return { unpaid: '未报销', pending_reimbursement: '待报销', reimbursed: '已报销' }[s] || s }
 
 onMounted(async () => {

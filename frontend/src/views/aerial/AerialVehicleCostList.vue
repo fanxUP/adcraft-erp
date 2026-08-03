@@ -6,9 +6,6 @@
       <el-select v-model="filters.cost_type" placeholder="费用类型" clearable style="width: 120px">
         <el-option v-for="t in costTypes" :key="t.value" :label="t.label" :value="t.value" />
       </el-select>
-      <el-select v-model="filters.review_status" placeholder="审核状态" clearable style="width: 120px">
-        <el-option label="待审核" value="pending" /><el-option label="已通过" value="approved" /><el-option label="已驳回" value="rejected" />
-      </el-select>
       <el-button type="primary" @click="fetchData">搜索</el-button>
     </div>
     <el-table :data="list" stripe v-loading="loading">
@@ -17,18 +14,7 @@
       <el-table-column prop="amount" label="金额" width="120" align="right"><template #default="{ row }">¥{{ row.amount }}</template></el-table-column>
       <el-table-column prop="plate_number" label="车辆" width="100" />
       <el-table-column prop="allocation_type" label="分摊方式" width="100"><template #default="{ row }">{{ allocLabel(row.allocation_type) }}</template></el-table-column>
-      <el-table-column prop="review_status" label="审核" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.review_status === 'approved' ? 'success' : row.review_status === 'rejected' ? 'danger' : 'warning'" size="small">{{ reviewLabel(row.review_status) }}</el-tag>
-        </template>
-      </el-table-column>
       <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
-      <el-table-column label="操作" width="200" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="success" size="small" @click="handleReview(row, 'approved')" v-if="row.review_status === 'pending'">通过</el-button>
-          <el-button link type="danger" size="small" @click="handleReview(row, 'rejected')" v-if="row.review_status === 'pending'">驳回</el-button>
-        </template>
-      </el-table-column>
     </el-table>
     <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px" @current-change="fetchData" />
 
@@ -67,11 +53,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import {
   getAerialVehicleCosts,
   createAerialVehicleCost,
-  reviewAerialVehicleCost,
   getAerialVehicles,
   getAerialPersonnel,
   type AerialPersonnel,
@@ -85,7 +70,7 @@ const loading = ref(false); const saving = ref(false); const dialogVisible = ref
 const list = ref<AerialVehicleCost[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
 const vehicleOptions = ref<AerialVehicle[]>([])
 const personnelOptions = ref<AerialPersonnel[]>([])
-const filters = reactive({ dateRange: [] as string[], cost_type: '', review_status: '' })
+const filters = reactive({ dateRange: [] as string[], cost_type: '' })
 const form = reactive({ aerial_vehicle_id: '', cost_date: '', cost_type: '', amount: 0, allocation_type: 'none', payer_id: '', remark: '' })
 
 const costTypes = [
@@ -103,7 +88,6 @@ async function fetchData() {
     const params: AerialQueryParams = { page: page.value, page_size: pageSize.value }
     if (filters.dateRange?.length === 2) { params.date_from = filters.dateRange[0]; params.date_to = filters.dateRange[1] }
     if (filters.cost_type) params.cost_type = filters.cost_type
-    if (filters.review_status) params.review_status = filters.review_status
     const res = await getAerialVehicleCosts(params); list.value = res.items || []; total.value = res.total || 0
   } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
@@ -123,13 +107,8 @@ async function handleSave() {
   catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { saving.value = false }
 }
 
-async function handleReview(row: AerialVehicleCost, status: string) {
-  try { await ElMessageBox.confirm(`确定${status === 'approved' ? '通过' : '驳回'}？`, '审核'); await reviewAerialVehicleCost(row.id, status); ElMessage.success('操作成功'); fetchData() } catch {}
-}
-
 function costTypeLabel(t: string) { return costTypes.find(c => c.value === t)?.label || t }
 function allocLabel(t: string) { return { none: '不分摊', per_trip: '按趟', daily: '按日', monthly: '按月', annual: '按年' }[t] || t }
-function reviewLabel(s: string) { return { pending: '待审核', approved: '已通过', rejected: '已驳回' }[s] || s }
 
 onMounted(async () => {
   fetchData()

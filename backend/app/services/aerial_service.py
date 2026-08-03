@@ -19,9 +19,6 @@ from app.repositories.aerial_repo import AerialRepository
 ACTION_CREATE = "create"
 ACTION_UPDATE = "update"
 ACTION_DELETE = "delete"
-ACTION_APPROVE = "approve"
-ACTION_REJECT = "reject"
-ACTION_REVIEW = "review"
 ACTION_REIMBURSE = "reimburse"
 ACTION_PAY_WAGE = "pay_wage"
 ACTION_RECORD_PAYMENT = "record_payment"
@@ -333,33 +330,6 @@ class AerialService:
         await self._log(None, ACTION_DELETE, target_type="ledger", target_id=obj.id, before=before)
         return before
 
-    async def approve_ledger(self, ledger_id: str, remark: str = ""):
-        obj = await self.repo.get_ledger(uuid.UUID(ledger_id))
-        if not obj:
-            raise ValueError("台账不存在")
-        before = self._ledger_to_dict(obj)
-        obj = await self.repo.update_ledger(obj, {
-            "audit_status": "approved",
-            "status": "reviewed",
-            "reviewed_by": self._user_id(),
-            "reviewed_at": datetime.now(),
-        })
-        await self._log(obj.id, ACTION_APPROVE, "ledger", obj.id, before=before, after=self._ledger_to_dict(obj), remark=remark)
-        return self._ledger_to_dict(obj)
-
-    async def reject_ledger(self, ledger_id: str, remark: str = ""):
-        obj = await self.repo.get_ledger(uuid.UUID(ledger_id))
-        if not obj:
-            raise ValueError("台账不存在")
-        before = self._ledger_to_dict(obj)
-        obj = await self.repo.update_ledger(obj, {
-            "audit_status": "rejected",
-            "reviewed_by": self._user_id(),
-            "reviewed_at": datetime.now(),
-        })
-        await self._log(obj.id, ACTION_REJECT, "ledger", obj.id, before=before, after=self._ledger_to_dict(obj), remark=remark)
-        return self._ledger_to_dict(obj)
-
     def _calc_amounts(self, data: dict) -> dict:
         receivable = float(data.get("receivable_amount", 0) or 0)
         discount = float(data.get("discount_amount", 0) or 0)
@@ -484,36 +454,15 @@ class AerialService:
         if not ledger:
             raise ValueError("关联台账不存在")
 
+        # 创建即登记：垫付无需审核，直接进入待报销状态
+        data["reimbursement_status"] = "pending_reimbursement"
+
         obj = await self.repo.create_expense(data)
         await self._log(data["ledger_id"], ACTION_CREATE, "expense", obj.id, after=self._expense_to_dict(obj))
-        return self._expense_to_dict(obj)
 
-    async def review_expense(self, expense_id: str, status: str, remark: str = ""):
-        obj = await self.repo.get_expense(uuid.UUID(expense_id))
-        if not obj:
-            raise ValueError("垫付记录不存在")
-        if obj.review_status != "pending":
-            raise ValueError("只能审核待审核状态的记录")
-
-        before = self._expense_to_dict(obj)
-        update_data = {
-            "review_status": status,
-            "reviewed_by": self._user_id(),
-            "reviewed_at": datetime.now(),
-        }
-        if status == "approved":
-            update_data["reimbursement_status"] = "pending_reimbursement"
-
-        obj = await self.repo.update_expense(obj, update_data)
-
-        # 更新台账报销金额（重新汇总所有已审核费用，避免重复累加）
-        if status == "approved" and obj.ledger_id:
-            ledger = await self.repo.get_ledger(obj.ledger_id)
-            if ledger:
-                total_reimbursed = await self._sum_expenses_for_ledger(obj.ledger_id)
-                await self.repo.update_ledger(ledger, {"reimbursement_amount": total_reimbursed})
-
-        await self._log(obj.ledger_id, ACTION_REVIEW, "expense", obj.id, before=before, after=self._expense_to_dict(obj), remark=remark)
+        # 更新台账报销金额（重新汇总该台账全部垫付，避免重复累加）
+        total_reimbursed = await self._sum_expenses_for_ledger(obj.ledger_id)
+        await self.repo.update_ledger(ledger, {"reimbursement_amount": total_reimbursed})
         return self._expense_to_dict(obj)
 
     async def reimburse_expense(self, expense_id: str, remark: str = ""):
@@ -552,12 +501,11 @@ class AerialService:
         }
 
     async def _sum_expenses_for_ledger(self, ledger_id) -> float:
-        """汇总台账下所有已审核通过的费用金额"""
+        """汇总台账下所有垫付的费用金额（创建即登记，全部计入）"""
         from sqlalchemy import select, func
         from app.models.aerial import AerialPersonnelExpense
         q = select(func.coalesce(func.sum(AerialPersonnelExpense.amount), 0)).where(
             AerialPersonnelExpense.ledger_id == ledger_id,
-            AerialPersonnelExpense.review_status == "approved",
         )
         result = (await self.db.execute(q)).scalar()
         return float(result)
@@ -672,26 +620,6 @@ class AerialService:
                 await self.repo.update_ledger(ledger, {"vehicle_direct_cost": new_cost})
 
         return self._cost_to_dict(obj)
-
-    async def review_cost(self, cost_id: str, status: str, remark: str = ""):
-        obj = await self.repo.get_cost(uuid.UUID(cost_id))
-        if not obj:
-            raise ValueError("费用记录不存在")
-        if obj.review_status != "pending":
-            raise ValueError("只能审核待审核状态的记录")
-
-        before = self._cost_to_dict(obj)
-        obj = await self.repo.update_cost(obj, {
-            "review_status": status,
-            "reviewed_by": self._user_id(),
-            "reviewed_at": datetime.now(),
-        })
-        after = self._cost_to_dict(obj)
-        await self._log(
-            obj.ledger_id, ACTION_REVIEW, "vehicle_cost", obj.id,
-            before=before, after=after, remark=remark
-        )
-        return after
 
     def _cost_to_dict(self, c):
         return {
@@ -892,11 +820,8 @@ class AerialService:
         return {"items": ledgers, "total": total, "total_unpaid": total_unpaid}
 
     async def get_report_reimbursements(self, page=1, page_size=20):
-        pending_expenses, pe_total = await self.repo.get_pending_expenses()
         pending_reimb, pr_total = await self.repo.get_pending_reimbursements((page - 1) * page_size, page_size)
         return {
-            "pending_review": [self._expense_to_dict(e) for e in pending_expenses],
-            "pending_review_total": pe_total,
             "pending_reimbursement": [self._expense_to_dict(e) for e in pending_reimb],
             "pending_reimbursement_total": pr_total,
         }

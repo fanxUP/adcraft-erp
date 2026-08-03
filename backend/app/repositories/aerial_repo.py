@@ -118,7 +118,6 @@ class AerialRepository:
         customer_name: Optional[str] = None,
         work_location: Optional[str] = None,
         payment_status: Optional[str] = None,
-        audit_status: Optional[str] = None,
         status: Optional[str] = None,
         skip: int = 0,
         limit: int = 20,
@@ -136,8 +135,6 @@ class AerialRepository:
             q = q.where(AerialDailyLedger.work_location.ilike(f"%{work_location}%"))
         if payment_status:
             q = q.where(AerialDailyLedger.payment_status == payment_status)
-        if audit_status:
-            q = q.where(AerialDailyLedger.audit_status == audit_status)
         if status:
             q = q.where(AerialDailyLedger.status == status)
         count_q = select(func.count()).select_from(q.subquery())
@@ -199,7 +196,6 @@ class AerialRepository:
         date_to: Optional[str] = None,
         personnel_id: Optional[str] = None,
         expense_type: Optional[str] = None,
-        review_status: Optional[str] = None,
         reimbursement_status: Optional[str] = None,
         ledger_id: Optional[str] = None,
         skip: int = 0,
@@ -214,8 +210,6 @@ class AerialRepository:
             q = q.where(AerialPersonnelExpense.personnel_id == uuid.UUID(personnel_id))
         if expense_type:
             q = q.where(AerialPersonnelExpense.expense_type == expense_type)
-        if review_status:
-            q = q.where(AerialPersonnelExpense.review_status == review_status)
         if reimbursement_status:
             q = q.where(AerialPersonnelExpense.reimbursement_status == reimbursement_status)
         if ledger_id:
@@ -293,7 +287,6 @@ class AerialRepository:
         date_to: Optional[str] = None,
         cost_type: Optional[str] = None,
         aerial_vehicle_id: Optional[str] = None,
-        review_status: Optional[str] = None,
         ledger_id: Optional[str] = None,
         skip: int = 0,
         limit: int = 20,
@@ -307,8 +300,6 @@ class AerialRepository:
             q = q.where(AerialVehicleCost.cost_type == cost_type)
         if aerial_vehicle_id:
             q = q.where(AerialVehicleCost.aerial_vehicle_id == uuid.UUID(aerial_vehicle_id))
-        if review_status:
-            q = q.where(AerialVehicleCost.review_status == review_status)
         if ledger_id:
             q = q.where(AerialVehicleCost.ledger_id == uuid.UUID(ledger_id))
         count_q = select(func.count()).select_from(q.subquery())
@@ -472,22 +463,9 @@ class AerialRepository:
         rows = (await self.db.execute(q)).scalars().all()
         return list(rows), total
 
-    async def get_pending_expenses(self, skip: int = 0, limit: int = 20):
-        q = select(AerialPersonnelExpense).where(
-            AerialPersonnelExpense.review_status == "pending"
-        ).order_by(AerialPersonnelExpense.expense_date.desc())
-        count_q = select(func.count()).select_from(q.subquery())
-        total = (await self.db.execute(count_q)).scalar() or 0
-        q = q.offset(skip).limit(limit)
-        rows = (await self.db.execute(q)).scalars().all()
-        return list(rows), total
-
     async def get_pending_reimbursements(self, skip: int = 0, limit: int = 20):
         q = select(AerialPersonnelExpense).where(
-            and_(
-                AerialPersonnelExpense.review_status == "approved",
-                AerialPersonnelExpense.reimbursement_status == "pending_reimbursement",
-            )
+            AerialPersonnelExpense.reimbursement_status == "pending_reimbursement"
         ).order_by(AerialPersonnelExpense.expense_date.desc())
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar() or 0
@@ -496,13 +474,14 @@ class AerialRepository:
         return list(rows), total
 
     async def get_cost_by_type(self, year_month: Optional[str] = None):
-        base = AerialVehicleCost.review_status == "approved"
-        if year_month:
-            base = and_(base, func.to_char(AerialVehicleCost.cost_date, 'YYYY-MM') == year_month)
+        """费用分类汇总（创建即登记，全部费用计入，与台账 vehicle_direct_cost 口径一致）"""
         q = select(
             AerialVehicleCost.cost_type,
             func.coalesce(func.sum(AerialVehicleCost.amount), 0).label("total"),
-        ).where(base).group_by(AerialVehicleCost.cost_type)
+        )
+        if year_month:
+            q = q.where(func.to_char(AerialVehicleCost.cost_date, 'YYYY-MM') == year_month)
+        q = q.group_by(AerialVehicleCost.cost_type)
         rows = (await self.db.execute(q)).all()
         return [{"cost_type": r[0], "total": float(r[1])} for r in rows]
 
