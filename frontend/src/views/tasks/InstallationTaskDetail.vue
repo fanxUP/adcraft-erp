@@ -336,7 +336,7 @@ async function handleDelete() {
   try {
     await deleteInstallationTask(route.params.id as string)
     ElMessage.success('任务已删除')
-    router.back()
+    router.push('/projects/board')
   } catch { /* handled */ } finally { deleting.value = false }
 }
 
