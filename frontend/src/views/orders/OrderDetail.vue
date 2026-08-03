@@ -290,7 +290,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Printer } from '@element-plus/icons-vue'
 import OrderWorkflow from './OrderWorkflow.vue'
 import OrderProjectOverview from './OrderProjectOverview.vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { getOrder, changeOrderStatus, reopenCompletedOrder, autoCalculateCost } from '@/api/orders'
 import { getDesignTasks, getProductionTasks, getInstallationTasks } from '@/api/tasks'
@@ -298,6 +298,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, OrderDetailResponse, OrderItemResponse } from '@/types/api'
 
 const route = useRoute()
+const router = useRouter()
 const aiStore = useAiAssistantStore()
 const loading = ref(false)
 const changing = ref(false)
@@ -483,6 +484,8 @@ async function handleChangeStatus(to_status: string) {
     ElMessage.success(`状态已变更为「${label}」`)
     // 取消会软删订单进回收站，导航刷新查不到已删订单，跳过
     if (to_status !== 'cancelled') await aiStore.notifyBusinessMutation()
+    // 取消订单后自动跳转回订单管理页
+    if (to_status === 'cancelled') router.push('/orders')
   } finally { changing.value = false }
 }
 
