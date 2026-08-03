@@ -296,6 +296,11 @@ class OutsourceService:
         if not task:
             raise ValueError("外协任务不存在或未被删除")
         await self.task_repo.restore(task)
+        # 删除时付款已级联清除，恢复后按现存付款记录重算已付/未付
+        count, total = await self.payment_repo.payment_totals(task_id)
+        task.paid_amount = total
+        task.unpaid_amount = max(0.0, float(task.total_amount or 0) - total)
+        await self.db.flush()
         vname = await self._task_vendor_name(task)
         pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
         return self._task_to_dict(task, vname, pname)
@@ -382,14 +387,21 @@ class OutsourceService:
 
     # ── Delete Task (admin only, soft delete + cascade payments) ──
 
-    async def delete_task(self, task_id: UUID) -> bool:
-        """软删除没有付款记录的已取消任务。"""
-        task = await self.task_repo.get_by_id(task_id)
+    async def delete_task(self, task_id: UUID) -> dict:
+        """删除外协任务：任务软删除进回收站，关联付款记录一并删除。
+
+        返回删除摘要 {task_id, task_no, deleted_payment_count, deleted_payment_total}。
+        """
+        task = await self.task_repo.get_by_id(task_id, for_update=True)
         if not task:
             raise ValueError("外协任务不存在")
-        if task.status != "cancelled":
-            raise ValueError("仅已取消的外协任务可以删除")
-        if await self.payment_repo.has_task_payments(task_id):
-            raise ValueError("该外协任务存在付款记录，不能删除")
+        count, total = await self.payment_repo.payment_totals(task_id)
+        if count:
+            await self.payment_repo.delete_by_task(task_id)
         await self.task_repo.soft_delete(task)
-        return True
+        return {
+            "task_id": str(task.id),
+            "task_no": task.task_no,
+            "deleted_payment_count": count,
+            "deleted_payment_total": total,
+        }

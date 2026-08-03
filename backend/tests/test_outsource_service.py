@@ -96,7 +96,8 @@ def mock_repos():
     payment_repo = MagicMock()
     payment_repo.list_payments = AsyncMock(return_value=([], 0))
     payment_repo.create = AsyncMock()
-    payment_repo.has_task_payments = AsyncMock(return_value=False)
+    payment_repo.payment_totals = AsyncMock(return_value=(0, 0.0))
+    payment_repo.delete_by_task = AsyncMock()
 
     return vendor_repo, task_repo, payment_repo
 
@@ -456,27 +457,68 @@ async def test_cancel_task_rejects_task_with_payment(service):
 
 
 @pytest.mark.asyncio
-async def test_delete_task_preserves_payment_history(service):
+async def test_delete_task_any_status_cascades_payments(service):
     svc, _, tr, pr = service
-    task = make_mock_outsource_task(status="cancelled")
+    task = make_mock_outsource_task(status="settled")
     tr.get_by_id.return_value = task
-    pr.has_task_payments.return_value = True
+    pr.payment_totals = AsyncMock(return_value=(2, 500.0))
+    pr.delete_by_task = AsyncMock()
 
-    with pytest.raises(ValueError, match="存在付款记录"):
-        await svc.delete_task(SAMPLE_ORDER_ID)
+    result = await svc.delete_task(SAMPLE_ORDER_ID)
 
-    tr.soft_delete.assert_not_awaited()
+    pr.delete_by_task.assert_awaited_once_with(SAMPLE_ORDER_ID)
+    tr.soft_delete.assert_awaited_once_with(task)
+    assert result["deleted_payment_count"] == 2
+    assert result["deleted_payment_total"] == 500.0
+
+
+@pytest.mark.asyncio
+async def test_delete_task_without_payments(service):
+    svc, _, tr, pr = service
+    task = make_mock_outsource_task(status="settled")
+    tr.get_by_id.return_value = task
+    pr.payment_totals = AsyncMock(return_value=(0, 0.0))
+    pr.delete_by_task = AsyncMock()
+
+    result = await svc.delete_task(SAMPLE_ORDER_ID)
+
+    pr.delete_by_task.assert_not_awaited()
+    tr.soft_delete.assert_awaited_once_with(task)
+    assert result["deleted_payment_count"] == 0
+    assert result["deleted_payment_total"] == 0.0
 
 
 @pytest.mark.asyncio
 async def test_restore_task_keeps_cancelled_status(service):
-    svc, _, tr, _ = service
+    svc, _, tr, pr = service
     task = make_mock_outsource_task(status="cancelled", deleted_at=datetime.now(timezone.utc))
     tr.get_deleted_by_id.return_value = task
+    pr.payment_totals = AsyncMock(return_value=(0, 0.0))
 
     result = await svc.restore_task(SAMPLE_ORDER_ID)
 
     assert result["status"] == "cancelled"
+    tr.restore.assert_awaited_once_with(task)
+
+
+@pytest.mark.asyncio
+async def test_restore_task_recomputes_amounts_from_remaining_payments(service):
+    svc, _, tr, pr = service
+    task = make_mock_outsource_task(
+        status="cancelled",
+        total_amount=500.0,
+        paid_amount=500.0,
+        unpaid_amount=0.0,
+        deleted_at=datetime.now(timezone.utc),
+    )
+    tr.get_deleted_by_id.return_value = task
+    # 付款已随删除清除，恢复后已付/未付按现存付款重算为 0
+    pr.payment_totals = AsyncMock(return_value=(0, 0.0))
+
+    result = await svc.restore_task(SAMPLE_ORDER_ID)
+
+    assert result["paid_amount"] == 0.0
+    assert result["unpaid_amount"] == 500.0
     tr.restore.assert_awaited_once_with(task)
 
 

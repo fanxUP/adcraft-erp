@@ -56,7 +56,7 @@
           <el-button v-if="isAdmin && row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" text type="warning" @click="handlePay(row as OutsourceTaskResponse)">付款</el-button>
           <el-button v-if="isAdmin && row.status === 'completed'" text type="warning" @click="handleRevert(row as OutsourceTaskResponse)">退回</el-button>
           <el-button v-if="isAdmin && !['completed', 'settled', 'cancelled'].includes(row.status)" text type="danger" @click="handleCancel(row as OutsourceTaskResponse)">取消</el-button>
-          <el-button v-if="isAdmin && row.status === 'cancelled'" text type="danger" @click="handleDelete(row as OutsourceTaskResponse)">删除</el-button>
+          <el-button v-if="isAdmin" text type="danger" @click="handleDelete(row as OutsourceTaskResponse)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -388,12 +388,30 @@ async function handleRevert(row: OutsourceTaskResponse) {
 }
 
 async function handleDelete(row: OutsourceTaskResponse) {
+  // 拉取关联付款摘要，用于删除确认提示
+  let summary: OutsourceTaskPaymentSummary | null = null
   try {
-    await ElMessageBox.confirm(`确认删除外协任务「${row.task_no}」？删除后可在回收站恢复。`, '确认', {
+    summary = await getOutsourceTaskPaymentSummary(row.id)
+  } catch { /* 摘要拿不到不阻塞删除 */ }
+
+  const payments = summary?.payments ?? []
+  let msg: string
+  if (payments.length) {
+    const total = payments.reduce((s, p) => s + p.amount, 0)
+    const detail = payments.slice(0, 5).map(p => `${p.payment_no} ¥${p.amount.toFixed(2)}`).join('、')
+    msg = `外协任务「${row.task_no}」关联 ${payments.length} 条付款记录，合计 ¥${total.toFixed(2)}` +
+      (detail ? `（${detail}）` : '') +
+      `。删除任务将一并删除这些付款记录，付款记录删除后不可恢复。确认删除？`
+  } else {
+    msg = `确认删除外协任务「${row.task_no}」？该任务无关联付款记录。删除后任务可在回收站恢复。`
+  }
+
+  try {
+    await ElMessageBox.confirm(msg, '确认删除', {
       confirmButtonText: '确认删除', cancelButtonText: '取消', type: 'warning',
     })
     await deleteOutsourceTask(row.id)
-    ElMessage.success('外协任务已删除')
+    ElMessage.success(payments.length ? `已删除任务及 ${payments.length} 条关联付款记录` : '外协任务已删除')
     await fetchData()
   } catch { /* ignore */ }
 }

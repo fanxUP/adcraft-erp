@@ -1,7 +1,7 @@
 import uuid as _uuid
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete as sa_delete
 
 from app.models.outsource import OutsourceVendor, OutsourceTask, OutsourcePayment
 
@@ -147,10 +147,19 @@ class OutsourcePaymentRepository:
         await self.db.flush()
         return payment
 
-    async def has_task_payments(self, task_id: UUID) -> bool:
+    async def payment_totals(self, task_id: UUID) -> tuple[int, float]:
+        """返回某任务的付款记录数与付款总额。"""
         result = await self.db.execute(
-            select(func.count(OutsourcePayment.id)).where(
-                OutsourcePayment.task_id == task_id
-            )
+            select(
+                func.count(OutsourcePayment.id),
+                func.coalesce(func.sum(OutsourcePayment.amount), 0),
+            ).where(OutsourcePayment.task_id == task_id)
         )
-        return bool(result.scalar())
+        count, total = result.one()
+        return count, float(total)
+
+    async def delete_by_task(self, task_id: UUID) -> None:
+        """硬删除某任务的付款记录（付款表无软删除字段）。"""
+        await self.db.execute(
+            sa_delete(OutsourcePayment).where(OutsourcePayment.task_id == task_id)
+        )
