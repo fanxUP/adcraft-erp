@@ -536,7 +536,7 @@ function handlePrint() {
 
   #__print_container__ .preview-table th,
   #__print_container__ .preview-table td {
-    font-size: 16px;
+    font-size: 14px;
     padding: 4px 4px;
     box-sizing: border-box;
     page-break-inside: avoid;
@@ -566,9 +566,18 @@ function handlePrint() {
     box-sizing: border-box;
   }
 
+  #__print_container__ .preview-info .info-row {
+    font-size: 14px;
+  }
+
   #__print_container__ .preview-signatures {
     page-break-inside: avoid;
     margin-top: 20px;
+  }
+
+  #__print_container__ .signature-label,
+  #__print_container__ .signature-date {
+    font-size: 14px;
   }
 }
 </style>
