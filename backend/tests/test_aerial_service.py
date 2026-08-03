@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from datetime import datetime, timezone, date
+from datetime import datetime, timedelta, timezone, date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -226,6 +226,7 @@ def mock_repo():
     repo.list_vehicle_attachments = AsyncMock(return_value=[])
     repo.create_vehicle_attachment = AsyncMock()
     repo.delete_vehicle_attachment = AsyncMock()
+    repo.list_expiring_vehicles = AsyncMock(return_value=[])
     repo.create_audit_log = AsyncMock()
     repo.list_audit_logs = AsyncMock(return_value=([], 0))
     return repo
@@ -684,3 +685,98 @@ async def test_delete_vehicle_attachment_not_found(service, mock_repo):
     mock_repo.delete_vehicle_attachment.return_value = None
     with pytest.raises(ValueError, match="附件不存在"):
         await service.delete_vehicle_attachment(SAMPLE_VEHICLE_ID)
+
+
+# ── Expiry reminder tests ─────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_list_vehicles_expiring_urgency_mapping(service, mock_repo):
+    now = datetime.now()
+    v1 = make_mock_vehicle(
+        id=SAMPLE_VEHICLE_ID,
+        plate_number="京A00001",
+        insurance_expire_date=now - timedelta(days=3),   # expired
+        inspection_expire_date=now + timedelta(days=5),  # urgent
+    )
+    v2 = make_mock_vehicle(
+        id="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        plate_number="京A00002",
+        insurance_expire_date=now + timedelta(days=20),   # warning (within 30)
+        inspection_expire_date=now + timedelta(days=155), # beyond window -> excluded
+    )
+    mock_repo.list_expiring_vehicles.return_value = [v1, v2]
+    items = await service.list_vehicles_expiring(days=30)
+    mock_repo.list_expiring_vehicles.assert_awaited_once_with(30)
+    assert len(items) == 2
+    assert items[0]["insurance_urgency"] == "expired"
+    assert items[0]["insurance_days_left"] == -3
+    assert items[0]["inspection_urgency"] == "urgent"
+    assert items[0]["inspection_days_left"] == 5
+    assert items[1]["insurance_urgency"] == "warning"
+    assert items[1]["insurance_days_left"] == 20
+    assert items[1]["inspection_expire_date"] is None
+    assert items[1]["inspection_urgency"] is None
+    assert items[1]["inspection_days_left"] is None
+
+
+@pytest.mark.asyncio
+async def test_check_expiry_notifications_creates_and_dedups(service, mock_repo):
+    now = datetime.now()
+    v1 = make_mock_vehicle(
+        id=SAMPLE_VEHICLE_ID,
+        plate_number="京A00001",
+        insurance_expire_date=now + timedelta(days=20),  # warning
+        inspection_expire_date=now - timedelta(days=1),  # expired
+    )
+    mock_repo.list_expiring_vehicles.return_value = [v1]
+
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None  # no existing unread
+    service.db.execute = AsyncMock(return_value=result)
+
+    with patch("app.services.notification_service.NotificationService") as MockNS:
+        nsvc = MockNS.return_value
+        nsvc.create_system_notification = AsyncMock()
+        out = await service.check_expiry_notifications(30, user_id=SAMPLE_USER_ID)
+
+    assert out == {"created": 2, "total": 1}
+    assert nsvc.create_system_notification.await_count == 2
+    calls = nsvc.create_system_notification.await_args_list
+    assert calls[0].kwargs["type_"] == "aerial_expiry"
+    assert calls[0].kwargs["link"] == f"/aerial-vehicles?reminder=insurance&vehicle={SAMPLE_VEHICLE_ID}"
+    assert "还剩 20 天" in calls[0].kwargs["content"]
+    assert calls[1].kwargs["link"] == f"/aerial-vehicles?reminder=inspection&vehicle={SAMPLE_VEHICLE_ID}"
+    assert "已过期 1 天" in calls[1].kwargs["content"]
+
+
+@pytest.mark.asyncio
+async def test_check_expiry_notifications_skips_existing_unread(service, mock_repo):
+    now = datetime.now()
+    v1 = make_mock_vehicle(
+        id=SAMPLE_VEHICLE_ID,
+        plate_number="京A00001",
+        insurance_expire_date=now + timedelta(days=20),
+    )
+    mock_repo.list_expiring_vehicles.return_value = [v1]
+
+    existing = MagicMock()  # unread notification with same type+link already present
+    existing.id = uuid.uuid4()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = existing
+    service.db.execute = AsyncMock(return_value=result)
+
+    with patch("app.services.notification_service.NotificationService") as MockNS:
+        nsvc = MockNS.return_value
+        nsvc.create_system_notification = AsyncMock()
+        out = await service.check_expiry_notifications(30, user_id=SAMPLE_USER_ID)
+
+    assert out == {"created": 0, "total": 1}
+    nsvc.create_system_notification.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_check_expiry_notifications_no_user(service, mock_repo):
+    service.current_user = None
+    out = await service.check_expiry_notifications(30, user_id=None)
+    assert out == {"created": 0, "total": 0}
+    mock_repo.list_expiring_vehicles.assert_not_awaited()

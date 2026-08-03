@@ -7,11 +7,13 @@ import uuid
 from datetime import datetime, date
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.aerial import AerialDailyLedger, AerialAttendanceRecord
+from app.models.notification import Notification
 from app.repositories.aerial_repo import AerialRepository
 
 
@@ -1000,6 +1002,85 @@ class AerialService:
         if not obj:
             raise ValueError("附件不存在")
         return {"id": attachment_id, "deleted": True}
+
+    # ── 保险/年检到期提醒 ────────────────────────────────────────────────────
+
+    async def list_vehicles_expiring(self, days: int = 30):
+        """保险/年检在 N 天内到期或已过期的车辆，附 days_left 与 urgency。"""
+        vehicles = await self.repo.list_expiring_vehicles(days)
+        now = datetime.now().date()
+        result = []
+        for v in vehicles:
+            item = {
+                "vehicle_id": str(v.id),
+                "plate_number": v.plate_number,
+                "vehicle_name": v.vehicle_name,
+                "insurance_expire_date": None,
+                "insurance_days_left": None,
+                "insurance_urgency": None,
+                "inspection_expire_date": None,
+                "inspection_days_left": None,
+                "inspection_urgency": None,
+            }
+            for field in ("insurance", "inspection"):
+                d = getattr(v, f"{field}_expire_date")
+                if d:
+                    days_left = (d.date() - now).days
+                    if days_left <= days:
+                        if days_left < 0:
+                            urgency = "expired"
+                        elif days_left <= 7:
+                            urgency = "urgent"
+                        else:
+                            urgency = "warning"
+                        item[f"{field}_expire_date"] = d.isoformat()[:10]
+                        item[f"{field}_days_left"] = days_left
+                        item[f"{field}_urgency"] = urgency
+            result.append(item)
+        return result
+
+    async def check_expiry_notifications(self, days: int = 30, user_id=None) -> dict:
+        """为当前用户创建保险/年检到期提醒通知；已存在未读同 key 通知则跳过。"""
+        from app.services.notification_service import NotificationService
+
+        user_id = user_id or (self.current_user.id if self.current_user else None)
+        if not user_id:
+            return {"created": 0, "total": 0}
+        items = await self.list_vehicles_expiring(days)
+        nsvc = NotificationService(self.db)
+        created = 0
+        for it in items:
+            for field in ("insurance", "inspection"):
+                urgency = it.get(f"{field}_urgency")
+                if not urgency:
+                    continue
+                days_left = it[f"{field}_days_left"]
+                date_str = it[f"{field}_expire_date"]
+                label = "保险" if field == "insurance" else "年检"
+                if days_left < 0:
+                    detail = f"已于 {date_str} 到期，已过期 {abs(days_left)} 天"
+                else:
+                    detail = f"将于 {date_str} 到期，还剩 {days_left} 天"
+                link = f"/aerial-vehicles?reminder={field}&vehicle={it['vehicle_id']}"
+                existing = (await self.db.execute(
+                    select(Notification).where(
+                        Notification.user_id == user_id,
+                        Notification.type == "aerial_expiry",
+                        Notification.link == link,
+                        Notification.is_read == False,
+                    )
+                )).scalar_one_or_none()
+                if existing:
+                    continue
+                await nsvc.create_system_notification(
+                    user_id=user_id,
+                    type_="aerial_expiry",
+                    title="高空车保险/年检到期提醒",
+                    content=f"{it['plate_number']} {it['vehicle_name']} 的{label}{detail}",
+                    link=link,
+                )
+                created += 1
+        return {"created": created, "total": len(items)}
 
     def _vehicle_attachment_to_dict(self, a):
         return {

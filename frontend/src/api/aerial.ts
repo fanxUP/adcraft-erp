@@ -459,6 +459,26 @@ export const createAerialVehicleAttachment = async (vehicleId: string, file: Fil
 export const deleteAerialVehicleAttachment = (id: string) =>
   del(`/aerial/vehicles/attachments/${id}`)
 
+// ── Expiry Reminder API ──────────────────────────────────────────────────────
+
+export interface AerialExpiringVehicle {
+  vehicle_id: string
+  plate_number: string
+  vehicle_name: string
+  insurance_expire_date?: string | null
+  insurance_days_left?: number | null
+  insurance_urgency?: string | null
+  inspection_expire_date?: string | null
+  inspection_days_left?: number | null
+  inspection_urgency?: string | null
+}
+
+export const getAerialExpiringVehicles = (days = 30) =>
+  get<AerialExpiringVehicle[]>('/aerial/vehicles/expiring', { params: { days } })
+
+export const checkAerialExpiryNotifications = (days = 30) =>
+  post<{ created: number; total: number }>('/aerial/vehicles/expiry-notifications/check', undefined, { params: { days } })
+
 // ── Personnel Expense API ─────────────────────────────────────────────────────
 
 export const getAerialPersonnelExpenses = (params?: AerialQueryParams) =>

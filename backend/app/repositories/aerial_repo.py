@@ -46,6 +46,26 @@ class AerialRepository:
             select(AerialVehicle).where(AerialVehicle.plate_number == plate, AerialVehicle.deleted_at.is_(None))
         )).scalar_one_or_none()
 
+    async def list_expiring_vehicles(self, days: int = 30):
+        """保险/年检在 N 天内到期或已过期的车辆（未删除）。"""
+        from datetime import timedelta
+        deadline = datetime.now() + timedelta(days=days)
+        q = select(AerialVehicle).where(
+            AerialVehicle.deleted_at.is_(None),
+            or_(
+                and_(
+                    AerialVehicle.insurance_expire_date.isnot(None),
+                    AerialVehicle.insurance_expire_date <= deadline,
+                ),
+                and_(
+                    AerialVehicle.inspection_expire_date.isnot(None),
+                    AerialVehicle.inspection_expire_date <= deadline,
+                ),
+            ),
+        ).order_by(AerialVehicle.plate_number)
+        rows = (await self.db.execute(q)).scalars().all()
+        return list(rows)
+
     async def create_vehicle(self, data: dict):
         obj = AerialVehicle(**data)
         self.db.add(obj)

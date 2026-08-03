@@ -74,6 +74,32 @@ async def create_vehicle(
     return success(result)
 
 
+@router.get("/expiring")
+async def list_expiring_vehicles(
+    days: int = Query(30, ge=1, le=365, description="提前提醒天数"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_READ)),
+    request: Request = None,
+):
+    """保险/年检在 N 天内到期或已过期的车辆（含 days_left/urgency）。"""
+    svc = _svc(db, current_user, request)
+    items = await svc.list_vehicles_expiring(days)
+    return success(items)
+
+
+@router.post("/expiry-notifications/check")
+async def check_expiry_notifications(
+    days: int = Query(30, ge=1, le=365, description="提前提醒天数"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_READ)),
+    request: Request = None,
+):
+    """为当前用户创建保险/年检到期提醒通知（未读同 key 去重）。"""
+    svc = _svc(db, current_user, request)
+    result = await svc.check_expiry_notifications(days, user_id=current_user.id)
+    return success(result)
+
+
 @router.get("/{vehicle_id}")
 async def get_vehicle(
     vehicle_id: str,
