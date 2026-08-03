@@ -18,3 +18,5 @@ node_modules/
 *.timestamp-*.mjs
 
 *.pyc
+backend/uploads/*
+.env.production

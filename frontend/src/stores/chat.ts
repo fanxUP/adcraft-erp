@@ -45,7 +45,6 @@ export const useChatStore = defineStore('chat', () => {
     ws = new WebSocket(url)
 
     ws.onopen = () => {
-      console.log('[Chat WS] Connected')
       wsConnected.value = true
       reconnectAttempts = 0
     }
@@ -60,7 +59,6 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     ws.onclose = () => {
-      console.log('[Chat WS] Disconnected')
       wsConnected.value = false
       attemptReconnect(token)
     }
@@ -85,14 +83,12 @@ export const useChatStore = defineStore('chat', () => {
 
   function attemptReconnect(token: string) {
     if (reconnectAttempts >= maxReconnectAttempts) {
-      console.log('[Chat WS] Max reconnect attempts reached')
       return
     }
 
     const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
     reconnectAttempts++
 
-    console.log(`[Chat WS] Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`)
     reconnectTimer = setTimeout(() => {
       connectWebSocket(token)
     }, delay)
