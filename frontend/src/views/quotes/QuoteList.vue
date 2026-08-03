@@ -3,6 +3,9 @@
     <div class="page-header">
       <h2>报价管理</h2>
       <div class="quote-actions">
+        <el-button v-if="authStore.isAdmin" type="warning" @click="$router.push('/orders/recycle')">
+          <el-icon><Delete /></el-icon> 订单回收站
+        </el-button>
         <el-button @click="$router.push('/cdr/quotes')">智能报价记录</el-button>
         <el-button type="primary" @click="$router.push('/cdr/quotes/new')">新建智能报价</el-button>
         <el-button type="danger" @click="$router.push('/quotes/new')">新建常规报价</el-button>
@@ -106,10 +109,13 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { getQuotes, deleteQuote, previewDeleteQuote, cancelQuote, revertQuoteToDraft } from '@/api/quotes'
+import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { QuoteListResponse } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
 import { getErrorMessage } from '@/utils/error'
+
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const list = ref<QuoteListResponse[]>([])
