@@ -67,8 +67,10 @@ class AerialService:
         existing = await self.repo.get_vehicle_by_plate(plate)
         if existing:
             raise ValueError(f"车牌号 {plate} 已存在")
-        if data.get("default_personnel_id"):
+        if "default_personnel_id" in data and data.get("default_personnel_id"):
             data["default_personnel_id"] = uuid.UUID(data["default_personnel_id"])
+        elif "default_personnel_id" in data:
+            data["default_personnel_id"] = None
         if data.get("purchase_date"):
             data["purchase_date"] = datetime.fromisoformat(data["purchase_date"])
         else:
@@ -99,9 +101,15 @@ class AerialService:
             existing = await self.repo.get_vehicle_by_plate(data["plate_number"])
             if existing:
                 raise ValueError(f"车牌号 {data['plate_number']} 已存在")
-        for k in ["default_personnel_id"]:
-            if data.get(k):
-                data[k] = uuid.UUID(data[k])
+        if "default_personnel_id" in data:
+            val = data.get("default_personnel_id")
+            if val:
+                data["default_personnel_id"] = uuid.UUID(val)
+            else:
+                # 显式清空默认人员（repo.update_vehicle 跳过 None，需直接置空）
+                obj.default_personnel_id = None
+                await self.db.flush()
+                data.pop("default_personnel_id", None)
         for k in ["purchase_date", "insurance_expire_date", "inspection_expire_date", "maintenance_due_date"]:
             if data.get(k):
                 data[k] = datetime.fromisoformat(data[k])

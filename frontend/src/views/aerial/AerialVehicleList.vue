@@ -54,6 +54,11 @@
           <el-col :span="12"><el-form-item label="年检到期"><el-date-picker v-model="form.inspection_expire_date" type="date" value-format="YYYY-MM-DDTHH:mm:ss" style="width: 100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="下次保养"><el-date-picker v-model="form.maintenance_due_date" type="date" value-format="YYYY-MM-DDTHH:mm:ss" style="width: 100%" /></el-form-item></el-col>
         </el-row>
+        <el-form-item label="默认人员">
+          <el-select v-model="form.default_personnel_id" clearable placeholder="选择默认人员" style="width: 100%">
+            <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
@@ -69,6 +74,8 @@ import {
   createAerialVehicle,
   updateAerialVehicle,
   deleteAerialVehicle,
+  getAerialPersonnel,
+  type AerialPersonnel,
   type AerialVehicle,
 } from '@/api/aerial'
 import { getErrorMessage } from '@/utils/error'
@@ -76,10 +83,11 @@ import { getErrorMessage } from '@/utils/error'
 const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
 const list = ref<AerialVehicle[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
 const keyword = ref(''); const editingId = ref<string | null>(null)
+const personnelOptions = ref<AerialPersonnel[]>([])
 
 const form = reactive({
   plate_number: '', vehicle_name: '', brand_model: '', max_working_height: '', platform_capacity: '',
-  insurance_expire_date: '', inspection_expire_date: '', maintenance_due_date: '', remark: '',
+  insurance_expire_date: '', inspection_expire_date: '', maintenance_due_date: '', default_personnel_id: '', remark: '',
 })
 
 async function fetchData() {
@@ -90,13 +98,13 @@ async function fetchData() {
 
 function handleCreate() {
   editingId.value = null
-  Object.assign(form, { plate_number: '', vehicle_name: '', brand_model: '', max_working_height: '', platform_capacity: '', insurance_expire_date: '', inspection_expire_date: '', maintenance_due_date: '', remark: '' })
+  Object.assign(form, { plate_number: '', vehicle_name: '', brand_model: '', max_working_height: '', platform_capacity: '', insurance_expire_date: '', inspection_expire_date: '', maintenance_due_date: '', default_personnel_id: '', remark: '' })
   dialogVisible.value = true
 }
 
 function handleEdit(row: AerialVehicle) {
   editingId.value = row.id
-  Object.assign(form, { plate_number: row.plate_number, vehicle_name: row.vehicle_name, brand_model: row.brand_model, max_working_height: row.max_working_height, platform_capacity: row.platform_capacity, insurance_expire_date: row.insurance_expire_date, inspection_expire_date: row.inspection_expire_date, maintenance_due_date: row.maintenance_due_date, remark: row.remark })
+  Object.assign(form, { plate_number: row.plate_number, vehicle_name: row.vehicle_name, brand_model: row.brand_model, max_working_height: row.max_working_height, platform_capacity: row.platform_capacity, insurance_expire_date: row.insurance_expire_date, inspection_expire_date: row.inspection_expire_date, maintenance_due_date: row.maintenance_due_date, default_personnel_id: row.default_personnel_id || '', remark: row.remark })
   dialogVisible.value = true
 }
 
@@ -122,7 +130,10 @@ function isExpiredSoon(d: string | null) {
   return new Date(d) <= new Date(Date.now() + 30 * 86400000)
 }
 
-onMounted(fetchData)
+onMounted(async () => {
+  fetchData()
+  try { const d = await getAerialPersonnel({ page_size: 100 }); personnelOptions.value = d.items || [] } catch {}
+})
 </script>
 
 <style scoped>
