@@ -111,7 +111,7 @@
       v-model="showCreateGroup"
       title="创建群聊"
       width="500px"
-    >
+     :close-on-click-modal="false">
       <el-form label-width="80px">
         <el-form-item label="群名称">
           <el-input v-model="groupName" placeholder="请输入群名称" />

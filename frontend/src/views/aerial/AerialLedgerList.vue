@@ -76,7 +76,7 @@
     />
 
     <!-- 新增/编辑对话框 -->
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑台账' : '新增台账'" width="800px" destroy-on-close>
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑台账' : '新增台账'" width="800px" destroy-on-close :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-divider content-position="left">基础信息</el-divider>
         <el-row :gutter="16">
@@ -216,7 +216,7 @@
     </el-dialog>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="detailVisible" title="台账详情" width="900px" destroy-on-close>
+    <el-dialog v-model="detailVisible" title="台账详情" width="900px" destroy-on-close :close-on-click-modal="false">
       <el-tabs v-if="detailData">
         <el-tab-pane label="基础信息">
           <el-descriptions :column="2" border>

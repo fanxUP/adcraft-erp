@@ -86,7 +86,7 @@
     </div>
 
     <!-- 详情弹窗 -->
-    <el-dialog v-model="showDetailDialog" title="草稿详情" width="700px">
+    <el-dialog v-model="showDetailDialog" title="草稿详情" width="700px" :close-on-click-modal="false">
       <template v-if="detailDraft">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="发送人">{{ detailDraft.sender_name || '-' }}</el-descriptions-item>
@@ -136,7 +136,7 @@
     </el-dialog>
 
     <!-- 模拟消息弹窗 -->
-    <el-dialog v-model="showIngestDialog" title="模拟 Agent 消息" width="600px">
+    <el-dialog v-model="showIngestDialog" title="模拟 Agent 消息" width="600px" :close-on-click-modal="false">
       <el-form :model="ingestForm" label-width="80px">
         <el-form-item label="发送人">
           <el-input v-model="ingestForm.sender_name" placeholder="如：王师傅" />
@@ -160,7 +160,7 @@
     </el-dialog>
 
     <!-- 确认弹窗 -->
-    <el-dialog v-model="showConfirmDialog" title="确认草稿" width="500px">
+    <el-dialog v-model="showConfirmDialog" title="确认草稿" width="500px" :close-on-click-modal="false">
       <p>确认此草稿将写入正式台账/费用记录。</p>
       <p v-if="confirmDraft?.risk_level === 'high'" style="color: #e6a23c;">
         ⚠️ 此草稿风险等级为高，请仔细核对。
@@ -179,7 +179,7 @@
     </el-dialog>
 
     <!-- 拒绝弹窗 -->
-    <el-dialog v-model="showRejectDialog" title="拒绝草稿" width="400px">
+    <el-dialog v-model="showRejectDialog" title="拒绝草稿" width="400px" :close-on-click-modal="false">
       <el-form label-width="80px">
         <el-form-item label="拒绝原因">
           <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="可选" />

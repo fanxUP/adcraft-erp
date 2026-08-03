@@ -91,7 +91,7 @@
     </div>
 
     <!-- 出车对话框 -->
-    <el-dialog v-model="startDialogVisible" title="出车确认" width="500px">
+    <el-dialog v-model="startDialogVisible" title="出车确认" width="500px" :close-on-click-modal="false">
       <el-form :model="startForm" label-width="100px">
         <el-form-item label="派车单号">
           <el-input :model-value="currentDispatch?.dispatch_no" disabled />
@@ -116,7 +116,7 @@
     </el-dialog>
 
     <!-- 到达对话框 -->
-    <el-dialog v-model="arriveDialogVisible" title="到达现场" width="400px">
+    <el-dialog v-model="arriveDialogVisible" title="到达现场" width="400px" :close-on-click-modal="false">
       <el-form :model="arriveForm" label-width="80px">
         <el-form-item label="到达备注">
           <el-input v-model="arriveForm.arrive_remark" type="textarea" :rows="3" placeholder="到达现场情况" />
@@ -129,7 +129,7 @@
     </el-dialog>
 
     <!-- 收车对话框 -->
-    <el-dialog v-model="returnDialogVisible" title="收车回执" width="500px">
+    <el-dialog v-model="returnDialogVisible" title="收车回执" width="500px" :close-on-click-modal="false">
       <el-form :model="returnForm" label-width="100px">
         <el-form-item label="派车单号">
           <el-input :model-value="currentDispatch?.dispatch_no" disabled />
@@ -163,7 +163,7 @@
     </el-dialog>
 
     <!-- 查看详情对话框 -->
-    <el-dialog v-model="detailDialogVisible" title="台账详情" width="600px">
+    <el-dialog v-model="detailDialogVisible" title="台账详情" width="600px" :close-on-click-modal="false">
       <el-descriptions :column="2" border>
         <el-descriptions-item label="派车单号">{{ detailData?.dispatch_no }}</el-descriptions-item>
         <el-descriptions-item label="台账编号">{{ detailData?.trip_no || '-' }}</el-descriptions-item>

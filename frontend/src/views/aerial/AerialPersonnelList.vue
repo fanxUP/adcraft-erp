@@ -35,7 +35,7 @@
     </el-table>
     <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px" @current-change="fetchData" />
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑人员' : '新增人员'" width="560px" destroy-on-close @closed="attachments = []">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑人员' : '新增人员'" width="560px" destroy-on-close @closed="attachments = []" :close-on-click-modal="false">
       <el-form :model="form" label-width="90px">
         <el-form-item label="姓名" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="手机号"><el-input v-model="form.phone" /></el-form-item>

@@ -56,7 +56,7 @@
     </div>
 
     <!-- 编辑 Dialog -->
-    <el-dialog v-model="showDialog" :title="'工资规则 - ' + form.employee_name" width="760px" top="3vh">
+    <el-dialog v-model="showDialog" :title="'工资规则 - ' + form.employee_name" width="760px" top="3vh" :close-on-click-modal="false">
       <el-form :model="form" label-width="110px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">
         <el-form-item label="员工" v-if="!isEditing"><el-select v-model="form.employee_id" filterable style="width:100%"><el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" /></el-select></el-form-item>
         <el-form-item label="生效日期" required><el-date-picker v-model="form.effective_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
@@ -68,7 +68,7 @@
     </el-dialog>
 
     <!-- 批量设置 Dialog -->
-    <el-dialog v-model="showBatchDialog" title="批量设置工资规则" width="560px">
+    <el-dialog v-model="showBatchDialog" title="批量设置工资规则" width="560px" :close-on-click-modal="false">
       <el-form :model="batchForm" label-width="100px">
         <el-form-item label="适用员工" required>
           <el-select v-model="batchForm.employee_ids" multiple filterable style="width:100%" placeholder="选择需要设置规则的员工">

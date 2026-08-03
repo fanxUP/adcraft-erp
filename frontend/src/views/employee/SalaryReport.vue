@@ -52,7 +52,7 @@
       </div>
     </div>
 
-    <el-dialog v-model="payslipDialog" :title="dialogTitle" width="780px" top="4vh" @closed="payslipRow = null">
+    <el-dialog v-model="payslipDialog" :title="dialogTitle" width="780px" top="4vh" @closed="payslipRow = null" :close-on-click-modal="false">
       <iframe ref="payslipFrame" class="payslip-frame" :srcdoc="payslipDoc"></iframe>
       <template #footer>
         <el-button @click="payslipDialog = false">关闭</el-button>

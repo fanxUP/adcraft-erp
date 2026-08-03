@@ -13,7 +13,7 @@
         <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
     </el-table>
-    <el-dialog v-model="showDialog" :title="isEditing?'编辑规则':'新建规则'" width="500px">
+    <el-dialog v-model="showDialog" :title="isEditing?'编辑规则':'新建规则'" width="500px" :close-on-click-modal="false">
       <el-form :model="form" label-width="120px">
         <el-form-item label="规则名称" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="适用部门"><el-select v-model="form.department" placeholder="留空=全局" clearable style="width:100%"><el-option label="设计部" value="design" /><el-option label="生产部" value="production" /><el-option label="安装部" value="installation" /><el-option label="销售部" value="sales" /><el-option label="财务部" value="finance" /><el-option label="行政部" value="admin" /></el-select></el-form-item>

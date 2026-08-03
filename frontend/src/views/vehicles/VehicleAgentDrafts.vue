@@ -154,7 +154,7 @@
     </el-drawer>
 
     <!-- Reject Dialog -->
-    <el-dialog v-model="rejectDialogVisible" title="驳回草稿" width="400px">
+    <el-dialog v-model="rejectDialogVisible" title="驳回草稿" width="400px" :close-on-click-modal="false">
       <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="驳回原因（可选）" />
       <template #footer>
         <el-button @click="rejectDialogVisible = false">取消</el-button>

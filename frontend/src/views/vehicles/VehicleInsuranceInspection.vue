@@ -132,7 +132,7 @@
       v-model="dialogVisible"
       :title="isEdit ? '编辑证件' : '新增证件'"
       width="600px"
-    >
+     :close-on-click-modal="false">
       <el-form :model="formData" label-width="100px">
         <el-form-item label="车辆" required>
           <el-select v-model="formData.vehicle_id" placeholder="选择车辆" filterable>

@@ -100,7 +100,7 @@
     </div>
 
     <!-- 录入/编辑 Dialog -->
-    <el-dialog v-model="showDialog" :title="isEditing ? '编辑考勤' : '录入考勤'" width="500px" destroy-on-close>
+    <el-dialog v-model="showDialog" :title="isEditing ? '编辑考勤' : '录入考勤'" width="500px" destroy-on-close :close-on-click-modal="false">
       <el-form :model="form" label-width="110px">
         <el-form-item :label="targetType === 'vehicle' ? '车辆' : '人员'" v-if="!isEditing" required>
           <el-select v-model="form.vehicle_id" v-if="targetType === 'vehicle'" placeholder="选择车辆" filterable style="width:100%">

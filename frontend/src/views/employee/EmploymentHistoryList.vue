@@ -25,7 +25,7 @@
       </el-table-column>
     </el-table>
     <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10,20,50]" :total="total" layout="total,sizes,prev,pager,next" style="margin-top:16px" @change="fetchData" />
-    <el-dialog v-model="showDialog" :title="isEditing?'编辑记录':'新增记录'" width="600px">
+    <el-dialog v-model="showDialog" :title="isEditing?'编辑记录':'新增记录'" width="600px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
         <el-form-item label="员工" v-if="!isEditing" required><el-select v-model="form.employee_id" filterable style="width:100%"><el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" /></el-select></el-form-item>
         <el-form-item label="变动日期" required><el-date-picker v-model="form.change_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>

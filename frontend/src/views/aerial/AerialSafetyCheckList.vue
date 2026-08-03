@@ -32,7 +32,7 @@
 
     <el-empty v-if="!loading && checks.length === 0 && selectedLedgerId" description="暂无安全检查记录" />
 
-    <el-dialog v-model="showAddDialog" title="新增安全检查" width="700px" destroy-on-close>
+    <el-dialog v-model="showAddDialog" title="新增安全检查" width="700px" destroy-on-close :close-on-click-modal="false">
       <el-form :model="checkForm" label-width="100px">
         <el-form-item label="检查类型" required>
           <el-radio-group v-model="checkForm.check_type">

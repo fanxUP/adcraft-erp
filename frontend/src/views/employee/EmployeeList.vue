@@ -29,7 +29,7 @@
       </el-table-column>
     </el-table>
     <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10,20,50]" :total="total" layout="total,sizes,prev,pager,next" style="margin-top:16px" @change="fetchData" />
-    <el-dialog v-model="showDialog" :title="isEditing?'编辑员工':'新建员工'" width="820px" top="5vh">
+    <el-dialog v-model="showDialog" :title="isEditing?'编辑员工':'新建员工'" width="820px" top="5vh" :close-on-click-modal="false">
       <el-form :model="form" label-width="90px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">
         <el-divider content-position="left" style="grid-column:1/3;margin:0 0 4px">基本信息</el-divider>
         <el-form-item label="姓名" required><el-input v-model="form.name" /></el-form-item>

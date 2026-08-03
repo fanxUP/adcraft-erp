@@ -66,7 +66,7 @@
     </el-table>
     <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px" @current-change="fetchData" />
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑高空车' : '新增高空车'" width="600px" destroy-on-close>
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑高空车' : '新增高空车'" width="600px" destroy-on-close :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-row :gutter="16">
           <el-col :span="12"><el-form-item label="车牌号" required><el-input v-model="form.plate_number" /></el-form-item></el-col>

@@ -32,7 +32,7 @@
       </el-table-column>
     </el-table>
     <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10,20,50]" :total="total" layout="total,sizes,prev,pager,next" style="margin-top:16px" @change="fetchData" />
-    <el-dialog v-model="showDialog" :title="isEditing?'编辑申请':'新建请假申请'" width="560px">
+    <el-dialog v-model="showDialog" :title="isEditing?'编辑申请':'新建请假申请'" width="560px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
         <el-form-item label="员工" v-if="!isEditing" required><el-select v-model="form.employee_id" filterable style="width:100%"><el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" /></el-select></el-form-item>
         <el-form-item label="请假类型" required><el-select v-model="form.leave_type" style="width:100%"><el-option label="年假" value="annual" /><el-option label="病假" value="sick" /><el-option label="事假" value="personal" /><el-option label="产假" value="maternity" /><el-option label="其他" value="other" /></el-select></el-form-item>

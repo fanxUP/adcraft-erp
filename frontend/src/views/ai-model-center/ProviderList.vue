@@ -145,7 +145,7 @@
     />
 
     <!-- Test result dialog -->
-    <el-dialog v-model="showTestResult" title="测试结果" width="480px">
+    <el-dialog v-model="showTestResult" title="测试结果" width="480px" :close-on-click-modal="false">
       <div v-if="testResult" class="test-result">
         <div class="test-status">
           <el-icon v-if="testResult.success" color="#67c23a" :size="48"><SuccessFilled /></el-icon>

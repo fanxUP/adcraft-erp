@@ -156,7 +156,7 @@
     </el-dialog>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="detailVisible" title="合同详情" width="960px">
+    <el-dialog v-model="detailVisible" title="合同详情" width="960px" :close-on-click-modal="false">
       <el-descriptions v-if="currentDetail" :column="2" border>
         <el-descriptions-item label="合同编号" :span="2">{{ currentDetail.contract_no }}</el-descriptions-item>
         <el-descriptions-item label="客户名称">{{ currentDetail.customer_name }}</el-descriptions-item>
@@ -200,7 +200,7 @@
     </el-dialog>
 
     <!-- 状态变更对话框 -->
-    <el-dialog v-model="statusDialogVisible" title="合同状态变更" width="400px">
+    <el-dialog v-model="statusDialogVisible" title="合同状态变更" width="400px" :close-on-click-modal="false">
       <el-form :model="statusForm" label-width="80px">
         <el-form-item label="当前状态">
           <el-tag :type="statusColor(statusForm.current_status)" size="small">{{ statusLabel(statusForm.current_status) }}</el-tag>

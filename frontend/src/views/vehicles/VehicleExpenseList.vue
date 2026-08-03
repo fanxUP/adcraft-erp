@@ -233,7 +233,7 @@
     </el-tabs>
 
     <!-- 新增油费对话框 -->
-    <el-dialog v-model="fuelDialogVisible" title="新增油费记录" width="600px" destroy-on-close>
+    <el-dialog v-model="fuelDialogVisible" title="新增油费记录" width="600px" destroy-on-close :close-on-click-modal="false">
       <el-form :model="fuelForm" label-width="100px">
         <el-form-item label="车辆" required>
           <el-select v-model="fuelForm.vehicle_id" placeholder="选择车辆" style="width: 100%">
@@ -307,7 +307,7 @@
     </el-dialog>
 
     <!-- 新增维修保养对话框 -->
-    <el-dialog v-model="maintDialogVisible" title="新增维修保养记录" width="600px" destroy-on-close>
+    <el-dialog v-model="maintDialogVisible" title="新增维修保养记录" width="600px" destroy-on-close :close-on-click-modal="false">
       <el-form :model="maintForm" label-width="100px">
         <el-form-item label="车辆" required>
           <el-select v-model="maintForm.vehicle_id" placeholder="选择车辆" style="width: 100%">
@@ -372,7 +372,7 @@
     </el-dialog>
 
     <!-- 新增其他费用对话框 -->
-    <el-dialog v-model="costDialogVisible" title="新增其他费用" width="600px" destroy-on-close>
+    <el-dialog v-model="costDialogVisible" title="新增其他费用" width="600px" destroy-on-close :close-on-click-modal="false">
       <el-form :model="costForm" label-width="100px">
         <el-form-item label="车辆" required>
           <el-select v-model="costForm.vehicle_id" placeholder="选择车辆" style="width: 100%">
@@ -401,7 +401,7 @@
     </el-dialog>
 
     <!-- 审核对话框 -->
-    <el-dialog v-model="reviewDialogVisible" title="费用审核" width="400px" destroy-on-close>
+    <el-dialog v-model="reviewDialogVisible" title="费用审核" width="400px" destroy-on-close :close-on-click-modal="false">
       <el-form :model="reviewForm" label-width="80px">
         <el-form-item label="审核结果">
           <el-radio-group v-model="reviewForm.status">
@@ -420,7 +420,7 @@
     </el-dialog>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="detailDialogVisible" title="费用详情" width="600px">
+    <el-dialog v-model="detailDialogVisible" title="费用详情" width="600px" :close-on-click-modal="false">
       <el-descriptions :column="2" border v-if="detailData">
         <el-descriptions-item v-for="(value, key) in detailData" :key="key" :label="key">
           {{ value }}

@@ -327,7 +327,7 @@
     </el-dialog>
 
     <!-- Image Preview Dialog -->
-    <el-dialog v-model="previewVisible" title="凭证预览" width="600px" destroy-on-close>
+    <el-dialog v-model="previewVisible" title="凭证预览" width="600px" destroy-on-close :close-on-click-modal="false">
       <img :src="previewUrl" style="width: 100%; object-fit: contain" />
     </el-dialog>
   </div>

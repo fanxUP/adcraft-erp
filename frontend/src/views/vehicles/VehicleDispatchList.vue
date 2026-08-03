@@ -115,7 +115,7 @@
     </el-dialog>
 
     <!-- 查看详情对话框 -->
-    <el-dialog v-model="detailVisible" title="派车单详情" width="650px">
+    <el-dialog v-model="detailVisible" title="派车单详情" width="650px" :close-on-click-modal="false">
       <el-descriptions :column="2" border v-if="detail">
         <el-descriptions-item label="派车单号">{{ detail.dispatch_no }}</el-descriptions-item>
         <el-descriptions-item label="状态">

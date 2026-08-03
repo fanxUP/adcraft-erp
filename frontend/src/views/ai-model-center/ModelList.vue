@@ -4,7 +4,7 @@
     v-model="visible"
     width="700px"
     @close="emit('close')"
-  >
+   :close-on-click-modal="false">
     <div class="mb-12">
       <el-button type="primary" size="small" @click="showAdd = true">
         <el-icon><Plus /></el-icon>添加模型
@@ -68,7 +68,7 @@
       v-model="showAdd"
       width="480px"
       append-to-body
-    >
+     :close-on-click-modal="false">
       <el-form ref="addFormRef" :model="addForm" label-width="120px" :rules="addRules">
         <el-form-item label="模型名称" prop="upstream_model_code">
           <el-input v-model="addForm.upstream_model_code" placeholder="如：deepseek-chat" />

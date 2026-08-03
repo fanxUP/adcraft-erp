@@ -78,7 +78,7 @@
     </el-card>
 
     <!-- Create result dialog -->
-    <el-dialog v-model="resultVisible" title="备份结果" width="500px">
+    <el-dialog v-model="resultVisible" title="备份结果" width="500px" :close-on-click-modal="false">
       <div v-if="result">
         <p><strong>状态：</strong>✅ {{ result.message }}</p>
         <p v-if="result.backup">
@@ -94,7 +94,7 @@
     </el-dialog>
 
     <!-- Restore confirm dialog -->
-    <el-dialog v-model="restoreConfirmVisible" title="确认恢复" width="420px">
+    <el-dialog v-model="restoreConfirmVisible" title="确认恢复" width="420px" :close-on-click-modal="false">
       <p style="color: #e6a23c; font-size: 15px; margin-bottom: 12px">
         ⚠️ 恢复操作将<strong>覆盖</strong>当前数据库！
       </p>
@@ -109,7 +109,7 @@
     </el-dialog>
 
     <!-- Restore result dialog -->
-    <el-dialog v-model="restoreResultVisible" :title="restoreSuccess ? '恢复成功' : '恢复失败'" width="420px">
+    <el-dialog v-model="restoreResultVisible" :title="restoreSuccess ? '恢复成功' : '恢复失败'" width="420px" :close-on-click-modal="false">
       <div style="text-align: center; padding: 10px 0">
         <div v-if="restoreSuccess" style="font-size: 48px; margin-bottom: 16px">✅</div>
         <div v-else style="font-size: 48px; margin-bottom: 16px">❌</div>
@@ -127,7 +127,7 @@
     </el-dialog>
 
     <!-- Delete confirm dialog -->
-    <el-dialog v-model="deleteConfirmVisible" title="确认删除" width="400px">
+    <el-dialog v-model="deleteConfirmVisible" title="确认删除" width="400px" :close-on-click-modal="false">
       <p style="color: var(--ad-text)">确定删除备份文件 <strong>{{ toDelete?.filename }}</strong> 吗？</p>
       <p style="color: #999; font-size: 13px; margin-top: 4px">此操作不可撤销。</p>
       <template #footer>

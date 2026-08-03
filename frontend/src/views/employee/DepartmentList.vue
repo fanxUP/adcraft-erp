@@ -13,7 +13,7 @@
         <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
     </el-table>
-    <el-dialog v-model="showDialog" :title="isEditing?'编辑部门':'新建部门'" width="500px">
+    <el-dialog v-model="showDialog" :title="isEditing?'编辑部门':'新建部门'" width="500px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-form-item label="名称" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="编码" required><el-input v-model="form.code" :disabled="isEditing" /></el-form-item>

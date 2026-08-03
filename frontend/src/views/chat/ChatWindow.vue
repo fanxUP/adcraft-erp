@@ -340,7 +340,7 @@
     </div>
 
     <!-- 搜索对话框 -->
-    <el-dialog v-model="showSearch" title="搜索消息" width="500px">
+    <el-dialog v-model="showSearch" title="搜索消息" width="500px" :close-on-click-modal="false">
       <el-input
         v-model="searchKeyword"
         placeholder="输入关键词搜索"
@@ -365,7 +365,7 @@
     </el-dialog>
 
     <!-- 分享卡片对话框 -->
-    <el-dialog v-model="showShareCard" :title="`分享${shareCardTypeLabel}`" width="500px">
+    <el-dialog v-model="showShareCard" :title="`分享${shareCardTypeLabel}`" width="500px" :close-on-click-modal="false">
       <div class="share-card-dialog">
         <el-input
           v-model="shareCardKeyword"
@@ -501,7 +501,7 @@
     </el-dialog>
 
     <!-- 批量分享对话框 -->
-    <el-dialog v-model="showBatchShare" title="批量分享" width="600px">
+    <el-dialog v-model="showBatchShare" title="批量分享" width="600px" :close-on-click-modal="false">
       <div class="batch-share-dialog">
         <!-- 类型切换 -->
         <div class="batch-type-tabs">
@@ -561,7 +561,7 @@
     </el-dialog>
 
     <!-- 群设置对话框 -->
-    <el-dialog v-model="showGroupSetting" title="群设置" width="500px">
+    <el-dialog v-model="showGroupSetting" title="群设置" width="500px" :close-on-click-modal="false">
       <div class="group-setting">
         <el-form label-width="80px">
           <el-form-item label="群名称">

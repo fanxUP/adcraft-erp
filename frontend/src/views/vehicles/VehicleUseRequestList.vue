@@ -103,7 +103,7 @@
     </el-dialog>
 
     <!-- 查看详情对话框 -->
-    <el-dialog v-model="detailVisible" title="用车申请详情" width="600px">
+    <el-dialog v-model="detailVisible" title="用车申请详情" width="600px" :close-on-click-modal="false">
       <el-descriptions :column="2" border v-if="detail">
         <el-descriptions-item label="申请人">{{ detail.requester_name }}</el-descriptions-item>
         <el-descriptions-item label="状态">

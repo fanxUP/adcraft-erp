@@ -68,7 +68,7 @@
     </div>
 
     <!-- 指标设置 Dialog -->
-    <el-dialog v-model="showItems" title="🔧 工资指标设置（每列一个公式）" width="820px" top="4vh">
+    <el-dialog v-model="showItems" title="🔧 工资指标设置（每列一个公式）" width="820px" top="4vh" :close-on-click-modal="false">
       <div class="items-help">
         <div style="font-weight:700;margin-bottom:6px">可用变量</div>
         <div class="help-grid">
@@ -144,7 +144,7 @@
     </el-dialog>
 
     <!-- 工资参数 Dialog：每月填一个值，公式可引用 -->
-    <el-dialog v-model="showParams" title="⚙ 工资参数设置（每月填一个值，公式可引用）" width="640px" top="6vh">
+    <el-dialog v-model="showParams" title="⚙ 工资参数设置（每月填一个值，公式可引用）" width="640px" top="6vh" :close-on-click-modal="false">
       <div style="color:#909399;font-size:12px;margin-bottom:10px">
         参数是每月填一个数的变量，指标公式里可以直接引用它的 key（如提成系数 <code>commission_rate</code>）。当月所有员工的公式都使用这个月的参数值；未填的参数按 0 处理。
       </div>

@@ -123,7 +123,7 @@
       v-model="dialogVisible"
       :title="isEdit ? '编辑异常' : '新增异常'"
       width="650px"
-    >
+     :close-on-click-modal="false">
       <el-form :model="formData" label-width="100px">
         <el-row :gutter="16">
           <el-col :span="12">
@@ -220,7 +220,7 @@
       v-model="resolveDialogVisible"
       title="处理异常"
       width="500px"
-    >
+     :close-on-click-modal="false">
       <el-form :model="resolveForm" label-width="80px">
         <el-form-item label="处理状态">
           <el-radio-group v-model="resolveForm.status">
@@ -244,7 +244,7 @@
       v-model="detailDialogVisible"
       title="异常详情"
       width="600px"
-    >
+     :close-on-click-modal="false">
       <el-descriptions :column="2" border v-if="currentDetail">
         <el-descriptions-item label="车辆" :span="2">{{ currentDetail.plate_number }} {{ currentDetail.vehicle_name }}</el-descriptions-item>
         <el-descriptions-item label="事件类型">

@@ -100,7 +100,7 @@
     </div>
 
     <!-- 录入/编辑 Dialog -->
-    <el-dialog v-model="showDialog" :title="isEditing?'编辑打卡':'录入打卡'" width="500px" @closed="form={employee_id:'',date:'',check_in_time:null,check_out_time:null,check_in_status:'normal',check_out_status:'normal',overtime_hours:null,remark:''}">
+    <el-dialog v-model="showDialog" :title="isEditing?'编辑打卡':'录入打卡'" width="500px" @closed="form={employee_id:'',date:'',check_in_time:null,check_out_time:null,check_in_status:'normal',check_out_status:'normal',overtime_hours:null,remark:''}" :close-on-click-modal="false">
       <el-form :model="form" label-width="110px">
         <el-form-item label="员工" v-if="!isEditing" required>
           <el-select v-model="form.employee_id" placeholder="选择员工" filterable style="width:100%">

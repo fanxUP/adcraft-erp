@@ -27,7 +27,7 @@
     </el-table>
 
     <!-- 新建规则集弹窗 -->
-    <el-dialog v-model="createDialogVisible" title="新建规则集" width="600px">
+    <el-dialog v-model="createDialogVisible" title="新建规则集" width="600px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-form-item label="编码" required>
           <el-input v-model="form.code" placeholder="如：PVC-PRICE-2026" />
