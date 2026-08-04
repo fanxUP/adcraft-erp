@@ -35,7 +35,6 @@ wage_router = APIRouter(prefix="/aerial/personnel-wages", tags=["Aerial Personne
 cost_router = APIRouter(prefix="/aerial/vehicle-costs", tags=["Aerial Vehicle Costs"])
 safety_router = APIRouter(prefix="/aerial/safety-checks", tags=["Aerial Safety Checks"])
 attachment_router = APIRouter(prefix="/aerial/attachments", tags=["Aerial Attachments"])
-audit_router = APIRouter(prefix="/aerial/audit-logs", tags=["Aerial Audit Logs"])
 dashboard_router = APIRouter(prefix="/aerial/dashboard", tags=["Aerial Dashboard"])
 report_router = APIRouter(prefix="/aerial/reports", tags=["Aerial Reports"])
 attendance_router = APIRouter(prefix="/aerial/attendance", tags=["Aerial Attendance"])
@@ -325,8 +324,7 @@ async def list_ledgers(
     customer_name: str = Query(""),
     work_location: str = Query(""),
     payment_status: str = Query(""),
-    status: str = Query(""),
-    sort_by: str = Query("", description="排序字段: ledger_no/work_date/receivable_amount/received_amount/unpaid_amount/name/customer_name/contact_phone/status 等"),
+    sort_by: str = Query("", description="排序字段: ledger_no/work_date/receivable_amount/received_amount/unpaid_amount/name/customer_name/contact_phone 等"),
     sort_order: str = Query("desc", description="排序方向: asc/desc"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -339,7 +337,7 @@ async def list_ledgers(
         page=page, page_size=page_size,
         date_from=date_from, date_to=date_to, personnel_id=personnel_id,
         customer_name=customer_name, work_location=work_location,
-        payment_status=payment_status, status=status,
+        payment_status=payment_status,
         sort_by=sort_by, sort_order=sort_order,
     )
     return success_paginated(items, total, page, page_size)
@@ -593,22 +591,6 @@ async def delete_attachment(
     return success(result)
 
 
-# ── 审计日志 ────────────────────────────────────────────────────────────────
-
-@audit_router.get("")
-async def list_audit_logs(
-    ledger_id: str = Query(""),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_AERIAL_READ)),
-    request: Request = None,
-):
-    svc = _svc(db, current_user, request)
-    items, total = await svc.list_audit_logs(ledger_id or None, page, page_size)
-    return success_paginated(items, total, page, page_size)
-
-
 # ── Dashboard ───────────────────────────────────────────────────────────────
 
 @dashboard_router.get("/overview")
@@ -743,7 +725,7 @@ async def export_ledgers(
     ws.title = "出车台账"
 
     headers = ["台账编号", "日期", "车牌号", "人员", "客户", "作业地点", "计费方式", "数量", "作业类型",
-               "应收", "实收", "未收", "工资", "报销", "毛利", "状态", "收款状态"]
+               "应收", "实收", "未收", "工资", "报销", "毛利", "收款状态"]
     ws.append(headers)
     for cell in ws[1]:
         cell.font = Font(bold=True)
@@ -756,7 +738,7 @@ async def export_ledgers(
             item.get("work_type"), item.get("receivable_amount"), item.get("received_amount"),
             item.get("unpaid_amount"), item.get("personnel_wage_amount"),
             item.get("reimbursement_amount"), item.get("gross_profit"),
-            item.get("status"), item.get("payment_status"),
+            item.get("payment_status"),
         ])
 
     output = io.BytesIO()

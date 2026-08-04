@@ -31,11 +31,6 @@
             <el-table-column prop="received_amount" label="实收" width="80" align="right">
               <template #default="{ row }">¥{{ row.received_amount }}</template>
             </el-table-column>
-            <el-table-column prop="status" label="状态" width="80">
-              <template #default="{ row }">
-                <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
-              </template>
-            </el-table-column>
           </el-table>
           <el-empty v-if="!loading && todayLedgers.length === 0" description="今日暂无出车记录" />
         </el-card>
@@ -105,22 +100,6 @@ const overviewCards = computed(() => {
     { label: '本月毛利', value: `¥${m.gross_profit || 0}`, color: (m.gross_profit || 0) >= 0 ? '#67c23a' : '#f56c6c' },
   ]
 })
-
-function statusLabel(s: string) {
-  const map: Record<string, string> = {
-    draft: '草稿', assigned: '已派', started: '已出发', working: '作业中',
-    completed: '已完成', returned: '已收车', reviewed: '已审核', settled: '已结算',
-    cancelled: '已作废', abnormal: '异常',
-  }
-  return map[s] || s
-}
-
-function statusTagType(s: string) {
-  const map: Record<string, string> = {
-    draft: 'info', cancelled: 'info', abnormal: 'danger', reviewed: 'success', settled: 'success',
-  }
-  return map[s] || ''
-}
 
 async function loadData() {
   loading.value = true

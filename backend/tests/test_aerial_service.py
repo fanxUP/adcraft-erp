@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.aerial_service import AerialService, ACTION_CREATE, ACTION_UPDATE
+from app.services.aerial_service import AerialService
 from tests.conftest import SAMPLE_USER_ID
 
 
@@ -75,13 +75,10 @@ def make_mock_ledger(**kwargs):
     l.received_amount = kwargs.get("received_amount", 0.0)
     l.final_amount = kwargs.get("final_amount", 1500.0)
     l.payment_status = kwargs.get("payment_status", "pending")
-    l.audit_status = kwargs.get("audit_status", "draft")
-    l.status = kwargs.get("status", "draft")
     l.work_hours = kwargs.get("work_hours", None)
     l.start_time = kwargs.get("start_time", None)
     l.end_time = kwargs.get("end_time", None)
     l.remark = kwargs.get("remark", None)
-    l.void_reason = kwargs.get("void_reason", None)
     l.created_at = kwargs.get("created_at", datetime.now(timezone.utc))
     l.updated_at = kwargs.get("updated_at", datetime.now(timezone.utc))
     # Relationships
@@ -94,7 +91,6 @@ def make_mock_ledger(**kwargs):
     l.expenses = []
     l.safety_checks = []
     l.attachments = []
-    l.audit_logs = []
     return l
 
 
@@ -227,8 +223,6 @@ def mock_repo():
     repo.create_vehicle_attachment = AsyncMock()
     repo.delete_vehicle_attachment = AsyncMock()
     repo.list_expiring_vehicles = AsyncMock(return_value=[])
-    repo.create_audit_log = AsyncMock()
-    repo.list_audit_logs = AsyncMock(return_value=([], 0))
     return repo
 
 
@@ -284,7 +278,6 @@ async def test_create_vehicle(service, mock_repo):
     mock_repo.create_vehicle.return_value = v
     result = await service.create_vehicle({"plate_number": "京A12345", "vehicle_name": "测试高空车"})
     assert result["plate_number"] == "京A12345"
-    mock_repo.create_audit_log.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -313,7 +306,6 @@ async def test_update_vehicle(service, mock_repo):
     mock_repo.update_vehicle.side_effect = update_side_effect
     result = await service.update_vehicle(SAMPLE_VEHICLE_ID, {"vehicle_name": "新名称"})
     assert result["vehicle_name"] == "新名称"
-    mock_repo.create_audit_log.assert_called_once()
 
 
 # ── Personnel tests ────────────────────────────────────────────────────────────
@@ -356,7 +348,6 @@ async def test_create_personnel(service, mock_repo):
     mock_repo.create_personnel.return_value = d
     result = await service.create_personnel({"name": "张师傅"})
     assert result["name"] == "张师傅"
-    mock_repo.create_audit_log.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -378,7 +369,6 @@ async def test_update_personnel(service, mock_repo):
     mock_repo.update_personnel.side_effect = update_side_effect
     result = await service.update_personnel(SAMPLE_PERSONNEL_ID, {"name": "李师傅"})
     assert result["name"] == "李师傅"
-    mock_repo.create_audit_log.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -408,7 +398,6 @@ async def test_update_personnel_with_gender_ethnicity(service, mock_repo):
     result = await service.update_personnel(SAMPLE_PERSONNEL_ID, {"gender": "female", "ethnicity": "回族"})
     assert result["gender"] == "female"
     assert result["ethnicity"] == "回族"
-    mock_repo.create_audit_log.assert_called_once()
 
 
 # ── Ledger tests ────────────────────────────────────────────────────────────
@@ -450,7 +439,6 @@ async def test_create_ledger(service, mock_repo):
         "receivable_amount": 1500.0,
     })
     assert result["ledger_no"] == "GT-20260723-001"
-    mock_repo.create_audit_log.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -462,7 +450,6 @@ async def test_delete_ledger(service, mock_repo):
     result = await service.delete_ledger(SAMPLE_LEDGER_ID)
 
     mock_repo.delete_ledger.assert_awaited_once_with(l)
-    mock_repo.create_audit_log.assert_called_once()
 
 
 # ── Expense tests ───────────────────────────────────────────────────────────
@@ -517,7 +504,6 @@ async def test_reimburse_expense(service, mock_repo):
     mock_repo.update_expense.side_effect = update_side_effect
     result = await service.reimburse_expense(SAMPLE_EXPENSE_ID, "已报销")
     assert result["reimbursement_status"] == "reimbursed"
-    mock_repo.create_audit_log.assert_called_once()
 
 
 # ── Wage tests ──────────────────────────────────────────────────────────────
@@ -557,7 +543,6 @@ async def test_pay_wage(service, mock_repo):
     mock_repo.update_wage.side_effect = update_side_effect
     result = await service.pay_wage(SAMPLE_WAGE_ID, "已发放")
     assert result["payment_status"] == "paid"
-    mock_repo.create_audit_log.assert_called_once()
 
 
 # ── Cost tests ──────────────────────────────────────────────────────────────

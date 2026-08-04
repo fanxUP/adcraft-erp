@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.aerial import (
     AerialVehicle, AerialPersonnel, AerialDailyLedger, AerialPersonnelExpense,
     AerialPersonnelWage, AerialVehicleCost, AerialSafetyCheck,
-    AerialLedgerAttachment, AerialLedgerAuditLog, AerialAttendanceRecord,
+    AerialLedgerAttachment, AerialAttendanceRecord,
     AerialPersonnelAttachment, AerialAgentDraft, AerialVehicleAttachment,
 )
 
@@ -138,7 +138,6 @@ class AerialRepository:
         customer_name: Optional[str] = None,
         work_location: Optional[str] = None,
         payment_status: Optional[str] = None,
-        status: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_order: str = "desc",
         skip: int = 0,
@@ -159,7 +158,6 @@ class AerialRepository:
             "name": AerialPersonnel.name,
             "customer_name": AerialDailyLedger.customer_name,
             "contact_phone": AerialDailyLedger.contact_phone,
-            "status": AerialDailyLedger.status,
         }
         q = select(AerialDailyLedger)
         if sort_by == "name":
@@ -176,8 +174,6 @@ class AerialRepository:
             q = q.where(AerialDailyLedger.work_location.ilike(f"%{work_location}%"))
         if payment_status:
             q = q.where(AerialDailyLedger.payment_status == payment_status)
-        if status:
-            q = q.where(AerialDailyLedger.status == status)
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar() or 0
         order_col = SORTABLE.get(sort_by)
@@ -214,7 +210,7 @@ class AerialRepository:
         ledger_id = obj.id
         for model in (
             AerialLedgerAttachment, AerialSafetyCheck, AerialPersonnelExpense,
-            AerialPersonnelWage, AerialVehicleCost, AerialLedgerAuditLog,
+            AerialPersonnelWage, AerialVehicleCost,
         ):
             await self.db.execute(delete(model).where(model.ledger_id == ledger_id))
         await self.db.execute(
@@ -229,10 +225,7 @@ class AerialRepository:
         from datetime import date as date_type
         target = dt.date() if hasattr(dt, 'date') else dt
         q = select(func.count()).select_from(AerialDailyLedger).where(
-            and_(
-                func.date(AerialDailyLedger.work_date) == target,
-                AerialDailyLedger.status != "cancelled",
-            )
+            func.date(AerialDailyLedger.work_date) == target
         )
         return (await self.db.execute(q)).scalar() or 0
 
@@ -415,34 +408,13 @@ class AerialRepository:
             await self.db.flush()
         return obj
 
-    # ── 审计日志 ────────────────────────────────────────────────────────────
-
-    async def list_audit_logs(self, ledger_id: Optional[str] = None, skip: int = 0, limit: int = 50):
-        q = select(AerialLedgerAuditLog)
-        if ledger_id:
-            q = q.where(AerialLedgerAuditLog.ledger_id == uuid.UUID(ledger_id))
-        count_q = select(func.count()).select_from(q.subquery())
-        total = (await self.db.execute(count_q)).scalar() or 0
-        q = q.order_by(AerialLedgerAuditLog.created_at.desc()).offset(skip).limit(limit)
-        rows = (await self.db.execute(q)).scalars().all()
-        return list(rows), total
-
-    async def create_audit_log(self, data: dict):
-        obj = AerialLedgerAuditLog(**data)
-        self.db.add(obj)
-        await self.db.flush()
-        return obj
-
     # ── 报表统计 ────────────────────────────────────────────────────────────
 
     async def get_daily_summary(self, date_str: str):
         """获取某日汇总"""
         from datetime import date as date_type
         dt = date_type.fromisoformat(date_str)
-        base = and_(
-            func.date(AerialDailyLedger.work_date) == dt,
-            AerialDailyLedger.status != "cancelled",
-        )
+        base = func.date(AerialDailyLedger.work_date) == dt
         q = select(
             func.count(AerialDailyLedger.id).label("trip_count"),
             func.coalesce(func.sum(AerialDailyLedger.receivable_amount), 0).label("receivable"),
@@ -467,10 +439,7 @@ class AerialRepository:
 
     async def get_monthly_summary(self, year_month: str):
         """获取某月汇总"""
-        base = and_(
-            func.to_char(AerialDailyLedger.work_date, 'YYYY-MM') == year_month,
-            AerialDailyLedger.status != "cancelled",
-        )
+        base = func.to_char(AerialDailyLedger.work_date, 'YYYY-MM') == year_month
         q = select(
             func.count(AerialDailyLedger.id).label("trip_count"),
             func.count(func.distinct(func.date(AerialDailyLedger.work_date))).label("work_days"),
@@ -501,7 +470,6 @@ class AerialRepository:
         q = select(AerialDailyLedger).where(
             and_(
                 AerialDailyLedger.unpaid_amount > 0,
-                AerialDailyLedger.status.notin_(["cancelled"]),
                 AerialDailyLedger.payment_status.notin_(["free", "included_in_order"]),
             )
         ).order_by(AerialDailyLedger.work_date.desc())
@@ -535,10 +503,7 @@ class AerialRepository:
 
     async def get_personnel_summary(self, year_month: str):
         """人员工资月度汇总"""
-        base = and_(
-            func.to_char(AerialDailyLedger.work_date, 'YYYY-MM') == year_month,
-            AerialDailyLedger.status != "cancelled",
-        )
+        base = func.to_char(AerialDailyLedger.work_date, 'YYYY-MM') == year_month
         q = select(
             AerialDailyLedger.personnel_id,
             AerialPersonnel.name,

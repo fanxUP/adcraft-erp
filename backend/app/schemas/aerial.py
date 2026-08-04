@@ -136,7 +136,6 @@ class AerialLedgerUpdate(BaseModel):
     personnel_wage_amount: Optional[float] = None
     abnormal_flag: Optional[bool] = None
     abnormal_description: Optional[str] = None
-    status: Optional[str] = None
     remark: Optional[str] = None
 
 
@@ -264,14 +263,6 @@ class AerialAttachmentCreate(BaseModel):
     file_url: str
     file_name: Optional[str] = None
     remark: Optional[str] = None
-
-
-# ── 审计日志 ────────────────────────────────────────────────────────────────
-
-class AerialAuditLogQuery(BaseModel):
-    ledger_id: Optional[str] = None
-    action: Optional[str] = None
-    source: Optional[str] = None
 
 
 # ── Agent 草稿 ──────────────────────────────────────────────────────────────

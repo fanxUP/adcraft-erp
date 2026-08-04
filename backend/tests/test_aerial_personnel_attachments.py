@@ -57,7 +57,6 @@ def service():
     repo.create_personnel_attachment = AsyncMock()
     repo.delete_personnel_attachment = AsyncMock()
     repo.get_personnel = AsyncMock()
-    repo.create_audit_log = AsyncMock()
     with patch("app.services.aerial_service.AerialRepository") as MockRepoClass:
         MockRepoClass.return_value = repo
         svc = AerialService(AsyncMock(), MagicMock(id=SAMPLE_USER_ID), "127.0.0.1")

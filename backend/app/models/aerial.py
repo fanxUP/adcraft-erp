@@ -73,7 +73,6 @@ class AerialDailyLedger(Base, TimestampMixin):
         Index("ix_aerial_ledger_work_date", "work_date"),
         Index("ix_aerial_ledger_personnel_id", "personnel_id"),
         Index("ix_aerial_ledger_customer_name", "customer_name"),
-        Index("ix_aerial_ledger_status", "status"),
         Index("ix_aerial_ledger_payment_status", "payment_status"),
     )
 
@@ -133,17 +132,8 @@ class AerialDailyLedger(Base, TimestampMixin):
     abnormal_flag: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否异常")
     abnormal_description: Mapped[str | None] = mapped_column(Text, nullable=True, comment="异常说明")
 
-    # 状态
-    status: Mapped[str] = mapped_column(String(32), default="draft", nullable=False, comment="状态: draft/assigned/started/working/completed/returned/reviewed/settled/cancelled/abnormal")
-    audit_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, comment="审核状态: pending/approved/rejected")
-
     # 操作人
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="创建人")
-    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="审核人")
-    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="审核时间")
-    voided_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="作废人")
-    voided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="作废时间")
-    void_reason: Mapped[str | None] = mapped_column(Text, nullable=True, comment="作废原因")
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
 
     # relationships
@@ -154,7 +144,6 @@ class AerialDailyLedger(Base, TimestampMixin):
     vehicle_costs: Mapped[list["AerialVehicleCost"]] = relationship("AerialVehicleCost", back_populates="ledger", lazy="selectin")
     safety_checks: Mapped[list["AerialSafetyCheck"]] = relationship("AerialSafetyCheck", back_populates="ledger", lazy="selectin")
     attachments: Mapped[list["AerialLedgerAttachment"]] = relationship("AerialLedgerAttachment", back_populates="ledger", lazy="selectin")
-    audit_logs: Mapped[list["AerialLedgerAuditLog"]] = relationship("AerialLedgerAuditLog", back_populates="ledger", lazy="selectin")
 
 
 # ── 人员垫付/报销 ────────────────────────────────────────────────────────────
@@ -302,26 +291,6 @@ class AerialLedgerAttachment(Base):
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
 
     ledger: Mapped["AerialDailyLedger"] = relationship("AerialDailyLedger", back_populates="attachments", lazy="selectin")
-
-
-# ── 审计日志 ────────────────────────────────────────────────────────────────
-
-class AerialLedgerAuditLog(Base):
-    __tablename__ = "aerial_ledger_audit_logs"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    ledger_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_daily_ledgers.id"), nullable=True, comment="关联台账")
-    operator_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="操作人")
-    action: Mapped[str] = mapped_column(String(64), nullable=False, comment="操作类型")
-    source: Mapped[str] = mapped_column(String(32), default="erp", nullable=False, comment="来源: erp/wechat_agent/feishu_agent/system")
-    target_type: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="操作对象类型")
-    target_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="操作对象ID")
-    before_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="操作前JSON")
-    after_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="操作后JSON")
-    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
-
-    ledger: Mapped["AerialDailyLedger | None"] = relationship("AerialDailyLedger", back_populates="audit_logs", lazy="selectin")
 
 
 # ── Agent 草稿 ──────────────────────────────────────────────────────────────

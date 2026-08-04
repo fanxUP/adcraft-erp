@@ -1,6 +1,5 @@
 """高空作业车台账模块 — Service 层"""
 
-import json
 import os
 import random
 import uuid
@@ -17,15 +16,6 @@ from app.models.notification import Notification
 from app.repositories.aerial_repo import AerialRepository
 
 
-# 审计日志动作常量
-ACTION_CREATE = "create"
-ACTION_UPDATE = "update"
-ACTION_DELETE = "delete"
-ACTION_REIMBURSE = "reimburse"
-ACTION_PAY_WAGE = "pay_wage"
-ACTION_RECORD_PAYMENT = "record_payment"
-
-
 class AerialService:
     def __init__(self, db: AsyncSession, current_user=None, ip_address: str = ""):
         self.db = db
@@ -35,19 +25,6 @@ class AerialService:
 
     def _user_id(self):
         return self.current_user.id if self.current_user else None
-
-    def _log(self, ledger_id, action, target_type=None, target_id=None, before=None, after=None, remark=None):
-        return self.repo.create_audit_log({
-            "ledger_id": ledger_id,
-            "operator_id": self._user_id(),
-            "action": action,
-            "source": "erp",
-            "target_type": target_type,
-            "target_id": target_id,
-            "before_json": json.dumps(before, ensure_ascii=False, default=str) if before else None,
-            "after_json": json.dumps(after, ensure_ascii=False, default=str) if after else None,
-            "remark": remark,
-        })
 
     # ── 高空车档案 ──────────────────────────────────────────────────────────
 
@@ -90,15 +67,12 @@ class AerialService:
         else:
             data["maintenance_due_date"] = None
         obj = await self.repo.create_vehicle(data)
-        result = self._vehicle_to_dict(obj)
-        await self._log(None, ACTION_CREATE, target_type="vehicle", target_id=obj.id, after=result)
-        return result
+        return self._vehicle_to_dict(obj)
 
     async def update_vehicle(self, vehicle_id: str, data: dict):
         obj = await self.repo.get_vehicle(uuid.UUID(vehicle_id))
         if not obj:
             raise ValueError("高空车不存在")
-        before = self._vehicle_to_dict(obj)
         if "plate_number" in data and data["plate_number"] != obj.plate_number:
             existing = await self.repo.get_vehicle_by_plate(data["plate_number"])
             if existing:
@@ -118,18 +92,14 @@ class AerialService:
             elif k in data:
                 data[k] = None
         obj = await self.repo.update_vehicle(obj, data)
-        after = self._vehicle_to_dict(obj)
-        await self._log(None, ACTION_UPDATE, target_type="vehicle", target_id=obj.id, before=before, after=after)
-        return after
+        return self._vehicle_to_dict(obj)
 
     async def delete_vehicle(self, vehicle_id: str) -> dict:
         obj = await self.repo.get_vehicle(uuid.UUID(vehicle_id))
         if not obj:
             raise ValueError("高空车不存在")
-        before = self._vehicle_to_dict(obj)
         await self.repo.soft_delete_vehicle(obj)
-        await self._log(None, ACTION_DELETE, target_type="vehicle", target_id=obj.id, before=before)
-        return before
+        return self._vehicle_to_dict(obj)
 
     def _vehicle_to_dict(self, v):
         return {
@@ -172,32 +142,25 @@ class AerialService:
         else:
             data["license_expire_date"] = None
         obj = await self.repo.create_personnel(data)
-        result = self._personnel_to_dict(obj)
-        await self._log(None, ACTION_CREATE, target_type="personnel", target_id=obj.id, after=result)
-        return result
+        return self._personnel_to_dict(obj)
 
     async def delete_personnel(self, personnel_id: str) -> dict:
         obj = await self.repo.get_personnel(uuid.UUID(personnel_id))
         if not obj:
             raise ValueError("人员不存在")
-        before = self._personnel_to_dict(obj)
         await self.repo.soft_delete_personnel(obj)
-        await self._log(None, ACTION_DELETE, target_type="personnel", target_id=obj.id, before=before)
-        return before
+        return self._personnel_to_dict(obj)
 
     async def update_personnel(self, personnel_id: str, data: dict):
         obj = await self.repo.get_personnel(uuid.UUID(personnel_id))
         if not obj:
             raise ValueError("人员不存在")
-        before = self._personnel_to_dict(obj)
         if data.get("license_expire_date"):
             data["license_expire_date"] = datetime.fromisoformat(data["license_expire_date"])
         else:
             data["license_expire_date"] = None
         obj = await self.repo.update_personnel(obj, data)
-        after = self._personnel_to_dict(obj)
-        await self._log(None, ACTION_UPDATE, target_type="personnel", target_id=obj.id, before=before, after=after)
-        return after
+        return self._personnel_to_dict(obj)
 
     def _personnel_to_dict(self, d):
         return {
@@ -291,17 +254,12 @@ class AerialService:
                 if attempt == max_retries - 1:
                     raise ValueError("台账编号生成失败，请稍后重试")
 
-        # 审计日志
-        await self._log(obj.id, ACTION_CREATE, "ledger", obj.id, after=self._ledger_to_dict(obj))
-
         return self._ledger_to_dict(obj)
 
     async def update_ledger(self, ledger_id: str, data: dict):
         obj = await self.repo.get_ledger(uuid.UUID(ledger_id))
         if not obj:
             raise ValueError("台账不存在")
-        if obj.status == "cancelled":
-            raise ValueError("已作废台账不能编辑")
 
         # 转换类型
         for k in ["aerial_vehicle_id", "personnel_id"]:
@@ -327,9 +285,6 @@ class AerialService:
 
         obj = await self.repo.update_ledger(obj, data)
 
-        # 审计日志
-        await self._log(obj.id, ACTION_UPDATE, "ledger", obj.id, before=before, after=self._ledger_to_dict(obj))
-
         return self._ledger_to_dict(obj)
 
     async def delete_ledger(self, ledger_id: str) -> dict:
@@ -337,10 +292,8 @@ class AerialService:
         if not obj:
             raise ValueError("台账不存在")
 
-        before = self._ledger_to_dict(obj)
         await self.repo.delete_ledger(obj)
-        await self._log(None, ACTION_DELETE, target_type="ledger", target_id=obj.id, before=before)
-        return before
+        return self._ledger_to_dict(obj)
 
     def _calc_amounts(self, data: dict) -> dict:
         receivable = float(data.get("receivable_amount", 0) or 0)
@@ -417,9 +370,6 @@ class AerialService:
             "estimated_profit": float(l.estimated_profit),
             "abnormal_flag": l.abnormal_flag,
             "abnormal_description": l.abnormal_description,
-            "status": l.status,
-            "audit_status": l.audit_status,
-            "void_reason": l.void_reason,
             "remark": l.remark,
             "created_at": l.created_at.isoformat() if l.created_at else None,
         }
@@ -437,10 +387,6 @@ class AerialService:
             "invoice_required": l.invoice_required,
             "invoice_status": l.invoice_status,
             "created_by": str(l.created_by) if l.created_by else None,
-            "reviewed_by": str(l.reviewed_by) if l.reviewed_by else None,
-            "reviewed_at": l.reviewed_at.isoformat() if l.reviewed_at else None,
-            "voided_by": str(l.voided_by) if l.voided_by else None,
-            "voided_at": l.voided_at.isoformat() if l.voided_at else None,
         })
         return d
 
@@ -470,7 +416,6 @@ class AerialService:
         data["reimbursement_status"] = "pending_reimbursement"
 
         obj = await self.repo.create_expense(data)
-        await self._log(data["ledger_id"], ACTION_CREATE, "expense", obj.id, after=self._expense_to_dict(obj))
 
         # 更新台账报销金额（重新汇总该台账全部垫付，避免重复累加）
         total_reimbursed = await self._sum_expenses_for_ledger(obj.ledger_id)
@@ -484,13 +429,11 @@ class AerialService:
         if obj.reimbursement_status != "pending_reimbursement":
             raise ValueError("只能报销待报销状态的记录")
 
-        before = self._expense_to_dict(obj)
         obj = await self.repo.update_expense(obj, {
             "reimbursement_status": "reimbursed",
             "reimbursed_at": datetime.now(),
             "reimbursed_by": self._user_id(),
         })
-        await self._log(obj.ledger_id, ACTION_REIMBURSE, "expense", obj.id, before=before, after=self._expense_to_dict(obj), remark=remark)
         return self._expense_to_dict(obj)
 
     def _expense_to_dict(self, e):
@@ -573,14 +516,11 @@ class AerialService:
         obj = await self.repo.get_wage(uuid.UUID(wage_id))
         if not obj:
             raise ValueError("工资记录不存在")
-        before = self._wage_to_dict(obj)
         obj = await self.repo.update_wage(obj, {
             "payment_status": "paid",
             "paid_at": datetime.now(),
             "paid_by": self._user_id(),
         })
-        if obj.ledger_id:
-            await self._log(obj.ledger_id, ACTION_PAY_WAGE, "wage", obj.id, before=before, after=self._wage_to_dict(obj), remark=remark)
         return self._wage_to_dict(obj)
 
     def _wage_to_dict(self, w):
@@ -744,28 +684,6 @@ class AerialService:
             "uploaded_by": str(a.uploaded_by) if a.uploaded_by else None,
             "uploaded_at": a.uploaded_at.isoformat() if a.uploaded_at else None,
             "remark": a.remark,
-        }
-
-    # ── 审计日志 ────────────────────────────────────────────────────────────
-
-    async def list_audit_logs(self, ledger_id: str = None, page=1, page_size=50):
-        skip = (page - 1) * page_size
-        items, total = await self.repo.list_audit_logs(ledger_id, skip, page_size)
-        return [self._audit_log_to_dict(a) for a in items], total
-
-    def _audit_log_to_dict(self, a):
-        return {
-            "id": str(a.id),
-            "ledger_id": str(a.ledger_id) if a.ledger_id else None,
-            "operator_id": str(a.operator_id) if a.operator_id else None,
-            "action": a.action,
-            "source": a.source,
-            "target_type": a.target_type,
-            "target_id": str(a.target_id) if a.target_id else None,
-            "before_json": a.before_json,
-            "after_json": a.after_json,
-            "remark": a.remark,
-            "created_at": a.created_at.isoformat() if a.created_at else None,
         }
 
     # ── 首页 Dashboard ─────────────────────────────────────────────────────

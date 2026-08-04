@@ -46,7 +46,6 @@ def service():
     repo.create_attendance = AsyncMock()
     repo.update_attendance = AsyncMock()
     repo.delete_attendance = AsyncMock()
-    repo.create_audit_log = AsyncMock()
     with patch("app.services.aerial_service.AerialRepository") as MockRepoClass:
         MockRepoClass.return_value = repo
         svc = AerialService(AsyncMock(), make_mock_user(), "127.0.0.1")

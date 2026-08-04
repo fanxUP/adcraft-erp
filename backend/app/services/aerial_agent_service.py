@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.aerial import (
     AerialAgentDraft, AerialDailyLedger, AerialPersonnelExpense,
-    AerialVehicleCost, AerialPersonnel, AerialVehicle, AerialLedgerAuditLog,
+    AerialVehicleCost, AerialPersonnel, AerialVehicle,
 )
 from app.services.aerial_service import AerialService
 
@@ -415,19 +415,6 @@ class AerialAgentService:
             draft.confirmed_by = self.current_user.id if self.current_user else None
             draft.confirmed_at = datetime.utcnow()
 
-            # 审计日志
-            audit = AerialLedgerAuditLog(
-                ledger_id=draft.created_ledger_id,
-                operator_id=self.current_user.id if self.current_user else None,
-                action="agent_confirm",
-                source="erp",
-                target_type="agent_draft",
-                target_id=draft.id,
-                before_json=json.dumps({"status": "pending"}, ensure_ascii=False),
-                after_json=json.dumps({"status": "confirmed", "result_ids": result_ids}, ensure_ascii=False, default=str),
-                remark=f"Agent草稿确认: {draft.raw_message[:100]}",
-            )
-            self.db.add(audit)
             await self.db.flush()
 
             return {"success": True, "ids": result_ids}
@@ -448,19 +435,6 @@ class AerialAgentService:
         draft.confirmed_by = self.current_user.id if self.current_user else None
         draft.confirmed_at = datetime.utcnow()
 
-        # 审计日志
-        audit = AerialLedgerAuditLog(
-            ledger_id=None,
-            operator_id=self.current_user.id if self.current_user else None,
-            action="agent_reject",
-            source="erp",
-            target_type="agent_draft",
-            target_id=draft.id,
-            before_json=json.dumps({"status": "pending"}, ensure_ascii=False),
-            after_json=json.dumps({"status": "rejected", "reason": reason}, ensure_ascii=False),
-            remark=f"Agent草稿拒绝: {reason or '无原因'}",
-        )
-        self.db.add(audit)
         await self.db.flush()
 
         return {"success": True}
@@ -496,7 +470,6 @@ class AerialAgentService:
             "receivable_amount": extracted.get("receivable_amount", 0),
             "final_amount": extracted.get("receivable_amount", 0),
             "payment_status": "pending",
-            "status": "draft",
         }
         return await self.aerial_svc.create_ledger(ledger_data)
 

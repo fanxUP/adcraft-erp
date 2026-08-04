@@ -29,12 +29,6 @@
             <el-option label="免费" value="free" /><el-option label="并入订单" value="included_in_order" />
           </el-select>
         </el-form-item>
-        <el-form-item label="台账状态">
-          <el-select v-model="filters.status" placeholder="全部" clearable style="width: 120px">
-            <el-option label="草稿" value="draft" /><el-option label="已审核" value="reviewed" />
-            <el-option label="已作废" value="cancelled" />
-          </el-select>
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="fetchData">搜索</el-button>
           <el-button @click="resetFilters">重置</el-button>
@@ -44,42 +38,37 @@
 
     <!-- 列表 -->
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" @sort-change="handleSortChange">
-      <el-table-column prop="ledger_no" label="台账编号" width="96" sortable="custom" show-overflow-tooltip />
-      <el-table-column prop="work_date" label="出车日期" width="94" sortable="custom" />
-      <el-table-column prop="work_location" label="作业地点" min-width="85" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="billing_method" label="计费方式" width="85" sortable="custom">
+      <el-table-column prop="ledger_no" label="台账编号" width="104" sortable="custom" show-overflow-tooltip />
+      <el-table-column prop="work_date" label="出车日期" width="100" sortable="custom" />
+      <el-table-column prop="work_location" label="作业地点" min-width="95" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="billing_method" label="计费方式" width="90" sortable="custom">
         <template #default="{ row }">{{ billingLabel(row.billing_method) }}</template>
       </el-table-column>
-      <el-table-column prop="quantity" label="数量" width="70" align="center" sortable="custom" />
-      <el-table-column prop="work_content" label="作业内容" min-width="95" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="receivable_amount" label="应收金额" width="90" align="right" sortable="custom">
+      <el-table-column prop="quantity" label="数量" width="76" align="center" sortable="custom" />
+      <el-table-column prop="work_content" label="作业内容" min-width="102" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="receivable_amount" label="应收金额" width="92" align="right" sortable="custom">
         <template #default="{ row }">¥{{ fmtMoney(row.receivable_amount) }}</template>
       </el-table-column>
-      <el-table-column prop="received_amount" label="已收金额" width="90" align="right" sortable="custom">
+      <el-table-column prop="received_amount" label="已收金额" width="92" align="right" sortable="custom">
         <template #default="{ row }">¥{{ fmtMoney(row.received_amount) }}</template>
       </el-table-column>
-      <el-table-column prop="unpaid_amount" label="欠款金额" width="90" align="right" sortable="custom">
+      <el-table-column prop="unpaid_amount" label="欠款金额" width="92" align="right" sortable="custom">
         <template #default="{ row }">
           <span :style="{ color: row.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ fmtMoney(row.unpaid_amount) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="payment_status" label="收款状态" width="85" align="center" sortable="custom">
+      <el-table-column prop="payment_status" label="收款状态" width="92" align="center" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="paymentTagType(row.payment_status)" size="small">{{ paymentLabel(row.payment_status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="驾驶员" width="90" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="customer_name" label="客户名称" min-width="85" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="contact_phone" label="联系电话" width="92" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="status" label="状态" width="78" align="center" sortable="custom">
-        <template #default="{ row }">
-          <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="115" align="center" fixed="right">
+      <el-table-column prop="name" label="驾驶员" width="94" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="customer_name" label="客户名称" min-width="90" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="contact_phone" label="联系电话" width="98" show-overflow-tooltip sortable="custom" />
+      <el-table-column label="操作" width="122" align="center" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="handleDetail(row)">详情</el-button>
-          <el-button link type="primary" size="small" @click="handleEdit(row)" v-if="row.status !== 'cancelled'">编辑</el-button>
+          <el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
           <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
@@ -208,9 +197,6 @@
             <el-descriptions-item label="车牌号">{{ detailData.plate_number }}</el-descriptions-item>
             <el-descriptions-item label="人员">{{ detailData.name }}</el-descriptions-item>
             <el-descriptions-item label="随车人员">{{ detailData.assistant_names || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="状态">
-              <el-tag :type="statusTagType(detailData.status)" size="small">{{ statusLabel(detailData.status) }}</el-tag>
-            </el-descriptions-item>
             <el-descriptions-item label="客户">{{ detailData.customer_name || '-' }}</el-descriptions-item>
             <el-descriptions-item label="联系人">{{ detailData.contact_name || '-' }}</el-descriptions-item>
             <el-descriptions-item label="作业地点" :span="2">{{ detailData.work_location }}</el-descriptions-item>
@@ -244,27 +230,21 @@
             <el-descriptions-item label="预计利润">¥{{ detailData.estimated_profit }}</el-descriptions-item>
           </el-descriptions>
         </el-tab-pane>
-        <el-tab-pane label="审计日志">
-          <AuditLog :ledger-id="detailData.id" />
-        </el-tab-pane>
       </el-tabs>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, defineComponent, h } from 'vue'
-import { ElMessage, ElMessageBox, ElTable, ElTableColumn, ElTag } from 'element-plus'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox, ElTag } from 'element-plus'
 // 手动引入的组件不经过 unplugin-vue-components 自动按需补样式，需显式引入，否则表格/标签无样式
-import 'element-plus/es/components/table/style/css'
-import 'element-plus/es/components/table-column/style/css'
 import 'element-plus/es/components/tag/style/css'
 import {
   getAerialLedgers, getAerialLedger, createAerialLedger, updateAerialLedger,
   deleteAerialLedger,
-  getAerialVehicles, getAerialPersonnel, getAerialAuditLogs,
+  getAerialVehicles, getAerialPersonnel,
   exportAerialLedgers,
-  type AerialAuditLog,
   type AerialLedger,
   type AerialPersonnel,
   type AerialQueryParams,
@@ -290,7 +270,6 @@ const filters = reactive({
   personnel_id: '',
   customer_name: '',
   payment_status: '',
-  status: '',
 })
 
 const sortBy = ref('')
@@ -330,7 +309,6 @@ async function fetchData() {
     if (filters.personnel_id) params.personnel_id = filters.personnel_id
     if (filters.customer_name) params.customer_name = filters.customer_name
     if (filters.payment_status) params.payment_status = filters.payment_status
-    if (filters.status) params.status = filters.status
     if (sortBy.value) {
       params.sort_by = sortBy.value
       params.sort_order = sortOrder.value
@@ -350,7 +328,6 @@ function resetFilters() {
   filters.personnel_id = ''
   filters.customer_name = ''
   filters.payment_status = ''
-  filters.status = ''
   sortBy.value = ''
   sortOrder.value = 'desc'
   page.value = 1
@@ -454,14 +431,6 @@ function fmtMoney(v: number | string | null | undefined) {
   return Number(v || 0).toFixed(2)
 }
 
-function statusLabel(s: string) {
-  const map: Record<string, string> = { draft: '草稿', assigned: '已派', started: '已出发', working: '作业中', completed: '已完成', returned: '已收车', reviewed: '已审核', settled: '已结算', cancelled: '已作废', abnormal: '异常' }
-  return map[s] || s
-}
-function statusTagType(s: string) {
-  const map: Record<string, string> = { draft: 'info', cancelled: 'info', abnormal: 'danger', reviewed: 'success', settled: 'success' }
-  return map[s] || ''
-}
 function paymentLabel(s: string) {
   const map: Record<string, string> = { unpaid: '未收款', partial: '部分收款', paid: '已收款', credit: '挂账', free: '免费', included_in_order: '并入订单' }
   return map[s] || s
@@ -478,31 +447,6 @@ function settlementLabel(s: string) {
   const map: Record<string, string> = { separate: '单独收款', included_in_order: '并入订单', monthly: '月结', free: '免费' }
   return map[s] || s
 }
-
-// Audit log sub-component
-const AuditLog = defineComponent({
-  props: { ledgerId: { type: String, required: true } },
-  setup(props) {
-    const logs = ref<AerialAuditLog[]>([])
-    const loadingLog = ref(false)
-    async function loadLogs() {
-      loadingLog.value = true
-      try {
-        const res = await getAerialAuditLogs({ ledger_id: props.ledgerId, page_size: 100 })
-        logs.value = res.items || []
-      } catch {} finally { loadingLog.value = false }
-    }
-    onMounted(loadLogs)
-    return () => h(ElTable, { data: logs.value, stripe: true, size: 'small', vLoading: loadingLog.value }, {
-      default: () => [
-        h(ElTableColumn, { prop: 'created_at', label: '时间', width: '170' }),
-        h(ElTableColumn, { prop: 'action', label: '操作', width: '100' }),
-        h(ElTableColumn, { prop: 'source', label: '来源', width: '80' }),
-        h(ElTableColumn, { prop: 'remark', label: '备注', minWidth: '200' }),
-      ]
-    })
-  }
-})
 
 async function loadOptions() {
   try {

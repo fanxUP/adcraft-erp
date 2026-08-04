@@ -95,9 +95,6 @@ export interface AerialLedger {
   estimated_profit: number
   abnormal_flag: boolean
   abnormal_description?: string
-  status: string
-  audit_status: string
-  void_reason?: string
   remark?: string
   created_at?: string
   // detail fields
@@ -111,10 +108,6 @@ export interface AerialLedger {
   invoice_required?: boolean
   invoice_status?: string
   created_by?: string
-  reviewed_by?: string
-  reviewed_at?: string
-  voided_by?: string
-  voided_at?: string
 }
 
 export type AerialLedgerCreate = Pick<
@@ -239,20 +232,6 @@ export interface AerialAttachment {
 
 export type AerialAttachmentCreate = Pick<AerialAttachment, 'ledger_id' | 'file_url'> &
   Partial<Omit<AerialAttachment, 'id' | 'uploaded_at'>>
-
-export interface AerialAuditLog {
-  id: string
-  ledger_id?: string
-  operator_id?: string
-  action: string
-  source: string
-  target_type?: string
-  target_id?: string
-  before_json?: JsonObject
-  after_json?: JsonObject
-  remark?: string
-  created_at?: string
-}
 
 export interface AerialSummary {
   work_days?: number
@@ -527,11 +506,6 @@ export const createAerialAttachment = (data: AerialAttachmentCreate) =>
 
 export const deleteAerialAttachment = (id: string) =>
   del(`/aerial/attachments/${id}`)
-
-// ── Audit Log API ──────────────────────────────────────────────────────────
-
-export const getAerialAuditLogs = (params?: AerialQueryParams) =>
-  get<PaginatedData<AerialAuditLog>>('/aerial/audit-logs', { params })
 
 // ── Dashboard API ──────────────────────────────────────────────────────────
 
