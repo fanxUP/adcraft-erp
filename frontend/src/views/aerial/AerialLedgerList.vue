@@ -261,7 +261,7 @@
             </el-select>
           </el-form-item>
           <el-form-item label="收款时间">
-            <el-date-picker v-model="settleForm.payment_time" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" style="width: 100%" />
+            <el-date-picker v-model="settleForm.payment_time" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
           </el-form-item>
           <el-form-item label="收款人">
             <el-select v-model="settleForm.payee_id" placeholder="请选择收款人" clearable style="width: 100%">
@@ -274,8 +274,8 @@
         </el-form>
         <el-divider content-position="left">结算记录</el-divider>
         <el-table :data="settlements" size="small" border v-loading="settlementsLoading" max-height="200">
-          <el-table-column label="收款时间" width="150">
-            <template #default="{ row }">{{ (row.payment_time || '').replace('T', ' ').slice(0, 19) || '-' }}</template>
+          <el-table-column label="收款时间" width="130">
+            <template #default="{ row }">{{ (row.payment_time || '').slice(0, 10) || '-' }}</template>
           </el-table-column>
           <el-table-column label="收款金额" width="110">
             <template #default="{ row }">¥{{ row.amount }}</template>
@@ -498,7 +498,7 @@ function paymentMethodLabel(method?: string) {
 function nowStr() {
   const d = new Date()
   const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00`
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
 async function handleSettle(row: AerialLedger) {
