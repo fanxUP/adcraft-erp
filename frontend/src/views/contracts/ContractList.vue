@@ -55,11 +55,9 @@
       <el-table-column label="创建时间" width="100">
         <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="320" fixed="right">
+      <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" @click="goDetail(row.id)">详情</el-button>
-          <el-button text type="primary" @click="goDetail(row.id)">管理项目</el-button>
-          <el-button text type="success" @click="handleEdit(row)">编辑</el-button>
           <el-button
             text type="warning"
             :disabled="!canChangeStatus(row)"
@@ -300,7 +298,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getContracts, getContract, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment, getOrdersWithoutContract, linkOrdersToContract } from '@/api/contracts'
+import { getContracts, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment, getOrdersWithoutContract, linkOrdersToContract } from '@/api/contracts'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ContractListResponse, ContractDetailResponse, OrderWithoutContractItem } from '@/types/api'
@@ -550,38 +548,6 @@ async function handleCreate() {
   resetForm()
   isEditing.value = false
   await loadAllCustomers()
-  formVisible.value = true
-}
-
-async function handleEdit(row: ContractListResponse) {
-  resetForm()
-  isEditing.value = true
-  editingId.value = row.id
-  formLoading.value = true
-  try {
-    const detail = await getContract(row.id)
-    form.customer_id = detail.customer_id
-    form.customer_name = detail.customer_name
-    // Populate customerOptions so el-select shows the name, not UUID
-    if (detail.customer_id && detail.customer_name) {
-      customerOptions.value = [{ id: detail.customer_id, name: detail.customer_name }]
-    }
-    form.project_name = detail.project_name
-    form.contract_type = detail.contract_type || ''
-    form.total_amount = detail.total_amount
-    form.paid_amount = detail.paid_amount
-    form.sign_date = detail.sign_date || null
-    form.start_date = detail.start_date || null
-    form.end_date = detail.end_date || null
-    form.our_signatory = detail.our_signatory || ''
-    form.customer_signatory = detail.customer_signatory || ''
-    form.content = detail.content || ''
-    form.remark = detail.remark || ''
-    attFileName.value = detail.attachment_name || ''
-    await loadAllCustomers()
-  } finally {
-    formLoading.value = false
-  }
   formVisible.value = true
 }
 
