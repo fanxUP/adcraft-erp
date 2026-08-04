@@ -149,7 +149,7 @@
           <el-input v-model="form.work_content" type="textarea" :rows="2" />
         </el-form-item>
 
-        <el-divider content-position="left">计费与收款</el-divider>
+        <el-divider content-position="left">计费</el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="计费方式">
@@ -161,53 +161,19 @@
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="单价">
-              <el-input-number v-model="form.unit_price" :min="0" :precision="2" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
             <el-form-item label="数量">
               <el-input-number v-model="form.quantity" :min="0" :precision="1" style="width: 100%" />
             </el-form-item>
           </el-col>
-        </el-row>
-        <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="应收金额">
               <el-input-number v-model="form.receivable_amount" :min="0" :precision="2" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
-            <el-form-item label="优惠金额">
-              <el-input-number v-model="form.discount_amount" :min="0" :precision="2" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="实收金额">
-              <el-input-number v-model="form.received_amount" :min="0" :precision="2" style="width: 100%" />
-            </el-form-item>
-          </el-col>
         </el-row>
-        <el-row :gutter="16">
-          <el-col :span="8">
-            <el-form-item label="结算方式">
-              <el-select v-model="form.settlement_type" style="width: 100%">
-                <el-option label="单独收款" value="separate" /><el-option label="并入订单" value="included_in_order" />
-                <el-option label="月结" value="monthly" /><el-option label="免费" value="free" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="人员工资">
-              <el-input-number v-model="form.personnel_wage_amount" :min="0" :precision="2" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="备注">
-              <el-input v-model="form.remark" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <el-form-item label="备注">
+          <el-input v-model="form.remark" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
