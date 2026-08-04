@@ -63,11 +63,11 @@
           <div v-if="!quoteList.length" style="text-align: center; padding: 20px; color: var(--ad-text-secondary)">暂无报价单</div>
           <div v-for="item in quoteList" :key="item.id" class="debt-row quote-row" @click="goQuote(item)">
             <el-tag size="small" :type="quoteStatusColor(item.status)" class="quote-status">{{ quoteStatusLabel(item.status) }}</el-tag>
-            <span class="debt-name">
-              <div>{{ item.quote_no }}</div>
-              <div class="quote-project">{{ item.project_name }}</div>
+            <span class="quote-col quote-no-customer">
+              <div class="quote-no">{{ item.quote_no }}</div>
               <div class="quote-sub">{{ item.customer_name || '—' }}</div>
             </span>
+            <span class="quote-col quote-project-col">{{ item.project_name }}</span>
             <span class="debt-amount" style="color: var(--ad-text)">¥ {{ item.total_amount?.toFixed(2) }}</span>
           </div>
         </el-card>
@@ -263,7 +263,10 @@ onBeforeUnmount(() => {
 .quote-row:hover { background: var(--ad-border); }
 .quote-status { width: 60px; justify-content: center; margin-right: 12px; flex-shrink: 0; }
 .quote-sub { font-size: 12px; color: var(--ad-text-secondary); }
-.quote-project { font-size: 13px; color: var(--ad-text); }
+.quote-col { flex: 1; min-width: 0; }
+.quote-no-customer { flex: 1.2; }
+.quote-no { color: var(--ad-text); font-size: 14px; }
+.quote-project-col { flex: 1.6; font-size: 13px; color: var(--ad-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .debt-rank { width: 28px; height: 28px; background: #e63946; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; font-size: 16px; margin-right: 12px; }
 .debt-name { flex: 1; color: var(--ad-text); }
 .debt-amount { font-weight: bold; font-size: 16px; color: #e63946; }
