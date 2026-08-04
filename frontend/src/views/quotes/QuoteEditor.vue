@@ -291,7 +291,7 @@
     </div>
   </div>
     <!-- 产品选择面板 -->
-    <ProductPickerDialog v-model="productPickerVisible" :customer-id="form.customer_id" @selected="onProductPicked" />
+    <ProductPickerDialog v-model="productPickerVisible" :customer-id="form.customer_id" @selected="onProductPicked" @updated="onProductUpdated" />
 </template>
 
 <script setup lang="ts">
@@ -639,6 +639,13 @@ function onProductPicked(product: ProductResponse) {
   if (!item) return
   onProductSelect(item, { value: formatProductMaterialProcess(product), product })
   pendingPickerItem.value = null
+}
+
+function onProductUpdated(product: ProductResponse) {
+  const item = pendingPickerItem.value
+  if (!item || !item.product_id || item.product_id !== product.id) return
+  // 产品主数据在选产品弹窗里被编辑后，同步到当前行；只更新产品继承字段，不改数量/面积开关
+  Object.assign(item, applyProductMaterialProcess(item, product))
 }
 
 function onProductSelect(item: QuoteItemResponse, opt: { value: string; product?: ProductResponse }) {
