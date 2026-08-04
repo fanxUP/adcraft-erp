@@ -123,7 +123,7 @@ const emit = defineEmits<{
   selected: [product: ProductResponse]
 }>()
 
-const UNIT_OPTIONS = ['项', '㎡', '米', '个', '套']
+const UNIT_OPTIONS = ['项', '㎡', '米', '个', '套', '批']
 const PRICING_OPTIONS = [
   { label: '按面积', value: 'area' },
   { label: '按数量', value: 'quantity' },

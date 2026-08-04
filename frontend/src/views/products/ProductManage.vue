@@ -190,6 +190,7 @@
             <el-option label="米" value="米" />
             <el-option label="个" value="个" />
             <el-option label="套" value="套" />
+            <el-option label="批" value="批" />
           </el-select>
         </el-form-item>
         <el-form-item label="计价方式">
@@ -245,6 +246,7 @@
               <el-option label="米" value="米" />
               <el-option label="个" value="个" />
               <el-option label="套" value="套" />
+              <el-option label="批" value="批" />
             </el-select>
           </el-form-item>
           <el-form-item label="计价方式">
@@ -724,7 +726,7 @@ const templateColumns = [
   { name: '产品', desc: '产品名称', required: true },
   { name: '材质', desc: '材质名称', required: false },
   { name: '工艺', desc: '工艺名称', required: false },
-  { name: '单位', desc: '项 / ㎡ / 米 / 个 / 套', required: false },
+  { name: '单位', desc: '项 / ㎡ / 米 / 个 / 套 / 批', required: false },
   { name: '计价方式', desc: 'area / quantity / length / word_count', required: false },
   { name: '默认价格', desc: '默认单价（数字）', required: false },
   { name: '最低收费', desc: '最低收费金额（数字）', required: false },

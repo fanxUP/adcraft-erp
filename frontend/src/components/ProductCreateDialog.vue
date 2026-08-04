@@ -25,6 +25,7 @@
           <el-option label="米" value="米" />
           <el-option label="个" value="个" />
           <el-option label="套" value="套" />
+          <el-option label="批" value="批" />
         </el-select>
       </el-form-item>
       <el-form-item label="计价方式">
