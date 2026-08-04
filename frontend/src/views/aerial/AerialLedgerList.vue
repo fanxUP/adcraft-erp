@@ -38,34 +38,34 @@
 
     <!-- 列表 -->
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" @sort-change="handleSortChange">
-      <el-table-column prop="ledger_no" label="台账编号" width="90" sortable="custom" show-overflow-tooltip />
-      <el-table-column prop="work_date" label="出车日期" width="88" sortable="custom" />
-      <el-table-column prop="work_location" label="作业地点" min-width="95" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="billing_method" label="计费方式" width="80" sortable="custom">
+      <el-table-column prop="ledger_no" label="台账编号" width="140" sortable="custom" show-overflow-tooltip fixed="left" />
+      <el-table-column prop="work_date" label="出车日期" width="100" sortable="custom" />
+      <el-table-column prop="work_location" label="作业地点" width="110" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="billing_method" label="计费方式" width="88" sortable="custom">
         <template #default="{ row }">{{ billingLabel(row.billing_method) }}</template>
       </el-table-column>
-      <el-table-column prop="quantity" label="数量" width="70" align="center" sortable="custom" />
-      <el-table-column prop="work_content" label="作业内容" min-width="102" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="receivable_amount" label="应收金额" width="92" align="right" sortable="custom">
+      <el-table-column prop="quantity" label="数量" width="60" align="center" sortable="custom" />
+      <el-table-column prop="work_content" label="作业内容" width="150" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="receivable_amount" label="应收金额" width="100" align="right" sortable="custom">
         <template #default="{ row }">¥{{ fmtMoney(row.receivable_amount) }}</template>
       </el-table-column>
-      <el-table-column prop="received_amount" label="已收金额" width="92" align="right" sortable="custom">
+      <el-table-column prop="received_amount" label="已收金额" width="100" align="right" sortable="custom">
         <template #default="{ row }">¥{{ fmtMoney(row.received_amount) }}</template>
       </el-table-column>
-      <el-table-column prop="unpaid_amount" label="欠款金额" width="92" align="right" sortable="custom">
+      <el-table-column prop="unpaid_amount" label="欠款金额" width="100" align="right" sortable="custom">
         <template #default="{ row }">
           <span :style="{ color: row.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ fmtMoney(row.unpaid_amount) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="payment_status" label="收款状态" width="87" align="center" sortable="custom">
+      <el-table-column prop="payment_status" label="收款状态" width="94" align="center" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="paymentTagType(row.payment_status)" size="small">{{ paymentLabel(row.payment_status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="驾驶员" width="88" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="customer_name" label="客户名称" min-width="90" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="contact_phone" label="联系电话" width="90" show-overflow-tooltip sortable="custom" />
-      <el-table-column label="操作" width="185" align="center" fixed="right">
+      <el-table-column prop="name" label="驾驶员" width="110" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="customer_name" label="客户名称" width="150" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="contact_phone" label="联系电话" width="116" show-overflow-tooltip sortable="custom" />
+      <el-table-column label="操作" width="200" align="center" fixed="right">
         <template #default="{ row }">
           <el-button link type="success" size="small" @click="handleSettle(row)">结算</el-button>
           <el-button link type="primary" size="small" @click="handleDetail(row)">详情</el-button>
