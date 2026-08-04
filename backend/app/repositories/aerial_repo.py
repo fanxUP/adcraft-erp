@@ -150,6 +150,8 @@ class AerialRepository:
             "work_date": AerialDailyLedger.work_date,
             "work_location": AerialDailyLedger.work_location,
             "work_content": AerialDailyLedger.work_content,
+            "billing_method": AerialDailyLedger.billing_method,
+            "quantity": AerialDailyLedger.quantity,
             "receivable_amount": AerialDailyLedger.receivable_amount,
             "received_amount": AerialDailyLedger.received_amount,
             "unpaid_amount": AerialDailyLedger.unpaid_amount,

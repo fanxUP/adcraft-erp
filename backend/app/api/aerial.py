@@ -2,6 +2,7 @@
 import json
 import uuid as _uuid
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -734,13 +735,14 @@ async def export_ledgers(
     import io
 
     svc = _svc(db, current_user, request)
-    items, _ = await svc.list_ledgers(page=1, page_size=10000, start_date=start_date, end_date=end_date)
+    # 服务层把 filters 原样透传给 repo，repo 只认 date_from/date_to（此前传 start_date 会 TypeError 导致导出失败）
+    items, _ = await svc.list_ledgers(page=1, page_size=10000, date_from=start_date, date_to=end_date)
 
     wb = Workbook()
     ws = wb.active
     ws.title = "出车台账"
 
-    headers = ["台账编号", "日期", "车牌号", "人员", "客户", "作业地点", "作业类型",
+    headers = ["台账编号", "日期", "车牌号", "人员", "客户", "作业地点", "计费方式", "数量", "作业类型",
                "应收", "实收", "未收", "工资", "报销", "毛利", "状态", "收款状态"]
     ws.append(headers)
     for cell in ws[1]:
@@ -750,6 +752,7 @@ async def export_ledgers(
         ws.append([
             item.get("ledger_no"), item.get("work_date"), item.get("plate_number"),
             item.get("name"), item.get("customer_name"), item.get("work_location"),
+            item.get("billing_method"), item.get("quantity"),
             item.get("work_type"), item.get("receivable_amount"), item.get("received_amount"),
             item.get("unpaid_amount"), item.get("personnel_wage_amount"),
             item.get("reimbursement_amount"), item.get("gross_profit"),
@@ -764,7 +767,7 @@ async def export_ledgers(
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"}
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"}
     )
 
 
