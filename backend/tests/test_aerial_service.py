@@ -469,6 +469,7 @@ async def test_settle_ledger_full(service, mock_repo):
         "amount": 400.0,
         "payment_method": "wechat",
         "payment_time": "2026-08-05T14:30:00",
+        "payee_id": SAMPLE_PERSONNEL_ID,
         "remark": "客户现场结清",
     })
     assert result["received_amount"] == 1000.0
@@ -486,6 +487,7 @@ async def test_settle_ledger_full(service, mock_repo):
     assert s_data["amount"] == 400.0
     assert s_data["payment_method"] == "wechat"
     assert s_data["payment_time"].isoformat() == "2026-08-05T14:30:00"
+    assert s_data["payee_id"] == uuid.UUID(SAMPLE_PERSONNEL_ID)
     assert s_data["remark"] == "客户现场结清"
     assert s_data["created_by"] == SAMPLE_USER_ID
 
@@ -510,6 +512,7 @@ async def test_settle_ledger_partial(service, mock_repo):
     assert s_data["amount"] == 200.0
     assert s_data["payment_method"] == "cash"
     assert s_data["payment_time"] is None
+    assert s_data["payee_id"] is None
     assert s_data["remark"] is None
 
 
@@ -539,6 +542,9 @@ async def test_list_settlements(service, mock_repo):
     s.amount = 400.0
     s.payment_method = "wechat"
     s.payment_time = datetime(2026, 8, 5, 14, 30, 0)
+    s.payee_id = SAMPLE_PERSONNEL_ID
+    s.payee = MagicMock()
+    s.payee.name = "李师傅"
     s.remark = "客户现场结清"
     s.created_by = SAMPLE_USER_ID
     s.created_at = datetime(2026, 8, 5, 15, 0, 0)
@@ -552,6 +558,8 @@ async def test_list_settlements(service, mock_repo):
     assert d["amount"] == 400.0
     assert d["payment_method"] == "wechat"
     assert d["payment_time"] == "2026-08-05T14:30:00"
+    assert d["payee_id"] == str(SAMPLE_PERSONNEL_ID)
+    assert d["payee_name"] == "李师傅"
     assert d["remark"] == "客户现场结清"
     assert d["created_by"] == str(SAMPLE_USER_ID)
 

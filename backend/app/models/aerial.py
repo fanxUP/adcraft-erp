@@ -307,10 +307,12 @@ class AerialLedgerSettlement(Base, TimestampMixin):
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, comment="本次收款金额")
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="收款方式")
     payment_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="收款时间")
+    payee_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_personnel.id"), nullable=True, comment="收款人")
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="登记人")
 
     ledger: Mapped["AerialDailyLedger"] = relationship("AerialDailyLedger", back_populates="settlements", lazy="selectin")
+    payee: Mapped["AerialPersonnel | None"] = relationship("AerialPersonnel", foreign_keys=[payee_id], lazy="selectin")
 
 
 # ── Agent 草稿 ──────────────────────────────────────────────────────────────

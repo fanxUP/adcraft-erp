@@ -322,6 +322,7 @@ class AerialService:
             "amount": amount,
             "payment_method": data.get("payment_method"),
             "payment_time": pay_time,
+            "payee_id": uuid.UUID(data["payee_id"]) if data.get("payee_id") else None,
             "remark": (data.get("remark") or "").strip() or None,
             "created_by": self._user_id(),
         })
@@ -339,6 +340,8 @@ class AerialService:
             "amount": float(s.amount),
             "payment_method": s.payment_method,
             "payment_time": s.payment_time.isoformat() if s.payment_time else None,
+            "payee_id": str(s.payee_id) if s.payee_id else None,
+            "payee_name": s.payee.name if s.payee else None,
             "remark": s.remark,
             "created_by": str(s.created_by) if s.created_by else None,
             "created_at": s.created_at.isoformat() if s.created_at else None,

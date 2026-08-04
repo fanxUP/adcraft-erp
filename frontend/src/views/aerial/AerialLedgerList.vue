@@ -247,21 +247,6 @@
             <span :style="{ color: settleData.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ settleData.unpaid_amount }}</span>
           </el-descriptions-item>
         </el-descriptions>
-        <el-divider content-position="left">结算记录</el-divider>
-        <el-table :data="settlements" size="small" border v-loading="settlementsLoading" max-height="200" style="margin-bottom: 12px">
-          <el-table-column label="收款时间" width="150">
-            <template #default="{ row }">{{ (row.payment_time || '').replace('T', ' ').slice(0, 19) || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="收款金额" width="110">
-            <template #default="{ row }">¥{{ row.amount }}</template>
-          </el-table-column>
-          <el-table-column label="收款方式" width="110">
-            <template #default="{ row }">{{ paymentMethodLabel(row.payment_method) }}</template>
-          </el-table-column>
-          <el-table-column label="备注" prop="remark" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.remark || '-' }}</template>
-          </el-table-column>
-        </el-table>
         <el-alert v-if="settleReadonly" type="info" :closable="false" title="该台账已结清/无需结算，仅可查看结算记录" style="margin-bottom: 12px" />
         <el-form v-if="!settleReadonly" :model="settleForm" label-width="100px">
           <el-form-item label="本次收款金额" required>
@@ -278,10 +263,33 @@
           <el-form-item label="收款时间">
             <el-date-picker v-model="settleForm.payment_time" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" style="width: 100%" />
           </el-form-item>
+          <el-form-item label="收款人">
+            <el-select v-model="settleForm.payee_id" placeholder="请选择收款人" clearable style="width: 100%">
+              <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
+            </el-select>
+          </el-form-item>
           <el-form-item label="备注">
             <el-input v-model="settleForm.remark" />
           </el-form-item>
         </el-form>
+        <el-divider content-position="left">结算记录</el-divider>
+        <el-table :data="settlements" size="small" border v-loading="settlementsLoading" max-height="200">
+          <el-table-column label="收款时间" width="150">
+            <template #default="{ row }">{{ (row.payment_time || '').replace('T', ' ').slice(0, 19) || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="收款金额" width="110">
+            <template #default="{ row }">¥{{ row.amount }}</template>
+          </el-table-column>
+          <el-table-column label="收款方式" width="110">
+            <template #default="{ row }">{{ paymentMethodLabel(row.payment_method) }}</template>
+          </el-table-column>
+          <el-table-column label="收款人" width="100">
+            <template #default="{ row }">{{ row.payee_name || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="备注" prop="remark" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.remark || '-' }}</template>
+          </el-table-column>
+        </el-table>
       </template>
       <template #footer>
         <el-button @click="settleVisible = false">{{ settleReadonly ? '关闭' : '取消' }}</el-button>
@@ -329,6 +337,7 @@ const settleForm = reactive({
   amount: 0,
   payment_method: '',
   payment_time: '',
+  payee_id: '',
   remark: '',
 })
 const vehicleOptions = ref<AerialVehicle[]>([])
@@ -508,6 +517,7 @@ async function handleSettle(row: AerialLedger) {
   settleForm.amount = row.unpaid_amount
   settleForm.payment_method = row.payment_method || ''
   settleForm.payment_time = nowStr()
+  settleForm.payee_id = ''
   settleForm.remark = ''
 }
 
@@ -521,6 +531,7 @@ async function handleSettleSubmit() {
       amount: settleForm.amount,
       payment_method: settleForm.payment_method,
       payment_time: settleForm.payment_time,
+      payee_id: settleForm.payee_id || undefined,
       remark: settleForm.remark,
     })
     ElMessage.success('结算成功')
