@@ -121,11 +121,15 @@ async function handleRestore(row: OrderListResponse) {
 }
 
 async function handleConvertToQuote(row: OrderListResponse) {
-  await ElMessageBox.confirm(`确定将订单「${row.order_no}」转为报价单？`, '转报价', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
+  await ElMessageBox.confirm(
+    `确定将订单「${row.order_no}」转为报价单？\n若该订单已关联合同，将自动解除合同关联（不再关联任何单据的合同/项目会一并删除）。`,
+    '转报价',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    },
+  )
   await convertOrderToQuote(row.id)
   ElMessage.success('订单已转为报价单')
   router.push('/quotes')

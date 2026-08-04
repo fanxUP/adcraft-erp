@@ -852,6 +852,62 @@ class BusinessDocumentService:
     # 核心：类型转换（订单 ↔ 报价）
     # ═══════════════════════════════════════════
 
+    async def _cleanup_contract_links_on_order_to_quote(self, doc) -> None:
+        """订单转报价时清理合同关联：
+        - 普通合同：移除该订单与合同的关联；合同不再关联任何单据时整份软删除
+        - 框架合同：从框架合同项目移除该订单；项目不再关联任何单据时软删项目并同步合同金额
+        """
+        from app.models.contract import Contract, ContractDocument
+        from app.models.framework_contract import (
+            FrameworkContractProject,
+            FrameworkContractProjectDocument,
+        )
+
+        # 1) 普通合同（contract_documents 直接关联）
+        links = (await self.db.execute(
+            select(ContractDocument).where(ContractDocument.document_id == doc.id)
+        )).scalars().all()
+        contract_ids = {l.contract_id for l in links}
+        for l in links:
+            await self.db.delete(l)
+        for cid in contract_ids:
+            contract = await self.db.get(Contract, cid)
+            if not contract or contract.deleted_at is not None:
+                continue
+            remaining = (await self.db.execute(
+                select(ContractDocument).where(
+                    ContractDocument.contract_id == cid,
+                    ContractDocument.document_id != doc.id,
+                )
+            )).scalars().all()
+            if not remaining:
+                # 软删空合同，与 ContractService.delete_contract 语义一致
+                contract.deleted_at = datetime.now()
+
+        # 2) 框架合同（framework_contract_project_documents 关联）
+        fw_links = (await self.db.execute(
+            select(FrameworkContractProjectDocument).where(
+                FrameworkContractProjectDocument.document_id == doc.id
+            )
+        )).scalars().all()
+        project_ids = {l.project_id for l in fw_links}
+        for l in fw_links:
+            await self.db.delete(l)
+        for pid in project_ids:
+            project = await self.db.get(FrameworkContractProject, pid)
+            if not project or project.deleted_at is not None:
+                continue
+            remaining = (await self.db.execute(
+                select(FrameworkContractProjectDocument).where(
+                    FrameworkContractProjectDocument.project_id == pid,
+                    FrameworkContractProjectDocument.document_id != doc.id,
+                )
+            )).scalars().all()
+            if not remaining:
+                # 软删空项目 + 重新同步框架合同总金额
+                from app.services.framework_contract_service import FrameworkContractService
+                await FrameworkContractService(self.db).delete_project(pid)
+
     async def convert_doc_type(self, doc_id: UUID, new_type: str,
                                 created_by: UUID) -> dict:
         """统一转换方法 — 只改 doc_type + 编号，ID 不变，所有 FK 自动跟随。"""
@@ -933,6 +989,8 @@ class BusinessDocumentService:
             doc.unpaid_amount = 0
             # 取消软删除（已取消订单被标记了 deleted_at）
             doc.deleted_at = None
+            # 订单转报价：清理合同关联（普通合同空则删；框架合同从项目移除该订单）
+            await self._cleanup_contract_links_on_order_to_quote(doc)
 
         await self.db.flush()
 
