@@ -41,10 +41,10 @@
       <el-table-column prop="ledger_no" label="台账编号" width="140" sortable="custom" show-overflow-tooltip fixed="left" />
       <el-table-column prop="work_date" label="出车日期" width="100" sortable="custom" />
       <el-table-column prop="work_location" label="作业地点" width="110" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="billing_method" label="计费方式" width="88" sortable="custom">
+      <el-table-column prop="billing_method" label="计费方式" width="96" sortable="custom">
         <template #default="{ row }">{{ billingLabel(row.billing_method) }}</template>
       </el-table-column>
-      <el-table-column prop="quantity" label="数量" width="60" align="center" sortable="custom" />
+      <el-table-column prop="quantity" label="数量" width="68" align="center" sortable="custom" />
       <el-table-column prop="work_content" label="作业内容" width="150" show-overflow-tooltip sortable="custom" />
       <el-table-column prop="receivable_amount" label="应收金额" width="100" align="right" sortable="custom">
         <template #default="{ row }">¥{{ fmtMoney(row.receivable_amount) }}</template>
