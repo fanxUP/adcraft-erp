@@ -31,7 +31,7 @@
             <span v-else>2</span>
           </div>
           <div class="qw-text">
-            <div class="qw-label">确认报价</div>
+            <div class="qw-label">{{ currentStatus === 'confirmed' ? '转为草稿' : '确认报价' }}</div>
             <div v-if="'confirmed' === currentStatus" class="qw-tag cur-tag">当前</div>
             <div v-else-if="isPast('confirmed')" class="qw-tag done-tag">已完成</div>
             <div v-else class="qw-tag future-tag">待开始</div>
@@ -80,7 +80,7 @@
         点击「保存草稿」保存草稿
       </template>
       <template v-else-if="currentStatus === 'confirmed'">
-        点击「确认报价」撤回草稿，点击「转为订单」转订单
+        点击「转为草稿」撤回草稿，点击「转为订单」转订单
       </template>
       <template v-else-if="currentStatus === 'converted'">
         该报价已转为订单，不可再修改
