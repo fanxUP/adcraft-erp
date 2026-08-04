@@ -44,35 +44,35 @@
 
     <!-- 列表 -->
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" @sort-change="handleSortChange">
-      <el-table-column prop="ledger_no" label="台账编号" width="180" sortable="custom" show-overflow-tooltip />
-      <el-table-column prop="work_date" label="出车日期" width="120" sortable="custom" />
-      <el-table-column prop="work_location" label="作业地点" width="150" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="work_content" label="作业内容" min-width="140" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="receivable_amount" label="应收金额" width="110" align="right" sortable="custom">
+      <el-table-column prop="ledger_no" label="台账编号" width="112" sortable="custom" show-overflow-tooltip />
+      <el-table-column prop="work_date" label="出车日期" width="108" sortable="custom" />
+      <el-table-column prop="work_location" label="作业地点" min-width="90" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="work_content" label="作业内容" min-width="100" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="receivable_amount" label="应收金额" width="95" align="right" sortable="custom">
         <template #default="{ row }">¥{{ fmtMoney(row.receivable_amount) }}</template>
       </el-table-column>
-      <el-table-column prop="received_amount" label="已收金额" width="110" align="right" sortable="custom">
+      <el-table-column prop="received_amount" label="已收金额" width="95" align="right" sortable="custom">
         <template #default="{ row }">¥{{ fmtMoney(row.received_amount) }}</template>
       </el-table-column>
-      <el-table-column prop="unpaid_amount" label="欠款金额" width="110" align="right" sortable="custom">
+      <el-table-column prop="unpaid_amount" label="欠款金额" width="95" align="right" sortable="custom">
         <template #default="{ row }">
           <span :style="{ color: row.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ fmtMoney(row.unpaid_amount) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="payment_status" label="收款状态" width="100" align="center" sortable="custom">
+      <el-table-column prop="payment_status" label="收款状态" width="95" align="center" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="paymentTagType(row.payment_status)" size="small">{{ paymentLabel(row.payment_status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="驾驶员" width="120" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="customer_name" label="客户名称" width="120" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="contact_phone" label="联系电话" width="130" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="status" label="状态" width="90" align="center" sortable="custom">
+      <el-table-column prop="name" label="驾驶员" width="105" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="customer_name" label="客户名称" min-width="90" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="contact_phone" label="联系电话" width="110" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="status" label="状态" width="80" align="center" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" align="center" fixed="right">
+      <el-table-column label="操作" width="130" align="center" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="handleDetail(row)">详情</el-button>
           <el-button link type="primary" size="small" @click="handleEdit(row)" v-if="row.status !== 'cancelled'">编辑</el-button>
@@ -251,6 +251,10 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, defineComponent, h } from 'vue'
 import { ElMessage, ElMessageBox, ElTable, ElTableColumn, ElTag } from 'element-plus'
+// 手动引入的组件不经过 unplugin-vue-components 自动按需补样式，需显式引入，否则表格/标签无样式
+import 'element-plus/es/components/table/style/css'
+import 'element-plus/es/components/table-column/style/css'
+import 'element-plus/es/components/tag/style/css'
 import {
   getAerialLedgers, getAerialLedger, createAerialLedger, updateAerialLedger,
   deleteAerialLedger,
@@ -519,4 +523,7 @@ onMounted(() => {
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .ledger-actions { display: flex; gap: 8px; }
 .filter-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); margin-bottom: 16px; }
+/* 排序箭头与表头文字同行：收窄 caret、表头不换行，避免 4 字表头被箭头挤到两行 */
+.el-table :deep(th.el-table__cell .caret-wrapper) { width: 12px; }
+.el-table :deep(th.el-table__cell .cell) { white-space: nowrap; }
 </style>

@@ -24,13 +24,10 @@ async function checkVersion() {
       return
     }
 
-    // 版本变了 → 带参数强制刷新（URL 变化绕过 index.html 缓存），自动拉取最新版本
+    // 版本变了 → 弹出更新提示条，由用户点击「立即刷新」带版本参数重载
     if (storedVersion !== currentVersion) {
-      localStorage.setItem(VERSION_KEY, currentVersion)
-      const sep = window.location.search ? '&' : '?'
-      window.location.replace(
-        window.location.pathname + window.location.search + sep + 'v=' + encodeURIComponent(currentVersion)
-      )
+      serverVersion.value = currentVersion
+      hasUpdate.value = true
     }
   } catch {
     // 网络错误静默忽略
@@ -59,12 +56,17 @@ export function useVersionCheck() {
     document.removeEventListener('visibilitychange', onVisibilityChange)
   })
 
-  /** 用户点了「立即刷新」后刷新页面 */
+  /** 用户点了「立即刷新」后，带版本参数重载，绕过 index.html 缓存加载最新版本 */
   function refreshPage() {
     if (serverVersion.value) {
       localStorage.setItem(VERSION_KEY, serverVersion.value)
+      const sep = window.location.search ? '&' : '?'
+      window.location.replace(
+        window.location.pathname + window.location.search + sep + 'v=' + encodeURIComponent(serverVersion.value)
+      )
+    } else {
+      window.location.reload()
     }
-    window.location.reload()
   }
 
   return {
