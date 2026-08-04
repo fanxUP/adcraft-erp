@@ -65,7 +65,8 @@
             <el-tag size="small" :type="quoteStatusColor(item.status)" class="quote-status">{{ quoteStatusLabel(item.status) }}</el-tag>
             <span class="debt-name">
               <div>{{ item.quote_no }}</div>
-              <div class="quote-sub">{{ item.customer_name || item.project_name }}</div>
+              <div class="quote-project">{{ item.project_name }}</div>
+              <div class="quote-sub">{{ item.customer_name || '—' }}</div>
             </span>
             <span class="debt-amount" style="color: var(--ad-text)">¥ {{ item.total_amount?.toFixed(2) }}</span>
           </div>
@@ -262,6 +263,7 @@ onBeforeUnmount(() => {
 .quote-row:hover { background: var(--ad-border); }
 .quote-status { width: 60px; justify-content: center; margin-right: 12px; flex-shrink: 0; }
 .quote-sub { font-size: 12px; color: var(--ad-text-secondary); }
+.quote-project { font-size: 13px; color: var(--ad-text); }
 .debt-rank { width: 28px; height: 28px; background: #e63946; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; font-size: 16px; margin-right: 12px; }
 .debt-name { flex: 1; color: var(--ad-text); }
 .debt-amount { font-weight: bold; font-size: 16px; color: #e63946; }
