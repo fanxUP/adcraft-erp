@@ -34,7 +34,7 @@ from app.models.vehicle import (
 from app.models.aerial import (
     AerialVehicle, AerialPersonnel, AerialDailyLedger, AerialPersonnelExpense,
     AerialPersonnelWage, AerialVehicleCost, AerialSafetyCheck,
-    AerialLedgerAttachment, AerialAgentDraft,
+    AerialLedgerAttachment, AerialAgentDraft, AerialLedgerSettlement,
 )
 from app.ai_assistant.models import AiChatSession, AiChatMessage, AiToolCallLog, AiPendingAction, AiOperationAuditLog
 

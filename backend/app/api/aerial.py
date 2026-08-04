@@ -396,6 +396,17 @@ async def settle_ledger(
     return success(result)
 
 
+@ledger_router.get("/{ledger_id}/settlements")
+async def list_settlements(
+    ledger_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_READ)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    return success(await svc.list_settlements(ledger_id))
+
+
 @ledger_router.delete("/{ledger_id}")
 async def delete_ledger(
     ledger_id: str,

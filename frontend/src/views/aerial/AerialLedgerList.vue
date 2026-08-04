@@ -67,7 +67,7 @@
       <el-table-column prop="contact_phone" label="联系电话" width="90" show-overflow-tooltip sortable="custom" />
       <el-table-column label="操作" width="185" align="center" fixed="right">
         <template #default="{ row }">
-          <el-button link type="success" size="small" @click="handleSettle(row)" :disabled="!canSettle(row)">结算</el-button>
+          <el-button link type="success" size="small" @click="handleSettle(row)">结算</el-button>
           <el-button link type="primary" size="small" @click="handleDetail(row)">详情</el-button>
           <el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
           <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
@@ -235,7 +235,7 @@
     </el-dialog>
 
     <!-- 结算对话框 -->
-    <el-dialog v-model="settleVisible" title="台账结算" width="520px" destroy-on-close :close-on-click-modal="false">
+    <el-dialog v-model="settleVisible" title="台账结算" width="580px" destroy-on-close :close-on-click-modal="false">
       <template v-if="settleData">
         <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
           <el-descriptions-item label="台账编号">{{ settleData.ledger_no }}</el-descriptions-item>
@@ -247,7 +247,23 @@
             <span :style="{ color: settleData.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ settleData.unpaid_amount }}</span>
           </el-descriptions-item>
         </el-descriptions>
-        <el-form :model="settleForm" label-width="100px">
+        <el-divider content-position="left">结算记录</el-divider>
+        <el-table :data="settlements" size="small" border v-loading="settlementsLoading" max-height="200" style="margin-bottom: 12px">
+          <el-table-column label="收款时间" width="150">
+            <template #default="{ row }">{{ (row.payment_time || '').replace('T', ' ').slice(0, 19) || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="收款金额" width="110">
+            <template #default="{ row }">¥{{ row.amount }}</template>
+          </el-table-column>
+          <el-table-column label="收款方式" width="110">
+            <template #default="{ row }">{{ paymentMethodLabel(row.payment_method) }}</template>
+          </el-table-column>
+          <el-table-column label="备注" prop="remark" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.remark || '-' }}</template>
+          </el-table-column>
+        </el-table>
+        <el-alert v-if="settleReadonly" type="info" :closable="false" title="该台账已结清/无需结算，仅可查看结算记录" style="margin-bottom: 12px" />
+        <el-form v-if="!settleReadonly" :model="settleForm" label-width="100px">
           <el-form-item label="本次收款金额" required>
             <el-input-number v-model="settleForm.amount" :min="0.01" :max="settleData.unpaid_amount || 0" :precision="2" style="width: 100%" />
           </el-form-item>
@@ -262,11 +278,14 @@
           <el-form-item label="收款时间">
             <el-date-picker v-model="settleForm.payment_time" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" style="width: 100%" />
           </el-form-item>
+          <el-form-item label="备注">
+            <el-input v-model="settleForm.remark" />
+          </el-form-item>
         </el-form>
       </template>
       <template #footer>
-        <el-button @click="settleVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSettleSubmit" :loading="settling">确认结算</el-button>
+        <el-button @click="settleVisible = false">{{ settleReadonly ? '关闭' : '取消' }}</el-button>
+        <el-button v-if="!settleReadonly" type="primary" @click="handleSettleSubmit" :loading="settling">确认结算</el-button>
       </template>
     </el-dialog>
   </div>
@@ -279,10 +298,11 @@ import { ElMessage, ElMessageBox, ElTag } from 'element-plus'
 import 'element-plus/es/components/tag/style/css'
 import {
   getAerialLedgers, getAerialLedger, createAerialLedger, updateAerialLedger,
-  settleAerialLedger, deleteAerialLedger,
+  settleAerialLedger, getAerialLedgerSettlements, deleteAerialLedger,
   getAerialVehicles, getAerialPersonnel,
   exportAerialLedgers,
   type AerialLedger,
+  type AerialSettlement,
   type AerialPersonnel,
   type AerialQueryParams,
   type AerialVehicle,
@@ -302,10 +322,14 @@ const settling = ref(false)
 const editingId = ref<string | null>(null)
 const detailData = ref<AerialLedger | null>(null)
 const settleData = ref<AerialLedger | null>(null)
+const settleReadonly = ref(false)
+const settlements = ref<AerialSettlement[]>([])
+const settlementsLoading = ref(false)
 const settleForm = reactive({
   amount: 0,
   payment_method: '',
   payment_time: '',
+  remark: '',
 })
 const vehicleOptions = ref<AerialVehicle[]>([])
 const personnelOptions = ref<AerialPersonnel[]>([])
@@ -457,18 +481,34 @@ function canSettle(row: AerialLedger) {
   return !['paid', 'free', 'included_in_order'].includes(row.payment_status)
 }
 
+function paymentMethodLabel(method?: string) {
+  const map: Record<string, string> = { wechat: '微信', alipay: '支付宝', bank_transfer: '银行转账', cash: '现金' }
+  return method ? map[method] || method : '-'
+}
+
 function nowStr() {
   const d = new Date()
   const p = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00`
 }
 
-function handleSettle(row: AerialLedger) {
+async function handleSettle(row: AerialLedger) {
   settleData.value = row
+  settleReadonly.value = !canSettle(row)
+  settlements.value = []
+  settlementsLoading.value = true
+  settleVisible.value = true
+  try {
+    settlements.value = await getAerialLedgerSettlements(row.id)
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '加载结算记录失败'))
+  } finally {
+    settlementsLoading.value = false
+  }
   settleForm.amount = row.unpaid_amount
   settleForm.payment_method = row.payment_method || ''
   settleForm.payment_time = nowStr()
-  settleVisible.value = true
+  settleForm.remark = ''
 }
 
 async function handleSettleSubmit() {
@@ -481,6 +521,7 @@ async function handleSettleSubmit() {
       amount: settleForm.amount,
       payment_method: settleForm.payment_method,
       payment_time: settleForm.payment_time,
+      remark: settleForm.remark,
     })
     ElMessage.success('结算成功')
     settleVisible.value = false

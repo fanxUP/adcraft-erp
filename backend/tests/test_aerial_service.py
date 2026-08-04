@@ -219,6 +219,8 @@ def mock_repo():
     repo.list_attachments = AsyncMock(return_value=[])
     repo.create_attachment = AsyncMock()
     repo.delete_attachment = AsyncMock()
+    repo.create_settlement = AsyncMock()
+    repo.list_settlements = AsyncMock(return_value=[])
     repo.list_vehicle_attachments = AsyncMock(return_value=[])
     repo.create_vehicle_attachment = AsyncMock()
     repo.delete_vehicle_attachment = AsyncMock()
@@ -467,6 +469,7 @@ async def test_settle_ledger_full(service, mock_repo):
         "amount": 400.0,
         "payment_method": "wechat",
         "payment_time": "2026-08-05T14:30:00",
+        "remark": "客户现场结清",
     })
     assert result["received_amount"] == 1000.0
     assert result["unpaid_amount"] == 0.0
@@ -476,6 +479,15 @@ async def test_settle_ledger_full(service, mock_repo):
     called_data = mock_repo.update_ledger.await_args.args[1]
     assert called_data["received_amount"] == 1000.0
     assert called_data["payment_time"].isoformat() == "2026-08-05T14:30:00"
+    # 结算流水
+    mock_repo.create_settlement.assert_awaited_once()
+    s_data = mock_repo.create_settlement.await_args.args[0]
+    assert s_data["ledger_id"] == SAMPLE_LEDGER_ID
+    assert s_data["amount"] == 400.0
+    assert s_data["payment_method"] == "wechat"
+    assert s_data["payment_time"].isoformat() == "2026-08-05T14:30:00"
+    assert s_data["remark"] == "客户现场结清"
+    assert s_data["created_by"] == SAMPLE_USER_ID
 
 
 @pytest.mark.asyncio
@@ -493,6 +505,55 @@ async def test_settle_ledger_partial(service, mock_repo):
     assert result["received_amount"] == 800.0
     assert result["unpaid_amount"] == 200.0
     assert result["payment_status"] == "partial"
+    mock_repo.create_settlement.assert_awaited_once()
+    s_data = mock_repo.create_settlement.await_args.args[0]
+    assert s_data["amount"] == 200.0
+    assert s_data["payment_method"] == "cash"
+    assert s_data["payment_time"] is None
+    assert s_data["remark"] is None
+
+
+@pytest.mark.asyncio
+async def test_settle_ledger_writes_record_with_blank_remark(service, mock_repo):
+    """备注为空白字符串时流水记录落空串。"""
+    l = make_mock_ledger(receivable_amount=1000.0, received_amount=600.0, final_amount=1000.0)
+    mock_repo.get_ledger.return_value = l
+
+    async def update_side_effect(obj, data):
+        for k, val in data.items():
+            setattr(obj, k, val)
+        return obj
+
+    mock_repo.update_ledger.side_effect = update_side_effect
+    await service.settle_ledger(SAMPLE_LEDGER_ID, {"amount": 100.0, "remark": "   "})
+    s_data = mock_repo.create_settlement.await_args.args[0]
+    assert s_data["amount"] == 100.0
+    assert s_data["remark"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_settlements(service, mock_repo):
+    s = MagicMock()
+    s.id = "99999999-9999-9999-9999-999999999999"
+    s.ledger_id = SAMPLE_LEDGER_ID
+    s.amount = 400.0
+    s.payment_method = "wechat"
+    s.payment_time = datetime(2026, 8, 5, 14, 30, 0)
+    s.remark = "客户现场结清"
+    s.created_by = SAMPLE_USER_ID
+    s.created_at = datetime(2026, 8, 5, 15, 0, 0)
+    mock_repo.list_settlements.return_value = [s]
+
+    items = await service.list_settlements(SAMPLE_LEDGER_ID)
+    mock_repo.list_settlements.assert_awaited_once()
+    assert len(items) == 1
+    d = items[0]
+    assert d["ledger_id"] == SAMPLE_LEDGER_ID
+    assert d["amount"] == 400.0
+    assert d["payment_method"] == "wechat"
+    assert d["payment_time"] == "2026-08-05T14:30:00"
+    assert d["remark"] == "客户现场结清"
+    assert d["created_by"] == str(SAMPLE_USER_ID)
 
 
 @pytest.mark.asyncio

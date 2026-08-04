@@ -179,13 +179,14 @@ class TestAerialPermissionMapping:
             "list_vehicles", "get_vehicle", "list_personnel", "get_personnel",
             "list_ledgers", "get_ledger", "list_expenses", "list_wages",
             "list_costs", "list_safety_checks", "list_attachments",
+            "list_settlements",
             "dashboard_overview", "dashboard_today",
             "dashboard_reminders", "report_daily", "report_monthly",
             "report_receivables", "report_reimbursements", "report_costs",
             "report_personnel_summary", "agent_list_drafts", "agent_get_draft",
         ]
         # This is a documentation test - verifies the mapping exists
-        assert len(read_endpoints) == 22
+        assert len(read_endpoints) == 23
 
     def test_create_permissions_for_mutating_endpoints(self):
         """POST create endpoints should use PERM_AERIAL_CREATE."""

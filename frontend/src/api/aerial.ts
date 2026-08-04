@@ -337,8 +337,22 @@ export const createAerialLedger = (data: AerialLedgerCreate) =>
 export const updateAerialLedger = (id: string, data: AerialLedgerUpdate) =>
   patch<AerialLedger>(`/aerial/ledgers/${id}`, data)
 
-export const settleAerialLedger = (id: string, data: { amount: number; payment_method?: string; payment_time?: string }) =>
+export const settleAerialLedger = (id: string, data: { amount: number; payment_method?: string; payment_time?: string; remark?: string }) =>
   post<AerialLedger>(`/aerial/ledgers/${id}/settle`, data)
+
+export interface AerialSettlement {
+  id: string
+  ledger_id: string
+  amount: number
+  payment_method?: string
+  payment_time?: string
+  remark?: string
+  created_by?: string
+  created_at?: string
+}
+
+export const getAerialLedgerSettlements = (id: string) =>
+  get<AerialSettlement[]>(`/aerial/ledgers/${id}/settlements`)
 
 export const deleteAerialLedger = (id: string) =>
   del(`/aerial/ledgers/${id}`)

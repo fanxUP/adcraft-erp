@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.aerial import (
     AerialVehicle, AerialPersonnel, AerialDailyLedger, AerialPersonnelExpense,
     AerialPersonnelWage, AerialVehicleCost, AerialSafetyCheck,
-    AerialLedgerAttachment, AerialAttendanceRecord,
+    AerialLedgerAttachment, AerialAttendanceRecord, AerialLedgerSettlement,
     AerialPersonnelAttachment, AerialAgentDraft, AerialVehicleAttachment,
 )
 
@@ -210,7 +210,7 @@ class AerialRepository:
         ledger_id = obj.id
         for model in (
             AerialLedgerAttachment, AerialSafetyCheck, AerialPersonnelExpense,
-            AerialPersonnelWage, AerialVehicleCost,
+            AerialPersonnelWage, AerialVehicleCost, AerialLedgerSettlement,
         ):
             await self.db.execute(delete(model).where(model.ledger_id == ledger_id))
         await self.db.execute(
@@ -228,6 +228,23 @@ class AerialRepository:
             func.date(AerialDailyLedger.work_date) == target
         )
         return (await self.db.execute(q)).scalar() or 0
+
+    # ── 结算流水 ──────────────────────────────────────────────────────────
+
+    async def create_settlement(self, data: dict):
+        obj = AerialLedgerSettlement(**data)
+        self.db.add(obj)
+        await self.db.flush()
+        await self.db.refresh(obj)
+        return obj
+
+    async def list_settlements(self, ledger_id: uuid.UUID):
+        q = (
+            select(AerialLedgerSettlement)
+            .where(AerialLedgerSettlement.ledger_id == ledger_id)
+            .order_by(AerialLedgerSettlement.created_at.asc())
+        )
+        return (await self.db.execute(q)).scalars().all()
 
     # ── 人员垫付 ──────────────────────────────────────────────────────────
 

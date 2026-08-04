@@ -317,8 +317,32 @@ class AerialService:
             updates["payment_method"] = data["payment_method"]
         if pay_time is not None:
             updates["payment_time"] = pay_time
+        await self.repo.create_settlement({
+            "ledger_id": obj.id,
+            "amount": amount,
+            "payment_method": data.get("payment_method"),
+            "payment_time": pay_time,
+            "remark": (data.get("remark") or "").strip() or None,
+            "created_by": self._user_id(),
+        })
         obj = await self.repo.update_ledger(obj, updates)
         return self._ledger_to_dict(obj)
+
+    async def list_settlements(self, ledger_id: str) -> list:
+        items = await self.repo.list_settlements(uuid.UUID(ledger_id))
+        return [self._settlement_to_dict(s) for s in items]
+
+    def _settlement_to_dict(self, s):
+        return {
+            "id": str(s.id),
+            "ledger_id": str(s.ledger_id),
+            "amount": float(s.amount),
+            "payment_method": s.payment_method,
+            "payment_time": s.payment_time.isoformat() if s.payment_time else None,
+            "remark": s.remark,
+            "created_by": str(s.created_by) if s.created_by else None,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+        }
 
     async def delete_ledger(self, ledger_id: str) -> dict:
         obj = await self.repo.get_ledger(uuid.UUID(ledger_id))

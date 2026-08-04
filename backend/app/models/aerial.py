@@ -144,6 +144,7 @@ class AerialDailyLedger(Base, TimestampMixin):
     vehicle_costs: Mapped[list["AerialVehicleCost"]] = relationship("AerialVehicleCost", back_populates="ledger", lazy="selectin")
     safety_checks: Mapped[list["AerialSafetyCheck"]] = relationship("AerialSafetyCheck", back_populates="ledger", lazy="selectin")
     attachments: Mapped[list["AerialLedgerAttachment"]] = relationship("AerialLedgerAttachment", back_populates="ledger", lazy="selectin")
+    settlements: Mapped[list["AerialLedgerSettlement"]] = relationship("AerialLedgerSettlement", back_populates="ledger", lazy="selectin")
 
 
 # ── 人员垫付/报销 ────────────────────────────────────────────────────────────
@@ -291,6 +292,25 @@ class AerialLedgerAttachment(Base):
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
 
     ledger: Mapped["AerialDailyLedger"] = relationship("AerialDailyLedger", back_populates="attachments", lazy="selectin")
+
+
+class AerialLedgerSettlement(Base, TimestampMixin):
+    """结算流水：每次登记收款记录一行。"""
+
+    __tablename__ = "aerial_ledger_settlements"
+    __table_args__ = (
+        Index("ix_aerial_ledger_settlements_ledger_id", "ledger_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ledger_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_daily_ledgers.id"), nullable=False, comment="关联台账")
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, comment="本次收款金额")
+    payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="收款方式")
+    payment_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="收款时间")
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="登记人")
+
+    ledger: Mapped["AerialDailyLedger"] = relationship("AerialDailyLedger", back_populates="settlements", lazy="selectin")
 
 
 # ── Agent 草稿 ──────────────────────────────────────────────────────────────
