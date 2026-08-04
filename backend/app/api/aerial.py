@@ -407,6 +407,22 @@ async def list_settlements(
     return success(await svc.list_settlements(ledger_id))
 
 
+@ledger_router.delete("/{ledger_id}/settlements/{settlement_id}")
+async def delete_settlement(
+    ledger_id: str,
+    settlement_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_FINANCE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    try:
+        result = await svc.delete_settlement(ledger_id, settlement_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return success(result)
+
+
 @ledger_router.delete("/{ledger_id}")
 async def delete_ledger(
     ledger_id: str,

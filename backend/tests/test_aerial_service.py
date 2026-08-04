@@ -221,6 +221,10 @@ def mock_repo():
     repo.delete_attachment = AsyncMock()
     repo.create_settlement = AsyncMock()
     repo.list_settlements = AsyncMock(return_value=[])
+    repo.get_settlement = AsyncMock()
+    repo.delete_settlement = AsyncMock()
+    repo.sum_settlements = AsyncMock(return_value=0.0)
+    repo.last_settlement = AsyncMock(return_value=None)
     repo.list_vehicle_attachments = AsyncMock(return_value=[])
     repo.create_vehicle_attachment = AsyncMock()
     repo.delete_vehicle_attachment = AsyncMock()
@@ -585,6 +589,78 @@ async def test_settle_ledger_exceeds_unpaid(service, mock_repo):
     mock_repo.get_ledger.return_value = l
     with pytest.raises(ValueError, match="不能超过未收金额"):
         await service.settle_ledger(SAMPLE_LEDGER_ID, {"amount": 500.0})
+
+
+# ── 结算流水删除 ─────────────────────────────────────────────────────────────
+
+async def _apply_updates(obj, data):
+    for k, val in data.items():
+        setattr(obj, k, val)
+    return obj
+
+
+@pytest.mark.asyncio
+async def test_delete_settlement_clears_to_unpaid(service, mock_repo):
+    """删除全部流水后：实收归零、状态回到未收款、收款方式/时间清空。"""
+    s = MagicMock()
+    s.id = "99999999-9999-9999-9999-999999999999"
+    s.ledger_id = uuid.UUID(SAMPLE_LEDGER_ID)
+    mock_repo.get_settlement.return_value = s
+    l = make_mock_ledger(receivable_amount=1000.0, received_amount=400.0, final_amount=1000.0)
+    mock_repo.get_ledger.return_value = l
+    mock_repo.sum_settlements.return_value = 0.0
+    mock_repo.last_settlement.return_value = None
+    mock_repo.update_ledger.side_effect = _apply_updates
+
+    result = await service.delete_settlement(SAMPLE_LEDGER_ID, s.id)
+
+    mock_repo.delete_settlement.assert_awaited_once_with(s)
+    mock_repo.sum_settlements.assert_awaited_once_with(SAMPLE_LEDGER_ID)
+    assert result["received_amount"] == 0.0
+    assert result["unpaid_amount"] == 1000.0
+    assert result["payment_status"] == "unpaid"
+    assert l.payment_method is None and l.payment_time is None
+
+
+@pytest.mark.asyncio
+async def test_delete_settlement_keeps_remaining_partial(service, mock_repo):
+    """删除一条后仍有流水：实收=剩余之和、状态部分收款、收款方式刷新为最近一条。"""
+    s = MagicMock()
+    s.id = "99999999-9999-9999-9999-999999999999"
+    s.ledger_id = uuid.UUID(SAMPLE_LEDGER_ID)
+    mock_repo.get_settlement.return_value = s
+    l = make_mock_ledger(receivable_amount=1000.0, received_amount=1000.0, final_amount=1000.0)
+    mock_repo.get_ledger.return_value = l
+    mock_repo.sum_settlements.return_value = 600.0
+    last = MagicMock()
+    last.payment_method = "cash"
+    last.payment_time = datetime(2026, 8, 5, 9, 0, 0)
+    mock_repo.last_settlement.return_value = last
+    mock_repo.update_ledger.side_effect = _apply_updates
+
+    result = await service.delete_settlement(SAMPLE_LEDGER_ID, s.id)
+
+    assert result["received_amount"] == 600.0
+    assert result["unpaid_amount"] == 400.0
+    assert result["payment_status"] == "partial"
+    assert l.payment_method == "cash"
+    assert l.payment_time == datetime(2026, 8, 5, 9, 0, 0)
+
+
+@pytest.mark.asyncio
+async def test_delete_settlement_not_found(service, mock_repo):
+    mock_repo.get_settlement.return_value = None
+    with pytest.raises(ValueError, match="结算记录不存在"):
+        await service.delete_settlement(SAMPLE_LEDGER_ID, "99999999-9999-9999-9999-999999999999")
+
+
+@pytest.mark.asyncio
+async def test_delete_settlement_ledger_mismatch(service, mock_repo):
+    s = MagicMock()
+    s.ledger_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    mock_repo.get_settlement.return_value = s
+    with pytest.raises(ValueError, match="结算记录不存在"):
+        await service.delete_settlement(SAMPLE_LEDGER_ID, "99999999-9999-9999-9999-999999999999")
 
 
 # ── Expense tests ───────────────────────────────────────────────────────────

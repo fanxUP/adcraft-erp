@@ -333,6 +333,32 @@ class AerialService:
         items = await self.repo.list_settlements(uuid.UUID(ledger_id))
         return [self._settlement_to_dict(s) for s in items]
 
+    async def delete_settlement(self, ledger_id: str, settlement_id: str) -> dict:
+        """删除一条结算流水，并按剩余流水重算台账聚合（实收/未收/收款状态/利润）。"""
+        s = await self.repo.get_settlement(uuid.UUID(settlement_id))
+        if not s or s.ledger_id != uuid.UUID(ledger_id):
+            raise ValueError("结算记录不存在")
+        ledger = await self.repo.get_ledger(s.ledger_id)
+        if not ledger:
+            raise ValueError("台账不存在")
+        await self.repo.delete_settlement(s)
+        # 实收 = 剩余结算流水之和；收款方式/时间刷新为最近一条，删空则清空
+        remaining = await self.repo.sum_settlements(ledger.id)
+        merged = self._ledger_to_dict(ledger)
+        merged["received_amount"] = remaining
+        calc = self._calc_amounts(merged)
+        last = await self.repo.last_settlement(ledger.id)
+        ledger.payment_method = last.payment_method if last else None
+        ledger.payment_time = last.payment_time if last else None
+        obj = await self.repo.update_ledger(ledger, {
+            "received_amount": calc["received_amount"],
+            "unpaid_amount": calc["unpaid_amount"],
+            "payment_status": calc["payment_status"],
+            "gross_profit": calc["gross_profit"],
+            "estimated_profit": calc["estimated_profit"],
+        })
+        return self._ledger_to_dict(obj)
+
     def _settlement_to_dict(self, s):
         return {
             "id": str(s.id),

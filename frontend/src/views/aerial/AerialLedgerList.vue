@@ -235,7 +235,7 @@
     </el-dialog>
 
     <!-- 结算对话框 -->
-    <el-dialog v-model="settleVisible" title="台账结算" width="580px" destroy-on-close :close-on-click-modal="false">
+    <el-dialog v-model="settleVisible" title="台账结算" width="680px" destroy-on-close :close-on-click-modal="false">
       <template v-if="settleData">
         <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
           <el-descriptions-item label="台账编号">{{ settleData.ledger_no }}</el-descriptions-item>
@@ -289,6 +289,11 @@
           <el-table-column label="备注" prop="remark" show-overflow-tooltip>
             <template #default="{ row }">{{ row.remark || '-' }}</template>
           </el-table-column>
+          <el-table-column label="操作" width="70" align="center">
+            <template #default="{ row }">
+              <el-button link type="danger" size="small" @click="handleDeleteSettlement(row)">删除</el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </template>
       <template #footer>
@@ -306,8 +311,8 @@ import { ElMessage, ElMessageBox, ElTag } from 'element-plus'
 import 'element-plus/es/components/tag/style/css'
 import {
   getAerialLedgers, getAerialLedger, createAerialLedger, updateAerialLedger,
-  settleAerialLedger, getAerialLedgerSettlements, deleteAerialLedger,
-  getAerialVehicles, getAerialPersonnel,
+  settleAerialLedger, getAerialLedgerSettlements, deleteAerialLedgerSettlement,
+  deleteAerialLedger, getAerialVehicles, getAerialPersonnel,
   exportAerialLedgers,
   type AerialLedger,
   type AerialSettlement,
@@ -521,6 +526,26 @@ async function handleSettle(row: AerialLedger) {
   settleForm.remark = ''
 }
 
+async function refreshSettleDialog(id: string) {
+  // 结算/删除后弹窗不关闭：重新拉台账聚合与结算记录，并重置表单
+  const updated = await getAerialLedger(id)
+  settleData.value = updated
+  settleReadonly.value = !canSettle(updated)
+  settlementsLoading.value = true
+  try {
+    settlements.value = await getAerialLedgerSettlements(id)
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '加载结算记录失败'))
+  } finally {
+    settlementsLoading.value = false
+  }
+  settleForm.amount = updated.unpaid_amount
+  settleForm.payment_method = updated.payment_method || ''
+  settleForm.payment_time = nowStr()
+  settleForm.payee_id = ''
+  settleForm.remark = ''
+}
+
 async function handleSettleSubmit() {
   if (!settleData.value) return
   if (!settleForm.amount || settleForm.amount <= 0) return ElMessage.warning('请输入本次收款金额')
@@ -535,13 +560,29 @@ async function handleSettleSubmit() {
       remark: settleForm.remark,
     })
     ElMessage.success('结算成功')
-    settleVisible.value = false
+    // 结算成功后不关闭弹窗，刷新聚合与记录后由用户手动关闭
+    await refreshSettleDialog(settleData.value.id)
     fetchData()
   } catch (error: unknown) {
     ElMessage.error(getErrorMessage(error, '结算失败'))
   } finally {
     settling.value = false
   }
+}
+
+async function handleDeleteSettlement(row: AerialSettlement) {
+  if (!settleData.value) return
+  try {
+    await ElMessageBox.confirm(
+      `删除该笔收款记录后，台账已收金额将减少 ¥${row.amount}，确定删除？`,
+      '删除确认',
+      { type: 'warning' },
+    )
+    await deleteAerialLedgerSettlement(settleData.value.id, row.id)
+    ElMessage.success('删除成功')
+    await refreshSettleDialog(settleData.value.id)
+    fetchData()
+  } catch {}
 }
 
 async function handleDelete(row: AerialLedger) {

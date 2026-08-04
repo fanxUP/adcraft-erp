@@ -246,6 +246,33 @@ class AerialRepository:
         )
         return (await self.db.execute(q)).scalars().all()
 
+    async def get_settlement(self, settlement_id: uuid.UUID):
+        return (await self.db.execute(
+            select(AerialLedgerSettlement).where(AerialLedgerSettlement.id == settlement_id)
+        )).scalar_one_or_none()
+
+    async def delete_settlement(self, obj):
+        await self.db.delete(obj)
+        await self.db.flush()
+        return obj
+
+    async def sum_settlements(self, ledger_id: uuid.UUID) -> float:
+        """台账下全部结算流水金额之和（与实收一致）。"""
+        q = select(func.coalesce(func.sum(AerialLedgerSettlement.amount), 0)).where(
+            AerialLedgerSettlement.ledger_id == ledger_id
+        )
+        return float((await self.db.execute(q)).scalar())
+
+    async def last_settlement(self, ledger_id: uuid.UUID):
+        """最近登记的一条结算流水。"""
+        q = (
+            select(AerialLedgerSettlement)
+            .where(AerialLedgerSettlement.ledger_id == ledger_id)
+            .order_by(AerialLedgerSettlement.created_at.desc())
+            .limit(1)
+        )
+        return (await self.db.execute(q)).scalar_one_or_none()
+
     # ── 人员垫付 ──────────────────────────────────────────────────────────
 
     async def list_expenses(

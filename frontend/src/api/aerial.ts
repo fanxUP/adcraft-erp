@@ -356,6 +356,9 @@ export interface AerialSettlement {
 export const getAerialLedgerSettlements = (id: string) =>
   get<AerialSettlement[]>(`/aerial/ledgers/${id}/settlements`)
 
+export const deleteAerialLedgerSettlement = (ledgerId: string, settlementId: string) =>
+  del(`/aerial/ledgers/${ledgerId}/settlements/${settlementId}`)
+
 export const deleteAerialLedger = (id: string) =>
   del(`/aerial/ledgers/${id}`)
 
