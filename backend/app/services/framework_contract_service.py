@@ -113,11 +113,21 @@ class FrameworkContractService:
         result["unpaid_amount"] = max(0, result["project_amount"] - paid)
         return result
 
+    async def _validate_contract_is_framework(self, contract_id: UUID) -> None:
+        """框架合同项目只能挂在框架合同下；普通合同（制作/采购等）订单应走 contract_documents 直连。"""
+        from app.models.contract import Contract
+        contract = await self.db.get(Contract, contract_id)
+        if not contract or contract.deleted_at is not None:
+            raise ValueError("合同不存在")
+        if contract.contract_type != "框架合同":
+            raise ValueError("仅框架合同支持添加项目，普通合同的订单请在合同编辑中直接关联")
+
     async def create_project(self, data: dict) -> dict:
         data["contract_id"] = UUID(data["contract_id"])
         data["customer_id"] = UUID(data["customer_id"])
         data["document_ids"] = self._combine_document_ids(data)
         await self._validate_order_ids(data["document_ids"])
+        await self._validate_contract_is_framework(data["contract_id"])
 
         project = await self.repo.create(data)
         project = await self.repo.get_by_id(project.id)
