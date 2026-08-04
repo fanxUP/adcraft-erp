@@ -139,10 +139,29 @@ class AerialRepository:
         work_location: Optional[str] = None,
         payment_status: Optional[str] = None,
         status: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: str = "desc",
         skip: int = 0,
         limit: int = 20,
     ):
+        # 排序白名单：只允许按这些字段排序（name 为人员姓名，需 join）
+        SORTABLE = {
+            "ledger_no": AerialDailyLedger.ledger_no,
+            "work_date": AerialDailyLedger.work_date,
+            "work_location": AerialDailyLedger.work_location,
+            "work_content": AerialDailyLedger.work_content,
+            "receivable_amount": AerialDailyLedger.receivable_amount,
+            "received_amount": AerialDailyLedger.received_amount,
+            "unpaid_amount": AerialDailyLedger.unpaid_amount,
+            "payment_status": AerialDailyLedger.payment_status,
+            "name": AerialPersonnel.name,
+            "customer_name": AerialDailyLedger.customer_name,
+            "contact_phone": AerialDailyLedger.contact_phone,
+            "status": AerialDailyLedger.status,
+        }
         q = select(AerialDailyLedger)
+        if sort_by == "name":
+            q = q.join(AerialPersonnel, AerialPersonnel.id == AerialDailyLedger.personnel_id)
         if date_from:
             q = q.where(AerialDailyLedger.work_date >= datetime.fromisoformat(date_from))
         if date_to:
@@ -159,7 +178,14 @@ class AerialRepository:
             q = q.where(AerialDailyLedger.status == status)
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar() or 0
-        q = q.order_by(AerialDailyLedger.work_date.desc(), AerialDailyLedger.created_at.desc()).offset(skip).limit(limit)
+        order_col = SORTABLE.get(sort_by)
+        if order_col is not None:
+            direction = order_col.asc() if sort_order == "asc" else order_col.desc()
+            # 加次级排序保证稳定
+            q = q.order_by(direction, AerialDailyLedger.work_date.desc(), AerialDailyLedger.created_at.desc())
+        else:
+            q = q.order_by(AerialDailyLedger.work_date.desc(), AerialDailyLedger.created_at.desc())
+        q = q.offset(skip).limit(limit)
         rows = (await self.db.execute(q)).scalars().all()
         return list(rows), total
 

@@ -325,6 +325,8 @@ async def list_ledgers(
     work_location: str = Query(""),
     payment_status: str = Query(""),
     status: str = Query(""),
+    sort_by: str = Query("", description="排序字段: ledger_no/work_date/receivable_amount/received_amount/unpaid_amount/name/customer_name/contact_phone/status 等"),
+    sort_order: str = Query("desc", description="排序方向: asc/desc"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -337,6 +339,7 @@ async def list_ledgers(
         date_from=date_from, date_to=date_to, personnel_id=personnel_id,
         customer_name=customer_name, work_location=work_location,
         payment_status=payment_status, status=status,
+        sort_by=sort_by, sort_order=sort_order,
     )
     return success_paginated(items, total, page, page_size)
 

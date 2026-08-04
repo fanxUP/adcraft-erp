@@ -225,9 +225,11 @@ class AerialService:
 
     # ── 每日台账 ────────────────────────────────────────────────────────────
 
-    async def list_ledgers(self, page=1, page_size=20, **filters):
+    async def list_ledgers(self, page=1, page_size=20, sort_by="", sort_order="desc", **filters):
         skip = (page - 1) * page_size
-        items, total = await self.repo.list_ledgers(skip=skip, limit=page_size, **filters)
+        items, total = await self.repo.list_ledgers(
+            skip=skip, limit=page_size, sort_by=sort_by or None, sort_order=sort_order, **filters
+        )
         return [self._ledger_to_dict(l) for l in items], total
 
     async def get_ledger(self, ledger_id: str):

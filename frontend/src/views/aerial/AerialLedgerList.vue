@@ -30,31 +30,31 @@
 
     <!-- 列表 -->
     <div class="table-wrap">
-    <el-table :data="list" stripe v-loading="loading" style="width: 100%; min-width: 1540px">
-      <el-table-column prop="ledger_no" label="台账编号" width="180" />
-      <el-table-column prop="work_date" label="出车日期" width="120" />
-      <el-table-column prop="work_location" label="作业地点" width="140" show-overflow-tooltip />
-      <el-table-column prop="work_content" label="作业内容" width="120" show-overflow-tooltip />
-      <el-table-column prop="receivable_amount" label="应收金额" width="120" align="right">
+    <el-table :data="list" stripe v-loading="loading" style="width: 100%; min-width: 1540px" @sort-change="handleSortChange">
+      <el-table-column prop="ledger_no" label="台账编号" width="180" sortable="custom" />
+      <el-table-column prop="work_date" label="出车日期" width="120" sortable="custom" />
+      <el-table-column prop="work_location" label="作业地点" width="140" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="work_content" label="作业内容" width="120" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="receivable_amount" label="应收金额" width="120" align="right" sortable="custom">
         <template #default="{ row }">¥{{ row.receivable_amount }}</template>
       </el-table-column>
-      <el-table-column prop="received_amount" label="已收金额" width="120" align="right">
+      <el-table-column prop="received_amount" label="已收金额" width="120" align="right" sortable="custom">
         <template #default="{ row }">¥{{ row.received_amount }}</template>
       </el-table-column>
-      <el-table-column prop="unpaid_amount" label="欠款金额" width="120" align="right">
+      <el-table-column prop="unpaid_amount" label="欠款金额" width="120" align="right" sortable="custom">
         <template #default="{ row }">
           <span :style="{ color: row.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ row.unpaid_amount }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="payment_status" label="收款状态" width="100">
+      <el-table-column prop="payment_status" label="收款状态" width="100" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="paymentTagType(row.payment_status)" size="small">{{ paymentLabel(row.payment_status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="驾驶员" width="110" />
-      <el-table-column prop="customer_name" label="客户名称" width="120" show-overflow-tooltip />
-      <el-table-column prop="contact_phone" label="联系电话" width="130" />
-      <el-table-column prop="status" label="状态" width="100">
+      <el-table-column prop="name" label="驾驶员" width="110" sortable="custom" />
+      <el-table-column prop="customer_name" label="客户名称" width="120" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="contact_phone" label="联系电话" width="130" sortable="custom" />
+      <el-table-column prop="status" label="状态" width="100" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
@@ -273,6 +273,9 @@ const filters = reactive({
   status: '',
 })
 
+const sortBy = ref('')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+
 const form = reactive({
   work_date: '',
   aerial_vehicle_id: '',
@@ -308,6 +311,10 @@ async function fetchData() {
     if (filters.customer_name) params.customer_name = filters.customer_name
     if (filters.payment_status) params.payment_status = filters.payment_status
     if (filters.status) params.status = filters.status
+    if (sortBy.value) {
+      params.sort_by = sortBy.value
+      params.sort_order = sortOrder.value
+    }
     const res = await getAerialLedgers(params)
     list.value = res.items || []
     total.value = res.total || 0
@@ -324,6 +331,21 @@ function resetFilters() {
   filters.customer_name = ''
   filters.payment_status = ''
   filters.status = ''
+  sortBy.value = ''
+  sortOrder.value = 'desc'
+  page.value = 1
+  fetchData()
+}
+
+function handleSortChange({ prop, order }: { prop: string; order: 'ascending' | 'descending' | null }) {
+  if (order) {
+    sortBy.value = prop
+    sortOrder.value = order === 'ascending' ? 'asc' : 'desc'
+  } else {
+    // 第三次点击：取消排序，恢复默认（按出车日期倒序）
+    sortBy.value = ''
+    sortOrder.value = 'desc'
+  }
   page.value = 1
   fetchData()
 }
