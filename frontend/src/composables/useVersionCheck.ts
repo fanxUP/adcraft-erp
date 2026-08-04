@@ -10,7 +10,7 @@ let timer: ReturnType<typeof setInterval> | null = null
 
 async function checkVersion() {
   try {
-    const res = await fetch(`/version.json?t=${Date.now()}`)
+    const res = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' })
     if (!res.ok) return
     const data = await res.json()
     const currentVersion = data.version || ''
@@ -24,10 +24,13 @@ async function checkVersion() {
       return
     }
 
-    // 版本变了 → 提示刷新
+    // 版本变了 → 带参数强制刷新（URL 变化绕过 index.html 缓存），自动拉取最新版本
     if (storedVersion !== currentVersion) {
-      serverVersion.value = currentVersion
-      hasUpdate.value = true
+      localStorage.setItem(VERSION_KEY, currentVersion)
+      const sep = window.location.search ? '&' : '?'
+      window.location.replace(
+        window.location.pathname + window.location.search + sep + 'v=' + encodeURIComponent(currentVersion)
+      )
     }
   } catch {
     // 网络错误静默忽略
