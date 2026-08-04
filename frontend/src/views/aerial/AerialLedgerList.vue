@@ -1,40 +1,53 @@
 <template>
-  <div class="aerial-ledger-page">
+  <div class="page">
     <div class="page-header">
       <h2>每日出车台账</h2>
-      <div>
+      <div class="ledger-actions">
         <el-button @click="handleExport" :disabled="!filters.dateRange?.length">导出 Excel</el-button>
         <el-button type="primary" @click="handleCreate">+ 新增台账</el-button>
       </div>
     </div>
 
     <!-- 筛选 -->
-    <div class="search-bar">
-      <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="width: 260px" />
-      <el-select v-model="filters.personnel_id" placeholder="人员" clearable style="width: 120px">
-        <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
-      </el-select>
-      <el-input v-model="filters.customer_name" placeholder="客户名称" clearable style="width: 140px" />
-      <el-select v-model="filters.payment_status" placeholder="收款状态" clearable style="width: 120px">
-        <el-option label="未收款" value="unpaid" /><el-option label="部分收款" value="partial" />
-        <el-option label="已收款" value="paid" /><el-option label="挂账" value="credit" />
-        <el-option label="免费" value="free" /><el-option label="并入订单" value="included_in_order" />
-      </el-select>
-      <el-select v-model="filters.status" placeholder="台账状态" clearable style="width: 120px">
-        <el-option label="草稿" value="draft" /><el-option label="已审核" value="reviewed" />
-        <el-option label="已作废" value="cancelled" />
-      </el-select>
-      <el-button type="primary" @click="fetchData">搜索</el-button>
-      <el-button @click="resetFilters">重置</el-button>
-    </div>
+    <el-card shadow="never" class="filter-card">
+      <el-form :model="filters" inline>
+        <el-form-item label="日期">
+          <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="width: 240px" />
+        </el-form-item>
+        <el-form-item label="人员">
+          <el-select v-model="filters.personnel_id" placeholder="全部" clearable style="width: 120px">
+            <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="客户名称">
+          <el-input v-model="filters.customer_name" placeholder="请输入" clearable style="width: 140px" />
+        </el-form-item>
+        <el-form-item label="收款状态">
+          <el-select v-model="filters.payment_status" placeholder="全部" clearable style="width: 120px">
+            <el-option label="未收款" value="unpaid" /><el-option label="部分收款" value="partial" />
+            <el-option label="已收款" value="paid" /><el-option label="挂账" value="credit" />
+            <el-option label="免费" value="free" /><el-option label="并入订单" value="included_in_order" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="台账状态">
+          <el-select v-model="filters.status" placeholder="全部" clearable style="width: 120px">
+            <el-option label="草稿" value="draft" /><el-option label="已审核" value="reviewed" />
+            <el-option label="已作废" value="cancelled" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="fetchData">搜索</el-button>
+          <el-button @click="resetFilters">重置</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
 
     <!-- 列表 -->
-    <div class="table-wrap">
-    <el-table :data="list" stripe v-loading="loading" style="width: 100%; min-width: 1640px" @sort-change="handleSortChange">
+    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" @sort-change="handleSortChange">
       <el-table-column prop="ledger_no" label="台账编号" width="180" sortable="custom" show-overflow-tooltip />
       <el-table-column prop="work_date" label="出车日期" width="120" sortable="custom" />
       <el-table-column prop="work_location" label="作业地点" width="150" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="work_content" label="作业内容" width="140" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="work_content" label="作业内容" min-width="140" show-overflow-tooltip sortable="custom" />
       <el-table-column prop="receivable_amount" label="应收金额" width="110" align="right" sortable="custom">
         <template #default="{ row }">¥{{ fmtMoney(row.receivable_amount) }}</template>
       </el-table-column>
@@ -67,13 +80,12 @@
         </template>
       </el-table-column>
     </el-table>
-    </div>
 
     <el-pagination
       v-model:current-page="page" v-model:page-size="pageSize"
-      :total="total" :page-sizes="[20, 50, 100]"
-      layout="total, sizes, prev, pager, next, jumper" style="margin-top: 16px; justify-content: flex-end"
-      @current-change="fetchData" @size-change="fetchData"
+      :total="total" :page-sizes="[10, 20, 50, 100]"
+      layout="total, sizes, prev, pager, next" style="margin-top: 16px; justify-content: flex-end"
+      @change="fetchData"
     />
 
     <!-- 新增/编辑对话框 -->
@@ -502,7 +514,9 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.page { padding: 0; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.search-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-.table-wrap { overflow-x: auto; }
+.page-header h2 { margin: 0; color: var(--ad-text); }
+.ledger-actions { display: flex; gap: 8px; }
+.filter-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); margin-bottom: 16px; }
 </style>
