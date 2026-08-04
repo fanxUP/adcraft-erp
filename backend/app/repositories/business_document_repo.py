@@ -160,6 +160,10 @@ class BusinessDocumentRepository:
             for idx, item in enumerate(items_data):
                 item.setdefault("sort_order", idx)
                 item["document_id"] = doc.id
+                # 明细整体替换，忽略客户端回传的 id（字符串 id 会使 asyncpg 的
+                # insertmanyvalues 以字符串为 sentinel，而 RETURNING 返回 uuid.UUID，
+                # 匹配失败报 "Can't match sentinel values"。重插应生成新 UUID）
+                item.pop("id", None)
                 self.db.add(BusinessDocumentItem(**item))
 
         await self.db.flush()
