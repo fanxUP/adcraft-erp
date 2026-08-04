@@ -287,6 +287,39 @@ class AerialService:
 
         return self._ledger_to_dict(obj)
 
+    async def settle_ledger(self, ledger_id: str, data: dict) -> dict:
+        """登记收款：本次收款累加到实收，自动更新收款状态。"""
+        obj = await self.repo.get_ledger(uuid.UUID(ledger_id))
+        if not obj:
+            raise ValueError("台账不存在")
+        amount = float(data.get("amount", 0) or 0)
+        if amount <= 0:
+            raise ValueError("本次收款金额必须大于 0")
+        unpaid = float(obj.final_amount) - float(obj.received_amount)
+        if amount > unpaid + 1e-6:
+            raise ValueError(f"本次收款金额不能超过未收金额 {unpaid:.2f} 元")
+        merged = self._ledger_to_dict(obj)
+        merged["received_amount"] = float(obj.received_amount) + amount
+        pay_time = None
+        if data.get("payment_time"):
+            t = data["payment_time"]
+            pay_time = datetime.fromisoformat(t) if isinstance(t, str) else t
+            merged["payment_time"] = pay_time
+        calc = self._calc_amounts(merged)
+        updates = {
+            "received_amount": calc["received_amount"],
+            "unpaid_amount": calc["unpaid_amount"],
+            "payment_status": calc["payment_status"],
+            "gross_profit": calc["gross_profit"],
+            "estimated_profit": calc["estimated_profit"],
+        }
+        if data.get("payment_method"):
+            updates["payment_method"] = data["payment_method"]
+        if pay_time is not None:
+            updates["payment_time"] = pay_time
+        obj = await self.repo.update_ledger(obj, updates)
+        return self._ledger_to_dict(obj)
+
     async def delete_ledger(self, ledger_id: str) -> dict:
         obj = await self.repo.get_ledger(uuid.UUID(ledger_id))
         if not obj:

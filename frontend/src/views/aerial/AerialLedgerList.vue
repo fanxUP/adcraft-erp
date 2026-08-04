@@ -38,13 +38,13 @@
 
     <!-- 列表 -->
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" @sort-change="handleSortChange">
-      <el-table-column prop="ledger_no" label="台账编号" width="104" sortable="custom" show-overflow-tooltip />
-      <el-table-column prop="work_date" label="出车日期" width="100" sortable="custom" />
+      <el-table-column prop="ledger_no" label="台账编号" width="90" sortable="custom" show-overflow-tooltip />
+      <el-table-column prop="work_date" label="出车日期" width="88" sortable="custom" />
       <el-table-column prop="work_location" label="作业地点" min-width="95" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="billing_method" label="计费方式" width="90" sortable="custom">
+      <el-table-column prop="billing_method" label="计费方式" width="80" sortable="custom">
         <template #default="{ row }">{{ billingLabel(row.billing_method) }}</template>
       </el-table-column>
-      <el-table-column prop="quantity" label="数量" width="76" align="center" sortable="custom" />
+      <el-table-column prop="quantity" label="数量" width="70" align="center" sortable="custom" />
       <el-table-column prop="work_content" label="作业内容" min-width="102" show-overflow-tooltip sortable="custom" />
       <el-table-column prop="receivable_amount" label="应收金额" width="92" align="right" sortable="custom">
         <template #default="{ row }">¥{{ fmtMoney(row.receivable_amount) }}</template>
@@ -57,16 +57,17 @@
           <span :style="{ color: row.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ fmtMoney(row.unpaid_amount) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="payment_status" label="收款状态" width="92" align="center" sortable="custom">
+      <el-table-column prop="payment_status" label="收款状态" width="87" align="center" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="paymentTagType(row.payment_status)" size="small">{{ paymentLabel(row.payment_status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="驾驶员" width="94" show-overflow-tooltip sortable="custom" />
+      <el-table-column prop="name" label="驾驶员" width="88" show-overflow-tooltip sortable="custom" />
       <el-table-column prop="customer_name" label="客户名称" min-width="90" show-overflow-tooltip sortable="custom" />
-      <el-table-column prop="contact_phone" label="联系电话" width="98" show-overflow-tooltip sortable="custom" />
-      <el-table-column label="操作" width="122" align="center" fixed="right">
+      <el-table-column prop="contact_phone" label="联系电话" width="90" show-overflow-tooltip sortable="custom" />
+      <el-table-column label="操作" width="185" align="center" fixed="right">
         <template #default="{ row }">
+          <el-button link type="success" size="small" @click="handleSettle(row)" :disabled="!canSettle(row)">结算</el-button>
           <el-button link type="primary" size="small" @click="handleDetail(row)">详情</el-button>
           <el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
           <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
@@ -232,6 +233,42 @@
         </el-tab-pane>
       </el-tabs>
     </el-dialog>
+
+    <!-- 结算对话框 -->
+    <el-dialog v-model="settleVisible" title="台账结算" width="520px" destroy-on-close :close-on-click-modal="false">
+      <template v-if="settleData">
+        <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
+          <el-descriptions-item label="台账编号">{{ settleData.ledger_no }}</el-descriptions-item>
+          <el-descriptions-item label="客户">{{ settleData.customer_name || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="应收金额">¥{{ settleData.receivable_amount }}</el-descriptions-item>
+          <el-descriptions-item label="最终金额">¥{{ settleData.final_amount }}</el-descriptions-item>
+          <el-descriptions-item label="已收金额">¥{{ settleData.received_amount }}</el-descriptions-item>
+          <el-descriptions-item label="未收金额">
+            <span :style="{ color: settleData.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ settleData.unpaid_amount }}</span>
+          </el-descriptions-item>
+        </el-descriptions>
+        <el-form :model="settleForm" label-width="100px">
+          <el-form-item label="本次收款金额" required>
+            <el-input-number v-model="settleForm.amount" :min="0.01" :max="settleData.unpaid_amount || 0" :precision="2" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="收款方式" required>
+            <el-select v-model="settleForm.payment_method" placeholder="请选择" style="width: 100%">
+              <el-option label="微信" value="wechat" />
+              <el-option label="支付宝" value="alipay" />
+              <el-option label="银行转账" value="bank_transfer" />
+              <el-option label="现金" value="cash" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="收款时间">
+            <el-date-picker v-model="settleForm.payment_time" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" style="width: 100%" />
+          </el-form-item>
+        </el-form>
+      </template>
+      <template #footer>
+        <el-button @click="settleVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleSettleSubmit" :loading="settling">确认结算</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -242,7 +279,7 @@ import { ElMessage, ElMessageBox, ElTag } from 'element-plus'
 import 'element-plus/es/components/tag/style/css'
 import {
   getAerialLedgers, getAerialLedger, createAerialLedger, updateAerialLedger,
-  deleteAerialLedger,
+  settleAerialLedger, deleteAerialLedger,
   getAerialVehicles, getAerialPersonnel,
   exportAerialLedgers,
   type AerialLedger,
@@ -260,8 +297,16 @@ const page = ref(1)
 const pageSize = ref(20)
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
+const settleVisible = ref(false)
+const settling = ref(false)
 const editingId = ref<string | null>(null)
 const detailData = ref<AerialLedger | null>(null)
+const settleData = ref<AerialLedger | null>(null)
+const settleForm = reactive({
+  amount: 0,
+  payment_method: '',
+  payment_time: '',
+})
 const vehicleOptions = ref<AerialVehicle[]>([])
 const personnelOptions = ref<AerialPersonnel[]>([])
 
@@ -408,6 +453,45 @@ async function handleDetail(row: AerialLedger) {
   }
 }
 
+function canSettle(row: AerialLedger) {
+  return !['paid', 'free', 'included_in_order'].includes(row.payment_status)
+}
+
+function nowStr() {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00`
+}
+
+function handleSettle(row: AerialLedger) {
+  settleData.value = row
+  settleForm.amount = row.unpaid_amount
+  settleForm.payment_method = row.payment_method || ''
+  settleForm.payment_time = nowStr()
+  settleVisible.value = true
+}
+
+async function handleSettleSubmit() {
+  if (!settleData.value) return
+  if (!settleForm.amount || settleForm.amount <= 0) return ElMessage.warning('请输入本次收款金额')
+  if (!settleForm.payment_method) return ElMessage.warning('请选择收款方式')
+  settling.value = true
+  try {
+    await settleAerialLedger(settleData.value.id, {
+      amount: settleForm.amount,
+      payment_method: settleForm.payment_method,
+      payment_time: settleForm.payment_time,
+    })
+    ElMessage.success('结算成功')
+    settleVisible.value = false
+    fetchData()
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '结算失败'))
+  } finally {
+    settling.value = false
+  }
+}
+
 async function handleDelete(row: AerialLedger) {
   try {
     await ElMessageBox.confirm('删除后不可恢复，确定删除该台账？', '删除确认', { type: 'warning' })
@@ -474,4 +558,6 @@ onMounted(() => {
 /* 排序箭头与表头文字同行：收窄 caret、表头不换行，避免 4 字表头被箭头挤到两行 */
 .el-table :deep(th.el-table__cell .caret-wrapper) { width: 12px; }
 .el-table :deep(th.el-table__cell .cell) { white-space: nowrap; }
+/* 操作列 4 个 link 按钮收窄间距，保持单行不换行 */
+.el-table :deep(td .el-button + .el-button) { margin-left: 6px; }
 </style>

@@ -337,6 +337,9 @@ export const createAerialLedger = (data: AerialLedgerCreate) =>
 export const updateAerialLedger = (id: string, data: AerialLedgerUpdate) =>
   patch<AerialLedger>(`/aerial/ledgers/${id}`, data)
 
+export const settleAerialLedger = (id: string, data: { amount: number; payment_method?: string; payment_time?: string }) =>
+  post<AerialLedger>(`/aerial/ledgers/${id}/settle`, data)
+
 export const deleteAerialLedger = (id: string) =>
   del(`/aerial/ledgers/${id}`)
 

@@ -212,8 +212,8 @@ class TestAerialPermissionMapping:
 
     def test_finance_permissions_for_payment_endpoints(self):
         """Payment/reimbursement endpoints should use PERM_AERIAL_FINANCE."""
-        finance_endpoints = ["reimburse_expense", "pay_wage"]
-        assert len(finance_endpoints) == 2
+        finance_endpoints = ["reimburse_expense", "pay_wage", "settle_ledger"]
+        assert len(finance_endpoints) == 3
 
     def test_wage_permissions_for_wage_creation(self):
         """Wage creation should use PERM_AERIAL_WAGE."""

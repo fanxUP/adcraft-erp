@@ -380,6 +380,22 @@ async def update_ledger(
     return success(result)
 
 
+@ledger_router.post("/{ledger_id}/settle")
+async def settle_ledger(
+    ledger_id: str,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_FINANCE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    try:
+        result = await svc.settle_ledger(ledger_id, data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return success(result)
+
+
 @ledger_router.delete("/{ledger_id}")
 async def delete_ledger(
     ledger_id: str,

@@ -452,6 +452,72 @@ async def test_delete_ledger(service, mock_repo):
     mock_repo.delete_ledger.assert_awaited_once_with(l)
 
 
+@pytest.mark.asyncio
+async def test_settle_ledger_full(service, mock_repo):
+    l = make_mock_ledger(receivable_amount=1000.0, received_amount=600.0, final_amount=1000.0)
+    mock_repo.get_ledger.return_value = l
+
+    async def update_side_effect(obj, data):
+        for k, val in data.items():
+            setattr(obj, k, val)
+        return obj
+
+    mock_repo.update_ledger.side_effect = update_side_effect
+    result = await service.settle_ledger(SAMPLE_LEDGER_ID, {
+        "amount": 400.0,
+        "payment_method": "wechat",
+        "payment_time": "2026-08-05T14:30:00",
+    })
+    assert result["received_amount"] == 1000.0
+    assert result["unpaid_amount"] == 0.0
+    assert result["payment_status"] == "paid"
+    assert result["payment_method"] == "wechat"
+    mock_repo.update_ledger.assert_awaited_once()
+    called_data = mock_repo.update_ledger.await_args.args[1]
+    assert called_data["received_amount"] == 1000.0
+    assert called_data["payment_time"].isoformat() == "2026-08-05T14:30:00"
+
+
+@pytest.mark.asyncio
+async def test_settle_ledger_partial(service, mock_repo):
+    l = make_mock_ledger(receivable_amount=1000.0, received_amount=600.0, final_amount=1000.0)
+    mock_repo.get_ledger.return_value = l
+
+    async def update_side_effect(obj, data):
+        for k, val in data.items():
+            setattr(obj, k, val)
+        return obj
+
+    mock_repo.update_ledger.side_effect = update_side_effect
+    result = await service.settle_ledger(SAMPLE_LEDGER_ID, {"amount": 200.0, "payment_method": "cash"})
+    assert result["received_amount"] == 800.0
+    assert result["unpaid_amount"] == 200.0
+    assert result["payment_status"] == "partial"
+
+
+@pytest.mark.asyncio
+async def test_settle_ledger_not_found(service, mock_repo):
+    mock_repo.get_ledger.return_value = None
+    with pytest.raises(ValueError, match="台账不存在"):
+        await service.settle_ledger(SAMPLE_LEDGER_ID, {"amount": 100.0})
+
+
+@pytest.mark.asyncio
+async def test_settle_ledger_invalid_amount(service, mock_repo):
+    l = make_mock_ledger(receivable_amount=1000.0, received_amount=600.0, final_amount=1000.0)
+    mock_repo.get_ledger.return_value = l
+    with pytest.raises(ValueError, match="必须大于 0"):
+        await service.settle_ledger(SAMPLE_LEDGER_ID, {"amount": 0})
+
+
+@pytest.mark.asyncio
+async def test_settle_ledger_exceeds_unpaid(service, mock_repo):
+    l = make_mock_ledger(receivable_amount=1000.0, received_amount=600.0, final_amount=1000.0)
+    mock_repo.get_ledger.return_value = l
+    with pytest.raises(ValueError, match="不能超过未收金额"):
+        await service.settle_ledger(SAMPLE_LEDGER_ID, {"amount": 500.0})
+
+
 # ── Expense tests ───────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
