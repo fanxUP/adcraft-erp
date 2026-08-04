@@ -799,12 +799,8 @@ export interface CustomerDebtItem {
   total_order_amount: number
   total_paid: number
   contract_count: number
-  order_count: number
-  quote_count: number
   last_payment_date: string | null
   contracts: CustomerDebtContract[]
-  orders: CustomerDebtOrder[]
-  quotes: CustomerDebtQuote[]
 }
 
 export interface DashboardData {

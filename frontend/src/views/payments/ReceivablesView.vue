@@ -125,63 +125,11 @@
                   </el-table-column>
                 </el-table>
               </template>
-              <!-- 该客户下未被合同关联的订单和报价 -->
-              <template v-if="row.orders?.length || row.quotes?.length">
-                <div style="margin: 8px 0 4px 48px; font-weight: 600; color: var(--ad-text-secondary);">独立订单 / 报价（未关联合同）</div>
-                <template v-if="row.orders?.length">
-                  <el-table :data="row.orders" size="small" stripe style="margin: 4px 0 8px 48px; width: calc(100% - 48px)">
-                    <el-table-column prop="order_no" label="订单编号" width="180" />
-                    <el-table-column label="部门/科室" width="120">
-                      <template #default="{ row: q }">{{ q.department || '-' }}</template>
-                    </el-table-column>
-                    <el-table-column prop="project_name" label="项目名称" min-width="200" />
-                    <el-table-column label="订单金额" width="120">
-                      <template #default="{ row: o }">¥ {{ o.total_amount?.toFixed(2) }}</template>
-                    </el-table-column>
-                    <el-table-column label="已收" width="120">
-                      <template #default="{ row: o }">¥ {{ o.paid_amount?.toFixed(2) }}</template>
-                    </el-table-column>
-                    <el-table-column label="欠款" width="120">
-                      <template #default="{ row: o }">
-                        <span style="color: #e63946; font-weight: 600">¥ {{ o.unpaid_amount?.toFixed(2) }}</span>
-                      </template>
-                    </el-table-column>
-                    <el-table-column label="状态" width="100">
-                      <template #default="{ row: o }">
-                        <el-tag size="small" :type="orderStatusTag(o.status)">{{ orderStatusLabel(o.status) }}</el-tag>
-                      </template>
-                    </el-table-column>
-                  </el-table>
-                </template>
-                <template v-if="row.quotes?.length">
-                  <el-table :data="row.quotes" size="small" stripe style="margin: 4px 0 8px 48px; width: calc(100% - 48px)">
-                    <el-table-column prop="quote_no" label="报价编号" width="180" />
-                    <el-table-column label="部门/科室" width="120">
-                      <template #default="{ row: q }">{{ q.department || '-' }}</template>
-                    </el-table-column>
-                    <el-table-column prop="project_name" label="项目名称" min-width="200" />
-                    <el-table-column label="金额" width="120">
-                      <template #default="{ row: q }">¥ {{ q.total_amount?.toFixed(2) }}</template>
-                    </el-table-column>
-                    <el-table-column label="状态" width="100">
-                      <template #default="{ row: q }">
-                        <el-tag size="small" :type="quoteStatusTag(q.status)">{{ quoteStatusLabel(q.status) }}</el-tag>
-                      </template>
-                    </el-table-column>
-                  </el-table>
-                </template>
-              </template>
             </template>
           </el-table-column>
           <el-table-column prop="customer_name" label="客户名称" min-width="160" />
           <el-table-column label="合同" width="60" align="center">
             <template #default="{ row }">{{ row.contract_count }}</template>
-          </el-table-column>
-          <el-table-column label="订单" width="60" align="center">
-            <template #default="{ row }">{{ row.order_count }}</template>
-          </el-table-column>
-          <el-table-column label="报价" width="60" align="center">
-            <template #default="{ row }">{{ row.quote_count }}</template>
           </el-table-column>
           <el-table-column label="合同总额" width="120">
             <template #default="{ row }">¥ {{ row.total_order_amount?.toFixed(2) }}</template>

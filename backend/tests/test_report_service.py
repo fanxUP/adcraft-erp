@@ -1,6 +1,7 @@
 """Tests for ReportService: dashboard, daily/monthly reports, customer debt."""
 
 from datetime import datetime, timezone
+from uuid import UUID
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,6 +12,11 @@ import app.models.payment  # noqa: F401
 import app.models.task  # noqa: F401
 from app.services.report_service import ReportService
 from tests.conftest import SAMPLE_USER_ID, SAMPLE_CUSTOMER_ID, MockResult
+
+
+SAMPLE_CONTRACT_ID = UUID("55555555-5555-5555-5555-555555555555")
+SAMPLE_ORDER_ID = UUID("66666666-6666-6666-6666-666666666666")
+SAMPLE_PROJECT_ID = UUID("77777777-7777-7777-7777-777777777777")
 
 
 class MockResultWithScalar:
@@ -58,6 +64,56 @@ def make_all_result(rows):
     return r
 
 
+# ── get_customer_debt 测试辅助 ───────────────────────────────
+
+def make_row(**kwargs):
+    """SQLAlchemy Row 风格 mock：支持属性访问（如 last_payment）。"""
+    r = MagicMock()
+    for k, v in kwargs.items():
+        setattr(r, k, v)
+    return r
+
+
+def make_mock_customer(**kwargs):
+    c = MagicMock()
+    c.id = kwargs.get("id", SAMPLE_CUSTOMER_ID)
+    c.name = kwargs.get("name", "测试客户")
+    c.deleted_at = None
+    return c
+
+
+def make_mock_doc(**kwargs):
+    """模拟一条 order/quote 类型的 business_document（满足 _to_ref 所需字段）。"""
+    d = MagicMock()
+    d.id = kwargs.get("id", SAMPLE_ORDER_ID)
+    d.doc_type = kwargs.get("doc_type", "order")
+    d.doc_no = kwargs.get("doc_no", "O20260804-0001")
+    d.project_name = kwargs.get("project_name", "测试项目")
+    d.customer_name = kwargs.get("customer_name", "测试客户")
+    d.customer = None
+    d.department = kwargs.get("department", "工程部")
+    d.status = kwargs.get("status", "completed")
+    d.total_amount = kwargs.get("total_amount", 100.0)
+    d.paid_amount = kwargs.get("paid_amount", 0.0)
+    d.unpaid_amount = kwargs.get("unpaid_amount", 100.0)
+    d.customer_id = kwargs.get("customer_id", SAMPLE_CUSTOMER_ID)
+    return d
+
+
+def make_mock_contract(**kwargs):
+    ct = MagicMock()
+    ct.id = kwargs.get("id", SAMPLE_CONTRACT_ID)
+    ct.customer_id = kwargs.get("customer_id", SAMPLE_CUSTOMER_ID)
+    ct.contract_type = kwargs.get("contract_type", "制作合同")
+    ct.contract_no = kwargs.get("contract_no", "HT20260804-0001")
+    ct.project_name = kwargs.get("project_name", "测试合同")
+    ct.total_amount = kwargs.get("total_amount", 100.0)
+    ct.status = kwargs.get("status", "active")
+    ct.deleted_at = None
+    ct.documents = kwargs.get("documents", [])
+    return ct
+
+
 @pytest.fixture
 def service():
     db = AsyncMock()
@@ -82,13 +138,14 @@ async def test_get_dashboard(service):
         MockResultWithScalar(scalar_value=1),          # overdue_orders
     ]
 
-    # Mock _customer_debt_ranking db.execute (last 2 calls) with iterable rows
+    # Mock _customer_debt_ranking db.execute (last 3 calls): 常规关联、框架关联、客户名
     debt_result = make_all_result([(SAMPLE_CUSTOMER_ID, 50000.0)])
+    fw_debt_result = make_all_result([])
     mock_customer = MagicMock()
     mock_customer.id = SAMPLE_CUSTOMER_ID
     mock_customer.name = "测试客户"
     customer_result = make_scalars_result([mock_customer])
-    db.execute = AsyncMock(side_effect=results + [debt_result, customer_result])
+    db.execute = AsyncMock(side_effect=results + [debt_result, fw_debt_result, customer_result])
 
     dash = await svc.get_dashboard()
 
@@ -187,8 +244,9 @@ async def test_get_customer_debt(service):
     customer.id = SAMPLE_CUSTOMER_ID
     customer.name = "测试客户"
     results = [
-        make_all_result([(SAMPLE_CUSTOMER_ID, 50000.0)]),
-        make_scalars_result([customer]),
+        make_all_result([(SAMPLE_CUSTOMER_ID, 50000.0)]),  # 常规合同关联订单
+        make_all_result([]),                               # 框架合同关联订单
+        make_scalars_result([customer]),                   # 客户名
     ]
     db.execute = AsyncMock(side_effect=results)
 
@@ -196,3 +254,146 @@ async def test_get_customer_debt(service):
     assert len(debts) == 1
     assert debts[0]["customer_name"] is not None
     assert debts[0]["debt_amount"] == 50000.0
+
+
+@pytest.mark.asyncio
+async def test_customer_debt_ranking_merges_framework_linked(service):
+    """首页欠款排行：框架合同关联订单计入，并与常规合同金额合并。"""
+    svc, db = service
+    customer = MagicMock()
+    customer.id = SAMPLE_CUSTOMER_ID
+    customer.name = "测试客户"
+    db.execute = AsyncMock(side_effect=[
+        make_all_result([(SAMPLE_CUSTOMER_ID, 10000.0)]),  # 常规
+        make_all_result([(SAMPLE_CUSTOMER_ID, 20000.0)]),  # 框架
+        make_scalars_result([customer]),
+    ])
+
+    debts = await svc._customer_debt_ranking()
+    assert len(debts) == 1
+    assert debts[0]["debt_amount"] == 30000.0
+
+
+# ── get_customer_debt：应收管理只保留有合同的客户 ─────────────────
+
+@pytest.mark.asyncio
+async def test_get_customer_debt_excludes_quote_only_customer(service):
+    """只有报价单、没有合同的客户不出现在应收管理中。"""
+    svc, db = service
+    cust = make_mock_customer()
+    quote = make_mock_doc(doc_type="quote", doc_no="Q20260804-0001", status="draft")
+    db.execute = AsyncMock(side_effect=[
+        make_scalars_result([cust]),   # customers
+        make_scalars_result([]),       # contracts
+        make_scalars_result([]),       # orders
+        make_scalars_result([quote]),  # quotes
+        make_all_result([]),           # last_payments
+    ])
+
+    debts = await svc.get_customer_debt()
+    assert debts == []
+
+
+@pytest.mark.asyncio
+async def test_get_customer_debt_excludes_order_without_contract(service):
+    """有订单但没合同的客户不出现在应收管理中。"""
+    svc, db = service
+    cust = make_mock_customer()
+    order = make_mock_doc(doc_no="O20260804-0001")
+    db.execute = AsyncMock(side_effect=[
+        make_scalars_result([cust]),
+        make_scalars_result([]),       # contracts
+        make_scalars_result([order]),  # orders
+        make_scalars_result([]),       # quotes
+        make_all_result([]),           # last_payments
+    ])
+
+    debts = await svc.get_customer_debt()
+    assert debts == []
+
+
+@pytest.mark.asyncio
+async def test_get_customer_debt_contract_only_fields(service):
+    """有合同的客户出现在应收管理，响应不含独立订单/报价字段。"""
+    svc, db = service
+    cust = make_mock_customer()
+    order = make_mock_doc(doc_no="O20260804-0001", total_amount=100.0,
+                          paid_amount=50.0, unpaid_amount=50.0)
+    ct = make_mock_contract(documents=[order])
+    db.execute = AsyncMock(side_effect=[
+        make_scalars_result([cust]),
+        make_scalars_result([ct]),       # contracts
+        make_scalars_result([order]),    # orders
+        make_scalars_result([]),         # quotes
+        make_all_result([make_row(customer_id=SAMPLE_CUSTOMER_ID,
+                                  last_payment=datetime(2026, 8, 1, tzinfo=timezone.utc))]),
+        make_all_result([(SAMPLE_CONTRACT_ID, 50.0)]),  # paid_map 常规
+    ])
+
+    debts = await svc.get_customer_debt()
+    assert len(debts) == 1
+    item = debts[0]
+    assert item["customer_id"] == str(SAMPLE_CUSTOMER_ID)
+    assert item["debt_amount"] == 50.0          # 100 - 50
+    assert item["total_paid"] == 50.0
+    assert item["contract_count"] == 1
+    assert item["last_payment_date"] is not None
+    # 独立订单/报价字段已移除
+    assert "order_count" not in item
+    assert "quote_count" not in item
+    assert "orders" not in item
+    assert "quotes" not in item
+    assert len(item["contracts"][0]["orders"]) == 1
+    assert item["contracts"][0]["orders"][0]["order_no"] == "O20260804-0001"
+
+
+@pytest.mark.asyncio
+async def test_get_customer_debt_ignores_standalone_order(service):
+    """有合同客户的未关联独立订单不再出现在应收管理中。"""
+    svc, db = service
+    cust = make_mock_customer()
+    linked = make_mock_doc(doc_no="O20260804-0001")
+    standalone = make_mock_doc(doc_no="O20260804-0002", total_amount=50000.0)
+    ct = make_mock_contract(documents=[linked])  # 只关联 linked
+    db.execute = AsyncMock(side_effect=[
+        make_scalars_result([cust]),
+        make_scalars_result([ct]),
+        make_scalars_result([linked, standalone]),  # orders
+        make_scalars_result([]),                    # quotes
+        make_all_result([]),                        # last_payments
+        make_all_result([(SAMPLE_CONTRACT_ID, 0.0)]),  # paid_map
+    ])
+
+    debts = await svc.get_customer_debt()
+    assert len(debts) == 1
+    ct_orders = debts[0]["contracts"][0]["orders"]
+    assert [o["order_no"] for o in ct_orders] == ["O20260804-0001"]
+    assert "orders" not in debts[0]  # 客户级独立订单字段不存在
+
+
+@pytest.mark.asyncio
+async def test_get_customer_debt_framework_contract(service):
+    """框架合同客户：金额=项目合计，收款=项目关联单据收款，单据挂在合同下。"""
+    svc, db = service
+    cust = make_mock_customer()
+    order = make_mock_doc(doc_no="O20260804-0001", total_amount=1000.0)
+    ct = make_mock_contract(contract_type="框架合同", total_amount=0.0)
+    db.execute = AsyncMock(side_effect=[
+        make_scalars_result([cust]),
+        make_scalars_result([ct]),
+        make_scalars_result([order]),
+        make_scalars_result([]),                              # quotes
+        make_all_result([]),                                  # last_payments
+        make_all_result([(SAMPLE_CONTRACT_ID, order.id)]),    # fcpd → fw_doc_ids_by_contract
+        make_all_result([]),                                  # paid_map 常规
+        make_all_result([(SAMPLE_CONTRACT_ID, 600.0)]),       # paid_map 框架
+        make_all_result([(SAMPLE_CONTRACT_ID, 1000.0)]),      # fw_total
+    ])
+
+    debts = await svc.get_customer_debt()
+    assert len(debts) == 1
+    item = debts[0]
+    assert item["debt_amount"] == 400.0  # 1000 - 600
+    assert item["total_order_amount"] == 1000.0
+    ct_orders = item["contracts"][0]["orders"]
+    assert [o["order_no"] for o in ct_orders] == ["O20260804-0001"]

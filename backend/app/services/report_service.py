@@ -119,7 +119,10 @@ class ReportService:
         }
 
     async def get_customer_debt(self) -> list:
-        """Return all customers with their contracts, orders and quotes for the receivables overview."""
+        """Return customers with active contracts for the receivables overview (contract-based only).
+
+        应收管理只反映合同应收/已收/欠款：只有报价单、或只有未关联合同的独立订单的客户不再列入。
+        """
         # Fetch all active customers
         c_result = await self.db.execute(
             select(Customer).where(Customer.deleted_at.is_(None)).order_by(Customer.name)
@@ -168,31 +171,20 @@ class ReportService:
         )
         last_payments = {r.customer_id: r.last_payment for r in lp_result.all()}
 
-        # Batch-fetch all contract-document links to know which docs are contract-linked
-        # Two tables: contract_documents (常规合同) + framework_contract_project_documents (框架合同)
-        from app.models.contract import ContractDocument as CD
+        # 框架合同项目关联的单据（contract_id → document_ids 映射，用于填充框架合同下的 orders/quotes）
         from app.models.framework_contract import FrameworkContractProject, FrameworkContractProjectDocument as FCPD
         all_contract_ids = [ct.id for ct in all_contracts]
-        linked_doc_ids: set[UUID] = set()
-        if all_contract_ids:
-            # 常规合同关联的单据
-            cd_result = await self.db.execute(
-                select(CD.document_id).where(CD.contract_id.in_(all_contract_ids))
+        fw_doc_ids_by_contract: dict[UUID, set[UUID]] = {}
+        fw_contract_ids = [ct.id for ct in all_contracts if ct.contract_type == "框架合同"]
+        if fw_contract_ids:
+            fcpd_result = await self.db.execute(
+                select(FrameworkContractProject.contract_id, FCPD.document_id)
+                .select_from(FCPD)
+                .join(FrameworkContractProject, FCPD.project_id == FrameworkContractProject.id)
+                .where(FrameworkContractProject.contract_id.in_(fw_contract_ids))
             )
-            linked_doc_ids = {row[0] for row in cd_result.all()}
-            # 框架合同项目关联的单据（同时记录 contract_id → document_ids 映射，用于填充合同下的 orders/quotes）
-            fw_contract_ids = [ct.id for ct in all_contracts if ct.contract_type == "框架合同"]
-            fw_doc_ids_by_contract: dict[UUID, set[UUID]] = {}
-            if fw_contract_ids:
-                fcpd_result = await self.db.execute(
-                    select(FrameworkContractProject.contract_id, FCPD.document_id)
-                    .select_from(FCPD)
-                    .join(FrameworkContractProject, FCPD.project_id == FrameworkContractProject.id)
-                    .where(FrameworkContractProject.contract_id.in_(fw_contract_ids))
-                )
-                for contract_id, doc_id in fcpd_result.all():
-                    linked_doc_ids.add(doc_id)
-                    fw_doc_ids_by_contract.setdefault(contract_id, set()).add(doc_id)
+            for contract_id, doc_id in fcpd_result.all():
+                fw_doc_ids_by_contract.setdefault(contract_id, set()).add(doc_id)
 
         # Batch-fetch paid_amount per contract from actual payments on linked orders
         contract_ids = all_contract_ids
@@ -259,15 +251,9 @@ class ReportService:
         debts = []
         for c in customers:
             customer_contracts = [ct for ct in all_contracts if ct.customer_id == c.id]
-            customer_orders = [o for o in all_orders if o.customer_id == c.id]
-            customer_quotes = [q for q in all_quotes if q.customer_id == c.id]
 
-            # Separate standalone orders/quotes (not linked to any contract)
-            standalone_orders = [o for o in customer_orders if o.id not in linked_doc_ids]
-            standalone_quotes = [q for q in customer_quotes if q.id not in linked_doc_ids]
-
-            # Skip customers with no contracts and no standalone orders/quotes
-            if not customer_contracts and not standalone_orders and not standalone_quotes:
+            # 应收管理只保留有合同的客户（只有报价单 / 有订单没合同的客户不再列入）
+            if not customer_contracts:
                 continue
 
             # Stats from contracts (paid_amount from actual payments, not stored value)
@@ -312,8 +298,6 @@ class ReportService:
                 "total_order_amount": float(total_contract),
                 "total_paid": float(total_paid),
                 "contract_count": len(customer_contracts),
-                "order_count": len(standalone_orders),
-                "quote_count": len(standalone_quotes),
                 "last_payment_date": lp.isoformat() if lp else None,
                 "contracts": [
                     {
@@ -331,8 +315,6 @@ class ReportService:
                     }
                     for ct in customer_contracts
                 ],
-                "orders": [BusinessDocumentService._to_ref(o) for o in standalone_orders],
-                "quotes": [BusinessDocumentService._to_ref(q) for q in standalone_quotes],
             })
         return debts
 
@@ -378,17 +360,51 @@ class ReportService:
         return result.scalar() or 0
 
     async def _customer_debt_ranking(self, limit: int = 10) -> list:
-        result = await self.db.execute(
-            select(BusinessDocument.customer_id, func.sum(BusinessDocument.unpaid_amount).label("debt"))
-            .where(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.unpaid_amount > 0)
-            .group_by(BusinessDocument.customer_id)
-            .order_by(func.sum(BusinessDocument.unpaid_amount).desc())
-            .limit(limit)
+        """客户欠款排行：只统计已关联合同的订单（常规合同 contract_documents 或框架合同项目）。"""
+        from app.models.framework_contract import (
+            FrameworkContractProject,
+            FrameworkContractProjectDocument,
         )
-        rows = result.all()
+
+        # 常规合同关联的订单（过滤已软删合同）
+        regular_result = await self.db.execute(
+            select(BusinessDocument.customer_id, func.sum(BusinessDocument.unpaid_amount).label("debt"))
+            .select_from(BusinessDocument)
+            .join(ContractDocument, ContractDocument.document_id == BusinessDocument.id)
+            .join(Contract, Contract.id == ContractDocument.contract_id)
+            .where(
+                BusinessDocument.doc_type == "order",
+                BusinessDocument.deleted_at.is_(None),
+                BusinessDocument.unpaid_amount > 0,
+                Contract.deleted_at.is_(None),
+            )
+            .group_by(BusinessDocument.customer_id)
+        )
+        debt_map = {row[0]: float(row[1]) for row in regular_result.all()}
+
+        # 框架合同项目关联的订单（过滤已软删项目）
+        fw_result = await self.db.execute(
+            select(BusinessDocument.customer_id, func.sum(BusinessDocument.unpaid_amount).label("debt"))
+            .select_from(BusinessDocument)
+            .join(FrameworkContractProjectDocument,
+                  FrameworkContractProjectDocument.document_id == BusinessDocument.id)
+            .join(FrameworkContractProject,
+                  FrameworkContractProjectDocument.project_id == FrameworkContractProject.id)
+            .where(
+                BusinessDocument.doc_type == "order",
+                BusinessDocument.deleted_at.is_(None),
+                BusinessDocument.unpaid_amount > 0,
+                FrameworkContractProject.deleted_at.is_(None),
+            )
+            .group_by(BusinessDocument.customer_id)
+        )
+        for row in fw_result.all():
+            debt_map[row[0]] = debt_map.get(row[0], 0.0) + float(row[1])
+
+        rows = sorted(debt_map.items(), key=lambda kv: kv[1], reverse=True)[:limit]
         ranking = []
         if rows:
-            customer_ids = [r[0] for r in rows]
+            customer_ids = [cid for cid, _ in rows]
             c_result = await self.db.execute(
                 select(Customer).where(Customer.id.in_(set(customer_ids)))
             )
