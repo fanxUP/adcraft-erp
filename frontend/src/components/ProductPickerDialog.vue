@@ -121,6 +121,7 @@ const props = defineProps<{ modelValue: boolean; customerId?: string }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   selected: [product: ProductResponse]
+  updated: [product: ProductResponse]
 }>()
 
 const UNIT_OPTIONS = ['项', '㎡', '米', '个', '套', '批']
@@ -241,6 +242,7 @@ async function saveEdit() {
   try {
     await updateProduct(editingProduct.value.id, { ...editForm.value })
     ElMessage.success('产品已更新')
+    emit('updated', { ...editingProduct.value, ...editForm.value })
     editVisible.value = false
     editingProduct.value = null
     await fetchProducts()
