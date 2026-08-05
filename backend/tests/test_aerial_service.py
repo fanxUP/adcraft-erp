@@ -539,6 +539,39 @@ async def test_settle_ledger_writes_record_with_blank_remark(service, mock_repo)
 
 
 @pytest.mark.asyncio
+async def test_update_ledger_does_not_write_readonly_fields(service, mock_repo):
+    """编辑台账时不得把 created_at/id/ledger_no 等只读字段写回（修复编辑500）。"""
+    l = make_mock_ledger(receivable_amount=1000.0, final_amount=1000.0,
+                         created_at=datetime(2026, 8, 5, 3, 33, 47))
+    mock_repo.get_ledger.return_value = l
+
+    async def update_side_effect(obj, data):
+        for k, val in data.items():
+            setattr(obj, k, val)
+        return obj
+
+    mock_repo.update_ledger.side_effect = update_side_effect
+    await service.update_ledger(SAMPLE_LEDGER_ID, {
+        "work_date": "2026-07-23",
+        "aerial_vehicle_id": SAMPLE_VEHICLE_ID,
+        "personnel_id": SAMPLE_PERSONNEL_ID,
+        "work_location": "北京朝阳",
+        "billing_method": "day",
+        "quantity": 1,
+        "receivable_amount": 1200.0,
+        "final_amount": 1200.0,
+        "received_amount": 0.0,
+    })
+    called_data = mock_repo.update_ledger.await_args.args[1]
+    for k in ("id", "ledger_no", "created_at", "created_by", "payment_time",
+              "planned_start_time", "actual_start_time"):
+        assert k not in called_data, f"不应把只读字段写回: {k}"
+    # 金额字段应包含重算结果
+    assert called_data["final_amount"] == 1200.0
+    assert called_data["payment_status"] == "unpaid"
+
+
+@pytest.mark.asyncio
 async def test_list_settlements(service, mock_repo):
     s = MagicMock()
     s.id = "99999999-9999-9999-9999-999999999999"

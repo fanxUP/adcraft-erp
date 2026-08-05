@@ -229,7 +229,7 @@ class AerialService:
             data["plate_number"] = vehicle.plate_number
 
         # 计算金额
-        data = self._calc_amounts(data)
+        data = {**data, **self._calc_amounts(data)}
 
         # 设置创建人
         data["created_by"] = self._user_id()
@@ -395,29 +395,33 @@ class AerialService:
         reimbursement = float(data.get("reimbursement_amount", 0) or 0)
         vehicle_cost = float(data.get("vehicle_direct_cost", 0) or 0)
 
-        data["receivable_amount"] = receivable
-        data["discount_amount"] = discount
-        data["final_amount"] = final
-        data["received_amount"] = received
-        data["unpaid_amount"] = max(0, unpaid)
-        data["gross_profit"] = received - wage - reimbursement - vehicle_cost
-        data["estimated_profit"] = final - wage - reimbursement - vehicle_cost
+        result = {
+            "receivable_amount": receivable,
+            "discount_amount": discount,
+            "final_amount": final,
+            "received_amount": received,
+            "unpaid_amount": max(0, unpaid),
+            "gross_profit": received - wage - reimbursement - vehicle_cost,
+            "estimated_profit": final - wage - reimbursement - vehicle_cost,
+        }
+
+        # 收款状态自动判断
+        if received >= final and final > 0:
+            result["payment_status"] = "paid"
+        elif received > 0:
+            result["payment_status"] = "partial"
+        elif data.get("payment_status") not in ("credit", "free", "included_in_order"):
+            result["payment_status"] = "unpaid"
+        else:
+            result["payment_status"] = data.get("payment_status")
 
         # 里程
         start = data.get("start_mileage")
         end = data.get("end_mileage")
         if start is not None and end is not None:
-            data["distance_km"] = float(end) - float(start)
+            result["distance_km"] = float(end) - float(start)
 
-        # 收款状态自动判断
-        if received >= final and final > 0:
-            data["payment_status"] = "paid"
-        elif received > 0:
-            data["payment_status"] = "partial"
-        elif data.get("payment_status") not in ("credit", "free", "included_in_order"):
-            data["payment_status"] = "unpaid"
-
-        return data
+        return result
 
     def _ledger_to_dict(self, l):
         return {
