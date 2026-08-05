@@ -325,8 +325,18 @@ export const deleteAerialPersonnel = (id: string) =>
 
 // ── Ledger API ─────────────────────────────────────────────────────────────
 
+export interface AerialLedgerSummary {
+  trip_count: number
+  quantity: number
+  receivable_amount: number
+  received_amount: number
+  unpaid_amount: number
+}
+
+export type AerialLedgerListResult = PaginatedData<AerialLedger> & { summary?: AerialLedgerSummary }
+
 export const getAerialLedgers = (params?: AerialQueryParams) =>
-  get<PaginatedData<AerialLedger>>('/aerial/ledgers', { params })
+  get<AerialLedgerListResult>('/aerial/ledgers', { params })
 
 export const getAerialLedger = (id: string) =>
   get<AerialLedger>(`/aerial/ledgers/${id}`)

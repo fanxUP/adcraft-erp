@@ -187,6 +187,44 @@ class AerialRepository:
         rows = (await self.db.execute(q)).scalars().all()
         return list(rows), total
 
+    async def summarize_ledgers(
+        self,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        personnel_id: Optional[str] = None,
+        customer_name: Optional[str] = None,
+        work_location: Optional[str] = None,
+        payment_status: Optional[str] = None,
+    ) -> dict:
+        """对与 list_ledgers 相同的过滤集做聚合求和（合计行数据源）。"""
+        q = select(
+            func.count(AerialDailyLedger.id).label("trip_count"),
+            func.coalesce(func.sum(AerialDailyLedger.quantity), 0).label("quantity"),
+            func.coalesce(func.sum(AerialDailyLedger.receivable_amount), 0).label("receivable_amount"),
+            func.coalesce(func.sum(AerialDailyLedger.received_amount), 0).label("received_amount"),
+            func.coalesce(func.sum(AerialDailyLedger.unpaid_amount), 0).label("unpaid_amount"),
+        )
+        if date_from:
+            q = q.where(AerialDailyLedger.work_date >= datetime.fromisoformat(date_from))
+        if date_to:
+            q = q.where(AerialDailyLedger.work_date <= datetime.fromisoformat(date_to + "T23:59:59"))
+        if personnel_id:
+            q = q.where(AerialDailyLedger.personnel_id == uuid.UUID(personnel_id))
+        if customer_name:
+            q = q.where(AerialDailyLedger.customer_name.ilike(f"%{customer_name}%"))
+        if work_location:
+            q = q.where(AerialDailyLedger.work_location.ilike(f"%{work_location}%"))
+        if payment_status:
+            q = q.where(AerialDailyLedger.payment_status == payment_status)
+        row = (await self.db.execute(q)).one()
+        return {
+            "trip_count": row.trip_count,
+            "quantity": float(row.quantity),
+            "receivable_amount": float(row.receivable_amount),
+            "received_amount": float(row.received_amount),
+            "unpaid_amount": float(row.unpaid_amount),
+        }
+
     async def get_ledger(self, ledger_id: uuid.UUID):
         return (await self.db.execute(select(AerialDailyLedger).where(AerialDailyLedger.id == ledger_id))).scalar_one_or_none()
 

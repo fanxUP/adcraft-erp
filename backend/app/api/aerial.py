@@ -340,7 +340,12 @@ async def list_ledgers(
         payment_status=payment_status,
         sort_by=sort_by, sort_order=sort_order,
     )
-    return success_paginated(items, total, page, page_size)
+    summary = await svc.get_ledger_totals(
+        date_from=date_from, date_to=date_to, personnel_id=personnel_id,
+        customer_name=customer_name, work_location=work_location,
+        payment_status=payment_status,
+    )
+    return success({"items": items, "total": total, "page": page, "page_size": page_size, "summary": summary})
 
 
 @ledger_router.post("")

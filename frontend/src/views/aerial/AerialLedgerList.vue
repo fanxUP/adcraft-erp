@@ -37,7 +37,8 @@
     </el-card>
 
     <!-- 列表 -->
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" @sort-change="handleSortChange">
+    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" @sort-change="handleSortChange"
+      :show-summary="list.length > 0" :summary-method="summaryMethod">
       <el-table-column prop="ledger_no" label="台账编号" width="140" sortable="custom" show-overflow-tooltip fixed="left" />
       <el-table-column prop="work_date" label="出车日期" width="100" sortable="custom" />
       <el-table-column prop="work_location" label="作业地点" width="110" show-overflow-tooltip sortable="custom" />
@@ -315,6 +316,7 @@ import {
   deleteAerialLedger, getAerialVehicles, getAerialPersonnel,
   exportAerialLedgers,
   type AerialLedger,
+  type AerialLedgerSummary,
   type AerialSettlement,
   type AerialPersonnel,
   type AerialQueryParams,
@@ -328,6 +330,7 @@ const list = ref<AerialLedger[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const summary = ref<AerialLedgerSummary | null>(null)
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const settleVisible = ref(false)
@@ -399,6 +402,7 @@ async function fetchData() {
     const res = await getAerialLedgers(params)
     list.value = res.items || []
     total.value = res.total || 0
+    summary.value = res.summary || null
   } catch (error: unknown) {
     ElMessage.error(getErrorMessage(error, '加载失败'))
   } finally {
@@ -606,6 +610,20 @@ async function handleExport() {
 
 function fmtMoney(v: number | string | null | undefined) {
   return Number(v || 0).toFixed(2)
+}
+
+type SummaryColumn = { property?: string }
+
+function summaryMethod({ columns }: { columns: SummaryColumn[] }) {
+  const s = summary.value
+  return columns.map((col, i) => {
+    if (i === 0) return `合计${s ? `（${s.trip_count} 条）` : ''}`
+    if (col.property === 'quantity') return s ? s.quantity : 0
+    if (col.property === 'receivable_amount') return s ? `¥${fmtMoney(s.receivable_amount)}` : '¥0.00'
+    if (col.property === 'received_amount') return s ? `¥${fmtMoney(s.received_amount)}` : '¥0.00'
+    if (col.property === 'unpaid_amount') return s ? `¥${fmtMoney(s.unpaid_amount)}` : '¥0.00'
+    return ''
+  })
 }
 
 function paymentLabel(s: string) {

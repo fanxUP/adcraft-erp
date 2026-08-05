@@ -196,6 +196,10 @@ def mock_repo():
     repo.create_personnel = AsyncMock()
     repo.update_personnel = AsyncMock()
     repo.list_ledgers = AsyncMock(return_value=([], 0))
+    repo.summarize_ledgers = AsyncMock(return_value={
+        "trip_count": 2, "quantity": 2,
+        "receivable_amount": 2000.0, "received_amount": 0.0, "unpaid_amount": 2000.0,
+    })
     repo.get_ledger = AsyncMock()
     repo.get_ledger_by_no = AsyncMock(return_value=None)
     repo.get_next_ledger_seq = AsyncMock(return_value=1)
@@ -414,6 +418,24 @@ async def test_list_ledgers_empty(service, mock_repo):
     items, total = await service.list_ledgers()
     assert items == []
     assert total == 0
+
+
+@pytest.mark.asyncio
+async def test_get_ledger_totals_passes_filters(service, mock_repo):
+    mock_repo.summarize_ledgers.return_value = {
+        "trip_count": 3, "quantity": 3,
+        "receivable_amount": 3600.0, "received_amount": 500.0, "unpaid_amount": 3100.0,
+    }
+    result = await service.get_ledger_totals(
+        date_from="2026-07-01", customer_name="李总", payment_status="unpaid",
+    )
+    assert result["trip_count"] == 3
+    assert result["quantity"] == 3
+    assert result["receivable_amount"] == 3600.0
+    assert result["unpaid_amount"] == 3100.0
+    mock_repo.summarize_ledgers.assert_awaited_once_with(
+        date_from="2026-07-01", customer_name="李总", payment_status="unpaid",
+    )
 
 
 @pytest.mark.asyncio
