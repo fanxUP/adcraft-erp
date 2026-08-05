@@ -225,6 +225,18 @@ class AerialRepository:
             "unpaid_amount": float(row.unpaid_amount),
         }
 
+    async def list_work_locations(self) -> list[str]:
+        """台账中所有去重非空的作业地点，按出现次数降序（筛选下拉框数据源）。"""
+        q = select(
+            AerialDailyLedger.work_location,
+            func.count().label("cnt"),
+        ).where(
+            AerialDailyLedger.work_location.isnot(None),
+            AerialDailyLedger.work_location != "",
+        ).group_by(AerialDailyLedger.work_location).order_by(func.count().desc())
+        rows = (await self.db.execute(q)).all()
+        return [r[0] for r in rows]
+
     async def get_ledger(self, ledger_id: uuid.UUID):
         return (await self.db.execute(select(AerialDailyLedger).where(AerialDailyLedger.id == ledger_id))).scalar_one_or_none()
 

@@ -200,6 +200,7 @@ def mock_repo():
         "trip_count": 2, "quantity": 2,
         "receivable_amount": 2000.0, "received_amount": 0.0, "unpaid_amount": 2000.0,
     })
+    repo.list_work_locations = AsyncMock(return_value=["华电", "草湖大学"])
     repo.get_ledger = AsyncMock()
     repo.get_ledger_by_no = AsyncMock(return_value=None)
     repo.get_next_ledger_seq = AsyncMock(return_value=1)
@@ -436,6 +437,13 @@ async def test_get_ledger_totals_passes_filters(service, mock_repo):
     mock_repo.summarize_ledgers.assert_awaited_once_with(
         date_from="2026-07-01", customer_name="李总", payment_status="unpaid",
     )
+
+
+@pytest.mark.asyncio
+async def test_list_work_locations(service, mock_repo):
+    result = await service.list_work_locations()
+    assert result == ["华电", "草湖大学"]
+    mock_repo.list_work_locations.assert_awaited_once()
 
 
 @pytest.mark.asyncio

@@ -22,6 +22,11 @@
         <el-form-item label="客户名称">
           <el-input v-model="filters.customer_name" placeholder="请输入" clearable style="width: 140px" />
         </el-form-item>
+        <el-form-item label="作业地点">
+          <el-select v-model="filters.work_location" placeholder="全部" clearable style="width: 130px">
+            <el-option v-for="loc in locationOptions" :key="loc" :label="loc" :value="loc" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="收款状态">
           <el-select v-model="filters.payment_status" placeholder="全部" clearable style="width: 120px">
             <el-option label="未收款" value="unpaid" /><el-option label="部分收款" value="partial" />
@@ -314,7 +319,7 @@ import {
   getAerialLedgers, getAerialLedger, createAerialLedger, updateAerialLedger,
   settleAerialLedger, getAerialLedgerSettlements, deleteAerialLedgerSettlement,
   deleteAerialLedger, getAerialVehicles, getAerialPersonnel,
-  exportAerialLedgers,
+  getAerialLedgerLocations, exportAerialLedgers,
   type AerialLedger,
   type AerialLedgerSummary,
   type AerialSettlement,
@@ -350,11 +355,13 @@ const settleForm = reactive({
 })
 const vehicleOptions = ref<AerialVehicle[]>([])
 const personnelOptions = ref<AerialPersonnel[]>([])
+const locationOptions = ref<string[]>([])
 
 const filters = reactive({
   dateRange: [] as string[],
   personnel_id: '',
   customer_name: '',
+  work_location: '',
   payment_status: '',
 })
 
@@ -394,6 +401,7 @@ async function fetchData() {
     }
     if (filters.personnel_id) params.personnel_id = filters.personnel_id
     if (filters.customer_name) params.customer_name = filters.customer_name
+    if (filters.work_location) params.work_location = filters.work_location
     if (filters.payment_status) params.payment_status = filters.payment_status
     if (sortBy.value) {
       params.sort_by = sortBy.value
@@ -414,6 +422,7 @@ function resetFilters() {
   filters.dateRange = []
   filters.personnel_id = ''
   filters.customer_name = ''
+  filters.work_location = ''
   filters.payment_status = ''
   sortBy.value = ''
   sortOrder.value = 'desc'
@@ -645,12 +654,14 @@ function settlementLabel(s: string) {
 
 async function loadOptions() {
   try {
-    const [v, d] = await Promise.all([
+    const [v, d, locs] = await Promise.all([
       getAerialVehicles({ page_size: 100 }),
       getAerialPersonnel({ page_size: 100 }),
+      getAerialLedgerLocations(),
     ])
     vehicleOptions.value = v.items || []
     personnelOptions.value = d.items || []
+    locationOptions.value = locs || []
   } catch {}
 }
 

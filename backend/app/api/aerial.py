@@ -348,6 +348,17 @@ async def list_ledgers(
     return success({"items": items, "total": total, "page": page, "page_size": page_size, "summary": summary})
 
 
+# 注意：/locations 必须注册在 /{ledger_id} 之前，否则会被 {ledger_id}:str 通配吞掉
+@ledger_router.get("/locations")
+async def list_ledger_locations(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_READ)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    return success(await svc.list_work_locations())
+
+
 @ledger_router.post("")
 async def create_ledger(
     data: dict,

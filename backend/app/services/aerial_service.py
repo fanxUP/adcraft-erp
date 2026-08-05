@@ -199,6 +199,10 @@ class AerialService:
         """当前筛选条件下的合计（数量/应收/已收/欠款），供列表底部合计行使用。"""
         return await self.repo.summarize_ledgers(**filters)
 
+    async def list_work_locations(self) -> list[str]:
+        """台账作业地点去重列表（按出现次数降序），供筛选下拉框使用。"""
+        return await self.repo.list_work_locations()
+
     async def get_ledger(self, ledger_id: str):
         obj = await self.repo.get_ledger(uuid.UUID(ledger_id))
         if not obj:

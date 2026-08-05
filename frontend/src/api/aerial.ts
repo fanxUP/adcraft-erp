@@ -341,6 +341,9 @@ export const getAerialLedgers = (params?: AerialQueryParams) =>
 export const getAerialLedger = (id: string) =>
   get<AerialLedger>(`/aerial/ledgers/${id}`)
 
+export const getAerialLedgerLocations = () =>
+  get<string[]>('/aerial/ledgers/locations')
+
 export const createAerialLedger = (data: AerialLedgerCreate) =>
   post<AerialLedger>('/aerial/ledgers', data)
 
