@@ -3,7 +3,6 @@ import { PaginatedData } from '@/types/api'
 
 export interface VehicleResponse {
   id: string
-  vehicle_code: string
   plate_number: string
   vehicle_name: string
   vehicle_type: string
@@ -24,7 +23,6 @@ export interface VehicleResponse {
 }
 
 export interface VehicleCreateData {
-  vehicle_code: string
   plate_number: string
   vehicle_name: string
   vehicle_type: string
@@ -41,7 +39,6 @@ export interface VehicleCreateData {
 }
 
 export interface VehicleUpdateData {
-  vehicle_code?: string
   plate_number?: string
   vehicle_name?: string
   vehicle_type?: string

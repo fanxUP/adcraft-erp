@@ -48,10 +48,6 @@ class VehicleRegistryService(VehicleServiceBase):
         existing = await self.repo.get_by_plate(data["plate_number"])
         if existing:
             raise ValueError(f"车牌号 {data['plate_number']} 已存在")
-        # 校验车辆编号唯一
-        existing_code = await self.repo.get_by_code(data["vehicle_code"])
-        if existing_code:
-            raise ValueError(f"车辆编号 {data['vehicle_code']} 已存在")
 
         # 日期字段转换
         for date_field in ["purchase_date"]:
@@ -89,12 +85,6 @@ class VehicleRegistryService(VehicleServiceBase):
             existing = await self.repo.get_by_plate(data["plate_number"])
             if existing:
                 raise ValueError(f"车牌号 {data['plate_number']} 已存在")
-
-        # 如果修改车辆编号，校验唯一
-        if "vehicle_code" in data and data["vehicle_code"] and data["vehicle_code"] != v.vehicle_code:
-            existing_code = await self.repo.get_by_code(data["vehicle_code"])
-            if existing_code:
-                raise ValueError(f"车辆编号 {data['vehicle_code']} 已存在")
 
         # 日期字段转换
         for date_field in ["purchase_date"]:
@@ -182,7 +172,6 @@ class VehicleRegistryService(VehicleServiceBase):
     def _vehicle_to_dict(self, v) -> dict:
         return {
             "id": str(v.id),
-            "vehicle_code": v.vehicle_code,
             "plate_number": v.plate_number,
             "vehicle_name": v.vehicle_name,
             "vehicle_type": v.vehicle_type,

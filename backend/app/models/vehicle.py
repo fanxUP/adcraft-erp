@@ -17,7 +17,6 @@ class Vehicle(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "vehicles"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    vehicle_code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, comment="车辆编号")
     plate_number: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, comment="车牌号")
     vehicle_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="车辆名称")
     vehicle_type: Mapped[str] = mapped_column(String(32), nullable=False, comment="车辆类型: van/truck/pickup/sedan/electric/tricycle/rented/other")

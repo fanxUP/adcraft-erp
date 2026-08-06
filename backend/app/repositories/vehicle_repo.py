@@ -24,10 +24,6 @@ class VehicleRepository:
         result = await self.db.execute(select(Vehicle).where(Vehicle.plate_number == plate_number, Vehicle.deleted_at.is_(None)))
         return result.scalar_one_or_none()
 
-    async def get_by_code(self, vehicle_code: str) -> Vehicle | None:
-        result = await self.db.execute(select(Vehicle).where(Vehicle.vehicle_code == vehicle_code, Vehicle.deleted_at.is_(None)))
-        return result.scalar_one_or_none()
-
     async def list_vehicles(
         self,
         skip: int = 0,
@@ -42,7 +38,6 @@ class VehicleRepository:
             q = q.where(
                 Vehicle.plate_number.ilike(f"%{keyword}%")
                 | Vehicle.vehicle_name.ilike(f"%{keyword}%")
-                | Vehicle.vehicle_code.ilike(f"%{keyword}%")
             )
         if vehicle_type:
             q = q.where(Vehicle.vehicle_type == vehicle_type)

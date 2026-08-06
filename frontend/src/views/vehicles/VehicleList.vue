@@ -6,7 +6,7 @@
     </div>
 
     <div class="search-bar">
-      <el-input v-model="filters.keyword" placeholder="搜索车牌号/名称/编号" clearable style="width: 240px" @keyup.enter="fetchData" />
+      <el-input v-model="filters.keyword" placeholder="搜索车牌号/名称" clearable style="width: 240px" @keyup.enter="fetchData" />
       <el-select v-model="filters.vehicle_type" placeholder="车辆类型" clearable style="width: 140px; margin-left: 12px">
         <el-option v-for="t in vehicleTypes" :key="t.value" :label="t.label" :value="t.value" />
       </el-select>
@@ -17,7 +17,6 @@
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
-      <el-table-column prop="vehicle_code" label="车辆编号" width="140" />
       <el-table-column prop="plate_number" label="车牌号" width="120" />
       <el-table-column prop="vehicle_name" label="车辆名称" min-width="140" />
       <el-table-column label="车辆类型" width="100">
@@ -59,12 +58,7 @@
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑车辆' : '新增车辆'" width="600px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="车辆编号" required>
-              <el-input v-model="form.vehicle_code" placeholder="如 V001" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
+          <el-col :span="24">
             <el-form-item label="车牌号" required>
               <el-input v-model="form.plate_number" placeholder="如 京A12345" />
             </el-form-item>
@@ -159,7 +153,6 @@ const filters = reactive({
 })
 
 const form = reactive({
-  vehicle_code: '',
   plate_number: '',
   vehicle_name: '',
   vehicle_type: 'van',
@@ -233,7 +226,7 @@ async function fetchData() {
 function handleCreate() {
   editingId.value = null
   Object.assign(form, {
-    vehicle_code: '', plate_number: '', vehicle_name: '', vehicle_type: 'van',
+    plate_number: '', vehicle_name: '', vehicle_type: 'van',
     brand_model: '', color: '', purchase_date: '', department: '',
     load_capacity: '', seats: 2, remark: '',
   })
@@ -243,7 +236,6 @@ function handleCreate() {
 function handleEdit(row: VehicleResponse) {
   editingId.value = row.id
   Object.assign(form, {
-    vehicle_code: row.vehicle_code,
     plate_number: row.plate_number,
     vehicle_name: row.vehicle_name,
     vehicle_type: row.vehicle_type,
@@ -259,7 +251,7 @@ function handleEdit(row: VehicleResponse) {
 }
 
 async function handleSave() {
-  if (!form.vehicle_code || !form.plate_number || !form.vehicle_name || !form.vehicle_type) {
+  if (!form.plate_number || !form.vehicle_name || !form.vehicle_type) {
     ElMessage.warning('请填写必填字段')
     return
   }

@@ -5,7 +5,6 @@ from datetime import datetime
 # ── 车辆档案 ──────────────────────────────────────────────────────────────────
 
 class VehicleCreate(BaseModel):
-    vehicle_code: str
     plate_number: str
     vehicle_name: str
     vehicle_type: str
@@ -22,7 +21,6 @@ class VehicleCreate(BaseModel):
 
 
 class VehicleUpdate(BaseModel):
-    vehicle_code: str | None = None
     plate_number: str | None = None
     vehicle_name: str | None = None
     vehicle_type: str | None = None
