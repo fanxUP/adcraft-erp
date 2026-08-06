@@ -50,12 +50,6 @@ export const resourceCapabilities: PageCapabilityMap = {
     workflowStage: 'vehicle_finance',
     availableActions: ['查询车辆费用', '登记费用', '审核费用'],
   },
-  vehicle_insurance: {
-    title: '保险年检',
-    purpose: '管理车辆保险、年检到期和续办记录',
-    workflowStage: 'vehicle_compliance',
-    availableActions: ['查看到期提醒', '登记保险', '登记年检'],
-  },
   vehicle_incidents: {
     title: '违章事故',
     purpose: '登记和跟踪车辆违章、事故及处理结果',

@@ -72,7 +72,6 @@ const pageContexts: Record<string, PageContext> = {
   VehicleDispatchList: { page: 'vehicle_dispatches', business_type: 'vehicle' },
   VehicleTripRecordList: { page: 'vehicle_trip_records', business_type: 'vehicle' },
   VehicleExpenseList: { page: 'vehicle_expenses', business_type: 'vehicle' },
-  VehicleInsuranceInspection: { page: 'vehicle_insurance', business_type: 'vehicle' },
   VehicleIncidentList: { page: 'vehicle_incidents', business_type: 'vehicle' },
   VehicleReports: { page: 'vehicle_reports', business_type: 'vehicle' },
   AerialDashboard: { page: 'aerial_dashboard', business_type: 'aerial' },

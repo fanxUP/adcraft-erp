@@ -80,7 +80,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'vehicle-dispatches', name: 'VehicleDispatchList', component: () => import('@/views/vehicles/VehicleDispatchList.vue') },
       { path: 'vehicle-trip-records', name: 'VehicleTripRecordList', component: () => import('@/views/vehicles/VehicleTripRecordList.vue') },
       { path: 'vehicle-expenses', name: 'VehicleExpenseList', component: () => import('@/views/vehicles/VehicleExpenseList.vue') },
-      { path: 'vehicle-insurance', name: 'VehicleInsuranceInspection', component: () => import('@/views/vehicles/VehicleInsuranceInspection.vue') },
       { path: 'vehicle-incidents', name: 'VehicleIncidentList', component: () => import('@/views/vehicles/VehicleIncidentList.vue') },
       { path: 'vehicle-reports', name: 'VehicleReports', component: () => import('@/views/vehicles/VehicleReports.vue') },
       { path: 'aerial-dashboard', name: 'AerialDashboard', component: () => import('@/views/aerial/AerialDashboard.vue') },
