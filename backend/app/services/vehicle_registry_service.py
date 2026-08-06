@@ -38,6 +38,41 @@ class VehicleRegistryService(VehicleServiceBase):
         )
         return [self._vehicle_to_dict(v) for v in vehicles], total
 
+    async def list_vehicles_expiring(self, days: int = 30) -> list[dict]:
+        """保险/年检在 N 天内到期或已过期的车辆，附 days_left 与 urgency。"""
+        from datetime import datetime
+        vehicles = await self.repo.list_expiring_vehicles(days)
+        now = datetime.now().date()
+        result = []
+        for v in vehicles:
+            item = {
+                "vehicle_id": str(v.id),
+                "plate_number": v.plate_number,
+                "vehicle_name": v.vehicle_name,
+                "insurance_expire_date": None,
+                "insurance_days_left": None,
+                "insurance_urgency": None,
+                "inspection_expire_date": None,
+                "inspection_days_left": None,
+                "inspection_urgency": None,
+            }
+            for field in ("insurance", "inspection"):
+                d = getattr(v, f"{field}_expire_date")
+                if d:
+                    days_left = (d.date() - now).days
+                    if days_left <= days:
+                        if days_left < 0:
+                            urgency = "expired"
+                        elif days_left <= 7:
+                            urgency = "urgent"
+                        else:
+                            urgency = "warning"
+                        item[f"{field}_expire_date"] = d.isoformat()[:10]
+                        item[f"{field}_days_left"] = days_left
+                        item[f"{field}_urgency"] = urgency
+            result.append(item)
+        return result
+
     async def get_vehicle(self, vehicle_id: UUID) -> dict | None:
         v = await self.repo.get_by_id(vehicle_id)
         return self._vehicle_to_dict(v) if v else None
@@ -50,7 +85,7 @@ class VehicleRegistryService(VehicleServiceBase):
             raise ValueError(f"车牌号 {data['plate_number']} 已存在")
 
         # 日期字段转换
-        for date_field in ["purchase_date"]:
+        for date_field in ["purchase_date", "insurance_expire_date", "inspection_expire_date", "maintenance_due_date"]:
             if date_field in data and isinstance(data[date_field], str):
                 try:
                     data[date_field] = datetime.fromisoformat(data[date_field])
@@ -87,7 +122,7 @@ class VehicleRegistryService(VehicleServiceBase):
                 raise ValueError(f"车牌号 {data['plate_number']} 已存在")
 
         # 日期字段转换
-        for date_field in ["purchase_date"]:
+        for date_field in ["purchase_date", "insurance_expire_date", "inspection_expire_date", "maintenance_due_date"]:
             if date_field in data and isinstance(data[date_field], str):
                 try:
                     data[date_field] = datetime.fromisoformat(data[date_field])
@@ -178,6 +213,9 @@ class VehicleRegistryService(VehicleServiceBase):
             "brand_model": v.brand_model,
             "color": v.color,
             "purchase_date": v.purchase_date.isoformat() if v.purchase_date else None,
+            "insurance_expire_date": v.insurance_expire_date.isoformat() if v.insurance_expire_date else None,
+            "inspection_expire_date": v.inspection_expire_date.isoformat() if v.inspection_expire_date else None,
+            "maintenance_due_date": v.maintenance_due_date.isoformat() if v.maintenance_due_date else None,
             "status": v.status,
             "department": v.department,
             "default_driver_id": str(v.default_driver_id) if v.default_driver_id else None,

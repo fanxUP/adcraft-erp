@@ -1,7 +1,7 @@
 from uuid import UUID
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_, and_
 
 from app.models.vehicle import (
     Vehicle, VehicleDriver, VehicleUseRequest, VehicleDispatch, VehicleTripRecord,
@@ -52,6 +52,26 @@ class VehicleRepository:
         q = q.order_by(Vehicle.created_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(q)
         return list(result.scalars().all()), total
+
+    async def list_expiring_vehicles(self, days: int = 30) -> list[Vehicle]:
+        """保险/年检在 N 天内到期或已过期的车辆（未删除）。"""
+        from datetime import timedelta
+        deadline = datetime.now() + timedelta(days=days)
+        q = select(Vehicle).where(
+            Vehicle.deleted_at.is_(None),
+            or_(
+                and_(
+                    Vehicle.insurance_expire_date.isnot(None),
+                    Vehicle.insurance_expire_date <= deadline,
+                ),
+                and_(
+                    Vehicle.inspection_expire_date.isnot(None),
+                    Vehicle.inspection_expire_date <= deadline,
+                ),
+            ),
+        ).order_by(Vehicle.plate_number)
+        result = await self.db.execute(q)
+        return list(result.scalars().all())
 
     async def create_vehicle(self, data: dict) -> Vehicle:
         vehicle = Vehicle(**data)

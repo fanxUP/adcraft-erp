@@ -11,6 +11,9 @@ class VehicleCreate(BaseModel):
     brand_model: str | None = None
     color: str | None = None
     purchase_date: datetime | None = None
+    insurance_expire_date: datetime | None = None
+    inspection_expire_date: datetime | None = None
+    maintenance_due_date: datetime | None = None
     department: str | None = None
     default_driver_id: str | None = None
     load_capacity: str | None = None
@@ -27,6 +30,9 @@ class VehicleUpdate(BaseModel):
     brand_model: str | None = None
     color: str | None = None
     purchase_date: datetime | None = None
+    insurance_expire_date: datetime | None = None
+    inspection_expire_date: datetime | None = None
+    maintenance_due_date: datetime | None = None
     department: str | None = None
     default_driver_id: str | None = None
     load_capacity: str | None = None

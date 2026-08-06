@@ -5,28 +5,23 @@
       <el-button type="danger" @click="handleCreate">新增车辆</el-button>
     </div>
 
-    <!-- 全局证件到期提醒 -->
+    <!-- 保险/年检到期提醒 -->
     <el-alert
-      v-if="expiringCerts.length"
-      :title="`有 ${expiringCerts.length} 个证件即将到期或已过期`"
-      type="warning"
+      v-if="expiringVehicles.length"
+      :title="`有 ${expiringVehicles.length} 辆车保险/年检即将到期或已过期`"
+      :type="hasExpired() ? 'error' : 'warning'"
       :closable="false"
       show-icon
-      style="margin-bottom: 16px;"
+      style="margin-bottom: 16px"
     >
       <template #default>
-        <div v-for="cert in expiringCerts.slice(0, 5)" :key="cert.id" class="expiring-item">
-          <el-tag :type="getUrgencyType(cert.urgency)" size="small" style="margin-right: 8px;">
-            {{ getUrgencyLabel(cert.urgency) }}
+        <div v-for="v in expiringVehicles.slice(0, 5)" :key="v.vehicle_id" class="expiring-item">
+          <el-tag size="small" :type="hasVehicleExpired(v) ? 'danger' : 'warning'" style="margin-right: 8px">
+            {{ hasVehicleExpired(v) ? '已过期' : '将到期' }}
           </el-tag>
-          {{ cert.vehicle_name }} - {{ getCertTypeLabel(cert.certificate_type) }}
-          <span v-if="cert.days_left !== undefined">
-            ({{ cert.days_left < 0 ? `已过期 ${Math.abs(cert.days_left)} 天` : `还剩 ${cert.days_left} 天` }})
-          </span>
+          {{ v.plate_number }} {{ v.vehicle_name }} — {{ getItemParts(v).join('，') }}
         </div>
-        <div v-if="expiringCerts.length > 5" style="margin-top: 4px; color: #909399;">
-          ...还有 {{ expiringCerts.length - 5 }} 个
-        </div>
+        <div v-if="expiringVehicles.length > 5" style="color: #909399; margin-top: 4px">...还有 {{ expiringVehicles.length - 5 }} 辆</div>
       </template>
     </el-alert>
 
@@ -52,6 +47,24 @@
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="保险到期" width="150">
+        <template #default="{ row }">
+          <span v-if="row.insurance_expire_date">
+            {{ row.insurance_expire_date.slice(0, 10) }}
+            <el-tag :type="getUrgency(row.insurance_expire_date).tag" size="small" style="margin-left: 4px">{{ getUrgency(row.insurance_expire_date).label }}</el-tag>
+          </span>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="年检到期" width="150">
+        <template #default="{ row }">
+          <span v-if="row.inspection_expire_date">
+            {{ row.inspection_expire_date.slice(0, 10) }}
+            <el-tag :type="getUrgency(row.inspection_expire_date).tag" size="small" style="margin-left: 4px">{{ getUrgency(row.inspection_expire_date).label }}</el-tag>
+          </span>
+          <span v-else>-</span>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
@@ -128,6 +141,23 @@
           </el-col>
         </el-row>
         <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="保险到期">
+              <el-date-picker v-model="form.insurance_expire_date" type="date" value-format="YYYY-MM-DDTHH:mm:ss" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="年检到期">
+              <el-date-picker v-model="form.inspection_expire_date" type="date" value-format="YYYY-MM-DDTHH:mm:ss" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="下次保养">
+              <el-date-picker v-model="form.maintenance_due_date" type="date" value-format="YYYY-MM-DDTHH:mm:ss" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="载重信息">
               <el-input v-model="form.load_capacity" placeholder="如 1.5吨" />
@@ -144,12 +174,12 @@
         </el-form-item>
       </el-form>
 
-      <!-- 保险年检：仅编辑车辆且有权限时显示 -->
+      <!-- 其他证件：仅编辑车辆且有权限时显示（保险/年检/保养已并入上方车辆日期字段） -->
       <template v-if="editingId && canManage">
-        <el-divider content-position="left">保险年检</el-divider>
+        <el-divider content-position="left">其他证件</el-divider>
         <div class="cert-section">
           <div class="cert-head">
-            <span class="cert-title">该车证件</span>
+            <span class="cert-title">行驶证 / 道路运输证 / 驾驶证 / 其他</span>
             <el-button type="primary" size="small" @click="showCertAdd">
               <el-icon><Plus /></el-icon> 新增证件
             </el-button>
@@ -205,13 +235,9 @@
         </el-form-item>
         <el-form-item label="证件类型" required>
           <el-select v-model="certForm.certificate_type" placeholder="选择类型">
-            <el-option label="交强险" value="compulsory_insurance" />
-            <el-option label="商业险" value="commercial_insurance" />
-            <el-option label="年检" value="annual_inspection" />
             <el-option label="行驶证" value="driving_license" />
             <el-option label="道路运输证" value="transport_license" />
             <el-option label="驾驶证" value="driver_license" />
-            <el-option label="保养提醒" value="maintenance" />
             <el-option label="其他" value="other" />
           </el-select>
         </el-form-item>
@@ -255,9 +281,10 @@ import { useAuthStore } from '@/stores/auth'
 import {
   getVehicles, createVehicle, updateVehicle,
   disableVehicle, enableVehicle, scrapVehicle, deleteVehicle,
-  getCertificates, getExpiringCertificates, createCertificate, updateCertificate, deleteCertificate,
+  getCertificates, getExpiringVehicles, createCertificate, updateCertificate, deleteCertificate,
   getDrivers,
   type CertificateResponse,
+  type ExpiringVehicle,
   type VehicleDriverResponse,
 } from '@/api/vehicles'
 import type { VehicleCreateData, VehicleUpdateData } from '@/api/vehicles'
@@ -286,6 +313,9 @@ const form = reactive({
   brand_model: '',
   color: '',
   purchase_date: '',
+  insurance_expire_date: '',
+  inspection_expire_date: '',
+  maintenance_due_date: '',
   department: '',
   load_capacity: '',
   seats: 2,
@@ -333,14 +363,17 @@ function statusTagType(s: string) {
   return m[s] || ''
 }
 
-// ── 保险年检（并入编辑面板） ──────────────────────────────────────────────
+// ── 保险/年检（车辆日期字段）+ 其他证件 ──────────────────────────────────
 const authStore = useAuthStore()
 const canManage = computed(() => authStore.hasAnyRole(['admin', 'finance']))
 
 const certificates = ref<CertificateResponse[]>([])
 const certLoading = ref(false)
-const expiringCerts = ref<CertificateResponse[]>([])
+const expiringVehicles = ref<ExpiringVehicle[]>([])
 const driverOptions = ref<VehicleDriverResponse[]>([])
+
+// 保险/年检/保养已并入车辆日期字段；其余证件类型
+const REMAINING_CERT_TYPES = ['driving_license', 'transport_license', 'driver_license', 'other']
 const currentVehicleLabel = ref('')
 
 const certDialogVisible = ref(false)
@@ -390,11 +423,40 @@ function getExpireClass(row: CertificateResponse) {
   return ''
 }
 
+// ── 保险/年检到期提醒（仿高空车） ─────────────────────────────────────────
+function getUrgency(d: string): { tag: 'success' | 'warning' | 'danger'; label: string } {
+  const days = Math.floor((new Date(d).getTime() - Date.now()) / 86400000)
+  if (days < 0) return { tag: 'danger', label: '已过期' }
+  if (days <= 7) return { tag: 'danger', label: '紧急' }
+  if (days <= 30) return { tag: 'warning', label: '将到期' }
+  return { tag: 'success', label: '正常' }
+}
+
+function hasVehicleExpired(v: ExpiringVehicle) {
+  return v.insurance_urgency === 'expired' || v.inspection_urgency === 'expired'
+}
+
+function hasExpired() {
+  return expiringVehicles.value.some(hasVehicleExpired)
+}
+
+function getItemParts(v: ExpiringVehicle): string[] {
+  const parts: string[] = []
+  for (const [field, label] of [['insurance', '保险'], ['inspection', '年检']] as const) {
+    const daysLeft = v[`${field}_days_left`] ?? null
+    const urgency = v[`${field}_urgency`]
+    if (urgency && daysLeft !== null) {
+      parts.push(`${label}${daysLeft < 0 ? `已过期 ${-daysLeft} 天` : `还剩 ${daysLeft} 天`}`)
+    }
+  }
+  return parts
+}
+
 async function loadCertificates(vehicleId: string) {
   certLoading.value = true
   try {
     const res = await getCertificates({ page: 1, page_size: 100, vehicle_id: vehicleId })
-    certificates.value = res?.items ?? []
+    certificates.value = (res?.items ?? []).filter(c => REMAINING_CERT_TYPES.includes(c.certificate_type))
   } catch {
     certificates.value = []
   } finally {
@@ -403,7 +465,7 @@ async function loadCertificates(vehicleId: string) {
 }
 
 async function loadExpiring() {
-  try { expiringCerts.value = (await getExpiringCertificates({ days: 30 })) ?? [] } catch { expiringCerts.value = [] }
+  try { expiringVehicles.value = (await getExpiringVehicles(30)) ?? [] } catch { expiringVehicles.value = [] }
 }
 
 async function loadDrivers() {
@@ -507,8 +569,9 @@ function handleCreate() {
   currentVehicleLabel.value = ''
   Object.assign(form, {
     plate_number: '', vehicle_name: '', vehicle_type: 'van',
-    brand_model: '', color: '', purchase_date: '', department: '',
-    load_capacity: '', seats: 2, remark: '',
+    brand_model: '', color: '', purchase_date: '',
+    insurance_expire_date: '', inspection_expire_date: '', maintenance_due_date: '',
+    department: '', load_capacity: '', seats: 2, remark: '',
   })
   dialogVisible.value = true
 }
@@ -523,6 +586,9 @@ function handleEdit(row: VehicleResponse) {
     brand_model: row.brand_model || '',
     color: row.color || '',
     purchase_date: row.purchase_date || '',
+    insurance_expire_date: row.insurance_expire_date || '',
+    inspection_expire_date: row.inspection_expire_date || '',
+    maintenance_due_date: row.maintenance_due_date || '',
     department: row.department || '',
     load_capacity: row.load_capacity || '',
     seats: row.seats || 2,

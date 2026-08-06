@@ -9,6 +9,9 @@ export interface VehicleResponse {
   brand_model?: string
   color?: string
   purchase_date?: string
+  insurance_expire_date?: string
+  inspection_expire_date?: string
+  maintenance_due_date?: string
   status: string
   department?: string
   default_driver_id?: string
@@ -29,6 +32,9 @@ export interface VehicleCreateData {
   brand_model?: string
   color?: string
   purchase_date?: string
+  insurance_expire_date?: string
+  inspection_expire_date?: string
+  maintenance_due_date?: string
   department?: string
   default_driver_id?: string
   load_capacity?: string
@@ -45,6 +51,9 @@ export interface VehicleUpdateData {
   brand_model?: string
   color?: string
   purchase_date?: string
+  insurance_expire_date?: string
+  inspection_expire_date?: string
+  maintenance_due_date?: string
   department?: string
   default_driver_id?: string
   load_capacity?: string
@@ -330,6 +339,22 @@ export function updateCertificate(id: string, data: Partial<CertificateResponse>
 
 export function deleteCertificate(id: string) {
   return del(`/vehicle-certificates/${id}`)
+}
+
+export interface ExpiringVehicle {
+  vehicle_id: string
+  plate_number: string
+  vehicle_name: string
+  insurance_expire_date?: string | null
+  insurance_days_left?: number | null
+  insurance_urgency?: string | null
+  inspection_expire_date?: string | null
+  inspection_days_left?: number | null
+  inspection_urgency?: string | null
+}
+
+export function getExpiringVehicles(days?: number) {
+  return get<ExpiringVehicle[]>('/vehicles/expiring', { params: { days } })
 }
 
 // ── 违章/事故/异常 ──────────────────────────────────────────────────────────

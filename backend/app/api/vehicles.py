@@ -72,6 +72,19 @@ async def list_vehicles(
     return success_paginated(vehicles, total, page, page_size)
 
 
+@router.get("/expiring")
+async def list_expiring_vehicles(
+    request: Request,
+    days: int = Query(30, ge=1, le=365, description="提前提醒天数"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
+):
+    """保险/年检在 N 天内到期或已过期的车辆（含 days_left/urgency）。"""
+    service = _get_service(db, current_user, request)
+    items = await service.list_vehicles_expiring(days)
+    return success(items)
+
+
 @router.post("/")
 async def create_vehicle(
     data: VehicleCreate,
