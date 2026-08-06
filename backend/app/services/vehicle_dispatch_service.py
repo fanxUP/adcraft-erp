@@ -298,9 +298,7 @@ class VehicleDispatchService(VehicleServiceBase):
         data["created_by"] = self.current_user.id if self.current_user else None
 
         # Convert string IDs
-        for field in ("request_id", "vehicle_id", "driver_id", "related_customer_id", "related_order_id", "related_install_task_id"):
-            if data.get(field) and isinstance(data[field], str):
-                data[field] = UUID(data[field])
+        self._coerce_uuid_fields(data, ("request_id", "vehicle_id", "driver_id", "related_customer_id", "related_order_id", "related_install_task_id"))
 
         d = await self.repo.create_dispatch(data)
 
@@ -354,9 +352,7 @@ class VehicleDispatchService(VehicleServiceBase):
 
         before = self._dispatch_to_dict(d)
 
-        for field in ("vehicle_id", "driver_id", "related_customer_id", "related_order_id", "related_install_task_id"):
-            if data.get(field) and isinstance(data[field], str):
-                data[field] = UUID(data[field])
+        self._coerce_uuid_fields(data, ("vehicle_id", "driver_id", "related_customer_id", "related_order_id", "related_install_task_id"))
 
         d = await self.repo.update_dispatch(d, data)
 

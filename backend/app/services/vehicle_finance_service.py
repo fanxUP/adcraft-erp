@@ -32,9 +32,7 @@ class VehicleFinanceService(VehicleServiceBase):
 
     async def create_fuel_record(self, data: dict) -> dict:
         from datetime import datetime
-        for field in ("vehicle_id", "driver_id", "dispatch_id", "payer_id"):
-            if data.get(field) and isinstance(data[field], str):
-                data[field] = UUID(data[field])
+        self._coerce_uuid_fields(data, ("vehicle_id", "driver_id", "dispatch_id", "payer_id"))
         for date_field in ["fuel_time"]:
             if date_field in data and isinstance(data[date_field], str):
                 try:
@@ -60,9 +58,7 @@ class VehicleFinanceService(VehicleServiceBase):
         if r.status not in ("pending_review", "rejected"):
             raise ValueError("只有待审核或已驳回的记录可以编辑")
         before = self._fuel_to_dict(r)
-        for field in ("vehicle_id", "driver_id", "dispatch_id", "payer_id"):
-            if data.get(field) and isinstance(data[field], str):
-                data[field] = UUID(data[field])
+        self._coerce_uuid_fields(data, ("vehicle_id", "driver_id", "dispatch_id", "payer_id"))
         for date_field in ["fuel_time"]:
             if date_field in data and isinstance(data[date_field], str):
                 try:
@@ -141,9 +137,7 @@ class VehicleFinanceService(VehicleServiceBase):
 
     async def create_maintenance_record(self, data: dict) -> dict:
         from datetime import datetime
-        for field in ("vehicle_id", "handler_id"):
-            if data.get(field) and isinstance(data[field], str):
-                data[field] = UUID(data[field])
+        self._coerce_uuid_fields(data, ("vehicle_id", "handler_id"))
         for date_field in ["maintenance_date", "next_maintenance_date"]:
             if date_field in data and isinstance(data[date_field], str):
                 try:
@@ -169,9 +163,7 @@ class VehicleFinanceService(VehicleServiceBase):
         if r.status not in ("pending_review", "rejected"):
             raise ValueError("只有待审核或已驳回的记录可以编辑")
         before = self._maintenance_to_dict(r)
-        for field in ("vehicle_id", "handler_id"):
-            if data.get(field) and isinstance(data[field], str):
-                data[field] = UUID(data[field])
+        self._coerce_uuid_fields(data, ("vehicle_id", "handler_id"))
         for date_field in ["maintenance_date", "next_maintenance_date"]:
             if date_field in data and isinstance(data[date_field], str):
                 try:
@@ -248,9 +240,7 @@ class VehicleFinanceService(VehicleServiceBase):
         return self._cost_to_dict(r) if r else None
 
     async def create_cost_allocation(self, data: dict) -> dict:
-        for field in ("vehicle_id", "dispatch_id", "related_order_id", "related_install_task_id"):
-            if data.get(field) and isinstance(data[field], str):
-                data[field] = UUID(data[field])
+        self._coerce_uuid_fields(data, ("vehicle_id", "dispatch_id", "related_order_id", "related_install_task_id"))
         r = await self.repo.create_cost_allocation(data)
         await log_operation(
             db=self.db, user_id=self.current_user.id if self.current_user else None,

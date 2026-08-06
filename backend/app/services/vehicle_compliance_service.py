@@ -52,9 +52,7 @@ class VehicleComplianceService(VehicleServiceBase):
 
     async def create_certificate(self, data: dict) -> dict:
         from datetime import datetime
-        for field in ("vehicle_id", "driver_id"):
-            if data.get(field) and isinstance(data[field], str):
-                data[field] = UUID(data[field])
+        self._coerce_uuid_fields(data, ("vehicle_id", "driver_id"))
         for date_field in ["start_date", "expire_date"]:
             if date_field in data and isinstance(data[date_field], str):
                 try:
@@ -78,9 +76,7 @@ class VehicleComplianceService(VehicleServiceBase):
         if not r:
             raise ValueError("证件记录不存在")
         before = self._certificate_to_dict(r)
-        for field in ("vehicle_id", "driver_id"):
-            if data.get(field) and isinstance(data[field], str):
-                data[field] = UUID(data[field])
+        self._coerce_uuid_fields(data, ("vehicle_id", "driver_id"))
         for date_field in ["start_date", "expire_date"]:
             if date_field in data and isinstance(data[date_field], str):
                 try:
@@ -145,9 +141,7 @@ class VehicleComplianceService(VehicleServiceBase):
 
     async def create_incident(self, data: dict) -> dict:
         from datetime import datetime
-        for field in ("vehicle_id", "driver_id", "dispatch_id", "related_order_id", "related_install_task_id", "responsible_user_id"):
-            if data.get(field) and isinstance(data[field], str):
-                data[field] = UUID(data[field])
+        self._coerce_uuid_fields(data, ("vehicle_id", "driver_id", "dispatch_id", "related_order_id", "related_install_task_id", "responsible_user_id"))
         for date_field in ["incident_time"]:
             if date_field in data and isinstance(data[date_field], str):
                 try:
@@ -171,9 +165,7 @@ class VehicleComplianceService(VehicleServiceBase):
         if not r:
             raise ValueError("异常记录不存在")
         before = self._incident_to_dict(r)
-        for field in ("vehicle_id", "driver_id", "dispatch_id", "related_order_id", "related_install_task_id", "responsible_user_id"):
-            if data.get(field) and isinstance(data[field], str):
-                data[field] = UUID(data[field])
+        self._coerce_uuid_fields(data, ("vehicle_id", "driver_id", "dispatch_id", "related_order_id", "related_install_task_id", "responsible_user_id"))
         for date_field in ["incident_time"]:
             if date_field in data and isinstance(data[date_field], str):
                 try:
