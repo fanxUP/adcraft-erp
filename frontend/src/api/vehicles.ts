@@ -357,6 +357,36 @@ export function getExpiringVehicles(days?: number) {
   return get<ExpiringVehicle[]>('/vehicles/expiring', { params: { days } })
 }
 
+// ── 车辆附件 ──────────────────────────────────────────────────────────────────
+
+export interface VehicleAttachment {
+  id: string
+  vehicle_id: string
+  attachment_type: string // license / registration / insurance / inspection / maintenance / other
+  file_url: string
+  file_name?: string
+  uploaded_by?: string
+  uploaded_at?: string
+  remark?: string
+}
+
+export function getVehicleAttachments(vehicleId: string) {
+  return get<VehicleAttachment[]>(`/vehicles/${vehicleId}/attachments`)
+}
+
+export async function createVehicleAttachment(vehicleId: string, file: File, attachmentType: string) {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('attachment_type', attachmentType)
+  return post<VehicleAttachment>(`/vehicles/${vehicleId}/attachments`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function deleteVehicleAttachment(id: string) {
+  return del(`/vehicles/attachments/${id}`)
+}
+
 // ── 违章/事故/异常 ──────────────────────────────────────────────────────────
 
 export interface IncidentResponse {

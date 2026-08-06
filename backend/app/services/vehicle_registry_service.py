@@ -1,6 +1,10 @@
+import os
+import uuid
 from uuid import UUID
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
 
 from app.models.vehicle import (
     VehicleUseRequest, VehicleDispatch, VehicleTripRecord,
@@ -360,4 +364,63 @@ class VehicleRegistryService(VehicleServiceBase):
             "remark": d.remark,
             "created_at": d.created_at.isoformat() if d.created_at else None,
             "updated_at": d.updated_at.isoformat() if d.updated_at else None,
+        }
+
+    # ── 车辆附件 ─────────────────────────────────────────────────────────────
+
+    async def save_upload_file(self, file):
+        """把上传文件落盘到 {LOCAL_UPLOAD_DIR}/{YYYYMM}/uuid.ext，返回 /uploads/ 相对路径。"""
+        from datetime import datetime
+        upload_dir = settings.LOCAL_UPLOAD_DIR
+        date_dir = datetime.now().strftime("%Y%m")
+        dest_dir = os.path.join(upload_dir, date_dir)
+        os.makedirs(dest_dir, exist_ok=True)
+        ext = file.filename.rsplit(".", 1)[1] if file.filename and "." in file.filename else ""
+        fn = f"{uuid.uuid4().hex}.{ext}"
+        fp = os.path.join(dest_dir, fn)
+        content = await file.read()
+        with open(fp, "wb") as f:
+            f.write(content)
+        return {
+            "file_url": f"/uploads/{date_dir}/{fn}",
+            "file_name": file.filename or fn,
+            "file_size": len(content),
+        }
+
+    async def list_vehicle_attachments(self, vehicle_id: UUID, attachment_type: str | None = None) -> list[dict]:
+        items = await self.repo.list_vehicle_attachments(vehicle_id, attachment_type)
+        return [self._vehicle_attachment_to_dict(a) for a in items]
+
+    async def create_vehicle_attachment(self, vehicle_id: str, file, attachment_type: str = "other", remark: str = "") -> dict:
+        v = await self.repo.get_by_id(uuid.UUID(vehicle_id))
+        if not v:
+            raise ValueError("车辆不存在")
+        saved = await self.save_upload_file(file)
+        data = {
+            "vehicle_id": uuid.UUID(vehicle_id),
+            "attachment_type": attachment_type or "other",
+            "file_url": saved["file_url"],
+            "file_name": saved["file_name"],
+            "remark": remark or None,
+            "uploaded_by": self.current_user.id if self.current_user else None,
+        }
+        att = await self.repo.create_vehicle_attachment(data)
+        return self._vehicle_attachment_to_dict(att)
+
+    async def delete_vehicle_attachment(self, attachment_id: str) -> dict:
+        obj = await self.repo.delete_vehicle_attachment(uuid.UUID(attachment_id))
+        if not obj:
+            raise ValueError("附件不存在")
+        return {"id": attachment_id, "deleted": True}
+
+    def _vehicle_attachment_to_dict(self, a) -> dict:
+        return {
+            "id": str(a.id),
+            "vehicle_id": str(a.vehicle_id),
+            "attachment_type": a.attachment_type,
+            "file_url": a.file_url,
+            "file_name": a.file_name,
+            "uploaded_by": str(a.uploaded_by) if a.uploaded_by else None,
+            "uploaded_at": a.uploaded_at.isoformat() if a.uploaded_at else None,
+            "remark": a.remark,
         }

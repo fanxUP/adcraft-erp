@@ -1,7 +1,7 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -173,6 +173,52 @@ async def scrap_vehicle(
     service = _get_service(db, current_user, request)
     vehicle = await service.scrap_vehicle(UUID(vehicle_id))
     return success(vehicle)
+
+
+@router.get("/{vehicle_id}/attachments")
+async def list_vehicle_attachments(
+    vehicle_id: str,
+    request: Request,
+    attachment_type: str = Query("", description="附件类型过滤"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
+):
+    service = _get_service(db, current_user, request)
+    items = await service.list_vehicle_attachments(UUID(vehicle_id), attachment_type or None)
+    return success(items)
+
+
+@router.post("/{vehicle_id}/attachments")
+async def create_vehicle_attachment(
+    vehicle_id: str,
+    file: UploadFile = File(...),
+    attachment_type: str = Form("other"),
+    remark: str = Form(""),
+    request: Request = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_UPDATE)),
+):
+    service = _get_service(db, current_user, request)
+    try:
+        result = await service.create_vehicle_attachment(vehicle_id, file, attachment_type, remark)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return success(result)
+
+
+@router.delete("/attachments/{attachment_id}")
+async def delete_vehicle_attachment(
+    attachment_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_UPDATE)),
+):
+    service = _get_service(db, current_user, request)
+    try:
+        result = await service.delete_vehicle_attachment(attachment_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return success(result)
 
 
 # ── 司机档案 ──────────────────────────────────────────────────────────────────

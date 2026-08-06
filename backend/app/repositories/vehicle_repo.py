@@ -6,7 +6,7 @@ from sqlalchemy import select, func, or_, and_
 from app.models.vehicle import (
     Vehicle, VehicleDriver, VehicleUseRequest, VehicleDispatch, VehicleTripRecord,
     VehicleFuelRecord, VehicleMaintenanceRecord, VehicleCostAllocation,
-    VehicleCertificate, VehicleIncident,
+    VehicleCertificate, VehicleIncident, VehicleAttachment,
 )
 
 
@@ -527,3 +527,29 @@ class VehicleRepository:
     async def delete_incident(self, i: VehicleIncident) -> None:
         await self.db.delete(i)
         await self.db.flush()
+
+    # ── 车辆附件 ─────────────────────────────────────────────────────────────
+
+    async def list_vehicle_attachments(self, vehicle_id: UUID, attachment_type: str | None = None) -> list[VehicleAttachment]:
+        q = select(VehicleAttachment).where(VehicleAttachment.vehicle_id == vehicle_id)
+        if attachment_type:
+            q = q.where(VehicleAttachment.attachment_type == attachment_type)
+        q = q.order_by(VehicleAttachment.uploaded_at.desc())
+        rows = (await self.db.execute(q)).scalars().all()
+        return list(rows)
+
+    async def create_vehicle_attachment(self, data: dict) -> VehicleAttachment:
+        obj = VehicleAttachment(**data)
+        self.db.add(obj)
+        await self.db.flush()
+        await self.db.refresh(obj)
+        return obj
+
+    async def delete_vehicle_attachment(self, attachment_id: UUID) -> VehicleAttachment | None:
+        obj = (await self.db.execute(
+            select(VehicleAttachment).where(VehicleAttachment.id == attachment_id)
+        )).scalar_one_or_none()
+        if obj:
+            await self.db.delete(obj)
+            await self.db.flush()
+        return obj

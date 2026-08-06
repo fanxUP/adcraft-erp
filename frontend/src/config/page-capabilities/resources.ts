@@ -10,9 +10,9 @@ export const resourceCapabilities: PageCapabilityMap = {
   },
   vehicle_list: {
     title: '车辆档案',
-    purpose: '维护公司车辆基础信息、保险年检到期和使用状态',
+    purpose: '维护公司车辆基础信息、保险年检到期、使用状态和档案附件',
     workflowStage: 'vehicle_registry',
-    availableActions: ['查询车辆', '新增车辆', '查看车辆详情', '登记保险到期', '登记年检到期'],
+    availableActions: ['查询车辆', '新增车辆', '查看车辆详情', '登记保险到期', '登记年检到期', '上传附件'],
   },
   driver_list: {
     title: '司机管理',

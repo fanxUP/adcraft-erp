@@ -174,43 +174,23 @@
         </el-form-item>
       </el-form>
 
-      <!-- 其他证件：仅编辑车辆且有权限时显示（保险/年检/保养已并入上方车辆日期字段） -->
-      <template v-if="editingId && canManage">
-        <el-divider content-position="left">其他证件</el-divider>
-        <div class="cert-section">
-          <div class="cert-head">
-            <span class="cert-title">行驶证 / 道路运输证 / 驾驶证 / 其他</span>
-            <el-button type="primary" size="small" @click="showCertAdd">
-              <el-icon><Plus /></el-icon> 新增证件
-            </el-button>
-          </div>
-          <el-table :data="certificates" v-loading="certLoading" size="small" stripe>
-            <el-table-column label="证件类型" width="110">
-              <template #default="{ row }">{{ getCertTypeLabel(row.certificate_type) }}</template>
-            </el-table-column>
-            <el-table-column prop="certificate_no" label="证件编号" min-width="140" />
-            <el-table-column label="到期日期" width="120">
-              <template #default="{ row }">
-                <span :class="getExpireClass(row)">{{ row.expire_date ? row.expire_date.slice(0, 10) : '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="状态" width="90">
-              <template #default="{ row }">
-                <el-tag v-if="row.urgency" :type="getUrgencyType(row.urgency)" size="small">{{ getUrgencyLabel(row.urgency) }}</el-tag>
-                <el-tag v-else :type="getStatusType(row.status)" size="small">{{ getStatusLabel(row.status) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="金额" width="100" align="right">
-              <template #default="{ row }">{{ row.amount ? `¥${row.amount.toFixed(2)}` : '-' }}</template>
-            </el-table-column>
-            <el-table-column label="操作" width="120" fixed="right">
-              <template #default="{ row }">
-                <el-button type="primary" link size="small" @click="showCertEdit(row)">编辑</el-button>
-                <el-button type="danger" link size="small" @click="handleCertDelete(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+      <!-- 附件：仅编辑车辆时显示（照搬高空车档案） -->
+      <template v-if="editingId">
+        <el-divider content-position="left">附件</el-divider>
+        <div class="att-upload-row">
+          <el-select v-model="attCategory" style="width: 120px">
+            <el-option v-for="(label, val) in VEH_ATT_LABELS" :key="val" :label="label" :value="val" />
+          </el-select>
+          <el-upload :http-request="handleUploadAttachment" :show-file-list="false" :disabled="attUploading">
+            <el-button type="primary" plain size="small" :loading="attUploading">上传附件</el-button>
+          </el-upload>
         </div>
+        <div v-if="attachments.length" class="att-list">
+          <el-tag v-for="att in attachments" :key="att.id" :type="VEH_ATT_TAGS[att.attachment_type] || 'info'" closable @close="handleDeleteAttachment(att.id)">
+            <a :href="att.file_url" target="_blank" class="att-link">{{ VEH_ATT_LABELS[att.attachment_type] || att.attachment_type }}·{{ att.file_name }}</a>
+          </el-tag>
+        </div>
+        <div v-else style="color: #909399; font-size: 13px">暂无附件</div>
       </template>
 
       <template #footer>
@@ -218,77 +198,24 @@
         <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
-
-    <!-- 证件新增/编辑对话框 -->
-    <el-dialog
-      v-model="certDialogVisible"
-      :title="certIsEdit ? '编辑证件' : '新增证件'"
-      width="600px"
-      append-to-body
-      :close-on-click-modal="false"
-    >
-      <el-form :model="certForm" label-width="100px">
-        <el-form-item label="车辆" required>
-          <el-select v-model="certForm.vehicle_id" disabled>
-            <el-option :value="certForm.vehicle_id" :label="currentVehicleLabel" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="证件类型" required>
-          <el-select v-model="certForm.certificate_type" placeholder="选择类型">
-            <el-option label="行驶证" value="driving_license" />
-            <el-option label="道路运输证" value="transport_license" />
-            <el-option label="驾驶证" value="driver_license" />
-            <el-option label="其他" value="other" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="关联司机" v-if="certForm.certificate_type === 'driver_license'">
-          <el-select v-model="certForm.driver_id" placeholder="选择司机" filterable clearable>
-            <el-option v-for="d in driverOptions" :key="d.id" :label="d.driver_name" :value="d.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="证件编号">
-          <el-input v-model="certForm.certificate_no" placeholder="输入证件编号" />
-        </el-form-item>
-        <el-form-item label="开始日期">
-          <el-date-picker v-model="certForm.start_date" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" />
-        </el-form-item>
-        <el-form-item label="到期日期">
-          <el-date-picker v-model="certForm.expire_date" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" />
-        </el-form-item>
-        <el-form-item label="金额">
-          <el-input-number v-model="certForm.amount" :min="0" :precision="2" />
-        </el-form-item>
-        <el-form-item label="提前提醒天数">
-          <el-input-number v-model="certForm.reminder_days" :min="1" :max="365" />
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="certForm.remark" type="textarea" :rows="2" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="certDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCertSubmit" :loading="certSubmitting">确定</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
-import { Plus } from '@element-plus/icons-vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useAuthStore } from '@/stores/auth'
+import type { UploadRequestOptions } from 'element-plus'
 import {
   getVehicles, createVehicle, updateVehicle,
   disableVehicle, enableVehicle, scrapVehicle, deleteVehicle,
-  getCertificates, getExpiringVehicles, createCertificate, updateCertificate, deleteCertificate,
-  getDrivers,
-  type CertificateResponse,
+  getExpiringVehicles,
+  getVehicleAttachments, createVehicleAttachment, deleteVehicleAttachment,
   type ExpiringVehicle,
-  type VehicleDriverResponse,
+  type VehicleAttachment,
 } from '@/api/vehicles'
 import type { VehicleCreateData, VehicleUpdateData } from '@/api/vehicles'
 import type { VehicleResponse } from '@/api/vehicles'
+import { VEHICLE_ATTACHMENT_TYPE_LABELS, VEHICLE_ATTACHMENT_TYPE_TAGS } from '@/config/attachment'
 import { getErrorMessage } from '@/utils/error'
 
 const loading = ref(false)
@@ -363,67 +290,9 @@ function statusTagType(s: string) {
   return m[s] || ''
 }
 
-// ── 保险/年检（车辆日期字段）+ 其他证件 ──────────────────────────────────
-const authStore = useAuthStore()
-const canManage = computed(() => authStore.hasAnyRole(['admin', 'finance']))
-
-const certificates = ref<CertificateResponse[]>([])
-const certLoading = ref(false)
-const expiringVehicles = ref<ExpiringVehicle[]>([])
-const driverOptions = ref<VehicleDriverResponse[]>([])
-
-// 保险/年检/保养已并入车辆日期字段；其余证件类型
-const REMAINING_CERT_TYPES = ['driving_license', 'transport_license', 'driver_license', 'other']
-const currentVehicleLabel = ref('')
-
-const certDialogVisible = ref(false)
-const certIsEdit = ref(false)
-const certEditingId = ref('')
-const certSubmitting = ref(false)
-const certForm = reactive({
-  vehicle_id: '',
-  driver_id: '',
-  certificate_type: '',
-  certificate_no: '',
-  start_date: '',
-  expire_date: '',
-  amount: 0,
-  reminder_days: 30,
-  remark: '',
-})
-
-const certTypeMap: Record<string, string> = {
-  compulsory_insurance: '交强险', commercial_insurance: '商业险', annual_inspection: '年检',
-  driving_license: '行驶证', transport_license: '道路运输证', driver_license: '驾驶证',
-  maintenance: '保养提醒', other: '其他',
-}
-function getCertTypeLabel(type: string) { return certTypeMap[type] || type }
-
-function getStatusLabel(status: string) {
-  const map: Record<string, string> = { active: '有效', expired: '已过期', renewed: '已续期', cancelled: '已取消' }
-  return map[status] || status
-}
-function getStatusType(status: string) {
-  const map: Record<string, string> = { active: 'success', expired: 'danger', renewed: 'info', cancelled: 'info' }
-  return map[status] || 'info'
-}
-function getUrgencyType(urgency?: string) {
-  if (urgency === 'expired') return 'danger'
-  if (urgency === 'urgent' || urgency === 'warning') return 'warning'
-  return 'info'
-}
-function getUrgencyLabel(urgency?: string) {
-  if (urgency === 'expired') return '已过期'
-  if (urgency === 'urgent' || urgency === 'warning') return '即将到期'
-  return ''
-}
-function getExpireClass(row: CertificateResponse) {
-  if (row.urgency === 'expired') return 'text-danger'
-  if (row.urgency === 'urgent') return 'text-warning'
-  return ''
-}
-
 // ── 保险/年检到期提醒（仿高空车） ─────────────────────────────────────────
+const expiringVehicles = ref<ExpiringVehicle[]>([])
+
 function getUrgency(d: string): { tag: 'success' | 'warning' | 'danger'; label: string } {
   const days = Math.floor((new Date(d).getTime() - Date.now()) / 86400000)
   if (days < 0) return { tag: 'danger', label: '已过期' }
@@ -452,97 +321,43 @@ function getItemParts(v: ExpiringVehicle): string[] {
   return parts
 }
 
-async function loadCertificates(vehicleId: string) {
-  certLoading.value = true
-  try {
-    const res = await getCertificates({ page: 1, page_size: 100, vehicle_id: vehicleId })
-    certificates.value = (res?.items ?? []).filter(c => REMAINING_CERT_TYPES.includes(c.certificate_type))
-  } catch {
-    certificates.value = []
-  } finally {
-    certLoading.value = false
-  }
-}
-
 async function loadExpiring() {
   try { expiringVehicles.value = (await getExpiringVehicles(30)) ?? [] } catch { expiringVehicles.value = [] }
 }
 
-async function loadDrivers() {
+// ── 附件（照搬高空车档案） ─────────────────────────────────────────────────
+const attachments = ref<VehicleAttachment[]>([])
+const attCategory = ref('other')
+const attUploading = ref(false)
+const VEH_ATT_LABELS = VEHICLE_ATTACHMENT_TYPE_LABELS
+const VEH_ATT_TAGS = VEHICLE_ATTACHMENT_TYPE_TAGS
+
+async function loadAttachments(vehicleId: string) {
+  try { attachments.value = (await getVehicleAttachments(vehicleId)) ?? [] } catch { attachments.value = [] }
+}
+
+async function handleUploadAttachment(options: UploadRequestOptions) {
+  if (!editingId.value) return
+  attUploading.value = true
   try {
-    const res = await getDrivers({ page: 1, page_size: 100 })
-    driverOptions.value = res?.items ?? []
-  } catch {
-    driverOptions.value = []
-  }
-}
-
-function resetCertForm() {
-  Object.assign(certForm, {
-    vehicle_id: editingId.value || '', driver_id: '', certificate_type: '',
-    certificate_no: '', start_date: '', expire_date: '', amount: 0, reminder_days: 30, remark: '',
-  })
-}
-
-function showCertAdd() {
-  certIsEdit.value = false
-  certEditingId.value = ''
-  resetCertForm()
-  certDialogVisible.value = true
-}
-
-function showCertEdit(row: CertificateResponse) {
-  certIsEdit.value = true
-  certEditingId.value = row.id
-  Object.assign(certForm, {
-    vehicle_id: row.vehicle_id || editingId.value,
-    driver_id: row.driver_id || '',
-    certificate_type: row.certificate_type,
-    certificate_no: row.certificate_no || '',
-    start_date: row.start_date || '',
-    expire_date: row.expire_date || '',
-    amount: row.amount,
-    reminder_days: row.reminder_days,
-    remark: row.remark || '',
-  })
-  certDialogVisible.value = true
-}
-
-async function handleCertSubmit() {
-  if (!certForm.vehicle_id) { ElMessage.warning('请选择车辆'); return }
-  if (!certForm.certificate_type) { ElMessage.warning('请选择证件类型'); return }
-  certSubmitting.value = true
-  try {
-    if (certIsEdit.value) {
-      await updateCertificate(certEditingId.value, certForm)
-      ElMessage.success('更新成功')
-    } else {
-      await createCertificate(certForm)
-      ElMessage.success('创建成功')
-    }
-    certDialogVisible.value = false
-    if (editingId.value) await loadCertificates(editingId.value)
-    loadExpiring()
+    await createVehicleAttachment(editingId.value, options.file, attCategory.value)
+    ElMessage.success('上传成功')
+    attachments.value = (await getVehicleAttachments(editingId.value)) ?? []
   } catch (e: unknown) {
-    ElMessage.error(getErrorMessage(e, '操作失败'))
+    ElMessage.error(getErrorMessage(e))
   } finally {
-    certSubmitting.value = false
+    attUploading.value = false
   }
 }
 
-async function handleCertDelete(row: CertificateResponse) {
+async function handleDeleteAttachment(aid: string) {
+  try { await ElMessageBox.confirm('确定删除该附件？', '确认') } catch { return }
   try {
-    await ElMessageBox.confirm('确定删除该证件记录？', '确认删除', { type: 'warning' })
-  } catch {
-    return
-  }
-  try {
-    await deleteCertificate(row.id)
+    await deleteVehicleAttachment(aid)
     ElMessage.success('删除成功')
-    if (editingId.value) await loadCertificates(editingId.value)
-    loadExpiring()
+    if (editingId.value) attachments.value = (await getVehicleAttachments(editingId.value)) ?? []
   } catch (e: unknown) {
-    ElMessage.error(getErrorMessage(e, '删除失败'))
+    ElMessage.error(getErrorMessage(e))
   }
 }
 
@@ -565,8 +380,7 @@ async function fetchData() {
 
 function handleCreate() {
   editingId.value = null
-  certificates.value = []
-  currentVehicleLabel.value = ''
+  attachments.value = []
   Object.assign(form, {
     plate_number: '', vehicle_name: '', vehicle_type: 'van',
     brand_model: '', color: '', purchase_date: '',
@@ -578,7 +392,7 @@ function handleCreate() {
 
 function handleEdit(row: VehicleResponse) {
   editingId.value = row.id
-  currentVehicleLabel.value = `${row.plate_number} - ${row.vehicle_name}`
+  attachments.value = []
   Object.assign(form, {
     plate_number: row.plate_number,
     vehicle_name: row.vehicle_name,
@@ -595,7 +409,7 @@ function handleEdit(row: VehicleResponse) {
     remark: row.remark || '',
   })
   dialogVisible.value = true
-  loadCertificates(row.id)
+  loadAttachments(row.id)
 }
 
 async function handleSave() {
@@ -651,7 +465,6 @@ async function handleDelete(row: VehicleResponse) {
 onMounted(() => {
   fetchData()
   loadExpiring()
-  loadDrivers()
 })
 </script>
 
@@ -660,10 +473,8 @@ onMounted(() => {
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .search-bar { display: flex; align-items: center; }
-.cert-section { margin-bottom: 8px; }
-.cert-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.cert-title { font-size: 13px; color: #909399; }
+.att-upload-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.att-list { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.att-link { text-decoration: none; }
 .expiring-item { margin-bottom: 4px; font-size: 13px; }
-.text-danger { color: #f56c6c; font-weight: bold; }
-.text-warning { color: #e6a23c; font-weight: bold; }
 </style>

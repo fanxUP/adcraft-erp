@@ -372,3 +372,23 @@ class VehicleAgentDraft(Base, TimestampMixin):
         Index("ix_vehicle_agent_drafts_intent", "intent"),
         Index("ix_vehicle_agent_drafts_platform", "platform"),
     )
+
+
+# ── 车辆档案附件 ────────────────────────────────────────────────────────────────
+
+class VehicleAttachment(Base):
+    """公司车辆档案附件（行驶证/登记证/保险单/年检/保养记录等）"""
+    __tablename__ = "vehicle_attachments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    vehicle_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("vehicles.id"), nullable=False, comment="关联车辆")
+    attachment_type: Mapped[str] = mapped_column(String(32), default="other", nullable=False, comment="附件类型: license/registration/insurance/inspection/maintenance/other")
+    file_url: Mapped[str] = mapped_column(String(500), nullable=False, comment="文件URL")
+    file_name: Mapped[str | None] = mapped_column(String(256), nullable=True, comment="文件名")
+    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="上传人")
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False, comment="上传时间")
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+
+    __table_args__ = (
+        Index("ix_vehicle_attachments_vehicle_id", "vehicle_id"),
+    )
