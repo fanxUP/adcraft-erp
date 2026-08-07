@@ -524,6 +524,11 @@ export const getAerialVehicleCosts = (params?: AerialQueryParams) =>
 export const createAerialVehicleCost = (data: AerialVehicleCostCreate) =>
   post<AerialVehicleCost>('/aerial/vehicle-costs', data)
 
+export type AerialVehicleCostUpdate = Partial<Omit<AerialVehicleCost, 'id' | 'created_at'>>
+
+export const updateAerialVehicleCost = (id: string, data: AerialVehicleCostUpdate) =>
+  patch<AerialVehicleCost>(`/aerial/vehicle-costs/${id}`, data)
+
 export const deleteAerialVehicleCost = (id: string) =>
   del<AerialVehicleCost>(`/aerial/vehicle-costs/${id}`)
 

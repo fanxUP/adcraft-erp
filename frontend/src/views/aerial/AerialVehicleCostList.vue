@@ -10,18 +10,22 @@
     </div>
     <el-table :data="list" stripe v-loading="loading">
       <el-table-column prop="cost_date" label="日期" width="115" />
-      <el-table-column prop="cost_type" label="费用类型" width="105"><template #default="{ row }">{{ costTypeLabel(row.cost_type) }}</template></el-table-column>
-      <el-table-column prop="amount" label="金额" width="130" align="right"><template #default="{ row }">¥{{ Number(row.amount).toFixed(2) }}</template></el-table-column>
       <el-table-column prop="plate_number" label="车辆" min-width="120" show-overflow-tooltip />
-      <el-table-column prop="payer_name" label="支付人" min-width="100" show-overflow-tooltip />
-      <el-table-column prop="allocation_type" label="分摊方式" width="105"><template #default="{ row }">{{ allocLabel(row.allocation_type) }}</template></el-table-column>
       <el-table-column prop="summary" label="费用摘要" min-width="140" show-overflow-tooltip><template #default="{ row }">{{ row.summary || '—' }}</template></el-table-column>
+      <el-table-column prop="amount" label="金额" width="130" align="right"><template #default="{ row }">¥{{ Number(row.amount).toFixed(2) }}</template></el-table-column>
+      <el-table-column prop="cost_type" label="费用类型" width="105"><template #default="{ row }">{{ costTypeLabel(row.cost_type) }}</template></el-table-column>
+      <el-table-column prop="allocation_type" label="分摊方式" width="105"><template #default="{ row }">{{ allocLabel(row.allocation_type) }}</template></el-table-column>
       <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
-      <el-table-column label="操作" width="70"><template #default="{ row }"><el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button></template></el-table-column>
+      <el-table-column label="操作" width="120">
+        <template #default="{ row }">
+          <el-button type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
+          <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+        </template>
+      </el-table-column>
     </el-table>
     <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px" @current-change="fetchData" />
 
-    <el-dialog v-model="dialogVisible" title="新增车辆费用" width="600px" destroy-on-close :close-on-click-modal="false">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑车辆费用' : '新增车辆费用'" width="600px" destroy-on-close :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-form-item label="高空车" required>
           <el-select v-model="form.aerial_vehicle_id" style="width: 100%">
@@ -61,6 +65,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getAerialVehicleCosts,
   createAerialVehicleCost,
+  updateAerialVehicleCost,
   deleteAerialVehicleCost,
   getAerialVehicles,
   getAerialPersonnel,
@@ -71,7 +76,7 @@ import {
 } from '@/api/aerial'
 import { getErrorMessage } from '@/utils/error'
 
-const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
+const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false); const editingId = ref('')
 const list = ref<AerialVehicleCost[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
 const vehicleOptions = ref<AerialVehicle[]>([])
 const personnelOptions = ref<AerialPersonnel[]>([])
@@ -98,7 +103,23 @@ async function fetchData() {
 }
 
 function handleCreate() {
+  editingId.value = ''
   Object.assign(form, { aerial_vehicle_id: '', cost_date: '', cost_type: '', amount: 0, allocation_type: 'none', payer_id: '', summary: '', remark: '' })
+  dialogVisible.value = true
+}
+
+function handleEdit(row: AerialVehicleCost) {
+  editingId.value = row.id
+  Object.assign(form, {
+    aerial_vehicle_id: row.aerial_vehicle_id,
+    cost_date: row.cost_date ? row.cost_date + 'T00:00:00' : '',
+    cost_type: row.cost_type,
+    amount: row.amount,
+    allocation_type: row.allocation_type || 'none',
+    payer_id: row.payer_id || '',
+    summary: row.summary || '',
+    remark: row.remark || '',
+  })
   dialogVisible.value = true
 }
 
@@ -117,8 +138,18 @@ async function handleSave() {
   if (!form.cost_type) return ElMessage.warning('请选择费用类型')
   if (form.amount <= 0) return ElMessage.warning('金额必须大于0')
   saving.value = true
-  try { await createAerialVehicleCost(form); ElMessage.success('新增成功'); dialogVisible.value = false; fetchData() }
-  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { saving.value = false }
+  try {
+    if (editingId.value) {
+      await updateAerialVehicleCost(editingId.value, { ...form })
+      ElMessage.success('已保存')
+    } else {
+      await createAerialVehicleCost(form)
+      ElMessage.success('新增成功')
+    }
+    editingId.value = ''
+    dialogVisible.value = false
+    fetchData()
+  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { saving.value = false }
 }
 
 function costTypeLabel(t: string) { return costTypes.find(c => c.value === t)?.label || t }

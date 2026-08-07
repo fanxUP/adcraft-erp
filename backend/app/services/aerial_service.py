@@ -671,6 +671,40 @@ class AerialService:
 
         return self._cost_to_dict(obj)
 
+    async def update_cost(self, cost_id: str, data: dict) -> dict:
+        obj = await self.repo.get_cost(uuid.UUID(cost_id))
+        if not obj:
+            raise ValueError("费用记录不存在")
+        # 空 ledger_id 直接忽略，避免空串写入 UUID 列
+        if "ledger_id" in data and not data.get("ledger_id"):
+            data.pop("ledger_id")
+        if "amount" in data and data["amount"] is not None and float(data["amount"]) <= 0:
+            raise ValueError("金额必须大于 0")
+        if data.get("aerial_vehicle_id"):
+            data["aerial_vehicle_id"] = uuid.UUID(data["aerial_vehicle_id"])
+        if data.get("cost_date"):
+            data["cost_date"] = datetime.fromisoformat(data["cost_date"]) if isinstance(data["cost_date"], str) else data["cost_date"]
+        for k in ["handler_id", "payer_id"]:
+            if k in data:
+                val = data.get(k)
+                if val:
+                    data[k] = uuid.UUID(val)
+                else:
+                    # 显式清空（repo.update_cost 跳过 None，需直接置空）
+                    setattr(obj, k, None)
+                    await self.db.flush()
+                    data.pop(k, None)
+        old_amount = float(obj.amount)
+        new_amount = float(data["amount"]) if "amount" in data and data["amount"] is not None else old_amount
+        obj = await self.repo.update_cost(obj, data)
+        # 若改金额且关联台账，按差值同步台账车辆费用（镜像 create/delete_cost）
+        if obj.ledger_id and abs(new_amount - old_amount) > 1e-9:
+            ledger = await self.repo.get_ledger(obj.ledger_id)
+            if ledger:
+                new_cost = float(ledger.vehicle_direct_cost) + (new_amount - old_amount)
+                await self.repo.update_ledger(ledger, {"vehicle_direct_cost": max(new_cost, 0)})
+        return self._cost_to_dict(obj)
+
     async def delete_cost(self, cost_id: str) -> dict:
         obj = await self.repo.get_cost(uuid.UUID(cost_id))
         if not obj:

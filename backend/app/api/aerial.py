@@ -584,6 +584,22 @@ async def create_cost(
     return success(result)
 
 
+@cost_router.patch("/{cost_id}")
+async def update_cost(
+    cost_id: str,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_UPDATE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    try:
+        result = await svc.update_cost(cost_id, data)
+        return success(result)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @cost_router.delete("/{cost_id}")
 async def delete_cost(
     cost_id: str,
