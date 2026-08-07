@@ -15,7 +15,9 @@
       <el-table-column prop="plate_number" label="车辆" min-width="120" show-overflow-tooltip />
       <el-table-column prop="payer_name" label="支付人" min-width="100" show-overflow-tooltip />
       <el-table-column prop="allocation_type" label="分摊方式" width="105"><template #default="{ row }">{{ allocLabel(row.allocation_type) }}</template></el-table-column>
-      <el-table-column prop="remark" label="备注" min-width="200" show-overflow-tooltip />
+      <el-table-column prop="summary" label="费用摘要" min-width="140" show-overflow-tooltip><template #default="{ row }">{{ row.summary || '—' }}</template></el-table-column>
+      <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
+      <el-table-column label="操作" width="70"><template #default="{ row }"><el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button></template></el-table-column>
     </el-table>
     <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px" @current-change="fetchData" />
 
@@ -45,6 +47,7 @@
             <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
         </el-form-item>
+        <el-form-item label="费用摘要"><el-input v-model="form.summary" placeholder="一句话描述用途，如：和田工地保险费" maxlength="200" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
@@ -54,10 +57,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getAerialVehicleCosts,
   createAerialVehicleCost,
+  deleteAerialVehicleCost,
   getAerialVehicles,
   getAerialPersonnel,
   type AerialPersonnel,
@@ -72,7 +76,7 @@ const list = ref<AerialVehicleCost[]>([]); const total = ref(0); const page = re
 const vehicleOptions = ref<AerialVehicle[]>([])
 const personnelOptions = ref<AerialPersonnel[]>([])
 const filters = reactive({ dateRange: [] as string[], cost_type: '' })
-const form = reactive({ aerial_vehicle_id: '', cost_date: '', cost_type: '', amount: 0, allocation_type: 'none', payer_id: '', remark: '' })
+const form = reactive({ aerial_vehicle_id: '', cost_date: '', cost_type: '', amount: 0, allocation_type: 'none', payer_id: '', summary: '', remark: '' })
 
 const costTypes = [
   { value: 'fuel', label: '油费' }, { value: 'maintenance', label: '维修费' }, { value: 'insurance', label: '保险费' },
@@ -94,8 +98,17 @@ async function fetchData() {
 }
 
 function handleCreate() {
-  Object.assign(form, { aerial_vehicle_id: '', cost_date: '', cost_type: '', amount: 0, allocation_type: 'none', payer_id: '', remark: '' })
+  Object.assign(form, { aerial_vehicle_id: '', cost_date: '', cost_type: '', amount: 0, allocation_type: 'none', payer_id: '', summary: '', remark: '' })
   dialogVisible.value = true
+}
+
+async function handleDelete(row: AerialVehicleCost) {
+  try { await ElMessageBox.confirm(`确认删除该笔费用（${costTypeLabel(row.cost_type)} ¥${Number(row.amount).toFixed(2)}）？`, '删除确认', { type: 'warning' }) } catch { return }
+  try {
+    await deleteAerialVehicleCost(row.id)
+    ElMessage.success('已删除')
+    fetchData()
+  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) }
 }
 
 async function handleSave() {

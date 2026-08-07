@@ -234,6 +234,7 @@ class AerialVehicleCost(Base, TimestampMixin):
     review_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, comment="审核状态: pending/approved/rejected")
     reviewed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="审核人")
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="审核时间")
+    summary: Mapped[str | None] = mapped_column(String(200), nullable=True, comment="费用摘要")
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
 
     aerial_vehicle: Mapped["AerialVehicle"] = relationship("AerialVehicle", foreign_keys=[aerial_vehicle_id], lazy="selectin")

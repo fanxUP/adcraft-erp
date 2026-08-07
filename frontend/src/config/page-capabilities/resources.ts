@@ -91,7 +91,7 @@ export const resourceCapabilities: PageCapabilityMap = {
     title: '高空车车辆费用',
     purpose: '登记高空作业车辆相关运营成本',
     workflowStage: 'aerial_finance',
-    availableActions: ['查询车辆成本', '登记费用'],
+    availableActions: ['查询车辆成本', '登记费用', '删除费用'],
   },
   aerial_safety_checks: {
     title: '高空车安全检查',

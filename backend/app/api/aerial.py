@@ -584,6 +584,21 @@ async def create_cost(
     return success(result)
 
 
+@cost_router.delete("/{cost_id}")
+async def delete_cost(
+    cost_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_AERIAL_DELETE)),
+    request: Request = None,
+):
+    svc = _svc(db, current_user, request)
+    try:
+        result = await svc.delete_cost(cost_id)
+        return success(result)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 # ── 安全检查 ────────────────────────────────────────────────────────────────
 
 @safety_router.get("")

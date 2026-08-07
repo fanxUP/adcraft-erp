@@ -172,6 +172,7 @@ export interface AerialVehicleCost {
   cost_date: string
   cost_type: string
   amount: number
+  summary?: string
   handler_id?: string
   payer_id?: string
   payer_name?: string
@@ -522,6 +523,9 @@ export const getAerialVehicleCosts = (params?: AerialQueryParams) =>
 
 export const createAerialVehicleCost = (data: AerialVehicleCostCreate) =>
   post<AerialVehicleCost>('/aerial/vehicle-costs', data)
+
+export const deleteAerialVehicleCost = (id: string) =>
+  del<AerialVehicleCost>(`/aerial/vehicle-costs/${id}`)
 
 // ── Safety Check API ───────────────────────────────────────────────────────
 

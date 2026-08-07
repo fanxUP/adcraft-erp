@@ -461,6 +461,11 @@ class AerialRepository:
         await self.db.refresh(obj)
         return obj
 
+    async def delete_cost(self, obj: AerialVehicleCost):
+        await self.db.delete(obj)
+        await self.db.flush()
+        return obj
+
     # ── 安全检查 ────────────────────────────────────────────────────────────
 
     async def list_safety_checks(self, ledger_id: str, check_type: Optional[str] = None):

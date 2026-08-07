@@ -671,6 +671,19 @@ class AerialService:
 
         return self._cost_to_dict(obj)
 
+    async def delete_cost(self, cost_id: str) -> dict:
+        obj = await self.repo.get_cost(uuid.UUID(cost_id))
+        if not obj:
+            raise ValueError("费用记录不存在")
+        # 若关联台账，反向扣减台账车辆费用（镜像 create_cost）
+        if obj.ledger_id:
+            ledger = await self.repo.get_ledger(obj.ledger_id)
+            if ledger:
+                new_cost = float(ledger.vehicle_direct_cost) - float(obj.amount)
+                await self.repo.update_ledger(ledger, {"vehicle_direct_cost": max(new_cost, 0)})
+        await self.repo.delete_cost(obj)
+        return self._cost_to_dict(obj)
+
     def _cost_to_dict(self, c):
         return {
             "id": str(c.id),
@@ -680,6 +693,7 @@ class AerialService:
             "cost_date": c.cost_date.strftime("%Y-%m-%d") if c.cost_date else None,
             "cost_type": c.cost_type,
             "amount": float(c.amount),
+            "summary": c.summary,
             "handler_id": str(c.handler_id) if c.handler_id else None,
             "payer_id": str(c.payer_id) if c.payer_id else None,
             "payer_name": c.payer.name if c.payer else None,
