@@ -688,24 +688,29 @@ function handleDragEnd(evt: Sortable.SortableEvent) {
 
   // 落点 = 拖拽行在 DOM 中的下一个兄弟行（天然代表视觉落点，不受分组结构影响）
   const succ = evt.item.nextElementSibling as HTMLElement | null
-  let insertAt = rest.length
-  let afterHeader = false
-  if (succ) {
-    const sk = rkKeyOf(succ)
-    const si = rest.findIndex(r => r.key === sk)
-    if (si >= 0) {
-      // 表头拖回自己块内（落到自己的条目/合计之间）→ 无操作
-      if (isGroup && blockRows.some(r => r.key === sk)) return
-      insertAt = si
-      afterHeader = rest[si].type === 'group-header'
-    }
-  }
-  // 条目落到分项表头正下方 → 成为该分项第一条；其余情况插在落点之前
-  const finalRows = (!isGroup && afterHeader)
-    ? [...rest.slice(0, insertAt + 1), dragged, ...rest.slice(insertAt + 1)]
-    : [...rest.slice(0, insertAt), ...blockRows, ...rest.slice(insertAt)]
+  const succKey = succ ? rkKeyOf(succ) : null
 
-  rebuildItemsFromRows(finalRows)
+  if (isGroup) {
+    // 组拖拽：按"分项边界"整体落位，绝不把分项拆进别的分项内部
+    if (succKey && blockRows.some(r => r.key === succKey)) return
+    const insertAt = groupBoundaryIndex(rest, succKey)
+    rebuildItemsFromRows([...rest.slice(0, insertAt), ...blockRows, ...rest.slice(insertAt)])
+  } else {
+    let insertAt = rest.length
+    let afterHeader = false
+    if (succKey) {
+      const si = rest.findIndex(r => r.key === succKey)
+      if (si >= 0) {
+        insertAt = si
+        afterHeader = rest[si].type === 'group-header'
+      }
+    }
+    // 条目落到分项表头正下方 → 成为该分项第一条；其余情况插在落点之前
+    const finalRows = afterHeader
+      ? [...rest.slice(0, insertAt + 1), dragged, ...rest.slice(insertAt + 1)]
+      : [...rest.slice(0, insertAt), ...blockRows, ...rest.slice(insertAt)]
+    rebuildItemsFromRows(finalRows)
+  }
 }
 
 function rkKeyOf(tr: HTMLElement): string {
@@ -717,6 +722,19 @@ function blockOf(rows: DisplayRow[], headerIdx: number): DisplayRow[] {
   const h = rows[headerIdx]
   const end = rows.findIndex((r, i) => i > headerIdx && r.type === 'group-total' && r.groupName === h.groupName)
   return rows.slice(headerIdx, end >= 0 ? end + 1 : rows.length)
+}
+
+// 组拖拽落位：把"落在某分项内部"吸附到分项边界（整体插到该分项之后）
+function groupBoundaryIndex(rest: DisplayRow[], succKey: string | null): number {
+  if (!succKey) return rest.length
+  const si = rest.findIndex(r => r.key === succKey)
+  if (si < 0) return rest.length
+  const row = rest[si]
+  if (row.type === 'group-header') return si
+  if (row.gi < 0) return si
+  let j = si
+  while (j < rest.length && rest[j].type !== 'group-total') j++
+  return j < rest.length ? j + 1 : rest.length
 }
 
 function rebuildItemsFromRows(rows: DisplayRow[]) {
