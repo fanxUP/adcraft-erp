@@ -615,13 +615,15 @@ function initSortable() {
 let groupDragCard: HTMLElement | null = null
 
 function handleDragStart(evt: Sortable.SortableEvent) {
-  const oldIndex = evt.oldIndex
-  if (oldIndex == null) return
-  const dragged = displayRows.value[oldIndex]
+  // start 事件不带 oldIndex（sortable 只传 originalEvent），必须从被拖的 DOM 行反查
+  // evt.item 恒为拖拽元素（rk- 类 → displayRows 的 key）
+  const key = rkKeyOf(evt.item)
+  const dragged = displayRows.value.find(r => r.key === key)
   if (!dragged || dragged.type !== 'group-header') return
 
   const rows = displayRows.value
-  const block = blockOf(rows, oldIndex)
+  const headerIdx = rows.indexOf(dragged)
+  const block = blockOf(rows, headerIdx)
   const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody')
 
   // 隐藏原生拖拽快照（浏览器默认只跟随表头一行），改由下方整组卡片跟随
