@@ -5,17 +5,16 @@
     title="新建产品/材质/工艺"
     width="min(560px, 92vw)"
     :close-on-click-modal="false"
-    @opened="syncTextareaScroll"
   >
     <el-form :model="form" label-width="80px">
       <el-form-item label="产品">
-        <el-input ref="nameInput" v-model="form.name" type="textarea" :rows="3" placeholder="如：标识牌" @input="syncTextareaScroll" />
+        <el-input v-model="form.name" type="textarea" :rows="3" placeholder="如：标识牌" />
       </el-form-item>
       <el-form-item label="材质">
-        <el-input ref="materialInput" v-model="form.material_name" type="textarea" :rows="3" placeholder="如：亚克力" @input="syncTextareaScroll" />
+        <el-input v-model="form.material_name" type="textarea" :rows="3" placeholder="如：亚克力" />
       </el-form-item>
       <el-form-item label="工艺">
-        <el-input ref="processInput" v-model="form.process_name" type="textarea" :rows="3" placeholder="如：UV打印" @input="syncTextareaScroll" />
+        <el-input v-model="form.process_name" type="textarea" :rows="3" placeholder="如：UV打印" />
       </el-form-item>
       <el-form-item label="单位">
         <el-select v-model="form.unit" style="width: 100%">
@@ -54,7 +53,7 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { ElInput, ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { createProduct } from '@/api/products'
 import type { ProductResponse } from '@/types/api'
 
@@ -65,16 +64,6 @@ const emit = defineEmits<{
 }>()
 
 const saving = ref(false)
-const nameInput = ref<InstanceType<typeof ElInput>>()
-const materialInput = ref<InstanceType<typeof ElInput>>()
-const processInput = ref<InstanceType<typeof ElInput>>()
-
-function syncTextareaScroll() {
-  for (const el of [nameInput.value, materialInput.value, processInput.value]) {
-    const t = (el as unknown as { textarea?: HTMLTextAreaElement } | undefined)?.textarea
-    if (t) t.classList.toggle('has-scroll', t.scrollHeight > t.clientHeight)
-  }
-}
 const form = reactive({
   name: '',
   material_name: '',
@@ -111,17 +100,16 @@ async function handleSave() {
 </script>
 
 <style scoped>
-/* 产品/材质/工艺文本域：滚动条常驻输入框，未满3行灰色，可滚动时深色滑块 */
+/* 产品/材质/工艺文本域：滚动条常驻输入框，未满3行灰轨+上下箭头，可滚动时深色滑块浮现。
+   根因：Chrome 121+ 设置标准 scrollbar-width/scrollbar-color 会走标准渲染路径，
+   macOS 上为 overlay 自动隐藏且压制 ::-webkit-scrollbar，故仅用 webkit 伪元素；
+   Firefox 不支持 webkit 伪元素，@supports not 单独给标准属性。 */
 :deep(.el-textarea__inner) {
   overflow-y: scroll;
-  scrollbar-width: thin;
-  scrollbar-color: #d8d8d8 #d8d8d8;
-}
-:deep(.el-textarea__inner.has-scroll) {
-  scrollbar-color: #909399 #d8d8d8;
 }
 :deep(.el-textarea__inner::-webkit-scrollbar) {
-  width: 8px;
+  width: 12px;
+  background: #f0f0f0;
 }
 :deep(.el-textarea__inner::-webkit-scrollbar-track) {
   background: #d8d8d8;
@@ -131,6 +119,25 @@ async function handleSave() {
   background-color: #909399;
   border: 2px solid #d8d8d8;
   border-radius: 4px;
+}
+:deep(.el-textarea__inner::-webkit-scrollbar-button) {
+  display: block;
+  height: 16px;
+  background-color: #e4e4e4;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+:deep(.el-textarea__inner::-webkit-scrollbar-button:vertical:decrement) {
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M6 2 L11 8 L1 8 Z' fill='%23909999'/%3E%3C/svg%3E");
+}
+:deep(.el-textarea__inner::-webkit-scrollbar-button:vertical:increment) {
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M1 3 L11 3 L6 10 Z' fill='%23909999'/%3E%3C/svg%3E");
+}
+@supports not selector(::-webkit-scrollbar) {
+  :deep(.el-textarea__inner) {
+    scrollbar-width: thin;
+    scrollbar-color: #909399 #d8d8d8;
+  }
 }
 </style>
 
