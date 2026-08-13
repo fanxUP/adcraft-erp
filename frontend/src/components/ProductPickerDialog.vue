@@ -110,6 +110,9 @@
         <el-form-item label="最低收费">
           <el-input-number v-model="editForm.min_charge" :min="0" :precision="2" style="width: 100%" />
         </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="editForm.remark" type="textarea" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="editVisible = false">取消</el-button>
@@ -163,6 +166,7 @@ const editForm = ref({
   pricing_method: '',
   default_price: 0,
   min_charge: 0,
+  remark: '',
 })
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -249,6 +253,7 @@ function openEdit(product: ProductResponse) {
     pricing_method: product.pricing_method ?? '',
     default_price: product.default_price ?? 0,
     min_charge: product.min_charge ?? 0,
+    remark: product.remark ?? '',
   }
   editVisible.value = true
 }
