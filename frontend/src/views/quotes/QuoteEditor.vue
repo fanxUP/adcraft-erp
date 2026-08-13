@@ -75,7 +75,7 @@
           <template #default="{ row }">
             <template v-if="row.type === 'group-header'">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-weight: 600; white-space: nowrap;">分项名称：</span>
+                <span class="group-header-drag" title="拖动整个分项" style="font-weight: 600; white-space: nowrap;">分项名称：</span>
                 <el-input v-if="!isReadonly" :model-value="row.groupName" size="small" style="flex: 1" placeholder="输入分项名称" @input="(v: string) => renameGroup(row.groupName, v)" />
                 <span v-else style="font-weight: 600;">{{ row.groupName }}</span>
               </div>
@@ -600,16 +600,81 @@ function initSortable() {
   if (sortable) { sortable.destroy(); sortable = null }
   if (!tbody || isReadonly.value) return
   sortable = Sortable.create(tbody as HTMLElement, {
-    handle: '.row-drag-handle',
+    handle: '.row-drag-handle, .group-header-drag',
     animation: 150,
     ghostClass: 'ad-drag-ghost',
     chosenClass: 'ad-drag-chosen',
     dragClass: 'ad-drag-dragging',
+    onStart: handleDragStart,
+    onMove: handleDragMove,
     onEnd: handleDragEnd,
   })
 }
 
+// ── 组拖拽：整组跟随卡片 + 源分项整块"选中感" ──
+let groupDragCard: HTMLElement | null = null
+
+function handleDragStart(evt: Sortable.SortableEvent) {
+  const oldIndex = evt.oldIndex
+  if (oldIndex == null) return
+  const dragged = displayRows.value[oldIndex]
+  if (!dragged || dragged.type !== 'group-header') return
+
+  const rows = displayRows.value
+  const block = blockOf(rows, oldIndex)
+  const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody')
+
+  // 隐藏原生拖拽快照（浏览器默认只跟随表头一行），改由下方整组卡片跟随
+  const de = (evt as { originalEvent?: DragEvent }).originalEvent
+  const blank = document.createElement('canvas')
+  blank.width = blank.height = 0
+  de?.dataTransfer?.setDragImage(blank, 0, 0)
+
+  // 源分项整块"选中感"：高亮 + 轻微降透明
+  document.body.classList.add('ad-group-drag')
+  for (const r of block) tbody?.querySelector('.rk-' + r.key)?.classList.add('ad-drag-lifted')
+
+  // 整组概要卡片（跟随光标）
+  const card = document.createElement('div')
+  card.className = 'ad-drag-card'
+  card.style.setProperty('--ad-g', `var(--ad-group-${((dragged.gi % 5) + 1)})`)
+  const header = block.find(r => r.type === 'group-header')
+  const items = block.filter(r => r.type === 'item')
+  const total = block.find(r => r.type === 'group-total')?.total ?? 0
+  const nameEl = document.createElement('div')
+  nameEl.className = 'ad-drag-card__name'
+  nameEl.textContent = `分项：${header?.groupName ?? ''}`
+  const metaEl = document.createElement('div')
+  metaEl.className = 'ad-drag-card__meta'
+  metaEl.textContent = `${items.length} 条明细 · 合计 ¥${total.toFixed(2)}`
+  card.append(nameEl, metaEl)
+  document.body.appendChild(card)
+  groupDragCard = card
+  positionDragCard(de?.clientX ?? 0, de?.clientY ?? 0)
+}
+
+function positionDragCard(clientX: number, clientY: number) {
+  if (!groupDragCard) return
+  groupDragCard.style.transform = `translate(${clientX + 14}px, ${clientY + 14}px)`
+}
+
+function handleDragMove(_evt: Sortable.MoveEvent, originalEvent: Event) {
+  const e = originalEvent as MouseEvent | TouchEvent
+  const x = 'clientX' in e ? e.clientX : 0
+  const y = 'clientY' in e ? e.clientY : 0
+  positionDragCard(x, y)
+}
+
+function cleanupGroupDrag() {
+  document.body.classList.remove('ad-group-drag')
+  if (groupDragCard) { groupDragCard.remove(); groupDragCard = null }
+  const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody')
+  const lifted = tbody?.querySelectorAll('.ad-drag-lifted')
+  lifted?.forEach((el: Element) => el.classList.remove('ad-drag-lifted'))
+}
+
 function handleDragEnd(evt: Sortable.SortableEvent) {
+  cleanupGroupDrag()
   const oldIndex = evt.oldIndex
   if (oldIndex == null || evt.newIndex == null || oldIndex === evt.newIndex) return
   const rows = displayRows.value
@@ -1069,4 +1134,26 @@ watch(() => route.params.id, async (newId) => {
 :deep(.ad-drag-ghost) { opacity: 0.4; }
 :deep(.ad-drag-ghost td) { background: rgba(148, 163, 184, 0.15) !important; }
 :deep(.ad-drag-chosen td) { background: rgba(var(--ad-g, 148, 163, 184), 0.25) !important; }
+</style>
+
+<style>
+/* 组拖拽（整组跟随）：源分项整块"选中感"——高亮 + 轻微降透明 */
+body.ad-group-drag tr.ad-drag-lifted td { background: rgba(var(--ad-g), 0.2) !important; }
+body.ad-group-drag tr.ad-drag-lifted { opacity: 0.75 !important; }
+
+/* 组拖拽：整组概要卡片跟随光标（Notion 式），挂在 body 上，须全局样式 */
+.ad-drag-card {
+  position: fixed; left: 0; top: 0; z-index: 9999; pointer-events: none;
+  min-width: 200px; max-width: 340px; padding: 8px 14px 8px 12px;
+  background: #fff; border-radius: 8px;
+  border: 1px solid rgba(var(--ad-g), 0.4); border-left: 4px solid rgba(var(--ad-g), 0.95);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+  font-size: 13px; line-height: 1.6; color: #1f2329; will-change: transform;
+}
+.ad-drag-card__name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-drag-card__meta { color: #909399; font-size: 12px; }
+
+/* 分项名称标签可直接拖起整组（输入框仍可正常编辑） */
+.group-header-drag { cursor: grab; user-select: none; }
+.group-header-drag:hover { color: var(--ad-primary, #409eff); }
 </style>
