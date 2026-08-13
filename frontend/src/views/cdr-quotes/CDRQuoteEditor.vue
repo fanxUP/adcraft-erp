@@ -334,7 +334,6 @@ const saving = ref(false)
 
 const customers = ref<CustomerResponse[]>([])
 const contactOptions = ref<ContactResponse[]>([])
-const products = ref<ProductResponse[]>([])
 const productPickerVisible = ref(false)
 const pendingPickerLine = ref<EditorLine | null>(null)
 const pendingPickerIndex = ref(-1)
@@ -406,12 +405,8 @@ const summary = computed(() => {
 
 async function fetchLookups() {
   try {
-    const [custRes, prodRes] = await Promise.all([
-      api.get<PaginatedData<CustomerResponse>>('/customers/'),
-      api.get<PaginatedData<ProductResponse>>('/products/'),
-    ])
+    const custRes = await api.get<PaginatedData<CustomerResponse>>('/customers/')
     customers.value = custRes.items || []
-    products.value = (prodRes.items || []).filter(item => item.is_active)
   } catch { /* ignore */ }
 }
 
