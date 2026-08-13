@@ -66,8 +66,8 @@
       <el-table ref="tableRef" :data="displayRows" stripe border scrollbar-always-on :row-key="(row: DisplayRow) => row.key" :row-class-name="rowClassName">
         <el-table-column v-if="!isReadonly" label="排序" width="46" align="center">
           <template #default="{ row }">
-            <span v-if="row.type === 'group-header'" class="row-drag-handle" title="拖动排序" @mousedown="dragStartKey = row.key">⠿</span>
-            <span v-else-if="row.type === 'item'" class="row-drag-handle" title="拖动排序" @mousedown="dragStartKey = row.key">
+            <span v-if="row.type === 'group-header'" class="row-drag-handle" title="拖动整个分项" @mousedown="dragStartKey = row.key" @touchstart.passive="dragStartKey = row.key">⠿</span>
+            <span v-else-if="row.type === 'item'" class="row-drag-handle" title="拖动排序" @mousedown="dragStartKey = row.key" @touchstart.passive="dragStartKey = row.key">
               <el-icon><Rank /></el-icon>
             </span>
           </template>
@@ -76,7 +76,7 @@
           <template #default="{ row }">
             <template v-if="row.type === 'group-header'">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="group-header-drag" title="拖动整个分项" style="font-weight: 600; white-space: nowrap;" @mousedown="dragStartKey = row.key">分项名称：</span>
+                <span class="group-header-drag" title="拖动整个分项" style="font-weight: 600; white-space: nowrap;" @mousedown="dragStartKey = row.key" @touchstart.passive="dragStartKey = row.key">分项名称：</span>
                 <el-input v-if="!isReadonly" :model-value="row.groupName" size="small" style="flex: 1" placeholder="输入分项名称" @input="(v: string) => renameGroup(row.groupName, v)" />
                 <span v-else style="font-weight: 600;">{{ row.groupName }}</span>
               </div>
@@ -323,6 +323,14 @@ import {
   migrateLegacyQuoteDimensions,
   syncQuoteLineAreaQuantity,
 } from '@/utils/quoteLineCalculation'
+import {
+  applyQuoteDisplayOrder,
+  buildQuoteDisplayRows,
+  getQuoteGroupBlock,
+  isDuplicateQuoteGroupName,
+  reorderQuoteDisplayRows,
+  type QuoteDisplayRow,
+} from '@/utils/quoteItemOrdering'
 
 const route = useRoute()
 const router = useRouter()
@@ -552,39 +560,19 @@ function removeItem(target: QuoteItemResponse) {
 
 function renameGroup(oldName: string, newName: string) {
   if (!newName || oldName === newName) return
+  if (isDuplicateQuoteGroupName(items.value, oldName, newName)) {
+    ElMessage.warning('分项名称不能重复，否则两组明细会合并')
+    return
+  }
   items.value.forEach(i => { if (i.group_name === oldName) i.group_name = newName })
 }
 
-type DisplayRow =
-  | { type: 'group-header'; groupName: string; gi: number; key: string }
-  | { type: 'item'; item: QuoteItemResponse; groupName: string; gi: number; key: string }
-  | { type: 'group-total'; groupName: string; total: number; gi: number; key: string }
+type DisplayRow = QuoteDisplayRow<QuoteItemResponse>
 
-const displayRows = computed<DisplayRow[]>(() => {
-  const grouped = new Map<string, QuoteItemResponse[]>()
-  const ungrouped: QuoteItemResponse[] = []
-
-  for (const item of items.value) {
-    if (item.group_name) {
-      if (!grouped.has(item.group_name)) grouped.set(item.group_name, [])
-      grouped.get(item.group_name)!.push(item)
-    } else {
-      ungrouped.push(item)
-    }
-  }
-
-  const rows: DisplayRow[] = []
-  let gi = 0
-  for (const [groupName, groupItems] of grouped) {
-    rows.push({ type: 'group-header', groupName, gi, key: 'gh-' + gi })
-    for (const item of groupItems) rows.push({ type: 'item', item, groupName, gi, key: rowKeyFor(item) })
-    const total = groupItems.reduce((s, i) => s + calcSubtotal(i), 0)
-    rows.push({ type: 'group-total', groupName, total, gi, key: 'gt-' + gi })
-    gi++
-  }
-  for (const item of ungrouped) rows.push({ type: 'item', item, groupName: '', gi: -1, key: rowKeyFor(item) })
-  return rows
-})
+const displayRows = computed<DisplayRow[]>(() => (
+  buildQuoteDisplayRows(items.value, rowKeyFor, calcSubtotal)
+))
+const sortableStructure = computed(() => displayRows.value.map(row => row.key).join('|'))
 
 function rowClassName({ row }: { row: DisplayRow }) {
   const cls: string[] = []
@@ -624,7 +612,7 @@ function handleDragStart(evt: Sortable.SortableEvent) {
 
   const rows = displayRows.value
   const headerIdx = rows.indexOf(dragged)
-  const block = blockOf(rows, headerIdx)
+  const block = getQuoteGroupBlock(rows, headerIdx)
   const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody')
 
   // 隐藏原生拖拽快照（浏览器默认只跟随表头一行），改由下方整组卡片跟随
@@ -678,42 +666,20 @@ function cleanupGroupDrag() {
 }
 
 function handleDragEnd(evt: Sortable.SortableEvent) {
+  const capturedKey = dragStartKey.value
   cleanupGroupDrag()
-  const oldIndex = evt.oldIndex
-  if (oldIndex == null || evt.newIndex == null || oldIndex === evt.newIndex) return
   const rows = displayRows.value
-  const dragged = rows[oldIndex]
-  if (!dragged || dragged.type === 'group-total') return
-
-  const isGroup = dragged.type === 'group-header'
-  const blockRows = isGroup ? blockOf(rows, oldIndex) : [dragged]
-  const rest = rows.filter(r => !blockRows.includes(r))
+  const fallbackKey = evt.oldIndex == null ? '' : rows[evt.oldIndex]?.key
+  const draggedKey = capturedKey || fallbackKey
+  if (!draggedKey) return restoreDisplayRowDomOrder()
 
   // 落点 = 拖拽行在 DOM 中的下一个兄弟行（天然代表视觉落点，不受分组结构影响）
   const succ = evt.item.nextElementSibling as HTMLElement | null
   const succKey = succ ? rkKeyOf(succ) : null
 
-  if (isGroup) {
-    // 组拖拽：按"分项边界"整体落位，绝不把分项拆进别的分项内部
-    if (succKey && blockRows.some(r => r.key === succKey)) return
-    const insertAt = groupBoundaryIndex(rest, succKey)
-    rebuildItemsFromRows([...rest.slice(0, insertAt), ...blockRows, ...rest.slice(insertAt)])
-  } else {
-    let insertAt = rest.length
-    let afterHeader = false
-    if (succKey) {
-      const si = rest.findIndex(r => r.key === succKey)
-      if (si >= 0) {
-        insertAt = si
-        afterHeader = rest[si].type === 'group-header'
-      }
-    }
-    // 条目落到分项表头正下方 → 成为该分项第一条；其余情况插在落点之前
-    const finalRows = afterHeader
-      ? [...rest.slice(0, insertAt + 1), dragged, ...rest.slice(insertAt + 1)]
-      : [...rest.slice(0, insertAt), ...blockRows, ...rest.slice(insertAt)]
-    rebuildItemsFromRows(finalRows)
-  }
+  const nextRows = reorderQuoteDisplayRows(rows, draggedKey, succKey)
+  if (nextRows === rows) return restoreDisplayRowDomOrder()
+  items.value = applyQuoteDisplayOrder(nextRows)
 }
 
 function rkKeyOf(tr: HTMLElement): string {
@@ -721,43 +687,22 @@ function rkKeyOf(tr: HTMLElement): string {
   return cls.split(/\s+/).find(c => c.startsWith('rk-'))?.slice(3) || ''
 }
 
-function blockOf(rows: DisplayRow[], headerIdx: number): DisplayRow[] {
-  const h = rows[headerIdx]
-  const end = rows.findIndex((r, i) => i > headerIdx && r.type === 'group-total' && r.groupName === h.groupName)
-  return rows.slice(headerIdx, end >= 0 ? end + 1 : rows.length)
-}
-
-// 组拖拽落位：把"落在某分项内部"吸附到分项边界（整体插到该分项之后）
-function groupBoundaryIndex(rest: DisplayRow[], succKey: string | null): number {
-  if (!succKey) return rest.length
-  const si = rest.findIndex(r => r.key === succKey)
-  if (si < 0) return rest.length
-  const row = rest[si]
-  if (row.type === 'group-header') return si
-  if (row.gi < 0) return si
-  let j = si
-  while (j < rest.length && rest[j].type !== 'group-total') j++
-  return j < rest.length ? j + 1 : rest.length
-}
-
-function rebuildItemsFromRows(rows: DisplayRow[]) {
-  const next: QuoteItemResponse[] = []
-  let curGroup: string | undefined
-  for (const r of rows) {
-    if (r.type === 'group-header') curGroup = r.groupName
-    else if (r.type === 'group-total') curGroup = undefined
-    else if (r.type === 'item') {
-      r.item.group_name = curGroup
-      next.push(r.item)
-    }
+// Sortable 会先移动真实 DOM；无效落点时按响应式数据恢复，避免界面与保存顺序不一致。
+function restoreDisplayRowDomOrder() {
+  const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody')
+  if (!tbody) return
+  const rowElements = new Map<string, HTMLElement>()
+  for (const row of Array.from(tbody.children) as HTMLElement[]) {
+    rowElements.set(rkKeyOf(row), row)
   }
-  const old = items.value
-  const same = old.length === next.length && old.every((it, i) => it === next[i])
-  if (!same) items.value = next
+  for (const row of displayRows.value) {
+    const element = rowElements.get(row.key)
+    if (element) tbody.appendChild(element)
+  }
 }
 
 // 明细结构变化后重建 sortable（el-table 可能重建 tbody）
-watch([displayRows, isReadonly], () => { nextTick(() => initSortable()) })
+watch([sortableStructure, isReadonly], () => { nextTick(() => initSortable()) })
 
 // 单位相关
 const defaultUnits = ['㎡', 'm', '个', '套', '块', '件', '批', '次', '组', '台']
