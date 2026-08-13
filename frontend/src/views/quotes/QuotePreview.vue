@@ -76,15 +76,15 @@
           </thead>
           <tbody>
             <template v-for="row in previewDisplayRows" :key="row.key">
-              <tr v-if="row.type === 'group-header'" class="print-group-header">
+              <tr v-if="row.type === 'group-header'" class="print-group-header pg-block" :style="{ '--ad-g': `var(--ad-group-${((row.gi ?? 0) % 5) + 1})` }">
                 <td colspan="9"><strong>分项：</strong>{{ row.groupName }}</td>
               </tr>
-              <tr v-else-if="row.type === 'group-total'" class="print-group-total">
+              <tr v-else-if="row.type === 'group-total'" class="print-group-total pg-block" :style="{ '--ad-g': `var(--ad-group-${((row.gi ?? 0) % 5) + 1})` }">
                 <td colspan="7" style="text-align: right;">分项合计</td>
                 <td class="numeric">{{ row.total.toFixed(2) }}</td>
                 <td></td>
               </tr>
-              <tr v-else>
+              <tr v-else :class="row.gi !== undefined ? 'pg-block' : ''" :style="{ '--ad-g': `var(--ad-group-${((row.gi ?? 0) % 5) + 1})` }">
                 <td class="center">{{ row.idx }}</td>
                 <td>{{ row.item.item_name }}</td>
                 <td>{{ row.item.material_process || '-' }}</td>
@@ -163,6 +163,7 @@ interface PreviewRow {
   item?: QuoteItemResponse
   idx?: number
   total?: number
+  gi?: number
   key: string
 }
 
@@ -183,11 +184,13 @@ const previewDisplayRows = computed<PreviewRow[]>(() => {
 
   const rows: PreviewRow[] = []
   let idx = 1
+  let gi = 0
   for (const [groupName, groupItems] of grouped) {
-    rows.push({ type: 'group-header', groupName, key: `gh-${groupName}` })
-    for (const item of groupItems) rows.push({ type: 'item', item, idx: idx++, key: item.id || `i-${idx}` })
+    rows.push({ type: 'group-header', groupName, gi, key: `gh-${groupName}` })
+    for (const item of groupItems) rows.push({ type: 'item', item, idx: idx++, gi, key: item.id || `i-${idx}` })
     const total = groupItems.reduce((s, i) => s + (i.subtotal_amount || 0), 0)
-    rows.push({ type: 'group-total', groupName, total, key: `gt-${groupName}` })
+    rows.push({ type: 'group-total', groupName, total, gi, key: `gt-${groupName}` })
+    gi++
   }
   for (const item of ungrouped) rows.push({ type: 'item', item, idx: idx++, key: item.id || `i-${idx}` })
   return rows
@@ -285,4 +288,11 @@ function formatSpec(item: QuoteItemResponse) {
 
 /* 打印样式由全局 print.scss 统一控制，
    此文件仅保留屏幕预览所需的最小样式 */
+
+/* 分项色块追踪（预览+打印）：仅修饰边框
+   色块上缘 = 分项表头顶边，下缘 = 分项合计底边，左缘 = 整块（表头→明细→合计）连续色条
+   颜色由各分组行内联 style 的 --ad-g 指定（5 色循环，与编辑器一致） */
+.print-table tr.pg-block td:first-child { border-left: 3px solid rgba(var(--ad-g), 0.85) !important; }
+.print-table tr.print-group-header.pg-block td { border-top: 2px solid rgba(var(--ad-g), 0.85) !important; border-bottom: none !important; }
+.print-table tr.print-group-total.pg-block td { border-bottom: 2px solid rgba(var(--ad-g), 0.85) !important; }
 </style>
