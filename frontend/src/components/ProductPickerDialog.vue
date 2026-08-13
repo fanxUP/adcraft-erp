@@ -73,11 +73,22 @@
     <el-dialog
       v-model="editVisible"
       title="编辑产品"
-      width="420px"
+      width="min(560px, 92vw)"
       :close-on-click-modal="false"
       append-to-body
     >
       <el-form :model="editForm" label-width="80px">
+        <div style="display: flex; gap: 12px;">
+          <el-form-item label="产品" style="flex: 1;">
+            <el-input v-model="editForm.name" placeholder="如：标识牌" />
+          </el-form-item>
+          <el-form-item label="材质" style="flex: 1;">
+            <el-input v-model="editForm.material_name" placeholder="如：亚克力" />
+          </el-form-item>
+          <el-form-item label="工艺" style="flex: 1;">
+            <el-input v-model="editForm.process_name" placeholder="如：UV打印" />
+          </el-form-item>
+        </div>
         <el-form-item label="单位">
           <el-select v-model="editForm.unit" style="width: 100%">
             <el-option v-for="u in UNIT_OPTIONS" :key="u" :label="u" :value="u" />
@@ -145,6 +156,9 @@ const editVisible = ref(false)
 const editingProduct = ref<ProductResponse | null>(null)
 const savingEdit = ref(false)
 const editForm = ref({
+  name: '',
+  material_name: '',
+  process_name: '',
   unit: '',
   pricing_method: '',
   default_price: 0,
@@ -228,6 +242,9 @@ function onProductCreated(product: ProductResponse) {
 function openEdit(product: ProductResponse) {
   editingProduct.value = product
   editForm.value = {
+    name: product.name ?? '',
+    material_name: product.material_name ?? '',
+    process_name: product.process_name ?? '',
     unit: product.unit ?? '',
     pricing_method: product.pricing_method ?? '',
     default_price: product.default_price ?? 0,
@@ -238,6 +255,11 @@ function openEdit(product: ProductResponse) {
 
 async function saveEdit() {
   if (!editingProduct.value) return
+  const filled = [editForm.value.name.trim(), editForm.value.material_name.trim(), editForm.value.process_name.trim()].filter(Boolean)
+  if (filled.length === 0) {
+    ElMessage.warning('请至少填写产品、材质、工艺中的一项')
+    return
+  }
   savingEdit.value = true
   try {
     await updateProduct(editingProduct.value.id, { ...editForm.value })
