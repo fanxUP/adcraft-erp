@@ -295,10 +295,10 @@ async function saveEdit() {
 :deep(.el-textarea__inner) {
   overflow-y: scroll;
   scrollbar-width: thin;
-  scrollbar-color: #d8d8d8 transparent;
+  scrollbar-color: #d8d8d8 #d8d8d8;
 }
 :deep(.el-textarea__inner.has-scroll) {
-  scrollbar-color: #909399 transparent;
+  scrollbar-color: #909399 #d8d8d8;
 }
 :deep(.el-textarea__inner::-webkit-scrollbar) {
   width: 8px;
