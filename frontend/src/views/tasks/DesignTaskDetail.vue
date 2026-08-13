@@ -16,6 +16,10 @@
           </el-descriptions-item>
           <el-descriptions-item label="设计说明">{{ task.description || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户意见">{{ task.client_comments || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="设计文件">
+            <a v-if="task.design_file_url" :href="task.design_file_url" target="_blank" rel="noopener" style="color: var(--ad-primary)">查看文件</a>
+            <span v-else>-</span>
+          </el-descriptions-item>
         </el-descriptions>
       </el-card>
 
@@ -40,6 +44,24 @@
         </div>
       </el-card>
 
+      <el-card shadow="never" class="info-card" style="margin-top: 16px">
+        <template #header><span>任务信息</span></template>
+        <el-form :model="editForm" label-width="120px">
+          <el-form-item label="设计说明">
+            <el-input v-model="editForm.description" type="textarea" :rows="3" placeholder="填写设计说明" />
+          </el-form-item>
+          <el-form-item label="客户意见">
+            <el-input v-model="editForm.client_comments" type="textarea" :rows="3" placeholder="填写客户意见" />
+          </el-form-item>
+          <el-form-item label="设计文件">
+            <el-input v-model="editForm.design_file_url" placeholder="设计文件链接" />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="updating" @click="handleUpdate">保存</el-button>
+          </el-form-item>
+        </el-form>
+      </el-card>
+
       <!-- 管理员删除 -->
       <el-card v-if="authStore.isAdmin" shadow="never" class="info-card" style="margin-top: 16px; border-color: #ff4d4f;">
         <template #header><span style="color: #ff4d4f;">危险操作</span></template>
@@ -51,6 +73,13 @@
         <template #header>
           <div class="card-header">
             <span>附件</span>
+            <el-upload
+              :http-request="handleUpload"
+              :show-file-list="false"
+              accept="image/*"
+            >
+              <el-button type="danger" size="small">上传文件</el-button>
+            </el-upload>
           </div>
         </template>
         <el-table :data="task.attachments" stripe size="small">
@@ -77,9 +106,10 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getDesignTask, updateDesignTask, changeDesignTaskStatus } from '@/api/tasks'
+import { getDesignTask, updateDesignTask, changeDesignTaskStatus, uploadAttachment } from '@/api/tasks'
 import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadRequestOptions } from 'element-plus'
 import type { DesignTaskResponse, UserResponse } from '@/types/api'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import { getEmployees } from '@/api/employees'
@@ -99,6 +129,7 @@ const userOptions = ref<UserResponse[]>([])
 const employeeOptions = ref<{ id: string; name: string; employee_no?: string; user_id?: string | null }[]>([])
 const assignTarget = ref('')
 const assigning = ref(false)
+const updating = ref(false)
 const editForm = reactive({
   assigned_to: '',
   description: '',
@@ -193,6 +224,29 @@ async function handleAssign() {
     assignTarget.value = ''
   } catch { /* handled */ } finally { assigning.value = false }
 }
+async function handleUpdate() {
+  updating.value = true
+  try {
+    await updateDesignTask(route.params.id as string, {
+      description: editForm.description || '',
+      client_comments: editForm.client_comments || '',
+      design_file_url: editForm.design_file_url || '', 
+    })
+    ElMessage.success('保存成功')
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
+  } catch { /* handled */ } finally { updating.value = false }
+}
+
+async function handleUpload(req: UploadRequestOptions) {
+  try {
+    await uploadAttachment('design_task', route.params.id as string, req.file, 'design')
+    ElMessage.success('上传成功')
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
+  } catch { /* handled */ }
+}
+
 async function handleDelete() {
   await ElMessageBox.confirm(
     `确定删除设计任务 ${task.value?.design_no || ''}？删除后不可恢复，关联订单将回退到确认状态。`,

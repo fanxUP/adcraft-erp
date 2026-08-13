@@ -70,11 +70,11 @@ const pageSize = ref(20)
 const filterStatus = ref('')
 
 function designStatusLabel(s: string) {
-  const map: Record<string, string> = { pending: '初始/待分配', pending_review: '待确认', completed: '已完成', cancelled: '已取消' }
+  const map: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已完成', cancelled: '已取消' }
   return map[s] || s
 }
 function designStatusColor(s: string) {
-  const map: Record<string, string> = { pending: 'info', pending_review: 'warning', completed: 'success', cancelled: 'info' }
+  const map: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success', cancelled: 'info' }
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
