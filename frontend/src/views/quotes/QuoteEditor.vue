@@ -74,7 +74,7 @@
               </div>
             </template>
             <template v-else-if="row.type === 'group-total'">
-              <span style="font-weight: 600; float: right;">分项合计</span>
+              <span style="font-weight: 600;">分项合计：{{ row.groupName }}</span>
             </template>
             <template v-else>
               <el-input v-model="row.item.item_name" :disabled="isReadonly" size="small" />
@@ -534,9 +534,9 @@ function renameGroup(oldName: string, newName: string) {
 }
 
 type DisplayRow =
-  | { type: 'group-header'; groupName: string }
-  | { type: 'item'; item: QuoteItemResponse; groupName: string }
-  | { type: 'group-total'; groupName: string; total: number }
+  | { type: 'group-header'; groupName: string; gi: number }
+  | { type: 'item'; item: QuoteItemResponse; groupName: string; gi: number }
+  | { type: 'group-total'; groupName: string; total: number; gi: number }
 
 const displayRows = computed<DisplayRow[]>(() => {
   const grouped = new Map<string, QuoteItemResponse[]>()
@@ -552,20 +552,24 @@ const displayRows = computed<DisplayRow[]>(() => {
   }
 
   const rows: DisplayRow[] = []
+  let gi = 0
   for (const [groupName, groupItems] of grouped) {
-    rows.push({ type: 'group-header', groupName })
-    for (const item of groupItems) rows.push({ type: 'item', item, groupName })
+    rows.push({ type: 'group-header', groupName, gi })
+    for (const item of groupItems) rows.push({ type: 'item', item, groupName, gi })
     const total = groupItems.reduce((s, i) => s + calcSubtotal(i), 0)
-    rows.push({ type: 'group-total', groupName, total })
+    rows.push({ type: 'group-total', groupName, total, gi })
+    gi++
   }
-  for (const item of ungrouped) rows.push({ type: 'item', item, groupName: '' })
+  for (const item of ungrouped) rows.push({ type: 'item', item, groupName: '', gi: -1 })
   return rows
 })
 
 function rowClassName({ row }: { row: DisplayRow }) {
-  if (row.type === 'group-header') return 'group-header-row'
-  if (row.type === 'group-total') return 'group-total-row'
-  return ''
+  const cls: string[] = []
+  if (row.gi >= 0) cls.push(`group-c${(row.gi % 5) + 1}`)
+  if (row.type === 'group-header') cls.push('group-header-row')
+  if (row.type === 'group-total') cls.push('group-total-row')
+  return cls.join(' ')
 }
 
 // 单位相关
@@ -922,10 +926,24 @@ watch(() => route.params.id, async (newId) => {
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .summary-item { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
 .summary-item.total { font-size: 18px; color: #e63946; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ad-border); }
-:deep(.group-header-row) { background: var(--ad-bg-secondary, #f5f7fa) !important; }
-:deep(.group-header-row td) { border-bottom: 2px solid var(--ad-primary, #409eff) !important; }
-:deep(.group-total-row) { background: var(--ad-bg-secondary, #fafafa) !important; }
-:deep(.group-total-row td) { border-top: 1px solid var(--ad-border, #dcdfe6) !important; font-weight: 600; }
+/* 分项色块追踪：明细行同色浅底（覆盖斑马纹；5 色按分组序号循环） */
+:deep(.group-c1 td) { background: rgba(var(--ad-group-1), 0.08) !important; }
+:deep(.group-c2 td) { background: rgba(var(--ad-group-2), 0.08) !important; }
+:deep(.group-c3 td) { background: rgba(var(--ad-group-3), 0.08) !important; }
+:deep(.group-c4 td) { background: rgba(var(--ad-group-4), 0.08) !important; }
+:deep(.group-c5 td) { background: rgba(var(--ad-group-5), 0.08) !important; }
+/* 每组绑定 --ad-g；表头/合计行用同色更深底 + 同色分隔线 + 左侧色条 */
+:deep(.group-c1) { --ad-g: var(--ad-group-1); }
+:deep(.group-c2) { --ad-g: var(--ad-group-2); }
+:deep(.group-c3) { --ad-g: var(--ad-group-3); }
+:deep(.group-c4) { --ad-g: var(--ad-group-4); }
+:deep(.group-c5) { --ad-g: var(--ad-group-5); }
+:deep(.group-header-row td),
+:deep(.group-total-row td) { background: rgba(var(--ad-g), 0.16) !important; }
+:deep(.group-header-row td) { border-bottom: 2px solid rgba(var(--ad-g), 0.85) !important; }
+:deep(.group-total-row td) { border-top: 2px solid rgba(var(--ad-g), 0.85) !important; font-weight: 600; }
+:deep(.group-header-row td:first-child),
+:deep(.group-total-row td:first-child) { box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.8); }
 
 /* 修复 el-input-number 默认宽度(120px)超出窄列的问题 */
 :deep(.el-table .el-input-number) { width: 100%; }

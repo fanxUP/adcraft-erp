@@ -7,6 +7,12 @@
   --ad-text-secondary: #a0a0b0;
   --ad-border: #2a2a3e;
   --ad-font-size-base: 14px;
+  /* 报价分项色块追踪调色板（RGB 通道值，配合 rgba(var(--ad-group-N), alpha) 使用） */
+  --ad-group-1: 37, 99, 235;    /* 蓝 */
+  --ad-group-2: 217, 119, 6;    /* 橙 */
+  --ad-group-3: 22, 163, 74;    /* 绿 */
+  --ad-group-4: 168, 85, 247;   /* 紫 */
+  --ad-group-5: 220, 38, 38;    /* 红 */
   --ad-font-weight-base: 400;
 }
 
