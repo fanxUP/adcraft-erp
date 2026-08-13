@@ -679,6 +679,11 @@ function handleDragEnd(evt: Sortable.SortableEvent) {
 
   const nextRows = reorderQuoteDisplayRows(rows, draggedKey, succKey)
   if (nextRows === rows) return restoreDisplayRowDomOrder()
+
+  // Sortable 只挪动被拖拽的单个 tr；分项拖拽却会写回整个分项块。
+  // 先恢复 Vue 认知中的旧 DOM，再更新响应式数据，避免 Vue 在已被单行篡改的 DOM 上
+  // 做 keyed diff，造成目标分项在界面中被表头截断。
+  restoreDisplayRowDomOrder()
   items.value = applyQuoteDisplayOrder(nextRows)
 }
 

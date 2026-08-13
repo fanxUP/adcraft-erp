@@ -66,6 +66,26 @@ describe('quoteItemOrdering', () => {
     ])
   })
 
+  it('keeps the earlier target group intact when a later group is dropped into it', () => {
+    const rows = rowsOf([
+      item('b1', '分项B'), item('b2', '分项B'),
+      item('a1', '分项A'), item('a2', '分项A'),
+      item('c1', '分项C'),
+    ])
+    const moved = reorderQuoteDisplayRows(rows, 'gh-a1', 'b2')
+
+    expect(moved.map(row => row.key)).toEqual([
+      'gh-b1', 'b1', 'b2', 'gt-b1',
+      'gh-a1', 'a1', 'a2', 'gt-a1',
+      'gh-c1', 'c1', 'gt-c1',
+    ])
+    expect(applyQuoteDisplayOrder(moved).map(value => [value.id, value.group_name])).toEqual([
+      ['b1', '分项B'], ['b2', '分项B'],
+      ['a1', '分项A'], ['a2', '分项A'],
+      ['c1', '分项C'],
+    ])
+  })
+
   it('moves group A as a whole to the bottom', () => {
     const rows = rowsOf([
       item('a1', '分项A'), item('a2', '分项A'),
