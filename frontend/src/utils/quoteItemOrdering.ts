@@ -74,6 +74,40 @@ export function getQuoteGroupBlock<T extends QuoteOrderItem>(
   return rows.slice(headerIndex, end >= 0 ? end + 1 : rows.length)
 }
 
+/**
+ * 将整组拖拽的悬停行转换成合法分项边界。
+ * 表头表示放到目标分项前；明细/合计表示放到目标分项完整结束后。
+ */
+export function getQuoteGroupDropSuccessorKey<T extends QuoteOrderItem>(
+  rows: QuoteDisplayRow<T>[],
+  draggedHeaderKey: string,
+  relatedKey: string,
+  willInsertAfter = false,
+): string | null {
+  const draggedIndex = rows.findIndex(row => row.key === draggedHeaderKey)
+  const dragged = rows[draggedIndex]
+  const relatedIndex = rows.findIndex(row => row.key === relatedKey)
+  const related = rows[relatedIndex]
+  if (!dragged || dragged.type !== 'group-header' || !related) return relatedKey || null
+
+  const draggedBlock = getQuoteGroupBlock(rows, draggedIndex)
+  if (draggedBlock.includes(related)) return related.key
+
+  if (related.type === 'group-header') return related.key
+  if (related.gi >= 0) {
+    const totalIndex = related.type === 'group-total'
+      ? relatedIndex
+      : rows.findIndex((row, index) => (
+          index > relatedIndex
+          && row.type === 'group-total'
+          && row.groupName === related.groupName
+        ))
+    return rows[totalIndex + 1]?.key ?? null
+  }
+
+  return willInsertAfter ? (rows[relatedIndex + 1]?.key ?? null) : related.key
+}
+
 function groupBoundaryIndex<T extends QuoteOrderItem>(
   rows: QuoteDisplayRow<T>[],
   successorKey: string | null,

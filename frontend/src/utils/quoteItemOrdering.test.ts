@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyQuoteDisplayOrder,
   buildQuoteDisplayRows,
+  getQuoteGroupDropSuccessorKey,
   isDuplicateQuoteGroupName,
   reorderQuoteDisplayRows,
 } from './quoteItemOrdering'
@@ -102,6 +103,22 @@ describe('quoteItemOrdering', () => {
     const rows = rowsOf([item('a1', '分项A'), item('a2', '分项A'), item('b', '分项B')])
 
     expect(reorderQuoteDisplayRows(rows, 'gh-a1', 'a2')).toBe(rows)
+  })
+
+  it('converts every group hover target to a complete group boundary', () => {
+    const rows = rowsOf([
+      item('a1', '分项A'), item('a2', '分项A'),
+      item('free'),
+      item('b1', '分项B'), item('b2', '分项B'),
+      item('c1', '分项C'),
+    ])
+
+    expect(getQuoteGroupDropSuccessorKey(rows, 'gh-a1', 'gh-b1')).toBe('gh-b1')
+    expect(getQuoteGroupDropSuccessorKey(rows, 'gh-a1', 'b1')).toBe('gh-c1')
+    expect(getQuoteGroupDropSuccessorKey(rows, 'gh-a1', 'gt-b1')).toBe('gh-c1')
+    expect(getQuoteGroupDropSuccessorKey(rows, 'gh-a1', 'c1')).toBeNull()
+    expect(getQuoteGroupDropSuccessorKey(rows, 'gh-a1', 'a2')).toBe('a2')
+    expect(getQuoteGroupDropSuccessorKey(rows, 'gh-a1', 'free', true)).toBe('gh-b1')
   })
 
   it('keeps standalone details between groups instead of forcing them to the bottom', () => {

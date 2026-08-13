@@ -317,6 +317,7 @@ import QuotePreview from './QuotePreview.vue'
 import ProductPickerDialog from '@/components/ProductPickerDialog.vue'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { applyProductMaterialProcess, formatProductMaterialProcess } from '@/utils/productMaterialProcess'
+import { createQuoteGroupDragVisual, type QuoteGroupDragVisual } from '@/utils/quoteGroupDragVisual'
 import {
   calcQuoteLineArea,
   calcQuoteLineSubtotal,
@@ -327,6 +328,7 @@ import {
   applyQuoteDisplayOrder,
   buildQuoteDisplayRows,
   getQuoteGroupBlock,
+  getQuoteGroupDropSuccessorKey,
   isDuplicateQuoteGroupName,
   reorderQuoteDisplayRows,
   type QuoteDisplayRow,
@@ -455,6 +457,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  cleanupGroupDrag()
   sortable?.destroy()
   sortable = null
 })
@@ -594,14 +597,24 @@ function initSortable() {
     ghostClass: 'ad-drag-ghost',
     chosenClass: 'ad-drag-chosen',
     dragClass: 'ad-drag-dragging',
+    fallbackClass: 'ad-drag-fallback',
+    setData(dataTransfer, draggedElement) {
+      dataTransfer.setData('Text', draggedElement.textContent ?? '')
+      if (!dragStartKey.value?.startsWith('gh-')) return
+      const blank = document.createElement('canvas')
+      blank.width = blank.height = 0
+      dataTransfer.setDragImage(blank, 0, 0)
+    },
     onStart: handleDragStart,
     onMove: handleDragMove,
     onEnd: handleDragEnd,
   })
 }
 
-// ── 组拖拽：整组跟随卡片 + 源分项整块"选中感" ──
-let groupDragCard: HTMLElement | null = null
+// ── 组拖拽：整组预览 + 只允许落在完整分项边界 ──
+let groupDragVisual: QuoteGroupDragVisual | null = null
+let groupDragSourceKeys = new Set<string>()
+let groupDropSuccessorKey: string | null = null
 const dragStartKey = ref<string | null>(null)
 
 function handleDragStart(evt: Sortable.SortableEvent) {
@@ -614,68 +627,118 @@ function handleDragStart(evt: Sortable.SortableEvent) {
   const headerIdx = rows.indexOf(dragged)
   const block = getQuoteGroupBlock(rows, headerIdx)
   const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody')
+  groupDragSourceKeys = new Set(block.map(row => row.key))
+  groupDropSuccessorKey = dragged.key
 
   // 隐藏原生拖拽快照（浏览器默认只跟随表头一行），改由下方整组卡片跟随
   const de = (evt as { originalEvent?: DragEvent }).originalEvent
-  const blank = document.createElement('canvas')
-  blank.width = blank.height = 0
-  de?.dataTransfer?.setDragImage(blank, 0, 0)
 
-  // 源分项整块"选中感"：高亮 + 轻微降透明
-  document.body.classList.add('ad-group-drag')
-  for (const r of block) tbody?.querySelector('.rk-' + r.key)?.classList.add('ad-drag-lifted')
-
-  // 整组概要卡片（跟随光标）
-  const card = document.createElement('div')
-  card.className = 'ad-drag-card'
-  card.style.setProperty('--ad-g', `var(--ad-group-${((dragged.gi % 5) + 1)})`)
-  const header = block.find(r => r.type === 'group-header')
-  const items = block.filter(r => r.type === 'item')
-  const total = block.find(r => r.type === 'group-total')?.total ?? 0
-  const nameEl = document.createElement('div')
-  nameEl.className = 'ad-drag-card__name'
-  nameEl.textContent = `分项：${header?.groupName ?? ''}`
-  const metaEl = document.createElement('div')
-  metaEl.className = 'ad-drag-card__meta'
-  metaEl.textContent = `${items.length} 条明细 · 合计 ¥${total.toFixed(2)}`
-  card.append(nameEl, metaEl)
-  document.body.appendChild(card)
-  groupDragCard = card
-  positionDragCard(de?.clientX ?? 0, de?.clientY ?? 0)
+  // 用完整的名称、明细和合计生成跟随预览，避免原生快照只显示表头一行。
+  groupDragVisual = createQuoteGroupDragVisual({
+    colorIndex: (dragged.gi % 5) + 1,
+    sourceElements: block
+      .map(row => tbody?.querySelector('.rk-' + row.key) as HTMLElement | null)
+      .filter((element): element is HTMLElement => Boolean(element)),
+    rows: block.map((row, index) => {
+      if (row.type === 'group-header') return { type: row.type, label: `⠿ 分项名称：${row.groupName}` }
+      if (row.type === 'group-total') return { type: row.type, label: `分项合计：¥ ${row.total.toFixed(2)}` }
+      return {
+        type: row.type,
+        label: `${index}. ${row.item.item_name?.trim() || '未填写项目内容'}`,
+        amount: `¥ ${calcSubtotal(row.item).toFixed(2)}`,
+      }
+    }),
+    clientX: de?.clientX ?? 0,
+    clientY: de?.clientY ?? 0,
+  })
+  document.addEventListener('dragover', handleGroupDragPointer, true)
+  document.addEventListener('touchmove', handleGroupDragPointer, { capture: true, passive: true })
 }
 
 function positionDragCard(clientX: number, clientY: number) {
-  if (!groupDragCard) return
-  groupDragCard.style.transform = `translate(${clientX + 14}px, ${clientY + 14}px)`
+  groupDragVisual?.move(clientX, clientY)
 }
 
-function handleDragMove(_evt: Sortable.MoveEvent, originalEvent: Event) {
-  const e = originalEvent as MouseEvent | TouchEvent
-  const x = 'clientX' in e ? e.clientX : 0
-  const y = 'clientY' in e ? e.clientY : 0
+function handleGroupDragPointer(event: Event) {
+  if (!groupDragSourceKeys.size) return
+  const e = event as MouseEvent | TouchEvent
+  const touch = 'touches' in e ? (e.touches[0] ?? e.changedTouches[0]) : undefined
+  const x = touch?.clientX ?? ('clientX' in e ? e.clientX : 0)
+  const y = touch?.clientY ?? ('clientY' in e ? e.clientY : 0)
   positionDragCard(x, y)
+
+  const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody') as HTMLElement | null
+  if (tbody && y >= tbody.getBoundingClientRect().bottom) {
+    groupDropSuccessorKey = null
+    showGroupDropIndicator(null)
+  }
+}
+
+function handleDragMove(evt: Sortable.MoveEvent, originalEvent: Event) {
+  const e = originalEvent as MouseEvent | TouchEvent
+  const touch = 'touches' in e ? (e.touches[0] ?? e.changedTouches[0]) : undefined
+  const x = touch?.clientX ?? ('clientX' in e ? e.clientX : 0)
+  const y = touch?.clientY ?? ('clientY' in e ? e.clientY : 0)
+  positionDragCard(x, y)
+
+  if (!groupDragSourceKeys.size) return
+  const relatedKey = rkKeyOf(evt.related)
+  if (relatedKey) {
+    groupDropSuccessorKey = getQuoteGroupDropSuccessorKey(
+      displayRows.value,
+      dragStartKey.value ?? '',
+      relatedKey,
+      Boolean(evt.willInsertAfter),
+    )
+    showGroupDropIndicator(groupDropSuccessorKey)
+  }
+
+  // Sortable 原生只会移动表头 tr。整组拖拽期间禁止它改动真实 DOM，
+  // 最终只按上面计算出的合法分项边界一次性写回响应式数据。
+  return false
+}
+
+function showGroupDropIndicator(successorKey: string | null) {
+  if (!groupDragSourceKeys.size || (successorKey && groupDragSourceKeys.has(successorKey))) {
+    groupDragVisual?.showBoundary(null)
+    return
+  }
+
+  const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody')
+  if (!tbody) return
+  if (successorKey) {
+    groupDragVisual?.showBoundary(tbody.querySelector('.rk-' + successorKey), 'before')
+    return
+  }
+
+  const rows = [...displayRows.value].reverse()
+  const lastTarget = rows.find(row => !groupDragSourceKeys.has(row.key))
+  if (!lastTarget) return
+  groupDragVisual?.showBoundary(tbody.querySelector('.rk-' + lastTarget.key), 'after')
 }
 
 function cleanupGroupDrag() {
+  document.removeEventListener('dragover', handleGroupDragPointer, true)
+  document.removeEventListener('touchmove', handleGroupDragPointer, true)
   dragStartKey.value = null
-  document.body.classList.remove('ad-group-drag')
-  if (groupDragCard) { groupDragCard.remove(); groupDragCard = null }
-  const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody')
-  const lifted = tbody?.querySelectorAll('.ad-drag-lifted')
-  lifted?.forEach((el: Element) => el.classList.remove('ad-drag-lifted'))
+  groupDragVisual?.dispose()
+  groupDragVisual = null
+  groupDragSourceKeys.clear()
+  groupDropSuccessorKey = null
 }
 
 function handleDragEnd(evt: Sortable.SortableEvent) {
   const capturedKey = dragStartKey.value
+  const capturedGroupDrop = groupDragSourceKeys.size ? groupDropSuccessorKey : undefined
   cleanupGroupDrag()
   const rows = displayRows.value
   const fallbackKey = evt.oldIndex == null ? '' : rows[evt.oldIndex]?.key
   const draggedKey = capturedKey || fallbackKey
   if (!draggedKey) return restoreDisplayRowDomOrder()
 
-  // 落点 = 拖拽行在 DOM 中的下一个兄弟行（天然代表视觉落点，不受分组结构影响）
+  // 明细使用 Sortable 的真实 DOM 落点；整组使用拖动期间锁定的合法分项边界。
   const succ = evt.item.nextElementSibling as HTMLElement | null
-  const succKey = succ ? rkKeyOf(succ) : null
+  const succKey = capturedGroupDrop !== undefined ? capturedGroupDrop : (succ ? rkKeyOf(succ) : null)
 
   const nextRows = reorderQuoteDisplayRows(rows, draggedKey, succKey)
   if (nextRows === rows) return restoreDisplayRowDomOrder()
@@ -1112,18 +1175,36 @@ watch(() => route.params.id, async (newId) => {
 /* 组拖拽（整组跟随）：源分项整块"选中感"——高亮 + 轻微降透明 */
 body.ad-group-drag tr.ad-drag-lifted td { background: rgba(var(--ad-g, 64, 158, 255), 0.22) !important; }
 body.ad-group-drag tr.ad-drag-lifted { opacity: 0.72 !important; }
+body.ad-group-drag .ad-drag-fallback { opacity: 0 !important; }
 
-/* 组拖拽：整组概要卡片跟随光标（Notion 式），挂在 body 上，须全局样式 */
+/* 整组落点只画在合法边界，目标分项内部永远不会出现分割线。 */
+tr.ad-group-drop-before td { border-top: 3px solid var(--el-color-primary, #409eff) !important; }
+tr.ad-group-drop-after td { border-bottom: 3px solid var(--el-color-primary, #409eff) !important; }
+
+/* 组拖拽：名称、全部明细、合计以紧凑表格块跟随光标，挂在 body 上，须全局样式。 */
 .ad-drag-card {
   position: fixed; left: 0; top: 0; z-index: 9999; pointer-events: none;
-  min-width: 200px; max-width: 340px; padding: 8px 14px 8px 12px;
-  background: #fff; border-radius: 8px;
+  width: min(440px, calc(100vw - 24px)); max-height: min(60vh, 520px); overflow: hidden;
+  background: var(--ad-card, #fff); border-radius: 8px;
   border: 1px solid rgba(var(--ad-g), 0.4); border-left: 4px solid rgba(var(--ad-g), 0.95);
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
-  font-size: 13px; line-height: 1.6; color: #1f2329; will-change: transform;
+  font-size: 13px; line-height: 1.5; color: var(--ad-text, #1f2329); will-change: transform;
 }
-.ad-drag-card__name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ad-drag-card__meta { color: #909399; font-size: 12px; }
+.ad-drag-card__row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 34px; padding: 6px 12px; overflow: hidden;
+  border-bottom: 1px solid var(--ad-border, #e5e7eb);
+  white-space: nowrap; text-overflow: ellipsis;
+}
+.ad-drag-card__row:last-child { border-bottom: 0; }
+.ad-drag-card__row--group-header {
+  min-height: 38px; font-weight: 700; background: rgba(var(--ad-g), 0.18);
+}
+.ad-drag-card__row--item { padding-left: 22px; color: var(--ad-text-secondary, #64748b); }
+.ad-drag-card__row--item span { flex: 0 0 auto; color: var(--ad-text, #1f2329); }
+.ad-drag-card__row--group-total {
+  justify-content: flex-end; font-weight: 700; background: rgba(var(--ad-g), 0.1);
+}
 
 /* 分项名称标签可直接拖起整组（输入框仍可正常编辑） */
 .group-header-drag { cursor: grab; user-select: none; }
