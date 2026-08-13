@@ -66,7 +66,7 @@
       <el-table ref="tableRef" :data="displayRows" stripe border scrollbar-always-on :row-key="(row: DisplayRow) => row.key" :row-class-name="rowClassName">
         <el-table-column v-if="!isReadonly" label="排序" width="46" align="center">
           <template #default="{ row }">
-            <span v-if="row.type !== 'group-total'" class="row-drag-handle" title="拖动排序">
+            <span v-if="row.type !== 'group-total'" class="row-drag-handle" title="拖动排序" @mousedown="dragStartKey = row.key">
               <el-icon><Rank /></el-icon>
             </span>
           </template>
@@ -75,7 +75,7 @@
           <template #default="{ row }">
             <template v-if="row.type === 'group-header'">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="group-header-drag" title="拖动整个分项" style="font-weight: 600; white-space: nowrap;">分项名称：</span>
+                <span class="group-header-drag" title="拖动整个分项" style="font-weight: 600; white-space: nowrap;" @mousedown="dragStartKey = row.key">分项名称：</span>
                 <el-input v-if="!isReadonly" :model-value="row.groupName" size="small" style="flex: 1" placeholder="输入分项名称" @input="(v: string) => renameGroup(row.groupName, v)" />
                 <span v-else style="font-weight: 600;">{{ row.groupName }}</span>
               </div>
@@ -613,12 +613,12 @@ function initSortable() {
 
 // ── 组拖拽：整组跟随卡片 + 源分项整块"选中感" ──
 let groupDragCard: HTMLElement | null = null
+const dragStartKey = ref<string | null>(null)
 
 function handleDragStart(evt: Sortable.SortableEvent) {
-  // start 事件不带 oldIndex（sortable 只传 originalEvent），必须从被拖的 DOM 行反查
-  // evt.item 恒为拖拽元素（rk- 类 → displayRows 的 key）
-  const key = rkKeyOf(evt.item)
-  const dragged = displayRows.value.find(r => r.key === key)
+  // start 事件不带可靠的 item/oldIndex，行 key 已在 handle 的 @mousedown 里捕获
+  const key = dragStartKey.value
+  const dragged = key ? displayRows.value.find(r => r.key === key) : undefined
   if (!dragged || dragged.type !== 'group-header') return
 
   const rows = displayRows.value
@@ -668,6 +668,7 @@ function handleDragMove(_evt: Sortable.MoveEvent, originalEvent: Event) {
 }
 
 function cleanupGroupDrag() {
+  dragStartKey.value = null
   document.body.classList.remove('ad-group-drag')
   if (groupDragCard) { groupDragCard.remove(); groupDragCard = null }
   const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody')
@@ -1140,8 +1141,8 @@ watch(() => route.params.id, async (newId) => {
 
 <style>
 /* 组拖拽（整组跟随）：源分项整块"选中感"——高亮 + 轻微降透明 */
-body.ad-group-drag tr.ad-drag-lifted td { background: rgba(var(--ad-g), 0.2) !important; }
-body.ad-group-drag tr.ad-drag-lifted { opacity: 0.75 !important; }
+body.ad-group-drag tr.ad-drag-lifted td { background: rgba(var(--ad-g, 64, 158, 255), 0.22) !important; }
+body.ad-group-drag tr.ad-drag-lifted { opacity: 0.72 !important; }
 
 /* 组拖拽：整组概要卡片跟随光标（Notion 式），挂在 body 上，须全局样式 */
 .ad-drag-card {
