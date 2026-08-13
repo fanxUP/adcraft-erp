@@ -897,10 +897,10 @@ export interface DraftQuoteItem {
   process_id?: string
   material_process?: string
   unit_price?: number
-  design_fee: number
-  installation_fee: number
-  process_fee: number
-  transport_fee: number
+  design_fee?: number
+  installation_fee?: number
+  process_fee?: number
+  transport_fee?: number
   other_fee: number
   subtotal: number
   remark: string

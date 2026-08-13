@@ -82,10 +82,6 @@ QUOTE_COLUMN_MAP = {
     "高": "height",
     "高单位": "height_unit",
     "件数": "pieces",
-    "加工费": "process_fee",
-    "安装费": "installation_fee",
-    "设计费": "design_fee",
-    "运输费": "transport_fee",
     "其他费用": "other_fee",
     "面积开关": "use_area",
     "明细备注": "item_remark",
@@ -103,7 +99,6 @@ ITEM_TEMPLATE_HEADERS = [
     "宽", "宽单位", "高", "高单位",
     "件数", "面积开关",
     "数量", "单位", "单价",
-    "工艺费", "安装费", "设计费", "运输费",
     "备注",
 ]
 
@@ -122,10 +117,6 @@ QUOTE_ITEM_TEMPLATE_MAP = {
     "数量": "quantity",
     "单位": "unit",
     "单价": "unit_price",
-    "工艺费": "process_fee",
-    "安装费": "installation_fee",
-    "设计费": "design_fee",
-    "运输费": "transport_fee",
     "备注": "remark",
 }
 
@@ -259,10 +250,6 @@ async def import_quotes(
                     "height": parse_number(item_row.get("height")),
                     "height_unit": format_value(item_row.get("height_unit")) or "m",
                     "pieces": parse_number(item_row.get("pieces")) or 1,
-                    "process_fee": parse_number(item_row.get("process_fee")) or 0,
-                    "installation_fee": parse_number(item_row.get("installation_fee")) or 0,
-                    "design_fee": parse_number(item_row.get("design_fee")) or 0,
-                    "transport_fee": parse_number(item_row.get("transport_fee")) or 0,
                     "other_fee": parse_number(item_row.get("other_fee")) or 0,
                     "remark": format_value(item_row.get("item_remark")),
                 }
@@ -495,10 +482,6 @@ async def import_quote_items(
             "height": parse_number(row.get("height")),
             "height_unit": format_value(row.get("height_unit")) or "m",
             "pieces": parse_number(row.get("pieces")) or 1,
-            "process_fee": parse_number(row.get("process_fee")) or 0,
-            "installation_fee": parse_number(row.get("installation_fee")) or 0,
-            "design_fee": parse_number(row.get("design_fee")) or 0,
-            "transport_fee": parse_number(row.get("transport_fee")) or 0,
             "other_fee": 0,
             "remark": format_value(row.get("remark")),
         }

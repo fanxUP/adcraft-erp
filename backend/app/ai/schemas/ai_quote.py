@@ -21,10 +21,6 @@ class DraftQuoteItem(BaseModel):
     process_id: str | None = None
     material_process: str | None = None
     unit_price: float | None = None
-    design_fee: float = 0
-    installation_fee: float = 0
-    process_fee: float = 0
-    transport_fee: float = 0
     other_fee: float = 0
     subtotal: float = 0
     remark: str = ""

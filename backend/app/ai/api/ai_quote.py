@@ -79,10 +79,6 @@ async def save_assisted_quote(
             "quantity": item_data.get("quantity", 1),
             "unit": item_data.get("unit", "㎡"),
             "unit_price": item_data.get("unit_price", 0),
-            "design_fee": item_data.get("design_fee", 0),
-            "installation_fee": item_data.get("installation_fee", 0),
-            "process_fee": item_data.get("process_fee", 0),
-            "transport_fee": item_data.get("transport_fee", 0),
             "other_fee": item_data.get("other_fee", 0),
             "remark": item_data.get("remark", ""),
         }

@@ -24,10 +24,7 @@ SYSTEM_PROMPT = """你是一个专业的广告制作报价专家。用户会用�
 ## 核心原则
 1. 必须按照给出的产品/材质/工艺目录选择物料，不要凭空编造
 2. 单价优先参考目录中的默认价格，根据项目复杂度适当浮动（±30%）
-3. 设计费（design_fee）：简单排版设计 200-500元，复杂创意设计 800-2000元
-4. 安装费（installation_fee）：室内简易安装 100-300元/项，高空/复杂安装 500-2000元/项
-5. 运输费（transport_fee）：市内 50-200元，城郊 200-500元
-6. 如果用户提到特定尺寸，准确计算面积；如果没提到尺寸，给出合理估算并注明"估算"
+3. 如果用户提到特定尺寸，准确计算面积；如果没提到尺寸，给出合理估算并注明"估算"
 
 ## 返回格式
 ```json
@@ -43,10 +40,6 @@ SYSTEM_PROMPT = """你是一个专业的广告制作报价专家。用户会用�
       "quantity": 1,
       "unit": "㎡",
       "unit_price": 150.0,
-      "design_fee": 500.0,
-      "installation_fee": 300.0,
-      "process_fee": 0,
-      "transport_fee": 100.0,
       "other_fee": 0,
       "remark": "",
       "key_spec": "6m×2m"
@@ -217,9 +210,7 @@ class LLMQuoteAssistant:
                     ROUND(AVG(bi.unit_price::numeric), 2) AS avg_price,
                     ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY bi.unit_price)::numeric, 2) AS med_price,
                     ROUND(MIN(bi.unit_price::numeric), 2) AS min_price,
-                    ROUND(MAX(bi.unit_price::numeric), 2) AS max_price,
-                    ROUND(AVG(bi.design_fee::numeric), 0) AS avg_design_fee,
-                    ROUND(AVG(bi.installation_fee::numeric), 0) AS avg_install_fee
+                    ROUND(MAX(bi.unit_price::numeric), 2) AS max_price
                 FROM business_document_items bi
                 JOIN products p ON p.id = bi.product_id
                 WHERE bi.unit_price > 0
@@ -321,10 +312,6 @@ class LLMQuoteAssistant:
                 "quantity": max(1, self._to_float(item.get("quantity", 1))),
                 "unit": item.get("unit", "㎡"),
                 "unit_price": max(0, self._to_float(item.get("unit_price", 0))),
-                "design_fee": max(0, self._to_float(item.get("design_fee", 0))),
-                "installation_fee": max(0, self._to_float(item.get("installation_fee", 0))),
-                "process_fee": max(0, self._to_float(item.get("process_fee", 0))),
-                "transport_fee": max(0, self._to_float(item.get("transport_fee", 0))),
                 "other_fee": max(0, self._to_float(item.get("other_fee", 0))),
                 "remark": item.get("remark", "") or "",
             }

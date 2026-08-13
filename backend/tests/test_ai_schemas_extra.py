@@ -18,10 +18,6 @@ class TestAIQuoteSchemas:
         item = DraftQuoteItem(item_name="测试项")
         assert item.quantity == 1
         assert item.unit == "㎡"
-        assert item.design_fee == 0
-        assert item.installation_fee == 0
-        assert item.process_fee == 0
-        assert item.transport_fee == 0
         assert item.other_fee == 0
         assert item.subtotal == 0
         assert item.remark == ""

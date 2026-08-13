@@ -69,7 +69,7 @@ class PromptBuilder:
 └──────────┘                          └────────┘ └──────┘ └──────┘ └──────┘
 
 - 客户(Customer)：可以有多个报价单、订单、收款记录
-- 报价单(Quote)：属于一个客户，包含多个明细项(item_name, quantity, unit_price, process_fee等)
+- 报价单(Quote)：属于一个客户，包含多个明细项(item_name, quantity, unit_price, other_fee等)
 - 订单(Order)：由报价单转化或直接创建，有自己的状态流转
 - 设计任务(DesignTask)：属于一个订单，设计师负责，有设计稿要求
 - 制作任务(ProductionTask)：属于一个订单，制作人员负责，有材质/尺寸/工艺要求
