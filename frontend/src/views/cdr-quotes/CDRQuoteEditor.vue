@@ -498,13 +498,7 @@ function onProductUpdated(product: ProductResponse) {
   onLineChange(index)
 }
 
-function onProductSelect(line: EditorLine, opt: { value: string; product?: ProductResponse }, index: number) {
-  if (!opt.product) {
-    line.product_id = ''
-    line.use_area = false
-    line.quantity = 1
-    return
-  }
+function onProductSelect(line: EditorLine, opt: { value: string; product: ProductResponse }, index: number) {
   Object.assign(line, applyProductMaterialProcess(line, opt.product))
   line.material_process = opt.value
   if (opt.product.pricing_method === 'area') {

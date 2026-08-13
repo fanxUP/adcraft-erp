@@ -8,13 +8,13 @@
   >
     <el-form :model="form" label-width="80px">
       <el-form-item label="产品">
-        <el-input v-model="form.name" type="textarea" :rows="3" placeholder="如：标识牌" />
+        <el-input v-model="form.name" type="textarea" :rows="3" placeholder="如：标识牌" class="mp-textarea" />
       </el-form-item>
       <el-form-item label="材质">
-        <el-input v-model="form.material_name" type="textarea" :rows="3" placeholder="如：亚克力" />
+        <el-input v-model="form.material_name" type="textarea" :rows="3" placeholder="如：亚克力" class="mp-textarea" />
       </el-form-item>
       <el-form-item label="工艺">
-        <el-input v-model="form.process_name" type="textarea" :rows="3" placeholder="如：UV打印" />
+        <el-input v-model="form.process_name" type="textarea" :rows="3" placeholder="如：UV打印" class="mp-textarea" />
       </el-form-item>
       <el-form-item label="单位">
         <el-select v-model="form.unit" style="width: 100%">
@@ -104,37 +104,37 @@ async function handleSave() {
    根因：Chrome 121+ 设置标准 scrollbar-width/scrollbar-color 会走标准渲染路径，
    macOS 上为 overlay 自动隐藏且压制 ::-webkit-scrollbar，故仅用 webkit 伪元素；
    Firefox 不支持 webkit 伪元素，@supports not 单独给标准属性。 */
-:deep(.el-textarea__inner) {
+:deep(.mp-textarea .el-textarea__inner) {
   overflow-y: scroll;
 }
-:deep(.el-textarea__inner::-webkit-scrollbar) {
+:deep(.mp-textarea .el-textarea__inner::-webkit-scrollbar) {
   width: 12px;
   background: #f0f0f0;
 }
-:deep(.el-textarea__inner::-webkit-scrollbar-track) {
+:deep(.mp-textarea .el-textarea__inner::-webkit-scrollbar-track) {
   background: #d8d8d8;
   border-radius: 4px;
 }
-:deep(.el-textarea__inner::-webkit-scrollbar-thumb) {
+:deep(.mp-textarea .el-textarea__inner::-webkit-scrollbar-thumb) {
   background-color: #909399;
   border: 2px solid #d8d8d8;
   border-radius: 4px;
 }
-:deep(.el-textarea__inner::-webkit-scrollbar-button) {
+:deep(.mp-textarea .el-textarea__inner::-webkit-scrollbar-button) {
   display: block;
   height: 16px;
   background-color: #e4e4e4;
   background-repeat: no-repeat;
   background-position: center;
 }
-:deep(.el-textarea__inner::-webkit-scrollbar-button:vertical:decrement) {
+:deep(.mp-textarea .el-textarea__inner::-webkit-scrollbar-button:vertical:decrement) {
   background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M6 2 L11 8 L1 8 Z' fill='%23909999'/%3E%3C/svg%3E");
 }
-:deep(.el-textarea__inner::-webkit-scrollbar-button:vertical:increment) {
+:deep(.mp-textarea .el-textarea__inner::-webkit-scrollbar-button:vertical:increment) {
   background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M1 3 L11 3 L6 10 Z' fill='%23909999'/%3E%3C/svg%3E");
 }
 @supports not selector(::-webkit-scrollbar) {
-  :deep(.el-textarea__inner) {
+  :deep(.mp-textarea .el-textarea__inner) {
     scrollbar-width: thin;
     scrollbar-color: #909399 #d8d8d8;
   }

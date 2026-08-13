@@ -810,13 +810,7 @@ function onProductUpdated(product: ProductResponse) {
   Object.assign(item, applyProductMaterialProcess(item, product))
 }
 
-function onProductSelect(item: QuoteItemResponse, opt: { value: string; product?: ProductResponse }) {
-  if (!opt.product) {
-    item.product_id = undefined
-    item.use_area = false
-    item.quantity = 1
-    return
-  }
+function onProductSelect(item: QuoteItemResponse, opt: { value: string; product: ProductResponse }) {
   Object.assign(item, applyProductMaterialProcess(item, opt.product))
   item.material_process = opt.value
   if (opt.product.pricing_method === 'area') {
@@ -967,7 +961,7 @@ async function handleSave() {
       // Prepare items for update - only send editable fields
       const cleanItems = items.value.map((item, idx) => ({
         ...(item.id ? { id: item.id } : {}),
-        item_name: item.item_name,
+        item_name: item.item_name || '待填写',
         product_id: item.product_id || undefined,
         width: item.width || undefined,
         width_unit: item.width_unit || undefined,
