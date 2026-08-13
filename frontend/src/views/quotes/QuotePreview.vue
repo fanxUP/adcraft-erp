@@ -290,7 +290,7 @@ function formatSpec(item: QuoteItemResponse) {
 /* 分项色块追踪（预览+打印）：仅修饰边框
    色块上缘 = 分项表头顶边，下缘 = 分项合计底边，左缘 = 整块（表头→明细→合计）连续色条
    颜色由各分组行内联 style 的 --ad-g 指定，与编辑器的分项颜色身份一致 */
-.print-table tr.pg-block td:first-child { border-left: 3px solid rgba(var(--ad-g), 0.85) !important; }
-.print-table tr.print-group-header.pg-block td { border-top: 2px solid rgba(var(--ad-g), 0.85) !important; border-bottom: none !important; }
-.print-table tr.print-group-total.pg-block td { border-bottom: 2px solid rgba(var(--ad-g), 0.85) !important; }
+.print-table tr.pg-block td:first-child { border-left: 3px solid rgba(var(--ad-g), 0.65) !important; }
+.print-table tr.print-group-header.pg-block td { border-top: 2px solid rgba(var(--ad-g), 0.65) !important; border-bottom: none !important; }
+.print-table tr.print-group-total.pg-block td { border-bottom: 2px solid rgba(var(--ad-g), 0.65) !important; }
 </style>

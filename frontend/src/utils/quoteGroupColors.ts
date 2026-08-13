@@ -8,7 +8,7 @@ export interface QuoteGroupColorRegistry {
  * 为分项分配稳定的调色板序号。
  * 颜色跟随分项身份，不随展示位置重新计算。
  */
-export function createQuoteGroupColorRegistry(paletteSize = 5): QuoteGroupColorRegistry {
+export function createQuoteGroupColorRegistry(paletteSize = 10): QuoteGroupColorRegistry {
   const size = Math.max(1, Math.floor(paletteSize))
   const colors = new Map<string, number>()
   let nextColorIndex = 1

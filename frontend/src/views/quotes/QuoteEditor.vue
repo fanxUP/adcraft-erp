@@ -63,7 +63,7 @@
         </div>
       </template>
 
-      <el-table ref="tableRef" :data="displayRows" stripe border scrollbar-always-on :row-key="(row: DisplayRow) => row.key" :row-class-name="rowClassName">
+      <el-table ref="tableRef" :data="displayRows" stripe border scrollbar-always-on :row-key="(row: DisplayRow) => row.key" :row-class-name="rowClassName" :row-style="rowStyle">
         <el-table-column v-if="!isReadonly" label="排序" width="46" align="center">
           <template #default="{ row }">
             <span v-if="row.type === 'group-header'" class="row-drag-handle" title="拖动整个分项" @mousedown="dragStartKey = row.key" @touchstart.passive="dragStartKey = row.key">⠿</span>
@@ -351,7 +351,7 @@ const previewVisible = ref(false)
 const productPickerVisible = ref(false)
 const pendingPickerItem = ref<QuoteItemResponse | null>(null)
 const quoteId = computed(() => route.params.id as string)
-const groupColors = createQuoteGroupColorRegistry(5)
+const groupColors = createQuoteGroupColorRegistry()
 
 const tableRef = ref()
 let sortable: Sortable | null = null
@@ -580,13 +580,19 @@ const displayRows = computed<DisplayRow[]>(() => (
 ))
 const sortableStructure = computed(() => displayRows.value.map(row => row.key).join('|'))
 
-function rowClassName({ row }: { row: DisplayRow }) {
+function rowClassName({ row, rowIndex }: { row: DisplayRow; rowIndex: number }) {
   const cls: string[] = []
-  if (row.colorIndex > 0) cls.push(`group-c${row.colorIndex}`)
+  if (row.colorIndex > 0) cls.push('quote-group-row')
   if (row.type === 'group-header') cls.push('group-header-row')
+  if (row.type === 'group-header' && rowIndex > 0) cls.push('group-card-gap')
   if (row.type === 'group-total') cls.push('group-total-row')
   cls.push('rk-' + row.key)
   return cls.join(' ')
+}
+
+function rowStyle({ row }: { row: DisplayRow }) {
+  if (row.colorIndex <= 0) return undefined
+  return { '--ad-g': `var(--ad-group-${row.colorIndex})` }
 }
 
 // ── 拖拽排序（Sortablejs）──
@@ -1111,33 +1117,21 @@ watch(() => route.params.id, async (newId) => {
 .summary-item { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
 .summary-item.total { font-size: 18px; color: #e63946; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ad-border); }
 /* 分项色块追踪：整块（分项表头→分项合计）统一同色浅底，颜色跟随分项身份移动 */
-:deep(.group-c1 td),
-:deep(.group-c2 td),
-:deep(.group-c3 td),
-:deep(.group-c4 td),
-:deep(.group-c5 td) {
-  background: rgba(var(--ad-g), 0.08) !important;
+:deep(.quote-group-row td) {
+  background: rgba(var(--ad-g), 0.07) !important;
 }
-/* 每组绑定 --ad-g */
-:deep(.group-c1) { --ad-g: var(--ad-group-1); }
-:deep(.group-c2) { --ad-g: var(--ad-group-2); }
-:deep(.group-c3) { --ad-g: var(--ad-group-3); }
-:deep(.group-c4) { --ad-g: var(--ad-group-4); }
-:deep(.group-c5) { --ad-g: var(--ad-group-5); }
 /* 左侧连续色条：贯穿表头→明细→合计整块 */
-:deep(.group-c1 td:first-child),
-:deep(.group-c2 td:first-child),
-:deep(.group-c3 td:first-child),
-:deep(.group-c4 td:first-child),
-:deep(.group-c5 td:first-child) {
-  box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.85);
+:deep(.quote-group-row td:first-child) {
+  box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.65);
 }
+/* 分项卡片之间留出主题色分隔带，首个分项不额外留白 */
+:deep(.group-card-gap td) { border-top: 8px solid var(--ad-card) !important; }
 /* 分项表头：顶部同色边 = 色块上缘 */
-:deep(.group-header-row td:not(:first-child)) { box-shadow: inset 0 2px 0 rgba(var(--ad-g), 0.85); }
-:deep(.group-header-row td:first-child) { box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.85), inset 0 2px 0 rgba(var(--ad-g), 0.85); }
+:deep(.group-header-row td:not(:first-child)) { box-shadow: inset 0 2px 0 rgba(var(--ad-g), 0.65); }
+:deep(.group-header-row td:first-child) { box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.65), inset 0 2px 0 rgba(var(--ad-g), 0.65); }
 /* 分项合计：底部同色边 = 色块下缘；合计行加粗 */
-:deep(.group-total-row td:not(:first-child)) { box-shadow: inset 0 -2px 0 rgba(var(--ad-g), 0.85); font-weight: 600; }
-:deep(.group-total-row td:first-child) { box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.85), inset 0 -2px 0 rgba(var(--ad-g), 0.85); font-weight: 600; }
+:deep(.group-total-row td:not(:first-child)) { box-shadow: inset 0 -2px 0 rgba(var(--ad-g), 0.65); font-weight: 600; }
+:deep(.group-total-row td:first-child) { box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.65), inset 0 -2px 0 rgba(var(--ad-g), 0.65); font-weight: 600; }
 
 /* 修复 el-input-number 默认宽度(120px)超出窄列的问题 */
 :deep(.el-table .el-input-number) { width: 100%; }

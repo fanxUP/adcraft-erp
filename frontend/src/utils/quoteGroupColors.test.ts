@@ -4,6 +4,13 @@ import { createQuoteGroupColorRegistry } from './quoteGroupColors'
 import { applyQuoteDisplayOrder, buildQuoteDisplayRows, reorderQuoteDisplayRows } from './quoteItemOrdering'
 
 describe('quoteGroupColors', () => {
+  it('uses ten colors before repeating the default palette', () => {
+    const colors = createQuoteGroupColorRegistry()
+
+    expect(Array.from({ length: 11 }, (_, index) => colors.colorFor(`分项${index + 1}`)))
+      .toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1])
+  })
+
   it('keeps each group color attached to the group after reordering', () => {
     const colors = createQuoteGroupColorRegistry(5)
     const items = [
