@@ -327,8 +327,8 @@ import {
 import {
   applyQuoteDisplayOrder,
   buildQuoteDisplayRows,
+  getQuoteDropSuccessorKey,
   getQuoteGroupBlock,
-  getQuoteGroupDropSuccessorKey,
   isDuplicateQuoteGroupName,
   reorderQuoteDisplayRows,
   type QuoteDisplayRow,
@@ -457,7 +457,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
-  cleanupGroupDrag()
+  cleanupDrag()
   sortable?.destroy()
   sortable = null
 })
@@ -614,21 +614,25 @@ function initSortable() {
 // ── 组拖拽：整组预览 + 只允许落在完整分项边界 ──
 let groupDragVisual: QuoteGroupDragVisual | null = null
 let groupDragSourceKeys = new Set<string>()
-let groupDropSuccessorKey: string | null = null
+let dragDropSuccessorKey: string | null = null
 const dragStartKey = ref<string | null>(null)
 
 function handleDragStart(evt: Sortable.SortableEvent) {
-  // start 事件不带可靠的 item/oldIndex，行 key 已在 handle 的 @mousedown 里捕获
-  const key = dragStartKey.value
+  const key = dragStartKey.value || rkKeyOf(evt.item)
   const dragged = key ? displayRows.value.find(r => r.key === key) : undefined
-  if (!dragged || dragged.type !== 'group-header') return
+  if (!dragged || dragged.type === 'group-total') return
+
+  dragStartKey.value = key
+  dragDropSuccessorKey = key
+  document.addEventListener('dragover', handleDragPointer, true)
+  document.addEventListener('touchmove', handleDragPointer, { capture: true, passive: true })
+  if (dragged.type !== 'group-header') return
 
   const rows = displayRows.value
   const headerIdx = rows.indexOf(dragged)
   const block = getQuoteGroupBlock(rows, headerIdx)
   const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody')
   groupDragSourceKeys = new Set(block.map(row => row.key))
-  groupDropSuccessorKey = dragged.key
 
   // 隐藏原生拖拽快照（浏览器默认只跟随表头一行），改由下方整组卡片跟随
   const de = (evt as { originalEvent?: DragEvent }).originalEvent
@@ -651,16 +655,15 @@ function handleDragStart(evt: Sortable.SortableEvent) {
     clientX: de?.clientX ?? 0,
     clientY: de?.clientY ?? 0,
   })
-  document.addEventListener('dragover', handleGroupDragPointer, true)
-  document.addEventListener('touchmove', handleGroupDragPointer, { capture: true, passive: true })
 }
 
 function positionDragCard(clientX: number, clientY: number) {
   groupDragVisual?.move(clientX, clientY)
 }
 
-function handleGroupDragPointer(event: Event) {
-  if (!groupDragSourceKeys.size) return
+function handleDragPointer(event: Event) {
+  const draggedKey = dragStartKey.value
+  if (!draggedKey) return
   const e = event as MouseEvent | TouchEvent
   const touch = 'touches' in e ? (e.touches[0] ?? e.changedTouches[0]) : undefined
   const x = touch?.clientX ?? ('clientX' in e ? e.clientX : 0)
@@ -669,32 +672,31 @@ function handleGroupDragPointer(event: Event) {
 
   const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody') as HTMLElement | null
   if (tbody && y >= tbody.getBoundingClientRect().bottom) {
-    groupDropSuccessorKey = null
+    dragDropSuccessorKey = null
     showGroupDropIndicator(null)
+    return
   }
+
+  const target = document.elementFromPoint(x, y)?.closest('tr') as HTMLElement | null
+  if (!tbody || !target || !tbody.contains(target)) return
+  const relatedKey = rkKeyOf(target)
+  if (!relatedKey) return
+
+  const rect = target.getBoundingClientRect()
+  dragDropSuccessorKey = getQuoteDropSuccessorKey(
+    displayRows.value,
+    draggedKey,
+    relatedKey,
+    y >= rect.top + rect.height / 2,
+  )
+  showGroupDropIndicator(dragDropSuccessorKey)
 }
 
-function handleDragMove(evt: Sortable.MoveEvent, originalEvent: Event) {
-  const e = originalEvent as MouseEvent | TouchEvent
-  const touch = 'touches' in e ? (e.touches[0] ?? e.changedTouches[0]) : undefined
-  const x = touch?.clientX ?? ('clientX' in e ? e.clientX : 0)
-  const y = touch?.clientY ?? ('clientY' in e ? e.clientY : 0)
-  positionDragCard(x, y)
+function handleDragMove(_evt: Sortable.MoveEvent, originalEvent: Event) {
+  handleDragPointer(originalEvent)
 
-  if (!groupDragSourceKeys.size) return
-  const relatedKey = rkKeyOf(evt.related)
-  if (relatedKey) {
-    groupDropSuccessorKey = getQuoteGroupDropSuccessorKey(
-      displayRows.value,
-      dragStartKey.value ?? '',
-      relatedKey,
-      Boolean(evt.willInsertAfter),
-    )
-    showGroupDropIndicator(groupDropSuccessorKey)
-  }
-
-  // Sortable 原生只会移动表头 tr。整组拖拽期间禁止它改动真实 DOM，
-  // 最终只按上面计算出的合法分项边界一次性写回响应式数据。
+  // Vue 是 tbody 行顺序的唯一数据源。所有拖拽均禁止 Sortable 改动真实 DOM，
+  // 释放鼠标时只按记录的业务落点更新 items，避免合计行与虚拟 DOM 脱节。
   return false
 }
 
@@ -717,56 +719,34 @@ function showGroupDropIndicator(successorKey: string | null) {
   groupDragVisual?.showBoundary(tbody.querySelector('.rk-' + lastTarget.key), 'after')
 }
 
-function cleanupGroupDrag() {
-  document.removeEventListener('dragover', handleGroupDragPointer, true)
-  document.removeEventListener('touchmove', handleGroupDragPointer, true)
+function cleanupDrag() {
+  document.removeEventListener('dragover', handleDragPointer, true)
+  document.removeEventListener('touchmove', handleDragPointer, true)
   dragStartKey.value = null
   groupDragVisual?.dispose()
   groupDragVisual = null
   groupDragSourceKeys.clear()
-  groupDropSuccessorKey = null
+  dragDropSuccessorKey = null
 }
 
 function handleDragEnd(evt: Sortable.SortableEvent) {
   const capturedKey = dragStartKey.value
-  const capturedGroupDrop = groupDragSourceKeys.size ? groupDropSuccessorKey : undefined
-  cleanupGroupDrag()
+  const capturedDrop = dragDropSuccessorKey
+  cleanupDrag()
   const rows = displayRows.value
   const fallbackKey = evt.oldIndex == null ? '' : rows[evt.oldIndex]?.key
   const draggedKey = capturedKey || fallbackKey
-  if (!draggedKey) return restoreDisplayRowDomOrder()
+  if (!draggedKey) return
 
-  // 明细使用 Sortable 的真实 DOM 落点；整组使用拖动期间锁定的合法分项边界。
-  const succ = evt.item.nextElementSibling as HTMLElement | null
-  const succKey = capturedGroupDrop !== undefined ? capturedGroupDrop : (succ ? rkKeyOf(succ) : null)
+  const nextRows = reorderQuoteDisplayRows(rows, draggedKey, capturedDrop)
+  if (nextRows === rows) return
 
-  const nextRows = reorderQuoteDisplayRows(rows, draggedKey, succKey)
-  if (nextRows === rows) return restoreDisplayRowDomOrder()
-
-  // Sortable 只挪动被拖拽的单个 tr；分项拖拽却会写回整个分项块。
-  // 先恢复 Vue 认知中的旧 DOM，再更新响应式数据，避免 Vue 在已被单行篡改的 DOM 上
-  // 做 keyed diff，造成目标分项在界面中被表头截断。
-  restoreDisplayRowDomOrder()
   items.value = applyQuoteDisplayOrder(nextRows)
 }
 
 function rkKeyOf(tr: HTMLElement): string {
   const cls = String(tr.className || '')
   return cls.split(/\s+/).find(c => c.startsWith('rk-'))?.slice(3) || ''
-}
-
-// Sortable 会先移动真实 DOM；无效落点时按响应式数据恢复，避免界面与保存顺序不一致。
-function restoreDisplayRowDomOrder() {
-  const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody')
-  if (!tbody) return
-  const rowElements = new Map<string, HTMLElement>()
-  for (const row of Array.from(tbody.children) as HTMLElement[]) {
-    rowElements.set(rkKeyOf(row), row)
-  }
-  for (const row of displayRows.value) {
-    const element = rowElements.get(row.key)
-    if (element) tbody.appendChild(element)
-  }
 }
 
 // 明细结构变化后重建 sortable（el-table 可能重建 tbody）

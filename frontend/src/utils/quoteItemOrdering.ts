@@ -108,6 +108,26 @@ export function getQuoteGroupDropSuccessorKey<T extends QuoteOrderItem>(
   return willInsertAfter ? (rows[relatedIndex + 1]?.key ?? null) : related.key
 }
 
+/**
+ * 将光标悬停行转换成响应式数据的插入后继行。
+ * 整组拖拽吸附到完整分项边界；单条明细保留精确的行前/行后落点。
+ */
+export function getQuoteDropSuccessorKey<T extends QuoteOrderItem>(
+  rows: QuoteDisplayRow<T>[],
+  draggedKey: string,
+  relatedKey: string,
+  willInsertAfter = false,
+): string | null {
+  const dragged = rows.find(row => row.key === draggedKey)
+  if (dragged?.type === 'group-header') {
+    return getQuoteGroupDropSuccessorKey(rows, draggedKey, relatedKey, willInsertAfter)
+  }
+
+  const relatedIndex = rows.findIndex(row => row.key === relatedKey)
+  if (relatedIndex < 0) return relatedKey || null
+  return willInsertAfter ? (rows[relatedIndex + 1]?.key ?? null) : relatedKey
+}
+
 function groupBoundaryIndex<T extends QuoteOrderItem>(
   rows: QuoteDisplayRow<T>[],
   successorKey: string | null,

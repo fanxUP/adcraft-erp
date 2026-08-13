@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyQuoteDisplayOrder,
   buildQuoteDisplayRows,
+  getQuoteDropSuccessorKey,
   getQuoteGroupDropSuccessorKey,
   isDuplicateQuoteGroupName,
   reorderQuoteDisplayRows,
@@ -119,6 +120,19 @@ describe('quoteItemOrdering', () => {
     expect(getQuoteGroupDropSuccessorKey(rows, 'gh-a1', 'c1')).toBeNull()
     expect(getQuoteGroupDropSuccessorKey(rows, 'gh-a1', 'a2')).toBe('a2')
     expect(getQuoteGroupDropSuccessorKey(rows, 'gh-a1', 'free', true)).toBe('gh-b1')
+  })
+
+  it('converts a detail hover target to a data successor without relying on mutated DOM order', () => {
+    const rows = rowsOf([
+      item('a1', '分项A'), item('a2', '分项A'),
+      item('free'),
+      item('b1', '分项B'), item('b2', '分项B'),
+    ])
+
+    expect(getQuoteDropSuccessorKey(rows, 'a2', 'b1')).toBe('b1')
+    expect(getQuoteDropSuccessorKey(rows, 'a2', 'b1', true)).toBe('b2')
+    expect(getQuoteDropSuccessorKey(rows, 'a2', 'gt-b1', true)).toBeNull()
+    expect(getQuoteDropSuccessorKey(rows, 'a2', 'a2')).toBe('a2')
   })
 
   it('keeps standalone details between groups instead of forcing them to the bottom', () => {
