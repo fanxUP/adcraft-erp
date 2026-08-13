@@ -437,8 +437,10 @@ class ProductionTaskService:
                     form.deleted_at = datetime.now()
 
                 old_status = order.status
-                order.status = "designing"
                 order_svc = BusinessDocumentService(self.db, doc_type="order")
+                # 回退到设计中；若无设计任务则补建一个，保证看板设计栏有任务可跳转
+                await order_svc._auto_create_design_task(order)
+                order.status = "designing"
                 await order_svc.repo.create_status_log(doc_id, old_status, "designing",
                     "制作任务已被管理员删除，系统自动回退", None)
 
