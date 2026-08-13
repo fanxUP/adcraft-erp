@@ -7,17 +7,15 @@
     :close-on-click-modal="false"
   >
     <el-form :model="form" label-width="80px">
-      <div style="display: flex; gap: 12px;">
-        <el-form-item label="产品" style="flex: 1;">
-          <el-input v-model="form.name" placeholder="如：标识牌" />
-        </el-form-item>
-        <el-form-item label="材质" style="flex: 1;">
-          <el-input v-model="form.material_name" placeholder="如：亚克力" />
-        </el-form-item>
-        <el-form-item label="工艺" style="flex: 1;">
-          <el-input v-model="form.process_name" placeholder="如：UV打印" />
-        </el-form-item>
-      </div>
+      <el-form-item label="产品">
+        <el-input v-model="form.name" type="textarea" :rows="3" placeholder="如：标识牌" />
+      </el-form-item>
+      <el-form-item label="材质">
+        <el-input v-model="form.material_name" type="textarea" :rows="3" placeholder="如：亚克力" />
+      </el-form-item>
+      <el-form-item label="工艺">
+        <el-input v-model="form.process_name" type="textarea" :rows="3" placeholder="如：UV打印" />
+      </el-form-item>
       <el-form-item label="单位">
         <el-select v-model="form.unit" style="width: 100%">
           <el-option label="项" value="项" />

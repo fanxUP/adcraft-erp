@@ -78,17 +78,15 @@
       append-to-body
     >
       <el-form :model="editForm" label-width="80px">
-        <div style="display: flex; gap: 12px;">
-          <el-form-item label="产品" style="flex: 1;">
-            <el-input v-model="editForm.name" placeholder="如：标识牌" />
-          </el-form-item>
-          <el-form-item label="材质" style="flex: 1;">
-            <el-input v-model="editForm.material_name" placeholder="如：亚克力" />
-          </el-form-item>
-          <el-form-item label="工艺" style="flex: 1;">
-            <el-input v-model="editForm.process_name" placeholder="如：UV打印" />
-          </el-form-item>
-        </div>
+        <el-form-item label="产品">
+          <el-input v-model="editForm.name" type="textarea" :rows="3" placeholder="如：标识牌" />
+        </el-form-item>
+        <el-form-item label="材质">
+          <el-input v-model="editForm.material_name" type="textarea" :rows="3" placeholder="如：亚克力" />
+        </el-form-item>
+        <el-form-item label="工艺">
+          <el-input v-model="editForm.process_name" type="textarea" :rows="3" placeholder="如：UV打印" />
+        </el-form-item>
         <el-form-item label="单位">
           <el-select v-model="editForm.unit" style="width: 100%">
             <el-option v-for="u in UNIT_OPTIONS" :key="u" :label="u" :value="u" />
