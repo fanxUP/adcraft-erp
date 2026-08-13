@@ -524,7 +524,7 @@ class BusinessDocumentService:
         await self.db.flush()
 
     async def reopen_completed_order(self, doc_id: UUID, reason: str, operated_by: UUID) -> dict:
-        """管理员专用：将已完成订单退回待验收，供后续取消或纠正。"""
+        """管理员专用：将已完成订单退回安装中，供后续取消或纠正。"""
         doc = await self.repo.get_by_id(doc_id)
         if not doc:
             raise ValueError("订单不存在")
@@ -534,6 +534,24 @@ class BusinessDocumentService:
             raise ValueError("撤回原因不能为空")
         await self.repo.update(doc, {"status": "in_installation"})
         await self.repo.create_status_log(doc_id, "completed", "in_installation", reason.strip(), operated_by)
+        # 撤回后订单回到安装中，若无进行中的安装任务则新建一个，保证看板安装栏可跳转
+        open_task = (await self.db.execute(
+            select(InstallationTask).where(
+                InstallationTask.document_id == doc_id,
+                InstallationTask.status.not_in(["completed", "cancelled"]),
+            )
+        )).scalars().first()
+        if not open_task:
+            from app.services.number_generator import generate_installation_no
+            task = InstallationTask(
+                installation_no=await generate_installation_no(self.db),
+                document_id=doc_id,
+                customer_id=doc.customer_id,
+                project_name=doc.project_name,
+                status="pending",
+            )
+            self.db.add(task)
+            await self.db.flush()
         return self._to_detail(doc)
 
     async def _require_all_tasks_completed(
