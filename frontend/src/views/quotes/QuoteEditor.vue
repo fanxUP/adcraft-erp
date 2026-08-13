@@ -188,34 +188,7 @@
             </template>
           </template>
         </el-table-column>
-        <el-table-column label="工艺费" width="110">
-          <template #default="{ row }">
-            <template v-if="row.type === 'item'">
-              <el-input-number v-model="row.item.process_fee" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
-            </template>
-          </template>
-        </el-table-column>
-        <el-table-column label="安装费" width="110">
-          <template #default="{ row }">
-            <template v-if="row.type === 'item'">
-              <el-input-number v-model="row.item.installation_fee" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
-            </template>
-          </template>
-        </el-table-column>
-        <el-table-column label="设计费" width="110">
-          <template #default="{ row }">
-            <template v-if="row.type === 'item'">
-              <el-input-number v-model="row.item.design_fee" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
-            </template>
-          </template>
-        </el-table-column>
-        <el-table-column label="运输费" width="110">
-          <template #default="{ row }">
-            <template v-if="row.type === 'item'">
-              <el-input-number v-model="row.item.transport_fee" :precision="2" :min="0" :disabled="isReadonly" size="small" :controls="false" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
-            </template>
-          </template>
-        </el-table-column>
+
         <el-table-column label="小计" width="120">
           <template #default="{ row }">
             <template v-if="row.type === 'item'">¥ {{ calcItemSubtotal(row.item).toFixed(2) }}</template>
