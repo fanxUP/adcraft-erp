@@ -76,16 +76,17 @@
       width="min(560px, 92vw)"
       :close-on-click-modal="false"
       append-to-body
+      @opened="syncTextareaScroll"
     >
       <el-form :model="editForm" label-width="80px">
         <el-form-item label="产品">
-          <el-input v-model="editForm.name" type="textarea" :rows="3" placeholder="如：标识牌" />
+          <el-input ref="nameInput" v-model="editForm.name" type="textarea" :rows="3" placeholder="如：标识牌" @input="syncTextareaScroll" />
         </el-form-item>
         <el-form-item label="材质">
-          <el-input v-model="editForm.material_name" type="textarea" :rows="3" placeholder="如：亚克力" />
+          <el-input ref="materialInput" v-model="editForm.material_name" type="textarea" :rows="3" placeholder="如：亚克力" @input="syncTextareaScroll" />
         </el-form-item>
         <el-form-item label="工艺">
-          <el-input v-model="editForm.process_name" type="textarea" :rows="3" placeholder="如：UV打印" />
+          <el-input ref="processInput" v-model="editForm.process_name" type="textarea" :rows="3" placeholder="如：UV打印" @input="syncTextareaScroll" />
         </el-form-item>
         <el-form-item label="单位">
           <el-select v-model="editForm.unit" style="width: 100%">
@@ -122,7 +123,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElInput, ElMessage } from 'element-plus'
 import { getProducts, updateProduct } from '@/api/products'
 import { formatProductMaterialProcess } from '@/utils/productMaterialProcess'
 import { listCustomerAgreements, type CustomerAgreement } from '@/api/cdrQuote'
@@ -156,6 +157,16 @@ const createVisible = ref(false)
 const editVisible = ref(false)
 const editingProduct = ref<ProductResponse | null>(null)
 const savingEdit = ref(false)
+const nameInput = ref<InstanceType<typeof ElInput>>()
+const materialInput = ref<InstanceType<typeof ElInput>>()
+const processInput = ref<InstanceType<typeof ElInput>>()
+
+function syncTextareaScroll() {
+  for (const el of [nameInput.value, materialInput.value, processInput.value]) {
+    const t = (el as unknown as { textarea?: HTMLTextAreaElement } | undefined)?.textarea
+    if (t) t.classList.toggle('has-scroll', t.scrollHeight > t.clientHeight)
+  }
+}
 const editForm = ref({
   name: '',
   material_name: '',
@@ -278,3 +289,28 @@ async function saveEdit() {
   }
 }
 </script>
+
+<style scoped>
+/* 产品/材质/工艺文本域：滚动条常驻输入框，未超3行灰色，可滚动时加深 */
+:deep(.el-textarea__inner) {
+  scrollbar-width: thin;
+  scrollbar-color: #d8d8d8 transparent;
+}
+:deep(.el-textarea__inner.has-scroll) {
+  scrollbar-color: #909399 transparent;
+}
+:deep(.el-textarea__inner::-webkit-scrollbar) {
+  width: 6px;
+}
+:deep(.el-textarea__inner::-webkit-scrollbar-thumb) {
+  background-color: #d8d8d8;
+  border-radius: 3px;
+}
+:deep(.el-textarea__inner.has-scroll::-webkit-scrollbar-thumb) {
+  background-color: #909399;
+}
+:deep(.el-textarea__inner::-webkit-scrollbar-track) {
+  background: transparent;
+}
+</style>
+
