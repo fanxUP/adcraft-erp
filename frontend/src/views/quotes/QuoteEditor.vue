@@ -926,24 +926,34 @@ watch(() => route.params.id, async (newId) => {
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .summary-item { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
 .summary-item.total { font-size: 18px; color: #e63946; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ad-border); }
-/* 分项色块追踪：明细行同色浅底（覆盖斑马纹；5 色按分组序号循环） */
-:deep(.group-c1 td) { background: rgba(var(--ad-group-1), 0.08) !important; }
-:deep(.group-c2 td) { background: rgba(var(--ad-group-2), 0.08) !important; }
-:deep(.group-c3 td) { background: rgba(var(--ad-group-3), 0.08) !important; }
-:deep(.group-c4 td) { background: rgba(var(--ad-group-4), 0.08) !important; }
-:deep(.group-c5 td) { background: rgba(var(--ad-group-5), 0.08) !important; }
-/* 每组绑定 --ad-g；表头/合计行用同色更深底 + 同色分隔线 + 左侧色条 */
+/* 分项色块追踪：整块（分项表头→分项合计）统一同色浅底，覆盖斑马纹；5 色按分组序号循环 */
+:deep(.group-c1 td),
+:deep(.group-c2 td),
+:deep(.group-c3 td),
+:deep(.group-c4 td),
+:deep(.group-c5 td) {
+  background: rgba(var(--ad-g), 0.08) !important;
+}
+/* 每组绑定 --ad-g */
 :deep(.group-c1) { --ad-g: var(--ad-group-1); }
 :deep(.group-c2) { --ad-g: var(--ad-group-2); }
 :deep(.group-c3) { --ad-g: var(--ad-group-3); }
 :deep(.group-c4) { --ad-g: var(--ad-group-4); }
 :deep(.group-c5) { --ad-g: var(--ad-group-5); }
-:deep(.group-header-row td),
-:deep(.group-total-row td) { background: rgba(var(--ad-g), 0.16) !important; }
-:deep(.group-header-row td) { border-bottom: 2px solid rgba(var(--ad-g), 0.85) !important; }
-:deep(.group-total-row td) { border-top: 2px solid rgba(var(--ad-g), 0.85) !important; font-weight: 600; }
-:deep(.group-header-row td:first-child),
-:deep(.group-total-row td:first-child) { box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.8); }
+/* 左侧连续色条：贯穿表头→明细→合计整块 */
+:deep(.group-c1 td:first-child),
+:deep(.group-c2 td:first-child),
+:deep(.group-c3 td:first-child),
+:deep(.group-c4 td:first-child),
+:deep(.group-c5 td:first-child) {
+  box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.85);
+}
+/* 分项表头：顶部同色边 = 色块上缘 */
+:deep(.group-header-row td:not(:first-child)) { box-shadow: inset 0 2px 0 rgba(var(--ad-g), 0.85); }
+:deep(.group-header-row td:first-child) { box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.85), inset 0 2px 0 rgba(var(--ad-g), 0.85); }
+/* 分项合计：底部同色边 = 色块下缘；合计行加粗 */
+:deep(.group-total-row td:not(:first-child)) { box-shadow: inset 0 -2px 0 rgba(var(--ad-g), 0.85); font-weight: 600; }
+:deep(.group-total-row td:first-child) { box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.85), inset 0 -2px 0 rgba(var(--ad-g), 0.85); font-weight: 600; }
 
 /* 修复 el-input-number 默认宽度(120px)超出窄列的问题 */
 :deep(.el-table .el-input-number) { width: 100%; }
