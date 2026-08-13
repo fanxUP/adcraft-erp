@@ -66,7 +66,10 @@
       <el-table ref="tableRef" :data="displayRows" stripe border scrollbar-always-on :row-key="(row: DisplayRow) => row.key" :row-class-name="rowClassName">
         <el-table-column v-if="!isReadonly" label="排序" width="46" align="center">
           <template #default="{ row }">
-            <span v-if="row.type !== 'group-total'" class="row-drag-handle" title="拖动排序" @mousedown="dragStartKey = row.key">⠿</span>
+            <span v-if="row.type === 'group-header'" class="row-drag-handle" title="拖动排序" @mousedown="dragStartKey = row.key">⠿</span>
+            <span v-else-if="row.type === 'item'" class="row-drag-handle" title="拖动排序" @mousedown="dragStartKey = row.key">
+              <el-icon><Rank /></el-icon>
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="项目内容" min-width="320">
