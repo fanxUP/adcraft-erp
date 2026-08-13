@@ -576,16 +576,11 @@ class InstallationTaskService:
                     form.deleted_at = datetime.now()
 
                 old_status = order.status
-                # 如果没有制作任务则回退到设计中，避免看板点击无任务可跳转
-                from app.models.task import ProductionTask
-                pt_count = (await self.db.execute(
-                    select(func.count()).select_from(ProductionTask)
-                    .where(ProductionTask.document_id == doc_id)
-                )).scalar()
-                target = "in_production" if pt_count and pt_count > 0 else "designing"
-                order.status = target
                 order_svc = BusinessDocumentService(self.db, doc_type="order")
-                await order_svc.repo.create_status_log(doc_id, old_status, target,
+                # 回退到制作中；若无制作任务则补建一个，保证看板制作栏有任务可跳转
+                await order_svc._auto_create_production_task(order)
+                order.status = "in_production"
+                await order_svc.repo.create_status_log(doc_id, old_status, "in_production",
                     "安装任务已被管理员删除，系统自动回退", None)
 
         await self.db.flush()
