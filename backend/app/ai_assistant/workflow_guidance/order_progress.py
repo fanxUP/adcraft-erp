@@ -24,8 +24,7 @@ CURRENT_STAGE_INDEX = {
     "designing": 1,
     "in_production": 2,
     "in_installation": 3,
-    "pending_acceptance": 4,
-    "completed": 5,
+    "completed": 4,
     "cancelled": 0,
 }
 

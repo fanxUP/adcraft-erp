@@ -358,12 +358,12 @@ let pendingOrderId = ''
 
 const orderStatusLabelMap: Record<string, string> = {
   pending_confirm: '待确认', confirmed: '已确认', designing: '设计中',
-  in_production: '生产中', in_installation: '安装中', pending_acceptance: '待验收',
+  in_production: '生产中', in_installation: '安装中',
   completed: '已完成', cancelled: '已取消',
 }
 const orderStatusColorMap: Record<string, string> = {
   pending_confirm: 'warning', confirmed: 'info', designing: '', in_production: '',
-  in_installation: '', pending_acceptance: 'warning', completed: 'success', cancelled: 'danger',
+  in_installation: '', completed: 'success', cancelled: 'danger',
 }
 function orderStatusLabel(s: string) { return orderStatusLabelMap[s] || s }
 function orderStatusColor(s: string) { return orderStatusColorMap[s] || 'info' }

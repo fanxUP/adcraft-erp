@@ -247,7 +247,7 @@ async def test_rule_status_includes_contract_health_and_recent_sync_history():
 
     assert status["in_sync"] is True
     assert status["contract"]["in_sync"] is True
-    assert status["contract"]["semantic_complete_count"] == 33
+    assert status["contract"]["semantic_complete_count"] == 32
     assert status["last_sync"]["catalog_digest"] == "abc123"
     assert len(status["recent_syncs"]) == 1
 

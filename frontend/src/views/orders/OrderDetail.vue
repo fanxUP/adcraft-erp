@@ -454,13 +454,13 @@ function itemIndex(row: DisplayRow, displayIdx: number): number {
 function statusLabel(s: string) {
   const map: Record<string, string> = {
     pending_confirm: '待确认', confirmed: '已确认', designing: '设计中',
-    in_production: '生产中', in_installation: '安装中', pending_acceptance: '待验收',
+    in_production: '生产中', in_installation: '安装中',
     completed: '已完成', cancelled: '已取消',
   }
   return map[s] || s
 }
 function statusColor(s: string) {
-  const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', designing: '', in_production: '', in_installation: '', pending_acceptance: 'warning', completed: 'success', cancelled: 'danger' }
+  const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', designing: '', in_production: '', in_installation: '', completed: 'success', cancelled: 'danger' }
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
@@ -503,7 +503,7 @@ async function fetchTasks() {
 async function handleChangeStatus(to_status: string) {
   const labels: Record<string, string> = {
     pending_confirm: '待确认', confirmed: '已确认', designing: '设计中',
-    in_production: '生产中', in_installation: '安装中', pending_acceptance: '待验收',
+    in_production: '生产中', in_installation: '安装中',
     completed: '已完成', cancelled: '已取消',
   }
   const label = labels[to_status] || to_status
@@ -530,7 +530,7 @@ async function handleChangeStatus(to_status: string) {
 async function handleReopenCompleted() {
   if (!order.value) return
   const { value: reason } = await ElMessageBox.prompt(
-    '撤回后订单将回到“待验收”，之后可继续取消。请输入撤回原因。',
+    '撤回后订单将回到“安装中”，之后可继续取消。请输入撤回原因。',
     '撤回已完成订单',
     {
       confirmButtonText: '确认撤回',
@@ -542,7 +542,7 @@ async function handleReopenCompleted() {
   changing.value = true
   try {
     order.value = await reopenCompletedOrder(order.value.id, reason)
-    ElMessage.success('订单已撤回到待验收状态，现在可以取消订单')
+    ElMessage.success('订单已撤回到安装中状态，现在可以取消订单')
   } finally { changing.value = false }
 }
 

@@ -240,7 +240,7 @@ async def test_acceptance_create_stores_contact_and_syncs():
     source_doc = MagicMock()
     source_doc.id = order_id
     source_doc.doc_type = "order"
-    source_doc.status = "pending_acceptance"
+    source_doc.status = "completed"
     source_doc.customer_id = uuid4()
 
     form = MagicMock()

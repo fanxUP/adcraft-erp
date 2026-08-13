@@ -122,7 +122,7 @@ export const salesDeliveryCapabilities: PageCapabilityMap = {
   },
   acceptance_list: {
     title: '验收列表',
-    purpose: '管理安装完成后的验收单和待验收项目',
+    purpose: '管理验收单和待验收项目',
     workflowStage: 'acceptance',
     availableActions: ['查询验收单', '创建验收单', '查看验收详情'],
   },

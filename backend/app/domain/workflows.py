@@ -12,10 +12,9 @@ ORDER_WORKFLOW: Workflow = {
     "in_installation": (
         "designing",
         "in_production",
-        "pending_acceptance",
+        "completed",
         "cancelled",
     ),
-    "pending_acceptance": ("completed", "in_installation", "cancelled"),
     "completed": (),
     "cancelled": (),
 }

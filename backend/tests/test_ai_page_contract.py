@@ -109,8 +109,8 @@ def test_page_capability_health_reports_semantic_coverage():
 
     assert health["version"] == 2
     assert health["page_count"] == 7
-    assert health["capability_count"] == 33
-    assert health["semantic_complete_count"] == 33
-    assert health["write_capability_count"] == 32
+    assert health["capability_count"] == 32
+    assert health["semantic_complete_count"] == 32
+    assert health["write_capability_count"] == 31
     assert health["all_write_actions_require_confirmation"] is True
     assert health["unknown_permissions"] == []

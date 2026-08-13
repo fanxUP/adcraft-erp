@@ -25,7 +25,6 @@ def build_order_guidance(snapshot: dict) -> dict:
         "designing": "设计阶段",
         "in_production": "生产阶段",
         "in_installation": "安装阶段",
-        "pending_acceptance": "验收阶段",
         "completed": "收款阶段",
         "cancelled": "订单已取消",
     }
@@ -105,7 +104,7 @@ def build_order_guidance(snapshot: dict) -> dict:
         transitions = {
             "designing": ("进入生产阶段", "in_production", "订单状态变为“生产中”并生成制作任务"),
             "in_production": ("进入安装阶段", "in_installation", "订单状态变为“安装中”并生成安装任务"),
-            "in_installation": ("提交订单验收", "pending_acceptance", "订单状态变为“待验收”并生成验收单"),
+            "in_installation": ("完成订单", "completed", "订单状态变为“已完成”"),
         }
         next_label, target, completion = transitions[status]
         return guidance_result(
@@ -122,32 +121,6 @@ def build_order_guidance(snapshot: dict) -> dict:
             completion,
             ORDER_WORKFLOW,
         )
-
-    if status == "pending_acceptance":
-        acceptances = snapshot.get("acceptances") or []
-        if not acceptances:
-            return guidance_result(
-                snapshot,
-                stage_labels[status],
-                ["未找到系统自动生成的验收单，请核实订单数据"],
-                action("查看验收单列表", "验收管理", "/acceptances"),
-                "订单关联到一张验收单",
-                ORDER_WORKFLOW,
-            )
-        acceptance = acceptances[0]
-        guidance = build_acceptance_guidance(
-            {
-                **acceptance,
-                "business_type": "acceptance",
-                "business_id": str(acceptance.get("id") or ""),
-            }
-        )
-        guidance.update(
-            business_type="order",
-            business_id=order_id,
-            current_status=status,
-        )
-        return attach_order_overview(guidance, snapshot)
 
     if status == "completed":
         total = float(snapshot.get("total_amount") or 0)

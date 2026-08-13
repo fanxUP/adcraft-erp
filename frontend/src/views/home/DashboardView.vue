@@ -144,7 +144,6 @@ const columns = [
   { key: 'designing', label: '设计', statuses: ['designing'] },
   { key: 'production', label: '制作', statuses: ['in_production'] },
   { key: 'installation', label: '安装', statuses: ['in_installation'] },
-  { key: 'acceptance', label: '验收', statuses: ['pending_acceptance'] },
 ]
 
 function colCards(key: string) {

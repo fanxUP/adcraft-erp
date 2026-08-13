@@ -67,7 +67,6 @@
   <span data-ai-target="order-status-designing" style="display:none"></span>
   <span data-ai-target="order-status-in_production" style="display:none"></span>
   <span data-ai-target="order-status-in_installation" style="display:none"></span>
-  <span data-ai-target="order-status-pending_acceptance" style="display:none"></span>
 </template>
 
 <script setup lang="ts">
@@ -85,7 +84,7 @@ const emit = defineEmits<{
 
 const allStatuses = [
   'pending_confirm', 'confirmed', 'designing', 'in_production',
-  'in_installation', 'pending_acceptance', 'completed', 'cancelled',
+  'in_installation', 'completed', 'cancelled',
 ]
 
 const transitions: Record<string, string[]> = {
@@ -93,8 +92,7 @@ const transitions: Record<string, string[]> = {
   confirmed: ['cancelled'],
   designing: ['cancelled'],
   in_production: ['cancelled'],
-  in_installation: ['cancelled'],
-  pending_acceptance: ['completed', 'cancelled'],
+  in_installation: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
 }
@@ -104,11 +102,10 @@ const progressLabels: Record<string, string> = {
   designing: '设计中',
   in_production: '生产中',
   in_installation: '安装中',
-  pending_acceptance: '验收中',
 }
 
 const progressVisible = computed(() => {
-  return ['confirmed', 'designing', 'in_production', 'in_installation', 'pending_acceptance'].includes(props.currentStatus)
+  return ['confirmed', 'designing', 'in_production', 'in_installation'].includes(props.currentStatus)
 })
 
 const progressLabel = computed(() => progressLabels[props.currentStatus] || '')
@@ -118,8 +115,7 @@ const progressDetail = computed(() => {
     case 'confirmed': return '系统将自动创建设计任务'
     case 'designing': return '设计任务完成后自动推进到生产'
     case 'in_production': return '制作任务完成后自动推进到安装'
-    case 'in_installation': return '安装任务完成后自动推进到验收'
-    case 'pending_acceptance': return '验收通过后自动完成订单'
+    case 'in_installation': return '安装任务完成后订单自动完成'
     default: return ''
   }
 })

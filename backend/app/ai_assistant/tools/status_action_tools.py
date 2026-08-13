@@ -16,7 +16,6 @@ ORDER_STATUS_LABELS = {
     "designing": "设计中",
     "in_production": "生产中",
     "in_installation": "安装中",
-    "pending_acceptance": "待验收",
     "completed": "已完成",
     "cancelled": "已取消",
 }
@@ -25,7 +24,6 @@ ORDER_TRANSITION_EFFECTS = {
     "designing": ["进入设计阶段，请确保已创建设计任务"],
     "in_production": ["创建或衔接生产任务"],
     "in_installation": ["创建或衔接安装任务"],
-    "pending_acceptance": ["自动创建验收单"],
     "completed": ["订单完结；如有欠款将生成收款提醒"],
     "cancelled": ["订单移入回收站"],
 }

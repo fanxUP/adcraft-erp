@@ -52,14 +52,9 @@ def make_order(**overrides):
     return order
 
 
-def test_order_must_pass_acceptance_before_completion():
-    assert "pending_acceptance" in ORDER_TRANSITIONS["in_installation"]
-    assert "completed" not in ORDER_TRANSITIONS["in_installation"]
-    assert ORDER_TRANSITIONS["pending_acceptance"] == (
-        "completed",
-        "in_installation",
-        "cancelled",
-    )
+def test_order_completes_directly_after_installation():
+    assert "completed" in ORDER_TRANSITIONS["in_installation"]
+    assert "pending_acceptance" not in ORDER_TRANSITIONS
 
 
 @pytest.fixture
@@ -83,21 +78,6 @@ def service():
         repository.update = AsyncMock(side_effect=update)
         yield BusinessDocumentService(db, doc_type="order"), repository, db
 
-
-@pytest.mark.asyncio
-async def test_order_cannot_complete_without_acceptance_flow(service):
-    order_service, repository, _ = service
-    repository.get_by_id.return_value = make_order(status="pending_acceptance")
-
-    with pytest.raises(ValueError, match="请通过验收单确认验收"):
-        await order_service.change_status(
-            SAMPLE_ORDER_ID,
-            "completed",
-            reason="手工完成",
-            operated_by=uuid4(),
-        )
-
-    repository.update.assert_not_awaited()
 
 
 @pytest.mark.asyncio

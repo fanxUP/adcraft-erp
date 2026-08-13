@@ -2,15 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   formatFileSize,
   getStatusLabel,
-  getStatusTagType,
   shouldShowMessageTime,
 } from './chatPresentation'
 
 describe('chat presentation helpers', () => {
   it('uses the canonical order workflow labels', () => {
     expect(getStatusLabel('in_installation', 'order')).toBe('安装中')
-    expect(getStatusLabel('pending_acceptance', 'order')).toBe('待验收')
-    expect(getStatusTagType('pending_acceptance', 'order')).toBe('warning')
   })
 
   it('formats file sizes', () => {

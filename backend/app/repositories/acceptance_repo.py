@@ -93,7 +93,7 @@ class AcceptanceRepository:
             .where(
                 BusinessDocument.deleted_at.is_(None),
                 BusinessDocument.doc_type == "order",
-                BusinessDocument.status == "pending_acceptance",
+                BusinessDocument.status != "cancelled",
                 not_(BusinessDocument.id.in_(ac_sub)),
             )
             .order_by(BusinessDocument.created_at.desc())

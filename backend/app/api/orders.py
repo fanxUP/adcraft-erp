@@ -90,7 +90,7 @@ async def reopen_completed_order(
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_ORDER, oid, ACTION_STATUS_CHANGE,
                         ip_address=request.client.host if request.client else None,
-                        after_data={"status": "pending_acceptance", "reason": data.reason, "action": "reopen_completed"})
+                        after_data={"status": "in_installation", "reason": data.reason, "action": "reopen_completed"})
     return success(order)
 
 

@@ -257,7 +257,7 @@ class DesignTaskService:
             from app.services.business_document_service import BusinessDocumentService
 
             order = await self.db.get(BusinessDocument, doc_id)
-            if order and order.doc_type == "order" and order.status in ("designing", "in_production", "in_installation", "pending_acceptance"):
+            if order and order.doc_type == "order" and order.status in ("designing", "in_production", "in_installation"):
                 # Cancel downstream auto-created tasks
                 for model_cls in (ProductionTask, InstallationTask):
                     result = await self.db.execute(
@@ -417,7 +417,7 @@ class ProductionTaskService:
             from app.services.business_document_service import BusinessDocumentService
 
             order = await self.db.get(BusinessDocument, doc_id)
-            if order and order.doc_type == "order" and order.status in ("in_production", "in_installation", "pending_acceptance"):
+            if order and order.doc_type == "order" and order.status in ("in_production", "in_installation"):
                 # Cancel downstream installation task
                 result = await self.db.execute(
                     select(InstallationTask).where(InstallationTask.document_id == doc_id)
@@ -542,7 +542,7 @@ class InstallationTaskService:
                     order_svc = BusinessDocumentService(self.db, doc_type="order")
                     try:
                         await order_svc.change_status(
-                            task.document_id, "pending_acceptance",
+                            task.document_id, "completed",
                             "安装任务全部完成，系统自动推进", operated_by)
                     except ValueError:
                         pass
@@ -563,7 +563,7 @@ class InstallationTaskService:
             from app.services.business_document_service import BusinessDocumentService
 
             order = await self.db.get(BusinessDocument, doc_id)
-            if order and order.doc_type == "order" and order.status in ("in_installation", "pending_acceptance"):
+            if order and order.doc_type == "order" and order.status == "in_installation":
                 # Soft-delete acceptance if exists
                 from app.models.acceptance import AcceptanceForm
                 ac_result = await self.db.execute(

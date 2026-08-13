@@ -454,8 +454,8 @@ def test_task_guidance_identifies_the_target_status_control(
         (
             "installation_task",
             "completed",
-            "提交订单验收",
-            "order-status-pending_acceptance",
+            "完成订单",
+            "order-status-completed",
         ),
     ],
 )
@@ -525,9 +525,15 @@ async def test_order_guidance_tool_uses_latest_business_data():
         "total_paid": 0,
     }
 
-    with patch(
-        "app.ai_assistant.tools.order_tools.get_order_progress",
-        new=AsyncMock(return_value=progress),
+    with (
+        patch(
+            "app.ai_assistant.tools.order_tools.get_order_progress",
+            new=AsyncMock(return_value=progress),
+        ),
+        patch(
+            "app.services.acceptance_service.AcceptanceService",
+            return_value=MagicMock(list_acceptances=AsyncMock(return_value=([], 0))),
+        ),
     ):
         result = await get_workflow_guidance(
             db=MagicMock(),
@@ -580,6 +586,10 @@ async def test_completed_task_guidance_loads_parent_order_progress():
             "app.ai_assistant.tools.order_tools.get_order_progress",
             new=AsyncMock(return_value=progress),
         ),
+        patch(
+            "app.services.acceptance_service.AcceptanceService",
+            return_value=MagicMock(list_acceptances=AsyncMock(return_value=([], 0))),
+        ),
     ):
         result = await get_workflow_guidance(
             db=MagicMock(),
@@ -629,6 +639,10 @@ async def test_installation_task_guidance_loads_order_values_for_draft():
             "app.ai_assistant.tools.order_tools.get_order_progress",
             new=AsyncMock(return_value=progress),
         ),
+        patch(
+            "app.services.acceptance_service.AcceptanceService",
+            return_value=MagicMock(list_acceptances=AsyncMock(return_value=([], 0))),
+        ),
     ):
         result = await get_workflow_guidance(
             db=MagicMock(),
@@ -644,52 +658,6 @@ async def test_installation_task_guidance_loads_order_values_for_draft():
     assert draft_fields["address"]["value"] == "上海市静安区测试路 88 号"
     assert draft_fields["scheduled_at"]["value"] == "2026-08-02T14:30:00"
 
-
-@pytest.mark.asyncio
-async def test_pending_acceptance_order_loads_full_acceptance_detail():
-    acceptance_id = "55555555-5555-5555-5555-555555555555"
-    progress = {
-        "order": {
-            "id": str(SAMPLE_ORDER_ID),
-            "status": "pending_acceptance",
-            "total_amount": 1000,
-        },
-        "design_tasks": {"items": []},
-        "production_tasks": {"items": []},
-        "installation_tasks": {"items": []},
-        "total_paid": 0,
-    }
-    acceptance_service = MagicMock()
-    acceptance_service.list_acceptances = AsyncMock(
-        return_value=([{"id": acceptance_id, "status": "pending"}], 1)
-    )
-    acceptance_service.get_detail = AsyncMock(
-        return_value={
-            "id": acceptance_id,
-            "status": "pending",
-            "items": [{"item_status": "pending"}],
-        }
-    )
-
-    with (
-        patch(
-            "app.ai_assistant.tools.order_tools.get_order_progress",
-            new=AsyncMock(return_value=progress),
-        ),
-        patch(
-            "app.services.acceptance_service.AcceptanceService",
-            return_value=acceptance_service,
-        ),
-    ):
-        result = await get_workflow_guidance(
-            db=MagicMock(),
-            user=MagicMock(),
-            business_type="order",
-            business_id=str(SAMPLE_ORDER_ID),
-        )
-
-    assert result["blockers"] == ["仍有 1 项验收明细未确认"]
-    acceptance_service.get_detail.assert_awaited_once()
 
 
 def test_workflow_guidance_tool_is_registered_as_read_only():

@@ -81,15 +81,10 @@ class AcceptanceService:
             source = source_result.scalar_one_or_none()
             if not source:
                 raise ValueError("关联单据不存在或已取消")
-            allowed_statuses = (
-                ("in_installation", "pending_acceptance")
-                if source.doc_type == "order"
-                else ("confirmed",)
-            )
             if source.doc_type not in ("order", "quote"):
                 raise ValueError("验收单只能关联订单或报价")
-            if source.status not in allowed_statuses:
-                raise ValueError("关联单据尚未进入可验收阶段")
+            if source.doc_type == "quote" and source.status != "confirmed":
+                raise ValueError("报价尚未确认，无法创建验收单")
             duplicate_result = await self.db.execute(
                 select(AcceptanceForm.id).where(
                     AcceptanceForm.document_id == doc_id,
@@ -206,53 +201,12 @@ class AcceptanceService:
 
     # ── 删除 ──
     async def admin_delete_acceptance(self, acceptance_id: UUID, operated_by: UUID) -> None:
-        """管理员删除验收单并回退订单状态。任意状态均可删除。"""
+        """管理员删除验收单。任意状态均可删除。"""
         form = await self.repo.get_by_id(acceptance_id)
         if not form:
             raise ValueError("验收单不存在")
 
-        # 获取关联文档（硬删除前先加载，避免软删除后 lazy load 失效）
-        doc_id = form.document_id
-        target_status = None
-        if form.document:
-            doc = form.document
-            if doc.doc_type == "order" and doc.status in ("pending_acceptance", "completed"):
-                target_status = "in_installation"
-
-        # Soft-delete the acceptance
         await self.repo.soft_delete(form)
-
-        # Revert order status
-        if target_status and doc_id:
-            from sqlalchemy import select
-            from app.models.business_document import BusinessDocument
-            from app.models.task import InstallationTask
-            result = await self.db.execute(
-                select(BusinessDocument).where(BusinessDocument.id == doc_id)
-            )
-            doc = result.scalar_one_or_none()
-            if doc:
-                from app.services.business_document_service import BusinessDocumentService
-                old_status = doc.status
-                order_svc = BusinessDocumentService(self.db, doc_type="order")
-                await order_svc.repo.create_status_log(
-                    doc_id, old_status, target_status,
-                    "验收单已被管理员删除，系统自动回退", operated_by,
-                )
-                doc.status = target_status
-
-                # 重置已完成的安装任务为待分配，退回时可重新推进
-                inst_result = await self.db.execute(
-                    select(InstallationTask).where(
-                        InstallationTask.document_id == doc_id,
-                        InstallationTask.status == "completed",
-                    )
-                )
-                for t in inst_result.scalars().all():
-                    t.status = "pending"
-                    t.completed_at = None
-
-                await self.db.flush()
 
     async def delete_acceptance(self, acceptance_id: UUID):
         form = await self.repo.get_by_id(acceptance_id)
@@ -284,12 +238,6 @@ class AcceptanceService:
         if to_status == "pending":
             if not form.items:
                 raise ValueError("请先添加验收明细再提交")
-            if (
-                form.document
-                and form.document.doc_type == "order"
-                and form.document.status != "pending_acceptance"
-            ):
-                raise ValueError("请先完成安装任务并将订单流转到待验收")
             form.status = "pending"
         elif to_status == "accepted":
             unfinished_items = [
@@ -301,12 +249,6 @@ class AcceptanceService:
                 for item in unfinished_items:
                     item.item_status = "accepted"
                     item.remark = (item.remark or "") + " 系统自动确认"
-            # 验收接受 → 自动完成订单
-            await self._sync_order_on_acceptance(
-                form,
-                "completed",
-                operated_by=operated_by,
-            )
             form.status = "accepted"
             form.accepted_at = datetime.now()
             if kwargs.get("accepted_by"):
@@ -315,12 +257,6 @@ class AcceptanceService:
             reason = kwargs.get("reason", "")
             if not reason:
                 raise ValueError("驳回时请填写驳回原因")
-            # 验收驳回 → 订单回退到安装中
-            await self._sync_order_on_acceptance(
-                form,
-                "in_installation",
-                operated_by=operated_by,
-            )
             form.status = "rejected"
             form.reject_reason = reason
         elif to_status == "draft":
@@ -330,30 +266,6 @@ class AcceptanceService:
         await self.db.flush()
         form = await self.repo.get_by_id(acceptance_id)
         return self._to_detail_dict(form)
-
-    async def _sync_order_on_acceptance(
-        self,
-        form,
-        target_status: str,
-        *,
-        operated_by: UUID,
-    ) -> None:
-        """验收反馈：更新关联订单状态。"""
-        doc = form.document
-        if not doc or doc.doc_type != "order":
-            return
-        if doc.status == target_status:
-            return
-        order_svc = BusinessDocumentService(self.db, doc_type="order")
-        try:
-            await order_svc.change_status(
-                doc.id, target_status,
-                reason="验收单自动触发" if target_status == "completed" else "验收驳回，回退安装",
-                operated_by=operated_by,
-                **({"acceptance_id": form.id} if target_status == "completed" else {}),
-            )
-        except ValueError as exc:
-            raise ValueError(f"订单状态同步失败，验收状态未变更：{exc}") from exc
 
     # ── 序列化（统一访问 form.document） ──
     @staticmethod

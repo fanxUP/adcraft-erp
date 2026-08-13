@@ -22,18 +22,17 @@ async def _load_order_snapshot(db, user, business_id: str) -> dict:
         raise ValueError(progress["error"])
     order = progress["order"]
     acceptances = []
-    if order.get("status") == "pending_acceptance":
-        acceptance_service = AcceptanceService(db)
-        acceptance_summaries, _ = await acceptance_service.list_acceptances(
-            page=1,
-            page_size=20,
-            document_id=business_id,
+    acceptance_service = AcceptanceService(db)
+    acceptance_summaries, _ = await acceptance_service.list_acceptances(
+        page=1,
+        page_size=20,
+        document_id=business_id,
+    )
+    if acceptance_summaries:
+        detail = await acceptance_service.get_detail(
+            _require_uuid(str(acceptance_summaries[0]["id"]))
         )
-        if acceptance_summaries:
-            detail = await acceptance_service.get_detail(
-                _require_uuid(str(acceptance_summaries[0]["id"]))
-            )
-            acceptances = [detail]
+        acceptances = [detail]
     return {
         **order,
         "business_type": "order",

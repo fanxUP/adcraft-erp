@@ -68,7 +68,6 @@ const labels: Record<string, string> = {
   designing: '设计中',
   in_production: '生产中',
   in_installation: '安装中',
-  pending_acceptance: '待验收',
   completed: '已完成',
   cancelled: '已取消',
 }
@@ -77,7 +76,6 @@ const statusLabel = computed(() => labels[props.status] || props.status)
 const statusType = computed(() => {
   if (props.status === 'completed') return 'success'
   if (props.status === 'cancelled') return 'danger'
-  if (props.status === 'pending_acceptance') return 'warning'
   return 'primary'
 })
 

@@ -11,16 +11,11 @@ from app.domain.workflows import (
 )
 
 
-def test_order_workflow_requires_acceptance():
+def test_order_workflow_completes_after_installation():
     assert allowed_targets(ORDER_WORKFLOW, "in_installation") == (
         "designing",
         "in_production",
-        "pending_acceptance",
-        "cancelled",
-    )
-    assert allowed_targets(ORDER_WORKFLOW, "pending_acceptance") == (
         "completed",
-        "in_installation",
         "cancelled",
     )
 

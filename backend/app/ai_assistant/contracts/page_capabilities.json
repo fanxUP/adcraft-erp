@@ -197,17 +197,6 @@
       ]
     },
     {
-      "target_key": "order-status-pending_acceptance",
-      "business_types": ["order"],
-      "routes": [
-        {
-          "name": "OrderDetail",
-          "path": "/orders/:id",
-          "marker_files": ["frontend/src/views/orders/OrderWorkflow.vue"]
-        }
-      ]
-    },
-    {
       "target_key": "quote-status-confirmed",
       "business_types": ["quote"],
       "routes": [
@@ -576,9 +565,9 @@
     },
     "order-status-completed": {
       "purpose": "确认订单交付流程已经完成",
-      "prerequisites": ["安装和验收均已完成"],
+      "prerequisites": ["安装任务已经完成"],
       "completion_signal": "订单状态显示为“已完成”",
-      "blocking_conditions": ["仍有未完成任务、验收未通过或权限不足"],
+      "blocking_conditions": ["仍有未完成任务或权限不足"],
       "effect": "write",
       "requires_confirmation": true,
       "required_permissions": {"OrderDetail": "order:change_status"}
@@ -615,15 +604,6 @@
       "prerequisites": ["设计任务已经确认"],
       "completion_signal": "订单状态显示为“生产中”并出现制作任务",
       "blocking_conditions": ["设计任务未确认、状态不允许变更或权限不足"],
-      "effect": "write",
-      "requires_confirmation": true,
-      "required_permissions": {"OrderDetail": "order:change_status"}
-    },
-    "order-status-pending_acceptance": {
-      "purpose": "提交安装完成的订单进入验收",
-      "prerequisites": ["安装任务已经完成"],
-      "completion_signal": "订单状态显示为“待验收”并出现验收单",
-      "blocking_conditions": ["安装任务未完成、状态不允许变更或权限不足"],
       "effect": "write",
       "requires_confirmation": true,
       "required_permissions": {"OrderDetail": "order:change_status"}

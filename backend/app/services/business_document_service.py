@@ -433,14 +433,9 @@ class BusinessDocumentService:
                 await self._require_all_tasks_completed(
                     doc_id, ProductionTask, "production_no", "生产"
                 )
-            elif from_status == "in_installation" and to_status == "pending_acceptance":
+            elif from_status == "in_installation" and to_status == "completed":
                 await self._require_all_tasks_completed(
                     doc_id, InstallationTask, "installation_no", "安装"
-                )
-            elif from_status == "pending_acceptance" and to_status == "completed":
-                await self._require_acceptance_completion_source(
-                    doc_id,
-                    acceptance_id,
                 )
         elif to_status == "confirmed":
             if not doc.items:
@@ -458,10 +453,6 @@ class BusinessDocumentService:
             doc.status = "designing"
             await self.repo.create_status_log(doc_id, "confirmed", "designing", "订单已确认，系统自动推进", operated_by)
             await self.db.flush()
-
-        # 安装完成 → 自动创建验收单，验收通过后才完成订单
-        if doc.doc_type == "order" and to_status == "pending_acceptance":
-            await self._auto_create_acceptance(doc)
 
         # 订单完成 → 生成收款提醒
         if doc.doc_type == "order" and to_status == "completed":
@@ -491,7 +482,7 @@ class BusinessDocumentService:
             labels = {
                 "pending_confirm": "待确认", "confirmed": "已确认", "designing": "设计中",
                 "in_production": "生产中", "in_installation": "安装中",
-                "pending_acceptance": "待验收", "completed": "已完成",
+                "completed": "已完成",
                 "cancelled": "已取消", "draft": "草稿", "converted": "已转换",
             }
             await notif_svc.create_system_notification(
@@ -541,31 +532,9 @@ class BusinessDocumentService:
             raise ValueError("只有已完成订单可以撤回")
         if not reason.strip():
             raise ValueError("撤回原因不能为空")
-        await self.repo.update(doc, {"status": "pending_acceptance"})
-        await self.repo.create_status_log(doc_id, "completed", "pending_acceptance", reason.strip(), operated_by)
+        await self.repo.update(doc, {"status": "in_installation"})
+        await self.repo.create_status_log(doc_id, "completed", "in_installation", reason.strip(), operated_by)
         return self._to_detail(doc)
-
-    async def _require_acceptance_completion_source(
-        self,
-        doc_id: UUID,
-        acceptance_id: UUID | None,
-    ) -> None:
-        """仅允许验收服务凭待确认验收单完成订单。"""
-        if not acceptance_id:
-            raise ValueError("请通过验收单确认验收后完成订单")
-
-        from app.models.acceptance import AcceptanceForm
-
-        result = await self.db.execute(
-            select(AcceptanceForm.id).where(
-                AcceptanceForm.id == acceptance_id,
-                AcceptanceForm.document_id == doc_id,
-                AcceptanceForm.status == "pending",
-                AcceptanceForm.deleted_at.is_(None),
-            )
-        )
-        if result.scalar_one_or_none() is None:
-            raise ValueError("验收单与订单不匹配或当前不可确认")
 
     async def _require_all_tasks_completed(
         self,
@@ -588,50 +557,6 @@ class BusinessDocumentService:
             if t.status not in terminal_statuses:
                 task_no = getattr(t, no_attr, "N/A")
                 raise ValueError(f"{label}任务 {task_no} 未完成，请先完成后再流转")
-
-    async def _auto_create_acceptance(self, doc) -> None:
-        from app.models.acceptance import AcceptanceForm, AcceptanceItem
-        from app.services.number_generator import generate_acceptance_no
-
-        existing = (await self.db.execute(
-            select(AcceptanceForm).where(
-                AcceptanceForm.document_id == doc.id,
-                AcceptanceForm.deleted_at.is_(None),
-            )
-        )).scalars().first()
-        if existing:
-            return
-
-        acceptance_no = await generate_acceptance_no(self.db)
-        form = AcceptanceForm(
-            acceptance_no=acceptance_no,
-            document_id=doc.id,
-            status="draft",
-        )
-        self.db.add(form)
-        await self.db.flush()
-
-        for item in doc.items or []:
-            spec = _build_spec(item)
-            acceptance_item = AcceptanceItem(
-                acceptance_id=form.id,
-                document_item_id=item.id,
-                item_name=item.item_name,
-                material_process=item.material_process,
-                specification=spec,
-                quantity=float(item.quantity) if item.quantity else None,
-                unit=item.unit,
-                area=float(item.area) if item.use_area and item.area else None,
-                unit_price=float(item.unit_price) if item.unit_price else None,
-                subtotal=float(item.subtotal_amount) if item.subtotal_amount else None,
-                item_status="pending",
-                group_name=item.group_name,
-                remark=item.remark,
-                image_url=item.image_url,
-            )
-            self.db.add(acceptance_item)
-
-        await self.db.flush()
 
     async def _auto_create_design_task(self, doc) -> None:
         from app.models.task import DesignTask

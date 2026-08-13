@@ -14,7 +14,7 @@ export function changeOrderStatus(id: string, data: { to_status: string; reason?
 }
 
 export function reopenCompletedOrder(id: string, reason: string) {
-  return post<OrderDetailResponse>(`/orders/${id}/reopen-completed`, { to_status: 'pending_acceptance', reason })
+  return post<OrderDetailResponse>(`/orders/${id}/reopen-completed`, { to_status: 'in_installation', reason })
 }
 
 export function setOrderCost(id: string, cost_amount: number) {
