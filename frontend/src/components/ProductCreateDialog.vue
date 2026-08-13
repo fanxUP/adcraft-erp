@@ -111,8 +111,9 @@ async function handleSave() {
 </script>
 
 <style scoped>
-/* 产品/材质/工艺文本域：滚动条常驻输入框，未超3行灰色，可滚动时加深 */
+/* 产品/材质/工艺文本域：滚动条常驻输入框，未满3行灰色，可滚动时深色滑块 */
 :deep(.el-textarea__inner) {
+  overflow-y: scroll;
   scrollbar-width: thin;
   scrollbar-color: #d8d8d8 transparent;
 }
@@ -120,17 +121,16 @@ async function handleSave() {
   scrollbar-color: #909399 transparent;
 }
 :deep(.el-textarea__inner::-webkit-scrollbar) {
-  width: 6px;
-}
-:deep(.el-textarea__inner::-webkit-scrollbar-thumb) {
-  background-color: #d8d8d8;
-  border-radius: 3px;
-}
-:deep(.el-textarea__inner.has-scroll::-webkit-scrollbar-thumb) {
-  background-color: #909399;
+  width: 8px;
 }
 :deep(.el-textarea__inner::-webkit-scrollbar-track) {
-  background: transparent;
+  background: #d8d8d8;
+  border-radius: 4px;
+}
+:deep(.el-textarea__inner::-webkit-scrollbar-thumb) {
+  background-color: #909399;
+  border: 2px solid #d8d8d8;
+  border-radius: 4px;
 }
 </style>
 
