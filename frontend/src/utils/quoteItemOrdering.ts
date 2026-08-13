@@ -21,20 +21,27 @@ export function buildQuoteDisplayRows<T extends QuoteOrderItem>(
   subtotalFor: (item: T) => number,
 ): QuoteDisplayRow<T>[] {
   const grouped = new Map<string, T[]>()
-  const ungrouped: T[] = []
 
   for (const item of items) {
     if (item.group_name) {
       if (!grouped.has(item.group_name)) grouped.set(item.group_name, [])
       grouped.get(item.group_name)!.push(item)
-    } else {
-      ungrouped.push(item)
     }
   }
 
   const rows: QuoteDisplayRow<T>[] = []
+  const emittedGroups = new Set<string>()
   let groupIndex = 0
-  for (const [groupName, groupItems] of grouped) {
+  for (const item of items) {
+    const groupName = item.group_name
+    if (!groupName) {
+      rows.push({ type: 'item', item, groupName: '', gi: -1, key: keyFor(item) })
+      continue
+    }
+    if (emittedGroups.has(groupName)) continue
+
+    const groupItems = grouped.get(groupName)!
+    emittedGroups.add(groupName)
     // 分项至少有一个占位明细，用首条明细的稳定 key 标识表头/合计，避免排序后 DOM key 串组。
     const groupKey = keyFor(groupItems[0])
     rows.push({ type: 'group-header', groupName, gi: groupIndex, key: `gh-${groupKey}` })
@@ -49,10 +56,6 @@ export function buildQuoteDisplayRows<T extends QuoteOrderItem>(
       key: `gt-${groupKey}`,
     })
     groupIndex++
-  }
-
-  for (const item of ungrouped) {
-    rows.push({ type: 'item', item, groupName: '', gi: -1, key: keyFor(item) })
   }
   return rows
 }

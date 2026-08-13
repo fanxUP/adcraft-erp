@@ -143,6 +143,7 @@ import { getQuote } from '@/api/quotes'
 import { getCustomer } from '@/api/customers'
 import { usePrint } from '@/composables/usePrint'
 import { QuoteDetailResponse, QuoteItemResponse } from '@/types/api'
+import { buildQuoteDisplayRows } from '@/utils/quoteItemOrdering'
 
 const props = defineProps<{
   visible: boolean
@@ -170,30 +171,23 @@ interface PreviewRow {
 const previewDisplayRows = computed<PreviewRow[]>(() => {
   if (!quote.value) return []
   const items = quote.value.items || []
-  const grouped = new Map<string, QuoteItemResponse[]>()
-  const ungrouped: QuoteItemResponse[] = []
-
-  for (const item of items) {
-    if (item.group_name) {
-      if (!grouped.has(item.group_name)) grouped.set(item.group_name, [])
-      grouped.get(item.group_name)!.push(item)
-    } else {
-      ungrouped.push(item)
-    }
-  }
-
-  const rows: PreviewRow[] = []
   let idx = 1
-  let gi = 0
-  for (const [groupName, groupItems] of grouped) {
-    rows.push({ type: 'group-header', groupName, gi, key: `gh-${groupName}` })
-    for (const item of groupItems) rows.push({ type: 'item', item, idx: idx++, gi, key: item.id || `i-${idx}` })
-    const total = groupItems.reduce((s, i) => s + (i.subtotal_amount || 0), 0)
-    rows.push({ type: 'group-total', groupName, total, gi, key: `gt-${groupName}` })
-    gi++
-  }
-  for (const item of ungrouped) rows.push({ type: 'item', item, idx: idx++, key: item.id || `i-${idx}` })
-  return rows
+  return buildQuoteDisplayRows(
+    items,
+    item => item.id || `preview-${items.indexOf(item)}`,
+    item => item.subtotal_amount || 0,
+  ).map((row): PreviewRow => {
+    if (row.type === 'item') {
+      return {
+        type: 'item',
+        item: row.item,
+        idx: idx++,
+        gi: row.gi >= 0 ? row.gi : undefined,
+        key: row.key,
+      }
+    }
+    return row
+  })
 })
 
 watch(() => props.visible, async (val) => {

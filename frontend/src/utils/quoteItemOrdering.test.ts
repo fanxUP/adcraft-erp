@@ -15,6 +15,12 @@ interface Item {
 
 const item = (id: string, group_name?: string, amount = 1): Item => ({ id, group_name, amount })
 const rowsOf = (items: Item[]) => buildQuoteDisplayRows(items, value => value.id, value => value.amount)
+const totalOf = (items: Item[], groupName: string) => {
+  const row = rowsOf(items).find(candidate => (
+    candidate.type === 'group-total' && candidate.groupName === groupName
+  ))
+  return row?.type === 'group-total' ? row.total : undefined
+}
 
 describe('quoteItemOrdering', () => {
   it('detects a rename that would silently merge two groups', () => {
@@ -32,25 +38,43 @@ describe('quoteItemOrdering', () => {
     expect(rowsOf([b, a]).map(row => row.key)).toEqual(['gh-b', 'b', 'gt-b', 'gh-a', 'a', 'gt-a'])
   })
 
-  it('moves a group header together with all details and its total', () => {
-    const source = [item('a1', '分项A'), item('a2', '分项A'), item('b1', '分项B')]
-    const moved = reorderQuoteDisplayRows(rowsOf(source), 'gh-a1', null)
+  it('moves group A as a whole directly before group B', () => {
+    const rows = rowsOf([
+      item('b1', '分项B'), item('b2', '分项B'),
+      item('a1', '分项A'), item('a2', '分项A'),
+    ])
+    const moved = reorderQuoteDisplayRows(rows, 'gh-a1', 'gh-b1')
 
     expect(moved.map(row => row.key)).toEqual([
-      'gh-b1', 'b1', 'gt-b1', 'gh-a1', 'a1', 'a2', 'gt-a1',
+      'gh-a1', 'a1', 'a2', 'gt-a1', 'gh-b1', 'b1', 'b2', 'gt-b1',
     ])
-    expect(applyQuoteDisplayOrder(moved).map(value => value.id)).toEqual(['b1', 'a1', 'a2'])
-    expect(source.map(value => value.group_name)).toEqual(['分项A', '分项A', '分项B'])
+    expect(applyQuoteDisplayOrder(moved).map(value => value.id)).toEqual(['a1', 'a2', 'b1', 'b2'])
   })
 
-  it('snaps a group dropped inside another group to that group boundary', () => {
+  it('moves group A after the complete group B when dropped on a B detail', () => {
     const rows = rowsOf([
-      item('a', '分项A'), item('b1', '分项B'), item('b2', '分项B'), item('c', '分项C'),
+      item('a1', '分项A'), item('a2', '分项A'),
+      item('b1', '分项B'), item('b2', '分项B'),
+      item('c', '分项C'),
     ])
-    const moved = reorderQuoteDisplayRows(rows, 'gh-a', 'b2')
+    const moved = reorderQuoteDisplayRows(rows, 'gh-a1', 'b2')
 
     expect(moved.map(row => row.key)).toEqual([
-      'gh-b1', 'b1', 'b2', 'gt-b1', 'gh-a', 'a', 'gt-a', 'gh-c', 'c', 'gt-c',
+      'gh-b1', 'b1', 'b2', 'gt-b1',
+      'gh-a1', 'a1', 'a2', 'gt-a1',
+      'gh-c', 'c', 'gt-c',
+    ])
+  })
+
+  it('moves group A as a whole to the bottom', () => {
+    const rows = rowsOf([
+      item('a1', '分项A'), item('a2', '分项A'),
+      item('b1', '分项B'), item('b2', '分项B'),
+    ])
+    const moved = reorderQuoteDisplayRows(rows, 'gh-a1', null)
+
+    expect(moved.map(row => row.key)).toEqual([
+      'gh-b1', 'b1', 'b2', 'gt-b1', 'gh-a1', 'a1', 'a2', 'gt-a1',
     ])
   })
 
@@ -60,23 +84,74 @@ describe('quoteItemOrdering', () => {
     expect(reorderQuoteDisplayRows(rows, 'gh-a1', 'a2')).toBe(rows)
   })
 
-  it('moves a detail into a group and updates its group name', () => {
-    const free = item('free')
-    const moved = reorderQuoteDisplayRows(rowsOf([item('a', '分项A'), free]), 'free', 'gt-a')
+  it('keeps standalone details between groups instead of forcing them to the bottom', () => {
+    const rows = rowsOf([item('a', '分项A'), item('free'), item('b', '分项B')])
 
-    expect(applyQuoteDisplayOrder(moved).map(value => value.id)).toEqual(['a', 'free'])
-    expect(free.group_name).toBe('分项A')
+    expect(rows.map(row => row.key)).toEqual([
+      'gh-a', 'a', 'gt-a', 'free', 'gh-b', 'b', 'gt-b',
+    ])
   })
 
-  it('moves a detail out of a group when dropped after its total', () => {
+  it('reorders one detail inside its original group', () => {
+    const moving = item('a2', '分项A')
+    const moved = reorderQuoteDisplayRows(rowsOf([item('a1', '分项A'), moving]), 'a2', 'a1')
+
+    expect(applyQuoteDisplayOrder(moved).map(value => value.id)).toEqual(['a2', 'a1'])
+    expect(moving.group_name).toBe('分项A')
+  })
+
+  it('moves only one detail to another group at the requested position', () => {
+    const moving = item('a2', '分项A', 20)
+    const moved = reorderQuoteDisplayRows(
+      rowsOf([
+        item('a1', '分项A', 10), moving,
+        item('b1', '分项B', 30), item('b2', '分项B', 40),
+      ]),
+      'a2',
+      'b2',
+    )
+    const reorderedItems = applyQuoteDisplayOrder(moved)
+
+    expect(reorderedItems.map(value => value.id)).toEqual(['a1', 'b1', 'a2', 'b2'])
+    expect(moving.group_name).toBe('分项B')
+    expect(totalOf(reorderedItems, '分项A')).toBe(10)
+    expect(totalOf(reorderedItems, '分项B')).toBe(90)
+  })
+
+  it('moves a detail below a group header as that group first detail', () => {
+    const free = item('free')
+    const moved = reorderQuoteDisplayRows(
+      rowsOf([item('a', '分项A'), item('b', '分项B'), free]),
+      'free',
+      'b',
+    )
+
+    expect(applyQuoteDisplayOrder(moved).map(value => value.id)).toEqual(['a', 'free', 'b'])
+    expect(free.group_name).toBe('分项B')
+  })
+
+  it('moves one detail after a group total as a standalone top-level row', () => {
     const moving = item('a2', '分项A')
     const moved = reorderQuoteDisplayRows(
       rowsOf([item('a1', '分项A'), moving, item('b', '分项B')]),
       'a2',
       'gh-b',
     )
+    const reorderedItems = applyQuoteDisplayOrder(moved)
 
-    expect(applyQuoteDisplayOrder(moved).map(value => value.id)).toEqual(['a1', 'a2', 'b'])
+    expect(reorderedItems.map(value => value.id)).toEqual(['a1', 'a2', 'b'])
     expect(moving.group_name).toBeUndefined()
+    expect(rowsOf(reorderedItems).map(row => row.key)).toEqual([
+      'gh-a1', 'a1', 'gt-a1', 'a2', 'gh-b', 'b', 'gt-b',
+    ])
+  })
+
+  it('removes an empty group when its last detail becomes standalone', () => {
+    const only = item('only', '分项A')
+    const moved = reorderQuoteDisplayRows(rowsOf([only, item('free')]), 'only', null)
+    const reorderedItems = applyQuoteDisplayOrder(moved)
+
+    expect(only.group_name).toBeUndefined()
+    expect(rowsOf(reorderedItems).map(row => row.key)).toEqual(['free', 'only'])
   })
 })
