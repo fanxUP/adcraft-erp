@@ -64,12 +64,12 @@
       </template>
 
       <el-table :data="displayRows" stripe border scrollbar-always-on :row-class-name="rowClassName">
-        <el-table-column label="项目内容" min-width="160">
+        <el-table-column label="项目内容" min-width="320">
           <template #default="{ row }">
             <template v-if="row.type === 'group-header'">
               <div style="display: flex; align-items: center; gap: 8px;">
                 <span style="font-weight: 600; white-space: nowrap;">分项名称：</span>
-                <el-input v-if="!isReadonly" :model-value="row.groupName" size="small" style="width: 160px" placeholder="输入分项名称" @input="(v: string) => renameGroup(row.groupName, v)" />
+                <el-input v-if="!isReadonly" :model-value="row.groupName" size="small" style="flex: 1" placeholder="输入分项名称" @input="(v: string) => renameGroup(row.groupName, v)" />
                 <span v-else style="font-weight: 600;">{{ row.groupName }}</span>
               </div>
             </template>
