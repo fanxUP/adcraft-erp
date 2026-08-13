@@ -132,7 +132,7 @@
               placeholder="点击选择产品/材质/工艺"
               @click="openProductPicker(row, $index)"
               clearable
-              @clear="row.use_area = false; row.quantity = 1; row.product_id = ''; row.item_name = ''"
+              @clear="row.use_area = false; row.quantity = 1; row.product_id = ''"
             />
           </template>
         </el-table-column>
@@ -512,7 +512,6 @@ function onProductSelect(line: EditorLine, opt: { value: string; product?: Produ
   }
   Object.assign(line, applyProductMaterialProcess(line, opt.product))
   line.material_process = opt.value
-  line.item_name = opt.product.name
   if (opt.product.pricing_method === 'area') {
     if (!line.use_area) {
       line.use_area = true
@@ -573,7 +572,7 @@ async function handleSave() {
       lines: lines.value.map((l, index) => ({
         product_id: l.product_id,
         material_id: l.material_id || undefined,
-        item_name: l.item_name || (products.value.find(p => p.id === l.product_id)?.name || '待填写'),
+        item_name: l.item_name || '待填写',
         material_process: l.material_process || undefined,
         width: l.width,
         width_unit: l.width_unit,

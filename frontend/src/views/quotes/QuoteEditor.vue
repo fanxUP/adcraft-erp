@@ -99,7 +99,7 @@
                 placeholder="点击选择产品/材质/工艺"
                 @click="openProductPicker(row.item)"
                 clearable
-                @clear="row.item.use_area = false; row.item.quantity = 1; row.item.product_id = undefined; row.item.item_name = ''"
+                @clear="row.item.use_area = false; row.item.quantity = 1; row.item.product_id = undefined"
               />
             </template>
           </template>
@@ -819,7 +819,6 @@ function onProductSelect(item: QuoteItemResponse, opt: { value: string; product?
   }
   Object.assign(item, applyProductMaterialProcess(item, opt.product))
   item.material_process = opt.value
-  item.item_name = opt.product.name
   if (opt.product.pricing_method === 'area') {
     if (!item.use_area) {
       item.use_area = true
