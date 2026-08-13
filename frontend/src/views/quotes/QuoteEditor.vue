@@ -63,7 +63,14 @@
         </div>
       </template>
 
-      <el-table :data="displayRows" stripe border scrollbar-always-on :row-class-name="rowClassName">
+      <el-table ref="tableRef" :data="displayRows" stripe border scrollbar-always-on :row-key="(row: DisplayRow) => row.key" :row-class-name="rowClassName">
+        <el-table-column v-if="!isReadonly" label="排序" width="46" align="center">
+          <template #default="{ row }">
+            <span v-if="row.type !== 'group-total'" class="row-drag-handle" title="拖动排序">
+              <el-icon><Rank /></el-icon>
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column label="项目内容" min-width="320">
           <template #default="{ row }">
             <template v-if="row.type === 'group-header'">
@@ -295,7 +302,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import Sortable from 'sortablejs'
 import QuoteWorkflow from './QuoteWorkflow.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { onBeforeRouteLeave } from 'vue-router'
@@ -331,6 +339,16 @@ const previewVisible = ref(false)
 const productPickerVisible = ref(false)
 const pendingPickerItem = ref<QuoteItemResponse | null>(null)
 const quoteId = computed(() => route.params.id as string)
+
+const tableRef = ref()
+let sortable: Sortable | null = null
+let itemKeySeq = 0
+const itemKeyMap = new WeakMap<QuoteItemResponse, string>()
+function rowKeyFor(item: QuoteItemResponse): string {
+  let k = itemKeyMap.get(item)
+  if (!k) { k = `i-${itemKeySeq++}`; itemKeyMap.set(item, k) }
+  return k
+}
 
 const form = reactive({
   customer_id: '',
@@ -424,9 +442,12 @@ function handleBeforeUnload(e: BeforeUnloadEvent) {
 
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
+  initSortable()
 })
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  sortable?.destroy()
+  sortable = null
 })
 
 const isReadonly = computed(() => {
@@ -534,9 +555,9 @@ function renameGroup(oldName: string, newName: string) {
 }
 
 type DisplayRow =
-  | { type: 'group-header'; groupName: string; gi: number }
-  | { type: 'item'; item: QuoteItemResponse; groupName: string; gi: number }
-  | { type: 'group-total'; groupName: string; total: number; gi: number }
+  | { type: 'group-header'; groupName: string; gi: number; key: string }
+  | { type: 'item'; item: QuoteItemResponse; groupName: string; gi: number; key: string }
+  | { type: 'group-total'; groupName: string; total: number; gi: number; key: string }
 
 const displayRows = computed<DisplayRow[]>(() => {
   const grouped = new Map<string, QuoteItemResponse[]>()
@@ -554,13 +575,13 @@ const displayRows = computed<DisplayRow[]>(() => {
   const rows: DisplayRow[] = []
   let gi = 0
   for (const [groupName, groupItems] of grouped) {
-    rows.push({ type: 'group-header', groupName, gi })
-    for (const item of groupItems) rows.push({ type: 'item', item, groupName, gi })
+    rows.push({ type: 'group-header', groupName, gi, key: 'gh-' + gi })
+    for (const item of groupItems) rows.push({ type: 'item', item, groupName, gi, key: rowKeyFor(item) })
     const total = groupItems.reduce((s, i) => s + calcSubtotal(i), 0)
-    rows.push({ type: 'group-total', groupName, total, gi })
+    rows.push({ type: 'group-total', groupName, total, gi, key: 'gt-' + gi })
     gi++
   }
-  for (const item of ungrouped) rows.push({ type: 'item', item, groupName: '', gi: -1 })
+  for (const item of ungrouped) rows.push({ type: 'item', item, groupName: '', gi: -1, key: rowKeyFor(item) })
   return rows
 })
 
@@ -569,8 +590,87 @@ function rowClassName({ row }: { row: DisplayRow }) {
   if (row.gi >= 0) cls.push(`group-c${(row.gi % 5) + 1}`)
   if (row.type === 'group-header') cls.push('group-header-row')
   if (row.type === 'group-total') cls.push('group-total-row')
+  cls.push('rk-' + row.key)
   return cls.join(' ')
 }
+
+// ── 拖拽排序（Sortablejs）──
+function initSortable() {
+  const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody')
+  if (sortable) { sortable.destroy(); sortable = null }
+  if (!tbody || isReadonly.value) return
+  sortable = Sortable.create(tbody as HTMLElement, {
+    handle: '.row-drag-handle',
+    animation: 150,
+    ghostClass: 'ad-drag-ghost',
+    chosenClass: 'ad-drag-chosen',
+    dragClass: 'ad-drag-dragging',
+    onEnd: handleDragEnd,
+  })
+}
+
+function handleDragEnd(evt: Sortable.SortableEvent) {
+  const oldIndex = evt.oldIndex
+  if (oldIndex == null || evt.newIndex == null || oldIndex === evt.newIndex) return
+  const rows = displayRows.value
+  const dragged = rows[oldIndex]
+  if (!dragged || dragged.type === 'group-total') return
+
+  const isGroup = dragged.type === 'group-header'
+  const blockRows = isGroup ? blockOf(rows, oldIndex) : [dragged]
+  const rest = rows.filter(r => !blockRows.includes(r))
+
+  // 落点 = 拖拽行在 DOM 中的下一个兄弟行（天然代表视觉落点，不受分组结构影响）
+  const succ = evt.item.nextElementSibling as HTMLElement | null
+  let insertAt = rest.length
+  let afterHeader = false
+  if (succ) {
+    const sk = rkKeyOf(succ)
+    const si = rest.findIndex(r => r.key === sk)
+    if (si >= 0) {
+      // 表头拖回自己块内（落到自己的条目/合计之间）→ 无操作
+      if (isGroup && blockRows.some(r => r.key === sk)) return
+      insertAt = si
+      afterHeader = rest[si].type === 'group-header'
+    }
+  }
+  // 条目落到分项表头正下方 → 成为该分项第一条；其余情况插在落点之前
+  const finalRows = (!isGroup && afterHeader)
+    ? [...rest.slice(0, insertAt + 1), dragged, ...rest.slice(insertAt + 1)]
+    : [...rest.slice(0, insertAt), ...blockRows, ...rest.slice(insertAt)]
+
+  rebuildItemsFromRows(finalRows)
+}
+
+function rkKeyOf(tr: HTMLElement): string {
+  const cls = String(tr.className || '')
+  return cls.split(/\s+/).find(c => c.startsWith('rk-'))?.slice(3) || ''
+}
+
+function blockOf(rows: DisplayRow[], headerIdx: number): DisplayRow[] {
+  const h = rows[headerIdx]
+  const end = rows.findIndex((r, i) => i > headerIdx && r.type === 'group-total' && r.groupName === h.groupName)
+  return rows.slice(headerIdx, end >= 0 ? end + 1 : rows.length)
+}
+
+function rebuildItemsFromRows(rows: DisplayRow[]) {
+  const next: QuoteItemResponse[] = []
+  let curGroup: string | undefined
+  for (const r of rows) {
+    if (r.type === 'group-header') curGroup = r.groupName
+    else if (r.type === 'group-total') curGroup = undefined
+    else if (r.type === 'item') {
+      r.item.group_name = curGroup
+      next.push(r.item)
+    }
+  }
+  const old = items.value
+  const same = old.length === next.length && old.every((it, i) => it === next[i])
+  if (!same) items.value = next
+}
+
+// 明细结构变化后重建 sortable（el-table 可能重建 tbody）
+watch([displayRows, isReadonly], () => { nextTick(() => initSortable()) })
 
 // 单位相关
 const defaultUnits = ['㎡', 'm', '个', '套', '块', '件', '批', '次', '组', '台']
@@ -961,4 +1061,12 @@ watch(() => route.params.id, async (newId) => {
 /* 出现横向滚动时，滚动条始终可见，且与最后一行、表格底部边框保持间距 */
 :deep(.el-table.el-table--scrollable-x .el-scrollbar__view) { padding-bottom: 12px; }
 :deep(.el-table.el-table--scrollable-x .el-table__body-wrapper) { margin-bottom: 8px; }
+
+/* 拖拽排序（Sortablejs）反馈 */
+.row-drag-handle { cursor: grab; color: var(--ad-text-secondary, #909399); display: inline-flex; align-items: center; user-select: none; }
+.row-drag-handle:hover { color: var(--ad-primary, #409eff); }
+:deep(.ad-drag-dragging) { cursor: grabbing; }
+:deep(.ad-drag-ghost) { opacity: 0.4; }
+:deep(.ad-drag-ghost td) { background: rgba(148, 163, 184, 0.15) !important; }
+:deep(.ad-drag-chosen td) { background: rgba(var(--ad-g, 148, 163, 184), 0.25) !important; }
 </style>
