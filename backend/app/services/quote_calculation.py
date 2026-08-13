@@ -61,7 +61,8 @@ def calculate_quote_item_values(item: Mapping[str, Any]) -> dict[str, Decimal]:
         raise ValueError("面积计价明细必须填写大于 0 的宽和高")
     base = area if use_area else quantity
     subtotal = base * unit_price
-    subtotal += sum(fees, ZERO)
+    # 工艺费/安装费/设计费/运输费已移除，仅其他费计入行小计
+    subtotal += as_decimal(item.get("other_fee"))
     return {
         "area": area,
         "subtotal_amount": subtotal.quantize(

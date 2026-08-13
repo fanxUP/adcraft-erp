@@ -11,7 +11,7 @@ from app.services.quote_calculation import (
 )
 
 
-def test_area_quote_includes_pieces_and_all_fees():
+def test_area_quote_includes_pieces_and_other_fee():
     values = calculate_quote_item_values(
         {
             "width": 50,
@@ -31,7 +31,7 @@ def test_area_quote_includes_pieces_and_all_fees():
     )
 
     assert values["area"] == Decimal("0.50")
-    assert values["subtotal_amount"] == Decimal("605.00")
+    assert values["subtotal_amount"] == Decimal("505.00")
 
 
 def test_quantity_quote_ignores_geometry_for_pricing():
@@ -48,7 +48,7 @@ def test_quantity_quote_ignores_geometry_for_pricing():
     )
 
     assert values["area"] == Decimal("100.00")
-    assert values["subtotal_amount"] == Decimal("650.00")
+    assert values["subtotal_amount"] == Decimal("600.00")
 
 
 def test_quote_totals_use_percentage_tax_rate():

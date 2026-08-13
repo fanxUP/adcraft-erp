@@ -10,7 +10,7 @@ from app.ai_assistant.tools.quote_tools import (
 
 
 @pytest.mark.asyncio
-async def test_ai_quote_preview_uses_area_and_all_fees():
+async def test_ai_quote_preview_uses_area_and_other_fee():
     result = await preview_quote_creation(
         db=MagicMock(),
         user=MagicMock(),
@@ -36,8 +36,8 @@ async def test_ai_quote_preview_uses_area_and_all_fees():
     )
 
     assert result["items"][0]["area"] == 12
-    assert result["items"][0]["subtotal"] == 145
-    assert result["total_amount"] == 145
+    assert result["items"][0]["subtotal"] == 127
+    assert result["total_amount"] == 127
 
 
 @pytest.mark.asyncio

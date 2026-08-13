@@ -112,16 +112,6 @@
                   {{ formatMoney((row.width || 0) * (row.height || 0) * (row.quantity || 1) * (row.unit_price || 0)) }}
                 </template>
               </el-table-column>
-              <el-table-column label="设计费" width="100">
-                <template #default="{ row }">
-                  <el-input-number v-model="row.design_fee" :min="0" :step="50" size="small" style="width: 90px" />
-                </template>
-              </el-table-column>
-              <el-table-column label="安装费" width="100">
-                <template #default="{ row }">
-                  <el-input-number v-model="row.installation_fee" :min="0" :step="50" size="small" style="width: 90px" />
-                </template>
-              </el-table-column>
             </el-table>
 
             <!-- Total estimate -->
@@ -165,7 +155,8 @@ const computeTotal = computed(() => {
   return draft.value.items.reduce((sum, item) => {
     const area = (item.width || 0) * (item.height || 0) * (item.quantity || 1)
     const subtotal = area * (item.unit_price || 0)
-    return sum + subtotal + (item.design_fee || 0) + (item.installation_fee || 0) + (item.process_fee || 0) + (item.transport_fee || 0) + (item.other_fee || 0)
+    // 工艺费/安装费/设计费/运输费已移除，仅其他费计入预估总价
+    return sum + subtotal + (item.other_fee || 0)
   }, 0)
 })
 

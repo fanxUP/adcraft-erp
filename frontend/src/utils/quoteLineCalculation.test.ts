@@ -26,9 +26,9 @@ describe('quoteLineCalculation', () => {
     other_fee: 5,
   }
 
-  it('uses the same area and fee formula for regular and smart quote lines', () => {
+  it('counts other_fee but ignores process/installation/design/transport fees', () => {
     expect(calcQuoteLineArea(line)).toBe(7.2)
-    expect(calcQuoteLineSubtotal(line)).toBe(825)
+    expect(calcQuoteLineSubtotal(line)).toBe(725)
   })
 
   it('rounds every line subtotal to cents like the backend', () => {

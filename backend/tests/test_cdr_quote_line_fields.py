@@ -92,7 +92,7 @@ def test_cdr_quote_line_adapter_uses_regular_quote_amount_formula():
     assert normalized["width_mm"] == Decimal("3000")
     assert normalized["height_mm"] == Decimal("1200")
     assert normalized["length_m"] is None
-    assert calculate_regular_line_subtotal(normalized) == Decimal("825")
+    assert calculate_regular_line_subtotal(normalized) == Decimal("725")
 
 
 def test_cdr_quote_line_adapter_preserves_regular_fields_when_converting_order():
@@ -263,5 +263,5 @@ async def test_cdr_version_saves_regular_quote_fields_and_fees():
     assert saved["description"] == "门头制作"
     assert saved["width_mm"] == Decimal("3000")
     assert saved["height_mm"] == Decimal("1200.0")
-    assert saved["amount"] == Decimal("825.00")
+    assert saved["amount"] == Decimal("725.00")
     assert pricing_input["quantity"] == Decimal("2")

@@ -301,5 +301,5 @@ async def test_calculate_quote_amount(service):
 
     await quote_service._calculate_quote(SAMPLE_QUOTE_ID)
 
-    assert quote.subtotal_amount == Decimal("630")
-    assert quote.total_amount == Decimal("630")
+    assert quote.subtotal_amount == Decimal("600")
+    assert quote.total_amount == Decimal("600")

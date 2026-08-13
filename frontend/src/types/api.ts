@@ -108,10 +108,10 @@ export interface OrderItemResponse {
   quantity_mode?: 'piece' | 'area'
   area?: number
   unit_price: number
-  process_fee: number
-  installation_fee: number
-  design_fee: number
-  transport_fee: number
+  process_fee?: number
+  installation_fee?: number
+  design_fee?: number
+  transport_fee?: number
   other_fee: number
   subtotal_amount: number
   remark?: string
@@ -581,10 +581,10 @@ export interface QuoteItemResponse {
   area?: number
   pieces?: number
   unit_price: number
-  process_fee: number
-  installation_fee: number
-  design_fee: number
-  transport_fee: number
+  process_fee?: number
+  installation_fee?: number
+  design_fee?: number
+  transport_fee?: number
   other_fee: number
   subtotal_amount: number
   remark?: string

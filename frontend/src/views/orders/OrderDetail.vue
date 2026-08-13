@@ -154,26 +154,6 @@
                   <template v-if="row.type === 'item'">¥ {{ row.item.unit_price?.toFixed(2) }}</template>
                 </template>
               </el-table-column>
-              <el-table-column label="工艺费" width="90">
-                <template #default="{ row }">
-                  <template v-if="row.type === 'item'">{{ row.item.process_fee ? '¥ ' + row.item.process_fee.toFixed(2) : '-' }}</template>
-                </template>
-              </el-table-column>
-              <el-table-column label="安装费" width="90">
-                <template #default="{ row }">
-                  <template v-if="row.type === 'item'">{{ row.item.installation_fee ? '¥ ' + row.item.installation_fee.toFixed(2) : '-' }}</template>
-                </template>
-              </el-table-column>
-              <el-table-column label="设计费" width="90">
-                <template #default="{ row }">
-                  <template v-if="row.type === 'item'">{{ row.item.design_fee ? '¥ ' + row.item.design_fee.toFixed(2) : '-' }}</template>
-                </template>
-              </el-table-column>
-              <el-table-column label="运输费" width="90">
-                <template #default="{ row }">
-                  <template v-if="row.type === 'item'">{{ row.item.transport_fee ? '¥ ' + row.item.transport_fee.toFixed(2) : '-' }}</template>
-                </template>
-              </el-table-column>
               <el-table-column label="小计" width="110">
                 <template #default="{ row }">
                   <template v-if="row.type === 'item'">¥ {{ row.item.subtotal_amount?.toFixed(2) }}</template>

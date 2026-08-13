@@ -47,10 +47,6 @@
         <el-table-column prop="unit_price" label="单价" width="100">
           <template #default="{ row }">¥{{ Number(row.unit_price || 0).toFixed(2) }}</template>
         </el-table-column>
-        <el-table-column prop="process_fee" label="工艺费" width="90" />
-        <el-table-column prop="installation_fee" label="安装费" width="90" />
-        <el-table-column prop="design_fee" label="设计费" width="90" />
-        <el-table-column prop="transport_fee" label="运输费" width="90" />
         <el-table-column prop="amount" label="小计" width="120">
           <template #default="{ row }">¥{{ Number(row.amount || 0).toFixed(2) }}</template>
         </el-table-column>

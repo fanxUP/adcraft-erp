@@ -87,16 +87,8 @@ def calculate_regular_line_subtotal(data: dict[str, Any]) -> Decimal:
         else _decimal(data.get("quantity"))
     )
     subtotal = base * _decimal(data.get("unit_price"))
-    subtotal += sum(
-        _decimal(data.get(field))
-        for field in (
-            "process_fee",
-            "installation_fee",
-            "design_fee",
-            "transport_fee",
-            "other_fee",
-        )
-    )
+    # 工艺费/安装费/设计费/运输费已移除，仅其他费计入行小计
+    subtotal += _decimal(data.get("other_fee"))
     return subtotal.quantize(Decimal("0.01"))
 
 

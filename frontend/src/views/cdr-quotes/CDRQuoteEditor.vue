@@ -186,26 +186,6 @@
             <el-input-number v-model="row.unit_price" :min="0" :precision="2" size="small" :controls="false" />
           </template>
         </el-table-column>
-        <el-table-column label="工艺费" width="110">
-          <template #default="{ row }">
-            <el-input-number v-model="row.process_fee" :min="0" :precision="2" size="small" :controls="false" />
-          </template>
-        </el-table-column>
-        <el-table-column label="安装费" width="110">
-          <template #default="{ row }">
-            <el-input-number v-model="row.installation_fee" :min="0" :precision="2" size="small" :controls="false" />
-          </template>
-        </el-table-column>
-        <el-table-column label="设计费" width="110">
-          <template #default="{ row }">
-            <el-input-number v-model="row.design_fee" :min="0" :precision="2" size="small" :controls="false" />
-          </template>
-        </el-table-column>
-        <el-table-column label="运输费" width="110">
-          <template #default="{ row }">
-            <el-input-number v-model="row.transport_fee" :min="0" :precision="2" size="small" :controls="false" />
-          </template>
-        </el-table-column>
         <el-table-column label="小计" width="120">
           <template #default="{ row }">¥{{ calcQuoteLineSubtotal(row).toFixed(2) }}</template>
         </el-table-column>
@@ -338,10 +318,6 @@ interface EditorLine {
   quantity: number
   unit: string
   unit_price: number
-  process_fee: number
-  installation_fee: number
-  design_fee: number
-  transport_fee: number
   other_fee: number
   amount: number
   cost: number
@@ -403,10 +379,6 @@ function createEmptyLine(): EditorLine {
     quantity: 1,
     unit: '',
     unit_price: 0,
-    process_fee: 0,
-    installation_fee: 0,
-    design_fee: 0,
-    transport_fee: 0,
     other_fee: 0,
     amount: 0,
     cost: 0,
@@ -612,10 +584,6 @@ async function handleSave() {
         quantity: l.quantity,
         unit: l.unit || undefined,
         unit_price: l.unit_price,
-        process_fee: l.process_fee,
-        installation_fee: l.installation_fee,
-        design_fee: l.design_fee,
-        transport_fee: l.transport_fee,
         other_fee: l.other_fee,
         remark: l.remark || undefined,
         image_url: l.image_url || undefined,
@@ -782,10 +750,6 @@ onMounted(async () => {
           quantity: Number(l.quantity || 1),
           unit: l.unit || '',
           unit_price: Number(l.unit_price || 0),
-          process_fee: Number(l.process_fee || 0),
-          installation_fee: Number(l.installation_fee || 0),
-          design_fee: Number(l.design_fee || 0),
-          transport_fee: Number(l.transport_fee || 0),
           other_fee: Number(l.other_fee || 0),
           amount: Number(l.amount || 0),
           cost: Number(l.estimated_cost || 0),
