@@ -292,7 +292,7 @@
     />
 
     <!-- 预览弹窗 -->
-    <QuotePreview :visible="previewVisible" :quote-id="quoteId" :current-items="items" @close="previewVisible = false" />
+    <QuotePreview :visible="previewVisible" :quote-id="quoteId" :current-items="items" :group-color-for="groupColors.colorFor" @close="previewVisible = false" />
 
     <div v-if="quote?.status === 'confirmed'" style="margin-top: 8px; color: var(--ad-text-secondary); font-size: 13px">
       如需修改报价，请先将报价转成草稿
@@ -318,6 +318,7 @@ import ProductPickerDialog from '@/components/ProductPickerDialog.vue'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { applyProductMaterialProcess, formatProductMaterialProcess } from '@/utils/productMaterialProcess'
 import { createQuoteGroupDragVisual, type QuoteGroupDragVisual } from '@/utils/quoteGroupDragVisual'
+import { createQuoteGroupColorRegistry } from '@/utils/quoteGroupColors'
 import {
   calcQuoteLineArea,
   calcQuoteLineSubtotal,
@@ -350,6 +351,7 @@ const previewVisible = ref(false)
 const productPickerVisible = ref(false)
 const pendingPickerItem = ref<QuoteItemResponse | null>(null)
 const quoteId = computed(() => route.params.id as string)
+const groupColors = createQuoteGroupColorRegistry(5)
 
 const tableRef = ref()
 let sortable: Sortable | null = null
@@ -567,19 +569,20 @@ function renameGroup(oldName: string, newName: string) {
     ElMessage.warning('分项名称不能重复，否则两组明细会合并')
     return
   }
+  groupColors.rename(oldName, newName)
   items.value.forEach(i => { if (i.group_name === oldName) i.group_name = newName })
 }
 
 type DisplayRow = QuoteDisplayRow<QuoteItemResponse>
 
 const displayRows = computed<DisplayRow[]>(() => (
-  buildQuoteDisplayRows(items.value, rowKeyFor, calcSubtotal)
+  buildQuoteDisplayRows(items.value, rowKeyFor, calcSubtotal, groupColors.colorFor)
 ))
 const sortableStructure = computed(() => displayRows.value.map(row => row.key).join('|'))
 
 function rowClassName({ row }: { row: DisplayRow }) {
   const cls: string[] = []
-  if (row.gi >= 0) cls.push(`group-c${(row.gi % 5) + 1}`)
+  if (row.colorIndex > 0) cls.push(`group-c${row.colorIndex}`)
   if (row.type === 'group-header') cls.push('group-header-row')
   if (row.type === 'group-total') cls.push('group-total-row')
   cls.push('rk-' + row.key)
@@ -639,7 +642,7 @@ function handleDragStart(evt: Sortable.SortableEvent) {
 
   // 用完整的名称、明细和合计生成跟随预览，避免原生快照只显示表头一行。
   groupDragVisual = createQuoteGroupDragVisual({
-    colorIndex: (dragged.gi % 5) + 1,
+    colorIndex: dragged.colorIndex,
     sourceElements: block
       .map(row => tbody?.querySelector('.rk-' + row.key) as HTMLElement | null)
       .filter((element): element is HTMLElement => Boolean(element)),
@@ -870,6 +873,7 @@ function onCustomerBlur() {
 
 async function fetchQuote() {
   quote.value = await getQuote(route.params.id as string)
+  groupColors.reset()
   Object.assign(form, {
     customer_id: quote.value.customer_id || quote.value.customer_name || '',
     project_name: quote.value.project_name,
@@ -1106,7 +1110,7 @@ watch(() => route.params.id, async (newId) => {
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .summary-item { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
 .summary-item.total { font-size: 18px; color: #e63946; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ad-border); }
-/* 分项色块追踪：整块（分项表头→分项合计）统一同色浅底，覆盖斑马纹；5 色按分组序号循环 */
+/* 分项色块追踪：整块（分项表头→分项合计）统一同色浅底，颜色跟随分项身份移动 */
 :deep(.group-c1 td),
 :deep(.group-c2 td),
 :deep(.group-c3 td),

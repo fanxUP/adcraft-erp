@@ -11,14 +11,15 @@ export function isDuplicateQuoteGroupName<T extends QuoteOrderItem>(
 }
 
 export type QuoteDisplayRow<T extends QuoteOrderItem> =
-  | { type: 'group-header'; groupName: string; gi: number; key: string }
-  | { type: 'item'; item: T; groupName: string; gi: number; key: string }
-  | { type: 'group-total'; groupName: string; total: number; gi: number; key: string }
+  | { type: 'group-header'; groupName: string; gi: number; colorIndex: number; key: string }
+  | { type: 'item'; item: T; groupName: string; gi: number; colorIndex: number; key: string }
+  | { type: 'group-total'; groupName: string; total: number; gi: number; colorIndex: number; key: string }
 
 export function buildQuoteDisplayRows<T extends QuoteOrderItem>(
   items: T[],
   keyFor: (item: T) => string,
   subtotalFor: (item: T) => number,
+  groupColorFor?: (groupName: string) => number,
 ): QuoteDisplayRow<T>[] {
   const grouped = new Map<string, T[]>()
 
@@ -35,7 +36,7 @@ export function buildQuoteDisplayRows<T extends QuoteOrderItem>(
   for (const item of items) {
     const groupName = item.group_name
     if (!groupName) {
-      rows.push({ type: 'item', item, groupName: '', gi: -1, key: keyFor(item) })
+      rows.push({ type: 'item', item, groupName: '', gi: -1, colorIndex: 0, key: keyFor(item) })
       continue
     }
     if (emittedGroups.has(groupName)) continue
@@ -44,15 +45,17 @@ export function buildQuoteDisplayRows<T extends QuoteOrderItem>(
     emittedGroups.add(groupName)
     // 分项至少有一个占位明细，用首条明细的稳定 key 标识表头/合计，避免排序后 DOM key 串组。
     const groupKey = keyFor(groupItems[0])
-    rows.push({ type: 'group-header', groupName, gi: groupIndex, key: `gh-${groupKey}` })
+    const colorIndex = groupColorFor?.(groupName) ?? ((groupIndex % 5) + 1)
+    rows.push({ type: 'group-header', groupName, gi: groupIndex, colorIndex, key: `gh-${groupKey}` })
     for (const item of groupItems) {
-      rows.push({ type: 'item', item, groupName, gi: groupIndex, key: keyFor(item) })
+      rows.push({ type: 'item', item, groupName, gi: groupIndex, colorIndex, key: keyFor(item) })
     }
     rows.push({
       type: 'group-total',
       groupName,
       total: groupItems.reduce((sum, item) => sum + subtotalFor(item), 0),
       gi: groupIndex,
+      colorIndex,
       key: `gt-${groupKey}`,
     })
     groupIndex++
