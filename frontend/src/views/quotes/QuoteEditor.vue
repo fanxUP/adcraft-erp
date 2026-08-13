@@ -66,9 +66,7 @@
       <el-table ref="tableRef" :data="displayRows" stripe border scrollbar-always-on :row-key="(row: DisplayRow) => row.key" :row-class-name="rowClassName">
         <el-table-column v-if="!isReadonly" label="排序" width="46" align="center">
           <template #default="{ row }">
-            <span v-if="row.type !== 'group-total'" class="row-drag-handle" title="拖动排序" @mousedown="dragStartKey = row.key">
-              <el-icon><Rank /></el-icon>
-            </span>
+            <span v-if="row.type !== 'group-total'" class="row-drag-handle" title="拖动排序" @mousedown="dragStartKey = row.key">⠿</span>
           </template>
         </el-table-column>
         <el-table-column label="项目内容" min-width="320">
@@ -1131,7 +1129,7 @@ watch(() => route.params.id, async (newId) => {
 :deep(.el-table.el-table--scrollable-x .el-table__body-wrapper) { margin-bottom: 8px; }
 
 /* 拖拽排序（Sortablejs）反馈 */
-.row-drag-handle { cursor: grab; color: var(--ad-text-secondary, #909399); display: inline-flex; align-items: center; user-select: none; }
+.row-drag-handle { cursor: grab; color: var(--ad-text-secondary, #909399); display: inline-flex; align-items: center; user-select: none; font-size: 15px; line-height: 1; }
 .row-drag-handle:hover { color: var(--ad-primary, #409eff); }
 :deep(.ad-drag-dragging) { cursor: grabbing; }
 :deep(.ad-drag-ghost) { opacity: 0.4; }
