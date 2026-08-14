@@ -31,11 +31,11 @@
           <el-input-number v-model="form.tax_rate" :precision="2" :min="0" :max="100" :step="1" :disabled="isReadonly" style="width: 160px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
           <span style="margin-left: 6px">%</span>
         </el-form-item>
-        <el-form-item label="有效期">
-          <el-date-picker v-model="form.valid_until" type="date" value-format="YYYY-MM-DD" :disabled="isReadonly" style="width: 160px" />
-        </el-form-item>
         <el-form-item label="报价日期">
           <el-date-picker v-model="form.quote_date" type="date" value-format="YYYY-MM-DD" :disabled="isReadonly" style="width: 160px" />
+        </el-form-item>
+        <el-form-item label="有效期">
+          <el-date-picker v-model="form.valid_until" type="date" value-format="YYYY-MM-DD" :disabled="isReadonly" style="width: 160px" />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" :disabled="isReadonly" style="width: 260px" />
