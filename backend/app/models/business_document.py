@@ -67,6 +67,7 @@ class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
     tax_rate: Mapped[float] = mapped_column(Numeric(8, 4), default=0)
     tax_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
+    quote_date: Mapped[date | None] = mapped_column(Date, nullable=True, comment="报价日期（手动可选）")
 
     # ── 关系 ──
     customer: Mapped["Customer | None"] = relationship(lazy="selectin", foreign_keys=[customer_id])

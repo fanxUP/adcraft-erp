@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app.services.business_document_service import BusinessDocumentService
+from app.services.business_document_service import BusinessDocumentService, _business_today
 
 SAMPLE_QUOTE_ID = UUID("11111111-1111-1111-1111-111111111111")
 SAMPLE_CUSTOMER_ID = UUID("44444444-4444-4444-4444-444444444444")
@@ -33,6 +33,7 @@ def make_quote(**overrides):
         "tax_amount": Decimal("0"),
         "total_amount": Decimal("1000"),
         "valid_until": None,
+        "quote_date": None,
         "remark": None,
         "department": None,
         "contact_person": None,
@@ -303,3 +304,99 @@ async def test_calculate_quote_amount(service):
 
     assert quote.subtotal_amount == Decimal("600")
     assert quote.total_amount == Decimal("600")
+
+
+# ─────────────────────────────────────────────
+# quote_date（报价日期）往返
+# ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_quote_detail_serializes_quote_date(service):
+    from datetime import date
+    quote_service, repository = service
+    repository.get_by_id.return_value = make_quote(quote_date=date(2026, 8, 15))
+
+    quote = await quote_service.get_by_id(SAMPLE_QUOTE_ID)
+
+    assert quote["quote_date"] == "2026-08-15"
+
+
+@pytest.mark.asyncio
+async def test_quote_detail_none_quote_date(service):
+    quote_service, repository = service
+    repository.get_by_id.return_value = make_quote(quote_date=None)
+
+    quote = await quote_service.get_by_id(SAMPLE_QUOTE_ID)
+
+    assert quote["quote_date"] is None
+
+
+@pytest.mark.asyncio
+async def test_quote_create_defaults_quote_date_today():
+    from datetime import date
+    from uuid import uuid4
+    from app.services.business_document_service import BusinessDocumentService, _business_today
+
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
+    db.refresh = AsyncMock()
+    doc = MagicMock()
+    doc.doc_type = "quote"
+    doc.customer_id = uuid4()
+    doc.id = uuid4()
+
+    captured = {}
+
+    async def fake_create(data):
+        captured.update(data)
+        return doc
+
+    service = BusinessDocumentService(db, doc_type="quote")
+    service.repo.create = AsyncMock(side_effect=fake_create)
+    service._calculate_quote = AsyncMock()
+    service._sync_customer_agreements = AsyncMock()
+    service._sync_contact_to_customer = AsyncMock()
+    service._to_detail = MagicMock(return_value={})
+
+    await service.create({
+        "customer_id": str(doc.customer_id),
+        "project_name": "测试报价",
+    })
+
+    assert captured["quote_date"] == _business_today()
+
+
+@pytest.mark.asyncio
+async def test_quote_create_preserves_explicit_quote_date():
+    from datetime import date
+    from uuid import uuid4
+    from app.services.business_document_service import BusinessDocumentService, _business_today
+
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
+    db.refresh = AsyncMock()
+    doc = MagicMock()
+    doc.doc_type = "quote"
+    doc.customer_id = uuid4()
+    doc.id = uuid4()
+
+    captured = {}
+
+    async def fake_create(data):
+        captured.update(data)
+        return doc
+
+    service = BusinessDocumentService(db, doc_type="quote")
+    service.repo.create = AsyncMock(side_effect=fake_create)
+    service._calculate_quote = AsyncMock()
+    service._sync_customer_agreements = AsyncMock()
+    service._sync_contact_to_customer = AsyncMock()
+    service._to_detail = MagicMock(return_value={})
+
+    await service.create({
+        "customer_id": str(doc.customer_id),
+        "project_name": "测试报价",
+        "quote_date": date(2026, 8, 10),
+    })
+
+    assert captured["quote_date"] == date(2026, 8, 10)

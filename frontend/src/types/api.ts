@@ -605,6 +605,7 @@ export interface QuoteListResponse {
   status: string
   total_amount: number
   valid_until?: string
+  quote_date?: string
   created_at?: string
   department?: string
   contact_person?: string
@@ -626,6 +627,7 @@ export interface QuoteDetailResponse {
   tax_amount: number
   total_amount: number
   valid_until?: string
+  quote_date?: string
   remark?: string
   department?: string
   contact_person?: string

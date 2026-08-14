@@ -34,6 +34,9 @@
         <el-form-item label="有效期">
           <el-date-picker v-model="form.valid_until" type="date" value-format="YYYY-MM-DD" :disabled="isReadonly" style="width: 160px" />
         </el-form-item>
+        <el-form-item label="报价日期">
+          <el-date-picker v-model="form.quote_date" type="date" value-format="YYYY-MM-DD" :disabled="isReadonly" style="width: 160px" />
+        </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" :disabled="isReadonly" style="width: 260px" />
         </el-form-item>
@@ -336,12 +339,18 @@ function rowKeyFor(item: QuoteItemResponse): string {
   return k
 }
 
+function todayStr(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 const form = reactive({
   customer_id: '',
   project_name: '',
   tax_rate: 0,
   discount_amount: 0,
   valid_until: '',
+  quote_date: todayStr(),
   remark: '',
   department: '',
   contact_person: '',
@@ -848,6 +857,7 @@ async function fetchQuote() {
     tax_rate: quote.value.tax_rate,
     discount_amount: quote.value.discount_amount,
     valid_until: quote.value.valid_until || '',
+    quote_date: quote.value.quote_date || '',
     remark: quote.value.remark || '',
     department: quote.value.department || '',
     contact_person: quote.value.contact_person || '',
@@ -939,6 +949,7 @@ async function doCreateNewQuote(): Promise<QuoteDetailResponse> {
     items: cleanItems,
   }
   if (!payload.valid_until) delete payload.valid_until
+  if (!payload.quote_date) delete payload.quote_date
   if (!payload.remark) delete payload.remark
   if (!payload.contact_person) delete payload.contact_person
   if (!payload.contact_phone) delete payload.contact_phone
@@ -985,6 +996,7 @@ async function handleSave() {
         tax_rate: form.tax_rate,
         discount_amount: form.discount_amount,
         valid_until: form.valid_until || undefined,
+        quote_date: form.quote_date || undefined,
         remark: form.remark,
         department: form.department || undefined,
         contact_person: form.contact_person || undefined,

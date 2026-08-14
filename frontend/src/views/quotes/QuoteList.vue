@@ -59,6 +59,9 @@
       <el-table-column label="有效期" width="120">
         <template #default="{ row }">{{ row.valid_until || '-' }}</template>
       </el-table-column>
+      <el-table-column label="报价日期" width="120">
+        <template #default="{ row }">{{ row.quote_date || '-' }}</template>
+      </el-table-column>
       <el-table-column label="创建时间" width="160">
         <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
       </el-table-column>

@@ -25,7 +25,7 @@
         <div class="print-info">
           <div class="print-info-row">
             <span><strong>报价单号:</strong> {{ quote.quote_no }}</span>
-            <span><strong>日　　期:</strong> {{ quote.created_at?.slice(0, 10) }}</span>
+            <span><strong>日　　期:</strong> {{ quote.quote_date || quote.created_at?.slice(0, 10) }}</span>
           </div>
           <div class="print-info-row">
             <span><strong>有效期至:</strong> {{ quote.valid_until || '-' }}</span>

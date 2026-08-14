@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, date
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,6 +40,14 @@ def _build_spec(item) -> str | None:
 
 ORDER_TRANSITIONS = ORDER_WORKFLOW
 QUOTE_TRANSITIONS = QUOTE_WORKFLOW
+
+
+_BUSINESS_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def _business_today() -> date:
+    """业务日期：北京时间今天（服务器为 UTC，直接 date.today() 在凌晨会差一天）。"""
+    return datetime.now(_BUSINESS_TZ).date()
 
 
 class BusinessDocumentService:
@@ -98,6 +107,9 @@ class BusinessDocumentService:
             data.setdefault("tax_rate", Decimal(str(data.pop("tax_rate", "0"))))
             data.setdefault("tax_amount", Decimal("0"))
             data.setdefault("total_amount", Decimal("0"))
+            if not data.get("quote_date"):
+                # QuoteCreate.model_dump() 会把 None 也带进来，setdefault 无法兜底
+                data["quote_date"] = _business_today()
             data["items"] = [
                 normalize_quote_item_data(item)
                 for item in data.get("items", [])
@@ -1232,6 +1244,7 @@ class BusinessDocumentService:
                 "quote_no": d.doc_no,
                 "quote_mode": d.quote_mode,
                 "valid_until": d.valid_until.isoformat() if d.valid_until else None,
+                "quote_date": d.quote_date.isoformat() if d.quote_date else None,
             })
         return base
 
@@ -1331,6 +1344,7 @@ class BusinessDocumentService:
                 "tax_rate": float(d.tax_rate),
                 "tax_amount": float(d.tax_amount),
                 "valid_until": d.valid_until.isoformat() if d.valid_until else None,
+                "quote_date": d.quote_date.isoformat() if d.quote_date else None,
             })
 
         return base

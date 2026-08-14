@@ -104,6 +104,7 @@ class QuoteCreate(BaseModel):
     discount_amount: float = Field(0, ge=0)
     tax_rate: float = Field(0, ge=0, le=100)
     valid_until: date | None = None
+    quote_date: date | None = None
     remark: str | None = None
     department: str | None = None
     contact_person: str | None = None
@@ -125,6 +126,7 @@ class QuoteUpdate(BaseModel):
     discount_amount: float | None = Field(None, ge=0)
     tax_rate: float | None = Field(None, ge=0, le=100)
     valid_until: date | None = None
+    quote_date: date | None = None
     remark: str | None = None
     department: str | None = None
     contact_person: str | None = None
@@ -141,6 +143,7 @@ class QuoteListResponse(BaseModel):
     status: str
     total_amount: float
     valid_until: str | None = None
+    quote_date: str | None = None
     created_at: datetime | None = None
     department: str | None = None
     contact_person: str | None = None
@@ -163,6 +166,7 @@ class QuoteDetailResponse(BaseModel):
     tax_amount: float
     total_amount: float
     valid_until: str | None = None
+    quote_date: str | None = None
     remark: str | None = None
     department: str | None = None
     contact_person: str | None = None
