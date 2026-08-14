@@ -89,27 +89,27 @@
     <el-dialog v-model="showCreateDialog" title="选择订单或报价单创建验收单" width="900px" :close-on-click-modal="false">
       <el-input v-model="dialogKeyword" placeholder="搜索单号/客户/项目" clearable style="margin-bottom:12px" />
       <el-table :data="filteredAvailableItems" v-loading="loadingItems" border stripe highlight-current-row @row-dblclick="handleCreateFromItem">
-        <el-table-column label="来源" width="80">
+        <el-table-column label="来源" width="70">
           <template #default="{ row }">
             <el-tag v-if="row.order_no" type="primary" size="small">订单</el-tag>
             <el-tag v-else type="success" size="small">报价</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="编号" min-width="180">
+        <el-table-column label="编号" min-width="140">
           <template #default="{ row }">{{ row.order_no || row.quote_no }}</template>
         </el-table-column>
-        <el-table-column prop="customer_name" label="客户" min-width="150" />
-        <el-table-column prop="department" label="科室/部门" min-width="100" />
-        <el-table-column prop="project_name" label="项目名称" min-width="180" show-overflow-tooltip />
-        <el-table-column label="状态" width="100">
+        <el-table-column prop="customer_name" label="客户" min-width="130" />
+        <el-table-column prop="department" label="科室/部门" min-width="90" />
+        <el-table-column prop="project_name" label="项目名称" min-width="140" show-overflow-tooltip />
+        <el-table-column label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="docStatusColor(row.status)" size="small">{{ docStatusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="total_amount" label="金额" width="110" align="right">
+        <el-table-column prop="total_amount" label="金额" width="90" align="right">
           <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="80" fixed="right">
+        <el-table-column label="操作" width="70">
           <template #default="{ row }">
             <el-button text type="primary" size="small" @click="handleCreateFromItem(row)">选择</el-button>
           </template>
