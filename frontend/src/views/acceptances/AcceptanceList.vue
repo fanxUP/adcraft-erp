@@ -44,7 +44,7 @@
         <el-table-column prop="department" label="部门/科室" min-width="120" />
         <el-table-column prop="project_name" label="项目名称" min-width="200" show-overflow-tooltip />
         <el-table-column label="金额" width="120" align="right">
-          <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
+          <template #default="{ row }"><span style="white-space:nowrap">¥ {{ row.total_amount?.toFixed(2) }}</span></template>
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
@@ -106,8 +106,8 @@
             <el-tag :type="docStatusColor(row.status)" size="small">{{ docStatusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="total_amount" label="金额" width="90" align="right">
-          <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
+        <el-table-column prop="total_amount" label="金额" width="100" align="right">
+          <template #default="{ row }"><span style="white-space:nowrap">¥ {{ row.total_amount?.toFixed(2) }}</span></template>
         </el-table-column>
         <el-table-column label="操作" width="70">
           <template #default="{ row }">
