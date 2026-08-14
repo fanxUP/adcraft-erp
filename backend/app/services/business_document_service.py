@@ -2,7 +2,8 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.orm import selectinload
 
 from app.domain.workflows import ORDER_WORKFLOW, QUOTE_WORKFLOW, allowed_targets
 from app.repositories.business_document_repo import BusinessDocumentRepository
@@ -851,6 +852,93 @@ class BusinessDocumentService:
                 from app.services.framework_contract_service import FrameworkContractService
                 await FrameworkContractService(self.db).delete_project(pid)
 
+    async def _cleanup_associations_on_order_to_quote(self, doc_id: UUID) -> None:
+        """订单转报价：彻底清理该订单产生的业务关联数据，让重新报价从零开始。
+        - 验收单：全部软删（含已验收），回收站可查
+        - 收款：物理删除（无软删列，财务应收随订单取消不再生效）
+        - 任务：物理删除（任务表无软删列；取消时已置 cancelled，附件级联删除）
+        - 外协任务 / 项目成本：软删
+        - 用车/事故/成本分摊、库存出库流水：独立台账，仅解除订单关联（置 NULL）
+        """
+        from app.models.acceptance import AcceptanceForm
+        from app.models.payment import Payment
+        from app.models.inventory import StockRecord
+        from app.models.vehicle import (
+            VehicleUseRequest,
+            VehicleDispatch,
+            VehicleIncident,
+            VehicleCostAllocation,
+        )
+
+        # 1) 验收单全部软删（draft + accepted）
+        result = await self.db.execute(
+            select(AcceptanceForm).where(
+                AcceptanceForm.document_id == doc_id,
+                AcceptanceForm.deleted_at.is_(None),
+            )
+        )
+        for form in result.scalars().all():
+            form.deleted_at = datetime.now()
+
+        # 2) 收款物理删除（无软删列，用户决策：彻底清除财务应收记录）
+        result = await self.db.execute(
+            select(Payment).where(Payment.document_id == doc_id)
+        )
+        for payment in result.scalars().all():
+            await self.db.delete(payment)
+
+        # 3) 任务物理删除（附件级联；先解除车辆对安装任务的引用避免 FK 违例）
+        install_ids: list[UUID] = []
+        task_rows = []
+        for model in (DesignTask, ProductionTask, InstallationTask):
+            result = await self.db.execute(
+                select(model).options(selectinload(model.attachments)).where(
+                    model.document_id == doc_id
+                )
+            )
+            for task in result.scalars().all():
+                task_rows.append(task)
+                if model is InstallationTask:
+                    install_ids.append(task.id)
+        if install_ids:
+            for model in (VehicleUseRequest, VehicleDispatch, VehicleIncident, VehicleCostAllocation):
+                await self.db.execute(
+                    update(model).where(
+                        model.related_install_task_id.in_(install_ids)
+                    ).values(related_install_task_id=None)
+                )
+        for task in task_rows:
+            await self.db.delete(task)
+
+        # 4) 外协任务软删
+        result = await self.db.execute(
+            select(OutsourceTask).where(
+                OutsourceTask.related_doc_id == doc_id,
+                OutsourceTask.deleted_at.is_(None),
+            )
+        )
+        for task in result.scalars().all():
+            task.deleted_at = datetime.now()
+
+        # 5) 项目成本软删
+        result = await self.db.execute(
+            select(ProjectCost).where(
+                ProjectCost.document_id == doc_id,
+                ProjectCost.deleted_at.is_(None),
+            )
+        )
+        for cost in result.scalars().all():
+            cost.deleted_at = datetime.now()
+
+        # 6) 台账型记录（用车/事故/成本分摊、库存出库）：解除订单关联，保留台账本身
+        for model in (VehicleUseRequest, VehicleDispatch, VehicleIncident, VehicleCostAllocation):
+            await self.db.execute(
+                update(model).where(model.related_order_id == doc_id).values(related_order_id=None)
+            )
+        await self.db.execute(
+            update(StockRecord).where(StockRecord.document_id == doc_id).values(document_id=None)
+        )
+
     async def convert_doc_type(self, doc_id: UUID, new_type: str,
                                 created_by: UUID) -> dict:
         """统一转换方法 — 只改 doc_type + 编号，ID 不变，所有 FK 自动跟随。"""
@@ -932,8 +1020,12 @@ class BusinessDocumentService:
             doc.unpaid_amount = 0
             # 取消软删除（已取消订单被标记了 deleted_at）
             doc.deleted_at = None
+            # 自引用来源报价在转回报价后即自身，无意义，清零
+            doc.source_quote_id = None
             # 订单转报价：清理合同关联（普通合同空则删；框架合同从项目移除该订单）
             await self._cleanup_contract_links_on_order_to_quote(doc)
+            # 订单转报价：彻底清理该订单产生的业务关联数据（验收单/收款/任务/外协/成本；台账类仅解除关联）
+            await self._cleanup_associations_on_order_to_quote(doc_id)
 
         await self.db.flush()
 

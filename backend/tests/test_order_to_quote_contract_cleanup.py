@@ -12,7 +12,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# 注册完整模型注册表：查询/删除会实例化真实 ORM 模型，字符串关系需全部模型模块加载后解析
+import app.main  # noqa: F401
+from sqlalchemy.sql.dml import Update
+
 from app.services.business_document_service import BusinessDocumentService
+from app.models.acceptance import AcceptanceForm
+from app.models.business_document import BusinessDocument
+from app.models.inventory import StockRecord
+from app.models.outsource import OutsourceTask
+from app.models.payment import Payment
+from app.models.project_cost import ProjectCost
+from app.models.task import DesignTask, InstallationTask
+from app.models.vehicle import VehicleDispatch, VehicleUseRequest
 
 ORDER_UUID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 CONTRACT_UUID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
@@ -220,17 +232,25 @@ def make_order_doc():
     return doc
 
 
+def make_convert_execute(doc):
+    """convert_doc_type 的 db.execute 分发器：单据查询返回 doc，其余查询返回空，Update 返回空。"""
+    async def fake_execute(stmt):
+        if isinstance(stmt, Update):
+            return mock_result([])
+        entity = stmt.column_descriptions[0]["entity"] if stmt.column_descriptions else None
+        if entity is BusinessDocument:
+            first = MagicMock()
+            first.scalar_one_or_none.return_value = doc
+            return first
+        return mock_result([])
+    return fake_execute
+
+
 @pytest.mark.asyncio
 async def test_convert_order_to_quote_works_without_contract_links(service):
     service, db = service
     doc = make_order_doc()
-    first = MagicMock()
-    first.scalar_one_or_none.return_value = doc
-    db.execute.side_effect = [
-        first,           # 查询单据
-        mock_result([]),  # ContractDocument 空
-        mock_result([]),  # FrameworkContractProjectDocument 空
-    ]
+    db.execute.side_effect = make_convert_execute(doc)
 
     with patch(
         "app.services.number_generator.generate_quote_no",
@@ -241,4 +261,100 @@ async def test_convert_order_to_quote_works_without_contract_links(service):
     assert result["doc_type"] == "quote"
     assert result["quote_no"] == "Q20260804-9999"
     assert result["status"] == "draft"
-    db.delete.assert_not_awaited()  # 无合同关联，不做任何清理
+    db.delete.assert_not_awaited()  # 无合同/业务关联，不做任何清理
+
+
+# ── 订单转报价：业务关联数据清理 ──
+
+
+def make_form(**attrs):
+    f = MagicMock()
+    f.deleted_at = None
+    for k, v in attrs.items():
+        setattr(f, k, v)
+    return f
+
+
+def make_dispatch_execute(results_by_model):
+    """按 ORM 实体分发 db.execute 结果；Update 语句一律返回空，并记录调用。"""
+    calls = []
+
+    async def fake_execute(stmt):
+        calls.append(stmt)
+        if isinstance(stmt, Update):
+            return mock_result([])
+        entity = stmt.column_descriptions[0]["entity"] if stmt.column_descriptions else None
+        return mock_result(results_by_model.get(entity, []))
+
+    return fake_execute, calls
+
+
+@pytest.mark.asyncio
+async def test_cleanup_soft_deletes_all_acceptance_forms(service):
+    service, db = service
+    draft = make_form(status="draft")
+    accepted = make_form(status="accepted")
+    fake_execute, _ = make_dispatch_execute({AcceptanceForm: [draft, accepted]})
+    db.execute.side_effect = fake_execute
+
+    await service._cleanup_associations_on_order_to_quote(ORDER_UUID)
+
+    assert draft.deleted_at is not None
+    assert accepted.deleted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_cleanup_hard_deletes_payments(service):
+    service, db = service
+    payment = make_form(id=uuid4(), amount=100)
+    fake_execute, _ = make_dispatch_execute({Payment: [payment]})
+    db.execute.side_effect = fake_execute
+
+    await service._cleanup_associations_on_order_to_quote(ORDER_UUID)
+
+    db.delete.assert_awaited_once_with(payment)
+
+
+@pytest.mark.asyncio
+async def test_cleanup_deletes_tasks_and_unlinks_vehicle_install_refs(service):
+    service, db = service
+    design = make_form(id=uuid4(), attachments=[])
+    install = make_form(id=uuid4(), attachments=[])
+    fake_execute, calls = make_dispatch_execute({
+        DesignTask: [design],
+        InstallationTask: [install],
+    })
+    db.execute.side_effect = fake_execute
+
+    await service._cleanup_associations_on_order_to_quote(ORDER_UUID)
+
+    db.delete.assert_any_await(design)
+    db.delete.assert_any_await(install)
+    # 车辆对安装任务的引用被置空（每个车辆模型一次 UPDATE）
+    assert sum(isinstance(c, Update) for c in calls) >= 4
+
+
+@pytest.mark.asyncio
+async def test_cleanup_soft_deletes_outsource_and_project_cost(service):
+    service, db = service
+    out = make_form()
+    cost = make_form()
+    fake_execute, _ = make_dispatch_execute({OutsourceTask: [out], ProjectCost: [cost]})
+    db.execute.side_effect = fake_execute
+
+    await service._cleanup_associations_on_order_to_quote(ORDER_UUID)
+
+    assert out.deleted_at is not None
+    assert cost.deleted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_cleanup_unlinks_vehicle_order_ref_and_stock(service):
+    service, db = service
+    fake_execute, calls = make_dispatch_execute({})
+    db.execute.side_effect = fake_execute
+
+    await service._cleanup_associations_on_order_to_quote(ORDER_UUID)
+
+    # 4 个车辆模型 + 1 个库存 = 5 次解除关联 UPDATE
+    assert sum(isinstance(c, Update) for c in calls) >= 5
