@@ -272,3 +272,30 @@ async def test_update_nonexistent_task(service, mock_repo):
     mock_repo.get_by_id.return_value = None
     with pytest.raises(ValueError, match="设计任务不存在"):
         await service.update_task(SAMPLE_TASK_ID, {"project_name": "新名称"})
+
+
+# --- is_outsourced 标识 ---
+
+@pytest.mark.asyncio
+async def test_list_tasks_marks_outsourced(service, mock_repo):
+    """list_tasks 批量标记 is_outsourced：有未删除外协任务的为 True。"""
+    from tests.conftest import MockResult
+    task1 = make_mock_design_task(task_id=SAMPLE_TASK_ID, project_name="已外协")
+    task2 = make_mock_design_task(task_id=SAMPLE_USER_ID, design_no="D20260629-0002", project_name="未外协")
+    mock_repo.list_tasks.return_value = ([task1, task2], 2)
+    # 外协表只返回 task1 的 id
+    service.db.execute.return_value = MockResult(scalars_return=[SAMPLE_TASK_ID])
+    with patch("app.services.task_service._enrich_task_order", side_effect=lambda db, d: d):
+        tasks, total = await service.list_tasks(page=1, page_size=20)
+    assert total == 2
+    flags = {t["project_name"]: t["is_outsourced"] for t in tasks}
+    assert flags["已外协"] is True
+    assert flags["未外协"] is False
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_outsourced_filter_passes_to_repo(service, mock_repo):
+    """list_tasks 把 outsourced 过滤透传给 repo。"""
+    mock_repo.list_tasks.return_value = ([], 0)
+    await service.list_tasks(page=1, page_size=20, outsourced=True)
+    assert mock_repo.list_tasks.call_args.kwargs["outsourced"] is True

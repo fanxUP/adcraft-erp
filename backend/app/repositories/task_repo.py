@@ -2,9 +2,10 @@ from uuid import UUID
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, exists
 
 from app.models.task import DesignTask, ProductionTask, InstallationTask, Attachment
+from app.models.outsource import OutsourceTask
 
 
 class DesignTaskRepository:
@@ -16,7 +17,8 @@ class DesignTaskRepository:
         return result.scalar_one_or_none()
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
-                         order_id: str | None = None, assigned_to: str | None = None) -> tuple[list[DesignTask], int]:
+                         order_id: str | None = None, assigned_to: str | None = None,
+                         outsourced: bool | None = None) -> tuple[list[DesignTask], int]:
         q = select(DesignTask)
         if status:
             status_list = [s.strip() for s in status.split(",") if s.strip()]
@@ -28,6 +30,13 @@ class DesignTaskRepository:
             q = q.where(DesignTask.document_id == UUID(order_id))
         if assigned_to:
             q = q.where(DesignTask.assigned_to == UUID(assigned_to))
+        if outsourced is not None:
+            has_out = exists().where(
+                OutsourceTask.source_task_type == "design",
+                OutsourceTask.source_task_id == DesignTask.id,
+                OutsourceTask.deleted_at.is_(None),
+            )
+            q = q.where(has_out) if outsourced else q.where(~has_out)
 
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
@@ -59,7 +68,8 @@ class ProductionTaskRepository:
         return result.scalar_one_or_none()
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
-                         order_id: str | None = None, assigned_to: str | None = None) -> tuple[list[ProductionTask], int]:
+                         order_id: str | None = None, assigned_to: str | None = None,
+                         outsourced: bool | None = None) -> tuple[list[ProductionTask], int]:
         q = select(ProductionTask)
         if status:
             q = q.where(ProductionTask.status == status)
@@ -67,6 +77,13 @@ class ProductionTaskRepository:
             q = q.where(ProductionTask.document_id == UUID(order_id))
         if assigned_to:
             q = q.where(ProductionTask.assigned_to == UUID(assigned_to))
+        if outsourced is not None:
+            has_out = exists().where(
+                OutsourceTask.source_task_type == "production",
+                OutsourceTask.source_task_id == ProductionTask.id,
+                OutsourceTask.deleted_at.is_(None),
+            )
+            q = q.where(has_out) if outsourced else q.where(~has_out)
 
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
@@ -98,7 +115,8 @@ class InstallationTaskRepository:
         return result.scalar_one_or_none()
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
-                         order_id: str | None = None, assigned_to: str | None = None) -> tuple[list[InstallationTask], int]:
+                         order_id: str | None = None, assigned_to: str | None = None,
+                         outsourced: bool | None = None) -> tuple[list[InstallationTask], int]:
         q = select(InstallationTask)
         if status:
             status_list = [s.strip() for s in status.split(",") if s.strip()]
@@ -110,6 +128,13 @@ class InstallationTaskRepository:
             q = q.where(InstallationTask.document_id == UUID(order_id))
         if assigned_to:
             q = q.where(InstallationTask.assigned_to == UUID(assigned_to))
+        if outsourced is not None:
+            has_out = exists().where(
+                OutsourceTask.source_task_type == "installation",
+                OutsourceTask.source_task_id == InstallationTask.id,
+                OutsourceTask.deleted_at.is_(None),
+            )
+            q = q.where(has_out) if outsourced else q.where(~has_out)
 
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()

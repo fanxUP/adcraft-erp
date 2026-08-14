@@ -13,6 +13,10 @@
         <el-option label="已完成" value="completed" />
         <el-option label="已取消" value="cancelled" />
       </el-select>
+      <el-select v-model="filterOutsourced" placeholder="外协筛选" clearable style="width: 120px; margin-left: 8px" @change="fetchData">
+        <el-option label="已外协" value="true" />
+        <el-option label="未外协" value="false" />
+      </el-select>
       <el-button type="primary" style="margin-left: 12px" @click="fetchData">搜索</el-button>
     </div>
 
@@ -33,6 +37,12 @@
         </el-table-column>
         <el-table-column label="派发" width="90">
           <template #default="{ row }">{{ row.assigned_to_name || row.assigned_to || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="外协" width="80">
+          <template #default="{ row }">
+            <el-tag v-if="row.is_outsourced" type="warning" size="small">已外协</el-tag>
+            <span v-else>-</span>
+          </template>
         </el-table-column>
         <el-table-column label="创建时间" width="160">
           <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
@@ -68,6 +78,7 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const filterStatus = ref('')
+const filterOutsourced = ref('')
 
 function instStatusLabel(s: string) {
   const map: Record<string, string> = { pending: '初始/待分配', pending_review: '待确认', completed: '已完成', cancelled: '已取消' }
@@ -81,7 +92,7 @@ function instStatusColor(s: string) {
 async function fetchData() {
   loading.value = true
   try {
-    const data = await getInstallationTasks({ page: page.value, page_size: pageSize.value, status: filterStatus.value || undefined })
+    const data = await getInstallationTasks({ page: page.value, page_size: pageSize.value, status: filterStatus.value || undefined, outsourced: filterOutsourced.value === '' ? undefined : filterOutsourced.value === 'true' })
     list.value = data.items
     total.value = data.total
   } finally { loading.value = false }

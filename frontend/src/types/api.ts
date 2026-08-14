@@ -187,6 +187,7 @@ export interface DesignTaskResponse {
   source?: string
   project_name: string
   status: string
+  is_outsourced?: boolean
   assigned_to?: string
   assigned_to_name?: string
     description?: string
@@ -210,6 +211,7 @@ export interface ProductionTaskResponse {
   source?: string
   project_name: string
   status: string
+  is_outsourced?: boolean
   assigned_to?: string
   material_id?: string
   process_id?: string
@@ -237,6 +239,7 @@ export interface InstallationTaskResponse {
   source?: string
   project_name: string
   status: string
+  is_outsourced?: boolean
   assigned_to?: string
   address?: string
   contact_name?: string
@@ -514,6 +517,8 @@ export interface OutsourceTaskResponse {
   related_doc_type?: string
   related_project_name?: string
   order_id?: string
+  source_task_type?: string
+  source_task_id?: string
   task_type: string
   description?: string
   quantity: number

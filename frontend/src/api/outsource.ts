@@ -44,7 +44,7 @@ export function deleteOutsourceVendor(id: string) {
   return del<SuccessResponse>(`/outsource/vendors/${id}`)
 }
 
-export function getOutsourceTasks(params: { page?: number; page_size?: number; status?: string; vendor_id?: string; order_id?: string }) {
+export function getOutsourceTasks(params: { page?: number; page_size?: number; status?: string; vendor_id?: string; order_id?: string; source_task_id?: string; source_task_type?: string }) {
   return get<PaginatedData<OutsourceTaskResponse>>('/outsource/tasks', { params })
 }
 

@@ -62,6 +62,13 @@
         </el-form>
       </el-card>
 
+      <OutsourceTaskCard
+        :task-type="'design'"
+        :task-id="task.id"
+        :order-id="task.order_id"
+        :project-name="task.project_name"
+      />
+
       <!-- 管理员删除 -->
       <el-card v-if="authStore.isAdmin" shadow="never" class="info-card" style="margin-top: 16px; border-color: #ff4d4f;">
         <template #header><span style="color: #ff4d4f;">危险操作</span></template>
@@ -112,6 +119,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import type { DesignTaskResponse, UserResponse } from '@/types/api'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
+import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { getEmployees } from '@/api/employees'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { useAuthStore } from '@/stores/auth'

@@ -123,6 +123,25 @@ async def _prepare_task_create_data(
     return normalized
 
 
+async def _attach_outsource_flags(db: AsyncSession, task_type: str, task_dicts: list[dict]) -> list[dict]:
+    """为任务列表批量补 is_outsourced：存在未删除的关联外协任务即 True。"""
+    from app.models.outsource import OutsourceTask
+    ids = [d.get("id") for d in task_dicts if d.get("id")]
+    linked: set[str] = set()
+    if ids:
+        result = await db.execute(
+            select(OutsourceTask.source_task_id).where(
+                OutsourceTask.source_task_type == task_type,
+                OutsourceTask.source_task_id.in_([UUID(i) for i in ids]),
+                OutsourceTask.deleted_at.is_(None),
+            )
+        )
+        linked = {str(x) for x in result.scalars().all()}
+    for d in task_dicts:
+        d["is_outsourced"] = str(d.get("id")) in linked
+    return task_dicts
+
+
 class DesignTaskService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -135,10 +154,12 @@ class DesignTaskService:
         return d
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
-                         order_id: str | None = None, assigned_to: str | None = None) -> tuple[list, int]:
+                         order_id: str | None = None, assigned_to: str | None = None,
+                         outsourced: bool | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        tasks, total = await self.repo.list_tasks(skip=skip, limit=page_size, status=status, order_id=order_id, assigned_to=assigned_to)
-        return [await self._to_dict(t) for t in tasks], total
+        tasks, total = await self.repo.list_tasks(skip=skip, limit=page_size, status=status, order_id=order_id, assigned_to=assigned_to, outsourced=outsourced)
+        result = [await self._to_dict(t) for t in tasks]
+        return await _attach_outsource_flags(self.db, "design", result), total
 
     async def get_task(self, task_id: UUID) -> dict | None:
         task = await self.repo.get_by_id(task_id)
@@ -298,10 +319,12 @@ class ProductionTaskService:
         return d
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
-                         order_id: str | None = None, assigned_to: str | None = None) -> tuple[list, int]:
+                         order_id: str | None = None, assigned_to: str | None = None,
+                         outsourced: bool | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        tasks, total = await self.repo.list_tasks(skip=skip, limit=page_size, status=status, order_id=order_id, assigned_to=assigned_to)
-        return [await self._to_dict(t) for t in tasks], total
+        tasks, total = await self.repo.list_tasks(skip=skip, limit=page_size, status=status, order_id=order_id, assigned_to=assigned_to, outsourced=outsourced)
+        result = [await self._to_dict(t) for t in tasks]
+        return await _attach_outsource_flags(self.db, "production", result), total
 
     async def get_task(self, task_id: UUID) -> dict | None:
         task = await self.repo.get_by_id(task_id)
@@ -458,10 +481,12 @@ class InstallationTaskService:
         return d
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
-                         order_id: str | None = None, assigned_to: str | None = None) -> tuple[list, int]:
+                         order_id: str | None = None, assigned_to: str | None = None,
+                         outsourced: bool | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        tasks, total = await self.repo.list_tasks(skip=skip, limit=page_size, status=status, order_id=order_id, assigned_to=assigned_to)
-        return [await self._to_dict(t) for t in tasks], total
+        tasks, total = await self.repo.list_tasks(skip=skip, limit=page_size, status=status, order_id=order_id, assigned_to=assigned_to, outsourced=outsourced)
+        result = [await self._to_dict(t) for t in tasks]
+        return await _attach_outsource_flags(self.db, "installation", result), total
 
     async def get_task(self, task_id: UUID) -> dict | None:
         task = await self.repo.get_by_id(task_id)

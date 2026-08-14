@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from app.schemas.outsource import OutsourcePaymentCreate, OutsourceTaskCreate
 from app.services.outsource_service import OutsourceService
-from tests.conftest import SAMPLE_USER_ID, SAMPLE_ORDER_ID
+from tests.conftest import SAMPLE_USER_ID, SAMPLE_ORDER_ID, SAMPLE_TASK_ID
 
 
 def make_mock_vendor(**kwargs):
@@ -46,6 +46,8 @@ def make_mock_outsource_task(**kwargs):
     t.remark = kwargs.get("remark")
     t.created_at = kwargs.get("created_at", datetime.now(timezone.utc))
     t.deleted_at = kwargs.get("deleted_at")
+    t.source_task_type = kwargs.get("source_task_type")
+    t.source_task_id = kwargs.get("source_task_id")
     return t
 
 
@@ -539,3 +541,47 @@ def test_outsource_amounts_and_quantity_must_be_valid():
             quantity=1,
             unit_price=-1,
         )
+
+
+@pytest.mark.asyncio
+async def test_create_task_passes_source_task_fields(service):
+    """create_task 透传 source_task_type/source_task_id 并回显到响应。"""
+    svc, _, tr, _ = service
+    tr.create.return_value = make_mock_outsource_task(
+        task_no="OT20260629-0003",
+        source_task_type="design",
+        source_task_id=SAMPLE_TASK_ID,
+    )
+    with patch("app.services.outsource_service.generate_outsource_task_no", AsyncMock(return_value="OT20260629-0003")):
+        result = await svc.create_task({
+            "vendor_id": SAMPLE_USER_ID,
+            "order_id": SAMPLE_ORDER_ID,
+            "task_type": "design",
+            "quantity": 1,
+            "unit_price": 0,
+            "source_task_type": "design",
+            "source_task_id": SAMPLE_TASK_ID,
+        })
+    assert result["source_task_type"] == "design"
+    assert result["source_task_id"] == str(SAMPLE_TASK_ID)
+    data = tr.create.call_args.args[0]
+    assert data["source_task_type"] == "design"
+    assert data["source_task_id"] == SAMPLE_TASK_ID
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_passes_source_filter(service):
+    """list_tasks 把 source_task_type/source_task_id 过滤透传给 repo。"""
+    svc, _, tr, _ = service
+    tr.list_tasks.return_value = ([make_mock_outsource_task()], 1)
+    items, total = await svc.list_tasks(
+        page=1, page_size=20,
+        source_task_type="design",
+        source_task_id=SAMPLE_TASK_ID,
+    )
+    assert total == 1
+    assert len(items) == 1
+    args = tr.list_tasks.call_args.args
+    # (skip, limit, status, vendor_id, related_doc_id, source_task_type, source_task_id)
+    assert args[5] == "design"
+    assert args[6] == SAMPLE_TASK_ID

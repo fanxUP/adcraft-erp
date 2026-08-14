@@ -43,6 +43,13 @@
           <span v-if="task?.assigned_to_name" style="color: #999; font-size: 13px;">当前：{{ task.assigned_to_name }}</span>
         </div>
       </el-card>
+      <OutsourceTaskCard
+        :task-type="'installation'"
+        :task-id="task.id"
+        :order-id="task.order_id"
+        :project-name="task.project_name"
+      />
+
       <!-- 管理员删除 -->
       <el-card v-if="authStore.isAdmin" shadow="never" class="info-card" style="margin-top: 16px; border-color: #ff4d4f;">
         <template #header><span style="color: #ff4d4f;">危险操作</span></template>
@@ -136,6 +143,7 @@
 import { computed, ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
+import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { getInstallationTask, updateInstallationTask, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'

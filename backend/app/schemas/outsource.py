@@ -50,6 +50,8 @@ class OutsourceTaskCreate(BaseModel):
     related_doc_type: str | None = None
     related_project_name: str | None = None
     order_id: str | None = None
+    source_task_type: str | None = None
+    source_task_id: str | None = None
     task_type: str = Field(...)
     description: str | None = None
     quantity: int = Field(1, gt=0)
@@ -62,6 +64,8 @@ class OutsourceTaskUpdate(BaseModel):
     vendor_id: str | None = None
     related_doc_id: str | None = None
     related_doc_type: str | None = None
+    source_task_type: str | None = None
+    source_task_id: str | None = None
     task_type: str | None = None
     description: str | None = None
     quantity: int | None = Field(None, gt=0)
@@ -81,6 +85,8 @@ class OutsourceTaskResponse(BaseModel):
     related_doc_type: str | None = None
     related_project_name: str | None = None
     order_id: str | None = None
+    source_task_type: str | None = None
+    source_task_id: str | None = None
     task_type: str
     description: str | None = None
     quantity: int = 1

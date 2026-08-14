@@ -115,13 +115,16 @@ async def list_tasks(
     status: str | None = None,
     vendor_id: str | None = None,
     order_id: str | None = None,
+    source_task_type: str | None = None,
+    source_task_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
     service = OutsourceService(db)
     vid = UUID(vendor_id) if vendor_id else None
     oid = UUID(order_id) if order_id else None
-    tasks, total = await service.list_tasks(page, page_size, status, vid, oid)
+    stid = UUID(source_task_id) if source_task_id else None
+    tasks, total = await service.list_tasks(page, page_size, status, vid, oid, source_task_type, stid)
     return success_paginated(tasks, total, page, page_size)
 
 

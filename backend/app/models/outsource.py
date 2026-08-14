@@ -38,6 +38,8 @@ class OutsourceTask(Base, TimestampMixin, SoftDeleteMixin):
     )
     related_doc_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     order_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    source_task_type: Mapped[str | None] = mapped_column(String(32), nullable=True)  # design, production, installation 来源内部任务类型
+    source_task_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)  # 来源内部任务 id
     task_type: Mapped[str] = mapped_column(String(32), nullable=False)  # production, installation, design, transport
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, default=1)
