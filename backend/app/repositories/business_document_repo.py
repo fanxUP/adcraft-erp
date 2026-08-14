@@ -139,6 +139,10 @@ class BusinessDocumentRepository:
         for k, v in data.items():
             if v is not None:
                 setattr(doc, k, v)
+        # 用户清空的可空日期字段需显式置 NULL（上方跳过 None 是为保留未提交字段的旧值）
+        for k in ("quote_date", "valid_until"):
+            if k in data and data[k] is None:
+                setattr(doc, k, None)
 
         if items_data is not None:
             # Replace all items

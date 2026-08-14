@@ -400,3 +400,56 @@ async def test_quote_create_preserves_explicit_quote_date():
     })
 
     assert captured["quote_date"] == date(2026, 8, 10)
+
+# ─────────────────────────────────────────
+# repo.update 清空可空日期字段（修复清空无效）
+# ─────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_quote_update_clears_quote_date_and_valid_until():
+    """update 收到 None 时显式清空可空日期字段。"""
+    from datetime import date
+    from app.models.business_document import BusinessDocument
+    from app.repositories.business_document_repo import BusinessDocumentRepository
+
+    db = AsyncMock()
+    db.flush = AsyncMock()
+    doc = BusinessDocument(
+        id=uuid4(),
+        doc_type="quote",
+        doc_no="Q20260630-0001",
+        project_name="测试报价",
+        status="draft",
+        quote_date=date(2026, 8, 1),
+        valid_until=date(2026, 9, 1),
+    )
+    repo = BusinessDocumentRepository(db)
+    await repo.update(doc, {"quote_date": None, "valid_until": None})
+    assert doc.quote_date is None
+    assert doc.valid_until is None
+
+
+@pytest.mark.asyncio
+async def test_quote_update_preserves_unset_date_fields():
+    """未提交日期字段时不应被清空（None 跳过逻辑保留旧值）。"""
+    from datetime import date
+    from app.models.business_document import BusinessDocument
+    from app.repositories.business_document_repo import BusinessDocumentRepository
+
+    db = AsyncMock()
+    db.flush = AsyncMock()
+    doc = BusinessDocument(
+        id=uuid4(),
+        doc_type="quote",
+        doc_no="Q20260630-0002",
+        project_name="测试报价2",
+        status="draft",
+        quote_date=date(2026, 8, 1),
+        valid_until=date(2026, 9, 1),
+    )
+    repo = BusinessDocumentRepository(db)
+    await repo.update(doc, {"project_name": "改名"})
+    assert doc.quote_date == date(2026, 8, 1)
+    assert doc.valid_until == date(2026, 9, 1)
+    assert doc.project_name == "改名"
+

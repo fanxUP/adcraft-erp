@@ -202,3 +202,81 @@ async def test_copy_doc_items_skips_area_when_not_area_priced():
     assert added["面积计价"].area == 0.24
     assert added["数量计价"].area is None
     assert isinstance(added["面积计价"], AcceptanceItem)
+
+# ─────────────────────────────────────────
+# _doc_info 日期：报价来源回退报价日期（修复打印显示-）
+# ─────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_doc_info_quote_source_falls_back_to_quote_date():
+    """报价来源验收单 order_date 回退到报价日期。"""
+    from datetime import date, datetime
+
+    form = MagicMock()
+    doc = MagicMock()
+    doc.doc_type = "quote"
+    doc.doc_no = "Q20260630-0001"
+    doc.customer = None
+    doc.customer_name = "测试客户"
+    doc.project_name = "测试项目"
+    doc.department = None
+    doc.quote_date = date(2026, 8, 10)
+    doc.created_at = datetime(2026, 8, 1, 10, 0, 0)
+    form.document = doc
+    form.contact_person = "张三"
+    form.contact_phone = "13800000000"
+
+    info = AcceptanceService._doc_info(form)
+
+    assert info["source_type"] == "报价"
+    assert info["order_date"] == "2026-08-10"
+
+
+@pytest.mark.asyncio
+async def test_doc_info_quote_source_falls_back_to_created_at():
+    """报价来源且无 quote_date 时回退到单据创建时间。"""
+    from datetime import datetime
+
+    form = MagicMock()
+    doc = MagicMock()
+    doc.doc_type = "quote"
+    doc.doc_no = "Q20260630-0001"
+    doc.customer = None
+    doc.customer_name = "测试客户"
+    doc.project_name = "测试项目"
+    doc.department = None
+    doc.quote_date = None
+    doc.created_at = datetime(2026, 8, 2, 10, 0, 0)
+    form.document = doc
+    form.contact_person = "张三"
+    form.contact_phone = "13800000000"
+
+    info = AcceptanceService._doc_info(form)
+
+    assert info["order_date"].startswith("2026-08-02")
+
+
+@pytest.mark.asyncio
+async def test_doc_info_order_source_uses_created_at():
+    """订单来源验收单 order_date 仍取单据创建时间（回归保护）。"""
+    from datetime import datetime
+
+    form = MagicMock()
+    doc = MagicMock()
+    doc.doc_type = "order"
+    doc.doc_no = "O20260630-0001"
+    doc.customer = None
+    doc.customer_name = "测试客户"
+    doc.project_name = "测试项目"
+    doc.department = None
+    doc.quote_date = None
+    doc.created_at = datetime(2026, 7, 1, 9, 30, 0)
+    form.document = doc
+    form.contact_person = "张三"
+    form.contact_phone = "13800000000"
+
+    info = AcceptanceService._doc_info(form)
+
+    assert info["source_type"] == "订单"
+    assert info["order_date"].startswith("2026-07-01")
+

@@ -631,8 +631,8 @@ export interface QuoteDetailResponse {
   tax_rate: number
   tax_amount: number
   total_amount: number
-  valid_until?: string
-  quote_date?: string
+  valid_until?: string | null
+  quote_date?: string | null
   remark?: string
   department?: string
   contact_person?: string

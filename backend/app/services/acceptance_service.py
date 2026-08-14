@@ -300,7 +300,11 @@ class AcceptanceService:
             "contact_phone": form.contact_phone,
             "project_name": d.project_name,
             "department": d.department,
-            "order_date": d.created_at.isoformat() if (is_order and d.created_at) else None,
+            "order_date": (
+                d.created_at.isoformat()
+                if (is_order and d.created_at)
+                else (d.quote_date.isoformat() if d.quote_date else (d.created_at.isoformat() if d.created_at else None))
+            ),
         }
 
     async def _sync_contact_to_customer(self, form: AcceptanceForm) -> None:
