@@ -70,6 +70,7 @@ class AcceptanceRepository:
         )
         result = await self.db.execute(
             select(BusinessDocument)
+            .options(selectinload(BusinessDocument.customer))
             .where(
                 BusinessDocument.deleted_at.is_(None),
                 BusinessDocument.doc_type == "quote",

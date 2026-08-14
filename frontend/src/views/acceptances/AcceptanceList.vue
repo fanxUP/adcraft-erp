@@ -87,8 +87,9 @@
 
     <!-- 新建验收单 → 选择订单/报价单（合并列表） -->
     <el-dialog v-model="showCreateDialog" title="选择订单或报价单创建验收单" width="900px" :close-on-click-modal="false">
-      <el-table :data="availableItems" v-loading="loadingItems" border stripe highlight-current-row @row-dblclick="handleCreateFromItem">
-        <el-table-column label="来源" width="100">
+      <el-input v-model="dialogKeyword" placeholder="搜索单号/客户/项目" clearable style="margin-bottom:12px" />
+      <el-table :data="filteredAvailableItems" v-loading="loadingItems" border stripe highlight-current-row @row-dblclick="handleCreateFromItem">
+        <el-table-column label="来源" width="80">
           <template #default="{ row }">
             <el-tag v-if="row.order_no" type="primary" size="small">订单</el-tag>
             <el-tag v-else type="success" size="small">报价</el-tag>
@@ -97,13 +98,18 @@
         <el-table-column label="编号" min-width="180">
           <template #default="{ row }">{{ row.order_no || row.quote_no }}</template>
         </el-table-column>
-        <el-table-column prop="customer_name" label="客户" min-width="160" />
+        <el-table-column prop="customer_name" label="客户" min-width="150" />
         <el-table-column prop="department" label="科室/部门" min-width="100" />
-        <el-table-column prop="project_name" label="项目名称" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="total_amount" label="金额" width="120" align="right">
+        <el-table-column prop="project_name" label="项目名称" min-width="180" show-overflow-tooltip />
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="docStatusColor(row.status)" size="small">{{ docStatusLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="total_amount" label="金额" width="110" align="right">
           <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="80" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" size="small" @click="handleCreateFromItem(row)">选择</el-button>
           </template>
@@ -111,6 +117,9 @@
       </el-table>
       <div v-if="!availableItems.length && !loadingItems" style="text-align:center;color:#999;padding:32px 0;">
         暂无可用的订单或报价
+      </div>
+      <div v-else-if="!filteredAvailableItems.length" style="text-align:center;color:#999;padding:16px 0;">
+        无匹配的订单或报价
       </div>
       <template #footer>
         <el-button type="primary" @click="handleCreateBlank">创建空白验收单</el-button>
@@ -121,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAcceptances, deleteAcceptance, getAvailableOrders, getAvailableQuotes, createAcceptance } from '@/api/acceptances'
@@ -141,14 +150,27 @@ const filters = reactive({ keyword: '', status: '' })
 const showCreateDialog = ref(false)
 const availableItems = ref<AvailableItem[]>([])
 const loadingItems = ref(false)
+const dialogKeyword = ref('')
+const filteredAvailableItems = computed(() => {
+  const kw = dialogKeyword.value.trim().toLowerCase()
+  if (!kw) return availableItems.value
+  return availableItems.value.filter(item =>
+    [item.order_no, item.quote_no, item.customer_name, item.project_name]
+      .some(v => (v || '').toLowerCase().includes(kw))
+  )
+})
 
 async function loadAvailableItems() {
   loadingItems.value = true
   try {
-    const [orders, quotes] = await Promise.all([getAvailableOrders(), getAvailableQuotes()])
-    availableItems.value = [...orders, ...quotes]
-  } catch { /* ignore */ }
-  finally { loadingItems.value = false }
+    // 两个接口任一失败不阻断整体（allSettled）；合并后按创建时间全局排序
+    const [orders, quotes] = await Promise.allSettled([getAvailableOrders(), getAvailableQuotes()])
+    const items: AvailableItem[] = []
+    if (orders.status === 'fulfilled') items.push(...orders.value)
+    if (quotes.status === 'fulfilled') items.push(...quotes.value)
+    items.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+    availableItems.value = items
+  } finally { loadingItems.value = false }
 }
 
 async function handleCreateFromItem(row: AvailableItem) {
@@ -186,6 +208,23 @@ const statusColor = (s: string): '' | 'success' | 'warning' | 'info' | 'danger' 
     draft: 'info', pending: 'warning', accepted: 'success', rejected: 'danger'
   }
   return map[s] || ''
+}
+
+// 弹窗内订单/报价单据状态展示
+function docStatusLabel(s: string) {
+  const map: Record<string, string> = {
+    draft: '草稿', pending_confirm: '待确认', confirmed: '已确认', designing: '设计中',
+    in_production: '生产中', in_installation: '安装中',
+    completed: '已完成', cancelled: '已取消', converted: '已转订单',
+  }
+  return map[s] || s
+}
+function docStatusColor(s: string) {
+  const map: Record<string, string> = {
+    draft: 'info', pending_confirm: 'warning', confirmed: 'success', designing: '',
+    in_production: '', in_installation: '', completed: 'success', cancelled: 'danger', converted: '',
+  }
+  return (map[s] || 'info') as '' | 'success' | 'warning' | 'info' | 'danger'
 }
 
 async function fetchData() {
