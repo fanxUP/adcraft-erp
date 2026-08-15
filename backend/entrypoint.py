@@ -179,7 +179,7 @@ def main():
     import uvicorn
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
+        host="127.0.0.1",  # 只监听回环，公网/局域网必须经 nginx 代理（2026-08-16 安全加固）
         port=port,
         log_level="info",
         access_log=True,

@@ -62,8 +62,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version="0.1.0",
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    # 生产环境经公网隧道可达，关闭 /api/docs 与 /api/openapi.json 避免路由面暴露（2026-08-16 安全加固）
+    docs_url="/api/docs" if settings.APP_ENV.lower() != "production" else None,
+    openapi_url="/api/openapi.json" if settings.APP_ENV.lower() != "production" else None,
     lifespan=lifespan,
 )
 
@@ -100,6 +101,34 @@ async def security_headers(request: Request, call_next):
 
 # Performance monitoring: logs response times and adds X-Response-Time-MS header
 app.add_middleware(PerformanceMiddleware)
+
+
+@app.get("/api/v1/health")
+async def health_check():
+    """健康检查：nginx /health 与外部监控使用，探测数据库连通性。
+
+    DB 可达返回 200，不可达返回 503，便于负载均衡/监控探针区分。
+    """
+    from sqlalchemy import text
+
+    from app.core.database import engine
+
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        db_status = "ok"
+    except Exception:
+        db_status = "error"
+    status_code = 200 if db_status == "ok" else 503
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "code": 0 if db_status == "ok" else 50000,
+            "message": "ok" if db_status == "ok" else "database unreachable",
+            "data": {"status": "ok" if db_status == "ok" else "error", "database": db_status},
+        },
+    )
+
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")

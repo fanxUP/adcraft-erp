@@ -20,3 +20,6 @@ node_modules/
 *.pyc
 backend/uploads/*
 .env.production
+public_url.txt
+.tunnel_last_restart
+tunnel-watchdog.log
