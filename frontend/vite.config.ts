@@ -42,13 +42,7 @@ export default defineConfig(({ mode }) => ({
   ],
   build: {
     rollupOptions: {
-      output: {
-        manualChunks(id: string) {
-          if (/[\\/]node_modules[\\/](echarts|zrender|vue-echarts)[\\/]/.test(id)) {
-            return 'charts'
-          }
-        },
-      },
+      output: {},
     },
   },
   resolve: {
