@@ -161,7 +161,7 @@ systemctl restart "$SERVICE_NAME"
 for _ in $(seq 1 20); do
   if systemctl is-active --quiet "$SERVICE_NAME" \
     && curl --fail --silent --show-error \
-      http://127.0.0.1:8000/api/openapi.json >/dev/null; then
+      http://127.0.0.1:8000/api/v1/health >/dev/null; then
     break
   fi
   sleep 1
@@ -172,7 +172,7 @@ if ! systemctl is-active --quiet "$SERVICE_NAME"; then
   exit 1
 fi
 curl --fail --silent --show-error \
-  http://127.0.0.1:8000/api/openapi.json >/dev/null
+  http://127.0.0.1:8000/api/v1/health >/dev/null
 
 printf '%s\n' "$TARGET_COMMIT" > .deployed-commit
 
