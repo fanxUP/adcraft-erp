@@ -50,8 +50,8 @@ async def _load_quote_snapshot(db, user, business_id: str) -> dict:
 
     quote = await get_quote_detail(db, user, business_id)
     if quote.get("error"):
-        # 报价转订单后同一条单据的 doc_type 变为 order，按报价查不到。
-        # 单据确实存在且已是订单时，改按订单加载快照，而不是报"不存在"。
+        # 防御性兜底：历史数据可能仍存在"同 ID 翻转"导致的订单（报价已变订单），
+        # 按 ID 定位并改按订单加载快照，而不是报"不存在"。
         from sqlalchemy import select
 
         from app.models.business_document import BusinessDocument

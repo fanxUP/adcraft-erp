@@ -1072,7 +1072,6 @@ class BusinessDocumentService:
         """
         from app.models.business_document import BusinessDocument, BusinessDocumentItem
         from app.services.number_generator import generate_order_no
-        from app.services.order_customer_service import ensure_document_customer
 
         result = await self.db.execute(
             select(BusinessDocument).where(BusinessDocument.id == quote_id)

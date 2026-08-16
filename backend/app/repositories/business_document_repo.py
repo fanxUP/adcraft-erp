@@ -275,12 +275,3 @@ class BusinessDocumentRepository:
         self.db.add(ver)
         await self.db.flush()
         return ver
-
-    # ── 转换 ──
-
-    async def convert_doc_type(self, doc: BusinessDocument, new_type: str, new_doc_no: str) -> BusinessDocument:
-        """切换 doc_type + 重新编号。ID 不变，所有 FK 自动跟随。"""
-        doc.doc_type = new_type
-        doc.doc_no = new_doc_no
-        await self.db.flush()
-        return doc
