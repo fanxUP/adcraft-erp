@@ -222,3 +222,49 @@ body {
 .el-message.is-dark {
   background: rgba(30, 30, 48, 0.92) !important;
 }
+
+
+/* ===== Element Plus 主色统一（品牌蓝 #2563eb，消除默认蓝冲突）===== */
+:root {
+  --el-color-primary: #2563eb;
+  --el-color-primary-light-3: #3b82f6;
+  --el-color-primary-light-5: #60a5fa;
+  --el-color-primary-light-7: #93c5fd;
+  --el-color-primary-light-8: #bfdbfe;
+  --el-color-primary-light-9: #dbeafe;
+  --el-color-primary-dark-2: #1d4ed8;
+  --el-border-radius-base: 6px;
+  --el-border-radius-small: 4px;
+}
+
+/* ===== 浅色主题组件精修 ===== */
+[data-theme^="light"] {
+  .el-card {
+    border-radius: 10px;
+    border: 1px solid var(--ad-border);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  }
+  .el-table {
+    --el-table-header-bg-color: #f8fafc;
+    --el-table-header-text-color: #475569;
+    --el-table-row-hover-bg-color: #f8fafc;
+    --el-table-border-color: #eef2f7;
+  }
+  .el-button--primary {
+    --el-button-hover-bg-color: #1d4ed8;
+    --el-button-active-bg-color: #1e40af;
+  }
+}
+
+/* ===== 浅色主题 Toast 可读性覆盖 ===== */
+[data-theme^="light"] {
+  .el-message {
+    color: #1f2937 !important;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1) !important;
+    backdrop-filter: none;
+  }
+  .el-message--success { background: #f0fdf4 !important; color: #16a34a !important; }
+  .el-message--error   { background: #fef2f2 !important; color: #dc2626 !important; }
+  .el-message--warning { background: #fffbeb !important; color: #d97706 !important; }
+  .el-message--info    { background: #eff6ff !important; color: #2563eb !important; }
+}
