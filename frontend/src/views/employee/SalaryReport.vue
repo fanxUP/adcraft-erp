@@ -1,12 +1,12 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <h2>🧾 工资报表</h2>
+      <h2><el-icon><Document /></el-icon> 工资报表</h2>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <el-date-picker v-model="curMonth" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:160px" @change="fetchData" />
         <el-button @click="fetchData">刷新</el-button>
-        <el-button type="primary" @click="handlePrint">🖨️ 打印</el-button>
-        <el-button type="success" plain @click="handlePrintAll">🧾 打印工资条</el-button>
+        <el-button type="primary" @click="handlePrint"><el-icon><Printer /></el-icon> 打印</el-button>
+        <el-button type="success" plain @click="handlePrintAll"><el-icon><Printer /></el-icon> 打印工资条</el-button>
       </div>
     </div>
 
@@ -56,13 +56,14 @@
       <iframe ref="payslipFrame" class="payslip-frame" :srcdoc="payslipDoc"></iframe>
       <template #footer>
         <el-button @click="payslipDialog = false">关闭</el-button>
-        <el-button type="primary" @click="printPayslipFromDialog">🖨️ 打印工资条</el-button>
+        <el-button type="primary" @click="printPayslipFromDialog"><el-icon><Printer /></el-icon> 打印工资条</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
+import { Document, Printer } from '@element-plus/icons-vue'
 import { ref, computed, onMounted } from "vue"
 import { getSalaryGrid, type SalaryItem, type SalaryGridRow } from "@/api/salaries"
 import { buildCols, buildHeaderRows, gridTotals, fmtVal, deptLabel, isStrong, type Col, type HCell } from "@/composables/useSalaryGrid"
@@ -176,7 +177,7 @@ async function handlePrintAll() {
 .rep-sheet thead th { background: #f2f2f2; font-weight: 700; color: #303133; text-align: center; line-height: 1.35; }
 .col-fixed { min-width: 72px; }
 .col-item { min-width: 76px; }
-.manual-badge { display: inline-block; margin-left: 3px; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 14px; color: #e6a23c; background: #fdf6ec; border: 1px solid #f3d19e; }
+.manual-badge { display: inline-block; margin-left: 3px; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 14px; color: var(--el-color-warning); background: #fdf6ec; border: 1px solid #f3d19e; }
 .c-center { text-align: center; }
 .c-name { font-weight: 600; color: #303133; }
 .c-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; font-weight: 700; color: #000; }

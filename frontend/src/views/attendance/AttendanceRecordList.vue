@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <h2>📋 考勤表</h2>
+      <h2><el-icon><Calendar /></el-icon> 考勤表</h2>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <el-date-picker v-model="curMonth" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:160px" @change="fetchData" />
         <el-select v-model="fEmp" placeholder="全部员工" clearable filterable style="width:200px" @change="fetchData">
@@ -9,17 +9,17 @@
         </el-select>
         <el-button @click="fetchData">刷新</el-button>
         <el-button type="danger" @click="openCreate">录入打卡</el-button>
-        <el-button @click="handlePrint">🖨️ 打印预览</el-button>
+        <el-button @click="handlePrint"><el-icon><Printer /></el-icon> 打印预览</el-button>
       </div>
     </div>
 
     <!-- 汇总卡片 -->
     <el-row :gutter="12" style="margin-bottom:16px">
-      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#67c23a">{{totalStats.present}}</div><div style="font-size:13px;color:#909399;margin-top:4px">总出勤</div></div></el-card></el-col>
-      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#f56c6c">{{totalStats.absent}}</div><div style="font-size:13px;color:#909399;margin-top:4px">总未出勤</div></div></el-card></el-col>
-      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#e6a23c">{{totalStats.late}}</div><div style="font-size:13px;color:#909399;margin-top:4px">总迟到</div></div></el-card></el-col>
-      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#909399">{{totalStats.unauth}}</div><div style="font-size:13px;color:#909399;margin-top:4px">总矿工</div></div></el-card></el-col>
-      <el-col :span="4"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#ffa940">{{totalStats.overtimeHours ? totalStats.overtimeHours.toFixed(1) : 0}}</div><div style="font-size:13px;color:#909399;margin-top:4px">总加班(小时)</div></div></el-card></el-col>
+      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-success)">{{totalStats.present}}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">总出勤</div></div></el-card></el-col>
+      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-danger)">{{totalStats.absent}}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">总未出勤</div></div></el-card></el-col>
+      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-warning)">{{totalStats.late}}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">总迟到</div></div></el-card></el-col>
+      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-text-color-secondary)">{{totalStats.unauth}}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">总矿工</div></div></el-card></el-col>
+      <el-col :span="4"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-warning)">{{totalStats.overtimeHours ? totalStats.overtimeHours.toFixed(1) : 0}}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">总加班(小时)</div></div></el-card></el-col>
     </el-row>
 
     <!-- 图例 -->
@@ -30,7 +30,7 @@
       <span><span class="legend-dot" style="background:#ffe69c;border:1px solid #e8c95c"></span>迟到/早退</span>
       <span><span class="legend-dot" style="background:#f5c2c7;border:1px solid #e29aa0"></span>旷工/缺卡</span>
       <span><span class="legend-dot" style="background:#fff;border:1px solid #c0c4cc"></span>未出勤</span>
-      <span><span class="legend-dot" style="background:#ffa940;border:1px solid #e09024"></span>加班</span>
+      <span><span class="legend-dot" style="background:var(--el-color-warning);border:1px solid #e09024"></span>加班</span>
       <span><span class="legend-dot" style="background:#dee2e6;border:1px solid #b8bcc4"></span>休息日</span>
     </div>
 
@@ -142,6 +142,7 @@
 </template>
 
 <script setup lang="ts">
+import { Calendar, Printer } from '@element-plus/icons-vue'
 import { ref, computed, onMounted } from "vue"
 import { getAttendanceRecords, createAttendanceRecord, updateAttendanceRecord, getAttendanceEmployees, type AttendanceRecordItem, type EmployeeOption } from "@/api/attendance"
 import { ElMessage } from "element-plus"
@@ -345,13 +346,13 @@ function handlePrint() {
     + '.day-warning { background: #ffe69c !important; }'
     + '.day-danger { background: #f5c2c7 !important; }'
     + '.day-weekend { background: #dee2e6 !important; }'
-    + '.cell-stat.present { color: #67c23a; font-weight: 700; }'
-    + '.cell-stat.overtime { color: #ffa940; font-weight: 700; }'
-    + '.day-overtime { color: #ffa940; font-weight: 600; }'
+    + '.cell-stat.present { color: var(--el-color-success); font-weight: 700; }'
+    + '.cell-stat.overtime { color: var(--el-color-warning); font-weight: 700; }'
+    + '.day-overtime { color: var(--el-color-warning); font-weight: 600; }'
     + 'thead { display: table-header-group; } tbody { display: table-row-group; }'
     + 'tr { page-break-inside: avoid; }'
     + '.day-times { font-size: 11px; color: #666; }'
-    + '.day-in { color: #67c23a; } .day-out { color: #409eff; }'
+    + '.day-in { color: var(--el-color-success); } .day-out { color: var(--el-color-primary); }'
     + '.day-abnormal { font-size: 11px; font-weight: 600; }'
     + '.day-sep { color: #ccc; margin: 0 2px; }'
     + '</style>'
@@ -389,28 +390,28 @@ onMounted(async () => {
 .att-sheet th, .att-sheet td { border: 1px solid #e4e7ed; padding: 4px 6px; }
 .att-sheet thead th { background: #f5f7fa; position: sticky; top: 0; z-index: 2; font-weight: 600; color: #303133; }
 .att-sheet thead th.weekend { background: #fafafa; color: #c0c4cc; }
-.att-sheet thead th.today { background: #ecf5ff; color: #409eff; }
+.att-sheet thead th.today { background: #ecf5ff; color: var(--el-color-primary); }
 .att-col-sm { min-width: 36px; width: 36px; }
 .att-col-name { min-width: 70px; }
 .att-col-dept { min-width: 60px; }
 .att-col-stat { min-width: 42px; width: 42px; text-align: center; }
 .att-col-group { text-align: center; }
 .att-col-day { min-width: 72px; width: 72px; text-align: center; font-size: 12px; padding: 4px 2px !important; }
-.att-col-day .att-day-week { display: block; font-size: 11px; font-weight: 400; color: #909399; line-height: 1.4; }
+.att-col-day .att-day-week { display: block; font-size: 11px; font-weight: 400; color: var(--el-text-color-secondary); line-height: 1.4; }
 .cell-center { text-align: center; }
 .cell-name { font-weight: 600; color: #303133; }
 .cell-dept { color: #606266; }
 .cell-stat { text-align: center; font-weight: 600; font-size: 15px; }
-.cell-stat.present { color: #67c23a; }
-.cell-stat.late { color: #909399; }
-.cell-stat.late.highlight { color: #e6a23c; }
-.cell-stat.absent { color: #909399; }
-.cell-stat.absent.highlight { color: #f56c6c; }
-.cell-stat.unauth { color: #909399; }
-.cell-stat.unauth.highlight { color: #f56c6c; }
-.cell-stat.overtime { color: #ffa940; font-family: 'SF Mono', 'Courier New', monospace; }
+.cell-stat.present { color: var(--el-color-success); }
+.cell-stat.late { color: var(--el-text-color-secondary); }
+.cell-stat.late.highlight { color: var(--el-color-warning); }
+.cell-stat.absent { color: var(--el-text-color-secondary); }
+.cell-stat.absent.highlight { color: var(--el-color-danger); }
+.cell-stat.unauth { color: var(--el-text-color-secondary); }
+.cell-stat.unauth.highlight { color: var(--el-color-danger); }
+.cell-stat.overtime { color: var(--el-color-warning); font-family: 'SF Mono', 'Courier New', monospace; }
 .att-col-stat.overtime-col { line-height: 1.3; }
-.att-col-stat.overtime-col .overtime-unit { font-size: 13px; font-weight: 400; color: #909399; display: block; }
+.att-col-stat.overtime-col .overtime-unit { font-size: 13px; font-weight: 400; color: var(--el-text-color-secondary); display: block; }
 
 .cell-day { cursor: pointer; padding: 3px 4px !important; transition: background 0.15s; }
 .cell-day:hover { background: #ecf5ff !important; }
@@ -423,17 +424,17 @@ onMounted(async () => {
 .day-none { background: #fff; }
 .day-cell-inner { text-align: center; line-height: 1.5; }
 .day-times { font-size: 13px; color: #606266; font-family: "SF Mono", "Courier New", monospace; }
-.day-in { color: #67c23a; }
+.day-in { color: var(--el-color-success); }
 .day-sep { color: #dcdfe6; margin: 0 2px; }
-.day-out { color: #409eff; }
+.day-out { color: var(--el-color-primary); }
 .day-abnormal { font-size: 12px; font-weight: 600; margin-top: 1px; }
-.day-warning .day-abnormal { color: #e6a23c; }
-.day-danger .day-abnormal { color: #f56c6c; }
+.day-warning .day-abnormal { color: var(--el-color-warning); }
+.day-danger .day-abnormal { color: var(--el-color-danger); }
 .day-empty { text-align: center; color: #dcdfe6; font-size: 14px; }
-.day-overtime { color: #ffa940; font-weight: 600; font-family: "SF Mono", "Courier New", monospace; font-size: 13px; }
+.day-overtime { color: var(--el-color-warning); font-weight: 600; font-family: "SF Mono", "Courier New", monospace; font-size: 13px; }
 .day-overtime-unit { font-size: 11px; margin-left: 1px; }
 .att-footer td { background: #f5f7fa; font-weight: 600; color: #303133; }
-.att-footer .footer-day { text-align: center; color: #67c23a; font-size: 13px; }
+.att-footer .footer-day { text-align: center; color: var(--el-color-success); font-size: 13px; }
 .legend-dot { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; margin-right: 4px; }
 /* overtime now inside summary group */
 

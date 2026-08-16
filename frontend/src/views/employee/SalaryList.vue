@@ -1,21 +1,21 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <h2>💰 工资表</h2>
+      <h2><el-icon><Money /></el-icon> 工资表</h2>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <el-date-picker v-model="curMonth" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:160px" @change="fetchGrid" />
         <el-button @click="fetchGrid">刷新</el-button>
-        <el-button type="primary" :loading="computing" @click="computeAll">⚡ 计算</el-button>
-        <el-button type="warning" @click="openItems">🔧 指标设置</el-button>
-        <el-button type="success" plain @click="openParams">⚙ 参数</el-button>
+        <el-button type="primary" :loading="computing" @click="computeAll"><el-icon><Cpu /></el-icon> 计算</el-button>
+        <el-button type="warning" @click="openItems"><el-icon><Setting /></el-icon> 指标设置</el-button>
+        <el-button type="success" plain @click="openParams"><el-icon><Tools /></el-icon> 参数</el-button>
       </div>
     </div>
 
     <!-- 汇总 -->
     <el-row :gutter="16" style="margin-bottom:16px">
-      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#409eff">{{ rows.length }}</div><div style="font-size:13px;color:#909399;margin-top:4px">员工数</div></div></el-card></el-col>
-      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#e6a23c">{{ fmtVal(totals.gross) }}</div><div style="font-size:13px;color:#909399;margin-top:4px">应发合计</div></div></el-card></el-col>
-      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#f56c6c">{{ fmtVal(totals.net) }}</div><div style="font-size:13px;color:#909399;margin-top:4px">实发合计</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-primary)">{{ rows.length }}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">员工数</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-warning)">{{ fmtVal(totals.gross) }}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">应发合计</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-danger)">{{ fmtVal(totals.net) }}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">实发合计</div></div></el-card></el-col>
     </el-row>
 
     <!-- 工资网格 -->
@@ -27,7 +27,7 @@
                 :colspan="h.colspan" :rowspan="h.rowspan"
                 :class="h.key === 'no' || h.key === 'dept' || h.key === 'name' ? 'col-fixed' : 'col-item'"
                 :style="hdrStyle(h, ri)"
-                :title="h.formula ? (h.is_manual ? '手工填写（⚡计算不覆盖）' : h.formula) : ''">
+                :title="h.formula ? (h.is_manual ? '手工填写（计算不覆盖）' : h.formula) : ''">
               {{ h.label }}<span v-if="h.is_manual" class="manual-badge" title="手工填写">手</span>
             </th>
           </tr>
@@ -68,14 +68,14 @@
     </div>
 
     <!-- 指标设置 Dialog -->
-    <el-dialog v-model="showItems" title="🔧 工资指标设置（每列一个公式）" width="820px" top="4vh" :close-on-click-modal="false">
+    <el-dialog v-model="showItems" title="工资指标设置（每列一个公式）" width="820px" top="4vh" :close-on-click-modal="false">
       <div class="items-help">
         <div style="font-weight:700;margin-bottom:6px">可用变量</div>
         <div class="help-grid">
           <span v-for="v in varHints" :key="v.name" class="help-item"><code>{{ v.name }}</code> = {{ v.label }}</span>
         </div>
         <template v-if="paramHints.length">
-          <div style="font-weight:700;margin:10px 0 6px">本月参数（在「⚙ 参数」中填值，未填按 0）</div>
+          <div style="font-weight:700;margin:10px 0 6px">本月参数（在「参数」中填值，未填按 0）</div>
           <div class="help-grid">
             <span v-for="p in paramHints" :key="p.name" class="help-item"><code>{{ p.name }}</code> = {{ p.label }}</span>
           </div>
@@ -84,10 +84,10 @@
         <div class="help-examples">
           <div v-for="(ex, i) in examples" :key="i" class="help-ex"><code>{{ ex.split('→')[0] }}</code> → {{ ex.split('→')[1] }}</div>
         </div>
-        <div style="color:#909399;font-size:12px;margin-top:6px">
+        <div style="color:var(--el-text-color-secondary);font-size:12px;margin-top:6px">
           语法为 Python 风格；支持 + - * / % 、比较、and/or/not、<code>A if 条件 else B</code>、max/min/round/abs。
           「组1/组2」决定列在表头第几层分组里（组1 = 应发金额/应扣金额/代缴部分，组2 = 基本部分/绩效部分/未出勤；留空为独立列）。
-          勾选「手」的指标为手工填写列：无需公式，⚡计算不会覆盖它的值。改完点「保存」，再回到页面点「⚡ 计算」重新生成数值。
+          勾选「手」的指标为手工填写列：无需公式，计算不会覆盖它的值。改完点「保存」，再回到页面点「 计算」重新生成数值。
         </div>
       </div>
 
@@ -114,8 +114,8 @@
           </el-select>
           <el-input v-model="it.formula" :disabled="it.is_manual" :placeholder="it.is_manual ? '手工填写，无需公式' : '公式'" style="flex:1" />
           <el-input-number v-model="it.sort_order" :controls="false" size="small" style="width:58px" title="排序" />
-          <span style="font-size:12px;color:#909399">手</span>
-          <el-switch v-model="it.is_manual" size="small" title="手工填写（⚡计算不覆盖）" />
+          <span style="font-size:12px;color:var(--el-text-color-secondary)">手</span>
+          <el-switch v-model="it.is_manual" size="small" title="手工填写（计算不覆盖）" />
           <el-switch v-model="it.is_active" size="small" title="启用" />
           <el-button text type="danger" size="small" :disabled="it.is_builtin" :title="it.is_builtin ? '内置指标不可删除' : '删除'" @click="removeItem(it)">删</el-button>
         </div>
@@ -132,7 +132,7 @@
           <el-option v-for="g in group2Options" :key="g" :label="g" :value="g" />
         </el-select>
         <el-input v-model="newItem.formula" :disabled="newItem.is_manual" :placeholder="newItem.is_manual ? '手工填写，无需公式' : '公式，如：200'" style="flex:1" />
-        <span style="font-size:12px;color:#909399">手</span>
+        <span style="font-size:12px;color:var(--el-text-color-secondary)">手</span>
         <el-switch v-model="newItem.is_manual" size="small" title="手工填写" />
         <el-button type="primary" plain @click="addNewItem">＋ 添加</el-button>
       </div>
@@ -144,8 +144,8 @@
     </el-dialog>
 
     <!-- 工资参数 Dialog：每月填一个值，公式可引用 -->
-    <el-dialog v-model="showParams" title="⚙ 工资参数设置（每月填一个值，公式可引用）" width="640px" top="6vh" :close-on-click-modal="false">
-      <div style="color:#909399;font-size:12px;margin-bottom:10px">
+    <el-dialog v-model="showParams" title="工资参数设置（每月填一个值，公式可引用）" width="640px" top="6vh" :close-on-click-modal="false">
+      <div style="color:var(--el-text-color-secondary);font-size:12px;margin-bottom:10px">
         参数是每月填一个数的变量，指标公式里可以直接引用它的 key（如提成系数 <code>commission_rate</code>）。当月所有员工的公式都使用这个月的参数值；未填的参数按 0 处理。
       </div>
       <div class="items-list">
@@ -174,6 +174,7 @@
 </template>
 
 <script setup lang="ts">
+import { Money, Cpu, Setting, Tools } from '@element-plus/icons-vue'
 import { ref, computed, onMounted } from "vue"
 import {
   getSalaryItems, getSalaryGrid, computeSalaryGrid, saveSalaryGrid,
@@ -389,7 +390,7 @@ async function applyTemplate() {
   if (!curTemplateId.value) return
   const t = templates.value.find(x => x.id === curTemplateId.value)
   const ok = await ElMessageBox.confirm(
-    `应用模板「${t?.name}」会用模板里的指标替换当前配置；当前有但模板里没有的列会停用隐藏（历史数值保留）。应用后请重新⚡计算。`,
+    `应用模板「${t?.name}」会用模板里的指标替换当前配置；当前有但模板里没有的列会停用隐藏（历史数值保留）。应用后请重新计算。`,
     "应用模板", { type: "warning" }).catch(() => false)
   if (!ok) return
   try {
@@ -491,7 +492,7 @@ onMounted(() => fetchGrid())
 .sal-sheet thead th { font-weight: 700; text-align: center; color: #000; border-color: #333; }
 .col-fixed { min-width: 72px; }
 .col-item { min-width: 100px; text-align: center; }
-.manual-badge { display: inline-block; margin-left: 3px; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 14px; color: #e6a23c; background: #fdf6ec; border: 1px solid #f3d19e; }
+.manual-badge { display: inline-block; margin-left: 3px; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 14px; color: var(--el-color-warning); background: #fdf6ec; border: 1px solid #f3d19e; }
 .cell-center { text-align: center; }
 .cell-name { font-weight: 600; color: #303133; min-width: 96px; }
 .cell-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; font-weight: 700; color: #000; min-width: 100px; cursor: cell; }
@@ -502,12 +503,12 @@ onMounted(() => fetchGrid())
 .items-help { background: #f5f7fa; border: 1px solid #e4e7ed; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
 .help-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 12px; }
 .help-item { font-size: 12px; color: #606266; }
-.help-item code, .help-ex code { background: #fff; border: 1px solid #dcdfe6; border-radius: 3px; padding: 0 4px; font-size: 12px; color: #409eff; }
+.help-item code, .help-ex code { background: #fff; border: 1px solid #dcdfe6; border-radius: 3px; padding: 0 4px; font-size: 12px; color: var(--el-color-primary); }
 .help-examples { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
 .help-ex { font-size: 12px; color: #606266; }
 .tpl-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .items-list { max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .item-row { display: flex; align-items: center; gap: 8px; }
-.item-key { min-width: 80px; font-size: 12px; color: #909399; }
+.item-key { min-width: 80px; font-size: 12px; color: var(--el-text-color-secondary); }
 .new-item { margin-top: 4px; }
 </style>
