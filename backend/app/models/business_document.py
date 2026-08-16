@@ -24,7 +24,7 @@ class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
     # ── 鉴别器 ──
     doc_type: Mapped[str] = mapped_column(String(16), nullable=False, comment="order | quote")
 
-    # ── 统一编号（O-xxx = 报价, S-xxx = 订单） ──
+    # ── 统一编号（Q-xxx = 报价, O-xxx = 订单） ──
     doc_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
 
     # ── 共享字段 ──
