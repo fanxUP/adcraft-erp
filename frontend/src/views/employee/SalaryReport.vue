@@ -169,21 +169,21 @@ async function handlePrintAll() {
 </script>
 
 <style scoped>
-.report-sheet { background: #fff; border: 1px solid #e4e7ed; border-radius: 4px; padding: 12px; }
-.report-title { text-align: center; font-size: 22px; font-weight: 700; font-family: Songti, "SimSun", serif; padding: 6px 0 12px; border-bottom: 2px solid #333; margin-bottom: 10px; color: #303133; }
+.report-sheet { background: var(--ad-card); border: 1px solid var(--ad-border); border-radius: 4px; padding: 12px; }
+.report-title { text-align: center; font-size: 22px; font-weight: 700; font-family: Songti, "SimSun", serif; padding: 6px 0 12px; border-bottom: 2px solid var(--ad-text); margin-bottom: 10px; color: var(--ad-text); }
 .report-scroll { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 220px); padding-bottom: 14px; }
 .rep-sheet { width: 100%; border-collapse: collapse; white-space: nowrap; }
-.rep-sheet th, .rep-sheet td { border: 1px solid #b0b0b0; padding: 3px 5px; font-size: 12px; }
-.rep-sheet thead th { background: #f2f2f2; font-weight: 700; color: #303133; text-align: center; line-height: 1.35; }
+.rep-sheet th, .rep-sheet td { border: 1px solid var(--ad-border); padding: 3px 5px; font-size: 12px; }
+.rep-sheet thead th { background: var(--ad-darker); font-weight: 700; color: var(--ad-text); text-align: center; line-height: 1.35; }
 .col-fixed { min-width: 72px; }
 .col-item { min-width: 76px; }
 .manual-badge { display: inline-block; margin-left: 3px; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 14px; color: var(--el-color-warning); background: #fdf6ec; border: 1px solid #f3d19e; }
 .c-center { text-align: center; }
-.c-name { font-weight: 600; color: #303133; }
-.c-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; font-weight: 700; color: #000; }
-.c-num.c-strong { color: #0b7a1b; }
-.rep-total td { background: #d6e4f0; font-weight: 700; color: #303133; }
+.c-name { font-weight: 600; color: var(--ad-text); }
+.c-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; font-weight: 700; color: var(--ad-text); }
+.c-num.c-strong { color: var(--el-color-success); }
+.rep-total td { background: var(--ad-accent-glow); font-weight: 700; color: var(--ad-text); }
 .c-total-label { text-align: right; padding-right: 10px; }
 .ops-cell { text-align: center; }
-.payslip-frame { width: 100%; height: 560px; border: 1px solid #dcdfe6; border-radius: 4px; background: #fff; }
+.payslip-frame { width: 100%; height: 560px; border: 1px solid var(--ad-border); border-radius: 4px; background: var(--ad-card); }
 </style>

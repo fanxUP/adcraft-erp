@@ -29,7 +29,7 @@
       <span><span class="legend-dot" style="background:#a3d0ff;border:1px solid #82b3f0"></span>半天</span>
       <span><span class="legend-dot" style="background:#ffe69c;border:1px solid #e8c95c"></span>迟到/早退</span>
       <span><span class="legend-dot" style="background:#f5c2c7;border:1px solid #e29aa0"></span>旷工/缺卡</span>
-      <span><span class="legend-dot" style="background:#fff;border:1px solid #c0c4cc"></span>未出勤</span>
+      <span><span class="legend-dot" style="background:var(--ad-card);border:1px solid var(--ad-border)"></span>未出勤</span>
       <span><span class="legend-dot" style="background:var(--el-color-warning);border:1px solid #e09024"></span>加班</span>
       <span><span class="legend-dot" style="background:#dee2e6;border:1px solid #b8bcc4"></span>休息日</span>
     </div>
@@ -351,7 +351,7 @@ function handlePrint() {
     + '.day-overtime { color: var(--el-color-warning); font-weight: 600; }'
     + 'thead { display: table-header-group; } tbody { display: table-row-group; }'
     + 'tr { page-break-inside: avoid; }'
-    + '.day-times { font-size: 11px; color: #666; }'
+    + '.day-times { font-size: 11px; color: var(--ad-text-secondary); }'
     + '.day-in { color: var(--el-color-success); } .day-out { color: var(--el-color-primary); }'
     + '.day-abnormal { font-size: 11px; font-weight: 600; }'
     + '.day-sep { color: #ccc; margin: 0 2px; }'
@@ -385,12 +385,12 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.sheet-wrapper { overflow-x: auto; overflow-y: auto; border: 1px solid #e4e7ed; border-radius: 4px; background: #fff; padding-bottom: 14px; }
+.sheet-wrapper { overflow-x: auto; overflow-y: auto; border: 1px solid var(--ad-border); border-radius: 4px; background: var(--ad-card); padding-bottom: 14px; }
 .att-sheet { width: 100%; border-collapse: collapse; font-size: 14px; white-space: nowrap; }
-.att-sheet th, .att-sheet td { border: 1px solid #e4e7ed; padding: 4px 6px; }
-.att-sheet thead th { background: #f5f7fa; position: sticky; top: 0; z-index: 2; font-weight: 600; color: #303133; }
-.att-sheet thead th.weekend { background: #fafafa; color: #c0c4cc; }
-.att-sheet thead th.today { background: #ecf5ff; color: var(--el-color-primary); }
+.att-sheet th, .att-sheet td { border: 1px solid var(--ad-border); padding: 4px 6px; }
+.att-sheet thead th { background: var(--ad-darker); position: sticky; top: 0; z-index: 2; font-weight: 600; color: var(--ad-text); }
+.att-sheet thead th.weekend { background: var(--ad-darker); color: var(--ad-text-secondary); }
+.att-sheet thead th.today { background: var(--ad-accent-glow); color: var(--el-color-primary); }
 .att-col-sm { min-width: 36px; width: 36px; }
 .att-col-name { min-width: 70px; }
 .att-col-dept { min-width: 60px; }
@@ -399,8 +399,8 @@ onMounted(async () => {
 .att-col-day { min-width: 72px; width: 72px; text-align: center; font-size: 12px; padding: 4px 2px !important; }
 .att-col-day .att-day-week { display: block; font-size: 11px; font-weight: 400; color: var(--el-text-color-secondary); line-height: 1.4; }
 .cell-center { text-align: center; }
-.cell-name { font-weight: 600; color: #303133; }
-.cell-dept { color: #606266; }
+.cell-name { font-weight: 600; color: var(--ad-text); }
+.cell-dept { color: var(--ad-text-secondary); }
 .cell-stat { text-align: center; font-weight: 600; font-size: 15px; }
 .cell-stat.present { color: var(--el-color-success); }
 .cell-stat.late { color: var(--el-text-color-secondary); }
@@ -421,9 +421,9 @@ onMounted(async () => {
 .day-warning { background: #ffe69c; }
 .day-danger { background: #f5c2c7; }
 .day-weekend { background: #dee2e6; }
-.day-none { background: #fff; }
+.day-none { background: var(--ad-card); }
 .day-cell-inner { text-align: center; line-height: 1.5; }
-.day-times { font-size: 13px; color: #606266; font-family: "SF Mono", "Courier New", monospace; }
+.day-times { font-size: 13px; color: var(--ad-text-secondary); font-family: "SF Mono", "Courier New", monospace; }
 .day-in { color: var(--el-color-success); }
 .day-sep { color: #dcdfe6; margin: 0 2px; }
 .day-out { color: var(--el-color-primary); }
@@ -433,7 +433,7 @@ onMounted(async () => {
 .day-empty { text-align: center; color: #dcdfe6; font-size: 14px; }
 .day-overtime { color: var(--el-color-warning); font-weight: 600; font-family: "SF Mono", "Courier New", monospace; font-size: 13px; }
 .day-overtime-unit { font-size: 11px; margin-left: 1px; }
-.att-footer td { background: #f5f7fa; font-weight: 600; color: #303133; }
+.att-footer td { background: var(--ad-darker); font-weight: 600; color: var(--ad-text); }
 .att-footer .footer-day { text-align: center; color: var(--el-color-success); font-size: 13px; }
 .legend-dot { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; margin-right: 4px; }
 /* overtime now inside summary group */
