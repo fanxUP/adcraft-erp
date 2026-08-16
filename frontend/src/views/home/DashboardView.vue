@@ -12,7 +12,7 @@
       <el-col :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">今日收款金额</div>
-          <div class="stat-value" style="color: #22c55e">¥ {{ data.today_payment_amount?.toFixed(2) }}</div>
+          <div class="stat-value is-success">¥ {{ data.today_payment_amount?.toFixed(2) }}</div>
         </el-card>
       </el-col>
       <el-col :span="6">
@@ -24,7 +24,7 @@
       <el-col :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">本月收款金额</div>
-          <div class="stat-value" style="color: #22c55e">¥ {{ data.month_payment_amount?.toFixed(2) }}</div>
+          <div class="stat-value is-success">¥ {{ data.month_payment_amount?.toFixed(2) }}</div>
         </el-card>
       </el-col>
     </el-row>
@@ -33,7 +33,7 @@
       <el-col :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">本月未收金额</div>
-          <div class="stat-value" style="color: #e63946">¥ {{ data.month_unpaid_amount?.toFixed(2) }}</div>
+          <div class="stat-value is-danger">¥ {{ data.month_unpaid_amount?.toFixed(2) }}</div>
         </el-card>
       </el-col>
       <el-col :span="6">
@@ -252,10 +252,12 @@ onBeforeUnmount(() => {
 .card-no { font-size: 12px; color: #888; }
 .card-name { font-weight: bold; font-size: 16px; color: var(--ad-text); margin: 4px 0; }
 .card-meta { display: flex; justify-content: center; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: #888; }
-.stat-card { background: var(--ad-card); border: 1px solid var(--ad-border); text-align: center; padding: 12px 0; }
-.stat-label { font-size: 13px; color: var(--ad-text-secondary); margin-bottom: 8px; }
-.stat-value { font-size: 24px; font-weight: bold; font-size: 16px; color: var(--ad-text); }
-.task-card .stat-value { font-size: 32px; margin-top: 4px; }
+.stat-card { background: var(--ad-card); border: 1px solid var(--ad-border); text-align: center; padding: 18px 12px; border-radius: 10px; }
+.stat-label { font-size: 13px; color: var(--ad-text-secondary); margin-bottom: 10px; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--ad-text); }
+.stat-value.is-success { color: #16a34a; }
+.stat-value.is-danger { color: #dc2626; }
+.task-card .stat-value { font-size: 30px; margin-top: 4px; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .debt-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--ad-border); }
 .quote-row { cursor: pointer; }

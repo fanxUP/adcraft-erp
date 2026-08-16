@@ -1,6 +1,9 @@
 <template>
   <div class="login-container">
     <div class="login-card">
+      <div class="login-brand">
+        <span class="logo-mark">A</span>
+      </div>
       <h1 class="login-title">AdCraft ERP</h1>
       <p class="login-subtitle">广告制作安装工程管理系统</p>
       <el-form ref="formRef" :model="form" :rules="rules" @keyup.enter="handleLogin">
@@ -11,7 +14,7 @@
           <el-input v-model="form.password" type="password" placeholder="密码" prefix-icon="Lock" size="large" show-password />
         </el-form-item>
         <el-form-item>
-          <el-button type="danger" size="large" :loading="loading" @click="handleLogin" style="width: 100%">
+          <el-button type="primary" size="large" :loading="loading" @click="handleLogin" class="login-btn">
             登录
           </el-button>
         </el-form-item>
@@ -52,27 +55,53 @@ async function handleLogin() {
 .login-container {
   width: 100%;
   max-width: 400px;
+  padding: 20px;
 }
 
 .login-card {
   background: var(--ad-card);
-  padding: 40px;
-  border-radius: 8px;
+  padding: 40px 40px 32px;
+  border-radius: 12px;
   border: 1px solid var(--ad-border);
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+}
+
+.login-brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+  font-size: 28px;
+  font-weight: 800;
 }
 
 .login-title {
   text-align: center;
-  color: var(--ad-red, #e63946);
-  font-size: 28px;
-  margin: 0 0 8px;
+  color: var(--ad-text);
+  font-size: 24px;
+  margin: 0 0 6px;
+  font-weight: 700;
 }
 
 .login-subtitle {
   text-align: center;
   color: var(--ad-text-secondary);
-  margin: 0 0 32px;
+  margin: 0 0 28px;
   font-size: 14px;
+}
+
+.login-btn {
+  width: 100%;
 }
 
 /* Mobile responsive */
@@ -91,7 +120,7 @@ async function handleLogin() {
     padding: 32px 24px;
   }
   .login-title {
-    font-size: 24px;
+    font-size: 22px;
   }
   .login-subtitle {
     font-size: 13px;
