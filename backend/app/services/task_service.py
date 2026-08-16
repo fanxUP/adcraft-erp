@@ -325,7 +325,7 @@ class DesignTaskService:
                 old_status = order.status
                 order.status = "pending_confirm"
                 order_svc = BusinessDocumentService(self.db, doc_type="order")
-                await order_svc.repo.create_status_log(doc_id, old_status, "confirmed",
+                await order_svc.repo.create_status_log(doc_id, old_status, "pending_confirm",
                     "设计任务已被管理员删除，系统自动回退到待确认", None)
 
         # 清空外协任务对已删任务的悬空来源引用

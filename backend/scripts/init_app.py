@@ -43,6 +43,8 @@ ADMIN_USER = {
 
 async def init_app():
     """Run all seed operations idempotently."""
+    if not os.environ.get("ADMIN_INIT_PASSWORD"):
+        print("  !!! 未设置 ADMIN_INIT_PASSWORD，初始管理员密码为默认值 admin123，请部署后立即修改")
     async with async_session_maker() as session:
         # 1. Seed roles
         existing_roles: dict[str, Role] = {}

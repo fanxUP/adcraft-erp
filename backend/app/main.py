@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
 from app.core.performance import PerformanceMiddleware, SLOW_QUERY_MS, SLOW_API_MS, install_slow_query_listener
+from app.middleware.rate_limit import RateLimitMiddleware
 from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup, admin, notifications, conversations, acceptances, contracts, framework_contracts, vehicles, vehicle_agent, vehicle_dashboard, aerial, ai_execute, ai_models, ai_providers, ai_prompts, ai_requests, ai_routes, employees, attendance, departments, salaries, salary_rules, employment_histories, leaves
 from app.api import cdr_quotes
 # AI module routes
@@ -34,6 +35,17 @@ async def lifespan(app: FastAPI):
     install_slow_query_listener(engine)
     logger.info("Performance monitoring active (slow-query %dms, slow-api %dms)",
                  SLOW_QUERY_MS, SLOW_API_MS)
+    # Rate limiting: Redis-backed，覆盖 auth/ai/upload 等关键路径防爆破
+    from app.core.redis import get_redis
+    from app.core.rate_limiter import RateLimiter, default_rules
+    try:
+        _rl_redis = await get_redis()
+        _limiter = RateLimiter(_rl_redis)
+        _limiter.add_rules(*default_rules())
+        app.state.rate_limiter = _limiter
+        logger.info("Rate limiter active (Redis-backed)")
+    except Exception:
+        logger.warning("Rate limiter unavailable (Redis down?), continuing without it", exc_info=True)
     if (
         settings.AI_BUSINESS_RULE_SYNC_ON_STARTUP
         and settings.APP_ENV.lower() != "test"
@@ -86,6 +98,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 全局限流中间件（Redis 未就绪时自动放行，规则见 core/rate_limiter.default_rules）
+app.add_middleware(RateLimitMiddleware)
 
 
 @app.middleware("http")
