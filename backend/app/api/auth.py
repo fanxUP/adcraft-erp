@@ -22,6 +22,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
         "token": token,
         "username": user.username,
         "real_name": user.real_name,
+        "must_change_password": user.must_change_password,
     })
 
 

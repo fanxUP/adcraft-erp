@@ -20,7 +20,7 @@ from sqlalchemy import select, text
 from app.core.config import settings
 from app.core.database import engine, async_session_maker
 from app.models.user import Role, Permission, User, user_roles
-from app.utils.security import hash_password
+from app.utils.security import hash_password, verify_password
 
 
 ROLES = [
@@ -84,6 +84,13 @@ async def init_app():
             print(f"  + Admin user created: {ADMIN_USER['username']}")
         else:
             print(f"  ✓ Admin user exists: {ADMIN_USER['username']}")
+
+        # 强制改密：管理员仍使用默认密码时标记 must_change_password
+        if admin_user and verify_password(ADMIN_USER["password"], admin_user.password_hash):
+            if not admin_user.must_change_password:
+                admin_user.must_change_password = True
+                await session.flush()
+                print("  ⚠️  管理员仍使用默认密码，已标记 must_change_password（登录后需先改密）")
 
         # 3. Assign admin role to admin user
         admin_role = roles_by_name.get("admin")

@@ -33,6 +33,7 @@ class AuthService:
             "phone": user.phone,
             "email": user.email,
             "is_active": user.is_active,
+            "must_change_password": user.must_change_password,
             "roles": [r.name for r in user.roles],
         }
 
@@ -44,5 +45,6 @@ class AuthService:
         if not verify_password(old_password, user.password_hash):
             return False
         user.password_hash = hash_password(new_password)
+        user.must_change_password = False
         await self.db.flush()
         return True

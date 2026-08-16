@@ -52,5 +52,6 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     email: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     token_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False, comment="JWT token 版本号")
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="首次登录需强制改密")
 
     roles: Mapped[list["Role"]] = relationship(secondary=user_roles, back_populates="users", lazy="selectin")

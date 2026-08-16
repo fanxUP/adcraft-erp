@@ -10,6 +10,7 @@ class LoginResponse(BaseModel):
     token: str
     username: str
     real_name: str | None = None
+    must_change_password: bool = False
 
 
 class ChangePasswordRequest(BaseModel):
@@ -24,6 +25,7 @@ class UserProfile(BaseModel):
     phone: str | None
     email: str | None
     is_active: bool
+    must_change_password: bool = False
     roles: list[str] = []
 
     model_config = {"from_attributes": True}
