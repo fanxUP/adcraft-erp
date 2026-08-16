@@ -268,3 +268,56 @@ body {
   .el-message--warning { background: #fffbeb !important; color: #d97706 !important; }
   .el-message--info    { background: #eff6ff !important; color: #2563eb !important; }
 }
+
+/* ===== Element Plus 全局精修（列表页统一骨架）===== */
+:root {
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-header-text-color: #475569;
+  --el-table-row-hover-bg-color: #f8fafc;
+  --el-table-border-color: #eef2f7;
+}
+
+.el-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.el-table th.el-table__cell {
+  font-weight: 600;
+  background: #f8fafc !important;
+  color: #475569;
+}
+
+.el-table td.el-table__cell {
+  padding: 10px 0;
+}
+
+.el-dialog {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.el-dialog__header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #eef2f7;
+  margin-right: 0;
+}
+
+.el-dialog__title {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.el-dialog__body {
+  padding: 20px;
+}
+
+.el-form-item__label {
+  color: var(--ad-text-secondary);
+  font-weight: 500;
+}
+
+.el-pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
+}
