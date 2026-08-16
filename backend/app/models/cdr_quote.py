@@ -8,6 +8,7 @@
 """
 
 import uuid
+from decimal import Decimal
 from datetime import date, datetime
 
 from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric, String, Text, ForeignKey, func
@@ -68,9 +69,9 @@ class CustomerPriceAgreement(Base, TimestampMixin):
     material_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("materials.id"), nullable=True)
     process_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("processes.id"), nullable=True)
     pricing_method: Mapped[str] = mapped_column(String(32), nullable=False, comment="area | length | quantity | fixed")
-    price_value: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False)
-    minimum_charge: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    discount_rate: Mapped[float] = mapped_column(Numeric(8, 4), default=1.0, comment="折扣率：0.8=打8折")
+    price_value: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    minimum_charge: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    discount_rate: Mapped[Decimal] = mapped_column(Numeric(8, 4), default=1.0, comment="折扣率：0.8=打8折")
     effective_from: Mapped[str] = mapped_column(String(32), nullable=False, comment="YYYY-MM-DD")
     effective_to: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="YYYY-MM-DD")
     approved_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
@@ -99,14 +100,14 @@ class QuoteVersion(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(32), default="draft", comment="draft | review | approved | rejected")
 
     # 金额汇总
-    subtotal_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    discount_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    tax_rate: Mapped[float] = mapped_column(Numeric(8, 4), default=0)
-    tax_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    total_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    estimated_cost: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    estimated_profit: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    estimated_margin: Mapped[float] = mapped_column(Numeric(8, 4), default=0)
+    subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    discount_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    tax_rate: Mapped[Decimal] = mapped_column(Numeric(8, 4), default=0)
+    tax_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    estimated_cost: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    estimated_profit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    estimated_margin: Mapped[Decimal] = mapped_column(Numeric(8, 4), default=0)
 
     # 快照
     snapshot_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True, comment="报价快照（客户/产品/价格快照）")
@@ -132,35 +133,35 @@ class QuoteLine(Base, TimestampMixin):
     material_process: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # 几何/数量
-    width: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    width: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     width_unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    height: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    height: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     height_unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    width_mm: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
-    height_mm: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
-    length_m: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
-    quantity: Mapped[float] = mapped_column(Numeric(14, 3), default=1)
+    width_mm: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    height_mm: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    length_m: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=1)
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
     use_area: Mapped[bool] = mapped_column(Boolean, default=False)
-    pieces: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, comment="件数")
+    pieces: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, comment="件数")
 
     # 计费
-    billable_quantity: Mapped[float] = mapped_column(Numeric(14, 4), default=0, comment="计费数量（含损耗）")
-    unit_price: Mapped[float] = mapped_column(Numeric(14, 4), default=0)
-    amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    estimated_cost: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    process_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    installation_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    design_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    transport_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    other_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    billable_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=0, comment="计费数量（含损耗）")
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=0)
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    estimated_cost: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    process_fee: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    installation_fee: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    design_fee: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    transport_fee: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    other_fee: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     group_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # 手工调整
-    manual_adjustment: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    manual_adjustment: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     manual_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(String(32), default="auto", comment="auto | manual")
 
@@ -181,11 +182,11 @@ class QuoteLineProcess(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     line_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("quote_lines.id"), nullable=False)
     process_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("processes.id"), nullable=False)
-    billing_quantity: Mapped[float] = mapped_column(Numeric(14, 4), default=0)
+    billing_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=0)
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    unit_price: Mapped[float] = mapped_column(Numeric(14, 4), default=0)
-    amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    cost_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=0)
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    cost_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     pricing_trace_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     line: Mapped["QuoteLine"] = relationship(back_populates="processes")
@@ -302,22 +303,22 @@ class QuoteGeometry(Base, TimestampMixin):
     )
 
     # ── 孔洞与净面积 ──
-    net_area_mm2: Mapped[float | None] = mapped_column(Numeric(16, 3), nullable=True, comment="净面积（包围盒-孔洞）mm²")
-    hole_area_mm2: Mapped[float | None] = mapped_column(Numeric(16, 3), nullable=True, comment="孔洞总面积 mm²")
+    net_area_mm2: Mapped[Decimal | None] = mapped_column(Numeric(16, 3), nullable=True, comment="净面积（包围盒-孔洞）mm²")
+    hole_area_mm2: Mapped[Decimal | None] = mapped_column(Numeric(16, 3), nullable=True, comment="孔洞总面积 mm²")
 
     # ── 曲线信息 ──
-    curve_length_mm: Mapped[float | None] = mapped_column(Numeric(16, 3), nullable=True, comment="曲线/轮廓长度 mm")
+    curve_length_mm: Mapped[Decimal | None] = mapped_column(Numeric(16, 3), nullable=True, comment="曲线/轮廓长度 mm")
     is_open_curve: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否开放曲线")
 
     # ── 重叠检测 ──
     overlap_count: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="检测到的重叠对象数")
-    overlap_area_mm2: Mapped[float | None] = mapped_column(Numeric(16, 3), nullable=True, comment="重叠区域估计面积 mm²")
+    overlap_area_mm2: Mapped[Decimal | None] = mapped_column(Numeric(16, 3), nullable=True, comment="重叠区域估计面积 mm²")
 
     # ── 板材套料 ──
     sheet_count: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="预估需用板材张数")
-    sheet_utilization_pct: Mapped[float | None] = mapped_column(Numeric(6, 3), nullable=True, comment="板材利用率（%）")
-    sheet_width_mm: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, comment="使用的板材宽 mm（从 material 快照）")
-    sheet_height_mm: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, comment="使用的板材高 mm")
+    sheet_utilization_pct: Mapped[Decimal | None] = mapped_column(Numeric(6, 3), nullable=True, comment="板材利用率（%）")
+    sheet_width_mm: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, comment="使用的板材宽 mm（从 material 快照）")
+    sheet_height_mm: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, comment="使用的板材高 mm")
 
     # ── 标记 ──
     is_estimated: Mapped[bool] = mapped_column(Boolean, default=True, comment="是否为估算值（非精确测量）")

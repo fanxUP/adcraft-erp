@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from sqlalchemy import Boolean, DateTime, Numeric, String, Text, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -21,7 +22,7 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     tax_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
     invoice_info: Mapped[str | None] = mapped_column(Text, nullable=True)
     default_payment_days: Mapped[int] = mapped_column(Integer, default=0)
-    default_discount: Mapped[float] = mapped_column(Numeric(6, 4), default=1.0)
+    default_discount: Mapped[Decimal] = mapped_column(Numeric(6, 4), default=1.0)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 

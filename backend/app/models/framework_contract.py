@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from sqlalchemy import DateTime, Numeric, String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
@@ -16,7 +17,7 @@ class FrameworkContractProject(Base, TimestampMixin, SoftDeleteMixin):
     customer_name: Mapped[str] = mapped_column(String(255), nullable=False)
     department: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="部门/科室")
     project_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    project_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    project_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     attachment_path: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="附件存储路径")
     attachment_name: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="附件文件名")

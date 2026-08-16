@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 from datetime import date, datetime, time
 from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric, String, Text, Time, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -15,7 +16,7 @@ class AttendanceRule(Base, TimestampMixin):
     work_days: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     late_threshold: Mapped[int] = mapped_column(Integer, default=0)
     early_leave_threshold: Mapped[int] = mapped_column(Integer, default=0)
-    overtime_rate: Mapped[float | None] = mapped_column(Numeric(3, 1), default=1.5)
+    overtime_rate: Mapped[Decimal | None] = mapped_column(Numeric(3, 1), default=1.5)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 class AttendanceRecord(Base, TimestampMixin):
@@ -29,4 +30,4 @@ class AttendanceRecord(Base, TimestampMixin):
     check_out_status: Mapped[str] = mapped_column(String(16), default="normal")
     source: Mapped[str] = mapped_column(String(16), default="manual")
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
-    overtime_hours: Mapped[float | None] = mapped_column(Numeric(5, 1), nullable=True, default=0)
+    overtime_hours: Mapped[Decimal | None] = mapped_column(Numeric(5, 1), nullable=True, default=0)

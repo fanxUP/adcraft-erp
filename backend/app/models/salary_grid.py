@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -61,7 +62,7 @@ class SalaryGridValue(Base, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("employees.id"), nullable=False
     )
     item_key: Mapped[str] = mapped_column(String(64), nullable=False)
-    value: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    value: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     source: Mapped[str] = mapped_column(String(16), nullable=False, default="computed")
 
 
@@ -91,4 +92,4 @@ class SalaryParamValue(Base, TimestampMixin):
     param_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("salary_params.id"), nullable=False
     )
-    value: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
+    value: Mapped[Decimal | None] = mapped_column(Numeric(14, 4), nullable=True)

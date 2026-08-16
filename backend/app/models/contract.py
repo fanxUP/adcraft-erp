@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from datetime import datetime
 from sqlalchemy import DateTime, Numeric, String, Text, ForeignKey
@@ -23,9 +24,9 @@ class Contract(Base, TimestampMixin, SoftDeleteMixin):
     project_name: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # 金额
-    total_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    paid_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    unpaid_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    paid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    unpaid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
 
     # 日期
     sign_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

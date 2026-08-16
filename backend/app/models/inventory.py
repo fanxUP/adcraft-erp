@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 from datetime import datetime
 
 from sqlalchemy import DateTime, Integer, Numeric, String, Text, ForeignKey
@@ -18,9 +19,9 @@ class InventoryItem(Base, TimestampMixin):
     material_unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)  # raw_material, semi_finished, consumable
     spec: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    quantity: Mapped[float] = mapped_column(Numeric(14, 3), default=0)
-    min_quantity: Mapped[float] = mapped_column(Numeric(14, 3), default=0)
-    unit_cost: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0)
+    min_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0)
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
@@ -31,9 +32,9 @@ class StockRecord(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("inventory_items.id"), nullable=False)
     record_type: Mapped[str] = mapped_column(String(16), nullable=False)  # in, out
-    quantity: Mapped[float] = mapped_column(Numeric(14, 3), nullable=False)
-    unit_cost: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    total_cost: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    total_cost: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=True)
     operator: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -1,5 +1,6 @@
 """AI Usage Daily model - aggregates daily token usage and cost."""
 from datetime import date
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -31,7 +32,7 @@ class AIUsageDaily(Base, TimestampMixin):
     output_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
 
     # Cost
-    estimated_cost: Mapped[float] = mapped_column(Numeric(18, 8), nullable=False, default=0)
+    estimated_cost: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False, default=0)
     currency: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
 
     # Performance

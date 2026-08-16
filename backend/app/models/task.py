@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from sqlalchemy import DateTime, Integer, Numeric, String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
@@ -40,10 +41,10 @@ class ProductionTask(Base, TimestampMixin):
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     material_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("materials.id"), nullable=True)
     process_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("processes.id"), nullable=True)
-    length: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
-    width: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
-    height: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
-    quantity: Mapped[float] = mapped_column(Numeric(14, 3), default=1)
+    length: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    width: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    height: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=1)
     qc_result: Mapped[str | None] = mapped_column(String(64), nullable=True)
     rework_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     completed_at: Mapped[str | None] = mapped_column(DateTime, nullable=True)

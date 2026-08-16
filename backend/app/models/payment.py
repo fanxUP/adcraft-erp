@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text, ForeignKey
@@ -15,7 +16,7 @@ class Payment(Base, TimestampMixin):
     payment_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=False)
     customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False)
-    amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -36,9 +37,9 @@ class CustomerStatement(Base, TimestampMixin):
     customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False)
     start_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     end_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    total_order_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    total_paid_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    total_unpaid_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    total_order_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    total_paid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    total_unpaid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     status: Mapped[str] = mapped_column(String(32), default="draft")
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     confirmed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
@@ -52,7 +53,7 @@ class Expense(Base, TimestampMixin, SoftDeleteMixin):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     expense_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     expense_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)

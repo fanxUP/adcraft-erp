@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Numeric, String, Text, ForeignKey
@@ -22,14 +23,14 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
     group_name: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="分项名（1级分组）")
     customer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
     category: Mapped[str] = mapped_column(String(64), nullable=False)
-    amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
-    quantity: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True, comment="数量")
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True, comment="数量")
     specification: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="规格尺寸")
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="单位")
-    unit_price: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True, comment="单价")
+    unit_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True, comment="单价")
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="付款方式：现金支付/微信支付/转账支付/对公支付/其它支付")
     payee_company_name: Mapped[str | None] = mapped_column(String(200), nullable=True, comment="对方收款公司名称")
-    debt_amount: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True, default=0, comment="欠款金额")
+    debt_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True, default=0, comment="欠款金额")
     is_debt: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否为欠款")
     is_settled: Mapped[bool] = mapped_column(Boolean, default=False, comment="欠款是否已结清")
     settled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="欠款结清时间")

@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from datetime import date
 from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric, String, Text, ForeignKey
@@ -37,17 +38,17 @@ class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(64), nullable=False)
-    total_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     department: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="部门/科室")
     contact_person: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="联系人")
     contact_phone: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="联系电话")
 
     # ── 订单专有字段（doc_type='order' 时有效） ──
-    paid_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    unpaid_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    cost_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    gross_profit: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    paid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    unpaid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    cost_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    gross_profit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     delivery_deadline: Mapped[str | None] = mapped_column(DateTime, nullable=True)
     installation_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_quote_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -62,10 +63,10 @@ class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
         default="regular",
         comment="报价模式: regular | cdr",
     )
-    subtotal_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    discount_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    tax_rate: Mapped[float] = mapped_column(Numeric(8, 4), default=0)
-    tax_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    discount_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    tax_rate: Mapped[Decimal] = mapped_column(Numeric(8, 4), default=0)
+    tax_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
     quote_date: Mapped[date | None] = mapped_column(Date, nullable=True, comment="报价日期（手动可选）")
 
@@ -102,25 +103,25 @@ class BusinessDocumentItem(Base, TimestampMixin):
     product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=True)
     material_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("materials.id"), nullable=True)
     process_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("processes.id"), nullable=True)
-    length: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    length: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     length_unit: Mapped[str | None] = mapped_column(String(16), nullable=True, default="m")
-    width: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    width: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     width_unit: Mapped[str | None] = mapped_column(String(16), nullable=True, default="m")
-    height: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    height: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     height_unit: Mapped[str | None] = mapped_column(String(16), nullable=True, default="m")
-    quantity: Mapped[float] = mapped_column(Numeric(14, 3), default=1)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=1)
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
     use_area: Mapped[bool] = mapped_column(default=False)
     quantity_mode: Mapped[str] = mapped_column(String(16), default="piece")
-    pieces: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, default=1, comment="件数")
-    area: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-    unit_price: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    process_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    installation_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    design_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    transport_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    other_fee: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    subtotal_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    pieces: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True, default=1, comment="件数")
+    area: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    process_fee: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    installation_fee: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    design_fee: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    transport_fee: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    other_fee: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)

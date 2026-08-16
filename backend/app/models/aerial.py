@@ -4,6 +4,7 @@
 """
 
 import uuid
+from decimal import Decimal
 from datetime import date, datetime
 from typing import Optional
 
@@ -102,13 +103,13 @@ class AerialDailyLedger(Base, TimestampMixin):
 
     # 计费与收款
     billing_method: Mapped[str] = mapped_column(String(32), default="trip", nullable=False, comment="计费方式: trip/hour/half_day/day/project/free/included_in_order")
-    unit_price: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="单价")
-    quantity: Mapped[float] = mapped_column(Numeric(10, 2), default=1, nullable=False, comment="数量")
-    receivable_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="应收金额")
-    discount_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="优惠金额")
-    final_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="最终应收")
-    received_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="实收金额")
-    unpaid_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="未收金额")
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="单价")
+    quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=1, nullable=False, comment="数量")
+    receivable_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="应收金额")
+    discount_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="优惠金额")
+    final_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="最终应收")
+    received_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="实收金额")
+    unpaid_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="未收金额")
     settlement_type: Mapped[str] = mapped_column(String(32), default="separate", nullable=False, comment="结算方式: separate/included_in_order/monthly/free")
     payment_status: Mapped[str] = mapped_column(String(32), default="unpaid", nullable=False, comment="收款状态: unpaid/partial/paid/credit/free/included_in_order")
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="收款方式")
@@ -117,16 +118,16 @@ class AerialDailyLedger(Base, TimestampMixin):
     invoice_status: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="发票状态")
 
     # 里程
-    start_mileage: Mapped[float | None] = mapped_column(Numeric(10, 1), nullable=True, comment="出车里程")
-    end_mileage: Mapped[float | None] = mapped_column(Numeric(10, 1), nullable=True, comment="收车里程")
-    distance_km: Mapped[float | None] = mapped_column(Numeric(10, 1), nullable=True, comment="实际公里数")
+    start_mileage: Mapped[Decimal | None] = mapped_column(Numeric(10, 1), nullable=True, comment="出车里程")
+    end_mileage: Mapped[Decimal | None] = mapped_column(Numeric(10, 1), nullable=True, comment="收车里程")
+    distance_km: Mapped[Decimal | None] = mapped_column(Numeric(10, 1), nullable=True, comment="实际公里数")
 
     # 成本与利润
-    personnel_wage_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="人员工资")
-    reimbursement_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="已审核报销金额")
-    vehicle_direct_cost: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="车辆直接费用")
-    gross_profit: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="毛利润(已收)")
-    estimated_profit: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="预计毛利润")
+    personnel_wage_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="人员工资")
+    reimbursement_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="已审核报销金额")
+    vehicle_direct_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="车辆直接费用")
+    gross_profit: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="毛利润(已收)")
+    estimated_profit: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="预计毛利润")
 
     # 异常
     abnormal_flag: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否异常")
@@ -161,7 +162,7 @@ class AerialPersonnelExpense(Base, TimestampMixin):
     expense_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, comment="费用日期")
     personnel_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_personnel.id"), nullable=False, comment="人员")
     expense_type: Mapped[str] = mapped_column(String(32), nullable=False, comment="费用类型: fuel/toll/parking/meal/temporary_repair/material/other")
-    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, comment="金额")
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, comment="金额")
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="支付方式")
     paid_by_personnel: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, comment="是否人员垫付")
     receipt_url: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="票据照片")
@@ -191,13 +192,13 @@ class AerialPersonnelWage(Base, TimestampMixin):
     wage_month: Mapped[str | None] = mapped_column(String(7), nullable=True, comment="工资月份 YYYY-MM")
     personnel_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_personnel.id"), nullable=False, comment="人员")
     wage_type: Mapped[str] = mapped_column(String(32), default="daily", nullable=False, comment="工资类型: daily/trip/hourly/commission/base_plus_commission")
-    base_wage: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="基础工资")
-    trip_wage: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="趟次工资")
-    hourly_wage: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="小时工资")
-    commission_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="提成金额")
-    allowance_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="补贴")
-    deduction_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="扣款")
-    final_wage_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="最终工资")
+    base_wage: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="基础工资")
+    trip_wage: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="趟次工资")
+    hourly_wage: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="小时工资")
+    commission_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="提成金额")
+    allowance_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="补贴")
+    deduction_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="扣款")
+    final_wage_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False, comment="最终工资")
     payment_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, comment="支付状态: pending/calculated/pending_payment/paid")
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="发放时间")
     paid_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="发放人")
@@ -222,7 +223,7 @@ class AerialVehicleCost(Base, TimestampMixin):
     ledger_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_daily_ledgers.id"), nullable=True, comment="关联台账")
     cost_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, comment="费用日期")
     cost_type: Mapped[str] = mapped_column(String(32), nullable=False, comment="费用类型: fuel/maintenance/insurance/inspection/violation/tire/hydraulic_system/boom_repair/platform_repair/safety_equipment/tool_consumables/parking/loan/depreciation/other")
-    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, comment="金额")
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, comment="金额")
     handler_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="经办人")
     payer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="付款人")
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="支付方式")
@@ -305,7 +306,7 @@ class AerialLedgerSettlement(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     ledger_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_daily_ledgers.id"), nullable=False, comment="关联台账")
-    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, comment="本次收款金额")
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, comment="本次收款金额")
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="收款方式")
     payment_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="收款时间")
     payee_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("aerial_personnel.id"), nullable=True, comment="收款人")
@@ -332,7 +333,7 @@ class AerialAgentDraft(Base):
     raw_message: Mapped[str] = mapped_column(Text, nullable=False, comment="原始消息内容")
     # 识别结果
     intent: Mapped[str] = mapped_column(String(64), nullable=False, comment="识别意图: aerial_work_ledger/aerial_personnel_expense/aerial_payment_claim/aerial_vehicle_issue/aerial_query_report/aerial_reimbursement_claim/normal_chat")
-    confidence: Mapped[float] = mapped_column(default=0.0, nullable=False, comment="置信度 0-1")
+    confidence: Mapped[Decimal] = mapped_column(default=0.0, nullable=False, comment="置信度 0-1")
     risk_level: Mapped[str] = mapped_column(String(16), default="low", nullable=False, comment="风险等级: low/medium/high")
     extracted_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="提取的结构化数据JSON")
     suggested_action: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="建议动作")
@@ -371,7 +372,7 @@ class AerialAttendanceRecord(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(16), default="present", nullable=False, comment="状态: present/half_day/overtime/absent/maintenance")
     check_in_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="出车/开工时间")
     check_out_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="收车/完工时间")
-    overtime_hours: Mapped[float | None] = mapped_column(Numeric(5, 1), nullable=True, default=0, comment="加班小时")
+    overtime_hours: Mapped[Decimal | None] = mapped_column(Numeric(5, 1), nullable=True, default=0, comment="加班小时")
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
     source: Mapped[str] = mapped_column(String(16), default="manual_input", nullable=False, comment="来源: manual_input")
 

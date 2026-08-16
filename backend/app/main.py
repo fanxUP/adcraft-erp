@@ -35,17 +35,18 @@ async def lifespan(app: FastAPI):
     install_slow_query_listener(engine)
     logger.info("Performance monitoring active (slow-query %dms, slow-api %dms)",
                  SLOW_QUERY_MS, SLOW_API_MS)
-    # Rate limiting: Redis-backed，覆盖 auth/ai/upload 等关键路径防爆破
-    from app.core.redis import get_redis
-    from app.core.rate_limiter import RateLimiter, default_rules
-    try:
-        _rl_redis = await get_redis()
-        _limiter = RateLimiter(_rl_redis)
-        _limiter.add_rules(*default_rules())
-        app.state.rate_limiter = _limiter
-        logger.info("Rate limiter active (Redis-backed)")
-    except Exception:
-        logger.warning("Rate limiter unavailable (Redis down?), continuing without it", exc_info=True)
+    # Rate limiting: Redis-backed，覆盖 auth/ai/upload 等关键路径防爆破（测试环境跳过，避免干扰用例）
+    if settings.APP_ENV.lower() != "test":
+        from app.core.redis import get_redis
+        from app.core.rate_limiter import RateLimiter, default_rules
+        try:
+            _rl_redis = await get_redis()
+            _limiter = RateLimiter(_rl_redis)
+            _limiter.add_rules(*default_rules())
+            app.state.rate_limiter = _limiter
+            logger.info("Rate limiter active (Redis-backed)")
+        except Exception:
+            logger.warning("Rate limiter unavailable (Redis down?), continuing without it", exc_info=True)
     if (
         settings.AI_BUSINESS_RULE_SYNC_ON_STARTUP
         and settings.APP_ENV.lower() != "test"

@@ -48,7 +48,7 @@ class PaymentService:
 
         amount = Decimal(str(data["amount"]))
         total_amount = Decimal(str(doc.total_amount or 0))
-        existing_paid = await self.repo.get_document_paid_sum(document_id)
+        existing_paid = Decimal(str(await self.repo.get_document_paid_sum(document_id)))
         remaining = max(Decimal("0"), total_amount - existing_paid)
         if amount > remaining:
             raise ValueError(f"收款金额超过订单未收金额 {remaining:.2f} 元")
@@ -103,7 +103,7 @@ class PaymentService:
 
         doc = await self.db.get(BusinessDocument, p.document_id)
         if doc:
-            paid = await self.repo.get_document_paid_sum(p.document_id)
+            paid = Decimal(str(await self.repo.get_document_paid_sum(p.document_id)))
             unpaid = max(Decimal("0"), Decimal(str(doc.total_amount or 0)) - paid)
             doc.paid_amount = paid
             doc.unpaid_amount = unpaid

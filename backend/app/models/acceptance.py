@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 from datetime import datetime
 
 from sqlalchemy import DateTime, Numeric, String, Text, ForeignKey
@@ -25,8 +26,8 @@ class AcceptanceForm(Base, TimestampMixin, SoftDeleteMixin):
     contact_phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     reject_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    discount_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    advance_amount: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    discount_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    advance_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
 
     document: Mapped["BusinessDocument | None"] = relationship(foreign_keys=[document_id], lazy="selectin")
     our_acceptor: Mapped["User"] = relationship(foreign_keys=[our_acceptor_id], lazy="selectin")
@@ -45,11 +46,11 @@ class AcceptanceItem(Base, TimestampMixin):
     item_name: Mapped[str] = mapped_column(String(255), nullable=False)
     material_process: Mapped[str | None] = mapped_column(String(255), nullable=True)
     specification: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    quantity: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    area: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-    unit_price: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
-    subtotal: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    area: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    unit_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    subtotal: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     item_status: Mapped[str] = mapped_column(String(64), nullable=False, default="pending")
     remark: Mapped[str | None] = mapped_column(String(500), nullable=True)
