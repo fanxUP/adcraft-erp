@@ -96,7 +96,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="日期" width="100">
-          <template #default="{ row }">{{ row.created_at?.slice(0, 10) || '-' }}</template>
+          <template #default="{ row }">{{ formatDate(row.created_at) || '-' }}</template>
         </el-table-column>
         <el-table-column label="操作" width="80">
           <template #default="{ row }">
@@ -109,6 +109,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, MagicStick } from '@element-plus/icons-vue'

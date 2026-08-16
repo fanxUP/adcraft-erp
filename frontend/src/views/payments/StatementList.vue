@@ -15,7 +15,7 @@
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
       <el-table-column prop="statement_no" label="对账单号" width="180" />
       <el-table-column label="期间" width="240">
-        <template #default="{ row }">{{ row.start_date?.slice(0, 10) }} ~ {{ row.end_date?.slice(0, 10) }}</template>
+        <template #default="{ row }">{{ formatDate(row.start_date) }} ~ {{ formatDate(row.end_date) }}</template>
       </el-table-column>
       <el-table-column label="订单金额" width="120">
         <template #default="{ row }">¥ {{ row.total_order_amount?.toFixed(2) }}</template>
@@ -65,6 +65,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { getStatements, createStatement } from '@/api/payments'
 import { getCustomers } from '@/api/customers'

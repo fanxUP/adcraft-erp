@@ -193,7 +193,7 @@
               <el-timeline-item
                 v-for="log in order.status_logs"
                 :key="log.id"
-                :timestamp="log.operated_at?.slice(0, 19).replace('T', ' ')"
+                :timestamp="formatDateTimeFull(log.operated_at)"
                 placement="top"
               >
                 <div>
@@ -279,6 +279,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTimeFull } from '@/utils/datetime'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Printer } from '@element-plus/icons-vue'
 import OrderWorkflow from './OrderWorkflow.vue'

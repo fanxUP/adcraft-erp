@@ -50,10 +50,10 @@
         </template>
       </el-table-column>
       <el-table-column label="签约日期" width="120">
-        <template #default="{ row }">{{ row.sign_date?.slice(0, 10) || '-' }}</template>
+        <template #default="{ row }">{{ formatDate(row.sign_date) || '-' }}</template>
       </el-table-column>
       <el-table-column label="创建时间" width="100">
-        <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
+        <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
@@ -100,7 +100,7 @@
           </template>
         </el-table-column>
         <el-table-column label="创建日期" width="110">
-          <template #default="{ row }">{{ row.created_at?.slice(0, 10) || '-' }}</template>
+          <template #default="{ row }">{{ formatDate(row.created_at) || '-' }}</template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
@@ -243,9 +243,9 @@
         </el-descriptions-item>
         <el-descriptions-item label="我方签约人">{{ currentDetail.our_signatory || '-' }}</el-descriptions-item>
         <el-descriptions-item label="客户签约人">{{ currentDetail.customer_signatory || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="签约日期">{{ currentDetail.sign_date?.slice(0, 10) || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="生效日期">{{ currentDetail.start_date?.slice(0, 10) || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="结束日期">{{ currentDetail.end_date?.slice(0, 10) || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="签约日期">{{ formatDate(currentDetail.sign_date) || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="生效日期">{{ formatDate(currentDetail.start_date) || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="结束日期">{{ formatDate(currentDetail.end_date) || '-' }}</el-descriptions-item>
         <el-descriptions-item label="条款内容" :span="2">
           <pre style="white-space: pre-wrap; margin: 0">{{ currentDetail.content || '-' }}</pre>
         </el-descriptions-item>
@@ -296,6 +296,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getContracts, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment, getOrdersWithoutContract, linkOrdersToContract } from '@/api/contracts'

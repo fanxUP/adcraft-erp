@@ -165,6 +165,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTimeFull } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -228,7 +229,7 @@ function statusTagType(s: string) {
 }
 function formatTime(_r: unknown, _c: unknown, val: string) {
   if (!val) return '-'
-  return val.replace('T', ' ').substring(0, 19)
+  return formatDateTimeFull(val)
 }
 
 async function fetchDrafts() {

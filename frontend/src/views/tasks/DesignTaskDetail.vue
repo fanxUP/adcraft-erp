@@ -96,7 +96,7 @@
             <template #default="{ row }">{{ row.file_size ? (row.file_size / 1024).toFixed(1) + 'KB' : '-' }}</template>
           </el-table-column>
           <el-table-column label="时间" width="180">
-            <template #default="{ row }">{{ row.created_at?.slice(0, 19).replace('T', ' ') }}</template>
+            <template #default="{ row }">{{ formatDateTimeFull(row.created_at) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="80">
             <template #default="{ row }">
@@ -111,6 +111,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTimeFull } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDesignTask, updateDesignTask, changeDesignTaskStatus, uploadAttachment } from '@/api/tasks'

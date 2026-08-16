@@ -25,9 +25,9 @@
         <el-descriptions-item label="未收金额">
           <span :class="{ 'text-danger': (contract?.unpaid_amount || 0) > 0 }">¥ {{ (contract?.unpaid_amount || 0).toFixed(2) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="签约日期">{{ contract?.sign_date?.slice(0, 10) || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="生效日期">{{ contract?.start_date?.slice(0, 10) || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="结束日期">{{ contract?.end_date?.slice(0, 10) || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="签约日期">{{ formatDate(contract?.sign_date) || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="生效日期">{{ formatDate(contract?.start_date) || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="结束日期">{{ formatDate(contract?.end_date) || '-' }}</el-descriptions-item>
         <el-descriptions-item label="我方签约人">{{ contract?.our_signatory || '-' }}</el-descriptions-item>
         <el-descriptions-item label="客户签约人">{{ contract?.customer_signatory || '-' }}</el-descriptions-item>
         <el-descriptions-item label="条款内容" :span="2">
@@ -200,6 +200,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'

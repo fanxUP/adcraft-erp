@@ -74,6 +74,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTimeFull } from '@/utils/datetime'
 import { ref, onMounted, markRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
@@ -126,7 +127,7 @@ function getIconColor(type: string) {
 }
 
 function formatTime(ts: string): string {
-  return ts.replace('T', ' ').slice(0, 19)
+  return formatDateTimeFull(ts)
 }
 
 async function fetchList() {

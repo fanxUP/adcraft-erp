@@ -150,6 +150,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTimeFull } from '@/utils/datetime'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -208,7 +209,7 @@ const syncDescription = computed(() => {
 
 function formatTime(value: string | null): string {
   if (!value) return '-'
-  return value.replace('T', ' ').slice(0, 19)
+  return formatDateTimeFull(value)
 }
 
 function shortDigest(value: string): string {

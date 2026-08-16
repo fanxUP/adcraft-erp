@@ -52,7 +52,7 @@
         </template>
       </el-table-column>
       <el-table-column label="日期" width="120">
-        <template #default="{ row }">{{ row.cost_date?.slice(0, 10) || '-' }}</template>
+        <template #default="{ row }">{{ formatDate(row.cost_date) || '-' }}</template>
       </el-table-column>
       <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
       <el-table-column label="操作" width="200" fixed="right">
@@ -65,7 +65,7 @@
           >
             冲红结清
           </el-button>
-          <span v-else style="color: #c0c4cc; font-size: 12px">{{ row.settled_at?.slice(0, 10) }}</span>
+          <span v-else style="color: #c0c4cc; font-size: 12px">{{ formatDate(row.settled_at) }}</span>
         </template>
       </el-table-column>
     </el-table>
@@ -110,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getCostDebts, settleCostDebt } from '@/api/payments'
 import { ElMessage } from 'element-plus'

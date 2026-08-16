@@ -25,7 +25,7 @@
         <div class="print-info">
           <div class="print-info-row">
             <span><strong>报价单号:</strong> {{ quote.quote_no }}</span>
-            <span><strong>日　　期:</strong> {{ quote.quote_date || quote.created_at?.slice(0, 10) }}</span>
+            <span><strong>日　　期:</strong> {{ quote.quote_date || formatDate(quote.created_at) }}</span>
           </div>
           <div class="print-info-row">
             <span><strong>有效期至:</strong> {{ quote.valid_until || '-' }}</span>
@@ -138,6 +138,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, computed, watch } from 'vue'
 import { getQuote } from '@/api/quotes'
 import { getCustomer } from '@/api/customers'

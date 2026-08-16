@@ -56,21 +56,21 @@
               <h4>保险到期</h4>
               <div v-for="r in remindersData.insurance" :key="r.id" class="reminder-item" :class="r.urgency">
                 <el-tag :type="urgencyTagType(r.urgency)" size="small">{{ urgencyLabel(r.urgency) }}</el-tag>
-                <span class="reminder-text">{{ r.plate_number }} ({{ r.vehicle_name }}) — {{ r.expiry_date?.slice(0, 10) }}</span>
+                <span class="reminder-text">{{ r.plate_number }} ({{ r.vehicle_name }}) — {{ formatDate(r.expiry_date) }}</span>
               </div>
             </div>
             <div v-if="remindersData.inspection.length" class="reminder-section">
               <h4>年检到期</h4>
               <div v-for="r in remindersData.inspection" :key="r.id" class="reminder-item" :class="r.urgency">
                 <el-tag :type="urgencyTagType(r.urgency)" size="small">{{ urgencyLabel(r.urgency) }}</el-tag>
-                <span class="reminder-text">{{ r.plate_number }} ({{ r.vehicle_name }}) — {{ r.expiry_date?.slice(0, 10) }}</span>
+                <span class="reminder-text">{{ r.plate_number }} ({{ r.vehicle_name }}) — {{ formatDate(r.expiry_date) }}</span>
               </div>
             </div>
             <div v-if="remindersData.license.length" class="reminder-section">
               <h4>驾驶证到期</h4>
               <div v-for="r in remindersData.license" :key="r.id" class="reminder-item" :class="r.urgency">
                 <el-tag :type="urgencyTagType(r.urgency)" size="small">{{ urgencyLabel(r.urgency) }}</el-tag>
-                <span class="reminder-text">{{ r.driver_name }} ({{ r.phone }}) — {{ r.license_expiry?.slice(0, 10) }}</span>
+                <span class="reminder-text">{{ r.driver_name }} ({{ r.phone }}) — {{ formatDate(r.license_expiry) }}</span>
               </div>
             </div>
           </div>
@@ -136,6 +136,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, onMounted, computed } from 'vue'
 import {
   Van, Warning, Money, Clock, Document, TrendCharts,

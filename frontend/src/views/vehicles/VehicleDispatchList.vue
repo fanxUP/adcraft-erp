@@ -139,6 +139,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -198,7 +199,7 @@ const statusTagMap: Record<string, 'success' | 'warning' | 'info' | 'danger'> = 
 
 function statusLabel(status: string) { return statusMap[status] || status }
 function statusTagType(status: string): 'success' | 'warning' | 'info' | 'danger' { return statusTagMap[status] || 'info' }
-function formatTime(t: string | null) { return t ? t.replace('T', ' ').slice(0, 16) : '-' }
+function formatTime(t: string | null) { return t ? formatDateTime(t) : '-' }
 
 // Dialog state
 const dialogVisible = ref(false)

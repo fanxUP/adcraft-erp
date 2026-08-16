@@ -72,7 +72,7 @@
       </el-table-column>
       <el-table-column prop="incident_time" label="发生时间" width="160">
         <template #default="{ row }">
-          {{ row.incident_time ? row.incident_time.slice(0, 10) : '-' }}
+          {{ row.incident_time ? formatDate(row.incident_time) : '-' }}
         </template>
       </el-table-column>
       <el-table-column prop="location" label="地点" width="150" show-overflow-tooltip />
@@ -276,6 +276,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, onMounted, computed } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'

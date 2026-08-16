@@ -281,7 +281,7 @@
         <el-divider content-position="left">结算记录</el-divider>
         <el-table :data="settlements" size="small" border v-loading="settlementsLoading" max-height="200">
           <el-table-column label="收款时间" width="130">
-            <template #default="{ row }">{{ (row.payment_time || '').slice(0, 10) || '-' }}</template>
+            <template #default="{ row }">{{ formatDate(row.payment_time) }}</template>
           </el-table-column>
           <el-table-column label="收款金额" width="110">
             <template #default="{ row }">¥{{ row.amount }}</template>
@@ -311,6 +311,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, ElTag } from 'element-plus'
 // 手动引入的组件不经过 unplugin-vue-components 自动按需补样式，需显式引入，否则表格/标签无样式

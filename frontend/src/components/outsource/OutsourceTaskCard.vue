@@ -32,7 +32,7 @@
         </template>
       </el-table-column>
       <el-table-column label="预计完成" width="120">
-        <template #default="{ row }">{{ row.expected_at ? row.expected_at.slice(0, 10) : '-' }}</template>
+        <template #default="{ row }">{{ row.expected_at ? formatDate(row.expected_at) : '-' }}</template>
       </el-table-column>
       <el-table-column label="操作" width="80">
         <template #default>
@@ -73,6 +73,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { getOutsourceVendors, getOutsourceTasks, createOutsourceTask } from '@/api/outsource'
 import { ElMessage } from 'element-plus'

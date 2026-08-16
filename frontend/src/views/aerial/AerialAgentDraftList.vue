@@ -194,6 +194,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTimeFull } from '@/utils/datetime'
 import { ref, onMounted, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound } from '@element-plus/icons-vue'
@@ -392,7 +393,7 @@ const extractedLabel = (key: string) => {
 
 const formatTime = (t?: string) => {
   if (!t) return ''
-  return t.replace('T', ' ').substring(0, 19)
+  return formatDateTimeFull(t)
 }
 
 onMounted(loadDrafts)

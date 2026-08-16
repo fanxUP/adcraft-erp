@@ -34,7 +34,7 @@
         <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
       </el-table-column>
       <el-table-column label="日期" width="120">
-        <template #default="{ row }">{{ row.expense_date?.slice(0, 10) || '-' }}</template>
+        <template #default="{ row }">{{ formatDate(row.expense_date) || '-' }}</template>
       </el-table-column>
       <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
       <el-table-column label="操作" width="200" fixed="right">
@@ -81,6 +81,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/api/payments'
 import { useAuthStore } from '@/stores/auth'
@@ -120,7 +121,7 @@ function openEdit(row: ExpenseResponse) {
   editingId.value = row.id
   form.category = row.category || ''
   form.amount = row.amount
-  form.expense_date = row.expense_date?.slice(0, 10) || ''
+  form.expense_date = formatDate(row.expense_date) || ''
   form.description = row.description || ''
   showDialog.value = true
 }

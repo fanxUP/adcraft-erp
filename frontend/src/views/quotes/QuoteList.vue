@@ -63,7 +63,7 @@
         <template #default="{ row }">{{ row.quote_date || '-' }}</template>
       </el-table-column>
       <el-table-column label="创建时间" width="160">
-        <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
+        <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
@@ -110,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { getQuotes, deleteQuote, previewDeleteQuote, cancelQuote, revertQuoteToDraft } from '@/api/quotes'
 import { useAuthStore } from '@/stores/auth'

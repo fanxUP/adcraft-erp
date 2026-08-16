@@ -17,7 +17,7 @@
           <el-descriptions-item label="安装地址">{{ task.address || '-' }}</el-descriptions-item>
           <el-descriptions-item label="联系人">{{ task.contact_name || '-' }}</el-descriptions-item>
           <el-descriptions-item label="联系电话">{{ task.contact_phone || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="计划时间">{{ task.scheduled_at?.slice(0, 19).replace('T', ' ') || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="计划时间">{{ formatDateTimeFull(task.scheduled_at) || '-' }}</el-descriptions-item>
           <el-descriptions-item label="验收结果">{{ task.acceptance_result || '-' }}</el-descriptions-item>
         </el-descriptions>
       </el-card>
@@ -140,6 +140,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTimeFull } from '@/utils/datetime'
 import { computed, ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'

@@ -22,7 +22,7 @@
           <span>部门/科室: {{ form.department || '-' }}</span>
           <span>联 系 人: {{ form.contact_person || '-' }}</span>
           <span>联系电话: {{ form.customer_phone || '-' }}</span>
-          <span>{{ form.order_no ? '下单日期' : '报价日期' }}: {{ form.order_date?.slice(0, 10) || '-' }}</span>
+          <span>{{ form.order_no ? '下单日期' : '报价日期' }}: {{ formatDate(form.order_date) || '-' }}</span>
         </div>
       </div>
 
@@ -144,6 +144,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, computed, watch } from 'vue'
 import { getAcceptance } from '@/api/acceptances'
 import { getSystemSettings } from '@/api/admin'

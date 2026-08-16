@@ -79,7 +79,7 @@
         </div>
         <div class="task-footer">
           <span v-if="task.contact_name" class="meta-item">👤 {{ task.contact_name }}</span>
-          <span v-if="task.scheduled_at" class="meta-item">📅 {{ task.scheduled_at.slice(0, 10) }}</span>
+          <span v-if="task.scheduled_at" class="meta-item">📅 {{ formatDate(task.scheduled_at) }}</span>
           <span v-if="task.attachments?.length" class="meta-item photo-count">📷 {{ task.attachments.length }}</span>
         </div>
       </div>
@@ -121,7 +121,7 @@
           </div>
           <div class="info-row">
             <span class="info-label">计划安装日期</span>
-            <span class="info-value">{{ currentTask.scheduled_at?.slice(0, 10) || '未指定' }}</span>
+            <span class="info-value">{{ formatDate(currentTask.scheduled_at) || '未指定' }}</span>
           </div>
         </div>
 
@@ -190,6 +190,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {

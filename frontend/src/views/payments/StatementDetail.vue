@@ -16,8 +16,8 @@
           <el-descriptions-item label="状态">
             <el-tag :type="stmt.status === 'confirmed' ? 'success' : 'info'">{{ stmt.status === 'confirmed' ? '已确认' : '草稿' }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="期间">{{ stmt.start_date?.slice(0, 10) }} ~ {{ stmt.end_date?.slice(0, 10) }}</el-descriptions-item>
-          <el-descriptions-item label="确认时间">{{ stmt.confirmed_at?.slice(0, 19).replace('T', ' ') || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="期间">{{ formatDate(stmt.start_date) }} ~ {{ formatDate(stmt.end_date) }}</el-descriptions-item>
+          <el-descriptions-item label="确认时间">{{ formatDateTimeFull(stmt.confirmed_at) || '-' }}</el-descriptions-item>
         </el-descriptions>
       </el-card>
 
@@ -73,7 +73,7 @@
           </el-table-column>
           <el-table-column prop="payment_method" label="方式" width="100" />
           <el-table-column label="收款日期" width="120">
-            <template #default="{ row }">{{ row.paid_at?.slice(0, 10) || '-' }}</template>
+            <template #default="{ row }">{{ formatDate(row.paid_at) || '-' }}</template>
           </el-table-column>
           <el-table-column label="状态" width="80">
             <template #default="{ row }">
@@ -87,6 +87,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate, formatDateTimeFull } from '@/utils/datetime'
 import { Printer } from '@element-plus/icons-vue'
 import { usePrint } from '@/composables/usePrint'
 import { ref, onMounted } from 'vue'

@@ -21,7 +21,7 @@
             <el-descriptions-item label="联系电话">{{ form.contact_phone || '-' }}</el-descriptions-item>
             <el-descriptions-item v-if="form.order_id" label="客户地址" :span="2">{{ form.customer_address || '-' }}</el-descriptions-item>
             <el-descriptions-item label="部门/科室">{{ form.department || '-' }}</el-descriptions-item>
-            <el-descriptions-item v-if="form.order_id" label="下单日期">{{ form.order_date?.slice(0, 10) || '-' }}</el-descriptions-item>
+            <el-descriptions-item v-if="form.order_id" label="下单日期">{{ formatDate(form.order_date) || '-' }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
         <el-card class="order-info-card" v-else>
@@ -77,7 +77,7 @@
             </el-descriptions-item>
             <el-descriptions-item label="联系人：">{{ form.contact_person || '-' }}</el-descriptions-item>
             <el-descriptions-item label="联系电话：">{{ form.contact_phone || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="验收日期：">{{ form.accepted_at?.slice(0, 10) || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="验收日期：">{{ formatDate(form.accepted_at) || '-' }}</el-descriptions-item>
             <el-descriptions-item label="验收人/联系电话：">{{ form.accepted_by || '-' }}</el-descriptions-item>
             <el-descriptions-item label="负责人/联系电话：">{{ form.our_acceptor_name || '-' }}</el-descriptions-item>
             <el-descriptions-item label="驳回原因：" v-if="form.reject_reason">
@@ -301,6 +301,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'

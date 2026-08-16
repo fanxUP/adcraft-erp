@@ -38,7 +38,7 @@
       <el-table-column label="保险到期" width="150">
         <template #default="{ row }">
           <span v-if="row.insurance_expire_date">
-            {{ row.insurance_expire_date.slice(0, 10) }}
+            {{ formatDate(row.insurance_expire_date) }}
             <el-tag :type="getUrgency(row.insurance_expire_date).tag" size="small" style="margin-left: 4px">{{ getUrgency(row.insurance_expire_date).label }}</el-tag>
           </span>
           <span v-else>-</span>
@@ -47,7 +47,7 @@
       <el-table-column label="年检到期" width="150">
         <template #default="{ row }">
           <span v-if="row.inspection_expire_date">
-            {{ row.inspection_expire_date.slice(0, 10) }}
+            {{ formatDate(row.inspection_expire_date) }}
             <el-tag :type="getUrgency(row.inspection_expire_date).tag" size="small" style="margin-left: 4px">{{ getUrgency(row.inspection_expire_date).label }}</el-tag>
           </span>
           <span v-else>-</span>
@@ -114,6 +114,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'

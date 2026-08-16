@@ -34,7 +34,7 @@
         <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
       <el-table-column label="删除时间" width="160">
-        <template #default="{ row }">{{ row.deleted_at?.replace('T', ' ').slice(0, 19) }}</template>
+        <template #default="{ row }">{{ formatDateTimeFull(row.deleted_at) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="200">
         <template #default="{ row }">
@@ -57,6 +57,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTimeFull } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDeletedOrders, restoreOrder, convertOrderToQuote } from '@/api/orders'

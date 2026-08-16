@@ -94,7 +94,7 @@
       </el-table-column>
       <el-table-column prop="cost_date" label="日期" width="120" sortable>
         <template #default="{ row }">
-          {{ row.cost_date?.slice(0, 10) || '-' }}
+          {{ formatDate(row.cost_date) || '-' }}
         </template>
       </el-table-column>
       <el-table-column prop="summary" label="成本摘要" min-width="180" show-overflow-tooltip />
@@ -334,6 +334,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -461,7 +462,7 @@ function openEdit(row: ProjectCostResponse) {
   form.payment_method = row.payment_method || ''
   form.payee_company_name = row.payee_company_name || ''
   form.debt_amount = row.debt_amount || 0
-  form.cost_date = row.cost_date?.slice(0, 10) || ''
+  form.cost_date = formatDate(row.cost_date) || ''
   form.description = row.description || ''
   form.remark = row.remark || ''
   form.summary = row.summary || ''

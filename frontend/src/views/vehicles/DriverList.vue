@@ -26,7 +26,7 @@
       <el-table-column label="驾驶证到期" width="120">
         <template #default="{ row }">
           <span :class="{ 'text-danger': isExpiredSoon(row.license_expire_date) }">
-            {{ row.license_expire_date ? row.license_expire_date.slice(0, 10) : '-' }}
+            {{ row.license_expire_date ? formatDate(row.license_expire_date) : '-' }}
           </span>
         </template>
       </el-table-column>
@@ -103,6 +103,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getDrivers, createDriver, updateDriver, disableDriver, enableDriver, deleteDriver } from '@/api/vehicles'

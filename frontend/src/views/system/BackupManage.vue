@@ -141,6 +141,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTimeFull } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { createBackup, listBackups, restoreBackup, deleteBackup, exportBackup, importBackup } from '@/api/backup'
 import type { BackupItem, CreateBackupResponse } from '@/types/api'
@@ -180,7 +181,7 @@ const toDelete = ref<BackupItem | null>(null)
 
 function formatTime(ts: string | undefined): string {
   if (!ts) return '-'
-  return ts.replace('T', ' ').slice(0, 19)
+  return formatDateTimeFull(ts)
 }
 
 async function fetchList() {

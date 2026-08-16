@@ -46,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/datetime'
 import { computed } from 'vue'
 import type {
   AiFormDraft,
@@ -71,7 +72,7 @@ function sourceLabel(source: AiFormDraftFieldSource) {
 
 function displayValue(value: string | null) {
   if (!value) return '等待手动填写'
-  return value.replace('T', ' ').replace(/([+-]\d{2}:\d{2}|Z)$/, '')
+  return formatDateTime(value)
 }
 </script>
 

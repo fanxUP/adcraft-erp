@@ -53,10 +53,10 @@
         </el-table-column>
         <el-table-column prop="accepted_by" label="验收人" width="100" />
         <el-table-column label="验收日期" width="120">
-          <template #default="{ row }">{{ row.accepted_at?.slice(0, 10) || '-' }}</template>
+          <template #default="{ row }">{{ formatDate(row.accepted_at) || '-' }}</template>
         </el-table-column>
         <el-table-column label="创建时间" width="160">
-          <template #default="{ row }">{{ row.created_at?.slice(0, 10) }}</template>
+          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
@@ -130,6 +130,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, watch, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'

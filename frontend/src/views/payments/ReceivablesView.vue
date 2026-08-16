@@ -143,7 +143,7 @@
             </template>
           </el-table-column>
           <el-table-column label="最后收款" width="120">
-            <template #default="{ row }">{{ row.last_payment_date?.slice(0, 10) || '-' }}</template>
+            <template #default="{ row }">{{ formatDate(row.last_payment_date) || '-' }}</template>
           </el-table-column>
         </el-table>
       </el-tab-pane>
@@ -180,7 +180,7 @@
           </el-table-column>
           <el-table-column prop="payment_method" label="方式" width="100" />
           <el-table-column label="收款日期" width="120">
-            <template #default="{ row }">{{ row.paid_at?.slice(0, 10) || '-' }}</template>
+            <template #default="{ row }">{{ formatDate(row.paid_at) || '-' }}</template>
           </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="{ row }">
@@ -243,6 +243,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getPayments, createPayment, voidPayment, getCustomerDebt } from '@/api/payments'

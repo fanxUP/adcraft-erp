@@ -54,6 +54,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/datetime'
 import { ref, markRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
@@ -112,7 +113,7 @@ function formatTime(ts: string): string {
   if (minutes < 60) return `${minutes}分钟前`
   if (hours < 24) return `${hours}小时前`
   if (days < 7) return `${days}天前`
-  return ts.replace('T', ' ').slice(0, 16)
+  return formatDateTime(ts)
 }
 
 async function handleShow() {

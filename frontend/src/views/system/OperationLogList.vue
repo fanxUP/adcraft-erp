@@ -49,7 +49,7 @@
     <el-card shadow="never" class="table-card" style="margin-top: 16px">
       <el-table :data="logs" stripe size="small" v-loading="loading" empty-text="暂无操作日志">
         <el-table-column label="时间" width="160">
-          <template #default="{ row }">{{ row.created_at?.slice(0, 19).replace('T', ' ') }}</template>
+          <template #default="{ row }">{{ formatDateTimeFull(row.created_at) }}</template>
         </el-table-column>
         <el-table-column prop="user_name" label="操作人" width="100" />
         <el-table-column label="对象" width="100">
@@ -124,6 +124,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTimeFull } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { getOperationLogs } from '@/api/operation_logs'
 import type { OperationLogResponse } from '@/types/api'

@@ -25,7 +25,7 @@
       </el-table-column>
       <el-table-column prop="payment_method" label="方式" width="100" />
       <el-table-column label="收款日期" width="120">
-        <template #default="{ row }">{{ row.paid_at?.slice(0, 10) || '-' }}</template>
+        <template #default="{ row }">{{ formatDate(row.paid_at) || '-' }}</template>
       </el-table-column>
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
@@ -77,6 +77,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { getPayments, createPayment, voidPayment } from '@/api/payments'
 import { getOrders } from '@/api/orders'
