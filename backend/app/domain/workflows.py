@@ -44,7 +44,6 @@ DESIGN_TASK_WORKFLOW: Workflow = {
     "pending_review": ("confirmed", "revision", "cancelled"),
     "revision": ("designing", "pending_review", "cancelled"),
     "confirmed": ("cancelled",),
-    "completed": (),
     "cancelled": (),
 }
 

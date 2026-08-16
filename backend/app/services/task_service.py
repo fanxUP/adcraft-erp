@@ -142,6 +142,22 @@ async def _attach_outsource_flags(db: AsyncSession, task_type: str, task_dicts: 
     return task_dicts
 
 
+async def _clear_outsource_source_refs(db: AsyncSession, task_type: str, task_ids: list[UUID]) -> None:
+    """删除任务后清空外协任务对来源任务的悬空引用（source_task_id 无外键）。"""
+    if not task_ids:
+        return
+    from sqlalchemy import update as sa_update
+    from app.models.outsource import OutsourceTask
+    await db.execute(
+        sa_update(OutsourceTask)
+        .where(
+            OutsourceTask.source_task_type == task_type,
+            OutsourceTask.source_task_id.in_(task_ids),
+        )
+        .values(source_task_type=None, source_task_id=None)
+    )
+
+
 class DesignTaskService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -220,11 +236,11 @@ class DesignTaskService:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
 
         task.status = to_status
-        if to_status in ("completed", "confirmed"):
+        if to_status == "confirmed":
             task.completed_at = datetime.now()
         await self.db.flush()
         # Auto-advance order when all design tasks completed
-        if to_status in ("completed", "confirmed") and task.document_id:
+        if to_status == "confirmed" and task.document_id:
             from sqlalchemy import func
             from app.models.business_document import BusinessDocument
             from app.models.task import DesignTask, ProductionTask
@@ -268,6 +284,9 @@ class DesignTaskService:
             raise ValueError("设计任务不存在")
 
         doc_id = task.document_id
+        design_ids = [task_id]
+        prod_ids: list[UUID] = []
+        inst_ids: list[UUID] = []
         # Hard delete the task
         await self.db.delete(task)
 
@@ -285,6 +304,10 @@ class DesignTaskService:
                         select(model_cls).where(model_cls.document_id == doc_id)
                     )
                     for t in result.scalars().all():
+                        if model_cls is ProductionTask:
+                            prod_ids.append(t.id)
+                        else:
+                            inst_ids.append(t.id)
                         await self.db.delete(t)
 
                 # Soft-delete acceptance if exists
@@ -305,6 +328,10 @@ class DesignTaskService:
                 await order_svc.repo.create_status_log(doc_id, old_status, "confirmed",
                     "设计任务已被管理员删除，系统自动回退到待确认", None)
 
+        # 清空外协任务对已删任务的悬空来源引用
+        await _clear_outsource_source_refs(self.db, "design", design_ids)
+        await _clear_outsource_source_refs(self.db, "production", prod_ids)
+        await _clear_outsource_source_refs(self.db, "installation", inst_ids)
         await self.db.flush()
 
 class ProductionTaskService:
@@ -432,6 +459,8 @@ class ProductionTaskService:
             raise ValueError("制作任务不存在")
 
         doc_id = task.document_id
+        prod_ids = [task_id]
+        inst_ids: list[UUID] = []
         await self.db.delete(task)
 
         if doc_id:
@@ -446,6 +475,7 @@ class ProductionTaskService:
                     select(InstallationTask).where(InstallationTask.document_id == doc_id)
                 )
                 for t in result.scalars().all():
+                    inst_ids.append(t.id)
                     await self.db.delete(t)
 
                 # Soft-delete acceptance if exists
@@ -467,6 +497,9 @@ class ProductionTaskService:
                 await order_svc.repo.create_status_log(doc_id, old_status, "designing",
                     "制作任务已被管理员删除，系统自动回退", None)
 
+        # 清空外协任务对已删任务的悬空来源引用
+        await _clear_outsource_source_refs(self.db, "production", prod_ids)
+        await _clear_outsource_source_refs(self.db, "installation", inst_ids)
         await self.db.flush()
 
 class InstallationTaskService:
@@ -583,6 +616,7 @@ class InstallationTaskService:
             raise ValueError("安装任务不存在")
 
         doc_id = task.document_id
+        inst_ids = [task_id]
         await self.db.delete(task)
 
         if doc_id:
@@ -610,6 +644,8 @@ class InstallationTaskService:
                 await order_svc.repo.create_status_log(doc_id, old_status, "in_production",
                     "安装任务已被管理员删除，系统自动回退", None)
 
+        # 清空外协任务对已删任务的悬空来源引用
+        await _clear_outsource_source_refs(self.db, "installation", inst_ids)
         await self.db.flush()
 
 class AttachmentService:

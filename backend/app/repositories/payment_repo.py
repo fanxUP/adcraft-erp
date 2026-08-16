@@ -1,5 +1,6 @@
 from uuid import UUID
 from datetime import datetime
+from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
@@ -58,7 +59,7 @@ class PaymentRepository:
             select(func.coalesce(func.sum(Payment.amount), 0))
             .where(Payment.document_id == document_id, Payment.is_voided == False)
         )
-        return float(result.scalar() or 0)
+        return Decimal(str(result.scalar() or 0))
 
 
 class StatementRepository:

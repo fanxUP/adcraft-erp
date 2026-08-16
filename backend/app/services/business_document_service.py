@@ -902,6 +902,7 @@ class BusinessDocumentService:
         # 3) 任务物理删除（附件级联；先解除车辆对安装任务的引用避免 FK 违例）
         install_ids: list[UUID] = []
         task_rows = []
+        task_ids_by_type: dict[str, list[UUID]] = {"design": [], "production": [], "installation": []}
         for model in (DesignTask, ProductionTask, InstallationTask):
             result = await self.db.execute(
                 select(model).options(selectinload(model.attachments)).where(
@@ -910,6 +911,8 @@ class BusinessDocumentService:
             )
             for task in result.scalars().all():
                 task_rows.append(task)
+                type_key = "design" if model is DesignTask else ("production" if model is ProductionTask else "installation")
+                task_ids_by_type[type_key].append(task.id)
                 if model is InstallationTask:
                     install_ids.append(task.id)
         if install_ids:
@@ -921,6 +924,15 @@ class BusinessDocumentService:
                 )
         for task in task_rows:
             await self.db.delete(task)
+        # 清空外协任务对已删任务的悬空来源引用（source_task_id 无外键）
+        for type_key, ids in task_ids_by_type.items():
+            if ids:
+                await self.db.execute(
+                    update(OutsourceTask).where(
+                        OutsourceTask.source_task_type == type_key,
+                        OutsourceTask.source_task_id.in_(ids),
+                    ).values(source_task_type=None, source_task_id=None)
+                )
 
         # 4) 外协任务软删
         result = await self.db.execute(
@@ -1000,8 +1012,8 @@ class BusinessDocumentService:
             doc.unpaid_amount = doc.total_amount
             doc.cost_amount = 0
             doc.gross_profit = doc.total_amount
-            # 标记来源报价ID
-            doc.source_quote_id = doc.id
+            # 同 ID 翻转后原报价记录已不存在，来源报价 ID 置空，避免自引用脏数据
+            doc.source_quote_id = None
 
             # 清理该文档下残留的孤立任务和验收单，避免阻塞后续自动推进
             from app.models.acceptance import AcceptanceForm

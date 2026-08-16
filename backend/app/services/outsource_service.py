@@ -96,6 +96,18 @@ class OutsourceService:
         data["total_amount"] = float(qty * price)
         data["paid_amount"] = 0
         data["unpaid_amount"] = data["total_amount"]
+        # 校验来源任务存在（source_task_id 无外键，避免悬空引用）
+        if data.get("source_task_type") and data.get("source_task_id"):
+            st_type = data["source_task_type"]
+            st_id = UUID(str(data["source_task_id"]))
+            from app.models.task import DesignTask, ProductionTask, InstallationTask
+            model_map = {
+                "design": DesignTask,
+                "production": ProductionTask,
+                "installation": InstallationTask,
+            }
+            if st_type in model_map and not await self.db.get(model_map[st_type], st_id):
+                raise ValueError(f"来源任务不存在（{st_type}）")
         task = await self.task_repo.create(data)
         vname = await self._task_vendor_name(task)
         pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
