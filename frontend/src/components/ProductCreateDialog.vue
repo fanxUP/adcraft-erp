@@ -109,7 +109,7 @@ async function handleSave() {
 }
 :deep(.mp-textarea .el-textarea__inner::-webkit-scrollbar) {
   width: 12px;
-  background: #f0f0f0;
+  background: var(--ad-darker);
 }
 :deep(.mp-textarea .el-textarea__inner::-webkit-scrollbar-track) {
   background: #d8d8d8;
@@ -123,7 +123,7 @@ async function handleSave() {
 :deep(.mp-textarea .el-textarea__inner::-webkit-scrollbar-button) {
   display: block;
   height: 16px;
-  background-color: #e4e4e4;
+  background-color: var(--ad-border);
   background-repeat: no-repeat;
   background-position: center;
 }

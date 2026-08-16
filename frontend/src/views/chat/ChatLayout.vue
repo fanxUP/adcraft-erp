@@ -349,13 +349,13 @@ onUnmounted(() => {
 .chat-layout {
   display: flex;
   height: calc(100vh - 60px);
-  background: #f5f5f5;
+  background: var(--ad-dark);
 }
 
 .chat-sidebar {
   width: 320px;
-  background: #fff;
-  border-right: 1px solid #e4e7ed;
+  background: var(--ad-card);
+  border-right: 1px solid var(--ad-border);
   display: flex;
   flex-direction: column;
 }
@@ -412,7 +412,7 @@ onUnmounted(() => {
   transition: background 0.2s;
 
   &:hover {
-    background: #f5f7fa;
+    background: var(--ad-darker);
   }
 }
 
@@ -468,11 +468,11 @@ onUnmounted(() => {
   transition: background 0.2s;
 
   &:hover {
-    background: #f5f7fa;
+    background: var(--ad-darker);
   }
 
   &.active {
-    background: #ecf5ff;
+    background: var(--ad-accent-glow);
   }
 }
 

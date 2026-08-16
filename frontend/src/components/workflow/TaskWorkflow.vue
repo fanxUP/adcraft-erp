@@ -149,10 +149,10 @@ function iconClass(status: string) {
   font-weight: 500;
   white-space: nowrap;
 }
-.cur-tag { color: #409eff; }
+.cur-tag { color: var(--el-color-primary); }
 .done-tag { color: #52c41a; }
 .future-tag { color: #d9d9d9; }
-.ready-tag { color: #409eff; }
+.ready-tag { color: var(--el-color-primary); }
 
 /* 连接箭头 */
 .tw-conn {
@@ -166,7 +166,7 @@ function iconClass(status: string) {
 .tw-line {
   width: 32px;
   height: 2px;
-  background: #e8e8e8;
+  background: var(--ad-border);
   border-radius: 2px;
   transition: all 0.3s ease;
 }
@@ -189,7 +189,7 @@ function iconClass(status: string) {
 
 /* 卡片状态 */
 .card-current {
-  border-color: #409eff;
+  border-color: var(--el-color-primary);
   background: linear-gradient(135deg, rgba(64,158,255,0.07), rgba(64,158,255,0.03));
   box-shadow: 0 0 0 4px rgba(64,158,255,0.08);
   cursor: pointer;
@@ -198,10 +198,10 @@ function iconClass(status: string) {
   background: linear-gradient(135deg, rgba(64,158,255,0.12), rgba(64,158,255,0.06));
   box-shadow: 0 2px 12px rgba(64,158,255,0.15);
 }
-.card-current .tw-label { color: #409eff; }
+.card-current .tw-label { color: var(--el-color-primary); }
 
 .icon-current {
-  background: linear-gradient(135deg, #409eff, #66b1ff);
+  background: linear-gradient(135deg, var(--el-color-primary), #66b1ff);
   color: #fff;
   box-shadow: 0 2px 8px rgba(64,158,255,0.35);
 }
@@ -218,7 +218,7 @@ function iconClass(status: string) {
 
 /* 可点击 */
 .card-ready {
-  border-color: #409eff;
+  border-color: var(--el-color-primary);
   border-style: dashed;
   background: rgba(64,158,255,0.03);
   cursor: pointer;
@@ -229,25 +229,25 @@ function iconClass(status: string) {
   transform: translateX(3px);
 }
 .card-ready:active { transform: translateX(0); }
-.card-ready .tw-label { color: #409eff; }
+.card-ready .tw-label { color: var(--el-color-primary); }
 
 .icon-ready {
-  background: #f0f5ff;
-  color: #409eff;
-  border: 2px solid #409eff;
+  background: var(--ad-accent-glow);
+  color: var(--el-color-primary);
+  border: 2px solid var(--el-color-primary);
   cursor: pointer;
 }
 .icon-ready:hover {
-  background: #e6f0ff;
+  background: var(--ad-accent-glow);
   box-shadow: 0 0 0 4px rgba(64,158,255,0.15);
 }
 
 /* 不可达 */
-.card-disabled { border-color: #f0f0f0; background: #fafafa; }
+.card-disabled { border-color: var(--ad-border); background: var(--ad-darker); }
 .card-disabled .tw-label { color: #d9d9d9; }
 
 .icon-disabled {
-  background: #f5f5f5;
+  background: var(--ad-darker);
   color: #d9d9d9;
   border: 2px solid #e8e8e8;
 }

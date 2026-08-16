@@ -38,6 +38,7 @@ export const useAppStore = defineStore('app', () => {
   function setTheme(name: ThemeName) {
     theme.value = name
     document.documentElement.dataset.theme = name
+    document.documentElement.classList.toggle('dark', name.startsWith('dark'))
     localStorage.setItem('adcraft-theme', name)
   }
 
@@ -55,6 +56,7 @@ export const useAppStore = defineStore('app', () => {
 
   function initTheme() {
     document.documentElement.dataset.theme = theme.value
+    document.documentElement.classList.toggle('dark', theme.value.startsWith('dark'))
     document.documentElement.style.setProperty('--ad-font-size-base', `${fontSize.value}px`)
     document.documentElement.style.setProperty('--ad-font-weight-base', String(fontWeight.value))
   }
