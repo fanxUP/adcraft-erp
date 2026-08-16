@@ -224,15 +224,15 @@ body {
 }
 
 
-/* ===== Element Plus 主色统一（品牌蓝 #2563eb，消除默认蓝冲突）===== */
+/* ===== Element Plus 主色跟随主题强调色(--ad-red)，切换主题时按钮/链接/选中态一致 ===== */
 :root {
-  --el-color-primary: #2563eb;
-  --el-color-primary-light-3: #3b82f6;
-  --el-color-primary-light-5: #60a5fa;
-  --el-color-primary-light-7: #93c5fd;
-  --el-color-primary-light-8: #bfdbfe;
-  --el-color-primary-light-9: #dbeafe;
-  --el-color-primary-dark-2: #1d4ed8;
+  --el-color-primary: var(--ad-red);
+  --el-color-primary-light-3: color-mix(in srgb, var(--ad-red) 70%, white);
+  --el-color-primary-light-5: color-mix(in srgb, var(--ad-red) 50%, white);
+  --el-color-primary-light-7: color-mix(in srgb, var(--ad-red) 30%, white);
+  --el-color-primary-light-8: color-mix(in srgb, var(--ad-red) 20%, white);
+  --el-color-primary-light-9: color-mix(in srgb, var(--ad-red) 10%, white);
+  --el-color-primary-dark-2: color-mix(in srgb, var(--ad-red) 80%, black);
   --el-border-radius-base: 6px;
   --el-border-radius-small: 4px;
 }
