@@ -963,9 +963,8 @@ class BusinessDocumentService:
             update(StockRecord).where(StockRecord.document_id == doc_id).values(document_id=None)
         )
 
-    async def convert_doc_type(self, doc_id: UUID, new_type: str,
-                                created_by: UUID) -> dict:
-        """统一转换方法 — 只改 doc_type + 编号，ID 不变，所有 FK 自动跟随。"""
+    async def convert_order_to_quote(self, doc_id: UUID, created_by: UUID) -> dict:
+        """订单转报价——已取消订单原地翻转为草稿报价，ID 不变，并清理关联数据。"""
         # 直接查询（不过滤 deleted_at），因为已取消的订单已被软删除
         from app.models.business_document import BusinessDocument
         q = select(BusinessDocument).where(BusinessDocument.id == doc_id)
@@ -974,100 +973,47 @@ class BusinessDocumentService:
         if not doc:
             raise ValueError("单据不存在")
 
-        old_type = doc.doc_type
-        if old_type == new_type:
-            raise ValueError(f"已经是{new_type}类型")
-        if old_type != "quote" and old_type != "order":
-            raise ValueError(f"不支持的类型转换: {old_type}")
+        if doc.doc_type != "order":
+            raise ValueError("仅订单可转报价")
+        if doc.status != "cancelled":
+            raise ValueError("只有已取消的订单可以转报价")
 
-        # 转换前验证
-        if old_type == "quote" and new_type == "order":
-            if doc.status not in ("confirmed",):
-                raise ValueError("只有已确认的报价单可以转订单")
-            await ensure_document_customer(self.db, doc, created_by)
-        elif old_type == "order" and new_type == "quote":
-            if doc.status not in ("cancelled",):
-                raise ValueError("只有已取消的订单可以转报价")
-
-        from app.services.number_generator import generate_quote_no, generate_order_no
+        from app.services.number_generator import generate_quote_no
 
         # 1. 快照
         ver_no = await self.repo.get_next_version_no(doc_id)
         await self.repo.create_version(doc_id, ver_no, self._to_detail(doc), created_by)
 
         # 2. 切换类型 & 编号
-        if new_type == "order":
-            doc.doc_no = await generate_order_no(self.db)
-            doc.doc_type = "order"
-            doc.status = "pending_confirm"
-            # 重置报价专有字段
-            # 联系人不再随报价带过来：订单/报价/验收各看各的联系人
-            doc.contact_person = None
-            doc.contact_phone = None
-            doc.discount_amount = 0
-            doc.tax_rate = 0
-            doc.tax_amount = 0
-            doc.valid_until = None
-            doc.paid_amount = 0
-            doc.unpaid_amount = doc.total_amount
-            doc.cost_amount = 0
-            doc.gross_profit = doc.total_amount
-            # 同 ID 翻转后原报价记录已不存在，来源报价 ID 置空，避免自引用脏数据
-            doc.source_quote_id = None
-
-            # 清理该文档下残留的孤立任务和验收单，避免阻塞后续自动推进
-            from app.models.acceptance import AcceptanceForm
-            for model_cls in (DesignTask, ProductionTask, InstallationTask):
-                result = await self.db.execute(
-                    select(model_cls).where(
-                        model_cls.document_id == doc_id,
-                        model_cls.status == "pending"
-                    )
-                )
-                for t in result.scalars().all():
-                    t.status = "cancelled"
-            ac_result = await self.db.execute(
-                select(AcceptanceForm).where(
-                    AcceptanceForm.document_id == doc_id,
-                    AcceptanceForm.status == "draft",
-                    AcceptanceForm.deleted_at.is_(None),
-                )
-            )
-            for form in ac_result.scalars().all():
-                form.deleted_at = datetime.now()
-        else:  # new_type == "quote"
-            doc.doc_no = await generate_quote_no(self.db)
-            doc.doc_type = "quote"
-            doc.status = "draft"
-            # 重置订单专有字段
-            doc.paid_amount = 0
-            doc.unpaid_amount = 0
-            # 取消软删除（已取消订单被标记了 deleted_at）
-            doc.deleted_at = None
-            # 自引用来源报价在转回报价后即自身，无意义，清零
-            doc.source_quote_id = None
-            # 订单转报价：清理合同关联（普通合同空则删；框架合同从项目移除该订单）
-            await self._cleanup_contract_links_on_order_to_quote(doc)
-            # 订单转报价：彻底清理该订单产生的业务关联数据（验收单/收款/任务/外协/成本；台账类仅解除关联）
-            await self._cleanup_associations_on_order_to_quote(doc_id)
+        doc.doc_no = await generate_quote_no(self.db)
+        doc.doc_type = "quote"
+        doc.status = "draft"
+        # 重置订单专有字段
+        doc.paid_amount = 0
+        doc.unpaid_amount = 0
+        # 取消软删除（已取消订单被标记了 deleted_at）
+        doc.deleted_at = None
+        # 自引用来源报价在转回报价后即自身，无意义，清零
+        doc.source_quote_id = None
+        # 订单转报价：清理合同关联（普通合同空则删；框架合同从项目移除该订单）
+        await self._cleanup_contract_links_on_order_to_quote(doc)
+        # 订单转报价：彻底清理该订单产生的业务关联数据（验收单/收款/任务/外协/成本；台账类仅解除关联）
+        await self._cleanup_associations_on_order_to_quote(doc_id)
 
         await self.db.flush()
 
         # 3. 状态日志
         await self.repo.create_status_log(
-            doc_id, None, doc.status,
-            f"报价转订单" if new_type == "order" else "订单转报价",
-            created_by,
+            doc_id, None, doc.status, "订单转报价", created_by,
         )
 
         await self.db.flush()
-        # 所有 FK 自动跟随 — document_id 未改变
         return self._to_detail(doc)
 
     async def convert_regular_quote_to_order(self, quote_id: UUID, created_by: UUID) -> dict:
         """常规报价转订单——新建订单并回链来源报价，保留报价历史（ADR-002）。
 
-        与 convert_doc_type 的「同 ID 翻转」不同：创建新订单（全新 id、doc_no=O-xxx），
+        与历史「同 ID 翻转」做法不同：创建新订单（全新 id、doc_no=O-xxx），
         原报价保留并置为 converted；订单 source_quote_id 指向报价，明细 source_quote_item_id 回链。
         """
         from app.models.business_document import BusinessDocument, BusinessDocumentItem

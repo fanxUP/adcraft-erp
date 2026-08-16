@@ -87,50 +87,6 @@ async def test_convert_to_order_does_not_inherit_quote_contact():
 
 
 # ─────────────────────────────────────────────
-# 普通报价 → 订单（同一行改类型）：转单时清空联系人
-# ─────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_convert_doc_type_quote_to_order_clears_contact():
-    from app.services.business_document_service import BusinessDocumentService
-
-    db = MagicMock()
-    db.flush = AsyncMock()
-
-    doc = MagicMock()
-    doc.id = uuid4()
-    doc.doc_type = "quote"
-    doc.status = "confirmed"
-    doc.contact_person = "张三"
-    doc.contact_phone = "13800138000"
-    doc.total_amount = Decimal("1000")
-    doc.discount_amount = 100
-
-    initial = MagicMock(scalar_one_or_none=lambda: doc)
-    empty = MagicMock()
-    empty.scalars.return_value.all.return_value = []
-    db.execute = AsyncMock(side_effect=[initial, empty, empty, empty, empty])
-
-    with (
-        patch("app.services.order_customer_service.ensure_document_customer",
-              new=AsyncMock()),
-        patch("app.services.number_generator.generate_order_no",
-              new=AsyncMock(return_value="O20260803-0002")),
-    ):
-        service = BusinessDocumentService(db, doc_type="quote")
-        service.repo.get_next_version_no = AsyncMock(return_value=1)
-        service.repo.create_version = AsyncMock(return_value=MagicMock())
-        service.repo.create_status_log = AsyncMock()
-        service._to_detail = AsyncMock(return_value={})
-
-        await service.convert_doc_type(doc.id, "order", uuid4())
-
-    assert doc.doc_type == "order"
-    assert doc.contact_person is None
-    assert doc.contact_phone is None
-
-
-# ─────────────────────────────────────────────
 # 订单联系人独立编辑 + 反向同步
 # ─────────────────────────────────────────────
 

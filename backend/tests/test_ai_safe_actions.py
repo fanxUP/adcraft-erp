@@ -386,7 +386,7 @@ async def test_quote_conversion_execution_rejects_stale_preview():
         "doc_no": "Q20260729-0001",
         "status": "draft",
     })
-    service.convert_doc_type = AsyncMock()
+    service.convert_regular_quote_to_order = AsyncMock()
 
     with patch(
         "app.services.business_document_service.BusinessDocumentService",
@@ -400,4 +400,4 @@ async def test_quote_conversion_execution_rejects_stale_preview():
                 current_status="confirmed",
             )
 
-    service.convert_doc_type.assert_not_awaited()
+    service.convert_regular_quote_to_order.assert_not_awaited()

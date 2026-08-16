@@ -288,34 +288,6 @@ async def test_quote_item_must_belong_to_quote(service):
 
 
 @pytest.mark.asyncio
-async def test_convert_quote_initializes_order_receivable(service):
-    quote_service, repository = service
-    quote = make_quote(
-        status="confirmed",
-        total_amount=Decimal("1680.50"),
-    )
-    execute_result = MagicMock()
-    execute_result.scalar_one_or_none.return_value = quote
-    quote_service.db.execute.return_value = execute_result
-
-    with patch(
-        "app.services.number_generator.generate_order_no",
-        AsyncMock(return_value="O20260730-0001"),
-    ):
-        order = await quote_service.convert_doc_type(
-            SAMPLE_QUOTE_ID,
-            "order",
-            uuid4(),
-        )
-
-    assert order["paid_amount"] == 0
-    assert order["unpaid_amount"] == 1680.5
-    assert order["gross_profit"] == 1680.5
-    assert quote.doc_type == "order"
-    repository.create_version.assert_awaited_once()
-
-
-@pytest.mark.asyncio
 async def test_convert_regular_quote_to_order_preserves_quote(service):
     """ADR-002：常规报价转订单应新建订单并回链报价，报价保留 converted 而非原地变订单。"""
     quote_service, repository = service

@@ -233,7 +233,7 @@ def make_order_doc():
 
 
 def make_convert_execute(doc):
-    """convert_doc_type 的 db.execute 分发器：单据查询返回 doc，其余查询返回空，Update 返回空。"""
+    """convert_order_to_quote 的 db.execute 分发器：单据查询返回 doc，其余查询返回空，Update 返回空。"""
     async def fake_execute(stmt):
         if isinstance(stmt, Update):
             return mock_result([])
@@ -256,7 +256,7 @@ async def test_convert_order_to_quote_works_without_contract_links(service):
         "app.services.number_generator.generate_quote_no",
         AsyncMock(return_value="Q20260804-9999"),
     ):
-        result = await service.convert_doc_type(ORDER_UUID, "quote", uuid4())
+        result = await service.convert_order_to_quote(ORDER_UUID, uuid4())
 
     assert result["doc_type"] == "quote"
     assert result["quote_no"] == "Q20260804-9999"

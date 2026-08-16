@@ -210,7 +210,7 @@ async def convert_order_to_quote(
     service = BusinessDocumentService(db, doc_type='order')
     oid = UUID(order_id)
     try:
-        quote = await service.convert_doc_type(oid, 'quote', current_user.id)
+        quote = await service.convert_order_to_quote(oid, current_user.id)
         await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                             OBJ_ORDER, oid, "convert_to_quote",
                             ip_address=request.client.host if request.client else None,
