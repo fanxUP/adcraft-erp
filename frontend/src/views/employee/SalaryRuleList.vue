@@ -293,10 +293,10 @@ onMounted(async () => { await loadEmps(); await fetchData() })
 </script>
 
 <style scoped>
-.sheet-wrapper { overflow-x: auto; overflow-y: auto; border: 1px solid #e4e7ed; border-radius: 4px; background: #fff; padding-bottom: 14px; }
+.sheet-wrapper { overflow-x: auto; overflow-y: auto; border: 1px solid var(--ad-border); border-radius: 4px; background: var(--ad-card); padding-bottom: 14px; }
 .rule-sheet { width: 100%; border-collapse: collapse; font-size: 15px; white-space: nowrap; }
-.rule-sheet th, .rule-sheet td { border: 1px solid #e4e7ed; padding: 7px 10px; }
-.rule-sheet thead th { background: #f5f7fa; position: sticky; top: 0; z-index: 2; font-weight: 600; color: #303133; }
+.rule-sheet th, .rule-sheet td { border: 1px solid var(--ad-border); padding: 7px 10px; }
+.rule-sheet thead th { background: var(--ad-darker); position: sticky; top: 0; z-index: 2; font-weight: 600; color: var(--ad-text); }
 .rule-sheet th.sortable { cursor: pointer; user-select: none; }
 .rule-sheet th.sortable:hover { color: #409eff; }
 .rule-sheet th.sort-active { color: #409eff; }
@@ -308,9 +308,9 @@ onMounted(async () => { await loadEmps(); await fetchData() })
 .col-num { min-width: 85px; text-align: right; }
 .col-op { width: 100px; text-align: center; }
 .cell-center { text-align: center; }
-.cell-name { font-weight: 600; color: #303133; }
-.cell-date { text-align: center; font-family: "SF Mono", "Courier New", monospace; color: #606266; }
-.cell-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; color: #606266; }
+.cell-name { font-weight: 600; color: var(--ad-text); }
+.cell-date { text-align: center; font-family: "SF Mono", "Courier New", monospace; color: var(--ad-text-secondary); }
+.cell-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; color: var(--ad-text-secondary); }
 .cell-num.deduction { color: #f56c6c; }
 .cell-op { text-align: center; }
 </style>

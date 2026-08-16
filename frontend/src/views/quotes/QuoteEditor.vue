@@ -208,7 +208,7 @@
               <el-upload v-else-if="!isReadonly" :show-file-list="false" :http-request="(opt: any) => handleImageUpload(opt, row.item)" accept="image/*" style="display: inline;">
                 <el-button text type="primary" size="small" style="padding: 0;">上传</el-button>
               </el-upload>
-              <span v-else style="color: #999;">-</span>
+              <span v-else style="color: var(--ad-text-secondary);">-</span>
             </template>
           </template>
         </el-table-column>

@@ -142,7 +142,7 @@ const formattedResult = computed(() => {
 .is-info .ai-tool-icon-wrap { background: rgba(144, 147, 153, 0.08); }
 .is-success .ai-tool-icon-wrap .el-icon { color: #67c23a; }
 .is-error .ai-tool-icon-wrap .el-icon { color: #f56c6c; }
-.is-info .ai-tool-icon-wrap .el-icon { color: #909399; }
+.is-info .ai-tool-icon-wrap .el-icon { color: var(--ad-text-secondary); }
 
 .ai-tool-meta {
   display: flex;

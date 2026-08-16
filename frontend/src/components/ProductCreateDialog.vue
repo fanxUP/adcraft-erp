@@ -116,7 +116,7 @@ async function handleSave() {
   border-radius: 4px;
 }
 :deep(.mp-textarea .el-textarea__inner::-webkit-scrollbar-thumb) {
-  background-color: #909399;
+  background-color: var(--ad-text-secondary);
   border: 2px solid #d8d8d8;
   border-radius: 4px;
 }

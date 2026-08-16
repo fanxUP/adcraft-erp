@@ -45,7 +45,7 @@
             <el-button type="danger" :loading="bumping" @click="handleBumpToken">
               强制所有用户重新登录
             </el-button>
-            <div style="font-size: 12px; color: #909399; margin-top: 4px">
+            <div style="font-size: 12px; color: var(--ad-text-secondary); margin-top: 4px">
               发布需要重新登录才能生效的更新后，点击此按钮强制所有已登录用户退出并重新登录
             </div>
           </div>
@@ -116,7 +116,7 @@
           </el-form-item>
           <el-form-item label="API Key">
             <el-input v-model="form.AI_API_KEY" type="password" show-password placeholder="输入新Key覆盖" />
-            <div style="font-size: 12px; color: #909399; margin-top: 4px">当前: {{ settings?.AI_API_KEY || '未配置' }}</div>
+            <div style="font-size: 12px; color: var(--ad-text-secondary); margin-top: 4px">当前: {{ settings?.AI_API_KEY || '未配置' }}</div>
           </el-form-item>
           <el-form-item label="API Base URL">
             <el-input v-model="form.AI_API_BASE_URL" placeholder="留空使用默认" />

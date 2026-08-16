@@ -205,7 +205,7 @@
         </el-form-item>
         <el-form-item label="欠款金额">
           <el-input-number v-model="form.debt_amount" :min="0" :precision="2" style="width: 100%" placeholder="0 表示无欠款" />
-          <div style="font-size: 12px; color: #909399; margin-top: 4px">大于0时自动记为欠款</div>
+          <div style="font-size: 12px; color: var(--ad-text-secondary); margin-top: 4px">大于0时自动记为欠款</div>
         </el-form-item>
         <el-form-item label="成本类别" required>
           <el-select
@@ -226,7 +226,7 @@
         </el-form-item>
         <el-form-item label="收款公司">
           <el-input v-model="form.payee_company_name" placeholder="输入对方收款公司名称" clearable />
-          <div style="font-size: 12px; color: #909399; margin-top: 2px">对方收款公司名称（可选）</div>
+          <div style="font-size: 12px; color: var(--ad-text-secondary); margin-top: 2px">对方收款公司名称（可选）</div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="备注…" />
@@ -764,9 +764,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
+  background: var(--ad-darker);
   font-size: 12px;
-  color: #909399;
+  color: var(--ad-text-secondary);
   font-weight: bold;
 }
 .att-del {

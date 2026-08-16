@@ -40,7 +40,7 @@
             <el-option v-for="emp in employeeOptions" :key="emp.id" :label="emp.name + (emp.employee_no ? '(' + emp.employee_no + ')' : '')" :value="emp.user_id || emp.id" :disabled="!emp.user_id" />
           </el-select>
           <el-button type="primary" :loading="assigning" @click="handleAssign">派发</el-button>
-          <span v-if="task?.assigned_to_name" style="color: #999; font-size: 13px;">当前：{{ task.assigned_to_name }}</span>
+          <span v-if="task?.assigned_to_name" style="color: var(--ad-text-secondary); font-size: 13px;">当前：{{ task.assigned_to_name }}</span>
         </div>
       </el-card>
 
@@ -73,7 +73,7 @@
       <el-card v-if="authStore.isAdmin" shadow="never" class="info-card" style="margin-top: 16px; border-color: #ff4d4f;">
         <template #header><span style="color: #ff4d4f;">危险操作</span></template>
         <el-button type="danger" :loading="deleting" @click="handleDelete">删除此任务</el-button>
-        <span style="color: #999; margin-left: 12px; font-size: 12px;">删除后订单将回退到确认状态，下游任务将被清除</span>
+        <span style="color: var(--ad-text-secondary); margin-left: 12px; font-size: 12px;">删除后订单将回退到确认状态，下游任务将被清除</span>
       </el-card>
 
       <el-card shadow="never" class="info-card" style="margin-top: 16px">

@@ -36,7 +36,7 @@
               <el-button v-if="selectedRole" type="danger" size="small" :loading="savingPerms" @click="handleSavePerms">保存权限</el-button>
             </div>
           </template>
-          <div v-if="!selectedRole" style="color: #909399; text-align: center; padding: 40px 0">
+          <div v-if="!selectedRole" style="color: var(--ad-text-secondary); text-align: center; padding: 40px 0">
             ← 请先在左侧选择一个角色
           </div>
           <div v-else>
@@ -48,7 +48,7 @@
               <div style="font-weight: bold; margin-bottom: 8px; color: var(--ad-text)">{{ groupLabels[group as string] || group }}</div>
               <el-checkbox-group v-model="checkedPermIds">
                 <el-checkbox v-for="p in perms" :key="p.id" :value="p.id" style="margin-bottom: 4px">
-                  {{ p.name }} <span style="color: #909399; font-size: 12px">({{ p.code }})</span>
+                  {{ p.name }} <span style="color: var(--ad-text-secondary); font-size: 12px">({{ p.code }})</span>
                 </el-checkbox>
               </el-checkbox-group>
             </div>

@@ -6,7 +6,7 @@
     <el-row :gutter="16" style="margin-bottom: 20px">
       <el-col :xs="12" :sm="8" :md="6" v-for="card in overviewCards" :key="card.label" style="margin-bottom: 12px">
         <el-card shadow="hover" body-style="padding: 16px">
-          <div style="font-size: 13px; color: #909399; margin-bottom: 8px">{{ card.label }}</div>
+          <div style="font-size: 13px; color: var(--ad-text-secondary); margin-bottom: 8px">{{ card.label }}</div>
           <div style="font-size: 24px; font-weight: 700" :style="{ color: card.color || '#303133' }">
             {{ card.value }}
           </div>
@@ -40,13 +40,13 @@
       <el-col :span="8" style="margin-bottom: 20px">
         <el-card>
           <template #header><span style="font-weight: 600">到期提醒</span></template>
-          <div v-if="reminders.length === 0" style="color: #909399; text-align: center; padding: 20px">暂无提醒</div>
+          <div v-if="reminders.length === 0" style="color: var(--ad-text-secondary); text-align: center; padding: 20px">暂无提醒</div>
           <div v-for="r in reminders" :key="r.type + r.plate" style="padding: 8px 0; border-bottom: 1px solid #f0f0f0">
             <el-tag :type="r.urgent ? 'danger' : 'warning'" size="small" style="margin-right: 8px">
               {{ r.type === 'insurance' ? '保险' : r.type === 'inspection' ? '年检' : '保养' }}
             </el-tag>
             <span>{{ r.vehicle }} ({{ r.plate }})</span>
-            <div style="font-size: 12px; color: #909399; margin-top: 4px">
+            <div style="font-size: 12px; color: var(--ad-text-secondary); margin-top: 4px">
               {{ r.expire_date || r.due_date }} · 剩余 {{ r.days_left }} 天
             </div>
           </div>

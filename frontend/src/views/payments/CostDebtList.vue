@@ -65,7 +65,7 @@
           >
             冲红结清
           </el-button>
-          <span v-else style="color: #c0c4cc; font-size: 12px">{{ formatDate(row.settled_at) }}</span>
+          <span v-else style="color: var(--ad-text-secondary); font-size: 12px">{{ formatDate(row.settled_at) }}</span>
         </template>
       </el-table-column>
     </el-table>

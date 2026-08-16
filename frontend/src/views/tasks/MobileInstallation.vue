@@ -549,7 +549,7 @@ watch(() => document.visibilityState, (state) => {
 }
 .header-subtitle {
   font-size: 13px;
-  color: #666;
+  color: var(--ad-text-secondary);
   margin-top: 4px;
   display: flex;
   gap: 8px;
@@ -688,7 +688,7 @@ watch(() => document.visibilityState, (state) => {
   align-items: center;
   margin-bottom: 6px;
 }
-.task-no { font-size: 12px; color: #666; }
+.task-no { font-size: 12px; color: var(--ad-text-secondary); }
 .task-name {
   font-weight: 600;
   font-size: 15px;

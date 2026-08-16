@@ -42,7 +42,7 @@
             ¥{{ Number(agreementMap.get(row.id)!.price_value).toFixed(2) }}
           </template>
           <template v-else>
-            <span style="color: #c0c4cc;">-</span>
+            <span style="color: var(--ad-text-secondary);">-</span>
           </template>
         </template>
       </el-table-column>
@@ -296,7 +296,7 @@ async function saveEdit() {
   border-radius: 4px;
 }
 :deep(.mp-textarea .el-textarea__inner::-webkit-scrollbar-thumb) {
-  background-color: #909399;
+  background-color: var(--ad-text-secondary);
   border: 2px solid #d8d8d8;
   border-radius: 4px;
 }

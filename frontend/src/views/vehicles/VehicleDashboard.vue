@@ -257,7 +257,7 @@ onMounted(async () => {
 .card-blue .stat-value { color: #409eff; }
 .card-orange .stat-value { color: #e6a23c; }
 .card-red .stat-value { color: #f56c6c; }
-.card-gray .stat-value { color: #909399; }
+.card-gray .stat-value { color: var(--ad-text-secondary); }
 .card-purple .stat-value { color: #9b59b6; }
 .reminder-section { margin-bottom: 12px; }
 .reminder-section h4 { margin: 0 0 6px; font-size: 14px; color: var(--el-text-color-primary); }

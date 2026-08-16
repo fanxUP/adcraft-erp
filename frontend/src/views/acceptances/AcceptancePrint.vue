@@ -47,16 +47,16 @@
           <template v-for="(row, idx) in displayRows" :key="idx">
             <!-- 分组标题行 -->
             <tr v-if="row.type === 'group-header'" class="group-header-row">
-              <td colspan="11" style="font-weight: 600; background: #f5f7fa; border-bottom: 2px solid #409eff; padding: 6px 8px;">
+              <td colspan="11" style="font-weight: 600; background: var(--ad-darker); border-bottom: 2px solid #409eff; padding: 6px 8px;">
                 分项：{{ row.groupName }}
               </td>
             </tr>
             <!-- 分组合计行 -->
             <tr v-else-if="row.type === 'group-total'" class="group-total-row">
-              <td colspan="8" style="text-align: right; font-weight: 600; background: #fafafa; border-top: 1px solid #dcdfe6; padding: 6px 8px;">分项合计</td>
-              <td style="text-align: right; font-weight: 600; background: #fafafa; border-top: 1px solid #dcdfe6; padding: 6px 8px; white-space: nowrap;">¥ {{ row.total.toFixed(2) }}</td>
-              <td style="background: #fafafa; border-top: 1px solid #dcdfe6;"></td>
-              <td style="background: #fafafa; border-top: 1px solid #dcdfe6;"></td>
+              <td colspan="8" style="text-align: right; font-weight: 600; background: var(--ad-darker); border-top: 1px solid #dcdfe6; padding: 6px 8px;">分项合计</td>
+              <td style="text-align: right; font-weight: 600; background: var(--ad-darker); border-top: 1px solid #dcdfe6; padding: 6px 8px; white-space: nowrap;">¥ {{ row.total.toFixed(2) }}</td>
+              <td style="background: var(--ad-darker); border-top: 1px solid #dcdfe6;"></td>
+              <td style="background: var(--ad-darker); border-top: 1px solid #dcdfe6;"></td>
             </tr>
             <!-- 明细行 -->
             <tr v-else>
@@ -71,13 +71,13 @@
               <td style="text-align: right">{{ row.item.subtotal != null ? row.item.subtotal.toFixed(2) : '-' }}</td>
               <td style="text-align: center; padding: 4px;">
                 <img v-if="row.item.image_url" :src="row.item.image_url" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;" />
-                <span v-else style="color: #999;">-</span>
+                <span v-else style="color: var(--ad-text-secondary);">-</span>
               </td>
               <td><div class="wrap-text">{{ row.item.remark || '' }}</div></td>
             </tr>
           </template>
           <tr v-if="!form.items || form.items.length === 0">
-            <td colspan="11" style="text-align: center; color: #999;">暂无验收明细</td>
+            <td colspan="11" style="text-align: center; color: var(--ad-text-secondary);">暂无验收明细</td>
           </tr>
 
           <!-- 金额汇总 -->
@@ -442,7 +442,7 @@ function handlePrint() {
   font-size: 16px;
 }
 .preview-table th {
-  background: #f5f5f5;
+  background: var(--ad-darker);
   font-weight: bold;
   text-align: center;
 }
@@ -456,7 +456,7 @@ function handlePrint() {
   margin: 16px 0;
   padding: 12px;
   border: 1px solid #ddd;
-  background: #fafafa;
+  background: var(--ad-darker);
   font-size: 16px;
 }
 .conclusion-row {
@@ -498,7 +498,7 @@ function handlePrint() {
 .signature-date {
   font-size: 16px;
   font-weight: bold;
-  color: #666;
+  color: var(--ad-text-secondary);
 }
 
 .group-header-row td {

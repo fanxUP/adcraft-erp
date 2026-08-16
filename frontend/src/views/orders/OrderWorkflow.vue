@@ -257,7 +257,7 @@ function cancellClass() {
 .ow-line {
   width: 36px;
   height: 2px;
-  background: #e8e8e8;
+  background: var(--ad-darker);
   border-radius: 2px;
   transition: all 0.3s ease;
 }
@@ -269,7 +269,7 @@ function cancellClass() {
 
 .ow-point {
   font-size: 12px;
-  color: #d9d9d9;
+  color: var(--ad-text-secondary);
   margin-left: -2px;
   transition: all 0.3s ease;
 }
@@ -349,12 +349,12 @@ function cancellClass() {
   cursor: pointer;
 }
 
-.card-disabled { border-color: #f0f0f0; background: #fafafa; }
-.card-disabled .ow-label { color: #d9d9d9; }
+.card-disabled { border-color: #f0f0f0; background: var(--ad-darker); }
+.card-disabled .ow-label { color: var(--ad-text-secondary); }
 
 .icon-disabled {
-  background: #f5f5f5;
-  color: #d9d9d9;
+  background: var(--ad-darker);
+  color: var(--ad-text-secondary);
   border: 2px solid #e8e8e8;
 }
 

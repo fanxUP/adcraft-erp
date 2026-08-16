@@ -164,7 +164,7 @@
                 <template #default="{ row }">
                   <template v-if="row.type === 'item'">
                     <el-image v-if="row.item.image_url" :src="row.item.image_url" :preview-src-list="[row.item.image_url]" fit="cover" style="width: 32px; height: 32px; border-radius: 4px; cursor: pointer;" />
-                    <span v-else style="color: #999;">-</span>
+                    <span v-else style="color: var(--ad-text-secondary);">-</span>
                   </template>
                 </template>
               </el-table-column>

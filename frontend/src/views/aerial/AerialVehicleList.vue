@@ -20,7 +20,7 @@
           </el-tag>
           {{ v.plate_number }} {{ v.vehicle_name }} — {{ getItemParts(v).join('，') }}
         </div>
-        <div v-if="expiringVehicles.length > 5" style="color: #909399; margin-top: 4px">...还有 {{ expiringVehicles.length - 5 }} 辆</div>
+        <div v-if="expiringVehicles.length > 5" style="color: var(--ad-text-secondary); margin-top: 4px">...还有 {{ expiringVehicles.length - 5 }} 辆</div>
       </template>
     </el-alert>
     <el-table :data="list" stripe v-loading="loading">
@@ -105,7 +105,7 @@
               <a :href="att.file_url" target="_blank" class="att-link">{{ VEH_ATT_LABELS[att.attachment_type] || att.attachment_type }}·{{ att.file_name }}</a>
             </el-tag>
           </div>
-          <div v-else style="color: #909399; font-size: 13px">暂无附件</div>
+          <div v-else style="color: var(--ad-text-secondary); font-size: 13px">暂无附件</div>
         </template>
       </el-form>
       <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>

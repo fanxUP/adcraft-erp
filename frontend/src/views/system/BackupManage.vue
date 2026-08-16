@@ -129,7 +129,7 @@
     <!-- Delete confirm dialog -->
     <el-dialog v-model="deleteConfirmVisible" title="确认删除" width="400px" :close-on-click-modal="false">
       <p style="color: var(--ad-text)">确定删除备份文件 <strong>{{ toDelete?.filename }}</strong> 吗？</p>
-      <p style="color: #999; font-size: 13px; margin-top: 4px">此操作不可撤销。</p>
+      <p style="color: var(--ad-text-secondary); font-size: 13px; margin-top: 4px">此操作不可撤销。</p>
       <template #footer>
         <el-button @click="deleteConfirmVisible = false">取消</el-button>
         <el-button type="danger" @click="confirmDelete" :loading="!!deleting">

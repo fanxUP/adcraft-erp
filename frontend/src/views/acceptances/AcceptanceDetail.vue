@@ -263,7 +263,7 @@
       <div style="display: flex; align-items: center; gap: 16px;">
         <span style="color: #ff4d4f; font-weight: 600;">危险操作</span>
         <el-button type="danger" :loading="deleting" @click="handleAdminDelete">删除此验收单</el-button>
-        <span style="color: #999; font-size: 12px;">删除后订单将回退到安装中状态，验收单进入回收站</span>
+        <span style="color: var(--ad-text-secondary); font-size: 12px;">删除后订单将回退到安装中状态，验收单进入回收站</span>
       </div>
     </el-card>
 

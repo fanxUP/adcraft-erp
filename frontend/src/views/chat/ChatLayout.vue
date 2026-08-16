@@ -457,7 +457,7 @@ onUnmounted(() => {
 
 .user-role {
   font-size: 12px;
-  color: #909399;
+  color: var(--ad-text-secondary);
 }
 
 .conversation-item {
@@ -523,13 +523,13 @@ onUnmounted(() => {
 
 .conv-last-message {
   font-size: 12px;
-  color: #909399;
+  color: var(--ad-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 
   .sender {
-    color: #606266;
+    color: var(--ad-text-secondary);
   }
 }
 
@@ -542,7 +542,7 @@ onUnmounted(() => {
 
 .conv-time {
   font-size: 12px;
-  color: #909399;
+  color: var(--ad-text-secondary);
   margin-bottom: 4px;
 }
 
@@ -564,7 +564,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #909399;
+  color: var(--ad-text-secondary);
 
   p {
     margin-top: 16px;

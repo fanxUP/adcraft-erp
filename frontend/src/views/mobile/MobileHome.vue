@@ -240,7 +240,7 @@ onMounted(() => {
 }
 .header-date {
   font-size: 13px;
-  color: #666;
+  color: var(--ad-text-secondary);
   text-align: right;
   white-space: nowrap;
 }
@@ -395,7 +395,7 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 4px;
 }
-.task-no { font-size: 12px; color: #666; }
+.task-no { font-size: 12px; color: var(--ad-text-secondary); }
 .task-name {
   font-weight: 600;
   font-size: 14px;

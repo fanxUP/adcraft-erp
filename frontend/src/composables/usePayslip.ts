@@ -128,16 +128,16 @@ body { margin: 0; font-family: "Songti SC", SimSun, "PingFang SC", "Microsoft Ya
 .ps-detail { width: 100%; border-collapse: collapse; }
 .ps-detail th, .ps-detail td { border: 1px solid #333; padding: 4px 8px; font-size: 12px; }
 .ps-group th { background: #e8eef5; font-weight: 700; text-align: left; padding: 4px 10px; }
-.ps-hdr th { background: #f5f5f5; }
+.ps-hdr th { background: var(--ad-darker); }
 .ps-item { text-align: left; }
 .ps-amt { text-align: right; font-family: "Courier New", monospace; font-weight: 700; white-space: nowrap; }
 .ps-summary { width: 100%; border-collapse: collapse; margin-top: 8px; }
 .ps-summary td { border: 1px solid #333; padding: 4px 10px; font-size: 13px; }
-.ps-summary td.label { text-align: right; background: #f5f5f5; font-weight: 700; width: 50%; }
+.ps-summary td.label { text-align: right; background: var(--ad-darker); font-weight: 700; width: 50%; }
 .ps-net td { background: #e2f0e2; font-weight: 700; font-size: 14px; }
 .ps-remark { margin-top: 8px; border: 1px solid #333; padding: 4px 8px; min-height: 22px; font-size: 12px; }
 .ps-sign .ps-line { margin-top: 8px; font-size: 12px; }
 .ps-blank { display: inline-block; width: 64mm; height: 7mm; vertical-align: bottom; border-bottom: 1px solid #333; margin: 0 4px; }
 .ps-date { width: 30mm; }
-.ps-note { margin-top: 10px; font-size: 11px; color: #666; }
+.ps-note { margin-top: 10px; font-size: 11px; color: var(--ad-text-secondary); }
 `

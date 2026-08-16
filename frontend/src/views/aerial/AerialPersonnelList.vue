@@ -95,7 +95,7 @@
               <a :href="att.file_url" target="_blank" class="att-link">{{ ATT_TYPE_LABELS[att.attachment_type] || att.attachment_type }}·{{ att.file_name }}</a>
             </el-tag>
           </div>
-          <div v-else style="color: #909399; font-size: 13px">暂无附件</div>
+          <div v-else style="color: var(--ad-text-secondary); font-size: 13px">暂无附件</div>
         </template>
         <el-form-item label="外协人员"><el-switch v-model="form.is_external" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" /></el-form-item>
@@ -235,8 +235,8 @@ onMounted(fetchData)
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
 .idcard-slot { display: flex; align-items: center; gap: 10px; width: 100%; }
-.idcard-preview { width: 70px; height: 46px; border-radius: 4px; border: 1px solid #e4e7ed; }
-.idcard-tip { color: #c0c4cc; font-size: 13px; }
+.idcard-preview { width: 70px; height: 46px; border-radius: 4px; border: 1px solid var(--ad-border); }
+.idcard-tip { color: var(--ad-text-secondary); font-size: 13px; }
 .att-upload-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .att-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .att-link { text-decoration: none; }

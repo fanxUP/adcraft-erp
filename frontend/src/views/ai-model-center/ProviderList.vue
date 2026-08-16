@@ -327,7 +327,7 @@ onMounted(loadProviders)
 .stat-value { font-size: 28px; font-weight: 700; color: #409eff; }
 .stat-value.success { color: #67c23a; }
 .stat-value.warning { color: #e6a23c; }
-.stat-label { font-size: 13px; color: #909399; margin-top: 4px; }
+.stat-label { font-size: 13px; color: var(--ad-text-secondary); margin-top: 4px; }
 
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
 .provider-card { border-radius: 8px; }
@@ -337,23 +337,23 @@ onMounted(loadProviders)
 .card-title-row { display: flex; align-items: center; gap: 12px; }
 .provider-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
 .icon-enabled { background: #ecf5ff; color: #409eff; }
-.icon-disabled { background: #f4f4f5; color: #c0c4cc; }
+.icon-disabled { background: #f4f4f5; color: var(--ad-text-secondary); }
 .provider-name { font-size: 16px; font-weight: 600; }
-.provider-code { font-size: 12px; color: #909399; margin-top: 2px; }
+.provider-code { font-size: 12px; color: var(--ad-text-secondary); margin-top: 2px; }
 
 .card-body { margin-bottom: 12px; }
 .info-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
-.info-row .label { color: #909399; }
+.info-row .label { color: var(--ad-text-secondary); }
 .info-row .value.url { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .card-footer { display: flex; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid #ebeef5; }
-.enable-label { font-size: 12px; color: #909399; }
+.enable-label { font-size: 12px; color: var(--ad-text-secondary); }
 .card-actions { margin-left: auto; display: flex; gap: 4px; }
 
 .test-result .test-status { text-align: center; margin-bottom: 20px; }
 .test-result .test-status .success-text { font-size: 18px; color: #67c23a; margin-top: 8px; }
 .test-result .test-status .fail-text { font-size: 18px; color: #f56c6c; margin-top: 8px; }
 .test-output, .test-error { margin-top: 16px; }
-.test-output pre, .test-error pre { background: #f5f7fa; padding: 12px; border-radius: 4px; font-size: 13px; max-height: 200px; overflow: auto; white-space: pre-wrap; }
-.label { font-size: 13px; color: #909399; margin-bottom: 4px; }
+.test-output pre, .test-error pre { background: var(--ad-darker); padding: 12px; border-radius: 4px; font-size: 13px; max-height: 200px; overflow: auto; white-space: pre-wrap; }
+.label { font-size: 13px; color: var(--ad-text-secondary); margin-bottom: 4px; }
 </style>

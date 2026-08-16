@@ -255,7 +255,7 @@ function formatSpec(item: QuoteItemResponse) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #999;
+  color: var(--ad-text-secondary);
   font-size: 14px;
 }
 .company-name {
@@ -264,7 +264,7 @@ function formatSpec(item: QuoteItemResponse) {
 }
 .company-detail {
   font-size: 12px;
-  color: #666;
+  color: var(--ad-text-secondary);
   margin-top: 4px;
 }
 .preview-title {

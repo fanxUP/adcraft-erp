@@ -15,7 +15,7 @@
       <el-table-column prop="display_name" label="显示名称" min-width="140" />
       <el-table-column prop="upstream_model_code" label="上游模型" min-width="140">
         <template #default="{ row }">
-          <code style="font-size: 12px; background: #f5f7fa; padding: 2px 6px; border-radius: 3px;">
+          <code style="font-size: 12px; background: var(--ad-darker); padding: 2px 6px; border-radius: 3px;">
             {{ row.upstream_model_code }}
           </code>
         </template>

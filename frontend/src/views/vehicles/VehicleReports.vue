@@ -446,16 +446,16 @@ onMounted(loadAll)
 .stat-info .stat-value {
   font-size: 24px;
   font-weight: bold;
-  color: #303133;
+  color: var(--ad-text);
 }
 .stat-info .stat-label {
   font-size: 13px;
-  color: #909399;
+  color: var(--ad-text-secondary);
 }
 .stat-sub {
   margin-top: 8px;
   font-size: 12px;
-  color: #909399;
+  color: var(--ad-text-secondary);
   padding-left: 60px;
 }
 .mini-stat {
@@ -464,11 +464,11 @@ onMounted(loadAll)
 .mini-value {
   font-size: 18px;
   font-weight: bold;
-  color: #303133;
+  color: var(--ad-text);
 }
 .mini-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--ad-text-secondary);
   margin-top: 4px;
 }
 .section-card {

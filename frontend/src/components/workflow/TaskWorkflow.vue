@@ -151,7 +151,7 @@ function iconClass(status: string) {
 }
 .cur-tag { color: var(--el-color-primary); }
 .done-tag { color: #52c41a; }
-.future-tag { color: #d9d9d9; }
+.future-tag { color: var(--ad-text-secondary); }
 .ready-tag { color: var(--el-color-primary); }
 
 /* 连接箭头 */
@@ -178,7 +178,7 @@ function iconClass(status: string) {
 
 .tw-point {
   font-size: 11px;
-  color: #d9d9d9;
+  color: var(--ad-text-secondary);
   margin-left: -2px;
   transition: all 0.3s ease;
 }
@@ -244,11 +244,11 @@ function iconClass(status: string) {
 
 /* 不可达 */
 .card-disabled { border-color: var(--ad-border); background: var(--ad-darker); }
-.card-disabled .tw-label { color: #d9d9d9; }
+.card-disabled .tw-label { color: var(--ad-text-secondary); }
 
 .icon-disabled {
   background: var(--ad-darker);
-  color: #d9d9d9;
+  color: var(--ad-text-secondary);
   border: 2px solid #e8e8e8;
 }
 
