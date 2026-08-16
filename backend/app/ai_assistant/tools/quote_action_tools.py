@@ -22,8 +22,7 @@ async def _get_quote_service_and_detail(db, business_id: str):
     if quote:
         return service, quote
 
-    # 报价转订单后同一条单据的 doc_type 会变为 order，get_by_id 按 quote 过滤
-    # 查不到，这里直接按 ID 定位单据，给出明确提示而不是报"不存在"
+    # 防御性兜底：历史数据可能仍存在"同 ID 翻转"导致的订单，按 ID 定位并给明确提示
     from sqlalchemy import select
 
     from app.models.business_document import BusinessDocument
@@ -149,11 +148,11 @@ async def execute_quote_conversion(
     _ensure_live_status(quote, current_status, stale_message="原操作已停止")
     if current_status != "confirmed":
         raise ValueError("只有已确认的报价单可以转订单")
-    order = await service.convert_doc_type(UUID(business_id), "order", user.id)
+    order = await service.convert_regular_quote_to_order(UUID(business_id), user.id)
     return {
         "status": "converted",
         "business_type": "order",
-        "business_id": business_id,
+        "business_id": order.get("id", business_id),
         "business_no": order.get("doc_no", ""),
         "previous_status": current_status,
         "current_status": order.get("status", "pending_confirm"),

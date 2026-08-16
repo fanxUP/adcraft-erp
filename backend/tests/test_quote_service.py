@@ -1,5 +1,46 @@
 """统一业务单据服务的报价路径回归测试。"""
 
+import app.models.acceptance  # noqa: F401
+import app.models.aerial  # noqa: F401
+import app.models.ai_health_check  # noqa: F401
+import app.models.ai_model  # noqa: F401
+import app.models.ai_prompt_execution_log  # noqa: F401
+import app.models.ai_prompt_template  # noqa: F401
+import app.models.ai_prompt_version  # noqa: F401
+import app.models.ai_provider  # noqa: F401
+import app.models.ai_request  # noqa: F401
+import app.models.ai_task_route  # noqa: F401
+import app.models.ai_usage_daily  # noqa: F401
+import app.models.attendance  # noqa: F401
+import app.models.base  # noqa: F401
+import app.models.business_document  # noqa: F401
+import app.models.cdr_quote  # noqa: F401
+import app.models.chat  # noqa: F401
+import app.models.contract  # noqa: F401
+import app.models.customer  # noqa: F401
+import app.models.department  # noqa: F401
+import app.models.employee  # noqa: F401
+import app.models.employment_history  # noqa: F401
+import app.models.framework_contract  # noqa: F401
+import app.models.inventory  # noqa: F401
+import app.models.leave  # noqa: F401
+import app.models.notification  # noqa: F401
+import app.models.operation_log  # noqa: F401
+import app.models.outsource  # noqa: F401
+import app.models.payment  # noqa: F401
+import app.models.product  # noqa: F401
+import app.models.project_cost  # noqa: F401
+import app.models.salary  # noqa: F401
+import app.models.salary_grid  # noqa: F401
+import app.models.salary_rule  # noqa: F401
+import app.models.task  # noqa: F401
+import app.models.user  # noqa: F401
+import app.models.vehicle  # noqa: F401
+
+import app.models.customer  # noqa: F401  注册 ORM mapper，供 BusinessDocument 实例化
+import app.models.task  # noqa: F401  注册 DesignTask/ProductionTask/InstallationTask
+import app.models.user  # noqa: F401
+
 from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -271,6 +312,43 @@ async def test_convert_quote_initializes_order_receivable(service):
     assert order["unpaid_amount"] == 1680.5
     assert order["gross_profit"] == 1680.5
     assert quote.doc_type == "order"
+    repository.create_version.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_convert_regular_quote_to_order_preserves_quote(service):
+    """ADR-002：常规报价转订单应新建订单并回链报价，报价保留 converted 而非原地变订单。"""
+    quote_service, repository = service
+    db = quote_service.db
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+
+    quote = make_quote(status="confirmed", total_amount=Decimal("1680.50"))
+    quote.items = [make_quote_item(unit_price=Decimal("100"), subtotal_amount=Decimal("100"))]
+
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = quote
+    db.execute = AsyncMock(return_value=execute_result)
+
+    with patch.object(quote_service, "_to_detail", return_value={"id": "new-order-id", "doc_no": "O20260730-0001"}):
+        with patch("app.services.number_generator.generate_order_no", AsyncMock(return_value="O20260730-0001")):
+            order = await quote_service.convert_regular_quote_to_order(SAMPLE_QUOTE_ID, uuid4())
+
+    # 报价保留为报价，状态变为 converted（不再原地变 order）
+    assert quote.doc_type == "quote"
+    assert quote.status == "converted"
+
+    # 新建订单：回链来源报价，且是全新单据
+    added_order = db.add.call_args_list[0].args[0]
+    assert added_order.doc_type == "order"
+    assert added_order.source_quote_id == SAMPLE_QUOTE_ID
+    assert added_order.doc_no == "O20260730-0001"
+
+    # 明细已复制且回链原明细
+    copied_item = db.add.call_args_list[1].args[0]
+    assert copied_item.source_quote_item_id == quote.items[0].id
+    assert copied_item.document_id == added_order.id
+
     repository.create_version.assert_awaited_once()
 
 

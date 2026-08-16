@@ -1064,6 +1064,120 @@ class BusinessDocumentService:
         # 所有 FK 自动跟随 — document_id 未改变
         return self._to_detail(doc)
 
+    async def convert_regular_quote_to_order(self, quote_id: UUID, created_by: UUID) -> dict:
+        """常规报价转订单——新建订单并回链来源报价，保留报价历史（ADR-002）。
+
+        与 convert_doc_type 的「同 ID 翻转」不同：创建新订单（全新 id、doc_no=O-xxx），
+        原报价保留并置为 converted；订单 source_quote_id 指向报价，明细 source_quote_item_id 回链。
+        """
+        from app.models.business_document import BusinessDocument, BusinessDocumentItem
+        from app.services.number_generator import generate_order_no
+        from app.services.order_customer_service import ensure_document_customer
+
+        result = await self.db.execute(
+            select(BusinessDocument).where(BusinessDocument.id == quote_id)
+        )
+        quote = result.scalar_one_or_none()
+        if not quote or quote.doc_type != "quote" or quote.deleted_at is not None:
+            raise ValueError("报价不存在")
+        if quote.quote_mode != "regular":
+            raise ValueError("仅常规报价支持此转换")
+
+        # 幂等：已转换则返回现有订单
+        if quote.status == "converted":
+            existing = await self.db.execute(
+                select(BusinessDocument).where(
+                    BusinessDocument.source_quote_id == quote_id,
+                    BusinessDocument.doc_type == "order",
+                    BusinessDocument.deleted_at.is_(None),
+                ).order_by(BusinessDocument.created_at.desc()).limit(1)
+            )
+            e = existing.scalar_one_or_none()
+            if e:
+                return self._to_detail(e)
+            raise ValueError("该报价已转订单，不能重复转换")
+        if quote.status != "confirmed":
+            raise ValueError("只有已确认的报价单可以转订单")
+
+        # 补齐正式客户（自由输入客户的报价）
+        await ensure_document_customer(self.db, quote, created_by)
+
+        # 快照报价版本，保留转单前历史
+        ver_no = await self.repo.get_next_version_no(quote_id)
+        await self.repo.create_version(quote_id, ver_no, self._to_detail(quote), created_by)
+
+        # 新建订单
+        order_no = await generate_order_no(self.db)
+        order = BusinessDocument(
+            doc_type="order",
+            doc_no=order_no,
+            customer_id=quote.customer_id,
+            customer_name=quote.customer_name,
+            project_name=quote.project_name,
+            sales_user_id=quote.sales_user_id,
+            department=quote.department,
+            contact_person=None,
+            contact_phone=None,
+            status="pending_confirm",
+            total_amount=quote.total_amount,
+            paid_amount=0,
+            unpaid_amount=quote.total_amount,
+            cost_amount=0,
+            gross_profit=quote.total_amount,
+            source_quote_id=quote.id,
+            remark=quote.remark,
+        )
+        self.db.add(order)
+        await self.db.flush()
+
+        # 复制明细（source_quote_item_id 回链原明细）
+        for src in sorted(quote.items or [], key=lambda it: it.sort_order or 0):
+            item = BusinessDocumentItem(
+                document_id=order.id,
+                source_quote_item_id=src.id,
+                item_name=src.item_name,
+                product_id=src.product_id,
+                material_id=src.material_id,
+                process_id=src.process_id,
+                length=src.length,
+                length_unit=src.length_unit,
+                width=src.width,
+                width_unit=src.width_unit,
+                height=src.height,
+                height_unit=src.height_unit,
+                quantity=src.quantity,
+                unit=src.unit,
+                use_area=src.use_area,
+                quantity_mode=src.quantity_mode,
+                pieces=src.pieces,
+                area=src.area,
+                unit_price=src.unit_price,
+                process_fee=src.process_fee,
+                installation_fee=src.installation_fee,
+                design_fee=src.design_fee,
+                transport_fee=src.transport_fee,
+                other_fee=src.other_fee,
+                subtotal_amount=src.subtotal_amount,
+                remark=src.remark,
+                image_url=src.image_url,
+                sort_order=src.sort_order,
+                group_name=src.group_name,
+                material_process=src.material_process,
+            )
+            # 追加到关系并加入会话，确保持久化且 _to_detail(order) 能返回完整明细
+            order.items.append(item)
+            self.db.add(item)
+
+        # 状态日志
+        await self.repo.create_status_log(order.id, None, "pending_confirm", "来自常规报价转换", created_by)
+        await self.repo.create_status_log(quote_id, quote.status, "converted", "已转为订单", created_by)
+
+        # 报价状态 → converted
+        quote.status = "converted"
+
+        await self.db.commit()
+        return self._to_detail(order)
+
     # ═══════════════════════════════════════════
     # 恢复
     # ═══════════════════════════════════════════

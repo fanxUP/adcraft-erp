@@ -437,7 +437,7 @@ async def convert_quote_to_order(
     current_user: User = Depends(require_permission(PERM_QUOTE_CONVERT)),
 ):
     service = BusinessDocumentService(db, doc_type='quote')
-    order = await service.convert_doc_type(UUID(quote_id), 'order', current_user.id)
+    order = await service.convert_regular_quote_to_order(UUID(quote_id), current_user.id)
     return success(order)
 
 
