@@ -43,29 +43,31 @@ export function buildCols(items: SalaryItem[]): Col[] {
   ]
 }
 
-// 顶层每组一种浅色（黑字可读），用于区分工资表各大块边界
+// 顶层每组一种语义色，用 color-mix 与主题表面混合，深浅模式都柔和可读
+const tint = (c: string) => `color-mix(in srgb, ${c} 30%, var(--ad-card))`
+
 export const HDR_BG: Record<string, string> = {
-  no: "#EEEEEE", dept: "#EEEEEE", name: "#EEEEEE",      // 工号/部门/姓名
-  missed_days: "#F8BBD0",                                // 旷工 粉
-  att_std: "#FFE0B2",                                    // 全勤300 琥珀
-  perf_std: "#FFF9C4",                                   // 绩效300 黄
-  basic: "#C8E6C9",                                      // 月工资标准 绿
-  "g:应发金额": "#B3E5FC",                                // 应发金额 浅蓝
-  "g:应扣金额": "#E1BEE7",                                // 应扣金额 紫
-  net: "#B2DFDB",                                        // 实发工资 青
-  __remark: "#D7CCC8",                                   // 备注 棕
-  __payment: "#C5CAE9",                                  // 支付状态 靛
-  last_net: "#FFCCBC",                                   // 上月实发工资 深橙
+  no: tint("#90caf9"), dept: tint("#90caf9"), name: tint("#90caf9"),   // 工号/部门/姓名 蓝
+  missed_days: tint("#f48fb1"),                                        // 旷工 粉
+  att_std: tint("#ffcc80"),                                            // 全勤300 琥珀
+  perf_std: tint("#fff59d"),                                           // 绩效300 黄
+  basic: tint("#a5d6a7"),                                              // 月工资标准 绿
+  "g:应发金额": tint("#81d4fa"),                                        // 应发金额 浅蓝
+  "g:应扣金额": tint("#ce93d8"),                                        // 应扣金额 紫
+  net: tint("#80cbc4"),                                                // 实发工资 青
+  __remark: tint("#bcaaa4"),                                           // 备注 棕
+  __payment: tint("#9fa8da"),                                          // 支付状态 靛
+  last_net: tint("#ffab91"),                                           // 上月实发工资 深橙
 }
 
 export function hdrBg(h: HCell, ri: number): string {
-  if (ri === 0) return HDR_BG[h.key || ""] ?? "#F0F0F0"  // 顶层：每组独立色
-  return ri === 1 ? "#F0F0F0" : "#FFFFFF"                // 二级浅灰 / 叶子白
+  if (ri === 0) return HDR_BG[h.key || ""] ?? tint("#90a4ae")  // 顶层：每组独立色
+  return ri === 1 ? tint("#90a4ae") : "var(--ad-card)"         // 二级浅灰 / 叶子卡片色
 }
 
 export function hdrStyle(h: HCell, ri: number) {
-  const st: Record<string, string> = { background: hdrBg(h, ri), color: "#000" }
-  if (ri === 0) st.borderRight = "3px solid #111" // 顶层每组右侧加粗分隔线，边界一目了然
+  const st: Record<string, string> = { background: hdrBg(h, ri), color: "var(--ad-text)" }
+  if (ri === 0) st.borderRight = "3px solid var(--ad-border)" // 顶层每组右侧加粗分隔线
   return st
 }
 
