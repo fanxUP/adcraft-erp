@@ -85,3 +85,41 @@
     color: var(--ad-text);
   }
 }
+
+/* ── 深色主题的 Element Plus 覆盖 ── */
+[data-theme^="dark"] {
+  .el-card {
+    --el-card-bg-color: var(--ad-card);
+    --el-text-color-primary: var(--ad-text);
+    --el-border-color: var(--ad-border);
+  }
+  .el-table {
+    --el-table-bg-color: var(--ad-card);
+    --el-table-tr-bg-color: var(--ad-card);
+    --el-table-header-bg-color: var(--ad-darker);
+    --el-table-text-color: var(--ad-text);
+    --el-table-header-text-color: var(--ad-text);
+    --el-table-border-color: var(--ad-border);
+    --el-table-row-hover-bg-color: var(--ad-darker);
+  }
+  .el-menu {
+    --el-menu-bg-color: var(--ad-darker);
+    --el-menu-text-color: var(--ad-text-secondary);
+    --el-menu-active-color: var(--ad-red);
+    --el-menu-hover-bg-color: var(--ad-card);
+  }
+  .el-dialog {
+    --el-dialog-bg-color: var(--ad-card);
+  }
+  .el-input {
+    --el-input-bg-color: var(--ad-card);
+    --el-input-text-color: var(--ad-text);
+    --el-input-border-color: var(--ad-border);
+  }
+  .el-select {
+    --el-select-input-color: var(--ad-text);
+  }
+  .el-form-item__label {
+    color: var(--ad-text);
+  }
+}

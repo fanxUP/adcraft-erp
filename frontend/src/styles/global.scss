@@ -270,13 +270,6 @@ body {
 }
 
 /* ===== Element Plus 全局精修（列表页统一骨架）===== */
-:root {
-  --el-table-header-bg-color: #f8fafc;
-  --el-table-header-text-color: #475569;
-  --el-table-row-hover-bg-color: #f8fafc;
-  --el-table-border-color: #eef2f7;
-}
-
 .el-table {
   border-radius: 8px;
   overflow: hidden;
@@ -284,8 +277,8 @@ body {
 
 .el-table th.el-table__cell {
   font-weight: 600;
-  background: #f8fafc !important;
-  color: #475569;
+  background: var(--el-table-header-bg-color) !important;
+  color: var(--el-table-header-text-color);
 }
 
 .el-table td.el-table__cell {
@@ -299,7 +292,7 @@ body {
 
 .el-dialog__header {
   padding: 16px 20px;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid var(--ad-border);
   margin-right: 0;
 }
 
