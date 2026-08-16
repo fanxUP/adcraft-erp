@@ -155,7 +155,6 @@ chmod -R a+rX frontend/dist
   PYTHONPATH=. .venv/bin/python scripts/seed_permissions.py
 )
 
-python3 /opt/adcraft/backend/apply_hr_module.py 2>/dev/null || true
 systemctl restart "$SERVICE_NAME"
 
 for _ in $(seq 1 20); do
