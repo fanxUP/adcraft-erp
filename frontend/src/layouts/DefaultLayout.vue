@@ -3,8 +3,8 @@
     <el-container>
       <el-aside :width="navigationCollapsed ? '64px' : '220px'" class="sidebar">
         <div class="logo">
+          <span class="logo-mark">A</span>
           <span v-if="!navigationCollapsed" class="logo-text">AdCraft ERP</span>
-          <span v-else class="logo-short">A</span>
         </div>
         <div class="sidebar-menu-wrap">
         <AppSidebarMenu
@@ -169,6 +169,23 @@ onUnmounted(() => {
       font-size: calc(var(--ad-font-size-base) + 1px);
       font-weight: 600;
     }
+
+    .el-menu-item.is-active {
+      background: var(--ad-accent-glow);
+      position: relative;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 3px;
+        height: 18px;
+        border-radius: 0 2px 2px 0;
+        background: var(--ad-red);
+      }
+    }
   }
 }
 
@@ -193,15 +210,31 @@ onUnmounted(() => {
   height: 60px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: var(--ad-red);
-  font-size: calc(var(--ad-font-size-base) + 6px);
+  gap: 10px;
+  padding: 0 16px;
+  color: var(--ad-text);
   font-weight: 700;
   border-bottom: 1px solid var(--ad-border);
 }
 
-.logo-short {
-  font-size: calc(var(--ad-font-size-base) + 10px);
+.logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  font-size: calc(var(--ad-font-size-base) + 2px);
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .header {
