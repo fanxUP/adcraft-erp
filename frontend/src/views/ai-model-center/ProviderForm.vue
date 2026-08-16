@@ -38,7 +38,7 @@
       </el-form-item>
       <el-form-item label="优先级">
         <el-input-number v-model="form.priority" :min="1" :max="9999" style="width: 120px" />
-        <span style="color:#909399;font-size:12px;margin-left:8px">数字越小优先级越高</span>
+        <span style="color:var(--ad-text-secondary);font-size:12px;margin-left:8px">数字越小优先级越高</span>
       </el-form-item>
     </el-form>
 
@@ -49,7 +49,7 @@
       </el-form-item>
       <el-form-item label="Full URL Mode">
         <el-switch v-model="form.full_url_mode" />
-        <span style="color:#909399;font-size:12px;margin-left:8px">用于非标准路径的 API</span>
+        <span style="color:var(--ad-text-secondary);font-size:12px;margin-left:8px">用于非标准路径的 API</span>
       </el-form-item>
       <el-form-item v-if="form.full_url_mode" label="完整 Endpoint">
         <el-input v-model="form.endpoint_url" placeholder="https://api.example.com/custom/chat" />
@@ -61,7 +61,7 @@
           show-password
           :placeholder="isEdit ? '留空保持现有密钥' : '必填'"
         />
-        <div style="color:#909399;font-size:12px;margin-top:4px">密钥加密存储，不会在页面中明文显示</div>
+        <div style="color:var(--ad-text-secondary);font-size:12px;margin-top:4px">密钥加密存储，不会在页面中明文显示</div>
       </el-form-item>
       <el-form-item label="超时（秒）">
         <el-input-number v-model="form.timeout_seconds" :min="5" :max="300" style="width: 120px" />
@@ -76,7 +76,7 @@
 
     <!-- Step 3: Confirm -->
     <div v-if="step === 2" class="confirm-step">
-      <el-icon color="#67c23a" :size="48"><SuccessFilled /></el-icon>
+      <el-icon color="var(--el-color-success)" :size="48"><SuccessFilled /></el-icon>
       <h3>配置确认</h3>
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="名称">{{ form.provider_name }}</el-descriptions-item>

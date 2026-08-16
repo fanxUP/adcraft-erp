@@ -86,18 +86,18 @@ const overviewCards = computed(() => {
   const t = overview.value.today || {}
   const m = overview.value.monthly || {}
   return [
-    { label: '今日出车', value: t.trip_count || 0, color: '#409eff' },
-    { label: '今日应收', value: `¥${t.receivable || 0}`, color: '#67c23a' },
+    { label: '今日出车', value: t.trip_count || 0, color: 'var(--el-color-primary)' },
+    { label: '今日应收', value: `¥${t.receivable || 0}`, color: 'var(--el-color-success)' },
     { label: '今日实收', value: `¥${t.received || 0}` },
-    { label: '今日待收', value: `¥${t.unpaid || 0}`, color: t.unpaid > 0 ? '#f56c6c' : '#909399' },
+    { label: '今日待收', value: `¥${t.unpaid || 0}`, color: t.unpaid > 0 ? 'var(--el-color-danger)' : 'var(--ad-text-secondary)' },
     { label: '今日工资', value: `¥${t.wages || 0}` },
     { label: '今日报销', value: `¥${t.reimbursements || 0}` },
     { label: '今日车辆费', value: `¥${t.vehicle_costs || 0}` },
-    { label: '今日毛利', value: `¥${t.gross_profit || 0}`, color: (t.gross_profit || 0) >= 0 ? '#67c23a' : '#f56c6c' },
-    { label: '本月应收', value: `¥${m.receivable || 0}`, color: '#409eff' },
+    { label: '今日毛利', value: `¥${t.gross_profit || 0}`, color: (t.gross_profit || 0) >= 0 ? 'var(--el-color-success)' : 'var(--el-color-danger)' },
+    { label: '本月应收', value: `¥${m.receivable || 0}`, color: 'var(--el-color-primary)' },
     { label: '本月实收', value: `¥${m.received || 0}` },
-    { label: '本月待收', value: `¥${m.unpaid || 0}`, color: m.unpaid > 0 ? '#f56c6c' : '#909399' },
-    { label: '本月毛利', value: `¥${m.gross_profit || 0}`, color: (m.gross_profit || 0) >= 0 ? '#67c23a' : '#f56c6c' },
+    { label: '本月待收', value: `¥${m.unpaid || 0}`, color: m.unpaid > 0 ? 'var(--el-color-danger)' : 'var(--ad-text-secondary)' },
+    { label: '本月毛利', value: `¥${m.gross_profit || 0}`, color: (m.gross_profit || 0) >= 0 ? 'var(--el-color-success)' : 'var(--el-color-danger)' },
   ]
 })
 

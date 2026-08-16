@@ -155,7 +155,7 @@ async function goToAction(action: AiWorkflowAction) {
   margin: 10px 14px 4px;
   padding: 12px;
   border: 1px solid var(--ai-border, #2a2a4a);
-  border-left: 3px solid var(--ai-accent, #f56c6c);
+  border-left: 3px solid var(--ai-accent, var(--el-color-danger));
   border-radius: 8px;
   background: var(--ai-surface, #1c1c34);
   color: var(--ai-text, #e8e8f0);
@@ -218,7 +218,7 @@ h2 {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: var(--ai-warning, #e6a23c);
+  color: var(--ai-warning, var(--el-color-warning));
 }
 ul {
   margin: 5px 0 0;

@@ -60,7 +60,7 @@
       </el-table-column>
       <el-table-column prop="unpaid_amount" label="欠款金额" width="100" align="right" sortable="custom">
         <template #default="{ row }">
-          <span :style="{ color: row.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ fmtMoney(row.unpaid_amount) }}</span>
+          <span :style="{ color: row.unpaid_amount > 0 ? 'var(--el-color-danger)' : '' }">¥{{ fmtMoney(row.unpaid_amount) }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="payment_status" label="收款状态" width="94" align="center" sortable="custom">
@@ -218,7 +218,7 @@
             <el-descriptions-item label="最终金额">¥{{ detailData.final_amount }}</el-descriptions-item>
             <el-descriptions-item label="实收金额">¥{{ detailData.received_amount }}</el-descriptions-item>
             <el-descriptions-item label="未收金额">
-              <span :style="{ color: detailData.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ detailData.unpaid_amount }}</span>
+              <span :style="{ color: detailData.unpaid_amount > 0 ? 'var(--el-color-danger)' : '' }">¥{{ detailData.unpaid_amount }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="收款状态">
               <el-tag :type="paymentTagType(detailData.payment_status)" size="small">{{ paymentLabel(detailData.payment_status) }}</el-tag>
@@ -232,7 +232,7 @@
             <el-descriptions-item label="报销金额">¥{{ detailData.reimbursement_amount }}</el-descriptions-item>
             <el-descriptions-item label="车辆直接费用">¥{{ detailData.vehicle_direct_cost }}</el-descriptions-item>
             <el-descriptions-item label="毛利润">
-              <span :style="{ color: detailData.gross_profit >= 0 ? '#67c23a' : '#f56c6c' }">¥{{ detailData.gross_profit }}</span>
+              <span :style="{ color: detailData.gross_profit >= 0 ? 'var(--el-color-success)' : 'var(--el-color-danger)' }">¥{{ detailData.gross_profit }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="预计利润">¥{{ detailData.estimated_profit }}</el-descriptions-item>
           </el-descriptions>
@@ -250,7 +250,7 @@
           <el-descriptions-item label="最终金额">¥{{ settleData.final_amount }}</el-descriptions-item>
           <el-descriptions-item label="已收金额">¥{{ settleData.received_amount }}</el-descriptions-item>
           <el-descriptions-item label="未收金额">
-            <span :style="{ color: settleData.unpaid_amount > 0 ? '#f56c6c' : '' }">¥{{ settleData.unpaid_amount }}</span>
+            <span :style="{ color: settleData.unpaid_amount > 0 ? 'var(--el-color-danger)' : '' }">¥{{ settleData.unpaid_amount }}</span>
           </el-descriptions-item>
         </el-descriptions>
         <el-alert v-if="settleReadonly" type="info" :closable="false" title="该台账已结清/无需结算，仅可查看结算记录" style="margin-bottom: 12px" />

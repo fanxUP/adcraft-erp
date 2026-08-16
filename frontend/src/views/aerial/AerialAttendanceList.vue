@@ -16,22 +16,22 @@
 
     <!-- 汇总卡片 -->
     <el-row :gutter="12" style="margin-bottom:16px">
-      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#67c23a">{{ totalStats.present }}</div><div style="font-size:13px;color:#909399;margin-top:4px">出勤记录</div></div></el-card></el-col>
-      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#f56c6c">{{ totalStats.absent }}</div><div style="font-size:13px;color:#909399;margin-top:4px">未出勤</div></div></el-card></el-col>
-      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#409eff">{{ totalStats.trips }}</div><div style="font-size:13px;color:#909399;margin-top:4px">趟数合计</div></div></el-card></el-col>
-      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#e6a23c">{{ fmtMoney(totalStats.receivable) }}</div><div style="font-size:13px;color:#909399;margin-top:4px">应收合计</div></div></el-card></el-col>
-      <el-col :span="4"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#67c23a">{{ fmtMoney(totalStats.received) }}</div><div style="font-size:13px;color:#909399;margin-top:4px">实收合计</div></div></el-card></el-col>
+      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-success)">{{ totalStats.present }}</div><div style="font-size:13px;color:var(--ad-text-secondary);margin-top:4px">出勤记录</div></div></el-card></el-col>
+      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-danger)">{{ totalStats.absent }}</div><div style="font-size:13px;color:var(--ad-text-secondary);margin-top:4px">未出勤</div></div></el-card></el-col>
+      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-primary)">{{ totalStats.trips }}</div><div style="font-size:13px;color:var(--ad-text-secondary);margin-top:4px">趟数合计</div></div></el-card></el-col>
+      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-warning)">{{ fmtMoney(totalStats.receivable) }}</div><div style="font-size:13px;color:var(--ad-text-secondary);margin-top:4px">应收合计</div></div></el-card></el-col>
+      <el-col :span="4"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-success)">{{ fmtMoney(totalStats.received) }}</div><div style="font-size:13px;color:var(--ad-text-secondary);margin-top:4px">实收合计</div></div></el-card></el-col>
     </el-row>
 
     <!-- 图例 -->
-    <div style="margin-bottom:12px;display:flex;gap:16px;font-size:13px;color:#606266;align-items:center;flex-wrap:wrap">
+    <div style="margin-bottom:12px;display:flex;gap:16px;font-size:13px;color:var(--ad-text-secondary);align-items:center;flex-wrap:wrap">
       <span>图例：</span>
       <span><span class="legend-dot" style="background:#b7e4c7;border:1px solid #98d2a8"></span>出勤/出车</span>
       <span><span class="legend-dot" style="background:#a3d0ff;border:1px solid #82b3f0"></span>半天</span>
-      <span><span class="legend-dot" style="background:#ffa940;border:1px solid #e09024"></span>加班</span>
+      <span><span class="legend-dot" style="background:var(--el-color-warning);border:1px solid #e09024"></span>加班</span>
       <span><span class="legend-dot" style="background:#fff;border:1px solid #c0c4cc"></span>未出勤</span>
       <span v-if="targetType === 'vehicle'"><span class="legend-dot" style="background:#dee2e6;border:1px solid #b8bcc4"></span>维修</span>
-      <span style="color:#909399">· 蓝色「n趟」徽标 = 当日有出车台账</span>
+      <span style="color:var(--ad-text-secondary)">· 蓝色「n趟」徽标 = 当日有出车台账</span>
     </div>
 
     <!-- 考勤矩阵表 -->
@@ -460,13 +460,13 @@ function handlePrint() {
     + '.day-overtime-cell { background: #ffa940 !important; }'
     + '.day-weekend { background: #dee2e6 !important; }'
     + '.cell-stat.money { color: var(--ad-text-secondary); font-weight: 600; }'
-    + '.cell-stat.profit { color: #e6a23c; font-weight: 700; }'
-    + '.day-overtime { color: #ffa940; font-weight: 600; }'
-    + '.day-ledger-badge { font-size: 10px; color: #fff; background: #409eff; border-radius: 2px; padding: 0 3px; display: inline-block; margin-top: 2px; }'
+    + '.cell-stat.profit { color: var(--el-color-warning); font-weight: 700; }'
+    + '.day-overtime { color: var(--el-color-warning); font-weight: 600; }'
+    + '.day-ledger-badge { font-size: 10px; color: #fff; background: var(--el-color-primary); border-radius: 2px; padding: 0 3px; display: inline-block; margin-top: 2px; }'
     + 'thead { display: table-header-group; } tbody { display: table-row-group; }'
     + 'tr { page-break-inside: avoid; }'
     + '.day-times { font-size: 11px; color: var(--ad-text-secondary); }'
-    + '.day-in { color: #67c23a; } .day-out { color: #409eff; }'
+    + '.day-in { color: var(--el-color-success); } .day-out { color: var(--el-color-primary); }'
     + '.day-abnormal { font-size: 11px; font-weight: 600; }'
     + '.day-sep { color: #ccc; margin: 0 2px; }'
     + '</style>'
@@ -490,7 +490,7 @@ watch(targetType, () => { showDialog.value = false; fetchData() })
 .att-sheet { width: 100%; border-collapse: collapse; font-size: 14px; white-space: nowrap; }
 .att-sheet th, .att-sheet td { border: 1px solid var(--ad-border); padding: 4px 6px; }
 .att-sheet thead th { background: var(--ad-darker); position: sticky; top: 0; z-index: 2; font-weight: 600; color: var(--ad-text); }
-.att-sheet thead th.today { background: #ecf5ff; color: #409eff; }
+.att-sheet thead th.today { background: #ecf5ff; color: var(--el-color-primary); }
 .att-col-sm { min-width: 36px; width: 36px; }
 .att-col-name { min-width: 140px; }
 .att-col-stat { min-width: 60px; width: 60px; text-align: center; }
@@ -504,26 +504,26 @@ watch(targetType, () => { showDialog.value = false; fetchData() })
 .cell-sub { font-size: 12px; font-weight: 400; color: var(--ad-text-secondary); }
 .cell-stat { text-align: center; font-weight: 600; font-size: 15px; }
 .cell-stat.money { font-family: "SF Mono", "Courier New", monospace; font-size: 13px; }
-.cell-stat.profit { color: #e6a23c; }
+.cell-stat.profit { color: var(--el-color-warning); }
 .cell-day { cursor: pointer; padding: 3px 4px !important; transition: background 0.15s; }
 .cell-day:hover { background: #ecf5ff !important; }
 .day-normal { background: #b7e4c7; }
 .day-half { background: #a3d0ff; }
-.day-overtime-cell { background: #ffa940; }
+.day-overtime-cell { background: var(--el-color-warning); }
 .day-weekend { background: #dee2e6; }
 .day-none { background: var(--ad-card); }
 .day-cell-inner { text-align: center; line-height: 1.5; }
 .day-times { font-size: 13px; color: var(--ad-text-secondary); font-family: "SF Mono", "Courier New", monospace; }
-.day-in { color: #67c23a; }
+.day-in { color: var(--el-color-success); }
 .day-sep { color: #dcdfe6; margin: 0 2px; }
-.day-out { color: #409eff; }
+.day-out { color: var(--el-color-primary); }
 .day-abnormal { font-size: 12px; font-weight: 600; margin-top: 1px; color: var(--ad-text-secondary); }
 .day-empty { text-align: center; color: #dcdfe6; font-size: 14px; }
 .day-overtime { color: #e09024; font-weight: 600; font-family: "SF Mono", "Courier New", monospace; font-size: 13px; }
 .day-overtime-cell .day-overtime { color: #fff; }
 .day-overtime-unit { font-size: 11px; margin-left: 1px; }
-.day-ledger-badge { font-size: 10px; color: #fff; background: #409eff; border-radius: 2px; padding: 0 4px; display: inline-block; margin-top: 2px; line-height: 1.5; }
+.day-ledger-badge { font-size: 10px; color: #fff; background: var(--el-color-primary); border-radius: 2px; padding: 0 4px; display: inline-block; margin-top: 2px; line-height: 1.5; }
 .att-footer td { background: var(--ad-darker); font-weight: 600; color: var(--ad-text); }
-.att-footer .footer-day { text-align: center; color: #67c23a; font-size: 13px; }
+.att-footer .footer-day { text-align: center; color: var(--el-color-success); font-size: 13px; }
 .legend-dot { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; margin-right: 4px; }
 </style>

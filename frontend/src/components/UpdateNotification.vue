@@ -25,7 +25,7 @@ const { hasUpdate, refreshPage } = useVersionCheck()
   align-items: center;
   gap: 12px;
   padding: 10px 24px;
-  background: linear-gradient(135deg, #e6a23c, #d48806);
+  background: linear-gradient(135deg, var(--el-color-warning), #d48806);
   color: #fff;
   font-size: 14px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);

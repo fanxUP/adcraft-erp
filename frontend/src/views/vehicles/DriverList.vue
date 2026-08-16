@@ -222,5 +222,5 @@ onMounted(fetchData)
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .search-bar { display: flex; align-items: center; }
-.text-danger { color: #f56c6c; font-weight: bold; }
+.text-danger { color: var(--el-color-danger); font-weight: bold; }
 </style>

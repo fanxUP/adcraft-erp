@@ -68,7 +68,7 @@ const store = useAiAssistantStore()
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #67c23a;
+  color: var(--el-color-success);
   margin-bottom: 16px;
   box-shadow: 0 0 20px rgba(103, 194, 58, 0.1);
   position: relative;

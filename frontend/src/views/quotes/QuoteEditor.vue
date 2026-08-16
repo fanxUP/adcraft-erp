@@ -1107,8 +1107,8 @@ watch(() => route.params.id, async (newId) => {
 :deep(.el-table.el-table--scrollable-x .el-table__body-wrapper) { margin-bottom: 8px; }
 
 /* 拖拽排序（Sortablejs）反馈 */
-.row-drag-handle { cursor: grab; color: var(--ad-text-secondary, #909399); display: inline-flex; align-items: center; user-select: none; font-size: 15px; line-height: 1; }
-.row-drag-handle:hover { color: var(--ad-primary, #409eff); }
+.row-drag-handle { cursor: grab; color: var(--ad-text-secondary, var(--ad-text-secondary)); display: inline-flex; align-items: center; user-select: none; font-size: 15px; line-height: 1; }
+.row-drag-handle:hover { color: var(--ad-primary, var(--el-color-primary)); }
 :deep(.ad-drag-dragging) { cursor: grabbing; }
 :deep(.ad-drag-ghost) { opacity: 0.4; }
 :deep(.ad-drag-ghost td) { background: rgba(148, 163, 184, 0.15) !important; }
@@ -1152,5 +1152,5 @@ tr.ad-group-drop-after td { border-bottom: 3px solid var(--el-color-primary, #40
 
 /* 分项名称标签可直接拖起整组（输入框仍可正常编辑） */
 .group-header-drag { cursor: grab; user-select: none; }
-.group-header-drag:hover { color: var(--ad-primary, #409eff); }
+.group-header-drag:hover { color: var(--ad-primary, var(--el-color-primary)); }
 </style>

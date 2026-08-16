@@ -47,7 +47,7 @@
           <template v-for="(row, idx) in displayRows" :key="idx">
             <!-- 分组标题行 -->
             <tr v-if="row.type === 'group-header'" class="group-header-row">
-              <td colspan="11" style="font-weight: 600; background: var(--ad-darker); border-bottom: 2px solid #409eff; padding: 6px 8px;">
+              <td colspan="11" style="font-weight: 600; background: var(--ad-darker); border-bottom: 2px solid var(--el-color-primary); padding: 6px 8px;">
                 分项：{{ row.groupName }}
               </td>
             </tr>
@@ -468,15 +468,15 @@ function handlePrint() {
   min-width: 80px;
 }
 .conclusion-row .value.accepted {
-  color: #67c23a;
+  color: var(--el-color-success);
   font-weight: bold;
 }
 .conclusion-row .value.rejected {
-  color: #f56c6c;
+  color: var(--el-color-danger);
   font-weight: bold;
 }
 .conclusion-row .value.reject {
-  color: #f56c6c;
+  color: var(--el-color-danger);
 }
 .preview-signatures {
   display: flex;

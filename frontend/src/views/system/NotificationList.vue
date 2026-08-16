@@ -109,13 +109,13 @@ const iconMap: Record<string, ReturnType<typeof markRaw>> = {
 }
 
 const colorMap: Record<string, string> = {
-  order_status: '#409eff',
-  task_assigned: '#67c23a',
-  quote_status: '#e6a23c',
-  payment_received: '#f56c6c',
-  inventory_alert: '#f56c6c',
-  user_message: '#409eff',
-  system_message: '#909399',
+  order_status: 'var(--el-color-primary)',
+  task_assigned: 'var(--el-color-success)',
+  quote_status: 'var(--el-color-warning)',
+  payment_received: 'var(--el-color-danger)',
+  inventory_alert: 'var(--el-color-danger)',
+  user_message: 'var(--el-color-primary)',
+  system_message: 'var(--ad-text-secondary)',
 }
 
 function getIcon(type: string) {
@@ -123,7 +123,7 @@ function getIcon(type: string) {
 }
 
 function getIconColor(type: string) {
-  return colorMap[type] || '#909399'
+  return colorMap[type] || 'var(--ad-text-secondary)'
 }
 
 function formatTime(ts: string): string {

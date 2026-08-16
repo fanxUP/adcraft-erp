@@ -23,7 +23,7 @@
     </el-row>
 
     <!-- 图例 -->
-    <div style="margin-bottom:12px;display:flex;gap:16px;font-size:13px;color:#606266;align-items:center;flex-wrap:wrap">
+    <div style="margin-bottom:12px;display:flex;gap:16px;font-size:13px;color:var(--ad-text-secondary);align-items:center;flex-wrap:wrap">
       <span>图例：</span>
       <span><span class="legend-dot" style="background:#b7e4c7;border:1px solid #98d2a8"></span>出勤</span>
       <span><span class="legend-dot" style="background:#a3d0ff;border:1px solid #82b3f0"></span>半天</span>

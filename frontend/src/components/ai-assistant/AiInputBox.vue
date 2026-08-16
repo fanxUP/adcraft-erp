@@ -74,7 +74,7 @@ function doSend() {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .ai-textarea :deep(.el-textarea__inner:focus) {
-  border-color: #f56c6c;
+  border-color: var(--el-color-danger);
   box-shadow: 0 0 0 2px rgba(245,108,108,0.12);
 }
 .ai-textarea :deep(.el-textarea__inner::placeholder) {
@@ -86,11 +86,11 @@ function doSend() {
   padding: 0;
   border-radius: 10px;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #f56c6c 0%, #d03050 100%);
+  background: linear-gradient(135deg, var(--el-color-danger) 0%, #d03050 100%);
   border: none;
 }
 .ai-send-btn:hover {
-  background: linear-gradient(135deg, #f56c6c 0%, #c02840 100%);
+  background: linear-gradient(135deg, var(--el-color-danger) 0%, #c02840 100%);
   box-shadow: 0 2px 8px rgba(245,108,108,0.25);
 }
 .ai-send-btn:disabled {

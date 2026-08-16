@@ -16,9 +16,9 @@
 
     <!-- 汇总 -->
     <el-row :gutter="16" style="margin-bottom:16px">
-      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#409eff">{{setRows.length}}</div><div style="font-size:13px;color:#909399;margin-top:4px">已设置规则人数</div></div></el-card></el-col>
-      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#67c23a">{{totalBase.toFixed(2)}}</div><div style="font-size:13px;color:#909399;margin-top:4px">月工资标准合计/月</div></div></el-card></el-col>
-      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:#f56c6c">{{totalDeduction.toFixed(2)}}</div><div style="font-size:13px;color:#909399;margin-top:4px">社保金额合计/月</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-primary)">{{setRows.length}}</div><div style="font-size:13px;color:var(--ad-text-secondary);margin-top:4px">已设置规则人数</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-success)">{{totalBase.toFixed(2)}}</div><div style="font-size:13px;color:var(--ad-text-secondary);margin-top:4px">月工资标准合计/月</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-danger)">{{totalDeduction.toFixed(2)}}</div><div style="font-size:13px;color:var(--ad-text-secondary);margin-top:4px">社保金额合计/月</div></div></el-card></el-col>
     </el-row>
 
     <!-- 工资规则表 -->
@@ -298,8 +298,8 @@ onMounted(async () => { await loadEmps(); await fetchData() })
 .rule-sheet th, .rule-sheet td { border: 1px solid var(--ad-border); padding: 7px 10px; }
 .rule-sheet thead th { background: var(--ad-darker); position: sticky; top: 0; z-index: 2; font-weight: 600; color: var(--ad-text); }
 .rule-sheet th.sortable { cursor: pointer; user-select: none; }
-.rule-sheet th.sortable:hover { color: #409eff; }
-.rule-sheet th.sort-active { color: #409eff; }
+.rule-sheet th.sortable:hover { color: var(--el-color-primary); }
+.rule-sheet th.sort-active { color: var(--el-color-primary); }
 .sort-arrow { margin-left: 3px; font-size: 10px; }
 .col-sm { width: 40px; text-align: center; }
 .col-emp { min-width: 70px; }
@@ -311,6 +311,6 @@ onMounted(async () => { await loadEmps(); await fetchData() })
 .cell-name { font-weight: 600; color: var(--ad-text); }
 .cell-date { text-align: center; font-family: "SF Mono", "Courier New", monospace; color: var(--ad-text-secondary); }
 .cell-num { text-align: right; font-family: "SF Mono", "Courier New", monospace; color: var(--ad-text-secondary); }
-.cell-num.deduction { color: #f56c6c; }
+.cell-num.deduction { color: var(--el-color-danger); }
 .cell-op { text-align: center; }
 </style>

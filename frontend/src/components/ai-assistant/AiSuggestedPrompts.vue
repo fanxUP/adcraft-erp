@@ -70,8 +70,8 @@ function handleClick(prompt: string) {
   user-select: none;
 }
 .ai-suggested-chip:hover {
-  border-color: var(--ai-accent, #f56c6c);
-  color: var(--ai-accent, #f56c6c);
+  border-color: var(--ai-accent, var(--el-color-danger));
+  color: var(--ai-accent, var(--el-color-danger));
   background: var(--ai-accent-bg, rgba(245, 108, 108, 0.08));
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(245, 108, 108, 0.08);

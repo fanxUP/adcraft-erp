@@ -95,7 +95,7 @@
 
     <!-- Restore confirm dialog -->
     <el-dialog v-model="restoreConfirmVisible" title="确认恢复" width="420px" :close-on-click-modal="false">
-      <p style="color: #e6a23c; font-size: 15px; margin-bottom: 12px">
+      <p style="color: var(--el-color-warning); font-size: 15px; margin-bottom: 12px">
         ⚠️ 恢复操作将<strong>覆盖</strong>当前数据库！
       </p>
       <p style="color: var(--ad-text); margin-bottom: 8px">备份文件：{{ toRestore?.filename }}</p>
@@ -114,7 +114,7 @@
         <div v-if="restoreSuccess" style="font-size: 48px; margin-bottom: 16px">✅</div>
         <div v-else style="font-size: 48px; margin-bottom: 16px">❌</div>
         <p style="font-size: 15px; color: var(--ad-text); margin-bottom: 12px">{{ restoreMessage }}</p>
-        <p v-if="restoreSuccess" style="color: #e6a23c; font-size: 13px">
+        <p v-if="restoreSuccess" style="color: var(--el-color-warning); font-size: 13px">
           点击"重新登录"将跳转到登录页面
         </p>
       </div>

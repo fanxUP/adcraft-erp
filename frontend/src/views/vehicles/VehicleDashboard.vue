@@ -253,16 +253,16 @@ onMounted(async () => {
   transform: translateY(-50%);
   opacity: 0.15;
 }
-.card-green .stat-value { color: #67c23a; }
-.card-blue .stat-value { color: #409eff; }
-.card-orange .stat-value { color: #e6a23c; }
-.card-red .stat-value { color: #f56c6c; }
+.card-green .stat-value { color: var(--el-color-success); }
+.card-blue .stat-value { color: var(--el-color-primary); }
+.card-orange .stat-value { color: var(--el-color-warning); }
+.card-red .stat-value { color: var(--el-color-danger); }
 .card-gray .stat-value { color: var(--ad-text-secondary); }
 .card-purple .stat-value { color: #9b59b6; }
 .reminder-section { margin-bottom: 12px; }
 .reminder-section h4 { margin: 0 0 6px; font-size: 14px; color: var(--el-text-color-primary); }
 .reminder-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
 .reminder-text { color: var(--el-text-color-regular); }
-.reminder-item.expired .reminder-text { color: #f56c6c; text-decoration: line-through; }
-.reminder-item.urgent .reminder-text { color: #e6a23c; font-weight: 600; }
+.reminder-item.expired .reminder-text { color: var(--el-color-danger); text-decoration: line-through; }
+.reminder-item.urgent .reminder-text { color: var(--el-color-warning); font-weight: 600; }
 </style>

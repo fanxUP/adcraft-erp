@@ -428,18 +428,18 @@ onUnmounted(() => {
     height: 10px;
     border-radius: 50%;
     border: 2px solid #fff;
-    background: #909399;
+    background: var(--ad-text-secondary);
 
     &.online {
-      background: #67c23a;
+      background: var(--el-color-success);
     }
 
     &.away {
-      background: #e6a23c;
+      background: var(--el-color-warning);
     }
 
     &.busy {
-      background: #f56c6c;
+      background: var(--el-color-danger);
     }
   }
 }
@@ -490,19 +490,19 @@ onUnmounted(() => {
     border: 2px solid #fff;
 
     &.online {
-      background: #67c23a;
+      background: var(--el-color-success);
     }
 
     &.away {
-      background: #e6a23c;
+      background: var(--el-color-warning);
     }
 
     &.busy {
-      background: #f56c6c;
+      background: var(--el-color-danger);
     }
 
     &.offline {
-      background: #909399;
+      background: var(--ad-text-secondary);
     }
   }
 }

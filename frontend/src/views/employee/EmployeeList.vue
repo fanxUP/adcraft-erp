@@ -98,7 +98,7 @@
         <div v-if="attachments.length" style="display:flex;flex-wrap:wrap;gap:8px">
           <div v-for="att in attachments" :key="att.id" style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #e4e7ed;border-radius:4px;font-size:13px">
             <el-tag :type="ATTACHMENT_TYPE_TAGS[att.category] || 'info'" size="small" disable-transitions>{{ ATTACHMENT_TYPE_LABELS[att.category] || att.category || '附件' }}</el-tag>
-            <a :href="'/uploads/'+att.file_path" target="_blank" style="color:#409eff;text-decoration:none">{{ att.filename }}</a>
+            <a :href="'/uploads/'+att.file_path" target="_blank" style="color:var(--el-color-primary);text-decoration:none">{{ att.filename }}</a>
             <el-button text type="danger" size="small" @click="handleDeleteAttachment(att.id)">删除</el-button>
           </div>
         </div>

@@ -249,7 +249,7 @@ function iconClass(status: string) {
   font-weight: 500;
   white-space: nowrap;
 }
-.cur-tag { color: #409eff; }
+.cur-tag { color: var(--el-color-primary); }
 .done-tag { color: #52c41a; }
 .future-tag { color: var(--ad-text-secondary); }
 
@@ -290,7 +290,7 @@ function iconClass(status: string) {
 
 /* 当前 */
 .card-current {
-  border-color: #409eff;
+  border-color: var(--el-color-primary);
   background: linear-gradient(135deg, rgba(64,158,255,0.07), rgba(64,158,255,0.03));
   box-shadow: 0 0 0 4px rgba(64,158,255,0.08);
   cursor: pointer;
@@ -299,10 +299,10 @@ function iconClass(status: string) {
   background: linear-gradient(135deg, rgba(64,158,255,0.12), rgba(64,158,255,0.06));
   box-shadow: 0 2px 12px rgba(64,158,255,0.15);
 }
-.card-current .qw-label { color: #409eff; }
+.card-current .qw-label { color: var(--el-color-primary); }
 
 .icon-current {
-  background: linear-gradient(135deg, #409eff, #66b1ff);
+  background: linear-gradient(135deg, var(--el-color-primary), #66b1ff);
   color: #fff;
   box-shadow: 0 2px 8px rgba(64,158,255,0.35);
 }
@@ -319,7 +319,7 @@ function iconClass(status: string) {
 
 /* 可点击 */
 .card-ready {
-  border-color: #409eff;
+  border-color: var(--el-color-primary);
   border-style: dashed;
   background: rgba(64,158,255,0.03);
   cursor: pointer;
@@ -330,12 +330,12 @@ function iconClass(status: string) {
   transform: translateX(3px);
 }
 .card-ready:active { transform: translateX(0); }
-.card-ready .qw-label { color: #409eff; }
+.card-ready .qw-label { color: var(--el-color-primary); }
 
 .icon-ready {
   background: #f0f5ff;
-  color: #409eff;
-  border: 2px solid #409eff;
+  color: var(--el-color-primary);
+  border: 2px solid var(--el-color-primary);
   cursor: pointer;
 }
 .icon-ready:hover {
@@ -369,7 +369,7 @@ function iconClass(status: string) {
   padding: 10px 24px;
   border: none;
   border-radius: 10px;
-  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
+  background: linear-gradient(135deg, var(--el-color-primary) 0%, #66b1ff 100%);
   color: #fff;
   font-size: 14px;
   font-weight: 600;
@@ -425,7 +425,7 @@ function iconClass(status: string) {
 :root[data-theme="dark"] .qw-line { background: #434343; }
 :root[data-theme="dark"] .qw-point { color: #595959; }
 :root[data-theme="dark"] .qw-preview-btn {
-  background: linear-gradient(135deg, #1677ff 0%, #409eff 100%);
+  background: linear-gradient(135deg, #1677ff 0%, var(--el-color-primary) 100%);
   box-shadow: 0 3px 10px rgba(22,119,255,0.3);
 }
 :root[data-theme="dark"] .qw-preview-btn:hover {

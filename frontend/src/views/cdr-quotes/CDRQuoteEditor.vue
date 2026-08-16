@@ -13,7 +13,7 @@
       <template #header>
         <span>设计文件</span>
       </template>
-      <div v-if="!route.params.id" style="color:#909399;font-size:13px">保存报价后可上传设计文件</div>
+      <div v-if="!route.params.id" style="color:var(--ad-text-secondary);font-size:13px">保存报价后可上传设计文件</div>
       <template v-else>
         <el-upload
           :show-file-list="false"
@@ -21,7 +21,7 @@
           accept=".cdr,.svg,.pdf,.ai,.eps,.dxf,.png,.jpg,.jpeg"
         >
           <el-button type="primary" :loading="uploading" size="small">上传设计文件</el-button>
-          <span style="margin-left:8px;font-size:12px;color:#909399">支持 .cdr .svg .pdf .ai .eps .dxf .png .jpg</span>
+          <span style="margin-left:8px;font-size:12px;color:var(--ad-text-secondary)">支持 .cdr .svg .pdf .ai .eps .dxf .png .jpg</span>
         </el-upload>
 
         <div v-if="uploadList.length" style="margin-top:8px">
@@ -53,7 +53,7 @@
             <el-button type="success" :loading="aiLoading" size="small" @click="handleAiAssist">AI 智能生成</el-button>
             <el-button v-if="aiResult" size="small" type="warning" @click="applyAiSuggestion">应用 AI 建议</el-button>
           </div>
-          <div v-if="aiLoading" style="font-size:13px;color:#909399;margin-top:4px">AI 正在生成报价明细...</div>
+          <div v-if="aiLoading" style="font-size:13px;color:var(--ad-text-secondary);margin-top:4px">AI 正在生成报价明细...</div>
         </div>
       </template>
     </el-card>

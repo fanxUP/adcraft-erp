@@ -47,7 +47,7 @@ const unreadCount = computed(() => 0)
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f56c6c 0%, #e04040 100%);
+  background: linear-gradient(135deg, var(--el-color-danger) 0%, #e04040 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -67,6 +67,6 @@ const unreadCount = computed(() => 0)
 }
 .ai-badge :deep(.el-badge__content) {
   border: 2px solid var(--ad-card, #1e1e30);
-  background: #f56c6c;
+  background: var(--el-color-danger);
 }
 </style>

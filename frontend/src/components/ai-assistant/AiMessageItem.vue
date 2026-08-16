@@ -137,13 +137,13 @@ const renderedContent = computed(() => renderMarkdown(props.msg.content))
   margin-top: 4px;
 }
 .ai-avatar-user {
-  background: linear-gradient(135deg, #f56c6c, #d03050);
+  background: linear-gradient(135deg, var(--el-color-danger), #d03050);
   color: #fff;
   box-shadow: 0 2px 6px rgba(245,108,108,0.25);
   margin-left: 8px;
 }
 .ai-avatar-ai {
-  background: linear-gradient(135deg, #67c23a, #4a9e2d);
+  background: linear-gradient(135deg, var(--el-color-success), #4a9e2d);
   color: #fff;
   box-shadow: 0 2px 6px rgba(103,194,58,0.25);
 }
@@ -156,7 +156,7 @@ const renderedContent = computed(() => renderMarkdown(props.msg.content))
   margin-bottom: 6px;
 }
 .ai-bubble-user {
-  background: linear-gradient(135deg, #f56c6c, #d03050);
+  background: linear-gradient(135deg, var(--el-color-danger), #d03050);
   color: #fff;
   border-radius: 14px 4px 14px 14px;
   box-shadow: 0 2px 8px rgba(245,108,108,0.15);
@@ -201,7 +201,7 @@ const renderedContent = computed(() => renderMarkdown(props.msg.content))
   border-radius: 3px;
   font-size: 12px;
   font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
-  color: #e6a23c;
+  color: var(--el-color-warning);
 }
 .markdown-body :deep(strong) {
   font-weight: 600;
@@ -244,6 +244,6 @@ const renderedContent = computed(() => renderMarkdown(props.msg.content))
 }
 .ai-system-inner.is-error {
   background: rgba(245,108,108,0.08);
-  color: var(--ai-accent, #f56c6c);
+  color: var(--ai-accent, var(--el-color-danger));
 }
 </style>

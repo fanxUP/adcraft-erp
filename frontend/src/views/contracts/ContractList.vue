@@ -40,7 +40,7 @@
       </el-table-column>
       <el-table-column label="未收金额" width="120">
         <template #default="{ row }">
-          <span v-if="row.unpaid_amount > 0" style="color: #f56c6c">¥ {{ row.unpaid_amount?.toFixed(2) }}</span>
+          <span v-if="row.unpaid_amount > 0" style="color: var(--el-color-danger)">¥ {{ row.unpaid_amount?.toFixed(2) }}</span>
           <span v-else>¥ {{ row.unpaid_amount?.toFixed(2) }}</span>
         </template>
       </el-table-column>

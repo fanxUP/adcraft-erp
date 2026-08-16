@@ -218,8 +218,8 @@ function rejectClass() {
   font-weight: 500;
   white-space: nowrap;
 }
-.cur-tag { color: #409eff; }
-.ready-tag { color: #409eff; }
+.cur-tag { color: var(--el-color-primary); }
+.ready-tag { color: var(--el-color-primary); }
 
 /* ===== 连接箭头 ===== */
 .aw-conn {
@@ -258,14 +258,14 @@ function rejectClass() {
 
 /* 当前 */
 .card-current {
-  border-color: #409eff;
+  border-color: var(--el-color-primary);
   background: linear-gradient(135deg, rgba(64,158,255,0.07), rgba(64,158,255,0.03));
   box-shadow: 0 0 0 4px rgba(64,158,255,0.08);
 }
-.card-current .aw-label { color: #409eff; }
+.card-current .aw-label { color: var(--el-color-primary); }
 
 .icon-current {
-  background: linear-gradient(135deg, #409eff, #66b1ff);
+  background: linear-gradient(135deg, var(--el-color-primary), #66b1ff);
   color: #fff;
   box-shadow: 0 2px 8px rgba(64,158,255,0.35);
 }
@@ -282,7 +282,7 @@ function rejectClass() {
 
 /* 可点击 */
 .card-ready {
-  border-color: #409eff;
+  border-color: var(--el-color-primary);
   border-style: dashed;
   background: rgba(64,158,255,0.03);
   cursor: pointer;
@@ -293,12 +293,12 @@ function rejectClass() {
   transform: translateX(3px);
 }
 .card-ready:active { transform: translateX(0); }
-.card-ready .aw-label { color: #409eff; }
+.card-ready .aw-label { color: var(--el-color-primary); }
 
 .icon-ready {
   background: #f0f5ff;
-  color: #409eff;
-  border: 2px solid #409eff;
+  color: var(--el-color-primary);
+  border: 2px solid var(--el-color-primary);
   cursor: pointer;
 }
 .icon-ready:hover {

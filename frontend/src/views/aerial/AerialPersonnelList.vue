@@ -13,7 +13,7 @@
       <el-table-column prop="license_no" label="驾驶证号" width="140" />
       <el-table-column prop="license_type" label="驾照类型" width="100" />
       <el-table-column prop="license_expire_date" label="驾照到期" width="110">
-        <template #default="{ row }"><span :style="{ color: isExpiredSoon(row.license_expire_date) ? '#f56c6c' : '' }">{{ row.license_expire_date || '-' }}</span></template>
+        <template #default="{ row }"><span :style="{ color: isExpiredSoon(row.license_expire_date) ? 'var(--el-color-danger)' : '' }">{{ row.license_expire_date || '-' }}</span></template>
       </el-table-column>
       <el-table-column prop="is_external" label="外协" width="80">
         <template #default="{ row }"><el-tag :type="row.is_external ? 'warning' : 'info'" size="small">{{ row.is_external ? '外协' : '内部' }}</el-tag></template>

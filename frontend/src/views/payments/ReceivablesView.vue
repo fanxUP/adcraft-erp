@@ -18,7 +18,7 @@
           <el-col :span="6">
             <el-card shadow="never" class="stat-card">
               <div class="stat-label">已收金额</div>
-              <div class="stat-value" style="color: #67c23a">¥ {{ stats.totalPaid.toFixed(2) }}</div>
+              <div class="stat-value" style="color: var(--el-color-success)">¥ {{ stats.totalPaid.toFixed(2) }}</div>
             </el-card>
           </el-col>
           <el-col :span="6">

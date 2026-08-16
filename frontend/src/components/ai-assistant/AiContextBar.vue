@@ -57,7 +57,7 @@ const contextText = computed(() => {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--ai-accent, #f56c6c);
+  background: var(--ai-accent, var(--el-color-danger));
   flex-shrink: 0;
 }
 .ai-context-text {
@@ -68,7 +68,7 @@ const contextText = computed(() => {
 }
 .ai-context-guide {
   flex-shrink: 0;
-  color: var(--ai-accent, #f56c6c);
+  color: var(--ai-accent, var(--el-color-danger));
   font-size: 12px;
   padding: 2px 6px;
 }

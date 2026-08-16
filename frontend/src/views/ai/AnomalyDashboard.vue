@@ -195,7 +195,7 @@ onMounted(() => {
 .summary-card { text-align: center; }
 .summary-card.critical { border-top: 3px solid var(--ad-red, #e63946); }
 .summary-card.warning { border-top: 3px solid var(--ad-orange, #e6a817); }
-.summary-card.info { border-top: 3px solid var(--ad-blue, #409eff); }
+.summary-card.info { border-top: 3px solid var(--ad-blue, var(--el-color-primary)); }
 
 .summary-count { font-size: 36px; font-weight: 700; color: var(--ad-text); }
 .summary-label { font-size: 14px; color: var(--ad-text-muted); margin-top: 4px; }

@@ -113,7 +113,7 @@ li button,
 .draft-action {
   border: 0;
   background: transparent;
-  color: var(--ai-accent, #f56c6c);
+  color: var(--ai-accent, var(--el-color-danger));
   cursor: pointer;
   font: inherit;
   font-weight: 600;
@@ -136,7 +136,7 @@ button:focus-visible {
 }
 button:focus-visible {
   border-radius: 2px;
-  outline: 2px solid var(--ai-accent, #f56c6c);
+  outline: 2px solid var(--ai-accent, var(--el-color-danger));
   outline-offset: 2px;
 }
 </style>

@@ -140,8 +140,8 @@ const formattedResult = computed(() => {
 .is-success .ai-tool-icon-wrap { background: rgba(103, 194, 58, 0.12); }
 .is-error .ai-tool-icon-wrap { background: rgba(245, 108, 108, 0.12); }
 .is-info .ai-tool-icon-wrap { background: rgba(144, 147, 153, 0.08); }
-.is-success .ai-tool-icon-wrap .el-icon { color: #67c23a; }
-.is-error .ai-tool-icon-wrap .el-icon { color: #f56c6c; }
+.is-success .ai-tool-icon-wrap .el-icon { color: var(--el-color-success); }
+.is-error .ai-tool-icon-wrap .el-icon { color: var(--el-color-danger); }
 .is-info .ai-tool-icon-wrap .el-icon { color: var(--ad-text-secondary); }
 
 .ai-tool-meta {
@@ -156,9 +156,9 @@ const formattedResult = computed(() => {
   border-radius: 50%;
   flex-shrink: 0;
 }
-.dot-success { background: #67c23a; }
-.dot-error { background: #f56c6c; }
-.dot-info { background: #909399; }
+.dot-success { background: var(--el-color-success); }
+.dot-error { background: var(--el-color-danger); }
+.dot-info { background: var(--ad-text-secondary); }
 .ai-tool-status-text {
   font-size: 11px;
 }
@@ -181,7 +181,7 @@ const formattedResult = computed(() => {
   padding: 2px 8px;
   border-radius: 4px;
   background: var(--ai-warning-bg, rgba(230, 162, 60, 0.1));
-  color: var(--ai-warning, #e6a23c);
+  color: var(--ai-warning, var(--el-color-warning));
   font-size: 11px;
   margin-bottom: 6px;
 }

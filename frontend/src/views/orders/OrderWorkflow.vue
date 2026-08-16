@@ -237,9 +237,9 @@ function cancellClass() {
   font-weight: 500;
   white-space: nowrap;
 }
-.cur-tag { color: #409eff; }
+.cur-tag { color: var(--el-color-primary); }
 .done-tag { color: #52c41a; }
-.ready-tag { color: #409eff; }
+.ready-tag { color: var(--el-color-primary); }
 
 .ow-spacer {
   flex: 1;
@@ -297,7 +297,7 @@ function cancellClass() {
 .progress-value {
   font-size: 14px;
   font-weight: 600;
-  color: #409eff;
+  color: var(--el-color-primary);
 }
 .progress-detail {
   font-size: 12px;
@@ -307,14 +307,14 @@ function cancellClass() {
 
 /* 卡片状态 */
 .card-current {
-  border-color: #409eff;
+  border-color: var(--el-color-primary);
   background: linear-gradient(135deg, rgba(64,158,255,0.07), rgba(64,158,255,0.03));
   box-shadow: 0 0 0 4px rgba(64,158,255,0.08);
 }
-.card-current .ow-label { color: #409eff; }
+.card-current .ow-label { color: var(--el-color-primary); }
 
 .icon-current {
-  background: linear-gradient(135deg, #409eff, #66b1ff);
+  background: linear-gradient(135deg, var(--el-color-primary), #66b1ff);
   color: #fff;
   box-shadow: 0 2px 8px rgba(64,158,255,0.35);
 }
@@ -329,7 +329,7 @@ function cancellClass() {
 }
 
 .card-ready {
-  border-color: #409eff;
+  border-color: var(--el-color-primary);
   border-style: dashed;
   background: rgba(64,158,255,0.03);
   cursor: pointer;
@@ -340,12 +340,12 @@ function cancellClass() {
   transform: translateX(3px);
 }
 .card-ready:active { transform: translateX(0); }
-.card-ready .ow-label { color: #409eff; }
+.card-ready .ow-label { color: var(--el-color-primary); }
 
 .icon-ready {
   background: #f0f5ff;
-  color: #409eff;
-  border: 2px solid #409eff;
+  color: var(--el-color-primary);
+  border: 2px solid var(--el-color-primary);
   cursor: pointer;
 }
 

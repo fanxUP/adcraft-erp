@@ -51,7 +51,7 @@
       </el-table-column>
       <el-table-column label="毛利" width="120">
         <template #default="{ row }">
-          <span :style="{ color: (row.gross_profit || 0) >= 0 ? '#67c23a' : '#f56c6c' }">
+          <span :style="{ color: (row.gross_profit || 0) >= 0 ? 'var(--el-color-success)' : 'var(--el-color-danger)' }">
             ¥ {{ row.gross_profit?.toFixed(2) }}
           </span>
         </template>

@@ -12,7 +12,7 @@
         <el-row :gutter="16" v-if="monthlyData">
           <el-col :span="6" v-for="card in monthlyCards" :key="card.label" style="margin-bottom: 12px">
             <el-card shadow="hover" body-style="padding: 16px">
-              <div style="font-size: 13px; color: #909399">{{ card.label }}</div>
+              <div style="font-size: 13px; color: var(--ad-text-secondary)">{{ card.label }}</div>
               <div style="font-size: 22px; font-weight: 700; margin-top: 4px" :style="{ color: card.color || '#303133' }">{{ card.value }}</div>
             </el-card>
           </el-col>
@@ -27,7 +27,7 @@
           <el-table-column prop="work_location" label="地点" width="140" />
           <el-table-column prop="final_amount" label="应收" width="90" align="right"><template #default="{ row }">¥{{ row.final_amount }}</template></el-table-column>
           <el-table-column prop="received_amount" label="实收" width="90" align="right"><template #default="{ row }">¥{{ row.received_amount }}</template></el-table-column>
-          <el-table-column prop="unpaid_amount" label="未收" width="90" align="right"><template #default="{ row }"><span style="color: #f56c6c">¥{{ row.unpaid_amount }}</span></template></el-table-column>
+          <el-table-column prop="unpaid_amount" label="未收" width="90" align="right"><template #default="{ row }"><span style="color: var(--el-color-danger)">¥{{ row.unpaid_amount }}</span></template></el-table-column>
         </el-table>
         <div style="margin-top: 12px; font-weight: 600">待收总额：¥{{ receivables.total_unpaid || 0 }}</div>
       </el-tab-pane>
@@ -105,15 +105,15 @@ const personnelData = ref<AerialPersonnelSummaryItem[]>([])
 const monthlyCards = computed(() => {
   const d = monthlyData.value
   return [
-    { label: '出车天数', value: d?.work_days || 0, color: '#409eff' },
+    { label: '出车天数', value: d?.work_days || 0, color: 'var(--el-color-primary)' },
     { label: '出车趟数', value: d?.trip_count || 0 },
     { label: '应收金额', value: `¥${d?.receivable || 0}` },
     { label: '实收金额', value: `¥${d?.received || 0}` },
-    { label: '待收金额', value: `¥${d?.unpaid || 0}`, color: (d?.unpaid || 0) > 0 ? '#f56c6c' : '#909399' },
+    { label: '待收金额', value: `¥${d?.unpaid || 0}`, color: (d?.unpaid || 0) > 0 ? 'var(--el-color-danger)' : 'var(--ad-text-secondary)' },
     { label: '人员工资', value: `¥${d?.wages || 0}` },
     { label: '报 销', value: `¥${d?.reimbursements || 0}` },
     { label: '车辆费用', value: `¥${d?.vehicle_costs || 0}` },
-    { label: '毛利润', value: `¥${d?.gross_profit || 0}`, color: (d?.gross_profit || 0) >= 0 ? '#67c23a' : '#f56c6c' },
+    { label: '毛利润', value: `¥${d?.gross_profit || 0}`, color: (d?.gross_profit || 0) >= 0 ? 'var(--el-color-success)' : 'var(--el-color-danger)' },
     { label: '平均趟收入', value: `¥${d?.avg_trip_revenue || 0}` },
     { label: '平均趟利润', value: `¥${d?.avg_trip_profit || 0}` },
   ]

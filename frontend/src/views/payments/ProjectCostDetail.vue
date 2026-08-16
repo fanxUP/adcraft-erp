@@ -25,7 +25,7 @@
           </div>
           <div class="order-info-item">
             <span class="label">项目成本合计</span>
-            <span class="value" style="color: #e6a23c; font-weight: bold; font-size: 18px">
+            <span class="value" style="color: var(--el-color-warning); font-weight: bold; font-size: 18px">
               ¥ {{ totalCost.toFixed(2) }}
             </span>
           </div>
@@ -72,7 +72,7 @@
       >
         批量删除（{{ selectedIds.length }}）
       </el-button>
-      <span v-if="selectedIds.length > 0" style="font-size: 13px; color: #909399">已选中 {{ selectedIds.length }} 条记录</span>
+      <span v-if="selectedIds.length > 0" style="font-size: 13px; color: var(--ad-text-secondary)">已选中 {{ selectedIds.length }} 条记录</span>
     </div>
     <el-table
       :data="list"

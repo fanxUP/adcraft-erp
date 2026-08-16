@@ -213,7 +213,7 @@
           </el-table>
 
           <!-- 明细合计 -->
-          <div v-if="form.items?.length" style="margin-top: 16px; padding-top: 12px; border-top: 2px solid var(--ad-primary, #409eff); text-align: right;">
+          <div v-if="form.items?.length" style="margin-top: 16px; padding-top: 12px; border-top: 2px solid var(--ad-primary, var(--el-color-primary)); text-align: right;">
             <div style="font-size: 16px; font-weight: 600; color: var(--ad-text); margin-bottom: 6px;">
               明细合计：¥ {{ itemsTotal.toFixed(2) }}
             </div>

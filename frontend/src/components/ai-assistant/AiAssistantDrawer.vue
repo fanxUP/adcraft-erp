@@ -187,7 +187,7 @@ function selectSession(id: string) {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #f56c6c 0%, #d03050 100%);
+  background: linear-gradient(135deg, var(--el-color-danger) 0%, #d03050 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -231,7 +231,7 @@ function selectSession(id: string) {
   background: #252545;
 }
 .ai-header-close:hover {
-  color: #f56c6c;
+  color: var(--el-color-danger);
   background: rgba(245,108,108,0.1);
 }
 
@@ -278,10 +278,10 @@ function selectSession(id: string) {
 .ai-history-item:hover { background: #252545; }
 .ai-history-item.active {
   background: rgba(245,108,108,0.1);
-  border-left-color: #f56c6c;
+  border-left-color: var(--el-color-danger);
 }
 .ai-history-item-icon { color: #666688; flex-shrink: 0; }
-.ai-history-item.active .ai-history-item-icon { color: #f56c6c; }
+.ai-history-item.active .ai-history-item-icon { color: var(--el-color-danger); }
 .ai-history-item-body {
   flex: 1;
   min-width: 0;
@@ -313,7 +313,7 @@ function selectSession(id: string) {
 .ai-dot {
   width: 6px; height: 6px;
   border-radius: 50%;
-  background: #f56c6c;
+  background: var(--el-color-danger);
   animation: dotPulse 1.4s ease-in-out infinite both;
 }
 .ai-dot:nth-child(2) { animation-delay: 0.16s; }

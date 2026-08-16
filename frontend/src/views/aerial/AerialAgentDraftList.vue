@@ -162,7 +162,7 @@
     <!-- 确认弹窗 -->
     <el-dialog v-model="showConfirmDialog" title="确认草稿" width="500px" :close-on-click-modal="false">
       <p>确认此草稿将写入正式台账/费用记录。</p>
-      <p v-if="confirmDraft?.risk_level === 'high'" style="color: #e6a23c;">
+      <p v-if="confirmDraft?.risk_level === 'high'" style="color: var(--el-color-warning);">
         ⚠️ 此草稿风险等级为高，请仔细核对。
       </p>
       <el-form v-if="confirmDraft?.extracted" label-width="80px" style="margin-top: 12px;">

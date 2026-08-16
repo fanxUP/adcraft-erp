@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2>成本欠款</h2>
       <div class="summary-bar">
-        <span style="color: #e6a23c; font-weight: bold; font-size: 16px">
+        <span style="color: var(--el-color-warning); font-weight: bold; font-size: 16px">
           待结清欠款：¥ {{ pendingTotal.toFixed(2) }}
         </span>
       </div>
@@ -42,7 +42,7 @@
       </el-table-column>
       <el-table-column label="欠款金额" width="120" align="right">
         <template #default="{ row }">
-          <span style="color: #e6a23c; font-weight: bold">¥ {{ row.debt_amount?.toFixed(2) }}</span>
+          <span style="color: var(--el-color-warning); font-weight: bold">¥ {{ row.debt_amount?.toFixed(2) }}</span>
         </template>
       </el-table-column>
       <el-table-column label="状态" width="100" align="center">

@@ -60,10 +60,10 @@
       </el-table-column>
       <el-table-column label="项目成本" width="120" align="right">
         <template #default="{ row }">
-          <span v-if="row._type === 'order'" :style="{ color: (costMap[row.id] || 0) > 0 ? '#e6a23c' : '' }">
+          <span v-if="row._type === 'order'" :style="{ color: (costMap[row.id] || 0) > 0 ? 'var(--el-color-warning)' : '' }">
             ¥ {{ (costMap[row.id] || 0).toFixed(2) }}
           </span>
-          <span v-else :style="{ color: (row.cost_amount || 0) > 0 ? '#e6a23c' : '' }">
+          <span v-else :style="{ color: (row.cost_amount || 0) > 0 ? 'var(--el-color-warning)' : '' }">
             ¥ {{ (row.cost_amount || 0).toFixed(2) }}
           </span>
         </template>

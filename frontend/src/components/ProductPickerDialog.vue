@@ -316,7 +316,7 @@ async function saveEdit() {
 @supports not selector(::-webkit-scrollbar) {
   :deep(.mp-textarea .el-textarea__inner) {
     scrollbar-width: thin;
-    scrollbar-color: #909399 #d8d8d8;
+    scrollbar-color: var(--ad-text-secondary) #d8d8d8;
   }
 }
 </style>

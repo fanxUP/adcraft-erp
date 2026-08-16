@@ -16,7 +16,7 @@
       <el-col :span="6">
         <el-card shadow="hover">
           <div class="stat-card">
-            <div class="stat-icon" style="background: #409eff">
+            <div class="stat-icon" style="background: var(--el-color-primary)">
               <el-icon size="24"><Van /></el-icon>
             </div>
             <div class="stat-info">
@@ -30,7 +30,7 @@
       <el-col :span="6">
         <el-card shadow="hover">
           <div class="stat-card">
-            <div class="stat-icon" style="background: #67c23a">
+            <div class="stat-icon" style="background: var(--el-color-success)">
               <el-icon size="24"><Odometer /></el-icon>
             </div>
             <div class="stat-info">
@@ -44,7 +44,7 @@
       <el-col :span="6">
         <el-card shadow="hover">
           <div class="stat-card">
-            <div class="stat-icon" style="background: #e6a23c">
+            <div class="stat-icon" style="background: var(--el-color-warning)">
               <el-icon size="24"><Money /></el-icon>
             </div>
             <div class="stat-info">
@@ -58,7 +58,7 @@
       <el-col :span="6">
         <el-card shadow="hover">
           <div class="stat-card">
-            <div class="stat-icon" style="background: #f56c6c">
+            <div class="stat-icon" style="background: var(--el-color-danger)">
               <el-icon size="24"><TrendCharts /></el-icon>
             </div>
             <div class="stat-info">
@@ -130,7 +130,7 @@
         </el-table-column>
         <el-table-column prop="total_cost" label="总费用" width="120" align="right">
           <template #default="{ row }">
-            <span style="font-weight: bold; color: #f56c6c">¥{{ formatMoney(row.total_cost) }}</span>
+            <span style="font-weight: bold; color: var(--el-color-danger)">¥{{ formatMoney(row.total_cost) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="dispatch_count" label="出车次数" width="90" align="center" />
@@ -226,7 +226,7 @@
                   :stroke-width="14"
                   :show-text="false"
                 />
-                <span style="font-size: 12px; color: #909399">{{ mileagePercent(row.total_mileage) }}%</span>
+                <span style="font-size: 12px; color: var(--ad-text-secondary)">{{ mileagePercent(row.total_mileage) }}%</span>
               </template>
             </el-table-column>
           </el-table>
@@ -254,7 +254,7 @@
             </el-table-column>
           </el-table>
           <div v-if="dispatchStats.by_reason.length" style="margin-top: 16px">
-            <div style="font-weight: bold; margin-bottom: 8px; color: #606266">按用途分布</div>
+            <div style="font-weight: bold; margin-bottom: 8px; color: var(--ad-text-secondary)">按用途分布</div>
             <el-table :data="dispatchStats.by_reason" stripe size="small">
               <el-table-column prop="reason" label="用途" width="120">
                 <template #default="{ row }">{{ reasonLabel(row.reason) }}</template>
@@ -286,7 +286,7 @@
         </el-table-column>
         <el-table-column prop="allocated_cost" label="已分摊费用" width="140" align="right">
           <template #default="{ row }">
-            <span style="font-weight: bold; color: #e6a23c">¥{{ formatMoney(row.allocated_cost) }}</span>
+            <span style="font-weight: bold; color: var(--el-color-warning)">¥{{ formatMoney(row.allocated_cost) }}</span>
           </template>
         </el-table-column>
       </el-table>

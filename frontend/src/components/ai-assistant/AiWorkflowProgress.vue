@@ -8,7 +8,7 @@
       :percentage="progress.percent"
       :stroke-width="6"
       :show-text="false"
-      color="var(--ai-accent, #f56c6c)"
+      color="var(--ai-accent, var(--el-color-danger))"
       :aria-label="`流程已完成 ${progress.percent}%`"
     />
 
@@ -165,7 +165,7 @@ defineEmits<{
   color: var(--el-color-success);
 }
 .progress-step.is-current {
-  color: var(--ai-accent, #f56c6c);
+  color: var(--ai-accent, var(--el-color-danger));
 }
 .progress-step.is-blocked {
   color: var(--el-color-danger);
@@ -207,7 +207,7 @@ defineEmits<{
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--ai-accent, #f56c6c);
+  color: var(--ai-accent, var(--el-color-danger));
   cursor: pointer;
   font: inherit;
   font-weight: 600;
@@ -217,7 +217,7 @@ defineEmits<{
   text-decoration: underline;
 }
 .alert-action:focus-visible {
-  outline: 2px solid var(--ai-accent, #f56c6c);
+  outline: 2px solid var(--ai-accent, var(--el-color-danger));
   outline-offset: 2px;
 }
 .progress-alert.is-danger {

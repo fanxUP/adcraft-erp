@@ -127,13 +127,13 @@
 
     <el-dialog v-model="importDialogVisible" title="导入客户" width="520px" :close-on-click-modal="false">
       <div style="margin-bottom: 16px; font-size: 13px; color: var(--ad-text-secondary)">
-        <p>支持 .xlsx / .xls 格式，请确保 Excel 包含以下列（<span style="color: #f56c6c">*</span>为必填）：</p>
+        <p>支持 .xlsx / .xls 格式，请确保 Excel 包含以下列（<span style="color: var(--el-color-danger)">*</span>为必填）：</p>
         <el-table :data="templateColumns" border size="small" style="margin: 12px 0">
           <el-table-column prop="name" label="列名" width="120" />
           <el-table-column prop="desc" label="说明" />
           <el-table-column label="必填" width="60">
             <template #default="{ row }">
-              <span v-if="row.required" style="color: #f56c6c">*</span>
+              <span v-if="row.required" style="color: var(--el-color-danger)">*</span>
             </template>
           </el-table-column>
         </el-table>
