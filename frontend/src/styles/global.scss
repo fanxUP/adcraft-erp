@@ -321,3 +321,30 @@ body {
   margin-top: 16px;
   justify-content: flex-end;
 }
+
+/* ===== 页面标题与标签统一 ===== */
+.main-content h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ad-text);
+}
+
+.main-content h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ad-text);
+}
+
+.el-tag {
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+/* 状态标签为描边样式，去 AI 味 */
+.el-tag--success,
+.el-tag--warning,
+.el-tag--danger,
+.el-tag--info,
+.el-tag--primary {
+  border-width: 1px;
+}
