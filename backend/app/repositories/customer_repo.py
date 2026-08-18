@@ -34,6 +34,9 @@ class CustomerRepository:
         contacts_data = data.pop("contacts", [])
         customer = Customer(**data)
         self.db.add(customer)
+        # 先 flush 生成 customer.id（列默认值仅在 INSERT 时生效），
+        # 否则联系人会带着 customer_id=None 入库，违反非空约束
+        await self.db.flush()
         for c in contacts_data:
             contact = CustomerContact(customer_id=customer.id, **c)
             self.db.add(contact)

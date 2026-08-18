@@ -23,7 +23,7 @@
           <el-input-number v-model="searchMaxArea" :min="0" :step="0.1" placeholder="最大" controls-position="right" style="width: 120px" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="loading" @click="doSearch">
+          <el-button :loading="loading" @click="doSearch" type="primary">
             <el-icon><Search /></el-icon> 搜索
           </el-button>
         </el-form-item>
@@ -36,7 +36,7 @@
           :rows="2"
           placeholder="或者输入完整需求描述：客户要做一面 6米×2米的党建文化墙，材质要求 PVC + 亚克力，含设计和安装"
         />
-        <el-button type="default" :loading="loading" style="margin-top: 8px" @click="doSearchByDesc">
+        <el-button :loading="loading" style="margin-top: 8px" @click="doSearchByDesc" type="primary">
           <el-icon><MagicStick /></el-icon> 智能提取关键词搜索
         </el-button>
       </div>
@@ -100,7 +100,7 @@
         </el-table-column>
         <el-table-column label="操作" width="80">
           <template #default="{ row }">
-            <el-button size="small" @click="$router.push(`/quotes/${row.quote_id}/edit`)">查看</el-button>
+            <el-button size="small" @click="$router.push(`/quotes/${row.quote_id}/edit`)" type="primary">查看</el-button>
           </template>
         </el-table-column>
       </el-table>

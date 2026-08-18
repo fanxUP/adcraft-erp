@@ -68,7 +68,7 @@
         </el-form>
         <template #footer>
           <el-button @click="contactDialogVisible = false">取消</el-button>
-          <el-button type="danger" :loading="savingContact" @click="handleSaveContact">保存</el-button>
+          <el-button :loading="savingContact" @click="handleSaveContact" type="primary">保存</el-button>
         </template>
       </el-dialog>
     </div>
@@ -94,7 +94,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
   </div>

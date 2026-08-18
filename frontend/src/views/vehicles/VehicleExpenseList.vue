@@ -3,9 +3,9 @@
     <div class="page-header">
       <h2>车辆费用管理</h2>
       <div class="header-actions">
-        <el-button type="primary" @click="showAddFuel">新增油费</el-button>
-        <el-button type="success" @click="showAddMaintenance">新增维修保养</el-button>
-        <el-button type="warning" @click="showAddCost">新增其他费用</el-button>
+        <el-button @click="showAddFuel" type="danger">新增油费</el-button>
+        <el-button @click="showAddMaintenance" type="danger">新增维修保养</el-button>
+        <el-button @click="showAddCost" type="danger">新增其他费用</el-button>
       </div>
     </div>
 
@@ -28,7 +28,7 @@
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="loadFuelRecords">查询</el-button>
+            <el-button @click="loadFuelRecords" type="primary">查询</el-button>
           </el-form-item>
         </el-form>
 
@@ -119,7 +119,7 @@
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="loadMaintenanceRecords">查询</el-button>
+            <el-button @click="loadMaintenanceRecords" type="primary">查询</el-button>
           </el-form-item>
         </el-form>
 
@@ -186,7 +186,7 @@
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="loadCostAllocations">查询</el-button>
+            <el-button @click="loadCostAllocations" type="primary">查询</el-button>
           </el-form-item>
         </el-form>
 
@@ -302,7 +302,7 @@
       </el-form>
       <template #footer>
         <el-button @click="fuelDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitFuel" :loading="submitting">提交</el-button>
+        <el-button @click="submitFuel" :loading="submitting" type="primary">提交</el-button>
       </template>
     </el-dialog>
 
@@ -367,7 +367,7 @@
       </el-form>
       <template #footer>
         <el-button @click="maintDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitMaintenance" :loading="submitting">提交</el-button>
+        <el-button @click="submitMaintenance" :loading="submitting" type="primary">提交</el-button>
       </template>
     </el-dialog>
 
@@ -396,7 +396,7 @@
       </el-form>
       <template #footer>
         <el-button @click="costDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitCost" :loading="submitting">提交</el-button>
+        <el-button @click="submitCost" :loading="submitting" type="primary">提交</el-button>
       </template>
     </el-dialog>
 
@@ -415,7 +415,7 @@
       </el-form>
       <template #footer>
         <el-button @click="reviewDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitReview" :loading="submitting">确认</el-button>
+        <el-button @click="submitReview" :loading="submitting" type="primary">确认</el-button>
       </template>
     </el-dialog>
 

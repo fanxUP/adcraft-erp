@@ -2,9 +2,9 @@
   <div class="page">
     <div class="page-header">
       <h2>合同管理</h2>
-      <div>
-        <el-button type="primary" @click="handleCreate">新建合同</el-button>
-      </div>
+    </div>
+    <div class="page-create">
+      <el-button @click="handleCreate" type="danger">新建合同</el-button>
     </div>
 
     <el-card shadow="never" class="filter-card">
@@ -20,7 +20,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
+          <el-button @click="handleSearch" type="primary">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
@@ -192,7 +192,7 @@
       </el-form>
       <template #footer>
         <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="formLoading" @click="saveForm">保存</el-button>
+        <el-button :loading="formLoading" @click="saveForm" type="primary">保存</el-button>
       </template>
     </el-dialog>
 
@@ -224,7 +224,7 @@
       </el-form>
       <template #footer>
         <el-button @click="linkVisible = false">取消</el-button>
-        <el-button type="primary" :loading="linkLoading" @click="confirmLink">确认加入</el-button>
+        <el-button :loading="linkLoading" @click="confirmLink" type="primary">确认加入</el-button>
       </template>
     </el-dialog>
 
@@ -289,7 +289,7 @@
       </el-form>
       <template #footer>
         <el-button @click="statusDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="statusLoading" @click="confirmStatusChange">确认变更</el-button>
+        <el-button :loading="statusLoading" @click="confirmStatusChange" type="primary">确认变更</el-button>
       </template>
     </el-dialog>
   </div>

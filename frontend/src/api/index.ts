@@ -31,12 +31,20 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401) {
+      // 登录接口失败（密码错误等）：显示后端真实原因，不当作“会话过期”处理
+      if (error.config?.url?.includes('/auth/login')) {
+        ElMessage.error(error.response?.data?.detail || '用户名或密码错误')
+        return Promise.reject(error)
+      }
       ElMessage.error('登录已过期，请重新登录')
       useAuthStore().logout()
       router.push('/login')
     } else if (error.response?.status === 422 && Array.isArray(error.response?.data?.detail)) {
       const messages = error.response.data.detail.map((d: { msg: string }) => d.msg).join('; ')
       ElMessage.error(messages || '请求参数错误')
+    } else if (error.response?.status === 403 && error.response?.data?.code === 40300) {
+      // 强制改密场景：不弹窗刷屏，由全局 ForceChangePasswordDialog 统一引导修改密码
+      return Promise.reject(error)
     } else {
       ElMessage.error(error.response?.data?.message || '网络错误')
     }

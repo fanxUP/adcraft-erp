@@ -31,7 +31,7 @@
               <el-input v-model="orderId" placeholder="可选：输入订单ID" clearable />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="loading" :disabled="!selectedFile" @click="doRecognize">
+              <el-button :loading="loading" :disabled="!selectedFile" @click="doRecognize">
                 <el-icon><Search /></el-icon> 识别截图
               </el-button>
             </el-form-item>
@@ -102,7 +102,7 @@
       </el-descriptions>
 
       <div v-if="result.extracted.amount && result.extracted.paid_at" style="margin-top: 16px; text-align: right">
-        <el-button type="success" @click="goToPayment">前往登记收款</el-button>
+        <el-button @click="goToPayment">前往登记收款</el-button>
       </div>
     </el-card>
 

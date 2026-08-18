@@ -94,6 +94,13 @@ class AcceptanceService:
             if duplicate_result.scalar_one_or_none():
                 raise ValueError("该单据已有有效验收单，请勿重复创建")
 
+        # 未显式填写联系人时，从来源订单/报价继承
+        if doc_id and source:
+            if not data.get("contact_person") and source.contact_person:
+                data["contact_person"] = source.contact_person
+            if not data.get("contact_phone") and source.contact_phone:
+                data["contact_phone"] = source.contact_phone
+
         data["acceptance_no"] = await generate_acceptance_no(self.db)
         data["status"] = "draft"
 

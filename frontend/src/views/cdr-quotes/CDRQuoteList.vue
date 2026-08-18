@@ -2,9 +2,9 @@
   <div class="page">
     <div class="page-header">
       <h2>智能报价</h2>
-      <div>
-        <el-button type="danger" @click="handleNewQuote">新建报价</el-button>
-      </div>
+    </div>
+    <div class="page-create">
+      <el-button @click="handleNewQuote" type="danger">新建报价</el-button>
     </div>
 
     <el-table :data="quotes" v-loading="loading" stripe>

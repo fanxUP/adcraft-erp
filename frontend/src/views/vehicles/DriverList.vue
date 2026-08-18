@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <h2>司机管理</h2>
-      <el-button type="danger" @click="handleCreate">新增司机</el-button>
+      <el-button @click="handleCreate" type="danger">新增司机</el-button>
     </div>
 
     <div class="search-bar">
@@ -11,7 +11,7 @@
         <el-option label="启用" value="active" />
         <el-option label="停用" value="disabled" />
       </el-select>
-      <el-button type="primary" style="margin-left: 12px" @click="fetchData">搜索</el-button>
+      <el-button style="margin-left: 12px" @click="fetchData" type="primary">搜索</el-button>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
@@ -96,7 +96,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
   </div>

@@ -78,19 +78,15 @@ async def init_app():
                 password_hash=hash_password(ADMIN_USER["password"]),
                 real_name=ADMIN_USER["real_name"],
                 is_active=True,
+                # 仅首次创建时标记强制改密；之后用户无论把密码改成什么
+                # （哪怕恰好等于默认值 admin123），重启都不会再被强制改密
+                must_change_password=True,
             )
             session.add(admin_user)
             await session.flush()
             print(f"  + Admin user created: {ADMIN_USER['username']}")
         else:
             print(f"  ✓ Admin user exists: {ADMIN_USER['username']}")
-
-        # 强制改密：管理员仍使用默认密码时标记 must_change_password
-        if admin_user and verify_password(ADMIN_USER["password"], admin_user.password_hash):
-            if not admin_user.must_change_password:
-                admin_user.must_change_password = True
-                await session.flush()
-                print("  ⚠️  管理员仍使用默认密码，已标记 must_change_password（登录后需先改密）")
 
         # 3. Assign admin role to admin user
         admin_role = roles_by_name.get("admin")

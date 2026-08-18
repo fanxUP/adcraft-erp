@@ -4,9 +4,9 @@
       <h2><el-icon><Document /></el-icon> 工资报表</h2>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <el-date-picker v-model="curMonth" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:160px" @change="fetchData" />
-        <el-button @click="fetchData">刷新</el-button>
-        <el-button type="primary" @click="handlePrint"><el-icon><Printer /></el-icon> 打印</el-button>
-        <el-button type="success" plain @click="handlePrintAll"><el-icon><Printer /></el-icon> 打印工资条</el-button>
+        <el-button @click="fetchData" type="primary">刷新</el-button>
+        <el-button @click="handlePrint" type="primary"><el-icon><Printer /></el-icon> 打印</el-button>
+        <el-button plain @click="handlePrintAll" type="primary"><el-icon><Printer /></el-icon> 打印工资条</el-button>
       </div>
     </div>
 
@@ -34,7 +34,7 @@
                 <td v-else-if="c.type === 'remark'" class="c-center">{{ row.remark || '' }}</td>
                 <td v-else class="c-center">{{ ({ pending: '待核算', calculated: '已核算', paid: '已发放' })[row.payment_status || 'pending'] }}</td>
               </template>
-              <td class="no-print ops-cell"><el-button size="small" type="primary" plain @click="openPayslip(row)">工资条</el-button></td>
+              <td class="no-print ops-cell"><el-button size="small" plain @click="openPayslip(row)">工资条</el-button></td>
             </tr>
           </tbody>
           <tfoot>
@@ -56,7 +56,7 @@
       <iframe ref="payslipFrame" class="payslip-frame" :srcdoc="payslipDoc"></iframe>
       <template #footer>
         <el-button @click="payslipDialog = false">关闭</el-button>
-        <el-button type="primary" @click="printPayslipFromDialog"><el-icon><Printer /></el-icon> 打印工资条</el-button>
+        <el-button @click="printPayslipFromDialog" type="primary"><el-icon><Printer /></el-icon> 打印工资条</el-button>
       </template>
     </el-dialog>
   </div>

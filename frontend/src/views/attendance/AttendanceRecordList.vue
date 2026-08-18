@@ -7,9 +7,9 @@
         <el-select v-model="fEmp" placeholder="全部员工" clearable filterable style="width:200px" @change="fetchData">
           <el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" />
         </el-select>
-        <el-button @click="fetchData">刷新</el-button>
-        <el-button type="danger" @click="openCreate">录入打卡</el-button>
-        <el-button @click="handlePrint"><el-icon><Printer /></el-icon> 打印预览</el-button>
+        <el-button @click="fetchData" type="primary">刷新</el-button>
+        <el-button @click="openCreate">录入打卡</el-button>
+        <el-button @click="handlePrint" type="primary"><el-icon><Printer /></el-icon> 打印预览</el-button>
       </div>
     </div>
 
@@ -135,7 +135,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog=false">取消</el-button>
-        <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
+        <el-button @click="handleSave" :loading="saving" type="primary">保存</el-button>
       </template>
     </el-dialog>
   </div>

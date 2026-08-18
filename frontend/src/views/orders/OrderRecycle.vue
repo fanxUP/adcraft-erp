@@ -15,7 +15,7 @@
           <el-input v-model="filters.keyword" placeholder="订单编号/项目名称" clearable style="width: 220px" @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
+          <el-button @click="handleSearch" type="primary">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>

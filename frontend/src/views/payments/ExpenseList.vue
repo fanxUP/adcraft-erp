@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <h2>支出管理</h2>
-      <el-button type="danger" @click="openCreate">登记支出</el-button>
+      <el-button @click="openCreate">登记支出</el-button>
     </div>
 
     <div class="search-bar">
@@ -19,7 +19,7 @@
         style="width: 260px; margin-left: 12px"
         @change="fetchData"
       />
-      <el-button style="margin-left: 12px" @click="fetchData">搜索</el-button>
+      <el-button style="margin-left: 12px" @click="fetchData" type="primary">搜索</el-button>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
@@ -74,7 +74,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSave">{{ isEditing ? '保存' : '登记' }}</el-button>
+        <el-button :loading="saving" @click="handleSave" type="primary">{{ isEditing ? '保存' : '登记' }}</el-button>
       </template>
     </el-dialog>
   </div>

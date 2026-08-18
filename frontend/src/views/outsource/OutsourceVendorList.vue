@@ -2,7 +2,9 @@
   <div class="page">
     <div class="page-header">
       <h2>外协商管理</h2>
-      <el-button type="danger" @click="handleCreate">新建外协商</el-button>
+    </div>
+    <div class="page-create">
+      <el-button @click="handleCreate" type="danger">新建外协商</el-button>
     </div>
 
     <div class="search-bar">
@@ -13,7 +15,7 @@
         <el-option label="设计" value="design" />
         <el-option label="运输" value="transport" />
       </el-select>
-      <el-button type="primary" @click="fetchData" style="margin-left: 12px">搜索</el-button>
+      <el-button @click="fetchData" style="margin-left: 12px" type="primary">搜索</el-button>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协商">
@@ -93,7 +95,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -191,7 +193,7 @@ onMounted(fetchData)
 
 <style scoped>
 .page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .search-bar { display: flex; align-items: center; }
 </style>

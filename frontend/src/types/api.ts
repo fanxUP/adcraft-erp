@@ -28,6 +28,7 @@ export interface UserProfile {
   phone?: string
   email?: string
   is_active: boolean
+  must_change_password?: boolean
   roles: string[]
 }
 
@@ -40,6 +41,7 @@ export interface UserResponse {
   phone?: string
   email?: string
   is_active: boolean
+  must_change_password?: boolean
   created_at?: string
   roles: string[]
 }

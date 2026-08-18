@@ -4,8 +4,10 @@
       <h2>客户管理</h2>
       <div>
         <el-button @click="importDialogVisible = true">导入</el-button>
-        <el-button type="danger" @click="handleCreate">新建客户</el-button>
       </div>
+    </div>
+    <div class="page-create">
+      <el-button @click="handleCreate" type="danger">新建客户</el-button>
     </div>
 
     <div class="search-bar">
@@ -15,7 +17,7 @@
         <el-option label="代理" value="代理" />
         <el-option label="同行" value="同行" />
       </el-select>
-      <el-button type="primary" @click="fetchData" style="margin-left: 12px">搜索</el-button>
+      <el-button @click="fetchData" style="margin-left: 12px" type="primary">搜索</el-button>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
@@ -93,11 +95,11 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-button size="small" @click="handleAddContact">+ 添加联系人</el-button>
+        <el-button size="small" @click="handleAddContact" type="danger">+ 添加联系人</el-button>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
 
@@ -121,7 +123,7 @@
       </el-form>
       <template #footer>
         <el-button @click="contactDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="handleConfirmContact">保存</el-button>
+        <el-button @click="handleConfirmContact" type="primary">保存</el-button>
       </template>
     </el-dialog>
 
@@ -155,7 +157,7 @@
         :on-exceed="() => ElMessage.warning('只能上传一个文件')"
       >
         <template #trigger>
-          <el-button type="primary">选择文件</el-button>
+          <el-button>选择文件</el-button>
         </template>
         <template #tip>
           <div class="el-upload__tip">仅支持 .xlsx / .xls 文件</div>
@@ -174,7 +176,7 @@
       </div>
       <template #footer>
         <el-button @click="importDialogVisible = false">关闭</el-button>
-        <el-button type="danger" :loading="importing" :disabled="!importFile" @click="handleImport">开始导入</el-button>
+        <el-button :loading="importing" :disabled="!importFile" @click="handleImport">开始导入</el-button>
       </template>
     </el-dialog>
   </div>
@@ -325,7 +327,7 @@ onMounted(fetchData)
 
 <style scoped>
 .page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .search-bar { display: flex; align-items: center; }
 :deep(.el-upload__tip) { margin-top: 4px; font-size: 12px; color: var(--ad-text-secondary, #999); }

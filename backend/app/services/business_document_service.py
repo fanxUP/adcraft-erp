@@ -1061,8 +1061,8 @@ class BusinessDocumentService:
             project_name=quote.project_name,
             sales_user_id=quote.sales_user_id,
             department=quote.department,
-            contact_person=None,
-            contact_phone=None,
+            contact_person=quote.contact_person,
+            contact_phone=quote.contact_phone,
             status="pending_confirm",
             total_amount=quote.total_amount,
             paid_amount=0,
@@ -1076,6 +1076,8 @@ class BusinessDocumentService:
         await self.db.flush()
 
         # 复制明细（source_quote_item_id 回链原明细）
+        # 注意：不要操作 order.items 关系——flush 后访问/赋值都会触发 selectin 懒加载
+        # （异步 MissingGreenlet），改为直接以 document_id 关联入库，提交后由 refresh 统一加载
         for src in sorted(quote.items or [], key=lambda it: it.sort_order or 0):
             item = BusinessDocumentItem(
                 document_id=order.id,
@@ -1109,8 +1111,6 @@ class BusinessDocumentService:
                 group_name=src.group_name,
                 material_process=src.material_process,
             )
-            # 追加到关系并加入会话，确保持久化且 _to_detail(order) 能返回完整明细
-            order.items.append(item)
             self.db.add(item)
 
         # 状态日志
@@ -1121,6 +1121,12 @@ class BusinessDocumentService:
         quote.status = "converted"
 
         await self.db.commit()
+
+        # 显式加载关系后再序列化（与 create() 的 refresh 模式一致），避免异步懒加载 MissingGreenlet
+        await self.db.refresh(
+            order,
+            ["customer", "items", "status_logs", "design_tasks", "production_tasks", "installation_tasks"],
+        )
         return self._to_detail(order)
 
     # ═══════════════════════════════════════════

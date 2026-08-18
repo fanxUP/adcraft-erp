@@ -3,9 +3,11 @@
     <div class="page-header">
       <h2>外协任务</h2>
       <div style="display: flex; gap: 8px;">
-        <el-button type="danger" @click="handleCreate">新建外协任务</el-button>
-        <el-button v-if="isAdmin" @click="$router.push('/outsource/tasks/recycle')">回收站</el-button>
+        <el-button v-if="isAdmin" @click="$router.push('/outsource/tasks/recycle')" type="warning">回收站</el-button>
       </div>
+    </div>
+    <div class="page-create">
+      <el-button @click="handleCreate" type="danger">新建外协任务</el-button>
     </div>
 
     <div class="search-bar">
@@ -16,7 +18,7 @@
         <el-option label="已结算" value="settled" />
         <el-option label="已取消" value="cancelled" />
       </el-select>
-      <el-button type="primary" @click="fetchData" style="margin-left: 12px">搜索</el-button>
+      <el-button @click="fetchData" style="margin-left: 12px" type="primary">搜索</el-button>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协任务">
@@ -112,7 +114,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
 
@@ -170,7 +172,7 @@
       </el-form>
       <template #footer>
         <el-button @click="payDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="paySaving" @click="handlePaySubmit">确认付款</el-button>
+        <el-button :loading="paySaving" @click="handlePaySubmit" type="primary">确认付款</el-button>
       </template>
     </el-dialog>
   </div>
@@ -423,7 +425,7 @@ onMounted(() => {
 
 <style scoped>
 .page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .search-bar { display: flex; align-items: center; }
 

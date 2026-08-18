@@ -18,7 +18,7 @@
         <el-option label="已外协" value="true" />
         <el-option label="未外协" value="false" />
       </el-select>
-      <el-button type="primary" style="margin-left: 12px" @click="fetchData">搜索</el-button>
+      <el-button style="margin-left: 12px" @click="fetchData" type="primary">搜索</el-button>
     </div>
 
           <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">

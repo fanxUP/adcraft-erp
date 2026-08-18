@@ -3,7 +3,9 @@
     <div class="page-header">
       <el-button text @click="$router.push('/acceptances')" style="font-size: 16px;">← 返回</el-button>
       <h2>{{ form.acceptance_no }}</h2>
-
+      <el-button @click="showPrint = true" type="primary">
+        <el-icon><Printer /></el-icon> 打印预览
+      </el-button>
     </div>
 
     <el-tabs v-model="activeTab">
@@ -98,7 +100,7 @@
           <template #header>
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span>验收明细（{{ form.items.length }} 项）</span>
-              <el-button v-if="form.items.length && canEditResult" type="success" size="small" @click="acceptAll">一键验收</el-button>
+              <el-button v-if="form.items.length && canEditResult" size="small" @click="acceptAll">一键验收</el-button>
             </div>
           </template>
 
@@ -235,7 +237,7 @@
                 :http-request="handleUpload"
                 accept="image/*,.pdf,.doc,.docx"
               >
-                <el-button type="primary" size="small">上传附件</el-button>
+                <el-button size="small">上传附件</el-button>
               </el-upload>
             </div>
           </template>
@@ -262,14 +264,14 @@
     <el-card v-if="authStore.isAdmin" shadow="never" style="margin-top: 16px; border-color: #ff4d4f; background: var(--ad-card);">
       <div style="display: flex; align-items: center; gap: 16px;">
         <span style="color: #ff4d4f; font-weight: 600;">危险操作</span>
-        <el-button type="danger" :loading="deleting" @click="handleAdminDelete">删除此验收单</el-button>
+        <el-button :loading="deleting" @click="handleAdminDelete" type="danger">删除此验收单</el-button>
         <span style="color: var(--ad-text-secondary); font-size: 12px;">删除后订单将回退到安装中状态，验收单进入回收站</span>
       </div>
     </el-card>
 
     <!-- 保存按钮 -->
     <div class="save-bar" v-if="canEditResult">
-      <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
+      <el-button @click="handleSave" :loading="saving" type="primary">保存</el-button>
       <el-button @click="$router.push('/acceptances')">取消</el-button>
     </div>
 
@@ -282,15 +284,9 @@
       </el-form>
       <template #footer>
         <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="confirmReject" :loading="statusChanging">确认驳回</el-button>
+        <el-button @click="confirmReject" :loading="statusChanging" type="primary">确认驳回</el-button>
       </template>
     </el-dialog>
-
-    <div style="text-align: left; margin-top: 24px;">
-      <el-button type="primary" @click="showPrint = true">
-        <el-icon><Printer /></el-icon> 打印预览
-      </el-button>
-    </div>
 
     <AcceptancePrint
       :visible="showPrint"

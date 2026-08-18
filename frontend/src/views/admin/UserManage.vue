@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <h2>用户管理</h2>
-      <el-button type="danger" @click="openCreate">新增用户</el-button>
+      <el-button @click="openCreate" type="danger">新增用户</el-button>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe>
@@ -68,7 +68,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
   </div>

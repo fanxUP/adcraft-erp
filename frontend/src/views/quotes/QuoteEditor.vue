@@ -48,8 +48,8 @@
         <div class="card-header">
           <span>报价明细</span>
           <div style="display: flex; gap: 8px;">
-            <el-button v-if="!isReadonly" size="small" @click="addGroup">添加分项</el-button>
-            <el-button v-if="!isReadonly" type="danger" size="small" @click="addItem()">添加行</el-button>
+            <el-button v-if="!isReadonly" size="small" @click="addGroup" type="danger">添加分项</el-button>
+            <el-button v-if="!isReadonly" size="small" @click="addItem()" type="danger">添加行</el-button>
             <el-button v-if="!isReadonly" size="small" @click="downloadQuoteTemplate">📥 下载导入模板</el-button>
             <el-upload
               v-if="!isReadonly"
@@ -58,7 +58,7 @@
               accept=".xlsx,.xls"
               :on-change="onImportItems"
             >
-              <el-button size="small" type="success" :loading="importingItems">
+              <el-button size="small" :loading="importingItems">
                 <el-icon><Upload /></el-icon> 导入明细
               </el-button>
             </el-upload>

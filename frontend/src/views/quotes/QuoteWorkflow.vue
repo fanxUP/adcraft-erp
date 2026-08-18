@@ -63,12 +63,11 @@
 
     </div>
 
-    <!-- 预览按钮独立行 -->
+    <!-- 预览/打印按钮独立行 -->
     <div class="qw-preview-row">
-      <button class="qw-preview-btn" @click="$emit('preview')">
-        <el-icon :size="20"><View /></el-icon>
-        <span>预览报价单</span>
-      </button>
+      <el-button type="primary" @click="$emit('preview')">
+        <el-icon><Printer /></el-icon> 打印预览
+      </el-button>
     </div>
 
     <!-- 提示文字 -->
@@ -91,7 +90,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Check, View } from '@element-plus/icons-vue'
+import { Check, Printer } from '@element-plus/icons-vue'
 
 const props = defineProps<{
   currentStatus: string
@@ -353,40 +352,13 @@ function iconClass(status: string) {
   border: 2px solid #e8e8e8;
 }
 
-/* ===== 预览按钮独立行 ===== */
+/* ===== 预览/打印按钮独立行 ===== */
 .qw-preview-row {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--ad-border);
-}
-
-.qw-preview-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 24px;
-  border: none;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--el-color-primary) 0%, #66b1ff 100%);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  box-shadow: 0 3px 10px rgba(64,158,255,0.3);
-  letter-spacing: 0.5px;
-}
-
-.qw-preview-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(64,158,255,0.4);
-}
-
-.qw-preview-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(64,158,255,0.25);
 }
 
 /* ===== 提示文字 ===== */
@@ -424,13 +396,6 @@ function iconClass(status: string) {
 }
 :root[data-theme="dark"] .qw-line { background: #434343; }
 :root[data-theme="dark"] .qw-point { color: #595959; }
-:root[data-theme="dark"] .qw-preview-btn {
-  background: linear-gradient(135deg, #1677ff 0%, var(--el-color-primary) 100%);
-  box-shadow: 0 3px 10px rgba(22,119,255,0.3);
-}
-:root[data-theme="dark"] .qw-preview-btn:hover {
-  box-shadow: 0 6px 18px rgba(22,119,255,0.45);
-}
 
 /* ===== 小屏 ===== */
 @media (max-width: 800px) {
@@ -440,6 +405,6 @@ function iconClass(status: string) {
   .qw-conn { padding: 0 2px; }
   .qw-tag { display: none; }
   .qw-preview-row { margin-top: 12px; padding-top: 10px; }
-  .qw-preview-btn { width: 100%; justify-content: center; padding: 8px 16px; font-size: 13px; }
+  .qw-preview-row .el-button { width: 100%; }
 }
 </style>

@@ -4,10 +4,10 @@
       <h2><el-icon><Money /></el-icon> 工资表</h2>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <el-date-picker v-model="curMonth" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:160px" @change="fetchGrid" />
-        <el-button @click="fetchGrid">刷新</el-button>
-        <el-button type="primary" :loading="computing" @click="computeAll"><el-icon><Cpu /></el-icon> 计算</el-button>
-        <el-button type="warning" @click="openItems"><el-icon><Setting /></el-icon> 指标设置</el-button>
-        <el-button type="success" plain @click="openParams"><el-icon><Tools /></el-icon> 参数</el-button>
+        <el-button @click="fetchGrid" type="primary">刷新</el-button>
+        <el-button :loading="computing" @click="computeAll"><el-icon><Cpu /></el-icon> 计算</el-button>
+        <el-button @click="openItems"><el-icon><Setting /></el-icon> 指标设置</el-button>
+        <el-button plain @click="openParams"><el-icon><Tools /></el-icon> 参数</el-button>
       </div>
     </div>
 
@@ -96,10 +96,10 @@
         <el-select v-model="curTemplateId" size="small" clearable filterable placeholder="选择模板" style="width:220px">
           <el-option v-for="t in templates" :key="t.id" :label="t.name + '（' + t.item_count + ' 列）'" :value="t.id" />
         </el-select>
-        <el-button size="small" type="primary" plain :disabled="!curTemplateId" @click="applyTemplate">应用</el-button>
+        <el-button size="small" plain :disabled="!curTemplateId" @click="applyTemplate">应用</el-button>
         <el-button size="small" :disabled="!curTemplateId" @click="renameTemplate">重命名</el-button>
-        <el-button size="small" type="danger" plain :disabled="!curTemplateId" @click="deleteTemplate">删除</el-button>
-        <el-button size="small" type="warning" plain @click="saveAsTemplate">💾 存为模板</el-button>
+        <el-button size="small" plain :disabled="!curTemplateId" @click="deleteTemplate" type="danger">删除</el-button>
+        <el-button size="small" plain @click="saveAsTemplate">💾 存为模板</el-button>
       </div>
 
       <div class="items-list">
@@ -134,12 +134,12 @@
         <el-input v-model="newItem.formula" :disabled="newItem.is_manual" :placeholder="newItem.is_manual ? '手工填写，无需公式' : '公式，如：200'" style="flex:1" />
         <span style="font-size:12px;color:var(--el-text-color-secondary)">手</span>
         <el-switch v-model="newItem.is_manual" size="small" title="手工填写" />
-        <el-button type="primary" plain @click="addNewItem">＋ 添加</el-button>
+        <el-button plain @click="addNewItem" type="danger">＋ 添加</el-button>
       </div>
 
       <template #footer>
         <el-button @click="showItems = false">取消</el-button>
-        <el-button type="primary" :loading="itemsSaving" @click="saveItems">保存</el-button>
+        <el-button :loading="itemsSaving" @click="saveItems" type="primary">保存</el-button>
       </template>
     </el-dialog>
 
@@ -162,12 +162,12 @@
       <div class="item-row new-item">
         <el-input v-model="newParam.label" placeholder="名称，如：提成系数" style="width:120px" />
         <el-input v-model="newParam.key" placeholder="key，如：commission_rate" style="width:170px" />
-        <el-button type="primary" plain @click="addNewParam">＋ 添加</el-button>
+        <el-button plain @click="addNewParam" type="danger">＋ 添加</el-button>
       </div>
 
       <template #footer>
         <el-button @click="showParams = false">取消</el-button>
-        <el-button type="primary" :loading="paramsSaving" @click="saveParams">保存</el-button>
+        <el-button :loading="paramsSaving" @click="saveParams" type="primary">保存</el-button>
       </template>
     </el-dialog>
   </div>

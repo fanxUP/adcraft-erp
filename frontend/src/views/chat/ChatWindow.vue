@@ -348,7 +348,7 @@
         @keyup.enter="handleSearch"
       >
         <template #append>
-          <el-button :icon="Search" @click="handleSearch" />
+          <el-button :icon="Search" @click="handleSearch"  type="primary" />
         </template>
       </el-input>
       <div v-if="searchResults.length > 0" class="search-results">
@@ -554,7 +554,7 @@
       </div>
       <template #footer>
         <el-button @click="showBatchShare = false">取消</el-button>
-        <el-button type="primary" :disabled="batchSelected.size === 0" :loading="batchShareLoading" @click="submitBatchShare">
+        <el-button :disabled="batchSelected.size === 0" :loading="batchShareLoading" @click="submitBatchShare">
           分享 ({{ batchSelected.size }})
         </el-button>
       </template>

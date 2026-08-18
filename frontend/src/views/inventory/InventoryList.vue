@@ -3,11 +3,13 @@
     <div class="page-header">
       <h2>库存管理</h2>
       <div>
-        <el-button type="primary" @click="showStockRecords = !showStockRecords">
+        <el-button @click="showStockRecords = !showStockRecords">
           {{ showStockRecords ? '查看库存' : '查看记录' }}
         </el-button>
-        <el-button type="danger" @click="handleCreate">新建物料</el-button>
       </div>
+    </div>
+    <div class="page-create">
+      <el-button @click="handleCreate" type="danger">新建物料</el-button>
     </div>
 
     <!-- Inventory Items -->
@@ -19,7 +21,7 @@
           <el-option label="半成品" value="semi_finished" />
           <el-option label="耗材" value="consumable" />
         </el-select>
-        <el-button type="primary" @click="fetchItems" style="margin-left: 12px">搜索</el-button>
+        <el-button @click="fetchItems" style="margin-left: 12px" type="primary">搜索</el-button>
       </div>
 
       <el-table :data="items" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无库存物料">
@@ -126,7 +128,7 @@
       </el-form>
       <template #footer>
         <el-button @click="itemDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSaveItem">保存</el-button>
+        <el-button :loading="saving" @click="handleSaveItem" type="primary">保存</el-button>
       </template>
     </el-dialog>
 
@@ -309,7 +311,7 @@ onMounted(fetchItems)
 
 <style scoped>
 .page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .search-bar { display: flex; align-items: center; }
 </style>

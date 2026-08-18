@@ -328,6 +328,18 @@ body {
   color: var(--ad-text);
 }
 
+/* ===== 统一「新建」操作区：位于页面标题下方 ===== */
+.page-create {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.page-create .el-button + .el-button {
+  margin-left: 0;
+}
+
 .el-tag {
   border-radius: 6px;
   font-weight: 500;

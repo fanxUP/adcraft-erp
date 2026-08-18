@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="page-header">
       <h2>违章事故</h2>
-      <el-button type="primary" @click="showAddDialog">
+      <el-button @click="showAddDialog" type="danger">
         <el-icon><Plus /></el-icon> 新增异常
       </el-button>
     </div>
@@ -51,7 +51,7 @@
         </el-select>
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="loadData">查询</el-button>
+        <el-button @click="loadData" type="primary">查询</el-button>
         <el-button @click="resetFilters">重置</el-button>
       </el-form-item>
     </el-form>
@@ -211,7 +211,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitting">确定</el-button>
+        <el-button @click="handleSubmit" :loading="submitting" type="primary">确定</el-button>
       </template>
     </el-dialog>
 
@@ -235,7 +235,7 @@
       </el-form>
       <template #footer>
         <el-button @click="resolveDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleResolve" :loading="submitting">确定</el-button>
+        <el-button @click="handleResolve" :loading="submitting" type="primary">确定</el-button>
       </template>
     </el-dialog>
 

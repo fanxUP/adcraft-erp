@@ -90,8 +90,8 @@
 
     <template #footer>
       <el-button v-if="step > 0" @click="step--">上一步</el-button>
-      <el-button v-if="step < 2" type="primary" @click="nextStep">下一步</el-button>
-      <el-button v-if="step === 2" type="primary" :loading="submitting" @click="submit">
+      <el-button v-if="step < 2" @click="nextStep" type="primary">下一步</el-button>
+      <el-button v-if="step === 2" :loading="submitting" @click="submit" type="primary">
         {{ isEdit ? '保存' : '创建' }}
       </el-button>
       <el-button @click="emit('close')">取消</el-button>

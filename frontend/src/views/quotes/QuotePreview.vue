@@ -14,8 +14,8 @@
         <div class="print-header">
           <div class="print-logo">LOGO</div>
           <div class="print-company">
-            <div class="print-company-name">广告制作公司</div>
-            <div class="print-company-detail">地址: __________  电话: __________</div>
+            <div class="print-company-name">{{ companyName || '广告制作公司' }}</div>
+            <div class="print-company-detail">联系电话: {{ companyPhone || '__________' }}</div>
           </div>
         </div>
 
@@ -37,6 +37,10 @@
           <div class="print-info-row">
             <span><strong>客户名称:</strong> {{ quote.customer_name || '-' }}</span>
             <span><strong>联系电话:</strong> {{ customerPhone }}</span>
+          </div>
+          <div class="print-info-row">
+            <span><strong>联 系 人:</strong> {{ quote.contact_person || '-' }}</span>
+            <span></span>
           </div>
           <div class="print-info-row">
             <span><strong>项目名称:</strong> {{ quote.project_name || '-' }}</span>
@@ -132,7 +136,7 @@
 
     <template #footer>
       <el-button @click="$emit('close')">关闭</el-button>
-      <el-button type="primary" @click="handlePrintBySelector('.print-area')">打印</el-button>
+      <el-button @click="handlePrintBySelector('.print-area')" type="primary">打印预览</el-button>
     </template>
   </el-dialog>
 </template>
@@ -142,6 +146,7 @@ import { formatDate } from '@/utils/datetime'
 import { ref, computed, watch } from 'vue'
 import { getQuote } from '@/api/quotes'
 import { getCustomer } from '@/api/customers'
+import { getSystemSettings } from '@/api/admin'
 import { usePrint } from '@/composables/usePrint'
 import { QuoteDetailResponse, QuoteItemResponse } from '@/types/api'
 import { buildQuoteDisplayRows } from '@/utils/quoteItemOrdering'
@@ -158,6 +163,8 @@ const { handlePrintBySelector } = usePrint()
 const loading = ref(false)
 const quote = ref<QuoteDetailResponse | null>(null)
 const customerPhone = ref('-')
+const companyName = ref('')
+const companyPhone = ref('')
 const salesName = ref('-')
 
 interface PreviewRow {
@@ -199,6 +206,10 @@ watch(() => props.visible, async (val) => {
   if (!val) return
   loading.value = true
   try {
+    getSystemSettings().then((s) => {
+      companyName.value = s.COMPANY_NAME || ''
+      companyPhone.value = s.COMPANY_PHONE || ''
+    }).catch(() => {})
     if (props.quoteId) {
       quote.value = await getQuote(props.quoteId)
       if (props.currentItems) {
@@ -207,8 +218,11 @@ watch(() => props.visible, async (val) => {
       if (quote.value.customer_id) {
         try {
           const customer = await getCustomer(quote.value.customer_id)
-          customerPhone.value = customer.phone || '-'
+          // 优先显示报价单上填写的联系人电话，未填则回退客户档案电话
+          customerPhone.value = quote.value.contact_phone || customer.phone || '-'
         } catch { customerPhone.value = '-' }
+      } else if (quote.value.contact_phone) {
+        customerPhone.value = quote.value.contact_phone
       }
       salesName.value = '-'
     } else if (props.currentItems) {

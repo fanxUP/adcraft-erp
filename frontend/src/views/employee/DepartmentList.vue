@@ -1,7 +1,8 @@
 <template>
   <div class="page">
-    <div class="page-header"><h2>部门管理</h2>
-      <el-button type="danger" @click="openCreate">新建部门</el-button>
+    <div class="page-header"><h2>部门管理</h2></div>
+    <div class="page-create">
+      <el-button @click="openCreate" type="danger">新建部门</el-button>
     </div>
     <el-table :data="list" v-loading="loading" stripe>
       <el-table-column prop="code" label="编码" width="120" />
@@ -21,7 +22,7 @@
         <el-form-item label="描述"><el-input v-model="form.description" type="textarea" :rows="2" /></el-form-item>
         <el-form-item label="启用"><el-switch v-model="form.is_active" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
+      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
   </div>
 </template>

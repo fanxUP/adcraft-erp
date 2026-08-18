@@ -1,9 +1,12 @@
 <template>
   <div class="page">
-    <div class="page-header"><h2>高空车人员</h2><el-button type="primary" @click="handleCreate">+ 新增人员</el-button></div>
+    <div class="page-header"><h2>高空车人员</h2></div>
+    <div class="page-create">
+      <el-button @click="handleCreate" type="danger">+ 新增人员</el-button>
+    </div>
     <div class="search-bar">
       <el-input v-model="keyword" placeholder="姓名/手机号搜索" clearable style="width: 200px" @keyup.enter="fetchData" />
-      <el-button type="primary" @click="fetchData">搜索</el-button>
+      <el-button @click="fetchData" type="primary">搜索</el-button>
     </div>
     <el-table :data="list" stripe v-loading="loading">
       <el-table-column prop="name" label="姓名" width="240" />
@@ -53,7 +56,7 @@
         <el-form-item label="身份证正面">
           <div class="idcard-slot">
             <el-upload :http-request="(o: any) => handleUploadIdCard(o, 'front')" :show-file-list="false" accept="image/*">
-              <el-button size="small" type="primary" plain>上传照片</el-button>
+              <el-button size="small" plain>上传照片</el-button>
             </el-upload>
             <template v-if="form.id_card_front_url">
               <el-image :src="form.id_card_front_url" :preview-src-list="[form.id_card_front_url]" preview-teleported fit="cover" class="idcard-preview" />
@@ -65,7 +68,7 @@
         <el-form-item label="身份证反面">
           <div class="idcard-slot">
             <el-upload :http-request="(o: any) => handleUploadIdCard(o, 'back')" :show-file-list="false" accept="image/*">
-              <el-button size="small" type="primary" plain>上传照片</el-button>
+              <el-button size="small" plain>上传照片</el-button>
             </el-upload>
             <template v-if="form.id_card_back_url">
               <el-image :src="form.id_card_back_url" :preview-src-list="[form.id_card_back_url]" preview-teleported fit="cover" class="idcard-preview" />
@@ -87,7 +90,7 @@
               <el-option v-for="(label, val) in ATT_TYPE_LABELS" :key="val" :label="label" :value="val" />
             </el-select>
             <el-upload :http-request="handleUploadAttachment" :show-file-list="false" :disabled="attUploading">
-              <el-button type="primary" plain size="small" :loading="attUploading">上传附件</el-button>
+              <el-button plain size="small" :loading="attUploading">上传附件</el-button>
             </el-upload>
           </div>
           <div v-if="attachments.length" class="att-list">
@@ -100,7 +103,7 @@
         <el-form-item label="外协人员"><el-switch v-model="form.is_external" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
+      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
   </div>
 </template>

@@ -4,10 +4,10 @@
       <h2>报价详情 #{{ quote?.quote_no || '' }}</h2>
       <div>
         <el-button @click="$router.push('/cdr/quotes')">返回列表</el-button>
-        <el-button type="primary" @click="handleEdit">编辑</el-button>
-        <el-button type="danger" plain @click="handleDelete" v-if="version?.status === 'draft'">删除</el-button>
-        <el-button :type="'warning'" @click="handleRequestApproval" v-if="version?.status === 'draft'">提交审批</el-button>
-        <el-button type="danger" @click="handleConvertToOrder" v-if="canConvert">转订单</el-button>
+        <el-button @click="handleEdit" type="primary">编辑</el-button>
+        <el-button plain @click="handleDelete" v-if="version?.status === 'draft'" type="danger">删除</el-button>
+        <el-button @click="handleRequestApproval" v-if="version?.status === 'draft'" type="primary">提交审批</el-button>
+        <el-button @click="handleConvertToOrder" v-if="canConvert">转订单</el-button>
       </div>
     </div>
 

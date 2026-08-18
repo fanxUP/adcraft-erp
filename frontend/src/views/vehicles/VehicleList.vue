@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <h2>车辆管理</h2>
-      <el-button type="danger" @click="handleCreate">新增车辆</el-button>
+      <el-button @click="handleCreate" type="danger">新增车辆</el-button>
     </div>
 
     <!-- 保险/年检到期提醒 -->
@@ -33,7 +33,7 @@
       <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px; margin-left: 12px">
         <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
       </el-select>
-      <el-button type="primary" style="margin-left: 12px" @click="fetchData">搜索</el-button>
+      <el-button style="margin-left: 12px" @click="fetchData" type="primary">搜索</el-button>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
@@ -182,7 +182,7 @@
             <el-option v-for="(label, val) in VEH_ATT_LABELS" :key="val" :label="label" :value="val" />
           </el-select>
           <el-upload :http-request="handleUploadAttachment" :show-file-list="false" :disabled="attUploading">
-            <el-button type="primary" plain size="small" :loading="attUploading">上传附件</el-button>
+            <el-button plain size="small" :loading="attUploading">上传附件</el-button>
           </el-upload>
         </div>
         <div v-if="attachments.length" class="att-list">
@@ -195,7 +195,7 @@
 
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
   </div>

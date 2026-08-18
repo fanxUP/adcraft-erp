@@ -2,7 +2,9 @@
   <div class="page">
     <div class="page-header">
       <h2>验收管理</h2>
-      <el-button type="primary" @click="showCreateDialog = true">新建验收单</el-button>
+    </div>
+    <div class="page-create">
+      <el-button @click="showCreateDialog = true" type="danger">新建验收单</el-button>
     </div>
 
     <el-card class="filter-card">
@@ -19,7 +21,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
+          <el-button @click="handleSearch" type="primary">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
@@ -122,7 +124,7 @@
         无匹配的订单或报价
       </div>
       <template #footer>
-        <el-button type="primary" @click="handleCreateBlank">创建空白验收单</el-button>
+        <el-button @click="handleCreateBlank" type="danger">创建空白验收单</el-button>
         <el-button @click="showCreateDialog = false">取消</el-button>
       </template>
     </el-dialog>
@@ -267,7 +269,7 @@ onMounted(fetchData)
 
 <style scoped>
 .page { padding: 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .filter-card { margin-bottom: 16px; }
 </style>

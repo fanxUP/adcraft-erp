@@ -48,7 +48,7 @@
           </el-select>
         </el-col>
         <el-col :span="6">
-          <el-button type="primary" :loading="loading" @click="fetchData">
+          <el-button :loading="loading" @click="fetchData">
             <el-icon><Refresh /></el-icon> 扫描
           </el-button>
         </el-col>
@@ -77,7 +77,7 @@
         <el-table-column prop="detail" label="详情" min-width="300" show-overflow-tooltip />
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ $index }">
-            <el-button size="small" @click="goToSource($index)">查看</el-button>
+            <el-button size="small" @click="goToSource($index)" type="primary">查看</el-button>
           </template>
         </el-table-column>
       </el-table>

@@ -26,7 +26,7 @@
           <el-input v-model="form.confirm_password" type="password" show-password placeholder="再次输入新密码" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
+          <el-button :loading="submitting" @click="handleSubmit" type="primary">保存</el-button>
         </el-form-item>
       </el-form>
     </el-card>

@@ -21,7 +21,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
+          <el-button @click="handleSearch" type="primary">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
@@ -59,7 +59,6 @@
         <template #default="{ row }">
           <el-button
             v-if="!row.is_settled"
-            type="success"
             size="small"
             @click="openSettle(row)"
           >
@@ -103,7 +102,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showSettle = false">取消</el-button>
-        <el-button type="success" :loading="settling" @click="handleSettle">确认冲红结清</el-button>
+        <el-button :loading="settling" @click="handleSettle" type="primary">确认冲红结清</el-button>
       </template>
     </el-dialog>
   </div>

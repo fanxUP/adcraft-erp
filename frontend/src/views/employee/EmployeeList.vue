@@ -9,8 +9,10 @@
           <el-option label="在职" value="active" /><el-option label="离职" value="resigned" /><el-option label="停职" value="suspended" />
         </el-select>
         <el-input v-model="keyword" placeholder="搜索姓名/工号/手机号" clearable style="width:240px" @clear="fetchData" @keyup.enter="fetchData" />
-        <el-button type="danger" @click="openCreate">新建员工</el-button>
       </div>
+    </div>
+    <div class="page-create">
+      <el-button @click="openCreate" type="danger">新建员工</el-button>
     </div>
     <el-table :data="list" v-loading="loading" stripe style="width:100%">
       <el-table-column prop="employee_no" label="工号" width="120" />
@@ -50,7 +52,7 @@
         <el-form-item label="身份证正面">
           <div class="idcard-slot">
             <el-upload :http-request="(o: any) => handleUploadIdCard(o, 'front')" :show-file-list="false" accept="image/*">
-              <el-button size="small" type="primary" plain>上传照片</el-button>
+              <el-button size="small" plain>上传照片</el-button>
             </el-upload>
             <template v-if="form.id_card_front_url">
               <el-image :src="form.id_card_front_url" :preview-src-list="[form.id_card_front_url]" preview-teleported fit="cover" class="idcard-preview" />
@@ -62,7 +64,7 @@
         <el-form-item label="身份证反面">
           <div class="idcard-slot">
             <el-upload :http-request="(o: any) => handleUploadIdCard(o, 'back')" :show-file-list="false" accept="image/*">
-              <el-button size="small" type="primary" plain>上传照片</el-button>
+              <el-button size="small" plain>上传照片</el-button>
             </el-upload>
             <template v-if="form.id_card_back_url">
               <el-image :src="form.id_card_back_url" :preview-src-list="[form.id_card_back_url]" preview-teleported fit="cover" class="idcard-preview" />
@@ -91,7 +93,7 @@
               <el-option v-for="o in ATTACHMENT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
             <el-upload :http-request="handleUploadAttachment" :show-file-list="false" multiple>
-              <el-button type="danger" size="small">上传附件</el-button>
+              <el-button size="small">上传附件</el-button>
             </el-upload>
           </div>
         </div>
@@ -104,7 +106,7 @@
         </div>
         <div v-else style="color:#999;font-size:13px">暂无附件</div>
       </template>
-      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
+      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
   </div>
 </template>

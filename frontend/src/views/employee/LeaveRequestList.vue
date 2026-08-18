@@ -11,8 +11,10 @@
         <el-select v-model="fType" placeholder="请假类型" clearable style="width:120px" @change="fetchData">
           <el-option label="年假" value="annual" /><el-option label="病假" value="sick" /><el-option label="事假" value="personal" /><el-option label="产假" value="maternity" /><el-option label="其他" value="other" />
         </el-select>
-        <el-button type="danger" @click="openCreate">新建申请</el-button>
       </div>
+    </div>
+    <div class="page-create">
+      <el-button @click="openCreate" type="danger">新建申请</el-button>
     </div>
     <el-table :data="list" v-loading="loading" stripe style="width:100%">
       <el-table-column label="员工" width="140"><template #default="{row}">{{row.employee_name||row.employee_id}}</template></el-table-column>
@@ -42,7 +44,7 @@
         <el-form-item label="备注"><el-input v-model="form.remark" /></el-form-item>
         <el-form-item label="事由" style="grid-column:1/3" required><el-input v-model="form.reason" type="textarea" :rows="3" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
+      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
   </div>
 </template>

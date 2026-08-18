@@ -39,7 +39,7 @@
               />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="loading" :disabled="!selectedFile" @click="doAnalyze">
+              <el-button :loading="loading" :disabled="!selectedFile" @click="doAnalyze">
                 <el-icon><Camera /></el-icon> 分析照片
               </el-button>
             </el-form-item>

@@ -4,7 +4,7 @@
       <h2>每日出车台账</h2>
       <div class="ledger-actions">
         <el-button @click="handleExport" :disabled="!filters.dateRange?.length">导出 Excel</el-button>
-        <el-button type="primary" @click="handleCreate">+ 新增台账</el-button>
+        <el-button @click="handleCreate" type="danger">+ 新增台账</el-button>
       </div>
     </div>
 
@@ -35,7 +35,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="fetchData">搜索</el-button>
+          <el-button @click="fetchData" type="primary">搜索</el-button>
           <el-button @click="resetFilters">重置</el-button>
         </el-form-item>
       </el-form>
@@ -190,7 +190,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
+        <el-button @click="handleSave" :loading="saving" type="primary">保存</el-button>
       </template>
     </el-dialog>
 
@@ -304,7 +304,7 @@
       </template>
       <template #footer>
         <el-button @click="settleVisible = false">{{ settleReadonly ? '关闭' : '取消' }}</el-button>
-        <el-button v-if="!settleReadonly" type="primary" @click="handleSettleSubmit" :loading="settling">确认结算</el-button>
+        <el-button v-if="!settleReadonly" @click="handleSettleSubmit" :loading="settling" type="primary">确认结算</el-button>
       </template>
     </el-dialog>
   </div>

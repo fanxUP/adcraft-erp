@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     APP_NAME: str = "AdCraft ERP"
     COMPANY_NAME: str = ""
+    COMPANY_PHONE: str = ""
     APP_ENV: str = "development"
     SECRET_KEY: str = ""  # MUST be set via .env for production — generate with: openssl rand -hex 32
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"

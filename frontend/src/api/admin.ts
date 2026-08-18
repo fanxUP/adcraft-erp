@@ -48,6 +48,7 @@ export function getPermissions() {
 export interface SystemSettings {
   APP_NAME: string
   COMPANY_NAME: string
+  COMPANY_PHONE: string
   JWT_EXPIRE_MINUTES: number
   UPLOAD_STORAGE: string
   LOCAL_UPLOAD_DIR: string

@@ -8,7 +8,7 @@
       <el-select v-model="selectedMonth" placeholder="月份" style="width: 120px" @change="loadAll" clearable>
         <el-option v-for="m in 12" :key="m" :label="m + '月'" :value="m" />
       </el-select>
-      <el-button type="primary" @click="loadAll" :icon="Refresh">刷新</el-button>
+      <el-button @click="loadAll" :icon="Refresh" type="primary">刷新</el-button>
     </div>
 
     <!-- 概览卡片 -->

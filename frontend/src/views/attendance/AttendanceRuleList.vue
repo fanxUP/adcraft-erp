@@ -1,6 +1,9 @@
 <template>
   <div class="page">
-    <div class="page-header"><h2>考勤规则</h2><el-button type="danger" @click="openCreate">新建规则</el-button></div>
+    <div class="page-header"><h2>考勤规则</h2></div>
+    <div class="page-create">
+      <el-button @click="openCreate" type="danger">新建规则</el-button>
+    </div>
     <el-table :data="rules" v-loading="loading" stripe>
       <el-table-column prop="name" label="规则名称" width="160" />
       <el-table-column label="适用部门" width="120"><template #default="{row}">{{row.department||"全局"}}</template></el-table-column>
@@ -23,7 +26,7 @@
         <el-form-item label="加班费率"><el-input-number v-model="form.overtime_rate" :min="1" :max="3" :step="0.1" style="width:100%" /></el-form-item>
         <el-form-item label="启用"><el-switch v-model="form.is_active" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
+      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
   </div>
 </template>

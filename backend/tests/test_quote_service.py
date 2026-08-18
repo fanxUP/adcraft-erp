@@ -294,6 +294,7 @@ async def test_convert_regular_quote_to_order_preserves_quote(service):
     db = quote_service.db
     db.add = MagicMock()
     db.commit = AsyncMock()
+    db.refresh = AsyncMock()
 
     quote = make_quote(status="confirmed", total_amount=Decimal("1680.50"))
     quote.items = [make_quote_item(unit_price=Decimal("100"), subtotal_amount=Decimal("100"))]

@@ -7,7 +7,7 @@
         </el-button>
         <h2>合同详情</h2>
       </div>
-      <el-button type="primary" @click="openEditContract">编辑合同</el-button>
+      <el-button @click="openEditContract">编辑合同</el-button>
     </div>
 
     <!-- 合同信息 -->
@@ -54,7 +54,7 @@
       <template #header>
         <div class="card-header">
           <span>项目列表</span>
-          <el-button type="primary" size="small" @click="openAddProject">添加项目</el-button>
+          <el-button size="small" @click="openAddProject" type="danger">添加项目</el-button>
         </div>
       </template>
 
@@ -147,7 +147,7 @@
       </el-form>
       <template #footer>
         <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" :loading="editSaving" @click="saveEdit">保存</el-button>
+        <el-button :loading="editSaving" @click="saveEdit" type="primary">保存</el-button>
       </template>
     </el-dialog>
 
@@ -187,13 +187,13 @@
             :file-list="projectAttFileList"
             accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
           >
-            <el-button type="primary" plain>选择文件</el-button>
+            <el-button plain>选择文件</el-button>
           </el-upload>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="projectVisible = false">取消</el-button>
-        <el-button type="primary" :loading="projectSaving" @click="saveProject">保存</el-button>
+        <el-button :loading="projectSaving" @click="saveProject" type="primary">保存</el-button>
       </template>
     </el-dialog>
   </div>

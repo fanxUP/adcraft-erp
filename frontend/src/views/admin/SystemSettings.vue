@@ -42,7 +42,7 @@
       <el-form label-width="140px" style="max-width: 600px">
         <el-form-item label="强制重新登录">
           <div>
-            <el-button type="danger" :loading="bumping" @click="handleBumpToken">
+            <el-button :loading="bumping" @click="handleBumpToken">
               强制所有用户重新登录
             </el-button>
             <div style="font-size: 12px; color: var(--ad-text-secondary); margin-top: 4px">
@@ -96,6 +96,9 @@
         <el-form-item label="公司名称（乙方）">
           <el-input v-model="form.COMPANY_NAME" placeholder="用于打印验收单等处乙方名称" />
         </el-form-item>
+        <el-form-item label="公司联系电话">
+          <el-input v-model="form.COMPANY_PHONE" placeholder="用于报价单/订单/验收单打印显示" />
+        </el-form-item>
         <el-form-item label="JWT过期时间(分钟)">
           <el-input-number v-model="form.JWT_EXPIRE_MINUTES" :min="60" :max="10080" style="width: 100%" />
         </el-form-item>
@@ -132,7 +135,7 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="danger" :loading="saving" @click="handleSave">保存设置</el-button>
+          <el-button :loading="saving" @click="handleSave" type="primary">保存设置</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -166,6 +169,7 @@ const settings = ref<SystemSettings | null>(null)
 const form = reactive({
   APP_NAME: '',
   COMPANY_NAME: '',
+  COMPANY_PHONE: '',
   JWT_EXPIRE_MINUTES: 1440,
   UPLOAD_STORAGE: '',
   LOCAL_UPLOAD_DIR: '',
@@ -184,6 +188,7 @@ async function fetchSettings() {
     Object.assign(form, {
       APP_NAME: data.APP_NAME,
       COMPANY_NAME: data.COMPANY_NAME || '',
+      COMPANY_PHONE: data.COMPANY_PHONE || '',
       JWT_EXPIRE_MINUTES: data.JWT_EXPIRE_MINUTES,
       UPLOAD_STORAGE: data.UPLOAD_STORAGE,
       LOCAL_UPLOAD_DIR: data.LOCAL_UPLOAD_DIR,
@@ -218,6 +223,7 @@ async function handleSave() {
     const payload: Record<string, unknown> = {
       APP_NAME: form.APP_NAME,
       COMPANY_NAME: form.COMPANY_NAME,
+      COMPANY_PHONE: form.COMPANY_PHONE,
       JWT_EXPIRE_MINUTES: form.JWT_EXPIRE_MINUTES,
       AI_ENABLED: form.AI_ENABLED,
       AI_PROVIDER: form.AI_PROVIDER,

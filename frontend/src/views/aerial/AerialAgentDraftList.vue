@@ -2,7 +2,7 @@
   <div class="draft-list-page">
     <div class="page-header">
       <h2>Agent 草稿中心</h2>
-      <el-button type="primary" @click="showIngestDialog = true">
+      <el-button @click="showIngestDialog = true">
         <el-icon><ChatDotRound /></el-icon>模拟消息
       </el-button>
     </div>
@@ -19,7 +19,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="loadDrafts">查询</el-button>
+          <el-button @click="loadDrafts" type="primary">查询</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -155,7 +155,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showIngestDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleIngest" :loading="ingesting">发送识别</el-button>
+        <el-button @click="handleIngest" :loading="ingesting">发送识别</el-button>
       </template>
     </el-dialog>
 
@@ -174,7 +174,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showConfirmDialog = false">取消</el-button>
-        <el-button type="success" @click="doConfirm" :loading="confirming">确认执行</el-button>
+        <el-button @click="doConfirm" :loading="confirming" type="primary">确认执行</el-button>
       </template>
     </el-dialog>
 
@@ -187,7 +187,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showRejectDialog = false">取消</el-button>
-        <el-button type="danger" @click="doReject" :loading="rejecting">确认拒绝</el-button>
+        <el-button @click="doReject" :loading="rejecting" type="primary">确认拒绝</el-button>
       </template>
     </el-dialog>
   </div>

@@ -6,8 +6,8 @@
 
     <div v-if="stmt" v-loading="loading">
       <div style="display: flex; justify-content: space-between; align-items: center; margin: 16px 0">
-        <div style="display: flex; gap: 8px;"><el-button @click="handlePrintView"><el-icon><Printer /></el-icon> 打印</el-button><h2 style="margin: 0; color: var(--ad-text)">对账单 {{ stmt.statement_no }}</h2></div>
-        <el-button v-if="stmt.status === 'draft'" type="success" @click="handleConfirm">确认对账单</el-button>
+        <div style="display: flex; gap: 8px;"><el-button @click="handlePrintView" type="primary"><el-icon><Printer /></el-icon> 打印</el-button><h2 style="margin: 0; color: var(--ad-text)">对账单 {{ stmt.statement_no }}</h2></div>
+        <el-button v-if="stmt.status === 'draft'" @click="handleConfirm" type="primary">确认对账单</el-button>
       </div>
 
       <el-card shadow="never" class="info-card" style="margin-bottom: 16px">

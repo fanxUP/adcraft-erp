@@ -75,9 +75,16 @@ export const useAuthStore = defineStore('auth', () => {
     router.push('/login')
   }
 
+  /** 强制改密成功后清除标记，解锁系统功能。 */
+  function clearMustChangePassword() {
+    if (user.value) {
+      user.value.must_change_password = false
+    }
+  }
+
   return {
     token, user, isLoggedIn, roles, isAdmin,
     hasRole, hasAnyRole,
-    login, fetchProfile, logout,
+    login, fetchProfile, logout, clearMustChangePassword,
   }
 })

@@ -2,7 +2,9 @@
   <div class="page">
     <div class="page-header">
       <h2>定价规则管理</h2>
-      <el-button type="danger" @click="createDialogVisible = true">新建规则集</el-button>
+    </div>
+    <div class="page-create">
+      <el-button @click="createDialogVisible = true" type="danger">新建规则集</el-button>
     </div>
 
     <el-table :data="ruleSets" v-loading="loading" stripe>
@@ -47,7 +49,7 @@
       </el-form>
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="handleCreate" :loading="submitting">创建</el-button>
+        <el-button @click="handleCreate" :loading="submitting" type="danger">创建</el-button>
       </template>
     </el-dialog>
   </div>

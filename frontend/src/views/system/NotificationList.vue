@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <h2 style="color: var(--ad-text)">消息中心</h2>
-      <el-button type="primary" @click="handleMarkAllRead" :disabled="notificationStore.unreadCount === 0">
+      <el-button @click="handleMarkAllRead" :disabled="notificationStore.unreadCount === 0">
         全部已读
       </el-button>
     </div>

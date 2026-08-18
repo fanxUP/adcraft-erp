@@ -6,9 +6,8 @@
         <p>检查 AI 是否正在使用最新业务流程、页面控件和权限规则。</p>
       </div>
       <div class="header-actions">
-        <el-button :loading="loading" @click="loadStatus">刷新</el-button>
+        <el-button :loading="loading" @click="loadStatus" type="primary">刷新</el-button>
         <el-button
-          type="primary"
           :loading="syncing"
           :disabled="!status"
           @click="handleSync"

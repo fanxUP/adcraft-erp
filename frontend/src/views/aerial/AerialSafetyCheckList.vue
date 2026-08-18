@@ -8,7 +8,7 @@
           <el-option v-for="l in ledgerOptions" :key="l.id" :label="`${l.ledger_no} - ${l.work_location}`" :value="l.id" />
         </el-select>
       </el-form-item>
-      <el-button type="primary" @click="showAddDialog = true" :disabled="!selectedLedgerId">+ 新增检查</el-button>
+      <el-button @click="showAddDialog = true" :disabled="!selectedLedgerId" type="danger">+ 新增检查</el-button>
     </el-form>
 
     <el-table :data="checks" stripe v-loading="loading">
@@ -50,7 +50,7 @@
         </el-row>
         <el-form-item label="异常说明"><el-input v-model="checkForm.issue_description" type="textarea" :rows="2" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="showAddDialog = false">取消</el-button><el-button type="primary" @click="handleSaveCheck" :loading="saving">保存</el-button></template>
+      <template #footer><el-button @click="showAddDialog = false">取消</el-button><el-button @click="handleSaveCheck" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
   </div>
 </template>

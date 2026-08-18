@@ -2,7 +2,9 @@
   <div class="page">
     <div class="page-header">
       <h2>用车申请</h2>
-      <el-button type="danger" @click="handleCreate">新建申请</el-button>
+    </div>
+    <div class="page-create">
+      <el-button @click="handleCreate" type="danger">新建申请</el-button>
     </div>
 
     <div class="search-bar">
@@ -10,7 +12,7 @@
       <el-select v-model="filters.status" placeholder="状态" clearable style="width: 140px; margin-left: 12px">
         <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
       </el-select>
-      <el-button type="primary" style="margin-left: 12px" @click="fetchData">搜索</el-button>
+      <el-button style="margin-left: 12px" @click="fetchData" type="primary">搜索</el-button>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
@@ -98,7 +100,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave" :loading="saving">保存草稿</el-button>
+        <el-button @click="handleSave" :loading="saving" type="primary">保存草稿</el-button>
       </template>
     </el-dialog>
 
@@ -133,7 +135,7 @@
       <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请输入驳回原因" />
       <template #footer>
         <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="confirmReject" :loading="rejecting">确认驳回</el-button>
+        <el-button @click="confirmReject" :loading="rejecting" type="primary">确认驳回</el-button>
       </template>
     </el-dialog>
   </div>
@@ -360,7 +362,7 @@ onMounted(fetchData)
 
 <style scoped>
 .page { padding: 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .page-header h2 { margin: 0; font-size: 20px; }
 .search-bar { display: flex; align-items: center; }
 </style>

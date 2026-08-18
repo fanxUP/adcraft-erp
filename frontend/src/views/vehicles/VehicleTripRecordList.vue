@@ -21,7 +21,7 @@
         <el-option label="已完成" value="completed" />
         <el-option label="已收车" value="returned" />
       </el-select>
-      <el-button type="primary" @click="handleSearch">查询</el-button>
+      <el-button @click="handleSearch" type="primary">查询</el-button>
     </div>
 
     <!-- 派车单列表 -->
@@ -68,11 +68,11 @@
       </el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="handleViewTrip(row)">查看</el-button>
-          <el-button v-if="row.status === 'assigned'" size="small" type="success" @click="handleStartTrip(row)">出车</el-button>
-          <el-button v-if="row.status === 'started'" size="small" type="warning" @click="handleArriveTrip(row)">到达</el-button>
-          <el-button v-if="row.status === 'arrived'" size="small" type="primary" @click="handleFinishTrip(row)">完工</el-button>
-          <el-button v-if="['completed', 'arrived', 'started'].includes(row.status)" size="small" type="danger" @click="handleReturnTrip(row)">收车</el-button>
+          <el-button size="small" @click="handleViewTrip(row)" type="primary">查看</el-button>
+          <el-button v-if="row.status === 'assigned'" size="small" @click="handleStartTrip(row)">出车</el-button>
+          <el-button v-if="row.status === 'started'" size="small" @click="handleArriveTrip(row)">到达</el-button>
+          <el-button v-if="row.status === 'arrived'" size="small" @click="handleFinishTrip(row)">完工</el-button>
+          <el-button v-if="['completed', 'arrived', 'started'].includes(row.status)" size="small" @click="handleReturnTrip(row)">收车</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -111,7 +111,7 @@
       </el-form>
       <template #footer>
         <el-button @click="startDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitStart">确认出车</el-button>
+        <el-button :loading="submitting" @click="submitStart" type="primary">确认出车</el-button>
       </template>
     </el-dialog>
 
@@ -124,7 +124,7 @@
       </el-form>
       <template #footer>
         <el-button @click="arriveDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitArrive">确认到达</el-button>
+        <el-button :loading="submitting" @click="submitArrive" type="primary">确认到达</el-button>
       </template>
     </el-dialog>
 
@@ -158,7 +158,7 @@
       </el-form>
       <template #footer>
         <el-button @click="returnDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitReturn">确认收车</el-button>
+        <el-button :loading="submitting" @click="submitReturn" type="primary">确认收车</el-button>
       </template>
     </el-dialog>
 

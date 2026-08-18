@@ -35,7 +35,7 @@
               </el-select>
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="loading" style="width: 100%" @click="generateDraft">
+              <el-button :loading="loading" style="width: 100%" @click="generateDraft" type="danger">
                 <el-icon><MagicStick /></el-icon> 生成报价草稿
               </el-button>
             </el-form-item>
@@ -121,8 +121,8 @@
 
             <!-- Actions -->
             <div class="actions" style="margin-top: 16px; text-align: right;">
-              <el-button @click="draft = null">重新生成</el-button>
-              <el-button type="primary" :loading="saving" @click="saveQuote">保存为正式报价</el-button>
+              <el-button @click="draft = null" type="danger">重新生成</el-button>
+              <el-button :loading="saving" @click="saveQuote" type="primary">保存为正式报价</el-button>
             </div>
           </div>
         </el-card>

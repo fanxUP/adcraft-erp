@@ -6,7 +6,7 @@
     @close="emit('close')"
    :close-on-click-modal="false">
     <div class="mb-12">
-      <el-button type="primary" size="small" @click="showAdd = true">
+      <el-button size="small" @click="showAdd = true" type="danger">
         <el-icon><Plus /></el-icon>添加模型
       </el-button>
     </div>
@@ -97,7 +97,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showAdd = false">取消</el-button>
-        <el-button type="primary" :loading="addLoading" @click="addModel">添加</el-button>
+        <el-button :loading="addLoading" @click="addModel" type="danger">添加</el-button>
       </template>
     </el-dialog>
   </el-dialog>

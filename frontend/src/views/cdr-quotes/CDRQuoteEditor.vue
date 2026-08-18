@@ -4,7 +4,7 @@
       <h2>{{ isEdit ? '编辑报价（CDR）' : '新建报价（CDR）' }}</h2>
       <div>
         <el-button @click="$router.back()">返回</el-button>
-        <el-button type="danger" @click="handleSave" :loading="saving">保存版本</el-button>
+        <el-button @click="handleSave" :loading="saving" type="primary">保存版本</el-button>
       </div>
     </div>
 
@@ -20,7 +20,7 @@
           :before-upload="(f:any)=>{onFileUpload({target:{files:[f]}} as any);return false}"
           accept=".cdr,.svg,.pdf,.ai,.eps,.dxf,.png,.jpg,.jpeg"
         >
-          <el-button type="primary" :loading="uploading" size="small">上传设计文件</el-button>
+          <el-button :loading="uploading" size="small">上传设计文件</el-button>
           <span style="margin-left:8px;font-size:12px;color:var(--ad-text-secondary)">支持 .cdr .svg .pdf .ai .eps .dxf .png .jpg</span>
         </el-upload>
 
@@ -38,7 +38,7 @@
           <div style="font-weight:bold;margin-bottom:4px">SVG 解析结果</div>
           <div style="font-size:13px">页面: {{ parseResult.document_width_mm }}mm x {{ parseResult.document_height_mm }}mm</div>
           <div v-for="(s,i) in parseResult.shapes" :key="i" style="font-size:13px">{{ s.label }} ({{ s.area_m2 }} m²)</div>
-          <el-button size="small" type="success" style="margin-top:4px" @click="applyParsedShapes">应用为报价明细</el-button>
+          <el-button size="small" style="margin-top:4px" @click="applyParsedShapes">应用为报价明细</el-button>
         </div>
 
         <!-- AI 辅助 -->
@@ -50,8 +50,8 @@
             placeholder="输入需求描述，AI 将根据已上传文件生成报价明细，例如：5米宽2米高户外广告牌，不锈钢边框，UV打印"
           />
           <div style="margin-top:4px;display:flex;gap:8px">
-            <el-button type="success" :loading="aiLoading" size="small" @click="handleAiAssist">AI 智能生成</el-button>
-            <el-button v-if="aiResult" size="small" type="warning" @click="applyAiSuggestion">应用 AI 建议</el-button>
+            <el-button :loading="aiLoading" size="small" @click="handleAiAssist" type="danger">AI 智能生成</el-button>
+            <el-button v-if="aiResult" size="small" @click="applyAiSuggestion">应用 AI 建议</el-button>
           </div>
           <div v-if="aiLoading" style="font-size:13px;color:var(--ad-text-secondary);margin-top:4px">AI 正在生成报价明细...</div>
         </div>

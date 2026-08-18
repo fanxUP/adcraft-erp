@@ -26,7 +26,7 @@
           <el-input-number v-model="week" :min="1" :max="53" @change="fetchReport" placeholder="周数" />
         </el-col>
         <el-col :span="4">
-          <el-button type="primary" :loading="loading" @click="fetchReport">
+          <el-button :loading="loading" @click="fetchReport" type="danger">
             <el-icon><Refresh /></el-icon> 生成报告
           </el-button>
         </el-col>

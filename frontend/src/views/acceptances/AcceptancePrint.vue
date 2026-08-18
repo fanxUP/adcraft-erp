@@ -8,6 +8,12 @@
   >
     <div v-if="loading" v-loading="true" style="height: 200px" />
     <div v-else-if="form" class="print-area">
+      <!-- 公司信息 -->
+      <div class="print-company">
+        <div class="print-company-name">{{ companyName || '广告制作公司' }}</div>
+        <div class="print-company-detail">联系电话: {{ companyPhone || '__________' }}</div>
+      </div>
+
       <!-- 标题 -->
       <h2 class="preview-title">{{ form.project_name || '' }} 验收单</h2>
 
@@ -21,7 +27,7 @@
         <div class="info-row">
           <span>部门/科室: {{ form.department || '-' }}</span>
           <span>联 系 人: {{ form.contact_person || '-' }}</span>
-          <span>联系电话: {{ form.customer_phone || '-' }}</span>
+          <span>联系电话: {{ form.contact_phone || '-' }}</span>
           <span>{{ form.order_no ? '下单日期' : '报价日期' }}: {{ formatDate(form.order_date) || '-' }}</span>
         </div>
       </div>
@@ -118,8 +124,8 @@
           <div class="signature-blank"></div>
           <div class="signature-label">验收签字：</div>
           <div class="signature-blank"></div>
-          <div class="signature-label">联系电话：</div>
-          <div class="signature-blank"></div>
+          <div class="signature-label">联系电话：{{ form.contact_phone || '' }}</div>
+          <div v-if="!form.contact_phone" class="signature-blank"></div>
           <div class="signature-date">日期：________年____月____日</div>
         </div>
         <div class="signature-block">
@@ -127,8 +133,8 @@
           <div class="signature-blank"></div>
           <div class="signature-label">负责人签字：</div>
           <div class="signature-blank"></div>
-          <div class="signature-label">联系电话：</div>
-          <div class="signature-blank"></div>
+          <div class="signature-label">联系电话：{{ companyPhone || '' }}</div>
+          <div v-if="!companyPhone" class="signature-blank"></div>
           <div class="signature-date">日期：________年____月____日</div>
         </div>
       </div>
@@ -138,7 +144,7 @@
       <el-button @click="$emit('close')">关闭</el-button>
       <el-button @click="handleExportImage">导出图片</el-button>
       <el-button @click="handleExportPDF">导出 PDF</el-button>
-      <el-button type="primary" @click="handlePrint">打印</el-button>
+      <el-button @click="handlePrint" type="primary">打印预览</el-button>
     </template>
   </el-dialog>
 </template>
@@ -177,7 +183,7 @@ interface AcceptancePrintData {
   reject_reason?: string
   order_no?: string
   customer_name?: string
-  customer_phone?: string
+  contact_phone?: string
   customer_address?: string
   contact_person?: string
   order_date?: string
@@ -200,6 +206,7 @@ defineEmits<{
 const loading = ref(false)
 const form = ref<AcceptancePrintData | null>(null)
 const companyName = ref('')
+const companyPhone = ref('')
 
 type PrintDisplayRow =
   | { type: 'group-header'; groupName: string }
@@ -283,6 +290,7 @@ watch(() => props.visible, async (val) => {
       getSystemSettings().catch(() => null),
     ])
     companyName.value = settings?.COMPANY_NAME || ''
+    companyPhone.value = settings?.COMPANY_PHONE || ''
     form.value = {
       acceptance_no: data.acceptance_no,
       status: data.status,
@@ -294,7 +302,7 @@ watch(() => props.visible, async (val) => {
       reject_reason: data.reject_reason,
       order_no: data.order_no,
       customer_name: data.customer_name,
-      customer_phone: data.customer_phone,
+      contact_phone: data.contact_phone,
       customer_address: data.customer_address,
       contact_person: data.contact_person,
       order_date: data.order_date,
@@ -411,6 +419,20 @@ function handlePrint() {
 
 <style>
 /* 不用 scoped，因为 el-dialog teleport 到 body，scoped 样式无法穿透 */
+.print-company {
+  text-align: center;
+  margin-bottom: 4px;
+}
+.print-company-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ad-text);
+}
+.print-company-detail {
+  font-size: 13px;
+  color: var(--ad-text-secondary);
+  margin-top: 2px;
+}
 .preview-title {
   text-align: center;
   font-size: 22px;

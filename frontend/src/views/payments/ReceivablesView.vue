@@ -154,7 +154,6 @@
           <span></span>
           <el-button
             data-ai-target="receivable-register-payment"
-            type="danger"
             @click="openPaymentDialog()"
           >
             登记收款
@@ -167,7 +166,7 @@
           <el-select v-model="filterCustomerId" placeholder="筛选客户" clearable filterable style="width: 200px; margin-left: 12px" @change="fetchPayments">
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
-          <el-button style="margin-left: 12px" @click="fetchPayments">搜索</el-button>
+          <el-button style="margin-left: 12px" @click="fetchPayments" type="primary">搜索</el-button>
         </div>
 
         <el-table :data="paymentList" v-loading="paymentLoading" stripe style="margin-top: 16px">
@@ -236,7 +235,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleCreate">确认收款</el-button>
+        <el-button :loading="saving" @click="handleCreate" type="primary">确认收款</el-button>
       </template>
     </el-dialog>
   </div>

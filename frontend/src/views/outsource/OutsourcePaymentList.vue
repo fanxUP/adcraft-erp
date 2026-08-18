@@ -15,7 +15,7 @@
       <el-select v-model="vendorFilter" placeholder="外协商" filterable clearable style="width: 180px; margin-left: 8px;">
         <el-option v-for="v in vendors" :key="v.id" :label="v.name" :value="v.id" />
       </el-select>
-      <el-button type="primary" @click="fetchData" style="margin-left: 12px">搜索</el-button>
+      <el-button @click="fetchData" style="margin-left: 12px" type="primary">搜索</el-button>
     </div>
 
     <!-- 任务付款汇总列表 -->
@@ -49,7 +49,7 @@
       </el-table-column>
       <el-table-column label="操作" width="200">
         <template #default="{ row }">
-          <el-button v-if="row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" type="warning" size="small" @click="handlePay(row)">付款</el-button>
+          <el-button v-if="row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" size="small" @click="handlePay(row)">付款</el-button>
           <el-button text type="primary" @click="handleViewPayments(row)">付款记录</el-button>
         </template>
       </el-table-column>
@@ -119,7 +119,7 @@
       </el-form>
       <template #footer>
         <el-button @click="payDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="paySaving" @click="handlePaySubmit">确认付款</el-button>
+        <el-button :loading="paySaving" @click="handlePaySubmit" type="primary">确认付款</el-button>
       </template>
     </el-dialog>
 

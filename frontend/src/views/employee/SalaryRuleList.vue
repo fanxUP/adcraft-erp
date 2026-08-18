@@ -9,8 +9,8 @@
         <el-select v-model="fDept" placeholder="部门筛选" clearable style="width:130px">
           <el-option v-for="d in DEPTS" :key="d.value" :label="d.label" :value="d.value" />
         </el-select>
-        <el-button @click="fetchData">刷新</el-button>
-        <el-button type="danger" @click="openBatchEdit">批量设置</el-button>
+        <el-button @click="fetchData" type="primary">刷新</el-button>
+        <el-button @click="openBatchEdit">批量设置</el-button>
       </div>
     </div>
 
@@ -64,7 +64,7 @@
         <el-form-item label="社保金额 (元)"><el-input-number v-model="form.social_insurance" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="备注" style="grid-column:1/3"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
+      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
 
     <!-- 批量设置 Dialog -->
@@ -84,7 +84,7 @@
           <el-form-item label="社保金额"><el-input-number v-model="batchForm.social_insurance" :min="0" :precision="2" style="width:100%" /></el-form-item>
         </div>
       </el-form>
-      <template #footer><el-button @click="showBatchDialog=false">取消</el-button><el-button type="primary" @click="handleBatchSave" :loading="batchSaving">批量保存</el-button></template>
+      <template #footer><el-button @click="showBatchDialog=false">取消</el-button><el-button @click="handleBatchSave" :loading="batchSaving" type="primary">批量保存</el-button></template>
     </el-dialog>
   </div>
 </template>

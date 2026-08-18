@@ -1,12 +1,15 @@
 <template>
   <div class="page">
-    <div class="page-header"><h2>车辆费用</h2><el-button type="primary" @click="handleCreate">+ 新增费用</el-button></div>
+    <div class="page-header"><h2>车辆费用</h2></div>
+    <div class="page-create">
+      <el-button @click="handleCreate" type="danger">+ 新增费用</el-button>
+    </div>
     <div class="search-bar">
       <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="width: 260px" />
       <el-select v-model="filters.cost_type" placeholder="费用类型" clearable style="width: 120px">
         <el-option v-for="t in costTypes" :key="t.value" :label="t.label" :value="t.value" />
       </el-select>
-      <el-button type="primary" @click="fetchData">搜索</el-button>
+      <el-button @click="fetchData" type="primary">搜索</el-button>
     </div>
     <el-table :data="list" stripe v-loading="loading">
       <el-table-column prop="cost_date" label="日期" width="115" />
@@ -54,7 +57,7 @@
         <el-form-item label="费用摘要"><el-input v-model="form.summary" placeholder="一句话描述用途，如：和田工地保险费" maxlength="200" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
+      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
   </div>
 </template>

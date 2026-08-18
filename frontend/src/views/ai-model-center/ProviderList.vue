@@ -10,7 +10,7 @@
           style="width: 240px"
           @input="onSearch"
         />
-        <el-button type="primary" @click="showCreate = true">
+        <el-button @click="showCreate = true" type="danger">
           <el-icon><Plus /></el-icon>新增供应商
         </el-button>
       </div>

@@ -3,13 +3,13 @@
     <div class="page-header">
       <h2>报价管理</h2>
       <div class="quote-actions">
-        <el-button v-if="authStore.isAdmin" type="warning" @click="$router.push('/orders/recycle')">
+        <el-button v-if="authStore.isAdmin" @click="$router.push('/orders/recycle')" type="warning">
           <el-icon><Delete /></el-icon> 订单回收站
         </el-button>
-        <el-button @click="$router.push('/cdr/quotes')">智能报价记录</el-button>
-        <el-button type="primary" @click="$router.push('/cdr/quotes/new')">新建智能报价</el-button>
-        <el-button type="danger" @click="$router.push('/quotes/new')">新建常规报价</el-button>
       </div>
+    </div>
+    <div class="page-create">
+      <el-button @click="$router.push('/quotes/new')" type="danger">新建常规报价</el-button>
     </div>
 
     <el-card shadow="never" class="filter-card">
@@ -37,7 +37,7 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
+          <el-button @click="handleSearch" type="primary">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
@@ -68,7 +68,7 @@
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" @click="$router.push(`/quotes/${row.id}/edit`)">编辑</el-button>
-          <el-button text type="success" @click="handlePreview(row)">预览</el-button>
+          <el-button text type="primary" @click="handlePreview(row)">打印预览</el-button>
           <el-button v-if="row.status === 'draft' || row.status === 'confirmed'" text type="warning" @click="handleCancel(row as QuoteListResponse)">作废</el-button>
           <el-button v-if="row.status === 'cancelled'" text @click="handleRevert(row as QuoteListResponse)">转草稿</el-button>
           <el-button text type="danger" @click="handleDelete(row as QuoteListResponse)">删除</el-button>
@@ -90,7 +90,7 @@
       </div>
       <template #footer>
         <el-button @click="deleteDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="deleting" @click="confirmDelete">确认删除</el-button>
+        <el-button :loading="deleting" @click="confirmDelete" type="danger">确认删除</el-button>
       </template>
     </el-dialog>
 
@@ -236,7 +236,7 @@ onMounted(fetchData)
 
 <style scoped>
 .page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .quote-actions { display: flex; gap: 8px; }
 .filter-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); margin-bottom: 16px; }

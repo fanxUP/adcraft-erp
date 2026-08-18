@@ -15,7 +15,7 @@
           clearable
           @keyup.enter="handleTestAnalyze"
         />
-        <el-button type="primary" :loading="analyzing" @click="handleTestAnalyze">
+        <el-button :loading="analyzing" @click="handleTestAnalyze">
           识别
         </el-button>
       </div>
@@ -87,13 +87,13 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="row.status === 'pending'" type="success" size="small" @click="handleConfirm(row)">
+            <el-button v-if="row.status === 'pending'" size="small" @click="handleConfirm(row)" type="primary">
               确认
             </el-button>
-            <el-button v-if="row.status === 'pending'" type="danger" size="small" @click="handleReject(row)">
+            <el-button v-if="row.status === 'pending'" size="small" @click="handleReject(row)">
               驳回
             </el-button>
-            <el-button size="small" @click="handleDetail(row)">
+            <el-button size="small" @click="handleDetail(row)" type="primary">
               详情
             </el-button>
           </template>
@@ -147,8 +147,8 @@
         </div>
 
         <div v-if="currentDraft.status === 'pending'" class="drawer-actions">
-          <el-button type="success" @click="handleConfirm(currentDraft)">确认创建</el-button>
-          <el-button type="danger" @click="handleReject(currentDraft)">驳回</el-button>
+          <el-button @click="handleConfirm(currentDraft)" type="primary">确认创建</el-button>
+          <el-button @click="handleReject(currentDraft)">驳回</el-button>
         </div>
       </template>
     </el-drawer>
@@ -158,7 +158,7 @@
       <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="驳回原因（可选）" />
       <template #footer>
         <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="rejecting" @click="confirmReject">确认驳回</el-button>
+        <el-button :loading="rejecting" @click="confirmReject" type="primary">确认驳回</el-button>
       </template>
     </el-dialog>
   </div>

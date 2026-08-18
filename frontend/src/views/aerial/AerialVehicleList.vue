@@ -1,9 +1,12 @@
 <template>
   <div class="page">
-    <div class="page-header"><h2>高空车档案</h2><el-button type="primary" @click="handleCreate">+ 新增高空车</el-button></div>
+    <div class="page-header"><h2>高空车档案</h2></div>
+    <div class="page-create">
+      <el-button @click="handleCreate" type="danger">+ 新增高空车</el-button>
+    </div>
     <div class="search-bar">
       <el-input v-model="keyword" placeholder="车牌号/名称搜索" clearable style="width: 200px" @keyup.enter="fetchData" />
-      <el-button type="primary" @click="fetchData">搜索</el-button>
+      <el-button @click="fetchData" type="primary">搜索</el-button>
     </div>
     <el-alert
       v-if="expiringVehicles.length"
@@ -97,7 +100,7 @@
               <el-option v-for="(label, val) in VEH_ATT_LABELS" :key="val" :label="label" :value="val" />
             </el-select>
             <el-upload :http-request="handleUploadAttachment" :show-file-list="false" :disabled="attUploading">
-              <el-button type="primary" plain size="small" :loading="attUploading">上传附件</el-button>
+              <el-button plain size="small" :loading="attUploading">上传附件</el-button>
             </el-upload>
           </div>
           <div v-if="attachments.length" class="att-list">
@@ -108,7 +111,7 @@
           <div v-else style="color: var(--ad-text-secondary); font-size: 13px">暂无附件</div>
         </template>
       </el-form>
-      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
+      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
   </div>
 </template>

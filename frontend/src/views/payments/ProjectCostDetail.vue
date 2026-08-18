@@ -36,7 +36,7 @@
     <!-- Actions -->
     <div style="display: flex; gap: 8px; margin: 16px 0">
       <el-button @click="openImport">导入Excel</el-button>
-      <el-button type="danger" @click="openCreate">登记成本</el-button>
+      <el-button @click="openCreate">登记成本</el-button>
     </div>
 
     <!-- Filters -->
@@ -60,16 +60,14 @@
         style="width: 260px; margin-left: 12px"
         @change="fetchData"
       />
-      <el-button style="margin-left: 12px" @click="fetchData">搜索</el-button>
+      <el-button style="margin-left: 12px" @click="fetchData" type="primary">搜索</el-button>
     </div>
 
     <!-- Cost table -->
     <div style="display: flex; gap: 8px; margin: 16px 0; align-items: center;">
       <el-button
         v-if="authStore.isAdmin && selectedIds.length > 0"
-        type="danger"
-        @click="handleBatchDelete"
-      >
+        @click="handleBatchDelete" type="danger">
         批量删除（{{ selectedIds.length }}）
       </el-button>
       <span v-if="selectedIds.length > 0" style="font-size: 13px; color: var(--ad-text-secondary)">已选中 {{ selectedIds.length }} 条记录</span>
@@ -263,7 +261,6 @@
               </div>
               <el-button
                 class="att-del"
-                type="danger"
                 :icon="Delete"
                 size="small"
                 circle
@@ -275,7 +272,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSave">
+        <el-button :loading="saving" @click="handleSave" type="primary">
           {{ isEditing ? '保存' : '登记' }}
         </el-button>
       </template>
@@ -302,7 +299,7 @@
         accept=".xlsx,.xls"
         :on-change="onFileChange"
       >
-        <el-button type="primary">选择Excel文件</el-button>
+        <el-button>选择Excel文件</el-button>
       </el-upload>
       <div v-if="importResult" style="margin-top: 12px">
         <el-alert
@@ -322,7 +319,7 @@
       </div>
       <template #footer>
         <el-button @click="showImport = false">关闭</el-button>
-        <el-button type="danger" :loading="importing" @click="handleImport">开始导入</el-button>
+        <el-button :loading="importing" @click="handleImport">开始导入</el-button>
       </template>
     </el-dialog>
 

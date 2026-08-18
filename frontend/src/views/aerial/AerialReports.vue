@@ -7,7 +7,7 @@
       <el-tab-pane label="月度统计" name="monthly">
         <el-form :inline="true" style="margin-bottom: 16px">
           <el-form-item label="月份"><el-date-picker v-model="month" type="month" value-format="YYYY-MM" /></el-form-item>
-          <el-button type="primary" @click="loadMonthly">查询</el-button>
+          <el-button @click="loadMonthly" type="primary">查询</el-button>
         </el-form>
         <el-row :gutter="16" v-if="monthlyData">
           <el-col :span="6" v-for="card in monthlyCards" :key="card.label" style="margin-bottom: 12px">
@@ -47,7 +47,7 @@
       <el-tab-pane label="费用分类" name="costs">
         <el-form :inline="true" style="margin-bottom: 16px">
           <el-form-item label="月份"><el-date-picker v-model="costMonth" type="month" value-format="YYYY-MM" clearable /></el-form-item>
-          <el-button type="primary" @click="loadCosts">查询</el-button>
+          <el-button @click="loadCosts" type="primary">查询</el-button>
         </el-form>
         <el-table :data="costData" stripe v-loading="loading">
           <el-table-column prop="cost_type" label="费用类型" width="150"><template #default="{ row }">{{ costTypeLabel(row.cost_type) }}</template></el-table-column>
@@ -59,7 +59,7 @@
       <el-tab-pane label="人员汇总" name="personnel">
         <el-form :inline="true" style="margin-bottom: 16px">
           <el-form-item label="月份"><el-date-picker v-model="personnelMonth" type="month" value-format="YYYY-MM" /></el-form-item>
-          <el-button type="primary" @click="loadPersonnel">查询</el-button>
+          <el-button @click="loadPersonnel" type="primary">查询</el-button>
         </el-form>
         <el-table :data="personnelData" stripe v-loading="loading">
           <el-table-column prop="name" label="人员" width="120" />

@@ -23,6 +23,30 @@ from app.services.operation_log_service import (
 
 logger = logging.getLogger(__name__)
 
+
+def _rewrite_env_file(env_path: str, env_lines: dict) -> None:
+    """Rewrite a .env file, preserving comments/order, overriding keys in env_lines."""
+    try:
+        with open(env_path, "r") as f:
+            lines = f.readlines()
+    except OSError:
+        lines = []
+    with open(env_path, "w") as f:
+        written = set()
+        for line in lines:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                key = stripped.split("=", 1)[0]
+                if key in env_lines:
+                    f.write(env_lines[key])
+                    written.add(key)
+            else:
+                f.write(line)
+        for key, line in env_lines.items():
+            if key not in written:
+                f.write(line)
+
+
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 OBJ_ROLE = "role"
@@ -178,6 +202,7 @@ async def get_settings(
     return success({
         "APP_NAME": settings.APP_NAME,
         "COMPANY_NAME": settings.COMPANY_NAME,
+        "COMPANY_PHONE": settings.COMPANY_PHONE,
         "JWT_EXPIRE_MINUTES": settings.JWT_EXPIRE_MINUTES,
         "UPLOAD_STORAGE": settings.UPLOAD_STORAGE,
         "LOCAL_UPLOAD_DIR": settings.LOCAL_UPLOAD_DIR,
@@ -196,14 +221,20 @@ async def update_settings(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    # admin.py is at backend/app/api/admin.py — go up 4 levels to project root (local dev).
-    # In Docker the file is at /app/app/api/admin.py, so 4 levels hits / which is not writable.
-    # Fall back to /app/.env in that case.
+    # 向上查找现有 .env 文件（兼容 Docker /app 与本地 /opt/adcraft/backend 两种部署），
+    # 避免固定层数上溯算错路径导致设置写入无效位置
     _file_dir = os.path.dirname(os.path.abspath(__file__))
-    _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(_file_dir))))
-    if _project_root in ("/", ""):
-        _project_root = "/app"
-    env_path = os.path.join(_project_root, ".env")
+    _candidate = _file_dir
+    env_path = None
+    while _candidate and _candidate != "/":
+        potential = os.path.join(_candidate, ".env")
+        if os.path.exists(potential):
+            env_path = potential
+            break
+        _candidate = os.path.dirname(_candidate)
+    if not env_path:
+        # 都找不到时回退 Docker 默认路径
+        env_path = "/app/.env"
 
     # In Docker, the .env file may not exist (env vars come from compose).
     # If missing, create from current settings so it can be managed going forward.
@@ -220,7 +251,7 @@ async def update_settings(
                 key = stripped.split("=", 1)[0]
                 env_lines[key] = line
 
-    allowed_keys = {"APP_NAME", "COMPANY_NAME", "JWT_EXPIRE_MINUTES", "AI_ENABLED", "AI_PROVIDER", "AI_MODEL", "AI_API_KEY", "AI_API_BASE_URL"}
+    allowed_keys = {"APP_NAME", "COMPANY_NAME", "COMPANY_PHONE", "JWT_EXPIRE_MINUTES", "AI_ENABLED", "AI_PROVIDER", "AI_MODEL", "AI_API_KEY", "AI_API_BASE_URL"}
     updated = {}
 
     for key, value in data.model_dump(exclude_none=True).items():
@@ -245,20 +276,15 @@ async def update_settings(
         logger.warning("Failed to log update_settings operation", exc_info=True)
 
     # Rewrite .env preserving comments and order
-    with open(env_path, "w") as f:
-        written = set()
-        for line in lines:
-            stripped = line.strip()
-            if stripped and not stripped.startswith("#") and "=" in stripped:
-                key = stripped.split("=", 1)[0]
-                if key in env_lines:
-                    f.write(env_lines[key])
-                    written.add(key)
-            else:
-                f.write(line)
-        for key, line in env_lines.items():
-            if key not in written:
-                f.write(line)
+    _rewrite_env_file(env_path, env_lines)
+
+    # 同步写入 systemd EnvironmentFile 指向的 .env（如 /opt/adcraft/.env，位于 .env 的上一级），
+    # 否则重启后环境变量仍取旧值，设置不会持久生效
+    _parent_env = os.path.join(os.path.dirname(os.path.dirname(env_path)), ".env")
+    if _parent_env != env_path and os.path.exists(_parent_env):
+        sync_lines = {k: env_lines[k] for k in updated if k in env_lines}
+        if sync_lines:
+            _rewrite_env_file(_parent_env, sync_lines)
 
     # Also update in-memory settings so changes take effect immediately
     for key, value in data.model_dump(exclude_none=True).items():

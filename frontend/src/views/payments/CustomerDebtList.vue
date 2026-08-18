@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <h2>客户欠款列表</h2>
-      <el-button type="primary" @click="fetchData">刷新</el-button>
+      <el-button @click="fetchData" type="primary">刷新</el-button>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无欠款客户">

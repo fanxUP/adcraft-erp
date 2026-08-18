@@ -136,7 +136,7 @@
 
       <template #footer>
         <el-button @click="showCreateGroup = false">取消</el-button>
-        <el-button type="primary" @click="handleCreateGroup" :loading="creating">
+        <el-button @click="handleCreateGroup" :loading="creating" type="danger">
           创建
         </el-button>
       </template>

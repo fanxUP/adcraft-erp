@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <h2>收款记录</h2>
-      <el-button type="danger" @click="showDialog = true">登记收款</el-button>
+      <el-button @click="showDialog = true">登记收款</el-button>
     </div>
 
     <div class="search-bar">
@@ -12,7 +12,7 @@
       <el-select v-model="filterCustomerId" placeholder="筛选客户" clearable filterable style="width: 200px; margin-left: 12px" @change="fetchData">
         <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
-      <el-button style="margin-left: 12px" @click="fetchData">搜索</el-button>
+      <el-button style="margin-left: 12px" @click="fetchData" type="primary">搜索</el-button>
     </div>
 
     <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
@@ -70,7 +70,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleCreate">确认收款</el-button>
+        <el-button :loading="saving" @click="handleCreate" type="primary">确认收款</el-button>
       </template>
     </el-dialog>
   </div>

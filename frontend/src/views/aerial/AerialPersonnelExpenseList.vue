@@ -12,7 +12,7 @@
       <el-select v-model="filters.reimbursement_status" placeholder="报销状态" clearable style="width: 120px">
         <el-option label="未报销" value="unpaid" /><el-option label="待报销" value="pending_reimbursement" /><el-option label="已报销" value="reimbursed" />
       </el-select>
-      <el-button type="primary" @click="fetchData">搜索</el-button>
+      <el-button @click="fetchData" type="primary">搜索</el-button>
       <el-button @click="resetFilters">重置</el-button>
     </div>
 

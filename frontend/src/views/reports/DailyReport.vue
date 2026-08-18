@@ -3,9 +3,9 @@
     <div class="page-header">
       <h2>销售日报</h2>
       <div style="display: flex; gap: 12px; align-items: center">
-        <el-button @click="handlePrintView"><el-icon><Printer /></el-icon> 打印</el-button>
+        <el-button @click="handlePrintView" type="primary"><el-icon><Printer /></el-icon> 打印</el-button>
         <el-date-picker v-model="reportDate" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" @change="fetchData" />
-        <el-button type="primary" @click="fetchData">查询</el-button>
+        <el-button @click="fetchData" type="primary">查询</el-button>
       </div>
     </div>
 

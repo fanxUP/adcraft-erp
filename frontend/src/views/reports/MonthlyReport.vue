@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2>销售月报</h2>
       <div style="display: flex; gap: 12px; align-items: center">
-        <el-button @click="handlePrintView"><el-icon><Printer /></el-icon> 打印</el-button>
+        <el-button @click="handlePrintView" type="primary"><el-icon><Printer /></el-icon> 打印</el-button>
         <el-select v-model="reportYear" style="width: 100px" @change="fetchData">
           <el-option v-for="y in years" :key="y" :label="String(y)" :value="y" />
         </el-select>
@@ -12,7 +12,7 @@
           <el-option v-for="m in 12" :key="m" :label="String(m)" :value="m" />
         </el-select>
         <span style="color: var(--ad-text)">月</span>
-        <el-button type="primary" @click="fetchData">查询</el-button>
+        <el-button @click="fetchData" type="primary">查询</el-button>
       </div>
     </div>
 

@@ -8,7 +8,7 @@
         <el-select v-model="fType" placeholder="变动类型" clearable style="width:130px" @change="fetchData">
           <el-option label="入职" value="hire" /><el-option label="晋升" value="promotion" /><el-option label="调岗" value="transfer" /><el-option label="离职" value="resignation" />
         </el-select>
-        <el-button type="danger" @click="openCreate">新增记录</el-button>
+        <el-button @click="openCreate" type="danger">新增记录</el-button>
       </div>
     </div>
     <el-table :data="list" v-loading="loading" stripe style="width:100%">
@@ -37,7 +37,7 @@
         <el-form-item label="新职位"><el-input v-model="form.new_position" /></el-form-item>
         <el-form-item label="备注" style="grid-column:1/3"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button type="primary" @click="handleSave" :loading="saving">保存</el-button></template>
+      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
   </div>
 </template>

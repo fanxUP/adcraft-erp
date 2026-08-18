@@ -13,7 +13,7 @@
         <el-option label="待核算" value="pending" /><el-option label="已核算" value="calculated" />
         <el-option label="待发放" value="pending_payment" /><el-option label="已发放" value="paid" />
       </el-select>
-      <el-button type="primary" @click="fetchData">搜索</el-button>
+      <el-button @click="fetchData" type="primary">搜索</el-button>
     </div>
     <el-table :data="list" stripe v-loading="loading">
       <el-table-column prop="wage_month" label="月份" width="100" />

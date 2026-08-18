@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <h2>角色权限管理</h2>
-      <el-button type="danger" @click="openCreate">新增角色</el-button>
+      <el-button @click="openCreate" type="danger">新增角色</el-button>
     </div>
 
     <el-row :gutter="20">
@@ -33,7 +33,7 @@
           <template #header>
             <div style="display: flex; justify-content: space-between; align-items: center">
               <span>权限配置 — {{ selectedRole ? roleLabel(selectedRole.name) : '请选择角色' }}</span>
-              <el-button v-if="selectedRole" type="danger" size="small" :loading="savingPerms" @click="handleSavePerms">保存权限</el-button>
+              <el-button v-if="selectedRole" size="small" :loading="savingPerms" @click="handleSavePerms" type="primary">保存权限</el-button>
             </div>
           </template>
           <div v-if="!selectedRole" style="color: var(--ad-text-secondary); text-align: center; padding: 40px 0">
@@ -69,7 +69,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
   </div>

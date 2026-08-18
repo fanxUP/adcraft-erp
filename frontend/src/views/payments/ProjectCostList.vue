@@ -28,7 +28,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
+          <el-button @click="handleSearch" type="primary">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
@@ -73,7 +73,7 @@
       </el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button type="danger" size="small" @click="$router.push(row._type === 'order' ? `/project-costs/${row.id}` : `/quote-costs/${row.id}`)">
+          <el-button size="small" @click="$router.push(row._type === 'order' ? `/project-costs/${row.id}` : `/quote-costs/${row.id}`)">
             登记成本
           </el-button>
         </template>

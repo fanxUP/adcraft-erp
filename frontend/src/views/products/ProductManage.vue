@@ -37,12 +37,14 @@
           <h2>产品/材质/工艺定价</h2>
           <div>
             <el-button @click="importDialogVisible = true">导入</el-button>
-            <el-button type="danger" @click="handleCreate">新建定价</el-button>
           </div>
+        </div>
+        <div class="page-create">
+          <el-button @click="handleCreate" type="danger">新建定价</el-button>
         </div>
         <div class="search-bar">
           <el-input v-model="keyword" placeholder="搜索产品、材质或工艺" clearable style="width: 300px" @keyup.enter="fetchProducts" />
-          <el-button type="primary" @click="fetchProducts" style="margin-left: 12px">搜索</el-button>
+          <el-button @click="fetchProducts" style="margin-left: 12px" type="primary">搜索</el-button>
         </div>
 
             <el-table :data="productList" v-loading="productLoading" stripe style="margin-top: 16px" @selection-change="onProductSelectionChange">
@@ -107,7 +109,7 @@
               <el-checkbox v-model="batchForm.overwrite">覆盖已有价格</el-checkbox>
             </el-form-item>
           </el-form>
-          <el-button type="danger" :loading="batchSubmitting" @click="handleBatchApply">应用到 {{ selectedNode?.count || 0 }} 个客户</el-button>
+          <el-button :loading="batchSubmitting" @click="handleBatchApply">应用到 {{ selectedNode?.count || 0 }} 个客户</el-button>
           <span v-if="batchResult" style="margin-left: 12px; color: var(--ad-text-secondary)">
             创建 {{ batchResult.created }}，更新 {{ batchResult.updated }}，跳过 {{ batchResult.skipped }}
           </span>
@@ -130,13 +132,15 @@
           <div>
             <el-tag style="margin-right: 8px">{{ selectedCustomer?.customer_type }}</el-tag>
             <el-tag type="success">{{ selectedCustomer?.level || '未分级' }}</el-tag>
-            <el-button type="primary" @click="openAddPricingDialog" style="margin-left: 12px">新建定价</el-button>
           </div>
+        </div>
+        <div class="page-create">
+          <el-button @click="openAddPricingDialog" type="danger">新建定价</el-button>
         </div>
 
         <div class="search-bar" style="margin-bottom: 12px">
           <el-button @click="handleInitCustomerPricing">一键初始化（复制全局标准价）</el-button>
-          <el-button type="danger" :disabled="selectedAgreements.length === 0" @click="handleBatchDeleteAgreements">删除选中 ({{ selectedAgreements.length }})</el-button>
+          <el-button :disabled="selectedAgreements.length === 0" @click="handleBatchDeleteAgreements" type="danger">删除选中 ({{ selectedAgreements.length }})</el-button>
         </div>
 
         <el-table :data="customerAgreements" v-loading="agreementLoading" stripe @selection-change="onAgreementSelectionChange">
@@ -213,7 +217,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
 
@@ -276,7 +280,7 @@
       </el-form>
       <template #footer>
         <el-button @click="addPricingDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="agreementSubmitting" @click="handleSaveAgreement">保存</el-button>
+        <el-button :loading="agreementSubmitting" @click="handleSaveAgreement" type="primary">保存</el-button>
       </template>
     </el-dialog>
 
@@ -293,14 +297,14 @@
         </el-table>
       </div>
       <el-upload :auto-upload="false" :limit="1" :on-change="handleFileChange" :on-exceed="() => ElMessage.warning('只能上传一个文件')">
-        <template #trigger><el-button type="primary">选择文件</el-button></template>
+        <template #trigger><el-button>选择文件</el-button></template>
       </el-upload>
       <div v-if="importResult" style="margin-top: 16px">
         <el-alert :title="'导入完成：成功 ' + importResult.succeeded + ' 条，失败 ' + importResult.failed + ' 条'" :type="importResult.failed > 0 ? 'warning' : 'success'" show-icon />
       </div>
       <template #footer>
         <el-button @click="importDialogVisible = false">关闭</el-button>
-        <el-button type="danger" :loading="importing" :disabled="!importFile" @click="handleImport">开始导入</el-button>
+        <el-button :loading="importing" :disabled="!importFile" @click="handleImport">开始导入</el-button>
       </template>
     </el-dialog>
   </div>

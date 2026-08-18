@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <h2>订单管理</h2>
-      <el-button v-if="authStore.isAdmin" type="warning" @click="$router.push('/orders/recycle')">
+      <el-button v-if="authStore.isAdmin" @click="$router.push('/orders/recycle')" type="warning">
         <el-icon><Delete /></el-icon> 回收站
       </el-button>
     </div>
@@ -24,7 +24,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
+          <el-button @click="handleSearch" type="primary">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>

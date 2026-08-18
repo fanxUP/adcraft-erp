@@ -7,8 +7,8 @@
     <div v-if="order" v-loading="loading" ref="printOrderSection">
       <div style="display: flex; justify-content: space-between; align-items: center; margin: 16px 0">
       <h2 style="margin: 0; color: var(--ad-text)">订单 {{ order.order_no }}</h2>
-      <el-button @click="handlePrintOrder">
-        <el-icon><Printer /></el-icon> 打印
+      <el-button @click="handlePrintOrder" type="primary">
+        <el-icon><Printer /></el-icon> 打印预览
       </el-button>
     </div>
 
@@ -43,7 +43,7 @@
               <el-descriptions-item label="联系电话">
                 <div v-if="contactEditing" style="display: flex; align-items: center; gap: 8px">
                   <el-input v-model="contactDraft.phone" size="small" style="width: 140px" placeholder="联系电话" />
-                  <el-button size="small" type="primary" :loading="contactSaving" @click="handleSaveContact">保存</el-button>
+                  <el-button size="small" :loading="contactSaving" @click="handleSaveContact" type="primary">保存</el-button>
                   <el-button size="small" @click="cancelContactEdit">取消</el-button>
                 </div>
                 <template v-else>
@@ -65,7 +65,7 @@
                 <span>成本与利润</span>
                 <div>
                   <el-button size="small" @click="handleAutoCost" :loading="autoCostLoading">自动核算</el-button>
-                  <el-button size="small" type="danger" @click="$router.push(`/project-costs/${order.id}`)">登记成本</el-button>
+                  <el-button size="small" @click="$router.push(`/project-costs/${order.id}`)">登记成本</el-button>
                 </div>
               </div>
             </template>
@@ -88,7 +88,6 @@
           />
           <el-button
             v-if="order.status === 'completed'"
-            type="warning"
             plain
             style="margin-top: 12px"
             @click="handleReopenCompleted"
@@ -287,6 +286,7 @@ import OrderProjectOverview from './OrderProjectOverview.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { getOrder, changeOrderStatus, reopenCompletedOrder, autoCalculateCost, updateOrderContact } from '@/api/orders'
+import { getSystemSettings } from '@/api/admin'
 import { getDesignTasks, getProductionTasks, getInstallationTasks } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, OrderDetailResponse, OrderItemResponse } from '@/types/api'
@@ -542,15 +542,26 @@ async function handleAutoCost() {
 
 const printOrderSection = ref(null)
 
-function handlePrintOrder() {
+async function handlePrintOrder() {
   // Build print-friendly HTML from order data
   const o = order.value
   if (!o) return
+  let companyName = ''
+  let companyPhone = ''
+  try {
+    const s = await getSystemSettings()
+    companyName = s.COMPANY_NAME || ''
+    companyPhone = s.COMPANY_PHONE || ''
+  } catch { /* 取不到设置时使用占位 */ }
   const wrapper = document.createElement('div')
   wrapper.id = '__print_a4_wrapper__'
   wrapper.className = 'print-a4-wrapper'
-  
-  let html = '<div class="print-title">订单 ' + o.order_no + '</div>'
+
+  let html = '<div class="print-company" style="text-align:center;margin-bottom:8px;">'
+  html += '<div style="font-size:20px;font-weight:700;">' + (companyName || '广告制作公司') + '</div>'
+  html += '<div style="font-size:13px;color:#666;">联系电话: ' + (companyPhone || '__________') + '</div>'
+  html += '</div>'
+  html += '<div class="print-title">订单 ' + o.order_no + '</div>'
   html += '<div class="print-info">'
   html += '<div class="print-info-row"><span><strong>订单编号:</strong> ' + (o.order_no || '-') + '</span><span><strong>项目名称:</strong> ' + (o.project_name || '-') + '</span></div>'
   html += '<div class="print-info-row"><span><strong>联系人:</strong> ' + (o.contact_person || '-') + '</span><span><strong>联系电话:</strong> ' + (o.contact_phone || '-') + '</span></div>'

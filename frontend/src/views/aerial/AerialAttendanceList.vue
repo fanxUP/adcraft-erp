@@ -8,9 +8,9 @@
           <el-radio-button value="personnel">人员</el-radio-button>
         </el-radio-group>
         <el-date-picker v-model="curMonth" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:160px" @change="fetchData" />
-        <el-button @click="fetchData">刷新</el-button>
-        <el-button type="danger" @click="openCreate">录入考勤</el-button>
-        <el-button @click="handlePrint">🖨️ 打印预览</el-button>
+        <el-button @click="fetchData" type="primary">刷新</el-button>
+        <el-button @click="openCreate">录入考勤</el-button>
+        <el-button @click="handlePrint" type="primary">🖨️ 打印预览</el-button>
       </div>
     </div>
 
@@ -133,7 +133,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog=false">取消</el-button>
-        <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
+        <el-button @click="handleSave" :loading="saving" type="primary">保存</el-button>
       </template>
     </el-dialog>
   </div>

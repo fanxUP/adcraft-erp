@@ -26,14 +26,14 @@
 
     <!-- Actions -->
     <div style="margin-bottom: 16px; display: flex; gap: 10px">
-      <el-button type="danger" @click="handleCreate" :loading="creating" :disabled="creating">
+      <el-button @click="handleCreate" :loading="creating" :disabled="creating" type="danger">
         <el-icon><Plus /></el-icon> 创建数据库备份
       </el-button>
       <el-button @click="triggerImport" :loading="importing">
         <el-icon><Upload /></el-icon> 导入备份
       </el-button>
       <input ref="fileInputRef" type="file" accept=".tar.gz" style="display: none" @change="handleFileChange" />
-      <el-button @click="fetchList" :loading="loading">刷新</el-button>
+      <el-button @click="fetchList" :loading="loading" type="primary">刷新</el-button>
     </div>
 
     <!-- Table -->
@@ -49,7 +49,6 @@
         <el-table-column label="操作" width="200" align="center" fixed="right">
           <template #default="{ row }">
             <el-button
-              type="primary"
               size="small"
               @click="handleExport(row as BackupItem)"
               :disabled="exporting === row.filename"
@@ -57,7 +56,6 @@
               导出
             </el-button>
             <el-button
-              type="warning"
               size="small"
               @click="handleRestore(row as BackupItem)"
               :disabled="restoring === row.filename"
@@ -65,11 +63,9 @@
               恢复
             </el-button>
             <el-button
-              type="danger"
               size="small"
               @click="handleDelete(row as BackupItem)"
-              :disabled="deleting === row.filename"
-            >
+              :disabled="deleting === row.filename" type="danger">
               删除
             </el-button>
           </template>
@@ -102,7 +98,7 @@
       <p style="color: var(--ad-text-secondary); font-size: 13px">创建时间：{{ formatTime(toRestore?.created_at) }}</p>
       <template #footer>
         <el-button @click="restoreConfirmVisible = false">取消</el-button>
-        <el-button type="danger" @click="confirmRestore" :loading="!!restoring">
+        <el-button @click="confirmRestore" :loading="!!restoring" type="primary">
           确认恢复
         </el-button>
       </template>
@@ -120,7 +116,7 @@
       </div>
       <template #footer>
         <el-button v-if="!restoreSuccess" @click="restoreResultVisible = false">关闭</el-button>
-        <el-button v-if="restoreSuccess" type="primary" @click="handleRelogin">
+        <el-button v-if="restoreSuccess" @click="handleRelogin">
           重新登录
         </el-button>
       </template>
@@ -132,7 +128,7 @@
       <p style="color: var(--ad-text-secondary); font-size: 13px; margin-top: 4px">此操作不可撤销。</p>
       <template #footer>
         <el-button @click="deleteConfirmVisible = false">取消</el-button>
-        <el-button type="danger" @click="confirmDelete" :loading="!!deleting">
+        <el-button @click="confirmDelete" :loading="!!deleting" type="danger">
           删除
         </el-button>
       </template>
