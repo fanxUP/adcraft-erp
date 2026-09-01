@@ -9,8 +9,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = ""  # MUST be set via .env for production — generate with: openssl rand -hex 32
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 
-    DATABASE_URL: str = "postgresql+asyncpg://adcraft:adcraft_dev_password@127.0.0.1:5432/adcraft_erp"
-    DATABASE_URL_SYNC: str = "postgresql+psycopg2://adcraft:adcraft_dev_password@127.0.0.1:5432/adcraft_erp"
+    # Credentials belong in .env; keep source fallbacks password-free so a
+    # development default cannot accidentally become a deployed credential.
+    DATABASE_URL: str = "postgresql+asyncpg://adcraft@127.0.0.1:5432/adcraft_erp"
+    DATABASE_URL_SYNC: str = "postgresql+psycopg2://adcraft@127.0.0.1:5432/adcraft_erp"
 
     REDIS_URL: str = "redis://127.0.0.1:6379/0"
 
@@ -19,7 +21,7 @@ class Settings(BaseSettings):
 
     MINIO_ENDPOINT: str = "minio:9000"
     MINIO_ROOT_USER: str = "admin"
-    MINIO_ROOT_PASSWORD: str = "minio_dev_password"
+    MINIO_ROOT_PASSWORD: str = ""
     MINIO_BUCKET: str = "adcraft-files"
 
     JWT_EXPIRE_MINUTES: int = 1440

@@ -14,8 +14,8 @@ describe('quoteGroupColors', () => {
   it('keeps each group color attached to the group after reordering', () => {
     const colors = createQuoteGroupColorRegistry(5)
     const items = [
-      { id: 'a', group_name: '分项A' },
-      { id: 'b', group_name: '分项B' },
+      { id: 'a', group_id: '分项A', group_name: '分项A' },
+      { id: 'b', group_id: '分项B', group_name: '分项B' },
     ]
     const rows = buildQuoteDisplayRows(items, item => item.id, () => 0, colors.colorFor)
 

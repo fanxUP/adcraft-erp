@@ -94,7 +94,7 @@
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
 import { getOrders } from '@/api/orders'
 import { getProjectCostSummary, getQuotesForCost } from '@/api/payments'
 import type { OrderListResponse, QuoteCostResponse } from '@/types/api'
@@ -113,6 +113,10 @@ type CombinedRow = (OrderListResponse | QuoteCostResponse) & {
 }
 
 const allRows = ref<CombinedRow[]>([])
+
+const REFRESH_INTERVAL_MS = 15000
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+let fetchRequestId = 0
 
 // Cost summary map for orders
 const costMap = ref<Record<string, number>>({})
@@ -179,6 +183,7 @@ const combinedList = computed(() => {
 })
 
 async function fetchData() {
+  const requestId = ++fetchRequestId
   loading.value = true
   try {
     const orderParams: Record<string, unknown> = { page: 1, page_size: 100 }
@@ -189,6 +194,9 @@ async function fetchData() {
       getOrders(orderParams),
       getQuotesForCost(quoteParams),
     ])
+
+    // 搜索、分页和自动刷新可能同时发起请求，旧响应不能覆盖更新的数据。
+    if (requestId !== fetchRequestId) return
 
     // Build order rows
     const orders: CombinedRow[] = (orderData.items || []).map((o: OrderListResponse) => ({
@@ -211,19 +219,19 @@ async function fetchData() {
       const ids = orders.map(o => o.id)
       try {
         const summary = await getProjectCostSummary(ids)
-        costMap.value = summary.costs
+        if (requestId === fetchRequestId) costMap.value = summary.costs
       } catch { /* ignore */ }
     } else {
       costMap.value = {}
     }
   } finally {
-    loading.value = false
+    if (requestId === fetchRequestId) loading.value = false
   }
 }
 
 function handleSearch() {
   page.value = 1
-  // For client-side filtering, just re-compute
+  fetchData()
 }
 
 function handleReset() {
@@ -231,9 +239,38 @@ function handleReset() {
   filterType.value = ''
   statusFilter.value = ''
   page.value = 1
+  fetchData()
 }
 
-onMounted(fetchData)
+function refreshIfVisible() {
+  if (!document.hidden && !loading.value) void fetchData()
+}
+
+function handleVisibilityChange() {
+  if (!document.hidden) void fetchData()
+}
+
+function startAutoRefresh() {
+  if (refreshTimer) return
+  refreshTimer = setInterval(refreshIfVisible, REFRESH_INTERVAL_MS)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+}
+
+onMounted(() => {
+  void fetchData()
+  startAutoRefresh()
+})
+onActivated(startAutoRefresh)
+onDeactivated(stopAutoRefresh)
+onUnmounted(stopAutoRefresh)
 </script>
 
 <style scoped>

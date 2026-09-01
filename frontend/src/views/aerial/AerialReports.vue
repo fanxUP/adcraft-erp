@@ -160,7 +160,7 @@ function handleTabChange(tab: string) {
 }
 
 function costTypeLabel(t: string) {
-  const m: Record<string, string> = { fuel: '油费', maintenance: '维修费', insurance: '保险费', inspection: '年检费', violation: '违章罚款', tire: '轮胎', hydraulic_system: '液压系统', boom_repair: '升降臂维修', platform_repair: '平台维修', safety_equipment: '安全用品', tool_consumables: '工具耗材', parking: '停车费', loan: '贷款/月供', depreciation: '折旧', other: '其他' }
+  const m: Record<string, string> = { fuel: '油费', maintenance: '维修费', insurance: '保险费', inspection: '年检费', violation: '违章罚款', tire: '轮胎', hydraulic_system: '液压系统', boom_repair: '升降臂维修', platform_repair: '平台维修', safety_equipment: '安全用品', tool_consumables: '工具耗材', parking: '停车费', toll: '过路费', loan: '贷款/月供', depreciation: '折旧', other: '其他' }
   return m[t] || t
 }
 

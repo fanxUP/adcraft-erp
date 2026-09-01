@@ -162,6 +162,25 @@ async def test_get_dashboard(service):
 
 
 @pytest.mark.asyncio
+async def test_dashboard_amounts_use_order_date_and_payment_date(service):
+    """Dashboard amount queries use each business record's effective date."""
+    svc, db = service
+    db.execute = AsyncMock(return_value=MockResultWithScalar(scalar_value=0))
+
+    start = datetime(2026, 8, 29)
+    end = datetime(2026, 8, 29, 23, 59, 59)
+
+    await svc._sum_orders(start, end)
+    order_statement = db.execute.await_args.args[0]
+    assert "business_documents.created_at" in str(order_statement)
+
+    await svc._sum_payments(start, end)
+    payment_statement = db.execute.await_args.args[0]
+    assert "payments.paid_at" in str(payment_statement)
+    assert "payments.created_at" not in str(payment_statement)
+
+
+@pytest.mark.asyncio
 async def test_get_daily_report(service):
     """Daily report returns orders, payments, and new customer count."""
     svc, db = service

@@ -1,5 +1,7 @@
 #!/bin/bash
-# Seed script: create admin user and default roles
+# Seed script: create default roles.
+# Admin creation is handled by backend/scripts/init_app.py and requires the
+# explicitly configured ADMIN_INIT_PASSWORD environment variable.
 
 set -e
 
@@ -7,7 +9,7 @@ HOST="${DB_HOST:-postgres}"
 PORT="${DB_PORT:-5432}"
 DB="${POSTGRES_DB:-adcraft_erp}"
 USER="${POSTGRES_USER:-adcraft}"
-PASSWORD="${POSTGRES_PASSWORD:-adcraft_dev_password}"
+PASSWORD="${POSTGRES_PASSWORD:-}"
 
 SQL="
 INSERT INTO roles (id, name, description) VALUES
@@ -19,16 +21,8 @@ INSERT INTO roles (id, name, description) VALUES
   (gen_random_uuid(), 'finance', '财务人员，管理收款和对账')
 ON CONFLICT (name) DO NOTHING;
 
-INSERT INTO users (id, username, password_hash, real_name, is_active) VALUES
-  (gen_random_uuid(), 'admin', '\$2b\$12\$CssbSpQCObmbmkgCzolCkuZbDBRHjoz9ykY/3V6A8EYND3hSaOZQ2', '系统管理员', TRUE)
-ON CONFLICT (username) DO NOTHING;
-
-INSERT INTO user_roles (user_id, role_id)
-SELECT u.id, r.id FROM users u, roles r
-WHERE u.username = 'admin' AND r.name = 'admin'
-ON CONFLICT DO NOTHING;
 "
 
 echo "Seeding database..."
 echo "$SQL" | PGPASSWORD="$PASSWORD" psql -h "$HOST" -p "$PORT" -U "$USER" -d "$DB"
-echo "Seed complete."
+echo "Role seed complete. Admin creation is handled by backend/scripts/init_app.py."

@@ -70,7 +70,7 @@ class BusinessDocumentService:
 
     async def list_all(self, page: int, page_size: int, status: str | None = None,
                        customer_id: UUID | None = None, keyword: str | None = None,
-                       exclude_status: str | None = None) -> tuple[list, int]:
+                       exclude_status: str | list[str] | tuple[str, ...] | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
         docs, total = await self.repo.list_all(
             skip=skip, limit=page_size, status=status,
@@ -129,7 +129,7 @@ class BusinessDocumentService:
         if doc.doc_type == "quote":
             await self._calculate_quote(doc.id)
         # Refresh to load relationships (e.g. customer) in async context
-        await self.db.refresh(doc, ["customer", "items", "status_logs"])
+        await self.db.refresh(doc, ["customer", "items", "groups", "status_logs"])
         # 自动同步客户协议价
         await self._sync_customer_agreements(doc)
         # 反向同步联系人：单据里填的联系人自动存入客户管理的联系人列表
@@ -153,6 +153,7 @@ class BusinessDocumentService:
                 normalize_quote_item_data(item)
                 for item in data["items"]
             ]
+        groups_supplied = doc.doc_type == "quote" and "groups" in data
         if doc.doc_type == "quote" and (
             "customer_id" in data or "customer_name" in data
         ):
@@ -179,6 +180,8 @@ class BusinessDocumentService:
             # 重新加载明细，确保协议价同步读取的是本次更新后的最新价格
             # （repo.update 只是替换了行，不会刷新内存中的 doc.items 集合）
             updated.items = await self.repo.get_items(doc_id)
+            if groups_supplied:
+                updated.groups = await self.repo.get_groups(doc_id)
             # 自动同步客户协议价
             await self._sync_customer_agreements(updated)
 
@@ -372,6 +375,7 @@ class BusinessDocumentService:
             "quote_geometry",
             "business_document_status_logs",
             "business_document_versions",
+            "business_document_groups",
             "business_document_items",
         ]:
             column = "document_id" if tbl.startswith("business_document_") else "quote_id"
@@ -1113,6 +1117,19 @@ class BusinessDocumentService:
             )
             self.db.add(item)
 
+        # Copy group definitions too, including groups that currently have no details.
+        from app.models.business_document import BusinessDocumentGroup
+        for src_group in sorted(
+            quote.groups or [],
+            key=lambda group: (group.sort_order or 0, group.created_at),
+        ):
+            self.db.add(BusinessDocumentGroup(
+                document_id=order.id,
+                group_id=src_group.group_id,
+                group_name=src_group.group_name,
+                sort_order=src_group.sort_order,
+            ))
+
         # 状态日志
         await self.repo.create_status_log(order.id, None, "pending_confirm", "来自常规报价转换", created_by)
         await self.repo.create_status_log(quote_id, quote.status, "converted", "已转为订单", created_by)
@@ -1125,7 +1142,7 @@ class BusinessDocumentService:
         # 显式加载关系后再序列化（与 create() 的 refresh 模式一致），避免异步懒加载 MissingGreenlet
         await self.db.refresh(
             order,
-            ["customer", "items", "status_logs", "design_tasks", "production_tasks", "installation_tasks"],
+            ["customer", "items", "groups", "status_logs", "design_tasks", "production_tasks", "installation_tasks"],
         )
         return self._to_detail(order)
 
@@ -1341,6 +1358,19 @@ class BusinessDocumentService:
             "contact_person": d.contact_person,
             "contact_phone": d.contact_phone,
             "created_at": d.created_at.isoformat() if d.created_at else None,
+            "groups": [
+                {
+                    "id": str(group.id),
+                    "quote_id": str(d.id),
+                    "group_id": group.group_id,
+                    "group_name": group.group_name,
+                    "sort_order": group.sort_order,
+                }
+                for group in sorted(
+                    (d.groups or []),
+                    key=lambda group: (group.sort_order or 0, group.created_at),
+                )
+            ],
             "items": [
                 {
                     "id": str(it.id),
@@ -1371,6 +1401,7 @@ class BusinessDocumentService:
                     "remark": it.remark,
                     "image_url": it.image_url,
                     "sort_order": it.sort_order,
+                    "group_id": it.group_id,
                     "group_name": it.group_name,
                     "material_process": it.material_process,
                 }

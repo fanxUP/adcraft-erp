@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
 from app.core.permissions import (
-    PERM_CONTRACT_CHANGE_STATUS,
     PERM_CONTRACT_CREATE,
     PERM_CONTRACT_DELETE,
     PERM_CONTRACT_READ,
@@ -22,7 +21,7 @@ from app.core.permissions import (
     require_permission,
 )
 from app.models.user import User
-from app.schemas.contract import ContractCreate, ContractUpdate, ContractStatusChange, ContractLinkOrders
+from app.schemas.contract import ContractCreate, ContractUpdate, ContractLinkOrders
 from app.schemas.common import success, success_paginated
 from app.services.contract_service import ContractService
 from app.services.operation_log_service import (
@@ -200,25 +199,6 @@ async def delete_contract(
                         ip_address=request.client.host if request.client else None,
                         before_data=before)
     return success(None)
-
-
-@router.post("/{contract_id}/status")
-async def change_contract_status(
-    contract_id: str,
-    data: ContractStatusChange,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_CONTRACT_CHANGE_STATUS)),
-):
-    service = ContractService(db)
-    cid = UUID(contract_id)
-    before = await service.get_contract(cid)
-    contract = await service.change_status(cid, data.to_status, data.reason)
-    await log_operation(db, current_user.id, current_user.real_name or current_user.username,
-                        OBJ_CONTRACT, cid, "change_status",
-                        ip_address=request.client.host if request.client else None,
-                        before_data=before, after_data=contract)
-    return success(contract)
 
 
 @router.post("/{contract_id}/orders")

@@ -14,7 +14,13 @@ from app.models.cdr_quote import (
     QuoteApproval, QuoteAuditLog, CdrDevice, CdrCaptureSession, DrawingSnapshot,
     QuoteGeometry,
 )
-from app.models.business_document import BusinessDocument, BusinessDocumentItem, BusinessDocumentStatusLog, BusinessDocumentVersion
+from app.models.business_document import (
+    BusinessDocument,
+    BusinessDocumentItem,
+    BusinessDocumentGroup,
+    BusinessDocumentStatusLog,
+    BusinessDocumentVersion,
+)
 from app.models.operation_log import OperationLog
 from app.models.task import DesignTask, ProductionTask, InstallationTask, Attachment
 from app.models.payment import Payment, CustomerStatement, Expense
@@ -36,6 +42,31 @@ from app.models.aerial import (
     AerialPersonnelWage, AerialVehicleCost, AerialSafetyCheck,
     AerialLedgerAttachment, AerialAgentDraft, AerialLedgerSettlement,
 )
+# These modules were previously imported after run_migrations_online(), which
+# left their tables out of Base.metadata during alembic check/upgrade.
+from app.models.ai_task_route import AITaskRoute
+from app.models.ai_request import AIRequest
+from app.models.ai_usage_daily import AIUsageDaily
+from app.models.ai_health_check import AIHealthCheck
+from app.models.ai_prompt_template import AIPromptTemplate
+from app.models.ai_prompt_version import AIPromptVersion
+from app.models.ai_prompt_execution_log import AIPromptExecutionLog
+from app.models.ai_model import AIModel
+from app.models.ai_provider import AIProvider
+from app.models.attendance import AttendanceRule, AttendanceRecord
+from app.models.department import Department
+from app.models.employee import Employee
+from app.models.employment_history import EmploymentHistory
+from app.models.leave import LeaveRequest
+from app.models.salary import SalaryRecord
+from app.models.salary_grid import (
+    SalaryItem,
+    SalaryItemTemplate,
+    SalaryGridValue,
+    SalaryParam,
+    SalaryParamValue,
+)
+from app.models.salary_rule import SalaryRule
 from app.ai_assistant.models import AiChatSession, AiChatMessage, AiToolCallLog, AiPendingAction, AiOperationAuditLog
 
 config = context.config
@@ -47,9 +78,33 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(object_, name, type_, reflected, compare_to):
+    """Keep legacy production objects while allowing additive migrations.
+
+    The current database predates the unified model metadata and contains
+    retired columns, indexes, and constraints. Autogenerate must not propose
+    destructive drops for those objects, nor rewrite existing column
+    nullability/defaults/comments merely because the legacy schema differs.
+    New tables, columns, indexes, and constraints are still compared and can
+    be introduced through an explicit reviewed migration.
+    """
+    if reflected and compare_to is None:
+        return False
+    if type_ == "column" and not reflected and compare_to is not None:
+        return False
+    return True
+
+
 def run_migrations_offline():
     url = config.get_main_option("sqlalchemy.url")
-    context.configure(url=url, target_metadata=target_metadata, literal_binds=True)
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        include_object=include_object,
+        compare_server_default=False,
+        compare_comments=False,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
@@ -57,7 +112,13 @@ def run_migrations_offline():
 def run_migrations_online():
     connectable = engine_from_config(config.get_section(config.config_ini_section), prefix="sqlalchemy.", poolclass=pool.NullPool)
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
+            compare_server_default=False,
+            compare_comments=False,
+        )
         with context.begin_transaction():
             context.run_migrations()
 
@@ -66,17 +127,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-
-# AI Gateway models (Phase 2)
-from app.models.ai_task_route import AITaskRoute
-from app.models.ai_request import AIRequest
-from app.models.ai_usage_daily import AIUsageDaily
-from app.models.ai_health_check import AIHealthCheck
-from app.models.ai_prompt_template import AIPromptTemplate
-from app.models.ai_prompt_version import AIPromptVersion
-from app.models.ai_prompt_execution_log import AIPromptExecutionLog
-from app.models.department import Department
-from app.models.salary import SalaryRecord
-from app.models.salary_rule import SalaryRule
-from app.models.employment_history import EmploymentHistory
-from app.models.leave import LeaveRequest

@@ -58,11 +58,6 @@
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" @click="goDetail(row.id)">详情</el-button>
-          <el-button
-            text type="warning"
-            :disabled="!canChangeStatus(row)"
-            @click="handleStatusChange(row)"
-          >状态</el-button>
           <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
@@ -151,7 +146,7 @@
               <el-date-picker v-model="form.sign_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
             <el-form-item label="生效日期">
-              <el-date-picker v-model="form.start_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              <el-date-picker v-model="form.start_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" @change="onStartDateChange" />
             </el-form-item>
             <el-form-item label="结束日期">
               <el-date-picker v-model="form.end_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
@@ -272,34 +267,14 @@
       <el-empty v-else description="暂无关联订单" />
     </el-dialog>
 
-    <!-- 状态变更对话框 -->
-    <el-dialog v-model="statusDialogVisible" title="合同状态变更" width="400px" :close-on-click-modal="false">
-      <el-form :model="statusForm" label-width="80px">
-        <el-form-item label="当前状态">
-          <el-tag :type="statusColor(statusForm.current_status)" size="small">{{ statusLabel(statusForm.current_status) }}</el-tag>
-        </el-form-item>
-        <el-form-item label="目标状态">
-          <el-select v-model="statusForm.to_status" placeholder="请选择目标状态" style="width: 100%">
-            <el-option v-for="s in availableTransitions" :key="s" :label="statusLabel(s)" :value="s" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="原因">
-          <el-input v-model="statusForm.reason" type="textarea" :rows="2" placeholder="状态变更原因（可选）" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="statusDialogVisible = false">取消</el-button>
-        <el-button :loading="statusLoading" @click="confirmStatusChange" type="primary">确认变更</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { formatDate } from '@/utils/datetime'
-import { ref, reactive, onMounted, computed } from 'vue'
+import { formatDate, addYears } from '@/utils/datetime'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getContracts, createContract, updateContract, deleteContract, changeContractStatus, uploadContractAttachment, deleteContractAttachment, getOrdersWithoutContract, linkOrdersToContract } from '@/api/contracts'
+import { getContracts, createContract, updateContract, deleteContract, uploadContractAttachment, deleteContractAttachment, getOrdersWithoutContract, linkOrdersToContract } from '@/api/contracts'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ContractListResponse, ContractDetailResponse, OrderWithoutContractItem } from '@/types/api'
@@ -545,6 +520,14 @@ async function loadAllCustomers() {
   } catch { /* ignore */ }
 }
 
+// 选择生效日期后自动填充结束日期 = 生效日期 + 1 年（编辑时若已有结束日期则不覆盖）
+function onStartDateChange(val: string | null) {
+  if (!val) return
+  if (!form.end_date) {
+    form.end_date = addYears(val, 1)
+  }
+}
+
 async function handleCreate() {
   resetForm()
   isEditing.value = false
@@ -601,56 +584,6 @@ async function saveForm() {
 const detailVisible = ref(false)
 const currentDetail = ref<ContractDetailResponse | null>(null)
 
-// ── Status change ──
-const statusDialogVisible = ref(false)
-const statusLoading = ref(false)
-const statusForm = reactive({
-  current_status: '',
-  to_status: '',
-  reason: '',
-  contract_id: '',
-})
-const STATUS_TRANSITIONS: Record<string, string[]> = {
-  draft: ['active', 'completed'],
-  active: ['draft', 'completed'],
-  completed: ['draft'],
-}
-
-const availableTransitions = computed(() => {
-  return STATUS_TRANSITIONS[statusForm.current_status] || []
-})
-
-function canChangeStatus(row: ContractListResponse) {
-  return (STATUS_TRANSITIONS[row.status] || []).length > 0
-}
-
-function handleStatusChange(row: ContractListResponse) {
-  statusForm.current_status = row.status
-  statusForm.to_status = ''
-  statusForm.reason = ''
-  statusForm.contract_id = row.id
-  statusDialogVisible.value = true
-}
-
-async function confirmStatusChange() {
-  if (!statusForm.to_status) {
-    ElMessage.warning('请选择目标状态')
-    return
-  }
-  statusLoading.value = true
-  try {
-    await changeContractStatus(statusForm.contract_id, {
-      to_status: statusForm.to_status,
-      reason: statusForm.reason || null,
-    })
-    ElMessage.success('状态变更成功')
-    statusDialogVisible.value = false
-    fetchData()
-  } catch { /* handled by interceptor */ } finally {
-    statusLoading.value = false
-  }
-}
-
 // ── Delete ──
 async function handleDelete(row: ContractListResponse) {
   try {
@@ -661,6 +594,7 @@ async function handleDelete(row: ContractListResponse) {
     })
   } catch { return }
   await deleteContract(row.id)
+  fetchUnlinkedOrders()
   ElMessage.success('合同已删除')
   fetchData()
 }

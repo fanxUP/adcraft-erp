@@ -115,6 +115,7 @@ async def list_tasks(
     status: str | None = None,
     vendor_id: str | None = None,
     order_id: str | None = None,
+    task_type: str | None = None,
     source_task_type: str | None = None,
     source_task_id: str | None = None,
     db: AsyncSession = Depends(get_db),
@@ -124,7 +125,7 @@ async def list_tasks(
     vid = UUID(vendor_id) if vendor_id else None
     oid = UUID(order_id) if order_id else None
     stid = UUID(source_task_id) if source_task_id else None
-    tasks, total = await service.list_tasks(page, page_size, status, vid, oid, source_task_type, stid)
+    tasks, total = await service.list_tasks(page, page_size, status, vid, oid, source_task_type, stid, task_type)
     return success_paginated(tasks, total, page, page_size)
 
 

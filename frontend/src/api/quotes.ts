@@ -1,5 +1,5 @@
 import { get, post, put, del, apiClient } from './index'
-import { PaginatedData, QuoteListResponse, QuoteDetailResponse, SuccessResponse, OrderDetailResponse, ImportResponse } from '@/types/api'
+import { PaginatedData, QuoteListResponse, QuoteDetailResponse, QuoteGroupInput, SuccessResponse, OrderDetailResponse, ImportResponse } from '@/types/api'
 
 export function getQuotes(params: { page?: number; page_size?: number; status?: string; customer_id?: string }) {
   return get<PaginatedData<QuoteListResponse>>('/quotes/', { params })
@@ -9,11 +9,11 @@ export function getQuote(id: string) {
   return get<QuoteDetailResponse>(`/quotes/${id}`)
 }
 
-export function createQuote(data: Omit<Partial<QuoteDetailResponse>, 'id' | 'quote_no' | 'created_at' | 'items'>) {
+export function createQuote(data: Omit<Partial<QuoteDetailResponse>, 'id' | 'quote_no' | 'created_at' | 'items' | 'groups'> & { groups?: QuoteGroupInput[] }) {
   return post<QuoteDetailResponse>('/quotes/', data)
 }
 
-export function updateQuote(id: string, data: Partial<Omit<QuoteDetailResponse, 'id' | 'quote_no' | 'created_at' | 'items'>> & { items?: Partial<QuoteDetailResponse['items'][0]>[] }) {
+export function updateQuote(id: string, data: Partial<Omit<QuoteDetailResponse, 'id' | 'quote_no' | 'created_at' | 'items' | 'groups'>> & { items?: Partial<QuoteDetailResponse['items'][0]>[]; groups?: QuoteGroupInput[] }) {
   return put<QuoteDetailResponse>(`/quotes/${id}`, data)
 }
 

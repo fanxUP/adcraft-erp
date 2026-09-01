@@ -10,6 +10,15 @@
       <el-button @click="handleCreate" type="danger">新建外协任务</el-button>
     </div>
 
+    <div class="task-tabs">
+      <el-tabs v-model="activeTaskType" @tab-change="handleTaskTypeChange">
+        <el-tab-pane label="全部" name="all" />
+        <el-tab-pane label="设计任务" name="design" />
+        <el-tab-pane label="制作任务" name="production" />
+        <el-tab-pane label="安装任务" name="installation" />
+      </el-tabs>
+    </div>
+
     <div class="search-bar">
       <el-select v-model="statusFilter" placeholder="状态" clearable style="width: 140px">
         <el-option label="待处理" value="pending" />
@@ -198,6 +207,8 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const statusFilter = ref('')
+type TaskTab = 'all' | 'design' | 'production' | 'installation'
+const activeTaskType = ref<TaskTab>('all')
 const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
 const vendors = ref<{id: string; name: string}[]>([])
@@ -259,12 +270,18 @@ async function fetchData() {
     const data = await getOutsourceTasks({
       page: page.value, page_size: pageSize.value,
       status: statusFilter.value || undefined,
+      task_type: activeTaskType.value === 'all' ? undefined : activeTaskType.value,
     })
     list.value = data.items
     total.value = data.total
   } finally {
     loading.value = false
   }
+}
+
+function handleTaskTypeChange() {
+  page.value = 1
+  void fetchData()
 }
 
 function onRelatedDocChange(val: string) {
@@ -427,6 +444,7 @@ onMounted(() => {
 .page { padding: 0; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
+.task-tabs { margin-top: 8px; }
 .search-bar { display: flex; align-items: center; }
 
 .pay-summary {

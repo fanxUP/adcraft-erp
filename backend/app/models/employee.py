@@ -7,6 +7,7 @@ from app.models.base import Base, TimestampMixin, SoftDeleteMixin
 
 class Employee(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "employees"
+    __table_args__ = {"comment": "员工档案"}
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     employee_no: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(64), nullable=False)

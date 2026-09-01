@@ -80,7 +80,7 @@
             <template v-if="row.type === 'group-header'">
               <div style="display: flex; align-items: center; gap: 8px;">
                 <span class="group-header-drag" title="拖动整个分项" style="font-weight: 600; white-space: nowrap;" @mousedown="dragStartKey = row.key" @touchstart.passive="dragStartKey = row.key">分项名称：</span>
-                <el-input v-if="!isReadonly" :model-value="row.groupName" size="small" style="flex: 1" placeholder="输入分项名称" @input="(v: string) => renameGroup(row.groupName, v)" />
+                <el-input v-if="!isReadonly" :model-value="row.groupName" size="small" style="flex: 1" placeholder="输入分项名称" @focus="(e: FocusEvent) => (e.target as HTMLInputElement).select()" @input="(v: string) => renameGroup(row.groupId, v)" />
                 <span v-else style="font-weight: 600;">{{ row.groupName }}</span>
               </div>
             </template>
@@ -219,12 +219,12 @@
             </template>
           </template>
         </el-table-column>
-        <el-table-column v-if="!isReadonly" label="操作" width="100">
+        <el-table-column v-if="!isReadonly" label="操作" width="150" align="center" fixed="right">
           <template #default="{ row }">
             <template v-if="row.type === 'group-header'">
-              <div style="display: flex; gap: 4px;">
-                <el-button text type="primary" size="small" @click="addItem(row.groupName)">添加行</el-button>
-                <el-button text type="danger" size="small" @click="removeGroup(row.groupName)">删除组</el-button>
+              <div class="quote-row-actions">
+                <el-button text type="primary" size="small" @click="addItem(row.groupId, row.groupName)">添加行</el-button>
+                <el-button text type="danger" size="small" @click="removeGroup(row.groupId)">删除组</el-button>
               </div>
             </template>
             <template v-else-if="row.type === 'item'">
@@ -308,6 +308,7 @@ import {
   getQuoteGroupBlock,
   isDuplicateQuoteGroupName,
   reorderQuoteDisplayRows,
+  type QuoteEmptyGroup,
   type QuoteDisplayRow,
 } from '@/utils/quoteItemOrdering'
 
@@ -357,7 +358,7 @@ const form = reactive({
   contact_phone: '',
 })
 
-const newItem = (groupName?: string): QuoteItemResponse => ({
+const newItem = (groupId?: string, groupName?: string): QuoteItemResponse => ({
   id: '',
   quote_id: '',
   item_name: '',
@@ -375,11 +376,13 @@ const newItem = (groupName?: string): QuoteItemResponse => ({
   remark: '',
   image_url: '',
   sort_order: 0,
+  group_id: groupId || undefined,
   group_name: groupName || undefined,
   material_process: '',
 })
 
 const items = ref<QuoteItemResponse[]>([newItem()])
+const emptyGroups = ref<QuoteEmptyGroup[]>([])
 
 // ===== 未保存修改检测 =====
 const dirty = ref(false)
@@ -390,6 +393,7 @@ function captureCleanSnapshot() {
   cleanSnapshot = JSON.stringify({
     form: { ...form },
     items: items.value.map(i => ({ ...i, subtotal_amount: calcSubtotal(i) })),
+    emptyGroups: emptyGroups.value,
   })
   isLoaded.value = true
   dirty.value = false
@@ -400,13 +404,14 @@ function hasUnsavedChanges(): boolean {
   const current = JSON.stringify({
     form: { ...form },
     items: items.value.map(i => ({ ...i, subtotal_amount: calcSubtotal(i) })),
+    emptyGroups: emptyGroups.value,
   })
   return current !== cleanSnapshot
 }
 
 // 监听表单和明细变化
 watch(
-  [form, items],
+  [form, items, emptyGroups],
   () => {
     dirty.value = hasUnsavedChanges()
   },
@@ -522,39 +527,88 @@ function toChineseAmount(n: number): string {
   return (negative ? '负' : '') + result
 }
 
-function addItem(groupName?: string) { items.value.push(newItem(groupName)) }
+function addItem(groupId?: string, groupName?: string) {
+  if (groupId) emptyGroups.value = emptyGroups.value.filter(group => group.groupId !== groupId)
+  items.value.push(newItem(groupId, groupName))
+}
 
 // --- 分组管理 ---
 function addGroup() {
-  const existing = new Set(items.value.filter(i => i.group_name).map(i => i.group_name))
+  const existing = new Set([
+    ...items.value.filter(i => i.group_name).map(i => i.group_name),
+    ...emptyGroups.value.map(group => group.groupName).filter(Boolean),
+  ])
   let idx = 1
   while (existing.has(`分项${idx}`)) idx++
-  items.value.push(newItem(`分项${idx}`))
+  items.value.push(newItem(Date.now().toString(36) + Math.random().toString(36).slice(2, 6), `分项${idx}`))
 }
 
-function removeGroup(groupName: string) {
-  items.value = items.value.filter(i => i.group_name !== groupName)
+function removeGroup(groupId: string) {
+  items.value = items.value.filter(i => i.group_id !== groupId)
+  emptyGroups.value = emptyGroups.value.filter(group => group.groupId !== groupId)
+  groupColors.rename(groupId, '')
 }
 
 function removeItem(target: QuoteItemResponse) {
   const idx = items.value.indexOf(target)
-  if (idx >= 0) items.value.splice(idx, 1)
+  if (idx < 0) return
+  const groupId = target.group_id || ''
+  const groupName = target.group_name || ''
+  items.value.splice(idx, 1)
+  if (groupId && !items.value.some(item => item.group_id === groupId)) {
+    const retained = emptyGroups.value.find(group => group.groupId === groupId)
+    if (retained) retained.groupName = groupName
+    else emptyGroups.value.push({ groupId, groupName })
+  }
 }
 
-function renameGroup(oldName: string, newName: string) {
-  if (!newName || oldName === newName) return
-  if (isDuplicateQuoteGroupName(items.value, oldName, newName)) {
+function renameGroup(groupId: string, newName: string) {
+  if (!groupId) return
+  if (!newName) {
+    groupColors.rename(groupId, '')
+    items.value.forEach(i => { if (i.group_id === groupId) i.group_name = undefined })
+    emptyGroups.value.forEach(group => { if (group.groupId === groupId) group.groupName = '' })
+    return
+  }
+  const duplicateEmptyGroup = emptyGroups.value.some(group => (
+    group.groupId !== groupId && group.groupName === newName
+  ))
+  if (isDuplicateQuoteGroupName(items.value, groupId, newName) || duplicateEmptyGroup) {
     ElMessage.warning('分项名称不能重复，否则两组明细会合并')
     return
   }
-  groupColors.rename(oldName, newName)
-  items.value.forEach(i => { if (i.group_name === oldName) i.group_name = newName })
+  items.value.forEach(i => { if (i.group_id === groupId) i.group_name = newName })
+  emptyGroups.value.forEach(group => { if (group.groupId === groupId) group.groupName = newName })
+}
+
+function buildGroupPayload() {
+  const groups: Array<{ group_id: string; group_name: string | null; sort_order: number }> = []
+  const seen = new Set<string>()
+  for (const item of items.value) {
+    if (!item.group_id || seen.has(item.group_id)) continue
+    seen.add(item.group_id)
+    groups.push({
+      group_id: item.group_id,
+      group_name: item.group_name || null,
+      sort_order: groups.length,
+    })
+  }
+  for (const group of emptyGroups.value) {
+    if (!group.groupId || seen.has(group.groupId)) continue
+    seen.add(group.groupId)
+    groups.push({
+      group_id: group.groupId,
+      group_name: group.groupName || null,
+      sort_order: groups.length,
+    })
+  }
+  return groups
 }
 
 type DisplayRow = QuoteDisplayRow<QuoteItemResponse>
 
 const displayRows = computed<DisplayRow[]>(() => (
-  buildQuoteDisplayRows(items.value, rowKeyFor, calcSubtotal, groupColors.colorFor)
+  buildQuoteDisplayRows(items.value, rowKeyFor, calcSubtotal, groupColors.colorFor, emptyGroups.value)
 ))
 const sortableStructure = computed(() => displayRows.value.map(row => row.key).join('|'))
 
@@ -728,7 +782,39 @@ function handleDragEnd(evt: Sortable.SortableEvent) {
   const nextRows = reorderQuoteDisplayRows(rows, draggedKey, capturedDrop)
   if (nextRows === rows) return
 
-  items.value = applyQuoteDisplayOrder(nextRows)
+  const draggedRow = rows.find(row => row.key === draggedKey)
+  const nextItems = applyQuoteDisplayOrder(nextRows)
+
+  // Reordering a detail can also move it out of its original group. When the
+  // moved detail was the group's last one, retain the group header just like
+  // the delete-last-detail path does. Conversely, remove a stale empty-group
+  // marker when a detail is moved into that group.
+  if (draggedRow?.type === 'item') {
+    const previousGroupNames = new Map<string, string>()
+    for (const row of rows) {
+      if (row.type === 'group-header') previousGroupNames.set(row.groupId, row.groupName)
+    }
+
+    const nextGroupIds = new Set(
+      nextItems.map(item => item.group_id).filter((groupId): groupId is string => Boolean(groupId)),
+    )
+    const movedOutGroupIds = new Set<string>()
+    for (const [groupId, groupName] of previousGroupNames) {
+      const hadDetail = rows.some(row => row.type === 'item' && row.groupId === groupId)
+      if (hadDetail && !nextGroupIds.has(groupId)) {
+        movedOutGroupIds.add(groupId)
+        if (!emptyGroups.value.some(group => group.groupId === groupId)) {
+          emptyGroups.value.push({ groupId, groupName })
+        }
+      }
+    }
+
+    if (nextGroupIds.size || movedOutGroupIds.size) {
+      emptyGroups.value = emptyGroups.value.filter(group => !nextGroupIds.has(group.groupId))
+    }
+  }
+
+  items.value = nextItems
 }
 
 function rkKeyOf(tr: HTMLElement): string {
@@ -851,6 +937,12 @@ function onCustomerBlur() {
 async function fetchQuote() {
   quote.value = await getQuote(route.params.id as string)
   groupColors.reset()
+  const itemGroupIds = new Set(
+    (quote.value.items || []).map(item => item.group_id).filter((groupId): groupId is string => Boolean(groupId)),
+  )
+  emptyGroups.value = (quote.value.groups || [])
+    .filter(group => !itemGroupIds.has(group.group_id))
+    .map(group => ({ groupId: group.group_id, groupName: group.group_name || '' }))
   Object.assign(form, {
     customer_id: quote.value.customer_id || quote.value.customer_name || '',
     project_name: quote.value.project_name,
@@ -901,7 +993,7 @@ async function onImportItems(uploadFile: unknown) {
     let targetId = quoteId.value
     if (!isEdit.value) {
       // 新建模式：先保存报价获取 ID
-      if (!form.customer_id && !form.project_name) {
+      if (!form.customer_id || !form.project_name || !form.project_name.trim()) {
         ElMessage.warning('请先填写客户和项目名称')
         importingItems.value = false
         return
@@ -909,11 +1001,12 @@ async function onImportItems(uploadFile: unknown) {
       targetId = await saveNewAndGetId()
     }
     await importQuoteItems(targetId, file)
+    // 已自动保存+导入成功，先标记为已保存，避免路由跳转时触发“未保存修改”确认框
+    dirty.value = false
     if (!isEdit.value) {
       await router.replace(`/quotes/${targetId}/edit`)
     }
     await fetchQuote()
-    dirty.value = false
     captureCleanSnapshot()
     ElMessage.success('导入成功')
   } catch { /* handled by interceptor */ } finally {
@@ -922,6 +1015,11 @@ async function onImportItems(uploadFile: unknown) {
 }
 
 async function doCreateNewQuote(): Promise<QuoteDetailResponse> {
+  // 后端 QuoteCreate 要求 project_name 非空，提前拦截避免 422
+  if (!form.project_name || !form.project_name.trim()) {
+    ElMessage.warning('请先填写项目名称')
+    throw new Error('项目名称不能为空')
+  }
   items.value.forEach(item => calcItemSubtotal(item))
   const cleanItems = items.value.map((item, idx) => ({
     ...(item.id ? { id: item.id } : {}),
@@ -940,6 +1038,7 @@ async function doCreateNewQuote(): Promise<QuoteDetailResponse> {
     remark: item.remark || undefined,
     image_url: item.image_url || undefined,
     sort_order: idx,
+    group_id: item.group_id || undefined,
     group_name: item.group_name || null,
     material_process: item.material_process || undefined,
   }))
@@ -947,6 +1046,7 @@ async function doCreateNewQuote(): Promise<QuoteDetailResponse> {
     ...form,
     ...buildCustomerPayload(),
     items: cleanItems,
+    groups: buildGroupPayload(),
   }
   if (!payload.valid_until) delete payload.valid_until
   if (!payload.quote_date) delete payload.quote_date
@@ -987,6 +1087,7 @@ async function handleSave() {
         remark: item.remark || undefined,
         image_url: item.image_url || undefined,
         sort_order: idx,
+        group_id: item.group_id || undefined,
         group_name: item.group_name || undefined,
         material_process: item.material_process || undefined,
       }))
@@ -1002,6 +1103,7 @@ async function handleSave() {
         contact_person: form.contact_person || undefined,
         contact_phone: form.contact_phone || undefined,
         items: cleanItems,
+        groups: buildGroupPayload(),
       })
       ElMessage.success('保存成功')
       dirty.value = false
@@ -1113,6 +1215,10 @@ watch(() => route.params.id, async (newId) => {
 :deep(.ad-drag-ghost) { opacity: 0.4; }
 :deep(.ad-drag-ghost td) { background: rgba(148, 163, 184, 0.15) !important; }
 :deep(.ad-drag-chosen td) { background: rgba(var(--ad-g, 148, 163, 184), 0.25) !important; }
+
+/* 分项表头有两个操作按钮：留出完整点击区域，避免窄列裁切“删除组”。 */
+.quote-row-actions { display: flex; justify-content: center; align-items: center; gap: 4px; white-space: nowrap; }
+.quote-row-actions :deep(.el-button) { margin-left: 0; }
 </style>
 
 <style>

@@ -16,8 +16,8 @@ services:
   backup:
     volumes:
       - ./backups:/backups
-      - ./uploads:/uploads
-      - ./scripts:/scripts
+      - ./uploads:/uploads:ro
+      - ./scripts:/scripts:ro
 
 volumes:
   adcraft_data_postgres:

@@ -35,8 +35,8 @@
 
     <!-- Actions -->
     <div style="display: flex; gap: 8px; margin: 16px 0">
+      <el-button type="danger" @click="openCreate">登记成本</el-button>
       <el-button @click="openImport">导入Excel</el-button>
-      <el-button @click="openCreate">登记成本</el-button>
     </div>
 
     <!-- Filters -->
@@ -332,7 +332,7 @@
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onActivated, onDeactivated, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getProjectCosts, createProjectCost, updateProjectCost, deleteProjectCost, batchDeleteProjectCosts, importProjectCosts,
@@ -350,7 +350,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const CATEGORIES = ['人工/工时费', '材料费', '租赁费', '运输/物流费', '安装杂费', '办公费', '餐费/交通费', '差旅费', '其他']
-const PAYMENT_METHODS = ['现金支付', '微信支付', '转账支付', '对公支付', '其它支付']
+const PAYMENT_METHODS = ['现金支付', '微信支付', '支付宝转账', '转账支付', '对公支付', '其它支付']
 
 const loading = ref(false)
 const saving = ref(false)
@@ -372,6 +372,11 @@ const dialogAttachments = ref<AttachmentResponse[]>([])
 const uploadingAtt = ref(false)
 const previewVisible = ref(false)
 const previewUrl = ref('')
+
+const REFRESH_INTERVAL_MS = 15000
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+let orderRequestId = 0
+let dataRequestId = 0
 
 // Detect source type: order or quote
 const isQuote = computed(() => route.path.includes('/quote-costs/'))
@@ -509,17 +514,21 @@ function downloadTemplate() {
 }
 
 async function fetchOrder() {
+  const requestId = ++orderRequestId
   try {
     if (isQuote.value) {
       const { getQuote } = await import('@/api/quotes')
-      order.value = await getQuote(sourceId.value)
+      const latest = await getQuote(sourceId.value)
+      if (requestId === orderRequestId) order.value = latest
     } else {
-      order.value = await getOrder(sourceId.value)
+      const latest = await getOrder(sourceId.value)
+      if (requestId === orderRequestId) order.value = latest
     }
   } catch { /* ignore */ }
 }
 
 async function fetchData() {
+  const requestId = ++dataRequestId
   loading.value = true
   try {
     const params: Record<string, unknown> = {
@@ -538,10 +547,12 @@ async function fetchData() {
       params.date_to = dateRange.value[1]
     }
     const data = await getProjectCosts(params)
-    list.value = data.items
-    total.value = data.total
+    if (requestId === dataRequestId) {
+      list.value = data.items
+      total.value = data.total
+    }
   } finally {
-    loading.value = false
+    if (requestId === dataRequestId) loading.value = false
   }
 }
 
@@ -562,6 +573,7 @@ async function handleSave() {
       else payload.debt_amount = 0
       if (form.cost_date) payload.cost_date = form.cost_date
       if (form.description) payload.description = form.description
+      payload.summary = form.summary
       if (form.remark) payload.remark = form.remark
       if (form.order_item_id) payload.order_item_id = form.order_item_id
       if (form.quote_item_id) payload.quote_item_id = form.quote_item_id
@@ -577,6 +589,7 @@ async function handleSave() {
           amount: form.amount,
           cost_date: form.cost_date || undefined,
           description: form.description || undefined,
+          summary: form.summary || undefined,
           remark: form.remark || undefined,
           quote_item_id: form.quote_item_id || undefined,
           group_name: form.group_name || undefined,
@@ -596,6 +609,7 @@ async function handleSave() {
           amount: form.amount,
           cost_date: form.cost_date || undefined,
           description: form.description || undefined,
+          summary: form.summary || undefined,
           remark: form.remark || undefined,
           order_item_id: form.order_item_id || undefined,
           group_name: form.group_name || undefined,
@@ -711,10 +725,41 @@ function handlePreviewAtt(att: AttachmentResponse) {
   }
 }
 
+function refreshIfVisible() {
+  if (document.hidden || loading.value) return
+  void fetchOrder()
+  void fetchData()
+}
+
+function handleVisibilityChange() {
+  if (!document.hidden) {
+    void fetchOrder()
+    void fetchData()
+  }
+}
+
+function startAutoRefresh() {
+  if (refreshTimer) return
+  refreshTimer = setInterval(refreshIfVisible, REFRESH_INTERVAL_MS)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+}
+
 onMounted(() => {
-  fetchOrder()
-  fetchData()
+  void fetchOrder()
+  void fetchData()
+  startAutoRefresh()
 })
+onActivated(startAutoRefresh)
+onDeactivated(stopAutoRefresh)
+onUnmounted(stopAutoRefresh)
 </script>
 
 <style scoped>

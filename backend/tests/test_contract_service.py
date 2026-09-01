@@ -93,7 +93,7 @@ async def test_create_contract_links_order_ids(contract_service):
     repo.get_by_id = AsyncMock(return_value=created)
     # 隔离无关逻辑：只验证 order_ids → document_ids 的转换
     service._to_detail = MagicMock(return_value={"id": str(SAMPLE_ORDER_UUID), "total_amount": 100.0})
-    service._auto_complete_if_paid = AsyncMock()
+    service._sync_auto_status = AsyncMock()
     service._calc_paid_amount = AsyncMock(return_value=0.0)
 
     with patch(
@@ -126,7 +126,7 @@ async def test_create_contract_without_order_ids(contract_service):
     repo.create = AsyncMock(return_value=created)
     repo.get_by_id = AsyncMock(return_value=created)
     service._to_detail = MagicMock(return_value={"id": str(SAMPLE_ORDER_UUID), "total_amount": 100.0})
-    service._auto_complete_if_paid = AsyncMock()
+    service._sync_auto_status = AsyncMock()
     service._calc_paid_amount = AsyncMock(return_value=0.0)
 
     with patch(
@@ -172,7 +172,7 @@ async def test_link_orders_to_contract(contract_service):
     repo.get_by_id = AsyncMock(side_effect=[contract, contract])
     service._load_linkable_orders = AsyncMock(return_value=[SAMPLE_ORDER_UUID])
     service._add_order_as_project = AsyncMock()
-    service._auto_complete_if_paid = AsyncMock()
+    service._sync_auto_status = AsyncMock()
     service._to_detail = MagicMock(return_value={"id": str(contract.id), "total_amount": 100.0})
     service._calc_framework_total = AsyncMock(return_value=100.0)
     service._calc_paid_amount = AsyncMock(return_value=50.0)
@@ -192,7 +192,7 @@ async def test_link_orders_to_contract_no_linkable(contract_service):
     repo.get_by_id = AsyncMock(side_effect=[contract, contract])
     service._load_linkable_orders = AsyncMock(return_value=[])
     service._add_order_as_project = AsyncMock()
-    service._auto_complete_if_paid = AsyncMock()
+    service._sync_auto_status = AsyncMock()
     service._to_detail = MagicMock(return_value={"id": str(contract.id), "total_amount": 100.0})
     service._calc_framework_total = AsyncMock(return_value=100.0)
     service._calc_paid_amount = AsyncMock(return_value=0.0)
@@ -297,3 +297,43 @@ async def test_load_linkable_orders_linked_elsewhere(contract_service):
 
     with pytest.raises(ValueError):
         await service._load_linkable_orders([SAMPLE_ORDER_UUID], UUID("22222222-2222-2222-2222-222222222222"))
+
+
+# ── 自动状态：结束日期为主、收款为次 ─────────────────────────────────────
+
+def make_contract(**kw):
+    c = MagicMock()
+    c.id = kw.get("id", UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
+    c.status = kw.get("status", "active")
+    c.total_amount = kw.get("total_amount", 10000.0)
+    c.start_date = kw.get("start_date")
+    c.end_date = kw.get("end_date")
+    return c
+
+
+@pytest.mark.asyncio
+async def test_auto_status_rule(contract_service):
+    """完成 = 已收满款 且 已过结束日期（取较晚；无结束日期只看收款）。"""
+    service, repo = contract_service
+    from datetime import date as _d
+    from app.services.contract_service import _business_today
+
+    today = _business_today()
+    past = _d(today.year - 1, today.month, today.day)
+    future = _d(today.year + 1, today.month, today.day)
+
+    # 1) 已收满 + 已过结束日期 -> completed
+    assert service._auto_status_for(make_contract(end_date=past), 10000.0) == "completed"
+    # 2) 已收满但结束日期未到 -> active（结束日期为主）
+    assert service._auto_status_for(make_contract(end_date=future), 10000.0) == "active"
+    # 3) 已过结束日期但未收满 -> active（收款为次）
+    assert service._auto_status_for(make_contract(end_date=past), 5000.0) == "active"
+    # 4) 无结束日期：收满 -> completed
+    assert service._auto_status_for(make_contract(end_date=None), 10000.0) == "completed"
+    # 5) 无结束日期未收满 -> active
+    assert service._auto_status_for(make_contract(end_date=None), 5000.0) == "active"
+    # 6) 已过结束日期未收满，且已是 completed -> 回归 active
+    assert service._auto_status_for(make_contract(end_date=past, status="completed"), 5000.0) == "active"
+    # 7) 未到生效日期且未收满 -> None（保持现状）
+    c = make_contract(start_date=future, end_date=future, status="draft")
+    assert service._auto_status_for(c, 0.0) is None

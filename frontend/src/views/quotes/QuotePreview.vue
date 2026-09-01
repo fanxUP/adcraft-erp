@@ -231,6 +231,7 @@ watch(() => props.visible, async (val) => {
         status: 'draft', subtotal_amount: 0, discount_amount: 0,
         tax_rate: 0, tax_amount: 0, total_amount: 0,
         items: props.currentItems, created_at: undefined,
+        groups: [],
         department: undefined, sales_user_id: undefined, remark: undefined,
       }
     }

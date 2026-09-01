@@ -29,9 +29,7 @@ export function deleteContract(id: string) {
   return del<SuccessResponse>(`/contracts/${id}`)
 }
 
-export function changeContractStatus(id: string, data: { to_status: string; reason?: string | null }) {
-  return post<ContractDetailResponse>(`/contracts/${id}/status`, data)
-}
+// 审批功能已移除：合同状态由系统按生效/结束日期自动流转
 
 export function uploadContractAttachment(contractId: string, file: File) {
   const form = new FormData()

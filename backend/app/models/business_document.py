@@ -75,6 +75,9 @@ class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
     items: Mapped[list["BusinessDocumentItem"]] = relationship(
         back_populates="document", lazy="selectin", cascade="all, delete-orphan"
     )
+    groups: Mapped[list["BusinessDocumentGroup"]] = relationship(
+        back_populates="document", lazy="selectin", cascade="all, delete-orphan"
+    )
     status_logs: Mapped[list["BusinessDocumentStatusLog"]] = relationship(
         back_populates="document", lazy="selectin", cascade="all, delete-orphan"
     )
@@ -126,9 +129,25 @@ class BusinessDocumentItem(Base, TimestampMixin):
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     group_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    group_id: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     material_process: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
 
     document: Mapped["BusinessDocument"] = relationship(back_populates="items")
+
+
+class BusinessDocumentGroup(Base, TimestampMixin):
+    """报价/订单分项定义，独立于明细以支持暂时没有明细的空分项。"""
+    __tablename__ = "business_document_groups"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=False
+    )
+    group_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    group_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    document: Mapped["BusinessDocument"] = relationship(back_populates="groups")
 
 
 class BusinessDocumentStatusLog(Base):

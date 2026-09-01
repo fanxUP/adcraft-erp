@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.api import quotes
 from app.core.permissions import (
@@ -69,3 +70,54 @@ def test_delete_quote_uses_quote_delete_permission():
 )
 def test_quote_routes_use_business_permissions(method, path, permission):
     assert _route_permission(method, path) == permission
+
+
+@pytest.mark.asyncio
+async def test_quote_list_hides_terminal_statuses_by_default_but_allows_explicit_filter():
+    db = MagicMock()
+    current_user = MagicMock()
+
+    with patch("app.api.quotes.BusinessDocumentService") as service_class:
+        service = service_class.return_value
+        service.list_all = AsyncMock(return_value=([], 0))
+
+        await quotes.list_quotes(
+            page=1,
+            page_size=20,
+            status=None,
+            customer_id=None,
+            keyword=None,
+            date_from=None,
+            date_to=None,
+            db=db,
+            current_user=current_user,
+        )
+        service.list_all.assert_awaited_once_with(
+            1,
+            20,
+            None,
+            None,
+            keyword=None,
+            exclude_status=["converted", "cancelled"],
+        )
+
+        service.list_all.reset_mock()
+        await quotes.list_quotes(
+            page=1,
+            page_size=20,
+            status="cancelled",
+            customer_id=None,
+            keyword=None,
+            date_from=None,
+            date_to=None,
+            db=db,
+            current_user=current_user,
+        )
+        service.list_all.assert_awaited_once_with(
+            1,
+            20,
+            "cancelled",
+            None,
+            keyword=None,
+            exclude_status=None,
+        )

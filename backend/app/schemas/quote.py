@@ -2,6 +2,20 @@ from pydantic import BaseModel, Field, model_validator
 from datetime import datetime, date
 
 
+class QuoteGroupCreate(BaseModel):
+    group_id: str = Field(..., min_length=1)
+    group_name: str | None = None
+    sort_order: int = 0
+
+
+class QuoteGroupResponse(BaseModel):
+    id: str
+    quote_id: str
+    group_id: str
+    group_name: str | None = None
+    sort_order: int = 0
+
+
 class QuoteItemCreate(BaseModel):
     id: str | None = None
     product_id: str | None = None
@@ -29,6 +43,7 @@ class QuoteItemCreate(BaseModel):
     image_url: str | None = None
     sort_order: int = 0
     group_name: str | None = None
+    group_id: str | None = None
     material_process: str | None = None
 
 
@@ -58,6 +73,7 @@ class QuoteItemUpdate(BaseModel):
     image_url: str | None = None
     sort_order: int | None = None
     group_name: str | None = None
+    group_id: str | None = None
     material_process: str | None = None
 
 
@@ -91,6 +107,7 @@ class QuoteItemResponse(BaseModel):
     image_url: str | None = None
     sort_order: int = 0
     group_name: str | None = None
+    group_id: str | None = None
     material_process: str | None = None
 
     model_config = {"from_attributes": True}
@@ -110,6 +127,7 @@ class QuoteCreate(BaseModel):
     contact_person: str | None = None
     contact_phone: str | None = None
     items: list[QuoteItemCreate] = Field(default_factory=list)
+    groups: list[QuoteGroupCreate] = Field(default_factory=list)
 
     @model_validator(mode='after')
     def check_customer(self):
@@ -132,6 +150,7 @@ class QuoteUpdate(BaseModel):
     contact_person: str | None = None
     contact_phone: str | None = None
     items: list[QuoteItemCreate] | None = None
+    groups: list[QuoteGroupCreate] | None = None
 
 
 class QuoteListResponse(BaseModel):
@@ -173,5 +192,6 @@ class QuoteDetailResponse(BaseModel):
     contact_phone: str | None = None
     created_at: datetime | None = None
     items: list[QuoteItemResponse] = []
+    groups: list[QuoteGroupResponse] = []
 
     model_config = {"from_attributes": True}

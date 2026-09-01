@@ -111,7 +111,7 @@
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
 import { getQuotes, deleteQuote, previewDeleteQuote, cancelQuote, revertQuoteToDraft } from '@/api/quotes'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -137,6 +137,10 @@ const pendingDeleteQuote = ref<QuoteListResponse | null>(null)
 const deleting = ref(false)
 const deleteAssociations = ref<Array<{ label: string; count: number }>>([])
 
+const REFRESH_INTERVAL_MS = 15000
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+let fetchRequestId = 0
+
 function handlePreview(row: QuoteListResponse) {
   previewQuoteId.value = row.id
   previewVisible.value = true
@@ -153,6 +157,7 @@ function statusColor(s: string) {
 }
 
 async function fetchData() {
+  const requestId = ++fetchRequestId
   loading.value = true
   try {
     const params = {
@@ -162,9 +167,13 @@ async function fetchData() {
       ...(dateRange.value ? { date_from: dateRange.value[0], date_to: dateRange.value[1] } : {}),
     }
     const data = await getQuotes(params)
-    list.value = data.items
-    total.value = data.total
-  } finally { loading.value = false }
+    if (requestId === fetchRequestId) {
+      list.value = data.items
+      total.value = data.total
+    }
+  } finally {
+    if (requestId === fetchRequestId) loading.value = false
+  }
 }
 
 function handleSearch() {
@@ -231,7 +240,35 @@ async function confirmDelete() {
   }
 }
 
-onMounted(fetchData)
+function refreshIfVisible() {
+  if (!document.hidden && !loading.value) void fetchData()
+}
+
+function handleVisibilityChange() {
+  if (!document.hidden) void fetchData()
+}
+
+function startAutoRefresh() {
+  if (refreshTimer) return
+  refreshTimer = setInterval(refreshIfVisible, REFRESH_INTERVAL_MS)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+}
+
+onMounted(() => {
+  void fetchData()
+  startAutoRefresh()
+})
+onActivated(startAutoRefresh)
+onDeactivated(stopAutoRefresh)
+onUnmounted(stopAutoRefresh)
 </script>
 
 <style scoped>

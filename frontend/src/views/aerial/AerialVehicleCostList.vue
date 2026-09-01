@@ -91,7 +91,7 @@ const costTypes = [
   { value: 'inspection', label: '年检费' }, { value: 'violation', label: '违章罚款' }, { value: 'tire', label: '轮胎' },
   { value: 'hydraulic_system', label: '液压系统' }, { value: 'boom_repair', label: '升降臂维修' },
   { value: 'platform_repair', label: '平台维修' }, { value: 'safety_equipment', label: '安全用品' },
-  { value: 'tool_consumables', label: '工具耗材' }, { value: 'parking', label: '停车费' },
+  { value: 'tool_consumables', label: '工具耗材' }, { value: 'parking', label: '停车费' }, { value: 'toll', label: '过路费' },
   { value: 'loan', label: '贷款/月供' }, { value: 'depreciation', label: '折旧' }, { value: 'other', label: '其他' },
 ]
 

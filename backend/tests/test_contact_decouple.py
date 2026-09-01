@@ -106,7 +106,7 @@ async def test_update_order_contact_updates_and_syncs():
         repo.upsert_contact = AsyncMock()
         service = BusinessDocumentService(db, doc_type="order")
         service.repo.get_by_id = AsyncMock(return_value=doc)
-        service._to_detail = AsyncMock(return_value={})
+        service._to_detail = MagicMock(return_value={})
 
         await service.update_order_contact(doc.id, "李四", "13900139000")
 
@@ -135,7 +135,7 @@ async def test_update_order_contact_clears_when_empty():
         repo.upsert_contact = AsyncMock()
         service = BusinessDocumentService(db, doc_type="order")
         service.repo.get_by_id = AsyncMock(return_value=doc)
-        service._to_detail = AsyncMock(return_value={})
+        service._to_detail = MagicMock(return_value={})
 
         await service.update_order_contact(doc.id, "   ", "   ")
 

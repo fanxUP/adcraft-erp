@@ -1,6 +1,6 @@
 export interface QuoteGroupColorRegistry {
-  colorFor(groupName: string): number
-  rename(oldName: string, newName: string): void
+  colorFor(groupId: string): number
+  rename(oldId: string, newId: string): void
   reset(): void
 }
 
@@ -13,22 +13,22 @@ export function createQuoteGroupColorRegistry(paletteSize = 10): QuoteGroupColor
   const colors = new Map<string, number>()
   let nextColorIndex = 1
 
-  const colorFor = (groupName: string): number => {
-    const existing = colors.get(groupName)
+  const colorFor = (groupId: string): number => {
+    const existing = colors.get(groupId)
     if (existing !== undefined) return existing
 
     const assigned = nextColorIndex
-    colors.set(groupName, assigned)
+    colors.set(groupId, assigned)
     nextColorIndex = (nextColorIndex % size) + 1
     return assigned
   }
 
-  const rename = (oldName: string, newName: string): void => {
-    if (!oldName || !newName || oldName === newName) return
-    const assigned = colors.get(oldName)
+  const rename = (oldId: string, newId: string): void => {
+    if (!oldId || !newId || oldId === newId) return
+    const assigned = colors.get(oldId)
     if (assigned === undefined) return
-    colors.delete(oldName)
-    colors.set(newName, assigned)
+    colors.delete(oldId)
+    colors.set(newId, assigned)
   }
 
   const reset = (): void => {
