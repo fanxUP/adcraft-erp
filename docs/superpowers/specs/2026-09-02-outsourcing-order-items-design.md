@@ -99,19 +99,28 @@ status IN ('completed', 'settled')
 
 ### 4.1 模型变化
 
-在 `OutsourceTask` 中保留现有字段并增加关系：
+在 `OutsourceTask` 中保留现有字段并增加关系和命名索引：
 
 ```python
-order_item_id: Mapped[UUID | None] = mapped_column(
-    UUID(as_uuid=True),
-    ForeignKey("business_document_items.id", ondelete="SET NULL"),
-    nullable=True,
-    index=True,
-)
-order_item: Mapped["BusinessDocumentItem | None"] = relationship(
-    foreign_keys=[order_item_id],
-    lazy="selectin",
-)
+from sqlalchemy import Index
+
+
+class OutsourceTask(Base, TimestampMixin, SoftDeleteMixin):
+    __tablename__ = "outsource_tasks"
+
+    __table_args__ = (
+        Index("ix_outsource_order_item", "order_item_id"),
+    )
+
+    order_item_id: Mapped[UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("business_document_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    order_item: Mapped["BusinessDocumentItem | None"] = relationship(
+        foreign_keys=[order_item_id],
+        lazy="selectin",
+    )
 ```
 
 关系只在外协任务侧建立，避免为了本期展示引入不必要的反向关系和级联行为。
