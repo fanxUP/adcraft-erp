@@ -16,7 +16,11 @@ class AIModel(Base, TimestampMixin):
 
     id: Mapped[UUID] = mapped_column(PUUID, primary_key=True, default=gen_uuid)
     tenant_id: Mapped[UUID] = mapped_column(PUUID, nullable=False)
-    provider_id: Mapped[UUID] = mapped_column(PUUID, ForeignKey("ai_providers.id"), nullable=False)
+    provider_id: Mapped[UUID] = mapped_column(
+        PUUID,
+        ForeignKey("ai_providers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     upstream_model_code: Mapped[str] = mapped_column(String(300), nullable=False)
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
     model_role: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

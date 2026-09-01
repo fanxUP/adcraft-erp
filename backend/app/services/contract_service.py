@@ -1,16 +1,20 @@
 from datetime import date, datetime
 from uuid import UUID
+from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.contract_repo import ContractRepository
 from app.schemas.contract import ContractListResponse, ContractDetailResponse
 from app.services.number_generator import generate_contract_no
 from app.services.business_document_service import BusinessDocumentService
-from app.domain.workflows import CONTRACT_WORKFLOW, allowed_targets
 
 
-# 状态流转映射
-CONTRACT_TRANSITIONS = CONTRACT_WORKFLOW
+_BUSINESS_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def _business_today() -> date:
+    """业务日期：北京时间今天（服务器为 UTC，直接 date.today() 在凌晨会差一天）。"""
+    return datetime.now(_BUSINESS_TZ).date()
 
 
 class ContractService:
@@ -92,20 +96,55 @@ class ContractService:
         )
         return {row[0]: float(row[1]) for row in result.all()}
 
-    async def _auto_complete_if_paid(self, contracts: list) -> None:
-        """已收金额>=合同金额时自动将状态改为已完成"""
-        cids = [c.id for c in contracts]
-        if not cids:
-            return
-        paid_map = await self._batch_paid_amounts(cids)
+    @staticmethod
+    def _to_day(v):
+        """datetime/date 统一转 date（in-memory 新对象是 date，DB 读出是 datetime）。
+        非日期值（如 None/MagicMock）返回 None。"""
+        if isinstance(v, datetime):
+            return v.date()
+        if isinstance(v, date):
+            return v
+        return None
+
+    def _auto_status_for(self, contract, paid: float) -> str | None:
+        """按「结束日期为主、收款为次」判定目标状态：
+        - 已完成：已过结束日期 且 已收满款（无结束日期则只看收款）
+        - 已生效：已过生效日期；或曾为生效/已完成而条件不再满足时回归已生效
+        返回 None 表示维持现状。"""
+        today = _business_today()
+        end_day = self._to_day(contract.end_date)
+        start_day = self._to_day(contract.start_date)
+        total = float(contract.total_amount or 0)
+        fully_paid = total > 0 and paid >= total
+
+        # 完成判定：结束日期为主、收款为次 —— 需同时满足
+        completed = fully_paid and (end_day is None or today > end_day)
+        if completed:
+            return "completed"
+
+        # 未完成：超过生效日期则已生效（结束日期未到、或已过结束日期但未收满均归此）
+        if start_day is not None and today >= start_day:
+            return "active"
+        if contract.status in ("active", "completed"):
+            return "active"  # 保持生效中 / 条件不再满足时从已完成回归
+        return None
+
+    async def _sync_auto_status(self, contracts: list) -> bool:
+        """按「结束日期为主、收款为次」规则同步合同状态：
+        完成 = 已收满款 且 已过结束日期（取两者较晚；无结束日期只看收款）。
+        支持从 completed 回归 active（结束日期未到但已收满时）。"""
+        if not contracts:
+            return False
+        paid_map = await self._batch_paid_amounts([c.id for c in contracts])
         changed = False
         for c in contracts:
-            paid = paid_map.get(c.id, 0.0)
-            if paid >= float(c.total_amount) and float(c.total_amount) > 0 and c.status not in ("completed",):
-                c.status = "completed"
+            target = self._auto_status_for(c, paid_map.get(c.id, 0.0))
+            if target and c.status != target:
+                c.status = target
                 changed = True
         if changed:
             await self.db.flush()
+        return changed
 
     def _to_response(self, contract) -> dict:
         d = ContractListResponse.model_validate(contract).model_dump(mode="json")
@@ -136,8 +175,9 @@ class ContractService:
             skip=skip, limit=page_size, status=status, keyword=keyword, customer_id=customer_id,
             contract_type=contract_type, exclude_contract_type=exclude_contract_type,
         )
-        # Auto-complete contracts that are fully paid
-        await self._auto_complete_if_paid(contracts)
+        # 自动推进状态：超过生效/结束日期自动跳转
+        await self._sync_auto_status(contracts)
+
 
         # Batch-calculate paid_amount and framework totals for all contracts in this page
         cids = [c.id for c in contracts]
@@ -260,8 +300,8 @@ class ContractService:
             for oid in linkable:
                 await self._add_order_as_project(contract, oid)
         contract = await self.repo.get_by_id(contract.id)
-        # Auto-complete if fully paid
-        await self._auto_complete_if_paid([contract])
+        # 自动推进状态
+        await self._sync_auto_status([contract])
         result = self._to_detail(contract)
         result["total_amount"] = await self._calc_framework_total(contract.id)
         result["paid_amount"] = await self._calc_paid_amount(contract.id)
@@ -295,8 +335,8 @@ class ContractService:
         contract = await self.repo.get_by_id(contract_id)
         if not contract:
             return None
-        # Auto-complete if fully paid
-        await self._auto_complete_if_paid([contract])
+        # 自动推进状态
+        await self._sync_auto_status([contract])
         result = self._to_detail(contract)
         # 所有合同：金额 = 子项目合计（无子项目则用合同自身金额）
         proj_total = await self._calc_framework_total(contract_id)
@@ -333,8 +373,8 @@ class ContractService:
         contract = await self.repo.create(data)
         # Re-fetch to load secondary relationships (documents)
         contract = await self.repo.get_by_id(contract.id)
-        # Auto-complete if fully paid
-        await self._auto_complete_if_paid([contract])
+        # 自动推进状态：超过生效/结束日期自动跳转
+        await self._sync_auto_status([contract])
         result = self._to_detail(contract)
         result["paid_amount"] = await self._calc_paid_amount(contract.id)
         result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
@@ -364,8 +404,8 @@ class ContractService:
         contract = await self.repo.update(contract, data)
         # Re-fetch to load secondary relationships after updates
         contract = await self.repo.get_by_id(contract.id)
-        # Auto-complete if fully paid
-        await self._auto_complete_if_paid([contract])
+        # 自动推进状态：修改日期后按新日期重新判定
+        await self._sync_auto_status([contract])
         result = self._to_detail(contract)
         result["paid_amount"] = await self._calc_paid_amount(contract_id)
         result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
@@ -386,18 +426,3 @@ class ContractService:
             return False
         await self.repo.soft_delete(contract)
         return True
-
-    async def change_status(self, contract_id: UUID, to_status: str, reason: str | None = None) -> dict:
-        contract = await self.repo.get_by_id(contract_id)
-        if not contract:
-            raise ValueError("合同不存在")
-
-        allowed = allowed_targets(CONTRACT_TRANSITIONS, contract.status)
-        if to_status not in allowed:
-            raise ValueError(f"合同状态不允许从「{contract.status}」变更为「{to_status}」")
-
-        contract.status = to_status
-        await self.db.flush()
-        # Re-fetch to load secondary relationships
-        contract = await self.repo.get_by_id(contract.id)
-        return self._to_detail(contract)

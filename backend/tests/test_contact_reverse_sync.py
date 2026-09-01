@@ -88,7 +88,7 @@ async def test_quote_create_syncs_contact_to_customer():
         service.repo.create = AsyncMock(return_value=doc)
         service._calculate_quote = AsyncMock()
         service._sync_customer_agreements = AsyncMock()
-        service._to_detail = AsyncMock(return_value={})
+        service._to_detail = MagicMock(return_value={})
 
         await service.create({
             "customer_id": str(doc.customer_id),
@@ -120,7 +120,7 @@ async def test_quote_update_syncs_contact_to_customer():
         service.repo.get_items = AsyncMock(return_value=[])
         service._calculate_quote = AsyncMock()
         service._sync_customer_agreements = AsyncMock()
-        service._to_detail = AsyncMock(return_value={})
+        service._to_detail = MagicMock(return_value={})
 
         await service.update(doc.id, {
             "project_name": "测试报价",
@@ -150,7 +150,7 @@ async def test_quote_create_without_customer_skips_sync():
         service.repo.create = AsyncMock(return_value=doc)
         service._calculate_quote = AsyncMock()
         service._sync_customer_agreements = AsyncMock()
-        service._to_detail = AsyncMock(return_value={})
+        service._to_detail = MagicMock(return_value={})
 
         await service.create({
             "customer_name": "自由输入客户",

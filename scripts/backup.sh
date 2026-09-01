@@ -3,7 +3,11 @@
 # Usage: ./scripts/backup.sh
 # Creates a database-only backup archive.
 
-set -e
+set -euo pipefail
+# Backups are private to the application account and its service group. The
+# group bit is needed when the scheduled backup runs as root while the API
+# lists/downloads the resulting archive as adcraft.
+umask 007
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
@@ -16,6 +20,7 @@ BACKUP_FILE="${BACKUP_DIR}/${BACKUP_NAME}.tar.gz"
 RETENTION_DAYS=14
 
 mkdir -p "$BACKUP_DIR"
+chmod 2770 "$BACKUP_DIR"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting backup..."
 
@@ -31,6 +36,7 @@ echo "  -> Database dump size: $(du -h "${BACKUP_DIR}/${BACKUP_NAME}.sql" | cut 
 # backups.
 echo "  -> Archiving database dump only..."
 tar -czf "$BACKUP_FILE" -C "$BACKUP_DIR" "${BACKUP_NAME}.sql"
+chmod 660 "$BACKUP_FILE"
 
 # 3. Clean up temporary SQL dump
 rm -f "${BACKUP_DIR}/${BACKUP_NAME}.sql"

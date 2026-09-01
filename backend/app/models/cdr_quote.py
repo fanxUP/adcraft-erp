@@ -294,11 +294,11 @@ class QuoteGeometry(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     quote_line_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("quote_lines.id"), nullable=True, unique=True,
+        UUID(as_uuid=True), ForeignKey("quote_lines.id", ondelete="SET NULL"), nullable=True, unique=True,
         comment="关联报价明细行"
     )
     quote_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=True,
+        UUID(as_uuid=True), ForeignKey("business_documents.id", ondelete="SET NULL"), nullable=True,
         comment="关联报价 header（便于查询）"
     )
 

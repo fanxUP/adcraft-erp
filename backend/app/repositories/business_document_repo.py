@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 from app.models.business_document import (
     BusinessDocument,
     BusinessDocumentItem,
+    BusinessDocumentGroup,
     BusinessDocumentStatusLog,
     BusinessDocumentVersion,
 )
@@ -30,6 +31,7 @@ class BusinessDocumentRepository:
     async def get_by_id(self, doc_id: UUID) -> BusinessDocument | None:
         q = select(BusinessDocument).options(
             selectinload(BusinessDocument.items),
+            selectinload(BusinessDocument.groups),
             selectinload(BusinessDocument.status_logs),
             selectinload(BusinessDocument.customer),
             selectinload(BusinessDocument.design_tasks),
@@ -49,6 +51,7 @@ class BusinessDocumentRepository:
     async def get_deleted_by_id(self, doc_id: UUID) -> BusinessDocument | None:
         q = select(BusinessDocument).options(
             selectinload(BusinessDocument.items),
+            selectinload(BusinessDocument.groups),
             selectinload(BusinessDocument.status_logs),
             selectinload(BusinessDocument.customer),
             selectinload(BusinessDocument.design_tasks),
@@ -70,7 +73,7 @@ class BusinessDocumentRepository:
         status: str | None = None,
         customer_id: UUID | None = None,
         keyword: str | None = None,
-        exclude_status: str | None = None,
+        exclude_status: str | list[str] | tuple[str, ...] | None = None,
     ) -> tuple[list[BusinessDocument], int]:
         """列出所有活跃单据，支持 doc_type 过滤。"""
         q = select(BusinessDocument).options(
@@ -83,7 +86,12 @@ class BusinessDocumentRepository:
         if status:
             q = q.where(BusinessDocument.status == status)
         if exclude_status:
-            q = q.where(BusinessDocument.status != exclude_status)
+            excluded_statuses = (
+                [exclude_status]
+                if isinstance(exclude_status, str)
+                else list(exclude_status)
+            )
+            q = q.where(BusinessDocument.status.notin_(excluded_statuses))
         if customer_id:
             q = q.where(BusinessDocument.customer_id == customer_id)
         if keyword:
@@ -121,21 +129,28 @@ class BusinessDocumentRepository:
 
     async def create(self, data: dict) -> BusinessDocument:
         items_data = data.pop("items", [])
+        groups_data = data.pop("groups", [])
         doc = BusinessDocument(**data)
         self.db.add(doc)
         await self.db.flush()
+
+        for idx, group in enumerate(groups_data):
+            group.setdefault("sort_order", idx)
+            group["document_id"] = doc.id
+            self.db.add(BusinessDocumentGroup(**group))
 
         for idx, item in enumerate(items_data):
             item.setdefault("sort_order", idx)
             item["document_id"] = doc.id
             self.db.add(BusinessDocumentItem(**item))
-        if items_data:
+        if items_data or groups_data:
             await self.db.flush()
 
         return doc
 
     async def update(self, doc: BusinessDocument, data: dict) -> BusinessDocument:
         items_data = data.pop("items", None)
+        groups_data = data.pop("groups", None)
         for k, v in data.items():
             if v is not None:
                 setattr(doc, k, v)
@@ -170,6 +185,21 @@ class BusinessDocumentRepository:
                 item.pop("id", None)
                 self.db.add(BusinessDocumentItem(**item))
 
+        if groups_data is not None:
+            existing_groups = (await self.db.execute(
+                select(BusinessDocumentGroup).where(
+                    BusinessDocumentGroup.document_id == doc.id
+                )
+            )).scalars().all()
+            for old_group in existing_groups:
+                await self.db.delete(old_group)
+            await self.db.flush()
+            for idx, group in enumerate(groups_data):
+                group.setdefault("sort_order", idx)
+                group["document_id"] = doc.id
+                group.pop("id", None)
+                self.db.add(BusinessDocumentGroup(**group))
+
         await self.db.flush()
         return doc
 
@@ -188,6 +218,14 @@ class BusinessDocumentRepository:
             select(BusinessDocumentItem)
             .where(BusinessDocumentItem.document_id == doc_id)
             .order_by(BusinessDocumentItem.sort_order)
+        )
+        return list(result.scalars().all())
+
+    async def get_groups(self, doc_id: UUID) -> list[BusinessDocumentGroup]:
+        result = await self.db.execute(
+            select(BusinessDocumentGroup)
+            .where(BusinessDocumentGroup.document_id == doc_id)
+            .order_by(BusinessDocumentGroup.sort_order, BusinessDocumentGroup.created_at)
         )
         return list(result.scalars().all())
 

@@ -6,8 +6,9 @@ Designed for admin users only.
 
 import asyncio
 import logging
-import os
+import re
 import subprocess
+import tarfile
 from datetime import datetime
 from pathlib import Path
 
@@ -30,6 +31,57 @@ BACKUP_DIR = PROJECT_DIR / "backups"
 SCRIPTS_DIR = PROJECT_DIR / "scripts"
 BACKUP_SCRIPT = SCRIPTS_DIR / "backup.sh"
 RESTORE_SCRIPT = SCRIPTS_DIR / "restore.sh"
+BACKUP_FILENAME_RE = re.compile(r"^backup_(?P<date>\d{8})_(?P<time>\d{6})\.tar\.gz$")
+MAX_BACKUP_UPLOAD_BYTES = 50 * 1024 * 1024
+
+
+def _is_valid_backup_filename(filename: str) -> bool:
+    """Accept only backup files produced by the backup script."""
+    match = BACKUP_FILENAME_RE.fullmatch(filename)
+    if not match:
+        return False
+    try:
+        datetime.strptime(f"{match['date']}_{match['time']}", "%Y%m%d_%H%M%S")
+    except ValueError:
+        return False
+    return True
+
+
+def _safe_backup_path(filename: str) -> Path | None:
+    """Resolve an existing backup without following user-controlled paths."""
+    if not _is_valid_backup_filename(filename):
+        return None
+
+    backup_dir = BACKUP_DIR.resolve()
+    candidate = BACKUP_DIR / filename
+    if candidate.is_symlink():
+        return None
+    try:
+        resolved = candidate.resolve(strict=True)
+    except (FileNotFoundError, OSError, RuntimeError):
+        return None
+
+    if not resolved.is_file() or resolved.parent != backup_dir:
+        return None
+    return resolved
+
+
+def _validate_backup_archive(path: Path) -> str | None:
+    """Validate the archive shape before it can reach the restore script."""
+    expected_sql = f"{path.name.removesuffix('.tar.gz')}.sql"
+    try:
+        with tarfile.open(path, mode="r:gz") as archive:
+            members = archive.getmembers()
+    except (OSError, tarfile.TarError) as exc:
+        return f"备份压缩包无法读取: {exc}"
+
+    if len(members) != 1:
+        return "备份压缩包必须且只能包含一个数据库 SQL 文件"
+
+    member = members[0]
+    if member.name != expected_sql or not member.isfile() or member.issym() or member.islnk():
+        return "备份压缩包内容不符合数据库备份格式"
+    return None
 
 
 def _format_size(size_bytes: int) -> str:
@@ -46,25 +98,26 @@ def _get_backups() -> list[dict]:
     if not BACKUP_DIR.exists():
         return []
 
-    backups: list[dict] = []
-    for f in sorted(BACKUP_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-        if f.name.endswith(".tar.gz") and f.name.startswith("backup_"):
-            stat = f.stat()
-            # Parse timestamp from filename: backup_20260629_020000.tar.gz
-            ts_str = f.name.replace("backup_", "").replace(".tar.gz", "")
-            created_at = None
-            try:
-                created_at = datetime.strptime(ts_str, "%Y%m%d_%H%M%S").isoformat()
-            except ValueError:
-                created_at = datetime.fromtimestamp(stat.st_mtime).isoformat()
+    backups: list[tuple[float, dict]] = []
+    for f in BACKUP_DIR.iterdir():
+        if not _is_valid_backup_filename(f.name):
+            continue
+        safe_path = _safe_backup_path(f.name)
+        if safe_path is None:
+            continue
+        try:
+            stat = safe_path.stat()
+        except OSError:
+            continue
 
-            backups.append({
-                "filename": f.name,
-                "size": stat.st_size,
-                "size_display": _format_size(stat.st_size),
-                "created_at": created_at,
-            })
-    return backups
+        ts_str = f.name.removeprefix("backup_").removesuffix(".tar.gz")
+        backups.append((stat.st_mtime, {
+            "filename": f.name,
+            "size": stat.st_size,
+            "size_display": _format_size(stat.st_size),
+            "created_at": datetime.strptime(ts_str, "%Y%m%d_%H%M%S").isoformat(),
+        }))
+    return [backup for _, backup in sorted(backups, key=lambda item: item[0], reverse=True)]
 
 
 @router.post("/create")
@@ -133,9 +186,14 @@ async def restore_backup(
     if not RESTORE_SCRIPT.exists():
         return error(50001, f"恢复脚本不存在: {RESTORE_SCRIPT}")
 
-    backup_path = BACKUP_DIR / filename
-    if not backup_path.exists():
+    if not _is_valid_backup_filename(filename):
+        return error(40001, "非法备份文件名")
+    backup_path = _safe_backup_path(filename)
+    if backup_path is None:
         return error(40401, f"备份文件不存在: {filename}")
+    archive_error = _validate_backup_archive(backup_path)
+    if archive_error:
+        return error(40002, archive_error)
 
     try:
         # Terminate all other database connections and dispose pool BEFORE
@@ -190,8 +248,10 @@ async def delete_backup(
     current_user: User = Depends(require_permission(PERM_BACKUP_DELETE)),
 ):
     """Delete a specific backup file."""
-    backup_path = BACKUP_DIR / filename
-    if not backup_path.exists():
+    if not _is_valid_backup_filename(filename):
+        return error(40001, "非法备份文件名")
+    backup_path = _safe_backup_path(filename)
+    if backup_path is None:
         return error(40401, f"备份文件不存在: {filename}")
 
     try:
@@ -208,12 +268,10 @@ async def export_backup(
     current_user: User = Depends(require_permission(PERM_BACKUP_READ)),
 ):
     """Download a backup file to the browser."""
-    # Prevent path traversal
-    if ".." in filename or "/" in filename or "\\" in filename:
-        return error(40001, "非法文件名")
-
-    backup_path = BACKUP_DIR / filename
-    if not backup_path.exists():
+    if not _is_valid_backup_filename(filename):
+        return error(40001, "非法备份文件名")
+    backup_path = _safe_backup_path(filename)
+    if backup_path is None:
         return error(40401, f"备份文件不存在: {filename}")
 
     return FileResponse(
@@ -229,11 +287,10 @@ async def import_backup(
     current_user: User = Depends(require_permission(PERM_BACKUP_CREATE)),
 ):
     """Upload a backup file (.tar.gz) to the server."""
-    if not file.filename or not file.filename.endswith(".tar.gz"):
-        return error(40001, "仅支持 .tar.gz 格式的备份文件")
+    if not file.filename or not _is_valid_backup_filename(file.filename):
+        return error(40001, "仅支持 backup_YYYYMMDD_HHMMSS.tar.gz 格式的备份文件")
 
-    # Prevent path traversal
-    safe_name = file.filename.replace("/", "_").replace("\\", "_").replace("..", "_")
+    safe_name = file.filename
     dest = BACKUP_DIR / safe_name
 
     if dest.exists():
@@ -241,16 +298,22 @@ async def import_backup(
 
     try:
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        content = await file.read()
-        dest.write_bytes(content)
+        total_size = 0
+        with dest.open("xb") as output_file:
+            while chunk := await file.read(1024 * 1024):
+                total_size += len(chunk)
+                if total_size > MAX_BACKUP_UPLOAD_BYTES:
+                    raise ValueError("备份文件超过 50 MB 限制")
+                output_file.write(chunk)
+
+        archive_error = _validate_backup_archive(dest)
+        if archive_error:
+            dest.unlink(missing_ok=True)
+            return error(40002, archive_error)
 
         stat = dest.stat()
-        ts_str = safe_name.replace("backup_", "").replace(".tar.gz", "")
-        created_at = None
-        try:
-            created_at = datetime.strptime(ts_str, "%Y%m%d_%H%M%S").isoformat()
-        except ValueError:
-            created_at = datetime.fromtimestamp(stat.st_mtime).isoformat()
+        ts_str = safe_name.removeprefix("backup_").removesuffix(".tar.gz")
+        created_at = datetime.strptime(ts_str, "%Y%m%d_%H%M%S").isoformat()
 
         return success({
             "message": "导入完成",
@@ -261,6 +324,12 @@ async def import_backup(
                 "created_at": created_at,
             },
         })
+    except ValueError as e:
+        if dest.is_file() and not dest.is_symlink():
+            dest.unlink(missing_ok=True)
+        return error(40003, str(e))
     except Exception as e:
+        if dest.is_file() and not dest.is_symlink():
+            dest.unlink(missing_ok=True)
         logger.exception("Backup import failed: %s", e)
         return error(50004, f"导入失败: {str(e)}")

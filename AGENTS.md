@@ -22,7 +22,8 @@ brew services start postgresql@16
 brew services start redis
 
 # 2. 创建数据库（仅首次）
-psql -U postgres -c "CREATE USER adcraft WITH PASSWORD 'adcraft_dev_password';"
+# 使用本地密码管理器生成并填入唯一密码，不要把密码写入仓库或命令历史。
+psql -U postgres -c "CREATE USER adcraft WITH PASSWORD '<set-a-local-password>';"
 psql -U postgres -c "CREATE DATABASE adcraft_erp OWNER adcraft;"
 
 # 3. 后端
@@ -58,7 +59,7 @@ cd frontend && node node_modules/vite/bin/vite.js --host 0.0.0.0 --port 5173
 | 前端页面 | http://localhost:5173 |
 | 后端 API | http://localhost:8000/api/v1 |
 | API 文档 | http://localhost:8000/api/docs |
-| 管理员登录 | admin / admin123（首次登录后请修改） |
+| 管理员登录 | admin / 由 `ADMIN_INIT_PASSWORD` 设置的密码（不会提供默认密码） |
 
 ### pip 安装问题处理
 
@@ -168,10 +169,10 @@ volumes:
 
 ### 数据备份
 
-系统每日凌晨 02:00 自动备份到 `backups/` 目录。手动恢复方式：
+系统每日凌晨 02:00 自动备份到 `backups/` 目录。手动恢复时必须通过带有文件名、路径和归档成员校验的恢复脚本：
 
 ```bash
-docker exec -i adcraft_postgres psql -U adcraft -d adcraft_erp < backups/backup_xxx.sql
+./scripts/restore.sh backup_YYYYMMDD_HHMMSS.tar.gz
 ```
 
 ## ⚠️ 数据安全 — 常见事故与预防
@@ -220,11 +221,6 @@ docker ps --format "table {{.Names}}\t{{.Status}}"
 ### 紧急恢复数据
 
 ```bash
-# 从自动备份恢复（压缩包内含 SQL 与 uploads）
-tar -xOf backups/backup_YYYYMMDD_020000.tar.gz backup_YYYYMMDD_020000.sql \
-  | docker exec -i adcraft_postgres psql -U adcraft -d adcraft_erp
-
-# 从手动备份恢复
-tar -xOf backups/manual_backup_YYYYMMDD_HHMMSS.tar.gz manual_backup_YYYYMMDD_HHMMSS.sql \
-  | docker exec -i adcraft_postgres psql -U adcraft -d adcraft_erp
+# 恢复前先停止后端服务，脚本会校验文件名、路径和压缩包内唯一 SQL 成员
+./scripts/restore.sh backup_YYYYMMDD_HHMMSS.tar.gz
 ```

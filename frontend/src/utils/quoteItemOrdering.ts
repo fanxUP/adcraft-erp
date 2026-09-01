@@ -1,57 +1,72 @@
 export interface QuoteOrderItem {
+  group_id?: string | null
   group_name?: string | null
+}
+
+export interface QuoteEmptyGroup {
+  groupId: string
+  groupName?: string | null
 }
 
 export function isDuplicateQuoteGroupName<T extends QuoteOrderItem>(
   items: T[],
-  currentName: string,
+  currentGroupId: string,
   candidateName: string,
 ): boolean {
-  return currentName !== candidateName && items.some(item => item.group_name === candidateName)
+  if (!candidateName) return false
+  return currentGroupId
+    ? items.some(item => item.group_name === candidateName && item.group_id !== currentGroupId)
+    : items.some(item => item.group_name === candidateName)
 }
 
 export type QuoteDisplayRow<T extends QuoteOrderItem> =
-  | { type: 'group-header'; groupName: string; gi: number; colorIndex: number; key: string }
-  | { type: 'item'; item: T; groupName: string; gi: number; colorIndex: number; key: string }
-  | { type: 'group-total'; groupName: string; total: number; gi: number; colorIndex: number; key: string }
+  | { type: 'group-header'; groupId: string; groupName: string; gi: number; colorIndex: number; key: string }
+  | { type: 'item'; item: T; groupId: string; groupName: string; gi: number; colorIndex: number; key: string }
+  | { type: 'group-total'; groupId: string; groupName: string; total: number; gi: number; colorIndex: number; key: string }
 
 export function buildQuoteDisplayRows<T extends QuoteOrderItem>(
   items: T[],
   keyFor: (item: T) => string,
   subtotalFor: (item: T) => number,
-  groupColorFor?: (groupName: string) => number,
+  groupColorFor?: (groupId: string) => number,
+  emptyGroups: QuoteEmptyGroup[] = [],
 ): QuoteDisplayRow<T>[] {
   const grouped = new Map<string, T[]>()
+  const groupNames = new Map<string, string>()
 
   for (const item of items) {
-    if (item.group_name) {
-      if (!grouped.has(item.group_name)) grouped.set(item.group_name, [])
-      grouped.get(item.group_name)!.push(item)
+    const gid = item.group_id
+    if (gid) {
+      if (!grouped.has(gid)) {
+        grouped.set(gid, [])
+        groupNames.set(gid, item.group_name || '')
+      }
+      grouped.get(gid)!.push(item)
     }
+  }
+
+  // A group can temporarily remain after its last detail is deleted. Keep it
+  // in the display model without manufacturing an empty detail row.
+  for (const group of emptyGroups) {
+    if (!group.groupId || grouped.has(group.groupId)) continue
+    grouped.set(group.groupId, [])
+    groupNames.set(group.groupId, group.groupName || '')
   }
 
   const rows: QuoteDisplayRow<T>[] = []
   const emittedGroups = new Set<string>()
   let groupIndex = 0
-  for (const item of items) {
-    const groupName = item.group_name
-    if (!groupName) {
-      rows.push({ type: 'item', item, groupName: '', gi: -1, colorIndex: 0, key: keyFor(item) })
-      continue
-    }
-    if (emittedGroups.has(groupName)) continue
-
-    const groupItems = grouped.get(groupName)!
-    emittedGroups.add(groupName)
-    // 分项至少有一个占位明细，用首条明细的稳定 key 标识表头/合计，避免排序后 DOM key 串组。
-    const groupKey = keyFor(groupItems[0])
-    const colorIndex = groupColorFor?.(groupName) ?? ((groupIndex % 5) + 1)
-    rows.push({ type: 'group-header', groupName, gi: groupIndex, colorIndex, key: `gh-${groupKey}` })
+  const appendGroup = (groupId: string, groupItems: T[], groupName: string, groupKey: string) => {
+    if (emittedGroups.has(groupId)) return
+    emittedGroups.add(groupId)
+    const colorIndex = groupColorFor?.(groupId) ?? ((groupIndex % 5) + 1)
+    rows.push({ type: 'group-header', groupId, groupName, gi: groupIndex, colorIndex, key: `gh-${groupKey}` })
     for (const item of groupItems) {
-      rows.push({ type: 'item', item, groupName, gi: groupIndex, colorIndex, key: keyFor(item) })
+      rows.push({ type: 'item', item, groupId, groupName, gi: groupIndex, colorIndex, key: keyFor(item) })
     }
     rows.push({
       type: 'group-total',
+      groupId,
       groupName,
       total: groupItems.reduce((sum, item) => sum + subtotalFor(item), 0),
       gi: groupIndex,
@@ -59,6 +74,24 @@ export function buildQuoteDisplayRows<T extends QuoteOrderItem>(
       key: `gt-${groupKey}`,
     })
     groupIndex++
+  }
+
+  for (const item of items) {
+    const gid = item.group_id
+    if (!gid) {
+      rows.push({ type: 'item', item, groupId: '', groupName: '', gi: -1, colorIndex: 0, key: keyFor(item) })
+      continue
+    }
+    if (emittedGroups.has(gid)) continue
+
+    const groupItems = grouped.get(gid)!
+    const groupName = groupNames.get(gid) || ''
+    appendGroup(gid, groupItems, groupName, keyFor(groupItems[0]))
+  }
+
+  for (const group of emptyGroups) {
+    if (!group.groupId || emittedGroups.has(group.groupId)) continue
+    appendGroup(group.groupId, [], group.groupName || '', `empty-${group.groupId}`)
   }
   return rows
 }
@@ -72,15 +105,11 @@ export function getQuoteGroupBlock<T extends QuoteOrderItem>(
   const end = rows.findIndex((row, index) => (
     index > headerIndex
     && row.type === 'group-total'
-    && row.groupName === header.groupName
+    && row.groupId === header.groupId
   ))
   return rows.slice(headerIndex, end >= 0 ? end + 1 : rows.length)
 }
 
-/**
- * 将整组拖拽的悬停行转换成合法分项边界。
- * 表头表示放到目标分项前；明细/合计表示放到目标分项完整结束后。
- */
 export function getQuoteGroupDropSuccessorKey<T extends QuoteOrderItem>(
   rows: QuoteDisplayRow<T>[],
   draggedHeaderKey: string,
@@ -103,7 +132,7 @@ export function getQuoteGroupDropSuccessorKey<T extends QuoteOrderItem>(
       : rows.findIndex((row, index) => (
           index > relatedIndex
           && row.type === 'group-total'
-          && row.groupName === related.groupName
+          && row.groupId === related.groupId
         ))
     return rows[totalIndex + 1]?.key ?? null
   }
@@ -111,10 +140,6 @@ export function getQuoteGroupDropSuccessorKey<T extends QuoteOrderItem>(
   return willInsertAfter ? (rows[relatedIndex + 1]?.key ?? null) : related.key
 }
 
-/**
- * 将光标悬停行转换成响应式数据的插入后继行。
- * 整组拖拽吸附到完整分项边界；单条明细保留精确的行前/行后落点。
- */
 export function getQuoteDropSuccessorKey<T extends QuoteOrderItem>(
   rows: QuoteDisplayRow<T>[],
   draggedKey: string,
@@ -146,10 +171,6 @@ function groupBoundaryIndex<T extends QuoteOrderItem>(
   return index < rows.length ? index + 1 : rows.length
 }
 
-/**
- * 根据拖拽行和它落位后的下一行重新排列展示行。
- * 分项表头代表整个分项；落入其他分项内部时吸附到该分项之后，避免拆散任一分项。
- */
 export function reorderQuoteDisplayRows<T extends QuoteOrderItem>(
   rows: QuoteDisplayRow<T>[],
   draggedKey: string,
@@ -174,15 +195,22 @@ export function reorderQuoteDisplayRows<T extends QuoteOrderItem>(
   return [...rest.slice(0, successorIndex), dragged, ...rest.slice(successorIndex)]
 }
 
-/** 将展示顺序写回明细，分项表头/合计只作为边界，不进入保存数据。 */
 export function applyQuoteDisplayOrder<T extends QuoteOrderItem>(rows: QuoteDisplayRow<T>[]): T[] {
   const items: T[] = []
-  let currentGroup: string | undefined
+  let currentGroupId: string | undefined
+  let currentGroupName: string | undefined
   for (const row of rows) {
-    if (row.type === 'group-header') currentGroup = row.groupName
-    else if (row.type === 'group-total') currentGroup = undefined
+    if (row.type === 'group-header') {
+      currentGroupId = row.groupId
+      currentGroupName = row.groupName
+    }
+    else if (row.type === 'group-total') {
+      currentGroupId = undefined
+      currentGroupName = undefined
+    }
     else {
-      row.item.group_name = currentGroup
+      row.item.group_id = currentGroupId
+      row.item.group_name = currentGroupName
       items.push(row.item)
     }
   }

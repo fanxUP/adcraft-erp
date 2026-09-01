@@ -15,12 +15,12 @@ from uuid import uuid4
 # Ensure the backend root is on sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import engine, async_session_maker
 from app.models.user import Role, Permission, User, user_roles
-from app.utils.security import hash_password, verify_password
+from app.utils.security import hash_password
 
 
 ROLES = [
@@ -32,19 +32,17 @@ ROLES = [
     {"name": "finance", "description": "财务人员，管理收款和对账"},
 ]
 
-# 初始管理员密码：优先取环境变量 ADMIN_INIT_PASSWORD，默认 admin123（首次登录后请立即修改）
-_ADMIN_INIT_PASSWORD = os.environ.get("ADMIN_INIT_PASSWORD", "admin123")
-ADMIN_USER = {
-    "username": "admin",
-    "password": _ADMIN_INIT_PASSWORD,
-    "real_name": "系统管理员",
-}
+# A new administrator may only be created when an operator explicitly
+# provides the bootstrap password. Never ship or log a known default.
+_ADMIN_INIT_PASSWORD = os.environ.get("ADMIN_INIT_PASSWORD")
+ADMIN_USERNAME = "admin"
+ADMIN_REAL_NAME = "系统管理员"
 
 
 async def init_app():
     """Run all seed operations idempotently."""
-    if not os.environ.get("ADMIN_INIT_PASSWORD"):
-        print("  !!! 未设置 ADMIN_INIT_PASSWORD，初始管理员密码为默认值 admin123，请部署后立即修改")
+    if not _ADMIN_INIT_PASSWORD:
+        print("  ⚠ 未设置 ADMIN_INIT_PASSWORD；已有管理员保持不变，不会创建默认密码账户")
     async with async_session_maker() as session:
         # 1. Seed roles
         existing_roles: dict[str, Role] = {}
@@ -68,29 +66,30 @@ async def init_app():
 
         # 2. Seed admin user
         result = await session.execute(
-            select(User).where(User.username == ADMIN_USER["username"])
+            select(User).where(User.username == ADMIN_USERNAME)
         )
         admin_user = result.scalar_one_or_none()
         if not admin_user:
-            admin_user = User(
-                id=uuid4(),
-                username=ADMIN_USER["username"],
-                password_hash=hash_password(ADMIN_USER["password"]),
-                real_name=ADMIN_USER["real_name"],
-                is_active=True,
-                # 仅首次创建时标记强制改密；之后用户无论把密码改成什么
-                # （哪怕恰好等于默认值 admin123），重启都不会再被强制改密
-                must_change_password=True,
-            )
-            session.add(admin_user)
-            await session.flush()
-            print(f"  + Admin user created: {ADMIN_USER['username']}")
+            if _ADMIN_INIT_PASSWORD:
+                admin_user = User(
+                    id=uuid4(),
+                    username=ADMIN_USERNAME,
+                    password_hash=hash_password(_ADMIN_INIT_PASSWORD),
+                    real_name=ADMIN_REAL_NAME,
+                    is_active=True,
+                    must_change_password=True,
+                )
+                session.add(admin_user)
+                await session.flush()
+                print(f"  + Admin user created: {ADMIN_USERNAME} (bootstrap password is not logged)")
+            else:
+                print("  ⚠ 未找到管理员，需设置 ADMIN_INIT_PASSWORD 后重新初始化")
         else:
-            print(f"  ✓ Admin user exists: {ADMIN_USER['username']}")
+            print(f"  ✓ Admin user exists: {ADMIN_USERNAME}")
 
         # 3. Assign admin role to admin user
         admin_role = roles_by_name.get("admin")
-        if admin_role:
+        if admin_role and admin_user:
             # Check via explicit query to avoid lazy-load in async context
             result = await session.execute(
                 select(user_roles).where(
@@ -146,7 +145,8 @@ async def init_app():
         print(f"\n🎉 Initialization complete!")
         for name, count in role_counts.items():
             print(f"  → {name}: {count} permissions")
-        print(f"  → Admin login: {ADMIN_USER['username']} / {ADMIN_USER['password']}")
+        if admin_user:
+            print(f"  → Admin user ready: {ADMIN_USERNAME} (password omitted from logs)")
 
 
 async def main():

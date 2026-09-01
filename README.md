@@ -12,11 +12,11 @@
 
 ```bash
 cp config/env.example .env
-# 编辑 .env，修改 SECRET_KEY 和数据库密码
+# 编辑 .env，设置 SECRET_KEY、ADMIN_INIT_PASSWORD、数据库密码和 MinIO 密码
 docker compose up -d
 ```
 
-访问 http://localhost | 默认管理员：admin / admin123（首次登录后请立即修改密码）
+访问 http://localhost。首次启动是否创建管理员由 `.env` 中显式设置的 `ADMIN_INIT_PASSWORD` 决定，项目不提供默认管理员密码。
 
 ## 前端开发
 

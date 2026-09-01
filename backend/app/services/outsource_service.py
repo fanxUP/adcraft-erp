@@ -54,10 +54,11 @@ class OutsourceService:
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          vendor_id: UUID | None = None, related_doc_id: UUID | None = None,
-                         source_task_type: str | None = None, source_task_id: UUID | None = None) -> tuple[list, int]:
+                         source_task_type: str | None = None, source_task_id: UUID | None = None,
+                         task_type: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
         tasks, total = await self.task_repo.list_tasks(skip, page_size, status, vendor_id, related_doc_id,
-                                                       source_task_type, source_task_id)
+                                                       source_task_type, source_task_id, task_type)
         result = []
         for t in tasks:
             vname = await self._task_vendor_name(t)

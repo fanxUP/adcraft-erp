@@ -119,6 +119,7 @@ export interface OrderItemResponse {
   remark?: string
   image_url?: string
   sort_order: number
+  group_id?: string
   group_name?: string
   material_process?: string
   specification?: string
@@ -597,6 +598,7 @@ export interface QuoteItemResponse {
   remark?: string
   image_url?: string
   sort_order: number
+  group_id?: string
   group_name?: string
   material_process?: string
   specification?: string
@@ -617,6 +619,20 @@ export interface QuoteListResponse {
   department?: string
   contact_person?: string
   contact_phone?: string
+}
+
+export interface QuoteGroupResponse {
+  id: string
+  quote_id: string
+  group_id: string
+  group_name?: string | null
+  sort_order: number
+}
+
+export interface QuoteGroupInput {
+  group_id: string
+  group_name?: string | null
+  sort_order?: number
 }
 
 export interface QuoteDetailResponse {
@@ -641,6 +657,7 @@ export interface QuoteDetailResponse {
   contact_phone?: string
   created_at?: string
   items: QuoteItemResponse[]
+  groups: QuoteGroupResponse[]
 }
 
 // ---- Contract ----
@@ -1079,6 +1096,7 @@ export interface AcceptanceItemResponse {
   image_url?: string
   item_status: string
   remark?: string
+  group_id?: string
   group_name?: string
 }
 
@@ -1141,4 +1159,3 @@ export interface CustomerTreeNode {
   levels: CustomerTreeLevel[]
   count: number
 }
-

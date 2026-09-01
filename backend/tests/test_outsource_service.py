@@ -585,3 +585,17 @@ async def test_list_tasks_passes_source_filter(service):
     # (skip, limit, status, vendor_id, related_doc_id, source_task_type, source_task_id)
     assert args[5] == "design"
     assert args[6] == SAMPLE_TASK_ID
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_passes_task_type_filter(service):
+    """list_tasks 把外协任务类型筛选透传给 repo。"""
+    svc, _, tr, _ = service
+    tr.list_tasks.return_value = ([], 0)
+
+    items, total = await svc.list_tasks(page=1, page_size=20, task_type="design")
+
+    assert items == []
+    assert total == 0
+    args = tr.list_tasks.call_args.args
+    assert args[7] == "design"

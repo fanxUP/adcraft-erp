@@ -44,7 +44,12 @@ async def list_quotes(
 ):
     service = BusinessDocumentService(db, doc_type='quote')
     cid = UUID(customer_id) if customer_id else None
-    quotes, total = await service.list_all(page, page_size, status, cid, keyword=keyword, exclude_status="converted")
+    # 默认列表只展示可继续处理的报价；状态筛选是显式查询，因此仍可查看已转订单/已作废。
+    excluded_statuses = None if status else ["converted", "cancelled"]
+    quotes, total = await service.list_all(
+        page, page_size, status, cid, keyword=keyword,
+        exclude_status=excluded_statuses,
+    )
     return success_paginated(quotes, total, page, page_size)
 
 

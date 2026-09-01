@@ -70,7 +70,8 @@ class OutsourceTaskRepository:
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
                          vendor_id: UUID | None = None, related_doc_id: UUID | None = None,
-                         source_task_type: str | None = None, source_task_id: UUID | None = None) -> tuple[list[OutsourceTask], int]:
+                         source_task_type: str | None = None, source_task_id: UUID | None = None,
+                         task_type: str | None = None) -> tuple[list[OutsourceTask], int]:
         q = select(OutsourceTask).where(OutsourceTask.deleted_at.is_(None))
         if status:
             q = q.where(OutsourceTask.status == status)
@@ -82,6 +83,8 @@ class OutsourceTaskRepository:
             q = q.where(OutsourceTask.source_task_type == source_task_type)
         if source_task_id:
             q = q.where(OutsourceTask.source_task_id == source_task_id)
+        if task_type:
+            q = q.where(OutsourceTask.task_type == task_type)
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
         q = q.order_by(OutsourceTask.created_at.desc()).offset(skip).limit(limit)

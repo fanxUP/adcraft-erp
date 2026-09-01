@@ -88,8 +88,13 @@ async def get_available_projects(
             FrameworkContractProjectDocument.project_id != UUID(project_id)
         )
 
-    # 已被常规合同关联的 document ID
-    contract_used_sub = select(ContractDocument.document_id)
+    # 已被常规合同关联的 document ID（仅统计未删除合同，软删除合同不再占用订单）
+    from app.models.contract import Contract as ContractModel
+    contract_used_sub = (
+        select(ContractDocument.document_id)
+        .join(ContractModel, ContractModel.id == ContractDocument.contract_id)
+        .where(ContractModel.deleted_at.is_(None))
+    )
 
     # 统一查询：客户下未关联的活跃单据（订单+报价）
     result = await db.execute(

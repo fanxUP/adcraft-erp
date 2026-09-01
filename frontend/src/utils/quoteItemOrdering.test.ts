@@ -11,11 +11,12 @@ import {
 
 interface Item {
   id: string
+  group_id?: string
   group_name?: string
   amount: number
 }
 
-const item = (id: string, group_name?: string, amount = 1): Item => ({ id, group_name, amount })
+const item = (id: string, group_name?: string, amount = 1): Item => ({ id, group_id: group_name, group_name, amount })
 const rowsOf = (items: Item[]) => buildQuoteDisplayRows(items, value => value.id, value => value.amount)
 const totalOf = (items: Item[], groupName: string) => {
   const row = rowsOf(items).find(candidate => (
@@ -38,6 +39,25 @@ describe('quoteItemOrdering', () => {
 
     expect(rowsOf([a, b]).map(row => row.key)).toEqual(['gh-a', 'a', 'gt-a', 'gh-b', 'b', 'gt-b'])
     expect(rowsOf([b, a]).map(row => row.key)).toEqual(['gh-b', 'b', 'gt-b', 'gh-a', 'a', 'gt-a'])
+  })
+
+  it('keeps an empty group header and total without adding a detail row', () => {
+    const rows = buildQuoteDisplayRows(
+      [item('free')],
+      value => value.id,
+      value => value.amount,
+      undefined,
+      [{ groupId: 'empty-group', groupName: '空分项' }],
+    )
+
+    expect(rows.map(row => row.key)).toEqual([
+      'free',
+      'gh-empty-empty-group',
+      'gt-empty-empty-group',
+    ])
+    expect(rows.filter(row => row.type === 'item')).toHaveLength(1)
+    expect(rows.find(row => row.type === 'group-header')?.groupName).toBe('空分项')
+    expect(rows.find(row => row.type === 'group-total')?.total).toBe(0)
   })
 
   it('moves group A as a whole directly before group B', () => {

@@ -362,11 +362,11 @@ story.append(PageBreak())
 story.append(h1("3. 登录与快速入门"))
 story.append(h3("3.1 访问系统"))
 story.append(body("在浏览器地址栏输入系统地址（如 http://localhost），将自动跳转到登录页面。"))
-story.append(h3("3.2 默认账户"))
+story.append(h3("3.2 初始账户"))
 story.append(_table(
     ["角色", "用户名", "密码", "说明"],
     [
-        ["管理员", "admin", "admin123", "拥有全部权限，首次登录后请立即修改密码"],
+        ["管理员", "admin", "由 ADMIN_INIT_PASSWORD 设置", "拥有全部权限；项目不提供默认密码"],
     ],
     col_widths=[4 * cm, 4 * cm, 4 * cm, 4.5 * cm],
 ))

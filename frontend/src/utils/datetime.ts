@@ -39,3 +39,10 @@ export function formatDateTimeFull(ts?: string | null): string {
   if (Number.isNaN(d.getTime())) return ts.replace('T', ' ').slice(0, 19)
   return `${formatDate(ts)} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
+
+/** 日期字符串 + N 年（保持月日，闰年 2/29 顺延到 3/1）。入参需为 YYYY-MM-DD。 */
+export function addYears(dateStr: string, years: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(y + years, (m || 1) - 1, d || 1)
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`
+}

@@ -56,7 +56,7 @@ def _connection(project_dir: Path) -> tuple[str, str, str, str, str]:
         _setting("PGHOST", env_file, "127.0.0.1"),
         _setting("PGPORT", env_file, "5432"),
         _setting("POSTGRES_USER", env_file, "adcraft"),
-        _setting("POSTGRES_PASSWORD", env_file, "adcraft_dev_password"),
+        _setting("POSTGRES_PASSWORD", env_file),
         _setting("POSTGRES_DB", env_file, "adcraft_erp"),
     )
 

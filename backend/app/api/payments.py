@@ -381,7 +381,7 @@ async def list_quotes_for_cost(
     q = select(BusinessDocument).where(
         BusinessDocument.deleted_at.is_(None),
         BusinessDocument.doc_type == "quote",
-        BusinessDocument.status != "converted",
+        BusinessDocument.status.notin_(["converted", "cancelled"]),
     )
     if keyword:
         fuzzy = f"%{keyword}%"

@@ -30,7 +30,7 @@ def error(code: int, message: str) -> dict:
 
 
 from uuid import UUID
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from pydantic import model_validator
 
@@ -55,6 +55,8 @@ class CoercedModel(BaseModel):
                 result[name] = val.isoformat()
             elif isinstance(val, Decimal):
                 result[name] = float(val)
+            elif isinstance(val, date):
+                result[name] = val.isoformat()
             else:
                 result[name] = val
         return result

@@ -12,8 +12,9 @@ import pytest
 
 
 # 测试必须与开发机/生产机的 .env 隔离，避免写入真实上传目录或启用外部 AI。
-_test_upload_dir = os.path.join(tempfile.gettempdir(), "adcraft-test-uploads")
-os.makedirs(_test_upload_dir, exist_ok=True)
+# 使用当前测试进程创建的临时目录，避免复用其他用户/root 创建的目录导致权限污染。
+_test_upload_dir_handle = tempfile.TemporaryDirectory(prefix="adcraft-test-uploads-")
+_test_upload_dir = _test_upload_dir_handle.name
 os.environ["APP_ENV"] = "test"
 os.environ["LOCAL_UPLOAD_DIR"] = _test_upload_dir
 os.environ["AI_ENABLED"] = "false"

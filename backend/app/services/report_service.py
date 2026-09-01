@@ -328,7 +328,7 @@ class ReportService:
     async def _sum_payments(self, start: datetime, end: datetime) -> float:
         result = await self.db.execute(
             select(func.coalesce(func.sum(Payment.amount), 0))
-            .where(and_(Payment.is_voided == False, Payment.created_at >= start, Payment.created_at <= end))
+            .where(and_(Payment.is_voided == False, Payment.paid_at >= start, Payment.paid_at <= end))
         )
         return result.scalar() or 0
 

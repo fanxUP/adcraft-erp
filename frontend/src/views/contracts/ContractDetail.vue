@@ -127,7 +127,7 @@
           <el-date-picker v-model="editForm.sign_date" type="date" style="width:100%" value-format="YYYY-MM-DD" />
         </el-form-item>
         <el-form-item label="生效日期">
-          <el-date-picker v-model="editForm.start_date" type="date" style="width:100%" value-format="YYYY-MM-DD" />
+          <el-date-picker v-model="editForm.start_date" type="date" style="width:100%" value-format="YYYY-MM-DD" @change="onStartDateChange" />
         </el-form-item>
         <el-form-item label="结束日期">
           <el-date-picker v-model="editForm.end_date" type="date" style="width:100%" value-format="YYYY-MM-DD" />
@@ -200,7 +200,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate } from '@/utils/datetime'
+import { formatDate, addYears } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -307,6 +307,14 @@ async function loadCustomersForEdit() {
     const data = await getCustomers({ page_size: 200 })
     customerOptions.value = (data.items as { id: string; name: string }[]).map(c => ({ id: c.id, name: c.name }))
   } catch { /* ignore */ }
+}
+
+// 选择生效日期后自动填充结束日期 = 生效日期 + 1 年（已有结束日期则不覆盖）
+function onStartDateChange(val: string | null) {
+  if (!val) return
+  if (!editForm.end_date) {
+    editForm.end_date = addYears(val, 1)
+  }
 }
 
 function openEditContract() {
