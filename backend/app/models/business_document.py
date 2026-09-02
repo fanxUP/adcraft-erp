@@ -1,12 +1,17 @@
 import uuid
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
-from datetime import date
-from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric, String, Text, ForeignKey
+from datetime import date, datetime
+from sqlalchemy import Date, DateTime, Integer, Numeric, String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, SoftDeleteMixin
+
+if TYPE_CHECKING:
+    from app.models.customer import Customer
+    from app.models.task import DesignTask, InstallationTask, ProductionTask
 
 
 class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
@@ -73,7 +78,10 @@ class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
     # ── 关系 ──
     customer: Mapped["Customer | None"] = relationship(lazy="selectin", foreign_keys=[customer_id])
     items: Mapped[list["BusinessDocumentItem"]] = relationship(
-        back_populates="document", lazy="selectin", cascade="all, delete-orphan"
+        back_populates="document",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        primaryjoin="and_(BusinessDocument.id == foreign(BusinessDocumentItem.document_id), BusinessDocumentItem.lifecycle_status == 'active')",
     )
     groups: Mapped[list["BusinessDocumentGroup"]] = relationship(
         back_populates="document", lazy="selectin", cascade="all, delete-orphan"
@@ -131,6 +139,16 @@ class BusinessDocumentItem(Base, TimestampMixin):
     group_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     group_id: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     material_process: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
+
+    # 明细生命周期：有关联的订单明细不能物理删除，作废/替代后仍保留历史引用。
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    void_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    superseded_by_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("business_document_items.id"), nullable=True
+    )
 
     document: Mapped["BusinessDocument"] = relationship(back_populates="items")
 

@@ -109,6 +109,7 @@ export interface OrderItemResponse {
   use_area?: boolean
   quantity_mode?: 'piece' | 'area'
   area?: number
+  pieces?: number
   unit_price: number
   process_fee?: number
   installation_fee?: number
@@ -123,6 +124,246 @@ export interface OrderItemResponse {
   group_name?: string
   material_process?: string
   specification?: string
+  lifecycle_status?: string
+}
+
+export interface OrderItemMutationFields {
+  item_name?: string
+  product_id?: string | null
+  material_id?: string | null
+  process_id?: string | null
+  length?: number | null
+  length_unit?: string | null
+  width?: number | null
+  width_unit?: string | null
+  height?: number | null
+  height_unit?: string | null
+  quantity?: number
+  unit?: string | null
+  use_area?: boolean
+  quantity_mode?: string
+  pieces?: number | null
+  unit_price?: number
+  process_fee?: number
+  installation_fee?: number
+  design_fee?: number
+  transport_fee?: number
+  other_fee?: number
+  remark?: string | null
+  image_url?: string | null
+  sort_order?: number
+  group_name?: string | null
+  group_id?: string | null
+  material_process?: string | null
+}
+
+export interface OrderEditItem extends OrderItemMutationFields {
+  id?: string
+}
+
+export interface OrderEditGroup {
+  group_id: string
+  group_name?: string | null
+  sort_order: number
+}
+
+export interface OrderEditHeader {
+  customer_id?: string | null
+  customer_name?: string | null
+  project_name?: string | null
+  department?: string | null
+  contact_person?: string | null
+  contact_phone?: string | null
+  delivery_deadline?: string | null
+  installation_address?: string | null
+  remark?: string | null
+}
+
+export interface OrderEditRequest {
+  reason: string
+  expected_updated_at: string
+  header: OrderEditHeader
+  items: OrderEditItem[]
+  groups: OrderEditGroup[]
+  preview_id?: string
+  plan_hash?: string
+  preview_expires_at?: string
+  confirm_high_risk?: boolean
+}
+
+export interface OrderEditItemDiff {
+  operation: 'add' | 'update' | 'delete'
+  item_id?: string | null
+  item_name?: string | null
+  changed_fields: string[]
+  before?: Record<string, unknown> | null
+  after?: Record<string, unknown> | null
+}
+
+export interface OrderEditImpactResponse {
+  order_id: string
+  order_no: string
+  status: string
+  updated_at?: string
+  operation: 'batch'
+  preview_id: string
+  preview_expires_at: string
+  plan_hash: string
+  change_status?: 'PREVIEWED' | string
+  verification_status?: 'PENDING' | string
+  before: OrderItemFinancialSnapshot
+  after: OrderItemFinancialSnapshot
+  delta: number
+  diff: {
+    added: number
+    updated: number
+    deleted: number
+    header_changed: number
+    groups_changed: boolean
+  }
+  header_diff: Array<{ field: string; before: unknown; after: unknown }>
+  item_diffs: OrderEditItemDiff[]
+  decision: 'DIRECT_APPLY' | 'CONFIRM_AND_REFRESH' | 'APPROVAL_AND_ADJUSTMENT' | 'BLOCK' | string
+  associated_edit_enabled?: boolean
+  requires_confirmation: boolean
+  requires_high_risk_ack: boolean
+  association_count: number
+  lock_reasons: Array<{ code: string; message: string }>
+  can_apply: boolean
+  association_catalog: OrderItemRelationCatalogEntry[]
+  refresh_plan?: OrderItemRelationCatalogEntry[]
+  relations: Record<string, unknown>
+}
+
+export interface OrderGroupResponse {
+  id: string
+  quote_id: string
+  group_id: string
+  group_name?: string | null
+  sort_order: number
+}
+
+export interface OrderItemRelationCatalogEntry {
+  module: string
+  label: string
+  relation_type: 'document' | 'item' | 'snapshot' | 'source' | string
+  record_id: string
+  record_no?: string | null
+  status?: string | null
+  action: string
+  risk: 'low' | 'medium' | 'high' | string
+  fields?: string[]
+  note?: string
+}
+
+export interface OrderItemFinancialSnapshot {
+  total_amount: number
+  paid_amount: number
+  unpaid_amount: number
+  cost_amount: number
+  gross_profit: number
+  line_count: number
+}
+
+export interface OrderItemEditabilityResponse {
+  order_id: string
+  order_no: string
+  status: string
+  updated_at?: string
+  can_edit_items: boolean
+  associated_edit_enabled?: boolean
+  editable_statuses: string[]
+  decision: 'DIRECT_APPLY' | 'CONFIRM_AND_REFRESH' | 'APPROVAL_AND_ADJUSTMENT' | 'BLOCK' | string
+  requires_confirmation: boolean
+  requires_high_risk_ack: boolean
+  association_count: number
+  lock_reasons: Array<{ code: string; message: string }>
+  association_catalog: OrderItemRelationCatalogEntry[]
+  relations: Record<string, unknown>
+}
+
+export interface OrderItemRefreshResult {
+  status: 'VERIFIED' | 'PENDING_ADJUSTMENT' | 'BLOCKED' | string
+  change_batch_id: string
+  auto_refreshed: Array<Record<string, unknown>>
+  preserved_facts: Array<Record<string, unknown>>
+  pending_review: Array<Record<string, unknown>>
+  adjustments: Array<Record<string, unknown>>
+  blocked: Array<Record<string, unknown>>
+  counts?: Record<string, number>
+}
+
+export interface OrderItemChangeBatch {
+  change_batch_id: string
+  version_id: string
+  version_no: number
+  created_at?: string | null
+  created_by?: string | null
+  operator_id?: string | null
+  change_type?: string | null
+  reason?: string | null
+  status: string
+  status_history?: string[]
+  verification_status: string
+  counts?: Record<string, number>
+  before?: Record<string, unknown> | null
+  after?: Record<string, unknown> | null
+  impact?: Record<string, unknown> | null
+  refresh_result?: OrderItemRefreshResult
+}
+
+export interface OrderItemChangeBatchListResponse {
+  order_id: string
+  order_no: string
+  total: number
+  batches: OrderItemChangeBatch[]
+}
+
+export interface OrderItemReconciliationCheck {
+  ok: boolean
+  actual: number | string | null
+  expected: number | string | null
+}
+
+export interface OrderItemReconciliationResponse {
+  order_id: string
+  order_no: string
+  checked_at: string
+  status: 'PASS' | 'ATTENTION' | string
+  checks: Record<string, OrderItemReconciliationCheck>
+  financials: Record<string, number | string | null>
+  associations: Record<string, unknown>
+  orphan_references: Array<Record<string, unknown>>
+  history: Record<string, unknown>
+  change_batch?: OrderItemChangeBatch | null
+}
+
+export interface OrderItemMutationImpactResponse {
+  order_id: string
+  order_no: string
+  status: string
+  updated_at?: string
+  operation: 'add' | 'update' | 'delete'
+  item_id?: string | null
+  before: OrderItemFinancialSnapshot
+  after: OrderItemFinancialSnapshot
+  delta: number
+  projected_item?: Record<string, unknown> | null
+  associated_edit_enabled?: boolean
+  decision: 'DIRECT_APPLY' | 'CONFIRM_AND_REFRESH' | 'APPROVAL_AND_ADJUSTMENT' | 'BLOCK' | string
+  requires_confirmation: boolean
+  requires_high_risk_ack: boolean
+  association_count: number
+  lock_reasons: Array<{ code: string; message: string }>
+  can_apply: boolean
+  preview_id: string
+  preview_expires_at: string
+  plan_hash: string
+  change_status?: 'PREVIEWED' | string
+  verification_status?: 'PENDING' | string
+  association_catalog: OrderItemRelationCatalogEntry[]
+  refresh_plan?: OrderItemRelationCatalogEntry[]
+  relations: Record<string, unknown>
 }
 
 export interface OrderStatusLogResponse {
@@ -156,8 +397,19 @@ export interface OrderDetailResponse {
   contact_person?: string
   contact_phone?: string
   created_at?: string
+  updated_at?: string
+  source_quote_id?: string
   items: OrderItemResponse[]
+  groups: OrderGroupResponse[]
   status_logs: OrderStatusLogResponse[]
+  change_batch?: {
+    change_batch_id: string
+    status: string
+    status_history?: string[]
+    verification_status?: string
+    idempotent_replay?: boolean
+    refresh_result?: OrderItemRefreshResult
+  }
   cost_amount?: number
   gross_profit?: number
 }

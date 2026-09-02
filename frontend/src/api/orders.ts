@@ -1,5 +1,17 @@
-import { get, post, put, del } from './index'
-import { PaginatedData, OrderListResponse, OrderDetailResponse, QuoteDetailResponse } from '@/types/api'
+import { get, post, put, del, patch } from './index'
+import {
+  PaginatedData,
+  OrderItemEditabilityResponse,
+  OrderItemMutationFields,
+  OrderItemMutationImpactResponse,
+  OrderEditImpactResponse,
+  OrderEditRequest,
+  OrderItemChangeBatch,
+  OrderItemChangeBatchListResponse,
+  OrderItemReconciliationResponse,
+  OrderListResponse,
+  OrderDetailResponse,
+} from '@/types/api'
 
 export function getOrders(params: { page?: number; page_size?: number; status?: string; customer_id?: string; keyword?: string }) {
   return get<PaginatedData<OrderListResponse>>('/orders/', { params })
@@ -7,6 +19,78 @@ export function getOrders(params: { page?: number; page_size?: number; status?: 
 
 export function getOrder(id: string) {
   return get<OrderDetailResponse>(`/orders/${id}`)
+}
+
+export function getOrderItemEditability(id: string) {
+  return get<OrderItemEditabilityResponse>(`/orders/${id}/items/editability`)
+}
+
+export function previewOrderItemMutation(id: string, data: {
+  operation: 'add' | 'update' | 'delete'
+  item_id?: string
+  item?: OrderItemMutationFields
+  reason: string
+  expected_updated_at: string
+}) {
+  return post<OrderItemMutationImpactResponse>(`/orders/${id}/items/preview`, data)
+}
+
+export function getOrderItemChangeBatches(id: string, params?: {
+  limit?: number
+  change_batch_id?: string
+}) {
+  return get<OrderItemChangeBatchListResponse>(`/orders/${id}/items/change-batches`, { params })
+}
+
+export function getOrderItemChangeBatch(id: string, changeBatchId: string) {
+  return get<OrderItemChangeBatch>(`/orders/${id}/items/change-batches/${changeBatchId}`)
+}
+
+export function reconcileOrderItemChange(id: string, changeBatchId?: string) {
+  return get<OrderItemReconciliationResponse>(`/orders/${id}/items/reconciliation`, {
+    params: changeBatchId ? { change_batch_id: changeBatchId } : undefined,
+  })
+}
+
+export function addOrderItem(id: string, data: OrderItemMutationFields & {
+  reason: string
+  expected_updated_at: string
+  preview_id?: string
+  plan_hash?: string
+  preview_expires_at?: string
+  confirm_high_risk?: boolean
+}) {
+  return post<OrderDetailResponse>(`/orders/${id}/items`, data)
+}
+
+export function updateOrderItem(id: string, itemId: string, data: OrderItemMutationFields & {
+  reason: string
+  expected_updated_at: string
+  preview_id?: string
+  plan_hash?: string
+  preview_expires_at?: string
+  confirm_high_risk?: boolean
+}) {
+  return patch<OrderDetailResponse>(`/orders/${id}/items/${itemId}`, data)
+}
+
+export function deleteOrderItem(id: string, itemId: string, data: {
+  reason: string
+  expected_updated_at: string
+  preview_id?: string
+  plan_hash?: string
+  preview_expires_at?: string
+  confirm_high_risk?: boolean
+}) {
+  return del<OrderDetailResponse>(`/orders/${id}/items/${itemId}`, { data })
+}
+
+export function previewOrderEdit(id: string, data: OrderEditRequest) {
+  return post<OrderEditImpactResponse>(`/orders/${id}/items/batch-preview`, data)
+}
+
+export function saveOrderEdit(id: string, data: OrderEditRequest) {
+  return post<OrderDetailResponse>(`/orders/${id}/items/batch`, data)
 }
 
 export function changeOrderStatus(id: string, data: { to_status: string; reason?: string }) {
@@ -35,10 +119,6 @@ export function getDeletedOrders(params: { page?: number; page_size?: number; ke
 
 export function restoreOrder(id: string) {
   return post<OrderDetailResponse>(`/orders/${id}/restore`)
-}
-
-export function convertOrderToQuote(id: string) {
-  return post<QuoteDetailResponse>(`/orders/${id}/convert-to-quote`)
 }
 
 export function updateOrderContact(id: string, data: { contact_person?: string | null; contact_phone?: string | null }) {

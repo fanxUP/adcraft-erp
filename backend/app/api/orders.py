@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,9 +15,19 @@ from app.core.permissions import (
     require_role,
 )
 from app.models.user import User
-from app.schemas.order import OrderStatusChange
+from app.schemas.order import (
+    OrderItemCreate,
+    OrderItemDelete,
+    OrderEditRequest,
+    OrderItemMutationPreview,
+    OrderItemUpdate,
+    OrderStatusChange,
+)
 from app.schemas.common import success, success_paginated, error
-from app.services.business_document_service import BusinessDocumentService
+from app.services.business_document_service import (
+    BusinessDocumentService,
+    OrderItemMutationConflict,
+)
 from app.services.operation_log_service import log_operation, OBJ_ORDER, ACTION_STATUS_CHANGE, ACTION_DELETE
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -71,6 +82,284 @@ async def get_order(
     if not order:
         return {"code": 40401, "message": "订单不存在", "data": None}
     return success(order)
+
+
+@router.get("/{order_id}/items/editability")
+async def get_order_item_editability(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_READ)),
+):
+    service = BusinessDocumentService(db, doc_type="order")
+    try:
+        return success(await service.get_order_item_editability(UUID(order_id)))
+    except ValueError as e:
+        return error(40401, str(e))
+
+@router.post("/{order_id}/items/preview")
+async def preview_order_item_mutation(
+    order_id: str,
+    data: OrderItemMutationPreview,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
+):
+    service = BusinessDocumentService(db, doc_type="order")
+    try:
+        item_id = UUID(data.item_id) if data.item_id else None
+        result = await service.preview_order_item_mutation(
+            UUID(order_id),
+            data.operation,
+            item_id=item_id,
+            data=data.item,
+            expected_updated_at=data.expected_updated_at,
+            reason=data.reason,
+            operated_by=current_user.id,
+        )
+        return success(result)
+    except OrderItemMutationConflict as e:
+        await db.rollback()
+        return JSONResponse(status_code=409, content=error(40901, str(e)))
+    except ValueError as e:
+        await db.rollback()
+        return error(40001, str(e))
+
+
+@router.post("/{order_id}/items/batch-preview")
+async def preview_order_edit(
+    order_id: str,
+    data: OrderEditRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
+):
+    """预检报价式订单编辑器提交的整批头部/明细变更。"""
+    service = BusinessDocumentService(db, doc_type="order")
+    try:
+        return success(
+            await service.preview_order_edit(
+                UUID(order_id),
+                header=data.header.model_dump(exclude_unset=True),
+                items=[item.model_dump(exclude_none=True) for item in data.items],
+                groups=[group.model_dump() for group in data.groups],
+                expected_updated_at=data.expected_updated_at,
+                reason=data.reason,
+                operated_by=current_user.id,
+            )
+        )
+    except OrderItemMutationConflict as e:
+        await db.rollback()
+        return JSONResponse(status_code=409, content=error(40901, str(e)))
+    except ValueError as e:
+        await db.rollback()
+        return error(40001, str(e))
+
+
+@router.post("/{order_id}/items/batch")
+async def apply_order_edit(
+    order_id: str,
+    data: OrderEditRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
+):
+    """原子应用订单编辑器的整批变更，并返回变更批次结果。"""
+    service = BusinessDocumentService(db, doc_type="order")
+    try:
+        return success(
+            await service.apply_order_edit(
+                UUID(order_id),
+                header=data.header.model_dump(exclude_unset=True),
+                items=[item.model_dump(exclude_none=True) for item in data.items],
+                groups=[group.model_dump() for group in data.groups],
+                expected_updated_at=data.expected_updated_at,
+                reason=data.reason,
+                operated_by=current_user.id,
+                operated_by_name=current_user.real_name or current_user.username,
+                ip_address=request.client.host if request.client else None,
+                preview_id=data.preview_id,
+                plan_hash=data.plan_hash,
+                preview_expires_at=data.preview_expires_at,
+                confirm_high_risk=data.confirm_high_risk,
+            )
+        )
+    except OrderItemMutationConflict as e:
+        await db.rollback()
+        return JSONResponse(status_code=409, content=error(40901, str(e)))
+    except ValueError as e:
+        await db.rollback()
+        return error(40001, str(e))
+
+
+@router.get("/{order_id}/items/change-batches")
+async def list_order_item_change_batches(
+    order_id: str,
+    limit: int = Query(50, ge=1, le=200),
+    change_batch_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_READ)),
+):
+    service = BusinessDocumentService(db, doc_type="order")
+    try:
+        return success(
+            await service.list_order_item_change_batches(
+                UUID(order_id),
+                limit=limit,
+                change_batch_id=change_batch_id,
+            )
+        )
+    except ValueError as e:
+        return error(40401, str(e))
+
+
+@router.get("/{order_id}/items/change-batches/{change_batch_id}")
+async def get_order_item_change_batch(
+    order_id: str,
+    change_batch_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_READ)),
+):
+    service = BusinessDocumentService(db, doc_type="order")
+    try:
+        return success(
+            await service.get_order_item_change_batch(
+                UUID(order_id),
+                change_batch_id,
+            )
+        )
+    except ValueError as e:
+        return error(40401, str(e))
+
+
+@router.get("/{order_id}/items/reconciliation")
+async def reconcile_order_item_change(
+    order_id: str,
+    change_batch_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_READ)),
+):
+    service = BusinessDocumentService(db, doc_type="order")
+    try:
+        return success(
+            await service.reconcile_order_item_change(
+                UUID(order_id),
+                change_batch_id=change_batch_id,
+            )
+        )
+    except ValueError as e:
+        return error(40401, str(e))
+
+
+@router.post("/{order_id}/items")
+async def add_order_item(
+    order_id: str,
+    data: OrderItemCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
+):
+    service = BusinessDocumentService(db, doc_type="order")
+    try:
+        return success(
+            await service.mutate_order_item(
+                UUID(order_id),
+                "add",
+                data=data.model_dump(exclude={
+                    "reason", "expected_updated_at", "preview_id", "plan_hash",
+                    "preview_expires_at", "confirm_high_risk",
+                }),
+                expected_updated_at=data.expected_updated_at,
+                reason=data.reason,
+                operated_by=current_user.id,
+                operated_by_name=current_user.real_name or current_user.username,
+                ip_address=request.client.host if request.client else None,
+                preview_id=data.preview_id,
+                plan_hash=data.plan_hash,
+                preview_expires_at=data.preview_expires_at,
+                confirm_high_risk=data.confirm_high_risk,
+            )
+        )
+    except OrderItemMutationConflict as e:
+        await db.rollback()
+        return JSONResponse(status_code=409, content=error(40901, str(e)))
+    except ValueError as e:
+        await db.rollback()
+        return error(40001, str(e))
+
+
+@router.patch("/{order_id}/items/{item_id}")
+async def update_order_item(
+    order_id: str,
+    item_id: str,
+    data: OrderItemUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
+):
+    service = BusinessDocumentService(db, doc_type="order")
+    try:
+        return success(
+            await service.mutate_order_item(
+                UUID(order_id),
+                "update",
+                item_id=UUID(item_id),
+                data=data.model_dump(
+                    exclude={
+                        "reason", "expected_updated_at", "preview_id", "plan_hash",
+                        "preview_expires_at", "confirm_high_risk",
+                    },
+                    exclude_unset=True,
+                ),
+                expected_updated_at=data.expected_updated_at,
+                reason=data.reason,
+                operated_by=current_user.id,
+                operated_by_name=current_user.real_name or current_user.username,
+                ip_address=request.client.host if request.client else None,
+                preview_id=data.preview_id,
+                plan_hash=data.plan_hash,
+                preview_expires_at=data.preview_expires_at,
+                confirm_high_risk=data.confirm_high_risk,
+            )
+        )
+    except OrderItemMutationConflict as e:
+        await db.rollback()
+        return JSONResponse(status_code=409, content=error(40901, str(e)))
+    except ValueError as e:
+        await db.rollback()
+        return error(40001, str(e))
+
+
+@router.delete("/{order_id}/items/{item_id}")
+async def delete_order_item(
+    order_id: str,
+    item_id: str,
+    data: OrderItemDelete,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
+):
+    service = BusinessDocumentService(db, doc_type="order")
+    try:
+        return success(
+            await service.mutate_order_item(
+                UUID(order_id),
+                "delete",
+                item_id=UUID(item_id),
+                expected_updated_at=data.expected_updated_at,
+                reason=data.reason,
+                operated_by=current_user.id,
+                operated_by_name=current_user.real_name or current_user.username,
+                ip_address=request.client.host if request.client else None,
+                preview_id=data.preview_id,
+                plan_hash=data.plan_hash,
+                preview_expires_at=data.preview_expires_at,
+                confirm_high_risk=data.confirm_high_risk,
+            )
+        )
+    except OrderItemMutationConflict as e:
+        await db.rollback()
+        return JSONResponse(status_code=409, content=error(40901, str(e)))
+    except ValueError as e:
+        await db.rollback()
+        return error(40001, str(e))
 
 
 @router.post("/{order_id}/reopen-completed")
@@ -198,23 +487,3 @@ async def update_order_contact(
         return success(order)
     except ValueError as e:
         return error(40401, str(e))
-
-
-@router.post("/{order_id}/convert-to-quote")
-async def convert_order_to_quote(
-    order_id: str,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
-):
-    service = BusinessDocumentService(db, doc_type='order')
-    oid = UUID(order_id)
-    try:
-        quote = await service.convert_order_to_quote(oid, current_user.id)
-        await log_operation(db, current_user.id, current_user.real_name or current_user.username,
-                            OBJ_ORDER, oid, "convert_to_quote",
-                            ip_address=request.client.host if request.client else None,
-                            after_data={"quote_id": quote["id"]})
-        return success(quote)
-    except ValueError as e:
-        return error(40001, str(e))

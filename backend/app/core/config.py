@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     RATE_LIMIT_DEFAULT: int = 120        # default requests per window
     RATE_LIMIT_WINDOW: int = 60          # window in seconds
 
+    # 执行中订单明细变更灰度开关：可通过环境变量关闭入口，不改业务数据。
+    ORDER_ITEM_ASSOCIATED_EDIT_ENABLED: bool = True
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

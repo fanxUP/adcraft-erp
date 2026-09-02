@@ -85,3 +85,24 @@ def test_existing_quote_length_and_width_are_moved_to_width_and_height():
         and "document.doc_type = 'quote'" in source
         for source in migration_sources
     )
+
+
+def test_order_item_lifecycle_migration_is_additive_and_reversible():
+    versions_dir = Path(__file__).parents[1] / "alembic" / "versions"
+    source = next(
+        path.read_text(encoding="utf-8")
+        for path in versions_dir.glob("*.py")
+        if "j1k2l3m4n5o6" in path.read_text(encoding="utf-8")
+    )
+
+    assert 'op.add_column(' in source
+    assert '"business_document_items"' in source
+    assert '"lifecycle_status"' in source
+    assert 'server_default="active"' in source
+    assert '"voided_at"' in source
+    assert '"void_reason"' in source
+    assert '"superseded_by_item_id"' in source
+    assert 'op.create_foreign_key(' in source
+    assert 'op.create_index(' in source
+    assert 'op.drop_constraint(' in source
+    assert 'op.drop_column("business_document_items", "lifecycle_status")' in source

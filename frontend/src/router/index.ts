@@ -24,6 +24,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'contracts/:id', name: 'ContractDetail', component: () => import('@/views/contracts/ContractDetail.vue') },
       { path: 'orders', name: 'OrderList', component: () => import('@/views/orders/OrderList.vue') },
       { path: 'orders/recycle', name: 'OrderRecycle', meta: { roles: ['admin'] }, component: () => import('@/views/orders/OrderRecycle.vue') },
+      { path: 'orders/:id/edit', name: 'OrderEdit', component: () => import('@/views/orders/OrderEditor.vue') },
       { path: 'orders/:id', name: 'OrderDetail', component: () => import('@/views/orders/OrderDetail.vue') },
       { path: 'acceptances', name: 'AcceptanceList', component: () => import('@/views/acceptances/AcceptanceList.vue') },
       { path: 'acceptances/:id', name: 'AcceptanceDetail', component: () => import('@/views/acceptances/AcceptanceDetail.vue') },
