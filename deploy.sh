@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-/opt/adcraft}"
 SERVICE_NAME="${SERVICE_NAME:-adcraft-backend}"
-DEPLOY_OWNER="${DEPLOY_OWNER:-admin}"
+DEPLOY_OWNER="${DEPLOY_OWNER:-root}"
 DEPLOY_GROUP="${DEPLOY_GROUP:-adcraft}"
 BRANCH="${DEPLOY_BRANCH:-master}"
 BUNDLE=""
@@ -250,6 +250,8 @@ curl --fail --silent --show-error \
   http://127.0.0.1:8000/api/v1/health >/dev/null
 
 printf '%s\n' "$TARGET_COMMIT" > .deployed-commit
+chown "$DEPLOY_OWNER:$DEPLOY_GROUP" .deployed-commit
+chmod 640 .deployed-commit
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "部署后检测到跟踪文件变化：" >&2
