@@ -105,8 +105,7 @@
               <div class="card-header">
                 <span>订单明细</span>
                 <div style="display: flex; align-items: center; gap: 8px">
-                  <el-button v-if="canEditItems" type="primary" size="small" @click="openAddItem">新增明细</el-button>
-                  <el-tooltip v-else-if="itemEditability" placement="top">
+                  <el-tooltip v-if="itemEditability && !canEditItems" placement="top">
                     <template #content>
                       <div v-for="reason in itemEditability.lock_reasons" :key="reason.code">{{ reason.message }}</div>
                     </template>
@@ -236,7 +235,7 @@
             </div>
           </el-card>
 
-        <el-dialog v-model="itemDialogVisible" :title="editingItemId ? '编辑订单明细' : '新增订单明细'" width="760px" destroy-on-close>
+        <el-dialog v-model="itemDialogVisible" title="编辑订单明细" width="760px" destroy-on-close>
           <el-form label-width="100px" class="item-form">
             <el-row :gutter="16">
               <el-col :span="12">
@@ -299,7 +298,7 @@
               </el-col>
               <el-col :span="24">
                 <el-form-item label="变更原因" required>
-                  <el-input v-model="itemReason" type="textarea" :rows="2" maxlength="500" show-word-limit placeholder="请说明新增、修改或删除原因" />
+                  <el-input v-model="itemReason" type="textarea" :rows="2" maxlength="500" show-word-limit placeholder="请说明修改原因" />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -507,7 +506,6 @@ import OrderProjectOverview from './OrderProjectOverview.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import {
-  addOrderItem,
   changeOrderStatus,
   deleteOrderItem,
   getOrder,
@@ -559,7 +557,7 @@ const impactDialogVisible = ref(false)
 const highRiskAcknowledged = ref(false)
 
 type PendingItemMutation = {
-  operation: 'add' | 'update' | 'delete'
+  operation: 'update' | 'delete'
   itemId?: string
   data?: OrderItemMutationFields
   reason: string
@@ -619,18 +617,6 @@ async function handleSaveContact() {
 
 const itemsTotal = computed(() => (order.value?.items || []).reduce((s, i) => s + (i.subtotal_amount || 0), 0))
 
-function resetItemForm() {
-  Object.assign(itemForm, emptyItemForm())
-  itemReason.value = ''
-  itemPreview.value = null
-}
-
-function openAddItem() {
-  editingItemId.value = null
-  resetItemForm()
-  itemDialogVisible.value = true
-}
-
 function openEditItem(item: OrderItemResponse) {
   editingItemId.value = item.id
   Object.assign(itemForm, emptyItemForm(), {
@@ -688,10 +674,9 @@ async function previewCurrentItem() {
     ElMessage.error('订单版本信息缺失，请刷新页面后重试')
     return null
   }
-  const operation = editingItemId.value ? 'update' : 'add'
   const impact = await previewOrderItemMutation(route.params.id as string, {
-    operation,
-    ...(editingItemId.value ? { item_id: editingItemId.value } : {}),
+    operation: 'update',
+    item_id: editingItemId.value!,
     item: itemMutationPayload(),
     reason: itemReason.value.trim(),
     expected_updated_at: order.value.updated_at,
@@ -701,6 +686,10 @@ async function previewCurrentItem() {
 }
 
 async function handleSaveItem() {
+  if (!editingItemId.value) {
+    ElMessage.warning('请选择需要编辑的订单明细')
+    return
+  }
   if (!itemReason.value.trim()) {
     ElMessage.warning('请填写订单明细变更原因')
     return
@@ -714,8 +703,8 @@ async function handleSaveItem() {
       return
     }
     const mutation: PendingItemMutation = {
-      operation: editingItemId.value ? 'update' : 'add',
-      ...(editingItemId.value ? { itemId: editingItemId.value } : {}),
+      operation: 'update',
+      itemId: editingItemId.value,
       data: itemMutationPayload(),
       reason: itemReason.value.trim(),
     }
@@ -797,9 +786,7 @@ async function applyItemMutation(
   }
   const result = mutation.operation === 'delete'
     ? await deleteOrderItem(route.params.id as string, mutation.itemId!, confirmation)
-    : mutation.operation === 'update'
-      ? await updateOrderItem(route.params.id as string, mutation.itemId!, { ...mutation.data, ...confirmation })
-      : await addOrderItem(route.params.id as string, { ...mutation.data, ...confirmation })
+    : await updateOrderItem(route.params.id as string, mutation.itemId!, { ...mutation.data, ...confirmation })
   order.value = result
   impactDialogVisible.value = false
   itemDialogVisible.value = false
@@ -818,7 +805,7 @@ async function applyItemMutation(
   if (result.change_batch?.status === 'PENDING_ADJUSTMENT') {
     ElMessage.warning('订单已修改；部分关联事实已保留，差异已进入待复核/调整')
   } else {
-    ElMessage.success(mutation.operation === 'delete' ? '订单明细已作废' : mutation.operation === 'update' ? '订单明细已更新' : '订单明细已新增')
+    ElMessage.success(mutation.operation === 'delete' ? '订单明细已作废' : '订单明细已更新')
   }
 }
 
