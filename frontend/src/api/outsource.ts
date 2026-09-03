@@ -3,6 +3,7 @@ import {
   PaginatedData,
   VendorResponse,
   OutsourceTaskResponse,
+  OutsourceTaskGroupResponse,
   OutsourcePaymentResponse,
   OutsourceOrderItemSummaryResponse,
   SuccessResponse,
@@ -53,6 +54,29 @@ export function deleteOutsourceVendor(id: string) {
 
 export function getOutsourceTasks(params: { page?: number; page_size?: number; status?: string; vendor_id?: string; order_id?: string; order_item_id?: string; task_type?: string; source_task_id?: string; source_task_type?: string }) {
   return get<PaginatedData<OutsourceTaskResponse>>('/outsource/tasks', { params })
+}
+
+export interface OutsourceTaskGroupQuery {
+  page?: number
+  page_size?: number
+  status?: string
+  vendor_id?: string
+  order_id?: string
+  order_item_id?: string
+  task_type?: string
+  source_task_id?: string
+  source_task_type?: string
+}
+
+export function getOutsourceTaskGroups(params: OutsourceTaskGroupQuery) {
+  return get<PaginatedData<OutsourceTaskGroupResponse>>('/outsource/task-groups', { params })
+}
+
+export function getOutsourceTaskGroupTasks(groupKey: string, params: OutsourceTaskGroupQuery) {
+  return get<PaginatedData<OutsourceTaskResponse>>(
+    `/outsource/task-groups/${encodeURIComponent(groupKey)}/tasks`,
+    { params },
+  )
 }
 
 export function getOutsourceOrderItemsSummary(orderId: string, params: { task_type?: string; source_task_type?: string; source_task_id?: string } = {}) {

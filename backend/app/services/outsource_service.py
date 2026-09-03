@@ -1,3 +1,4 @@
+import re
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
@@ -15,6 +16,25 @@ ITEM_OUTSOURCE_TASK_TYPES = frozenset({"design", "production", "installation"})
 
 
 class OutsourceService:
+    SOURCE_TASK_LABELS = {
+        "design": "设计",
+        "production": "制作",
+        "installation": "安装",
+    }
+    DOCUMENT_LABELS = {
+        "order": "订单",
+        "quote": "报价单",
+    }
+    GROUP_KEY_PATTERNS = (
+        ("source_task", re.compile(
+            r"^source:(design|production|installation):([0-9a-fA-F-]{36})$"
+        )),
+        ("related_document", re.compile(
+            r"^document:(order|quote):([0-9a-fA-F-]{36})$"
+        )),
+        ("task", re.compile(r"^task:([0-9a-fA-F-]{36})$")),
+    )
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.vendor_repo = OutsourceVendorRepository(db)
@@ -475,6 +495,287 @@ class OutsourceService:
         return True
 
     # ── Task ──
+
+    @classmethod
+    def _parse_task_group_key(cls, group_key: str) -> dict:
+        """Parse only keys emitted by the repository's grouping expression."""
+        if group_key == "unlinked":
+            return {"kind": "unlinked"}
+        for kind, pattern in cls.GROUP_KEY_PATTERNS:
+            match = pattern.fullmatch(group_key)
+            if not match:
+                continue
+            try:
+                identity = UUID(match.group(match.lastindex))
+            except (TypeError, ValueError):
+                break
+            if kind == "source_task":
+                return {
+                    "kind": kind,
+                    "source_task_type": match.group(1),
+                    "source_task_id": identity,
+                }
+            if kind == "related_document":
+                return {
+                    "kind": kind,
+                    "related_doc_type": match.group(1),
+                    "related_doc_id": identity,
+                }
+            return {"kind": kind, "task_id": identity}
+        raise ValueError("无效的外协任务分组键")
+
+    @staticmethod
+    def _row_value(row, name: str, default=None):
+        if isinstance(row, dict):
+            return row.get(name, default)
+        mapping = getattr(row, "_mapping", None)
+        if mapping is not None and name in mapping:
+            return mapping[name]
+        return getattr(row, name, default)
+
+    async def _load_source_task_contexts(self, identities: list[dict]) -> dict[tuple[str, UUID], dict]:
+        """Batch-load source task numbers/statuses to avoid one query per group."""
+        from app.models.task import DesignTask, InstallationTask, ProductionTask
+
+        model_map = {
+            "design": (DesignTask, "design_no"),
+            "production": (ProductionTask, "production_no"),
+            "installation": (InstallationTask, "installation_no"),
+        }
+        refs: dict[str, set[UUID]] = {task_type: set() for task_type in model_map}
+        for identity in identities:
+            if identity.get("kind") != "source_task":
+                continue
+            refs[identity["source_task_type"]].add(identity["source_task_id"])
+
+        contexts: dict[tuple[str, UUID], dict] = {}
+        for task_type, ids in refs.items():
+            if not ids:
+                continue
+            model, number_field = model_map[task_type]
+            result = await self.db.execute(select(model).where(model.id.in_(ids)))
+            for task in result.scalars().all():
+                contexts[(task_type, task.id)] = {
+                    "id": task.id,
+                    "business_no": getattr(task, number_field, None),
+                    "status": getattr(task, "status", None),
+                    "project_name": getattr(task, "project_name", None),
+                    "document_id": getattr(task, "document_id", None),
+                }
+        return contexts
+
+    async def _load_document_contexts(
+        self,
+        identities: list[dict],
+        source_contexts: dict[tuple[str, UUID], dict],
+    ) -> dict[UUID, dict]:
+        """Batch-load related order/quote labels used in group headers."""
+        from app.models.business_document import BusinessDocument
+
+        document_ids: set[UUID] = set()
+        for identity in identities:
+            if identity.get("kind") == "related_document":
+                document_ids.add(identity["related_doc_id"])
+        for source in source_contexts.values():
+            document_id = source.get("document_id")
+            if document_id:
+                document_ids.add(document_id)
+        if not document_ids:
+            return {}
+
+        result = await self.db.execute(
+            select(BusinessDocument).where(BusinessDocument.id.in_(document_ids))
+        )
+        return {
+            document.id: {
+                "id": document.id,
+                "doc_no": getattr(document, "doc_no", None),
+                "doc_type": getattr(document, "doc_type", None),
+                "project_name": getattr(document, "project_name", None),
+            }
+            for document in result.scalars().all()
+        }
+
+    @staticmethod
+    def _group_related_doc_ids(row) -> set[UUID]:
+        raw_ids = OutsourceService._row_value(row, "related_doc_ids") or []
+        if isinstance(raw_ids, (str, UUID)):
+            raw_ids = [raw_ids]
+        result = set()
+        for value in raw_ids:
+            try:
+                parsed = OutsourceService._to_uuid(value)
+            except (TypeError, ValueError):
+                parsed = None
+            if parsed:
+                result.add(parsed)
+        return result
+
+    def _task_group_to_dict(
+        self,
+        row,
+        identity: dict,
+        source_contexts: dict[tuple[str, UUID], dict],
+        document_contexts: dict[UUID, dict],
+    ) -> dict:
+        group_kind = self._row_value(row, "group_kind", "unlinked")
+        source_type = identity.get("source_task_type")
+        source_id = identity.get("source_task_id")
+        source = source_contexts.get((source_type, source_id)) if source_type and source_id else None
+        related_ids = self._group_related_doc_ids(row)
+        document_id = None
+        document = None
+        warnings = []
+
+        if identity.get("kind") == "related_document":
+            document_id = identity["related_doc_id"]
+            document = document_contexts.get(document_id)
+            if not document:
+                warnings.append("关联单据已不存在")
+        elif source:
+            document_id = source.get("document_id")
+            document = document_contexts.get(document_id) if document_id else None
+            if document_id and not document:
+                warnings.append("来源任务关联单据已不存在")
+            if related_ids and document_id and any(item_id != document_id for item_id in related_ids):
+                warnings.append("来源任务与外协记录的关联单据不一致")
+        elif related_ids:
+            # For unresolved/legacy groups, expose a document label when it is
+            # unambiguous without attempting to repair the historical link.
+            document_id = next(iter(related_ids)) if len(related_ids) == 1 else None
+            document = document_contexts.get(document_id) if document_id else None
+
+        if group_kind == "source_task":
+            source_label = self.SOURCE_TASK_LABELS.get(source_type, "内部")
+            if source:
+                group_label = f"{source_label}任务 {source.get('business_no') or source_id}"
+            else:
+                group_label = f"{source_label}任务（来源已不存在）"
+                warnings.insert(0, "来源任务已不存在，历史外协记录已保留")
+        elif group_kind == "related_document":
+            document_label = self.DOCUMENT_LABELS.get(
+                identity.get("related_doc_type"), "关联单据"
+            )
+            document_number = document.get("doc_no") if document else identity.get("related_doc_id")
+            group_label = f"{document_label} {document_number} · 未关联来源任务"
+        elif group_kind == "unresolved_source":
+            group_label = "来源任务关联不完整"
+            warnings.insert(0, "来源任务关联不完整，已按单条记录隔离")
+        elif group_kind == "unresolved_document":
+            group_label = "关联单据关联不完整"
+            warnings.insert(0, "关联单据关联不完整，已按单条记录隔离")
+        else:
+            group_label = "未关联任务"
+
+        status_keys = ("pending", "in_progress", "completed", "settled", "cancelled", "other")
+        status_counts = {
+            key: int(self._row_value(row, f"status_{key}_count", 0) or 0)
+            for key in status_keys
+        }
+        source_document_id = source.get("document_id") if source else None
+        if source_document_id and document_id is None:
+            document_id = source_document_id
+            document = document_contexts.get(document_id)
+
+        related_doc_type = document.get("doc_type") if document else None
+        if related_doc_type is None and identity.get("kind") == "related_document":
+            related_doc_type = identity.get("related_doc_type")
+        if related_doc_type is None and source_document_id:
+            related_doc_type = "order"
+        related_project_name = (
+            (source.get("project_name") if source else None)
+            or (document.get("project_name") if document else None)
+        )
+        warning = "；".join(dict.fromkeys(warnings)) or None
+        return {
+            "group_key": self._row_value(row, "group_key"),
+            "group_kind": group_kind,
+            "group_label": group_label,
+            "source_task_type": source_type,
+            "source_task_id": str(source_id) if source_id else None,
+            "source_task_no": source.get("business_no") if source else None,
+            "source_task_status": source.get("status") if source else None,
+            "source_task_exists": bool(source) if group_kind == "source_task" else None,
+            "related_doc_type": related_doc_type,
+            "related_doc_id": str(document_id) if document_id else None,
+            "related_doc_no": document.get("doc_no") if document else None,
+            "related_project_name": related_project_name,
+            "consistency_warning": warning,
+            "task_count": int(self._row_value(row, "task_count", 0) or 0),
+            "active_task_count": int(self._row_value(row, "active_task_count", 0) or 0),
+            "status_counts": status_counts,
+            "planned_amount": float(self._to_money(self._row_value(row, "planned_amount", 0))),
+            "recognized_cost": float(self._to_money(self._row_value(row, "recognized_cost", 0))),
+            "paid_amount": float(self._to_money(self._row_value(row, "paid_amount", 0))),
+            "unpaid_amount": float(self._to_money(self._row_value(row, "unpaid_amount", 0))),
+        }
+
+    async def list_task_groups(self, page: int, page_size: int, status: str | None = None,
+                               vendor_id: UUID | None = None, related_doc_id: UUID | None = None,
+                               source_task_type: str | None = None, source_task_id: UUID | None = None,
+                               task_type: str | None = None,
+                               order_item_id: UUID | None = None) -> tuple[list, int]:
+        skip = (page - 1) * page_size
+        rows, total = await self.task_repo.list_task_groups(
+            skip,
+            page_size,
+            status,
+            vendor_id,
+            related_doc_id,
+            source_task_type,
+            source_task_id,
+            task_type,
+            order_item_id,
+        )
+        identities = [
+            self._parse_task_group_key(self._row_value(row, "group_key"))
+            for row in rows
+        ]
+        source_contexts = await self._load_source_task_contexts(identities)
+        document_contexts = await self._load_document_contexts(identities, source_contexts)
+        return [
+            self._task_group_to_dict(row, identity, source_contexts, document_contexts)
+            for row, identity in zip(rows, identities)
+        ], total
+
+    async def list_task_group_tasks(self, group_key: str, page: int, page_size: int,
+                                    status: str | None = None,
+                                    vendor_id: UUID | None = None,
+                                    related_doc_id: UUID | None = None,
+                                    source_task_type: str | None = None,
+                                    source_task_id: UUID | None = None,
+                                    task_type: str | None = None,
+                                    order_item_id: UUID | None = None) -> tuple[list, int]:
+        identity = self._parse_task_group_key(group_key)
+        if identity.get("kind") == "source_task":
+            if source_task_type and source_task_type != identity["source_task_type"]:
+                raise ValueError("分组与来源任务类型筛选不一致")
+            if source_task_id and source_task_id != identity["source_task_id"]:
+                raise ValueError("分组与来源任务筛选不一致")
+        elif identity.get("kind") == "related_document":
+            if source_task_type or source_task_id:
+                raise ValueError("单据兜底组不能使用来源任务筛选")
+            if related_doc_id and related_doc_id != identity["related_doc_id"]:
+                raise ValueError("分组与订单筛选不一致")
+        skip = (page - 1) * page_size
+        tasks, total = await self.task_repo.list_task_group_tasks(
+            group_key,
+            skip,
+            page_size,
+            status,
+            vendor_id,
+            related_doc_id,
+            source_task_type,
+            source_task_id,
+            task_type,
+            order_item_id,
+        )
+        result = []
+        for task in tasks:
+            vendor_name = await self._task_vendor_name(task)
+            project_name = await self._related_project_name(task.related_doc_id, task.related_doc_type)
+            result.append(self._task_to_dict(task, vendor_name, project_name))
+        return result, total
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          vendor_id: UUID | None = None, related_doc_id: UUID | None = None,

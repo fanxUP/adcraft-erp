@@ -30,6 +30,8 @@ def test_outsource_routes_use_business_permissions():
         ("PUT", "/outsource/vendors/{vendor_id}"): PERM_OUTSOURCE_UPDATE,
         ("DELETE", "/outsource/vendors/{vendor_id}"): PERM_OUTSOURCE_DELETE,
         ("GET", "/outsource/tasks"): PERM_OUTSOURCE_READ,
+        ("GET", "/outsource/task-groups"): PERM_OUTSOURCE_READ,
+        ("GET", "/outsource/task-groups/{group_key}/tasks"): PERM_OUTSOURCE_READ,
         ("GET", "/outsource/orders/{order_id}/items-summary"): PERM_OUTSOURCE_READ,
         ("GET", "/outsource/orders/{order_id}/items-for-dropdown"): PERM_OUTSOURCE_READ,
         ("POST", "/outsource/orders/{order_id}/items/{item_id}/send"): PERM_OUTSOURCE_CREATE,

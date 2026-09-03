@@ -27,57 +27,129 @@
         <el-option label="已结算" value="settled" />
         <el-option label="已取消" value="cancelled" />
       </el-select>
-      <el-button @click="fetchData" style="margin-left: 12px" type="primary">搜索</el-button>
+      <el-button @click="handleSearch" style="margin-left: 12px" type="primary">搜索</el-button>
     </div>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协任务">
-      <el-table-column prop="task_no" label="任务编号" width="180" />
-      <el-table-column prop="vendor_name" label="外协商" width="140" />
-      <el-table-column label="任务" width="160" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span v-if="row.related_project_name">{{ row.related_project_name }}</span>
-          <span v-else style="color: #999">-</span>
+    <el-collapse v-model="expandedGroupKeys" class="task-groups" v-loading="loading" @change="handleGroupChange">
+      <el-collapse-item v-for="group in groups" :key="group.group_key" :name="group.group_key">
+        <template #title>
+          <div class="group-header">
+            <div class="group-heading">
+              <el-tag size="small" effect="plain">{{ groupTypeLabel(group) }}</el-tag>
+              <el-button
+                v-if="group.source_task_no && group.source_task_exists !== false"
+                link
+                type="primary"
+                class="source-task-link"
+                @click.stop="openSourceTask(group)"
+              >
+                {{ group.source_task_no }}
+              </el-button>
+              <span v-else class="group-label">{{ group.group_label }}</span>
+              <el-tag v-if="group.consistency_warning" type="warning" size="small">需核对</el-tag>
+            </div>
+            <div class="group-summary">
+              <span>外协 {{ group.task_count }} 条</span>
+              <span>计划 ¥{{ formatMoney(group.planned_amount) }}</span>
+              <span class="paid">已付 ¥{{ formatMoney(group.paid_amount) }}</span>
+              <span class="unpaid">未付 ¥{{ formatMoney(group.unpaid_amount) }}</span>
+            </div>
+          </div>
         </template>
-      </el-table-column>
-      <el-table-column label="订单明细" min-width="170" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span v-if="row.order_item_name">{{ row.order_item_name }}</span>
-          <span v-else-if="row.related_doc_type === 'order'" style="color: var(--ad-text-secondary)">整单外协</span>
-          <span v-else style="color: var(--ad-text-secondary)">-</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="total_amount" label="总金额" width="120" align="right">
-        <template #default="{ row }">¥{{ row.total_amount?.toFixed(2) }}</template>
-      </el-table-column>
-      <el-table-column label="已付" width="100" align="right">
-        <template #default="{ row }">
-          <span style="color: var(--el-color-success)">¥{{ row.paid_amount?.toFixed(2) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="未付" width="100" align="right">
-        <template #default="{ row }">
-          <span v-if="row.unpaid_amount > 0" style="color: var(--el-color-danger)">¥{{ row.unpaid_amount?.toFixed(2) }}</span>
-          <span v-else style="color: var(--el-color-success)">已结清</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" min-width="200" fixed="right">
-        <template #default="{ row }">
-          <el-button text type="primary" @click="handleEdit(row as OutsourceTaskResponse)">编辑</el-button>
-          <el-button v-if="row.status === 'pending'" text type="primary" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'in_progress')">开始</el-button>
-          <el-button v-if="row.status === 'in_progress'" text type="success" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'completed')">完成</el-button>
-          <el-button v-if="isAdmin && row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" text type="warning" @click="handlePay(row as OutsourceTaskResponse)">付款</el-button>
-          <el-button v-if="isAdmin && row.status === 'completed'" text type="warning" @click="handleRevert(row as OutsourceTaskResponse)">退回</el-button>
-          <el-button v-if="isAdmin && !['completed', 'settled', 'cancelled'].includes(row.status)" text type="danger" @click="handleCancel(row as OutsourceTaskResponse)">取消</el-button>
-          <el-button v-if="isAdmin" text type="danger" @click="handleDelete(row as OutsourceTaskResponse)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+
+        <div class="group-meta">
+          <span v-if="group.related_project_name">项目：{{ group.related_project_name }}</span>
+          <span v-if="group.related_doc_no">单据：{{ group.related_doc_no }}</span>
+          <span v-if="group.source_task_status">来源状态：{{ internalStatusLabel(group.source_task_status) }}</span>
+          <span>状态分布：{{ groupStatusSummary(group) }}</span>
+          <span>已识别成本：¥{{ formatMoney(group.recognized_cost) }}</span>
+          <span v-if="group.status_counts.cancelled">已取消 {{ group.status_counts.cancelled }} 条不计成本</span>
+        </div>
+        <el-alert
+          v-if="group.consistency_warning"
+          :title="group.consistency_warning"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="group-warning"
+        />
+        <el-alert
+          v-if="group.tasksError"
+          :title="group.tasksError"
+          type="error"
+          :closable="false"
+          show-icon
+          class="group-warning"
+        />
+
+        <el-table :data="group.tasks" v-loading="group.tasksLoading" stripe empty-text="暂无符合筛选条件的明细">
+          <el-table-column prop="task_no" label="外协任务编号" width="180" />
+          <el-table-column prop="vendor_name" label="外协商" width="140" />
+          <el-table-column label="项目" width="160" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span v-if="row.related_project_name">{{ row.related_project_name }}</span>
+              <span v-else style="color: #999">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="订单明细" min-width="170" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span v-if="row.order_item_name">{{ row.order_item_name }}</span>
+              <span v-else-if="row.related_doc_type === 'order'" style="color: var(--ad-text-secondary)">整单外协</span>
+              <span v-else style="color: var(--ad-text-secondary)">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
+          <el-table-column label="数量" width="90" align="right">
+            <template #default="{ row }">{{ row.quantity }}</template>
+          </el-table-column>
+          <el-table-column label="单价" width="100" align="right">
+            <template #default="{ row }">¥{{ formatMoney(row.unit_price) }}</template>
+          </el-table-column>
+          <el-table-column prop="total_amount" label="总金额" width="120" align="right">
+            <template #default="{ row }">¥{{ formatMoney(row.total_amount) }}</template>
+          </el-table-column>
+          <el-table-column label="已付" width="100" align="right">
+            <template #default="{ row }">
+              <span style="color: var(--el-color-success)">¥{{ formatMoney(row.paid_amount) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="未付" width="100" align="right">
+            <template #default="{ row }">
+              <span v-if="row.unpaid_amount > 0" style="color: var(--el-color-danger)">¥{{ formatMoney(row.unpaid_amount) }}</span>
+              <span v-else style="color: var(--el-color-success)">已结清</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" min-width="200" fixed="right">
+            <template #default="{ row }">
+              <el-button text type="primary" @click="handleEdit(row as OutsourceTaskResponse)">编辑</el-button>
+              <el-button v-if="row.status === 'pending'" text type="primary" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'in_progress')">开始</el-button>
+              <el-button v-if="row.status === 'in_progress'" text type="success" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'completed')">完成</el-button>
+              <el-button v-if="isAdmin && row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" text type="warning" @click="handlePay(row as OutsourceTaskResponse)">付款</el-button>
+              <el-button v-if="isAdmin && row.status === 'completed'" text type="warning" @click="handleRevert(row as OutsourceTaskResponse)">退回</el-button>
+              <el-button v-if="isAdmin && !['completed', 'settled', 'cancelled'].includes(row.status)" text type="danger" @click="handleCancel(row as OutsourceTaskResponse)">取消</el-button>
+              <el-button v-if="isAdmin" text type="danger" @click="handleDelete(row as OutsourceTaskResponse)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <el-pagination
+          v-if="group.tasksTotal > 0"
+          v-model:current-page="group.tasksPage"
+          v-model:page-size="group.tasksPageSize"
+          :page-sizes="[10, 20, 50]"
+          :total="group.tasksTotal"
+          layout="total, sizes, prev, pager, next"
+          class="group-pagination"
+          @change="loadGroupTasks(group, true)"
+        />
+      </el-collapse-item>
+    </el-collapse>
+    <el-empty v-if="!loading && groups.length === 0" description="暂无外协任务" />
 
     <el-pagination
       v-model:current-page="page"
@@ -86,7 +158,7 @@
       :total="total"
       layout="total, sizes, prev, pager, next"
       style="margin-top: 16px; justify-content: flex-end"
-      @change="fetchData"
+      @change="handleGroupPageChange"
     />
 
     <!-- 新建/编辑任务对话框 -->
@@ -202,9 +274,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
-  getOutsourceVendors, getOutsourceTasks, getOutsourceTaskPaymentSummary,
+  getOutsourceVendors, getOutsourceTaskGroups, getOutsourceTaskGroupTasks, getOutsourceTaskPaymentSummary,
   createOutsourceTask, updateOutsourceTask, createOutsourcePayment,
   cancelOutsourceTask, revertOutsourceTask, deleteOutsourceTask,
   getQuotesForDropdown, getOrdersForDropdown, getOutsourceOrderItems,
@@ -212,11 +284,22 @@ import {
 import type { OutsourceTaskPaymentSummary } from '@/api/outsource'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { OutsourceTaskResponse } from '@/types/api'
+import type { OutsourceTaskGroupResponse, OutsourceTaskResponse } from '@/types/api'
 
 const loading = ref(false)
 const saving = ref(false)
-const list = ref<OutsourceTaskResponse[]>([])
+interface TaskGroup extends OutsourceTaskGroupResponse {
+  tasks: OutsourceTaskResponse[]
+  tasksPage: number
+  tasksPageSize: number
+  tasksTotal: number
+  tasksLoading: boolean
+  tasksLoaded: boolean
+  tasksError: string
+}
+
+const groups = ref<TaskGroup[]>([])
+const expandedGroupKeys = ref<string[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
@@ -255,6 +338,7 @@ const payRules = {
 const authStore = useAuthStore()
 const isAdmin = computed(() => authStore.isAdmin)
 const route = useRoute()
+const router = useRouter()
 
 interface OrderItemOption {
   id: string
@@ -277,6 +361,75 @@ function statusType(val: string) {
 function statusLabel(val: string) {
   const map: Record<string, string> = { pending: '待处理', in_progress: '进行中', completed: '已完成', settled: '已结算', cancelled: '已取消' }
   return map[val] || val
+}
+
+function internalStatusLabel(val: string) {
+  const map: Record<string, string> = {
+    pending: '待处理', assigned: '已分配', in_progress: '进行中', completed: '已完成', cancelled: '已取消',
+  }
+  return map[val] || val
+}
+
+function formatMoney(value: number | null | undefined) {
+  return Number(value || 0).toFixed(2)
+}
+
+function groupTypeLabel(group: OutsourceTaskGroupResponse) {
+  const taskLabels: Record<string, string> = { design: '设计任务', production: '制作任务', installation: '安装任务' }
+  if (group.group_kind === 'source_task') return taskLabels[group.source_task_type || ''] || '内部任务'
+  if (group.group_kind === 'related_document') return group.related_doc_type === 'quote' ? '报价单' : '订单'
+  if (group.group_kind === 'unresolved_source') return '异常来源'
+  if (group.group_kind === 'unresolved_document') return '异常单据'
+  return '未关联'
+}
+
+function groupStatusSummary(group: OutsourceTaskGroupResponse) {
+  const labels: Record<string, string> = {
+    pending: '待处理', in_progress: '进行中', completed: '已完成', settled: '已结算', cancelled: '已取消', other: '其他',
+  }
+  const counts = group.status_counts || {}
+  const summary = Object.entries(labels)
+    .filter(([key]) => Number(counts[key] || 0) > 0)
+    .map(([key, label]) => `${label} ${counts[key]}`)
+  return summary.join(' / ') || '无'
+}
+
+function createTaskGroup(group: OutsourceTaskGroupResponse): TaskGroup {
+  return {
+    ...group,
+    tasks: [],
+    tasksPage: 1,
+    tasksPageSize: 20,
+    tasksTotal: 0,
+    tasksLoading: false,
+    tasksLoaded: false,
+    tasksError: '',
+  }
+}
+
+function groupQueryParams() {
+  const contextualTaskType = typeof route.query.task_type === 'string' ? route.query.task_type : ''
+  const keepSourceScope = contextualTaskType !== '' && contextualTaskType === activeTaskType.value
+  return {
+    status: statusFilter.value || undefined,
+    task_type: activeTaskType.value === 'all' ? undefined : activeTaskType.value,
+    order_id: typeof route.query.order_id === 'string' ? route.query.order_id : undefined,
+    order_item_id: typeof route.query.order_item_id === 'string' ? route.query.order_item_id : undefined,
+    source_task_type: keepSourceScope && typeof route.query.source_task_type === 'string' ? route.query.source_task_type : undefined,
+    source_task_id: keepSourceScope && typeof route.query.source_task_id === 'string' ? route.query.source_task_id : undefined,
+  }
+}
+
+function contextualSourceGroupKey() {
+  const contextualTaskType = typeof route.query.task_type === 'string' ? route.query.task_type : ''
+  const sourceTaskType = typeof route.query.source_task_type === 'string' ? route.query.source_task_type : ''
+  const sourceTaskId = typeof route.query.source_task_id === 'string' ? route.query.source_task_id : ''
+  if (
+    contextualTaskType !== activeTaskType.value
+    || !['design', 'production', 'installation'].includes(sourceTaskType)
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sourceTaskId)
+  ) return ''
+  return `source:${sourceTaskType}:${sourceTaskId.toLowerCase()}`
 }
 
 async function loadQuotes() {
@@ -324,30 +477,106 @@ async function loadOrderItems(orderId: string, preserveItemId = '', preserveItem
   }
 }
 
-async function fetchData() {
+async function fetchData(options: { preserveExpanded?: boolean } = {}) {
   loading.value = true
+  const previousExpanded = options.preserveExpanded ? [...expandedGroupKeys.value] : []
   try {
-    const contextualTaskType = typeof route.query.task_type === 'string' ? route.query.task_type : ''
-    const keepSourceScope = contextualTaskType !== '' && contextualTaskType === activeTaskType.value
-    const data = await getOutsourceTasks({
+    const data = await getOutsourceTaskGroups({
       page: page.value, page_size: pageSize.value,
-      status: statusFilter.value || undefined,
-      task_type: activeTaskType.value === 'all' ? undefined : activeTaskType.value,
-      order_id: typeof route.query.order_id === 'string' ? route.query.order_id : undefined,
-      order_item_id: typeof route.query.order_item_id === 'string' ? route.query.order_item_id : undefined,
-      source_task_type: keepSourceScope && typeof route.query.source_task_type === 'string' ? route.query.source_task_type : undefined,
-      source_task_id: keepSourceScope && typeof route.query.source_task_id === 'string' ? route.query.source_task_id : undefined,
+      ...groupQueryParams(),
     })
-    list.value = data.items
+    groups.value = data.items.map(createTaskGroup)
     total.value = data.total
+    const availableKeys = new Set(groups.value.map(group => group.group_key))
+    const contextualGroupKey = options.preserveExpanded ? '' : contextualSourceGroupKey()
+    expandedGroupKeys.value = contextualGroupKey && availableKeys.has(contextualGroupKey)
+      ? [contextualGroupKey]
+      : previousExpanded.filter(groupKey => availableKeys.has(groupKey))
+    if (contextualGroupKey && expandedGroupKeys.value.includes(contextualGroupKey)) {
+      const contextualGroup = groups.value.find(group => group.group_key === contextualGroupKey)
+      if (contextualGroup) await loadGroupTasks(contextualGroup)
+    }
   } finally {
     loading.value = false
   }
 }
 
+async function loadGroupTasks(group: TaskGroup, force = false) {
+  if (group.tasksLoading || (group.tasksLoaded && !force)) return
+  group.tasksLoading = true
+  group.tasksError = ''
+  try {
+    let data = await getOutsourceTaskGroupTasks(group.group_key, {
+      ...groupQueryParams(),
+      page: group.tasksPage,
+      page_size: group.tasksPageSize,
+    })
+    // If a row was removed from the last child page, move back to the first
+    // page instead of showing an empty page while the group still has rows.
+    if (data.items.length === 0 && data.total > 0 && group.tasksPage > 1) {
+      group.tasksPage = 1
+      data = await getOutsourceTaskGroupTasks(group.group_key, {
+        ...groupQueryParams(),
+        page: group.tasksPage,
+        page_size: group.tasksPageSize,
+      })
+    }
+    group.tasks = data.items
+    group.tasksTotal = data.total
+    group.tasksLoaded = true
+  } catch (error) {
+    group.tasksError = error instanceof Error ? error.message : '明细加载失败'
+  } finally {
+    group.tasksLoading = false
+  }
+}
+
+function handleGroupChange(value: string | string[]) {
+  const keys = Array.isArray(value) ? value : [value]
+  void Promise.all(
+    keys.map(groupKey => {
+      const group = groups.value.find(item => item.group_key === groupKey)
+      return group ? loadGroupTasks(group) : Promise.resolve()
+    }),
+  )
+}
+
+function handleSearch() {
+  page.value = 1
+  expandedGroupKeys.value = []
+  void fetchData()
+}
+
 function handleTaskTypeChange() {
   page.value = 1
+  expandedGroupKeys.value = []
   void fetchData()
+}
+
+function handleGroupPageChange() {
+  expandedGroupKeys.value = []
+  void fetchData()
+}
+
+async function refreshData() {
+  const previousExpanded = [...expandedGroupKeys.value]
+  await fetchData({ preserveExpanded: true })
+  await Promise.all(
+    groups.value
+      .filter(group => previousExpanded.includes(group.group_key))
+      .map(group => loadGroupTasks(group, true)),
+  )
+}
+
+function openSourceTask(group: OutsourceTaskGroupResponse) {
+  if (!group.source_task_id) return
+  const pathMap: Record<string, string> = {
+    design: '/design-tasks',
+    production: '/production-tasks',
+    installation: '/installation-tasks',
+  }
+  const path = pathMap[group.source_task_type || '']
+  if (path) void router.push(`${path}/${group.source_task_id}`)
 }
 
 function onRelatedDocChange(val: string) {
@@ -408,7 +637,7 @@ async function handleSave() {
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false
-    await fetchData()
+    await refreshData()
   } finally {
     saving.value = false
   }
@@ -418,7 +647,7 @@ async function handleUpdateStatus(row: OutsourceTaskResponse, status: string) {
   try {
     await updateOutsourceTask(row.id, { status })
     ElMessage.success(`已更新为：${statusLabel(status)}`)
-    await fetchData()
+    await refreshData()
   } catch { /* ignore */ }
 }
 
@@ -469,7 +698,7 @@ async function handlePaySubmit() {
     })
     ElMessage.success('付款成功')
     payDialogVisible.value = false
-    await fetchData()
+    await refreshData()
   } finally {
     paySaving.value = false
   }
@@ -482,7 +711,7 @@ async function handleCancel(row: OutsourceTaskResponse) {
     })
     await cancelOutsourceTask(row.id)
     ElMessage.success('外协任务已取消')
-    await fetchData()
+    await refreshData()
   } catch { /* ignore */ }
 }
 
@@ -493,7 +722,7 @@ async function handleRevert(row: OutsourceTaskResponse) {
     })
     await revertOutsourceTask(row.id)
     ElMessage.success('外协任务已退回为进行中')
-    await fetchData()
+    await refreshData()
   } catch { /* ignore */ }
 }
 
@@ -522,7 +751,7 @@ async function handleDelete(row: OutsourceTaskResponse) {
     })
     await deleteOutsourceTask(row.id)
     ElMessage.success(payments.length ? `已删除任务及 ${payments.length} 条关联付款记录` : '外协任务已删除')
-    await fetchData()
+    await refreshData()
   } catch { /* ignore */ }
 }
 
@@ -540,8 +769,27 @@ onMounted(() => {
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .task-tabs { margin-top: 8px; }
-.search-bar { display: flex; align-items: center; }
+.search-bar { display: flex; align-items: center; flex-wrap: wrap; }
 .form-tip { color: var(--ad-text-secondary); font-size: 12px; line-height: 1.5; }
+
+.task-groups { margin-top: 16px; border-bottom: none; }
+.task-groups :deep(.el-collapse-item__header) { min-height: 64px; height: auto; padding: 10px 16px; line-height: 1.4; }
+.task-groups :deep(.el-collapse-item__wrap) { border-bottom: 1px solid var(--el-border-color-light); }
+.group-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-width: 0; }
+.group-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.group-label { color: var(--ad-text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-task-link { padding: 0; font-weight: 600; }
+.group-summary { display: flex; align-items: center; gap: 14px; color: var(--ad-text-secondary); font-size: 13px; white-space: nowrap; }
+.group-summary .paid { color: var(--el-color-success); }
+.group-summary .unpaid { color: var(--el-color-danger); }
+.group-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0 0 10px; color: var(--ad-text-secondary); font-size: 12px; }
+.group-warning { margin-bottom: 10px; }
+.group-pagination { margin: 12px 0 4px; justify-content: flex-end; }
+
+@media (max-width: 900px) {
+  .group-header { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .group-summary { flex-wrap: wrap; white-space: normal; gap: 6px 12px; }
+}
 
 .pay-summary {
   background: var(--el-fill-color-light);

@@ -115,6 +115,70 @@ async def delete_vendor(
 
 # ── Task ──
 
+@router.get("/task-groups")
+async def list_task_groups(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status: str | None = None,
+    vendor_id: UUID | None = None,
+    order_id: UUID | None = None,
+    task_type: str | None = None,
+    source_task_type: str | None = None,
+    source_task_id: UUID | None = None,
+    order_item_id: UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
+):
+    """按来源内部任务业务编号返回外协任务折叠组。"""
+    service = OutsourceService(db)
+    groups, total = await service.list_task_groups(
+        page,
+        page_size,
+        status,
+        vendor_id,
+        order_id,
+        source_task_type,
+        source_task_id,
+        task_type,
+        order_item_id,
+    )
+    return success_paginated(groups, total, page, page_size)
+
+
+@router.get("/task-groups/{group_key}/tasks")
+async def list_task_group_tasks(
+    group_key: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status: str | None = None,
+    vendor_id: UUID | None = None,
+    order_id: UUID | None = None,
+    task_type: str | None = None,
+    source_task_type: str | None = None,
+    source_task_id: UUID | None = None,
+    order_item_id: UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
+):
+    """按折叠组分页返回外协任务明细，写操作仍复用现有任务接口。"""
+    service = OutsourceService(db)
+    try:
+        tasks, total = await service.list_task_group_tasks(
+            group_key,
+            page,
+            page_size,
+            status,
+            vendor_id,
+            order_id,
+            source_task_type,
+            source_task_id,
+            task_type,
+            order_item_id,
+        )
+        return success_paginated(tasks, total, page, page_size)
+    except ValueError as e:
+        return error(40001, str(e))
+
 @router.get("/tasks")
 async def list_tasks(
     page: int = Query(1, ge=1),

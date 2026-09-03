@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
@@ -10,7 +11,12 @@ from pydantic import ValidationError
 
 from app.schemas.outsource import OutsourcePaymentCreate, OutsourceTaskCreate
 from app.services.outsource_service import OutsourceService
-from tests.conftest import SAMPLE_USER_ID, SAMPLE_ORDER_ID, SAMPLE_TASK_ID
+from tests.conftest import (
+    SAMPLE_USER_ID,
+    SAMPLE_ORDER_ID,
+    SAMPLE_TASK_ID,
+    make_mock_design_task,
+)
 
 
 SAMPLE_ORDER_ITEM_ID = UUID("55555555-5555-5555-5555-555555555555")
@@ -93,6 +99,8 @@ def mock_repos():
     task_repo = MagicMock()
     task_repo.get_by_id = AsyncMock()
     task_repo.list_tasks = AsyncMock(return_value=([], 0))
+    task_repo.list_task_groups = AsyncMock(return_value=([], 0))
+    task_repo.list_task_group_tasks = AsyncMock(return_value=([], 0))
     task_repo.create = AsyncMock()
     task_repo.get_deleted_by_id = AsyncMock()
     task_repo.restore = AsyncMock()
@@ -222,6 +230,156 @@ async def test_list_tasks_empty(service):
     items, total = await svc.list_tasks(page=1, page_size=20)
     assert items == []
     assert total == 0
+
+
+@pytest.mark.asyncio
+async def test_list_task_groups_resolves_source_business_number_and_summaries(service):
+    """同一内部任务下的外协记录应显示来源业务编号并汇总可核对金额。"""
+    svc, _, tr, _ = service
+    tr.list_task_groups = AsyncMock(
+        return_value=(
+            [
+                SimpleNamespace(
+                    group_key=f"source:design:{SAMPLE_TASK_ID}",
+                    group_kind="source_task",
+                    task_count=2,
+                    active_task_count=2,
+                    status_pending_count=1,
+                    status_in_progress_count=0,
+                    status_completed_count=1,
+                    status_settled_count=0,
+                    status_cancelled_count=0,
+                    status_other_count=0,
+                    planned_amount=Decimal("120"),
+                    recognized_cost=Decimal("80"),
+                    paid_amount=Decimal("20"),
+                    unpaid_amount=Decimal("100"),
+                    related_doc_ids=[SAMPLE_ORDER_ID],
+                    latest_created_at=datetime.now(timezone.utc),
+                ),
+            ],
+            1,
+        )
+    )
+    source_task = make_mock_design_task(
+        task_id=SAMPLE_TASK_ID,
+        design_no="D20260903-0001",
+        order_id=SAMPLE_ORDER_ID,
+        project_name="测试设计项目",
+        status="in_progress",
+    )
+    source_result = MagicMock()
+    source_result.scalars.return_value.all.return_value = [source_task]
+    document = MagicMock(
+        id=SAMPLE_ORDER_ID,
+        doc_no="O20260903-0001",
+        doc_type="order",
+        project_name="测试设计项目",
+    )
+    document_result = MagicMock()
+    document_result.scalars.return_value.all.return_value = [document]
+    svc.db.execute = AsyncMock(side_effect=[source_result, document_result])
+
+    groups, total = await svc.list_task_groups(page=1, page_size=20)
+
+    assert total == 1
+    assert groups[0]["group_key"] == f"source:design:{SAMPLE_TASK_ID}"
+    assert groups[0]["source_task_no"] == "D20260903-0001"
+    assert groups[0]["source_task_status"] == "in_progress"
+    assert groups[0]["related_doc_no"] == "O20260903-0001"
+    assert groups[0]["planned_amount"] == 120.0
+    assert groups[0]["recognized_cost"] == 80.0
+    assert groups[0]["paid_amount"] == 20.0
+    assert groups[0]["unpaid_amount"] == 100.0
+    assert groups[0]["status_counts"] == {
+        "pending": 1,
+        "in_progress": 0,
+        "completed": 1,
+        "settled": 0,
+        "cancelled": 0,
+        "other": 0,
+    }
+
+
+@pytest.mark.asyncio
+async def test_list_task_group_tasks_rejects_untrusted_group_key(service):
+    """分组明细接口不能接受未经严格校验的键，避免越权/模糊匹配。"""
+    svc, _, tr, _ = service
+    tr.list_task_group_tasks = AsyncMock()
+
+    with pytest.raises(ValueError, match="无效的外协任务分组"):
+        await svc.list_task_group_tasks("source:design:not-a-uuid", page=1, page_size=20)
+
+    with pytest.raises(ValueError, match="分组与来源任务类型筛选不一致"):
+        await svc.list_task_group_tasks(
+            f"source:design:{SAMPLE_TASK_ID}",
+            page=1,
+            page_size=20,
+            source_task_type="production",
+        )
+
+    tr.list_task_group_tasks.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_list_task_groups_keeps_legacy_document_fallback_visible(service):
+    """历史无来源任务记录按单据兜底，并明确标记单据缺失风险。"""
+    svc, _, tr, _ = service
+    legacy_doc_id = UUID("66666666-6666-6666-6666-666666666666")
+    tr.list_task_groups.return_value = (
+        [
+            SimpleNamespace(
+                group_key=f"document:order:{legacy_doc_id}",
+                group_kind="related_document",
+                task_count=1,
+                active_task_count=1,
+                planned_amount=Decimal("50"),
+                recognized_cost=Decimal("0"),
+                paid_amount=Decimal("0"),
+                unpaid_amount=Decimal("50"),
+                related_doc_ids=[legacy_doc_id],
+            ),
+        ],
+        1,
+    )
+    missing_document_result = MagicMock()
+    missing_document_result.scalars.return_value.all.return_value = []
+    svc.db.execute = AsyncMock(return_value=missing_document_result)
+
+    groups, total = await svc.list_task_groups(page=1, page_size=20)
+
+    assert total == 1
+    assert groups[0]["group_kind"] == "related_document"
+    assert groups[0]["group_label"] == f"订单 {legacy_doc_id} · 未关联来源任务"
+    assert groups[0]["related_doc_type"] == "order"
+    assert groups[0]["related_doc_id"] == str(legacy_doc_id)
+    assert groups[0]["consistency_warning"] == "关联单据已不存在"
+
+
+@pytest.mark.asyncio
+async def test_list_task_group_tasks_passes_group_and_filters(service):
+    """组内明细查询继续透传现有筛选条件，并返回现有明细格式。"""
+    svc, _, tr, _ = service
+    task = make_mock_outsource_task(source_task_type="design", source_task_id=SAMPLE_TASK_ID)
+    tr.list_task_group_tasks.return_value = ([task], 1)
+
+    items, total = await svc.list_task_group_tasks(
+        f"source:design:{SAMPLE_TASK_ID}",
+        page=2,
+        page_size=10,
+        status="pending",
+        source_task_type="design",
+        source_task_id=SAMPLE_TASK_ID,
+        task_type="design",
+    )
+
+    assert total == 1
+    assert items[0]["task_no"] == task.task_no
+    args = tr.list_task_group_tasks.call_args.args
+    assert args[:3] == (f"source:design:{SAMPLE_TASK_ID}", 10, 10)
+    assert args[3] == "pending"
+    assert args[6] == "design"
+    assert args[7] == SAMPLE_TASK_ID
 
 
 @pytest.mark.asyncio

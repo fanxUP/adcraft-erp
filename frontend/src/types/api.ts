@@ -791,6 +791,29 @@ export interface OutsourceTaskResponse {
   deleted_at?: string
 }
 
+export interface OutsourceTaskGroupResponse {
+  group_key: string
+  group_kind: 'source_task' | 'related_document' | 'unresolved_source' | 'unresolved_document' | 'unlinked' | string
+  group_label: string
+  source_task_type?: string | null
+  source_task_id?: string | null
+  source_task_no?: string | null
+  source_task_status?: string | null
+  source_task_exists?: boolean | null
+  related_doc_type?: string | null
+  related_doc_id?: string | null
+  related_doc_no?: string | null
+  related_project_name?: string | null
+  consistency_warning?: string | null
+  task_count: number
+  active_task_count: number
+  status_counts: Record<string, number>
+  planned_amount: number
+  recognized_cost: number
+  paid_amount: number
+  unpaid_amount: number
+}
+
 export interface OutsourceOrderItemSummary {
   id: string
   item_name: string
