@@ -27,8 +27,12 @@ AdCraft ERP 全量部署
   .env、backend/uploads、backups、backend/.venv
 
 程序目录会与目标 Git 提交一致；发现服务器有未提交的跟踪文件改动时会停止，
-不会自动使用 git clean 删除未知文件。代码最终归 ${DEPLOY_OWNER}:${DEPLOY_GROUP}，
-运行数据仍由服务账号维护。
+  不会自动使用 git clean 删除未知文件。代码最终归 ${DEPLOY_OWNER}:${DEPLOY_GROUP}，
+  运行数据仍由服务账号维护。
+
+默认复用服务器现有的 Python venv，不访问公网安装依赖。依赖有明确变更时，
+在已确认服务器可访问软件源或已准备离线包后显式设置：
+  INSTALL_DEPENDENCIES=1 sudo -E ./deploy.sh ...
 
 首次接管已有临时覆盖代码时，可在确认代码已备份后使用：
   ALLOW_DIRTY_WORKTREE=1 sudo -E ./deploy.sh ...
@@ -135,9 +139,17 @@ if [ ! -f .env ]; then
 fi
 
 if [ ! -x backend/.venv/bin/python ]; then
-  python3 -m venv backend/.venv
+  echo "缺少生产 Python venv：$PROJECT_DIR/backend/.venv/bin/python" >&2
+  echo "请先在服务器准备依赖，或按维护窗口单独初始化 venv。" >&2
+  exit 1
 fi
-backend/.venv/bin/pip install --quiet --disable-pip-version-check -e backend
+if [ "${INSTALL_DEPENDENCIES:-0}" = "1" ]; then
+  backend/.venv/bin/pip install --quiet --disable-pip-version-check --no-build-isolation -e backend
+else
+  echo "跳过 Python 依赖安装（使用服务器现有 venv）"
+fi
+backend/.venv/bin/python -c \
+  'import alembic, asyncpg, fastapi, pydantic, sqlalchemy, uvicorn'
 
 if [ -n "$DIST_ARCHIVE" ]; then
   if [ ! -f "$DIST_ARCHIVE" ]; then
