@@ -804,6 +804,7 @@ export interface OutsourceTaskGroupResponse {
   related_doc_id?: string | null
   related_doc_no?: string | null
   related_project_name?: string | null
+  related_project_amount?: number | null
   consistency_warning?: string | null
   task_count: number
   active_task_count: number

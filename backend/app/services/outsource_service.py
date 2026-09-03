@@ -592,6 +592,7 @@ class OutsourceService:
                 "doc_no": getattr(document, "doc_no", None),
                 "doc_type": getattr(document, "doc_type", None),
                 "project_name": getattr(document, "project_name", None),
+                "total_amount": getattr(document, "total_amount", None),
             }
             for document in result.scalars().all()
         }
@@ -686,6 +687,11 @@ class OutsourceService:
             (source.get("project_name") if source else None)
             or (document.get("project_name") if document else None)
         )
+        related_project_amount = (
+            self._to_money(document.get("total_amount"))
+            if document and document.get("total_amount") is not None
+            else None
+        )
         warning = "；".join(dict.fromkeys(warnings)) or None
         return {
             "group_key": self._row_value(row, "group_key"),
@@ -700,6 +706,9 @@ class OutsourceService:
             "related_doc_id": str(document_id) if document_id else None,
             "related_doc_no": document.get("doc_no") if document else None,
             "related_project_name": related_project_name,
+            "related_project_amount": (
+                float(related_project_amount) if related_project_amount is not None else None
+            ),
             "consistency_warning": warning,
             "task_count": int(self._row_value(row, "task_count", 0) or 0),
             "active_task_count": int(self._row_value(row, "active_task_count", 0) or 0),

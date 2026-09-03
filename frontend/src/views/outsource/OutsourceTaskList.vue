@@ -46,6 +46,21 @@
                 {{ group.source_task_no }}
               </el-button>
               <span v-else class="group-label">{{ group.group_label }}</span>
+              <div
+                v-if="group.related_project_name || group.related_project_amount !== null && group.related_project_amount !== undefined"
+                class="group-project"
+              >
+                <span
+                  v-if="group.related_project_name"
+                  class="group-project-name"
+                  :title="group.related_project_name"
+                >
+                  项目：{{ group.related_project_name }}
+                </span>
+                <span v-if="group.related_project_amount !== null && group.related_project_amount !== undefined" class="group-project-amount">
+                  项目金额：¥{{ formatMoney(group.related_project_amount) }}
+                </span>
+              </div>
               <el-tag v-if="group.consistency_warning" type="warning" size="small">需核对</el-tag>
             </div>
             <div class="group-summary">
@@ -58,7 +73,6 @@
         </template>
 
         <div class="group-meta">
-          <span v-if="group.related_project_name">项目：{{ group.related_project_name }}</span>
           <span v-if="group.related_doc_no">单据：{{ group.related_doc_no }}</span>
           <span v-if="group.source_task_status">来源状态：{{ internalStatusLabel(group.source_task_status) }}</span>
           <span>状态分布：{{ groupStatusSummary(group) }}</span>
@@ -776,10 +790,13 @@ onMounted(() => {
 .task-groups :deep(.el-collapse-item__header) { min-height: 64px; height: auto; padding: 10px 16px; line-height: 1.4; }
 .task-groups :deep(.el-collapse-item__wrap) { border-bottom: 1px solid var(--el-border-color-light); }
 .group-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-width: 0; }
-.group-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.group-heading { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; flex-wrap: wrap; }
 .group-label { color: var(--ad-text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-task-link { padding: 0; font-weight: 600; }
-.group-summary { display: flex; align-items: center; gap: 14px; color: var(--ad-text-secondary); font-size: 13px; white-space: nowrap; }
+.group-project { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--ad-text-secondary); font-size: 13px; }
+.group-project-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-project-amount { color: var(--ad-text); font-weight: 600; white-space: nowrap; }
+.group-summary { display: flex; align-items: center; gap: 14px; flex-shrink: 0; color: var(--ad-text-secondary); font-size: 13px; white-space: nowrap; }
 .group-summary .paid { color: var(--el-color-success); }
 .group-summary .unpaid { color: var(--el-color-danger); }
 .group-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0 0 10px; color: var(--ad-text-secondary); font-size: 12px; }

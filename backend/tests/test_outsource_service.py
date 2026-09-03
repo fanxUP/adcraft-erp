@@ -275,6 +275,7 @@ async def test_list_task_groups_resolves_source_business_number_and_summaries(se
         doc_no="O20260903-0001",
         doc_type="order",
         project_name="测试设计项目",
+        total_amount=Decimal("2560.00"),
     )
     document_result = MagicMock()
     document_result.scalars.return_value.all.return_value = [document]
@@ -287,6 +288,8 @@ async def test_list_task_groups_resolves_source_business_number_and_summaries(se
     assert groups[0]["source_task_no"] == "D20260903-0001"
     assert groups[0]["source_task_status"] == "in_progress"
     assert groups[0]["related_doc_no"] == "O20260903-0001"
+    assert groups[0]["related_project_name"] == "测试设计项目"
+    assert groups[0]["related_project_amount"] == 2560.0
     assert groups[0]["planned_amount"] == 120.0
     assert groups[0]["recognized_cost"] == 80.0
     assert groups[0]["paid_amount"] == 20.0
@@ -353,6 +356,7 @@ async def test_list_task_groups_keeps_legacy_document_fallback_visible(service):
     assert groups[0]["group_label"] == f"订单 {legacy_doc_id} · 未关联来源任务"
     assert groups[0]["related_doc_type"] == "order"
     assert groups[0]["related_doc_id"] == str(legacy_doc_id)
+    assert groups[0]["related_project_amount"] is None
     assert groups[0]["consistency_warning"] == "关联单据已不存在"
 
 
