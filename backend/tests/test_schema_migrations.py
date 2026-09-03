@@ -106,3 +106,23 @@ def test_order_item_lifecycle_migration_is_additive_and_reversible():
     assert 'op.create_index(' in source
     assert 'op.drop_constraint(' in source
     assert 'op.drop_column("business_document_items", "lifecycle_status")' in source
+
+
+def test_outsource_order_item_migration_adds_safe_fk_index_and_decimal_quantity():
+    versions_dir = Path(__file__).parents[1] / "alembic" / "versions"
+    source = next(
+        path.read_text(encoding="utf-8")
+        for path in versions_dir.glob("*.py")
+        if "outsource_order_item" in path.name
+    )
+
+    assert 'revision = "k2l3m4n5o6p7"' in source
+    assert 'down_revision = "j1k2l3m4n5o6"' in source
+    assert 'op.create_foreign_key(' in source
+    assert '"fk_outsource_tasks_order_item_id"' in source
+    assert 'ondelete="SET NULL"' in source
+    assert 'op.create_index(' in source
+    assert '"ix_outsource_order_item"' in source
+    assert 'sa.Numeric(14, 3)' in source
+    assert 'postgresql_using="quantity::numeric"' in source
+    assert 'quantity != trunc(quantity)' in source

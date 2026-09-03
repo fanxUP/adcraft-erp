@@ -71,7 +71,8 @@ class OutsourceTaskRepository:
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
                          vendor_id: UUID | None = None, related_doc_id: UUID | None = None,
                          source_task_type: str | None = None, source_task_id: UUID | None = None,
-                         task_type: str | None = None) -> tuple[list[OutsourceTask], int]:
+                         task_type: str | None = None,
+                         order_item_id: UUID | None = None) -> tuple[list[OutsourceTask], int]:
         q = select(OutsourceTask).where(OutsourceTask.deleted_at.is_(None))
         if status:
             q = q.where(OutsourceTask.status == status)
@@ -85,6 +86,8 @@ class OutsourceTaskRepository:
             q = q.where(OutsourceTask.source_task_id == source_task_id)
         if task_type:
             q = q.where(OutsourceTask.task_type == task_type)
+        if order_item_id:
+            q = q.where(OutsourceTask.order_item_id == order_item_id)
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
         q = q.order_by(OutsourceTask.created_at.desc()).offset(skip).limit(limit)
@@ -100,8 +103,9 @@ class OutsourceTaskRepository:
 
     async def update(self, task: OutsourceTask, data: dict) -> OutsourceTask:
         for k, v in data.items():
-            if v is not None:
-                setattr(task, k, v)
+            # None is meaningful for explicit relationship clearing, e.g.
+            # order_item_id=null must remove the item link.
+            setattr(task, k, v)
         await self.db.flush()
         return task
 

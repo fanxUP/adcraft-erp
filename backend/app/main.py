@@ -89,7 +89,11 @@ async def value_error_handler(request: Request, exc: ValueError):
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    return JSONResponse(status_code=exc.status_code, content={"code": exc.status_code * 100, "message": exc.detail, "data": None})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"code": exc.status_code * 100, "message": exc.detail, "data": None},
+        headers=exc.headers,
+    )
 
 
 app.add_middleware(

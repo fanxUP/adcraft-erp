@@ -39,6 +39,13 @@
           <span v-else style="color: #999">-</span>
         </template>
       </el-table-column>
+      <el-table-column label="订单明细" min-width="170" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span v-if="row.order_item_name">{{ row.order_item_name }}</span>
+          <span v-else-if="row.related_doc_type === 'order'" style="color: var(--ad-text-secondary)">整单外协</span>
+          <span v-else style="color: var(--ad-text-secondary)">-</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
       <el-table-column prop="total_amount" label="总金额" width="120" align="right">
         <template #default="{ row }">¥{{ row.total_amount?.toFixed(2) }}</template>
@@ -99,6 +106,12 @@
               <el-option v-for="o in orders" :key="'o_' + o.id" :label="o.label" :value="o.id" />
             </el-option-group>
           </el-select>
+        </el-form-item>
+        <el-form-item v-if="form.related_doc_type === 'order' && form.related_doc_id" label="订单明细">
+          <el-select v-model="form.order_item_id" filterable clearable placeholder="留空表示整单外协" style="width: 100%">
+            <el-option v-for="item in orderItems" :key="item.id" :label="item.label" :value="item.id" :disabled="item.disabled" />
+          </el-select>
+          <div class="form-tip">订单明细外协会参与明细数量和外协成本核对；历史整单外协可继续保留。</div>
         </el-form-item>
         <el-form-item label="任务类型" prop="task_type">
           <el-select v-model="form.task_type" clearable style="width: 100%">
@@ -189,11 +202,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   getOutsourceVendors, getOutsourceTasks, getOutsourceTaskPaymentSummary,
   createOutsourceTask, updateOutsourceTask, createOutsourcePayment,
   cancelOutsourceTask, revertOutsourceTask, deleteOutsourceTask,
-  getQuotesForDropdown, getOrdersForDropdown,
+  getQuotesForDropdown, getOrdersForDropdown, getOutsourceOrderItems,
 } from '@/api/outsource'
 import type { OutsourceTaskPaymentSummary } from '@/api/outsource'
 import { useAuthStore } from '@/stores/auth'
@@ -217,7 +231,7 @@ const orders = ref<{id: string; label: string; project_name: string}[]>([])
 
 const form = reactive({
   vendor_id: '', related_doc_id: '', related_doc_type: '', task_type: 'production',
-  description: '', quantity: 1, unit_price: 0, remark: '',
+  order_item_id: '', description: '', quantity: 1, unit_price: 0, remark: '',
 })
 const rules = {
   vendor_id: [{ required: true, message: '请选择外协商', trigger: 'change' }],
@@ -240,6 +254,20 @@ const payRules = {
 // 是否管理员（从 localStorage 取角色）
 const authStore = useAuthStore()
 const isAdmin = computed(() => authStore.isAdmin)
+const route = useRoute()
+
+interface OrderItemOption {
+  id: string
+  label: string
+  item_name: string
+  quantity: number
+  unit?: string | null
+  group_name?: string | null
+  sort_order: number
+  disabled?: boolean
+}
+
+const orderItems = ref<OrderItemOption[]>([])
 
 function statusType(val: string) {
   const map: Record<string, string> = { pending: 'info', in_progress: 'warning', completed: 'success', settled: '', cancelled: 'danger' }
@@ -264,13 +292,51 @@ async function loadVendors() {
   } catch { /* ignore */ }
 }
 
+async function loadOrderItems(orderId: string, preserveItemId = '', preserveItemName = '') {
+  if (!orderId) {
+    orderItems.value = []
+    return
+  }
+  try {
+    const activeItems = await getOutsourceOrderItems(orderId)
+    if (preserveItemId && !activeItems.some(item => item.id === preserveItemId)) {
+      orderItems.value = [
+        {
+          id: preserveItemId,
+          label: `${preserveItemName || '历史订单明细'}（已作废，仅可保留）`,
+          item_name: preserveItemName || '历史订单明细',
+          quantity: 0,
+          unit: null,
+          group_name: null,
+          sort_order: -1,
+          disabled: true,
+        },
+        ...activeItems,
+      ]
+    } else {
+      orderItems.value = activeItems
+    }
+    if (form.order_item_id && !orderItems.value.some(item => item.id === form.order_item_id)) {
+      form.order_item_id = ''
+    }
+  } catch {
+    orderItems.value = []
+  }
+}
+
 async function fetchData() {
   loading.value = true
   try {
+    const contextualTaskType = typeof route.query.task_type === 'string' ? route.query.task_type : ''
+    const keepSourceScope = contextualTaskType !== '' && contextualTaskType === activeTaskType.value
     const data = await getOutsourceTasks({
       page: page.value, page_size: pageSize.value,
       status: statusFilter.value || undefined,
       task_type: activeTaskType.value === 'all' ? undefined : activeTaskType.value,
+      order_id: typeof route.query.order_id === 'string' ? route.query.order_id : undefined,
+      order_item_id: typeof route.query.order_item_id === 'string' ? route.query.order_item_id : undefined,
+      source_task_type: keepSourceScope && typeof route.query.source_task_type === 'string' ? route.query.source_task_type : undefined,
+      source_task_id: keepSourceScope && typeof route.query.source_task_id === 'string' ? route.query.source_task_id : undefined,
     })
     list.value = data.items
     total.value = data.total
@@ -285,14 +351,34 @@ function handleTaskTypeChange() {
 }
 
 function onRelatedDocChange(val: string) {
-  if (!val) { form.related_doc_type = ''; return }
+  form.order_item_id = ''
+  if (!val) {
+    form.related_doc_type = ''
+    orderItems.value = []
+    return
+  }
   const foundQuote = quotes.value.find(q => q.id === val)
   form.related_doc_type = foundQuote ? 'quote' : 'order'
+  if (form.related_doc_type === 'order') void loadOrderItems(val)
+  else orderItems.value = []
 }
 
 function handleCreate() {
   editingId.value = null
-  Object.assign(form, { vendor_id: '', related_doc_id: '', related_doc_type: '', task_type: 'production', description: '', quantity: 1, unit_price: 0, remark: '' })
+  const routeOrderId = typeof route.query.order_id === 'string' ? route.query.order_id : ''
+  Object.assign(form, {
+    vendor_id: '',
+    related_doc_id: routeOrderId,
+    related_doc_type: routeOrderId ? 'order' : '',
+    order_item_id: typeof route.query.order_item_id === 'string' ? route.query.order_item_id : '',
+    task_type: activeTaskType.value === 'all' ? 'production' : activeTaskType.value,
+    description: '',
+    quantity: 1,
+    unit_price: 0,
+    remark: '',
+  })
+  if (routeOrderId) void loadOrderItems(routeOrderId)
+  else orderItems.value = []
   dialogVisible.value = true
 }
 
@@ -300,9 +386,14 @@ function handleEdit(row: OutsourceTaskResponse) {
   editingId.value = row.id
   Object.assign(form, {
     vendor_id: row.vendor_id, related_doc_id: row.related_doc_id || '', related_doc_type: row.related_doc_type || '',
+    order_item_id: row.order_item_id || '',
     task_type: row.task_type, description: row.description,
     quantity: row.quantity, unit_price: row.unit_price, remark: row.remark,
   })
+  if (form.related_doc_type === 'order' && form.related_doc_id) {
+    void loadOrderItems(form.related_doc_id, row.order_item_id || '', row.order_item_name || '')
+  }
+  else orderItems.value = []
   dialogVisible.value = true
 }
 
@@ -436,6 +527,10 @@ async function handleDelete(row: OutsourceTaskResponse) {
 }
 
 onMounted(() => {
+  const requestedTaskType = route.query.task_type
+  if (requestedTaskType === 'design' || requestedTaskType === 'production' || requestedTaskType === 'installation') {
+    activeTaskType.value = requestedTaskType
+  }
   fetchData(); loadVendors(); loadQuotes(); loadOrders()
 })
 </script>
@@ -446,6 +541,7 @@ onMounted(() => {
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .task-tabs { margin-top: 8px; }
 .search-bar { display: flex; align-items: center; }
+.form-tip { color: var(--ad-text-secondary); font-size: 12px; line-height: 1.5; }
 
 .pay-summary {
   background: var(--el-fill-color-light);

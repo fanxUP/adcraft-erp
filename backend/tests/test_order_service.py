@@ -8,8 +8,6 @@ import pytest
 
 from app.services.business_document_service import BusinessDocumentService, ORDER_TRANSITIONS
 from app.models.task import ProductionTask
-from app.models.acceptance import AcceptanceForm
-from app.models.user import User
 from app.services.task_service import DesignTaskService
 from tests.conftest import SAMPLE_CUSTOMER_ID, SAMPLE_ORDER_ID
 
@@ -322,3 +320,32 @@ async def test_order_update_skips_sync_when_no_linked_project():
     await service.update(doc.id, {"project_name": "奖牌制作", "department": "督察科"})
 
     db.flush.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_order_sales_total_update_does_not_overwrite_outsource_cost():
+    db = MagicMock()
+    order = make_order(total_amount=Decimal("1000"))
+    task = MagicMock(
+        description="旧项目",
+        unit_price=Decimal("10"),
+        total_amount=Decimal("20"),
+        deleted_at=None,
+    )
+    outsource_result = MagicMock()
+    outsource_result.scalars.return_value.all.return_value = [task]
+    projects_result = MagicMock()
+    projects_result.scalars.return_value.all.return_value = []
+    db.execute = AsyncMock(side_effect=[outsource_result, projects_result])
+    db.flush = AsyncMock()
+
+    service = BusinessDocumentService(db, doc_type="order")
+    service.repo.get_by_id = AsyncMock(return_value=order)
+    service.repo.update = AsyncMock(side_effect=lambda document, data: document)
+    service._sync_contact_to_customer = AsyncMock()
+    service._to_detail = MagicMock(return_value={})
+
+    await service.update(order.id, {"total_amount": Decimal("2000")})
+
+    assert task.unit_price == Decimal("10")
+    assert task.total_amount == Decimal("20")

@@ -15,7 +15,14 @@ from app.core.permissions import (
 )
 from app.models.user import User
 from app.schemas.common import success, success_paginated, error
-from app.schemas.outsource import VendorCreate, VendorUpdate, OutsourceTaskCreate, OutsourceTaskUpdate, OutsourcePaymentCreate
+from app.schemas.outsource import (
+    VendorCreate,
+    VendorUpdate,
+    OutsourceTaskCreate,
+    OutsourceTaskUpdate,
+    OutsourceOrderItemSend,
+    OutsourcePaymentCreate,
+)
 from app.services.outsource_service import OutsourceService
 from app.services.operation_log_service import log_operation, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, ACTION_STATUS_CHANGE
 from app.services.operation_log_service import OBJ_OUTSOURCE_VENDOR, OBJ_OUTSOURCE_TASK, OBJ_OUTSOURCE_PAYMENT
@@ -118,6 +125,7 @@ async def list_tasks(
     task_type: str | None = None,
     source_task_type: str | None = None,
     source_task_id: str | None = None,
+    order_item_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
@@ -125,8 +133,82 @@ async def list_tasks(
     vid = UUID(vendor_id) if vendor_id else None
     oid = UUID(order_id) if order_id else None
     stid = UUID(source_task_id) if source_task_id else None
-    tasks, total = await service.list_tasks(page, page_size, status, vid, oid, source_task_type, stid, task_type)
+    oiid = UUID(order_item_id) if order_item_id else None
+    tasks, total = await service.list_tasks(
+        page,
+        page_size,
+        status,
+        vid,
+        oid,
+        source_task_type,
+        stid,
+        task_type,
+        oiid,
+    )
     return success_paginated(tasks, total, page, page_size)
+
+
+@router.get("/orders/{order_id}/items-summary")
+async def get_order_item_summary(
+    order_id: str,
+    task_type: str | None = None,
+    source_task_type: str | None = None,
+    source_task_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
+):
+    """返回当前订单明细的外协分配与成本摘要。"""
+    service = OutsourceService(db)
+    try:
+        return success(
+            await service.get_order_item_summary(
+                UUID(order_id),
+                task_type=task_type,
+                source_task_type=source_task_type,
+                source_task_id=UUID(source_task_id) if source_task_id else None,
+            )
+        )
+    except ValueError as e:
+        return error(40001, str(e))
+
+
+@router.post("/orders/{order_id}/items/{item_id}/send")
+async def send_order_item(
+    order_id: str,
+    item_id: str,
+    data: OutsourceOrderItemSend,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_CREATE)),
+):
+    """从当前内部任务把一个订单明细发送为外协任务。"""
+    service = OutsourceService(db)
+    order_uuid = UUID(order_id)
+    item_uuid = UUID(item_id)
+    try:
+        task = await service.send_order_item(
+            order_uuid,
+            item_uuid,
+            data.model_dump(),
+        )
+        await log_operation(
+            db,
+            current_user.id,
+            current_user.real_name or current_user.username,
+            OBJ_OUTSOURCE_TASK,
+            UUID(task["id"]),
+            ACTION_CREATE,
+            ip_address=request.client.host if request.client else None,
+            after_data={
+                "task_no": task["task_no"],
+                "order_id": str(order_uuid),
+                "order_item_id": str(item_uuid),
+                "quantity": task.get("quantity"),
+            },
+        )
+        return success(task)
+    except ValueError as e:
+        return error(40001, str(e))
 
 
 @router.get("/tasks/payment-summary/{task_id}")
@@ -184,7 +266,7 @@ async def update_task(
     service = OutsourceService(db)
     tid = UUID(task_id)
     try:
-        task = await service.update_task(tid, data.model_dump(exclude_none=True))
+        task = await service.update_task(tid, data.model_dump(exclude_unset=True))
         await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                             OBJ_OUTSOURCE_TASK, tid, ACTION_UPDATE,
                             ip_address=request.client.host if request.client else None,
@@ -380,3 +462,17 @@ async def list_orders_for_dropdown(
          "order_no": r.doc_no, "project_name": r.project_name}
         for r in rows
     ])
+
+
+@router.get("/orders/{order_id}/items-for-dropdown")
+async def list_order_items_for_dropdown(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
+):
+    """返回一个有效订单的有效明细供手工外协表单选择。"""
+    service = OutsourceService(db)
+    try:
+        return success(await service.list_order_items_for_dropdown(UUID(order_id)))
+    except ValueError as e:
+        return error(40001, str(e))

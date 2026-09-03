@@ -641,7 +641,8 @@ async def test_stable_acceptance_and_outsource_links_refresh_only_planning_field
     assert acceptance_item.item_name == "新名称"
     assert acceptance_item.subtotal == Decimal("24")
     assert outsource.quantity == 2
-    assert outsource.total_amount == Decimal("24")
+    # 订单明细单价是销售价，外协单价是供应商成本；刷新数量时沿用外协成本单价。
+    assert outsource.total_amount == Decimal("20")
 
 
 @pytest.mark.asyncio

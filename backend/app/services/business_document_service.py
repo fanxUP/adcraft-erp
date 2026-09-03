@@ -254,21 +254,19 @@ class BusinessDocumentService:
         # 反向同步联系人：单据里填的联系人自动存入客户管理的联系人列表
         await self._sync_contact_to_customer(updated, data)
 
-        # 同步外协任务
-        if data.get("project_name") or data.get("total_amount"):
+        # 同步外协任务的项目描述；订单销售金额与外协供应商成本是两个独立口径，
+        # 不能因为订单保存而覆盖外协任务的 unit_price/total_amount。
+        if data.get("project_name"):
             from app.models.outsource import OutsourceTask
             tasks = (await self.db.execute(
                 select(OutsourceTask).where(
                     (OutsourceTask.related_doc_id == doc_id)
                     & (OutsourceTask.related_doc_type == updated.doc_type)
+                    & (OutsourceTask.deleted_at.is_(None))
                 )
             )).scalars().all()
             for t in tasks:
-                if data.get("project_name"):
-                    t.description = data["project_name"]
-                if data.get("total_amount") is not None:
-                    t.unit_price = float(data["total_amount"])
-                    t.total_amount = float(data["total_amount"])
+                t.description = data["project_name"]
             if tasks:
                 await self.db.flush()
 
@@ -2848,21 +2846,14 @@ class BusinessDocumentService:
                             )
                     elif operation == "update" and projected_item:
                         quantity = self._to_decimal(projected_item.get("quantity"))
-                        projected_total = self._to_decimal(projected_item.get("subtotal_amount"))
-                        if quantity != quantity.to_integral_value():
-                            append(
-                                "pending_review",
-                                {
-                                    "module": "outsource_tasks",
-                                    "label": "外协任务",
-                                    "record_id": str(task.id),
-                                    "record_no": task.task_no,
-                                    "status": task.status,
-                                    "action": "refresh_plan",
-                                },
-                                "订单数量不是整数，外协数量需人工复核后调整",
-                            )
-                        elif paid_amount > projected_total:
+                        # 订单明细的 unit_price/subtotal_amount 是销售价，外协任务的
+                        # unit_price/total_amount 是供应商成本。订单变更只刷新描述、
+                        # 数量和按原外协成本单价重算的计划金额，绝不复制销售价。
+                        vendor_unit_price = self._to_decimal(task.unit_price).quantize(MONEY_QUANTUM)
+                        projected_total = (quantity * vendor_unit_price).quantize(
+                            MONEY_QUANTUM
+                        )
+                        if paid_amount > projected_total:
                             append(
                                 "adjustments",
                                 {
@@ -2877,8 +2868,7 @@ class BusinessDocumentService:
                             )
                         else:
                             task.description = projected_item.get("item_name") or task.description
-                            task.quantity = int(quantity)
-                            task.unit_price = self._to_decimal(projected_item.get("unit_price"))
+                            task.quantity = quantity
                             task.total_amount = projected_total
                             task.unpaid_amount = max(
                                 task.total_amount - self._to_decimal(task.paid_amount),
@@ -2894,7 +2884,7 @@ class BusinessDocumentService:
                                     "status": task.status,
                                     "action": "refresh_plan",
                                 },
-                                "未开始外协任务已按订单明细刷新计划数量和金额",
+                                "未开始外协任务已按订单明细刷新数量，成本单价沿用原外协任务",
                             )
                     else:
                         append(

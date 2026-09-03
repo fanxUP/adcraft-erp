@@ -6,18 +6,15 @@ response structure, and error handling.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4, UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 from app.core.deps import get_db, get_current_user
-from app.schemas.common import success
 from app.ai_assistant.service import AiAssistantService
 from app.ai_assistant.business_rules.service import BusinessRuleSyncService
 
@@ -120,6 +117,37 @@ class TestAIAnomaliesAPI:
             with TestClient(app) as c:
                 response = c.get("/api/v1/ai/anomalies/scan")
                 assert response.status_code == 401
+                assert response.headers["www-authenticate"] == "Bearer"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_scan_anomalies_rejects_wrong_auth_scheme(self, mock_db_session):
+        """A non-Bearer authorization scheme is still an unauthenticated request."""
+        app.dependency_overrides[get_db] = lambda: mock_db_session
+        try:
+            with TestClient(app) as c:
+                response = c.get(
+                    "/api/v1/ai/anomalies/scan",
+                    headers={"Authorization": "Basic dGVzdDpwYXNz"},
+                )
+                assert response.status_code == 401
+                assert response.headers["www-authenticate"] == "Bearer"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_scan_anomalies_rejects_invalid_bearer_token_with_challenge(
+        self, mock_db_session
+    ):
+        """An invalid Bearer token returns a standard authentication challenge."""
+        app.dependency_overrides[get_db] = lambda: mock_db_session
+        try:
+            with TestClient(app) as c:
+                response = c.get(
+                    "/api/v1/ai/anomalies/scan",
+                    headers={"Authorization": "Bearer not-a-valid-token"},
+                )
+                assert response.status_code == 401
+                assert response.headers["www-authenticate"] == "Bearer"
         finally:
             app.dependency_overrides.clear()
 

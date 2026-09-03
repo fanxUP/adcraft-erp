@@ -1,7 +1,9 @@
 """Tests for OutsourceService: vendor/task/payment CRUD."""
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
@@ -9,6 +11,9 @@ from pydantic import ValidationError
 from app.schemas.outsource import OutsourcePaymentCreate, OutsourceTaskCreate
 from app.services.outsource_service import OutsourceService
 from tests.conftest import SAMPLE_USER_ID, SAMPLE_ORDER_ID, SAMPLE_TASK_ID
+
+
+SAMPLE_ORDER_ITEM_ID = UUID("55555555-5555-5555-5555-555555555555")
 
 
 def make_mock_vendor(**kwargs):
@@ -33,13 +38,17 @@ def make_mock_outsource_task(**kwargs):
     t.task_no = kwargs.get("task_no", "OT20260629-0001")
     t.vendor_id = kwargs.get("vendor_id", SAMPLE_USER_ID)
     t.order_id = kwargs.get("order_id", SAMPLE_ORDER_ID)
+    t.related_doc_id = kwargs.get("related_doc_id", SAMPLE_ORDER_ID)
+    t.related_doc_type = kwargs.get("related_doc_type", "order")
+    t.order_item_id = kwargs.get("order_item_id")
+    t.order_item = kwargs.get("order_item")
     t.task_type = kwargs.get("task_type", "laser_cutting")
     t.description = kwargs.get("description", "激光切割")
     t.quantity = kwargs.get("quantity", 10.0)
     t.unit_price = kwargs.get("unit_price", 50.0)
     t.total_amount = kwargs.get("total_amount", 500.0)
     t.paid_amount = kwargs.get("paid_amount", 0.0)
-    t.unpaid_amount = kwargs.get("unpaid_amount", t.total_amount - t.paid_amount)
+    t.unpaid_amount = kwargs.get("unpaid_amount", float(t.total_amount) - float(t.paid_amount))
     t.status = kwargs.get("status", "pending")
     t.expected_at = kwargs.get("expected_at")
     t.completed_at = kwargs.get("completed_at")
@@ -248,6 +257,236 @@ async def test_create_task(service):
             "unit_price": 100.0,
         })
     assert result["task_no"] == "OT20260629-0002"
+
+
+@pytest.mark.asyncio
+async def test_create_task_accepts_item_owned_by_selected_order(service):
+    svc, _, task_repo, _ = service
+    order = MagicMock(id=SAMPLE_ORDER_ID, doc_type="order", deleted_at=None)
+    item = MagicMock(
+        id=SAMPLE_ORDER_ITEM_ID,
+        document_id=SAMPLE_ORDER_ID,
+        item_name="户外写真",
+        lifecycle_status="active",
+    )
+    svc.db.get = AsyncMock(side_effect=[order, item])
+    task_repo.create.return_value = make_mock_outsource_task(
+        order_item_id=SAMPLE_ORDER_ITEM_ID,
+        order_item=item,
+    )
+
+    with patch(
+        "app.services.outsource_service.generate_outsource_task_no",
+        AsyncMock(return_value="OT20260902-0001"),
+    ):
+        result = await svc.create_task(
+            {
+                "vendor_id": SAMPLE_USER_ID,
+                "related_doc_id": SAMPLE_ORDER_ID,
+                "related_doc_type": "order",
+                "order_item_id": SAMPLE_ORDER_ITEM_ID,
+                "task_type": "production",
+                "quantity": Decimal("1.25"),
+                "unit_price": 100,
+            }
+        )
+
+    assert result["order_item_id"] == str(SAMPLE_ORDER_ITEM_ID)
+    assert result["order_item_name"] == "户外写真"
+    assert task_repo.create.await_args.args[0]["order_item_id"] == SAMPLE_ORDER_ITEM_ID
+
+
+@pytest.mark.asyncio
+async def test_create_task_rejects_item_from_another_order(service):
+    svc, _, task_repo, _ = service
+    order = MagicMock(id=SAMPLE_ORDER_ID, doc_type="order", deleted_at=None)
+    foreign_item = MagicMock(
+        id=SAMPLE_ORDER_ITEM_ID,
+        document_id=UUID("66666666-6666-6666-6666-666666666666"),
+        item_name="其他订单明细",
+        lifecycle_status="active",
+    )
+    svc.db.get = AsyncMock(side_effect=[order, foreign_item])
+
+    with patch(
+        "app.services.outsource_service.generate_outsource_task_no",
+        AsyncMock(return_value="OT20260902-0002"),
+    ):
+        with pytest.raises(ValueError, match="不属于所选订单"):
+            await svc.create_task(
+                {
+                    "vendor_id": SAMPLE_USER_ID,
+                    "related_doc_id": SAMPLE_ORDER_ID,
+                    "related_doc_type": "order",
+                    "order_item_id": SAMPLE_ORDER_ITEM_ID,
+                    "task_type": "production",
+                    "quantity": 1,
+                    "unit_price": 100,
+                }
+            )
+
+    task_repo.create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_task_can_explicitly_clear_unpaid_item_link(service):
+    svc, _, task_repo, _ = service
+    task = make_mock_outsource_task(
+        order_item_id=SAMPLE_ORDER_ITEM_ID,
+        paid_amount=0,
+        unpaid_amount=100,
+    )
+    task_repo.get_by_id.return_value = task
+
+    result = await svc.update_task(SAMPLE_ORDER_ID, {"order_item_id": None})
+
+    assert result["order_item_id"] is None
+    task_repo.update.assert_called_once()
+    assert task_repo.update.call_args.args[1]["order_item_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_task_rejects_paid_item_reassignment(service):
+    svc, _, task_repo, _ = service
+    task_repo.get_by_id.return_value = make_mock_outsource_task(
+        order_item_id=SAMPLE_ORDER_ITEM_ID,
+        paid_amount=10,
+    )
+
+    with pytest.raises(ValueError, match="已有付款的外协任务不能更换订单明细"):
+        await svc.update_task(
+            SAMPLE_ORDER_ID,
+            {"order_item_id": UUID("77777777-7777-7777-7777-777777777777")},
+        )
+
+
+@pytest.mark.asyncio
+async def test_order_item_summary_reports_partial_allocation_and_costs(service):
+    svc, _, _, _ = service
+    order = MagicMock(id=SAMPLE_ORDER_ID, doc_type="order", deleted_at=None)
+    first_item = MagicMock(
+        id=SAMPLE_ORDER_ITEM_ID,
+        document_id=SAMPLE_ORDER_ID,
+        item_name="户外写真",
+        quantity=Decimal("3"),
+        unit="套",
+        group_name="制作",
+        sort_order=0,
+        lifecycle_status="active",
+    )
+    second_item_id = UUID("88888888-8888-8888-8888-888888888888")
+    second_item = MagicMock(
+        id=second_item_id,
+        document_id=SAMPLE_ORDER_ID,
+        item_name="安装服务",
+        quantity=Decimal("1"),
+        unit="项",
+        group_name="安装",
+        sort_order=1,
+        lifecycle_status="active",
+    )
+    pending = make_mock_outsource_task(
+        order_item_id=SAMPLE_ORDER_ITEM_ID,
+        quantity=Decimal("1.25"),
+        unit_price=Decimal("100"),
+        total_amount=Decimal("125"),
+        status="pending",
+    )
+    completed = make_mock_outsource_task(
+        order_item_id=SAMPLE_ORDER_ITEM_ID,
+        quantity=Decimal("1"),
+        unit_price=Decimal("100"),
+        total_amount=Decimal("100"),
+        status="completed",
+    )
+    finished = make_mock_outsource_task(
+        order_item_id=second_item_id,
+        quantity=Decimal("1"),
+        unit_price=Decimal("20"),
+        total_amount=Decimal("20"),
+        status="settled",
+    )
+    item_result = MagicMock()
+    item_result.scalars.return_value.all.return_value = [first_item, second_item]
+    task_result = MagicMock()
+    task_result.scalars.return_value.all.return_value = [pending, completed, finished]
+    svc.db.get = AsyncMock(return_value=order)
+    order_level_result = MagicMock()
+    order_level_result.scalars.return_value.all.return_value = []
+    svc.db.execute = AsyncMock(side_effect=[item_result, task_result, order_level_result])
+
+    result = await svc.get_order_item_summary(
+        SAMPLE_ORDER_ID,
+        task_type="production",
+        source_task_type="production",
+        source_task_id=SAMPLE_TASK_ID,
+    )
+
+    assert result["task_type"] == "production"
+    assert result["items"][0]["allocated_quantity"] == 2.25
+    assert result["items"][0]["remaining_quantity"] == 0.75
+    assert result["items"][0]["planned_amount"] == 225.0
+    assert result["items"][0]["recognized_cost"] == 100.0
+    assert result["items"][0]["status"] == "部分外协"
+    assert result["items"][0]["requires_reason"] is False
+    assert result["items"][1]["status"] == "已完成"
+    assert result["items"][1]["requires_reason"] is True
+
+
+@pytest.mark.asyncio
+async def test_send_order_item_defaults_to_remaining_quantity(service):
+    svc, _, task_repo, _ = service
+    order = MagicMock(id=SAMPLE_ORDER_ID, doc_type="order", deleted_at=None)
+    item = MagicMock(
+        id=SAMPLE_ORDER_ITEM_ID,
+        document_id=SAMPLE_ORDER_ID,
+        item_name="户外写真",
+        quantity=Decimal("3"),
+        lifecycle_status="active",
+    )
+    source_task = MagicMock(document_id=SAMPLE_ORDER_ID)
+    existing = make_mock_outsource_task(
+        order_item_id=SAMPLE_ORDER_ITEM_ID,
+        quantity=Decimal("1.25"),
+        total_amount=Decimal("125"),
+    )
+    existing_result = MagicMock()
+    existing_result.scalars.return_value.all.return_value = [existing]
+    vendor_result = MagicMock()
+    vendor_result.scalar_one_or_none.return_value = "测试外协商"
+    project_result = MagicMock()
+    project_result.scalar_one_or_none.return_value = "测试订单"
+    task_repo.create.return_value = make_mock_outsource_task(
+        order_item_id=SAMPLE_ORDER_ITEM_ID,
+        order_item=item,
+        quantity=Decimal("1.75"),
+    )
+    item_lock_result = MagicMock()
+    item_lock_result.scalar_one_or_none.return_value = item
+    svc.db.get = AsyncMock(side_effect=[order, source_task])
+    svc.db.execute = AsyncMock(side_effect=[item_lock_result, existing_result, vendor_result, project_result])
+
+    with patch(
+        "app.services.outsource_service.generate_outsource_task_no",
+        AsyncMock(return_value="OT20260902-0003"),
+    ):
+        await svc.send_order_item(
+            SAMPLE_ORDER_ID,
+            SAMPLE_ORDER_ITEM_ID,
+            {
+                "vendor_id": SAMPLE_USER_ID,
+                "task_type": "production",
+                "source_task_type": "production",
+                "source_task_id": SAMPLE_TASK_ID,
+                "unit_price": Decimal("80"),
+            },
+        )
+
+    create_data = task_repo.create.await_args.args[0]
+    assert create_data["quantity"] == Decimal("1.75")
+    assert create_data["order_item_id"] == SAMPLE_ORDER_ITEM_ID
+    assert create_data["related_doc_id"] == SAMPLE_ORDER_ID
+    assert create_data["source_task_id"] == SAMPLE_TASK_ID
 
 
 @pytest.mark.asyncio
@@ -547,6 +786,7 @@ def test_outsource_amounts_and_quantity_must_be_valid():
 async def test_create_task_passes_source_task_fields(service):
     """create_task 透传 source_task_type/source_task_id 并回显到响应。"""
     svc, _, tr, _ = service
+    svc.db.get = AsyncMock(return_value=MagicMock(document_id=SAMPLE_ORDER_ID))
     tr.create.return_value = make_mock_outsource_task(
         task_no="OT20260629-0003",
         source_task_type="design",

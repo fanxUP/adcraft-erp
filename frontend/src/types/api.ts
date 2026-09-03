@@ -772,6 +772,8 @@ export interface OutsourceTaskResponse {
   related_doc_type?: string
   related_project_name?: string
   order_id?: string
+  order_item_id?: string | null
+  order_item_name?: string | null
   source_task_type?: string
   source_task_id?: string
   task_type: string
@@ -787,6 +789,38 @@ export interface OutsourceTaskResponse {
   remark?: string
   created_at?: string
   deleted_at?: string
+}
+
+export interface OutsourceOrderItemSummary {
+  id: string
+  item_name: string
+  quantity: number
+  unit?: string | null
+  group_name?: string | null
+  sort_order: number
+  lifecycle_status?: string
+  allocated_quantity: number
+  remaining_quantity: number
+  planned_amount: number
+  recognized_cost: number
+  active_task_count: number
+  status: string
+  can_send: boolean
+  requires_reason: boolean
+  block_reason?: string | null
+}
+
+export interface OutsourceOrderItemSummaryResponse {
+  order_id: string
+  order_no: string
+  project_name: string
+  task_type?: string | null
+  source_task_type?: string | null
+  source_task_id?: string | null
+  items: OutsourceOrderItemSummary[]
+  order_level_task_count: number
+  order_level_planned_amount: number
+  order_level_recognized_cost: number
 }
 
 export interface OutsourcePaymentResponse {

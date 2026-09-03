@@ -3,6 +3,8 @@ set -Eeuo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-/opt/adcraft}"
 SERVICE_NAME="${SERVICE_NAME:-adcraft-backend}"
+DEPLOY_OWNER="${DEPLOY_OWNER:-admin}"
+DEPLOY_GROUP="${DEPLOY_GROUP:-adcraft}"
 BRANCH="${DEPLOY_BRANCH:-master}"
 BUNDLE=""
 DIST_ARCHIVE=""
@@ -24,7 +26,12 @@ AdCraft ERP 全量部署
 持久数据：
   .env、backend/uploads、backups、backend/.venv
 
-程序目录会强制与目标 Git 提交一致，服务器上的临时代码改动会被清理。
+程序目录会与目标 Git 提交一致；发现服务器有未提交的跟踪文件改动时会停止，
+不会自动使用 git clean 删除未知文件。代码最终归 ${DEPLOY_OWNER}:${DEPLOY_GROUP}，
+运行数据仍由服务账号维护。
+
+首次接管已有临时覆盖代码时，可在确认代码已备份后使用：
+  ALLOW_DIRTY_WORKTREE=1 sudo -E ./deploy.sh ...
 EOF
 }
 
@@ -56,6 +63,15 @@ done
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "请使用 sudo 运行部署脚本。" >&2
+  exit 1
+fi
+
+if ! id "$DEPLOY_OWNER" >/dev/null 2>&1; then
+  echo "部署代码所有者不存在：$DEPLOY_OWNER" >&2
+  exit 1
+fi
+if ! getent group "$DEPLOY_GROUP" >/dev/null 2>&1; then
+  echo "部署代码组不存在：$DEPLOY_GROUP" >&2
   exit 1
 fi
 
@@ -93,6 +109,14 @@ fi
 echo "=== AdCraft ERP 全量部署 ==="
 echo "目标提交：$TARGET_COMMIT"
 
+CURRENT_TRACKED_CHANGES="$(git status --porcelain --untracked-files=no)"
+if [ -n "$CURRENT_TRACKED_CHANGES" ] && [ "${ALLOW_DIRTY_WORKTREE:-0}" != "1" ]; then
+  echo "部署停止：服务器工作区存在未提交的跟踪文件改动。" >&2
+  echo "$CURRENT_TRACKED_CHANGES" >&2
+  echo "请先确认这些改动已经进入 Git，或在确认备份后使用 ALLOW_DIRTY_WORKTREE=1。" >&2
+  exit 1
+fi
+
 # 仅备份数据库；代码由 Git 恢复，上传文件是独立持久数据。
 BACKUP_TOOL_DIR="$(mktemp -d /tmp/adcraft-database-backup.XXXXXX)"
 trap 'rm -rf "$BACKUP_TOOL_DIR"' EXIT
@@ -104,18 +128,6 @@ rm -rf "$BACKUP_TOOL_DIR"
 trap - EXIT
 
 git reset --hard "$TARGET_COMMIT"
-git clean -ffdx \
-  -e .env \
-  -e .deployed-commit \
-  -e backups \
-  -e backend/.venv \
-  -e backend/uploads
-
-for PERSISTENT_PATH in .deployed-commit backend/uploads/; do
-  if ! grep -Fqx "$PERSISTENT_PATH" .git/info/exclude; then
-    printf '%s\n' "$PERSISTENT_PATH" >> .git/info/exclude
-  fi
-done
 
 if [ ! -f .env ]; then
   echo "缺少生产环境配置：$PROJECT_DIR/.env" >&2
@@ -155,6 +167,70 @@ chmod -R a+rX frontend/dist
   PYTHONPATH=. .venv/bin/python scripts/seed_permissions.py
 )
 
+normalize_deploy_permissions() {
+  local relative path
+
+  # The project root and Git metadata must be usable by the deploy account.
+  chown "$DEPLOY_OWNER:$DEPLOY_GROUP" "$PROJECT_DIR" "$PROJECT_DIR/.git"
+  chmod 750 "$PROJECT_DIR" "$PROJECT_DIR/.git"
+  chown -R "$DEPLOY_OWNER:$DEPLOY_GROUP" "$PROJECT_DIR/.git"
+  chmod -R u+rwX,g+rX,o-rwx "$PROJECT_DIR/.git"
+
+  # Only normalize source/generated-code paths. Persistent runtime data is
+  # deliberately excluded so the adcraft service keeps ownership of it.
+  for relative in \
+    .github \
+    .husky \
+    architecture \
+    backend/app \
+    backend/alembic \
+    backend/scripts \
+    cdr-bridge \
+    cdr-plugin \
+    config \
+    docs \
+    frontend/src \
+    frontend/public \
+    frontend/dist \
+    nginx \
+    prompts \
+    schema \
+    scripts \
+    templates; do
+    path="$PROJECT_DIR/$relative"
+    if [ -e "$path" ]; then
+      chown -R "$DEPLOY_OWNER:$DEPLOY_GROUP" "$path"
+      chmod -R u+rwX,g+rX,o-rwx "$path"
+    fi
+  done
+
+  for relative in backend frontend nginx scripts; do
+    path="$PROJECT_DIR/$relative"
+    if [ -d "$path" ]; then
+      chown "$DEPLOY_OWNER:$DEPLOY_GROUP" "$path"
+      chmod 750 "$path"
+    fi
+  done
+
+  # Root-level tracked files (compose files, deploy entrypoint, etc.) are
+  # writable by the deploy owner but keep their existing executable bit.
+  while IFS= read -r -d '' relative; do
+    case "$relative" in
+      .env|backend/uploads/*|backend/logs/*|backups/*)
+        continue
+        ;;
+    esac
+    path="$PROJECT_DIR/$relative"
+    [ -f "$path" ] && chown "$DEPLOY_OWNER:$DEPLOY_GROUP" "$path"
+  done < <(git ls-files -z)
+
+  if [ -f "$PROJECT_DIR/.deployed-commit" ]; then
+    chown "$DEPLOY_OWNER:$DEPLOY_GROUP" "$PROJECT_DIR/.deployed-commit"
+    chmod 640 "$PROJECT_DIR/.deployed-commit"
+  fi
+}
+
+normalize_deploy_permissions
 systemctl restart "$SERVICE_NAME"
 
 for _ in $(seq 1 20); do

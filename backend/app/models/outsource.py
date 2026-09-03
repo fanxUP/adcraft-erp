@@ -2,11 +2,12 @@ import uuid
 from decimal import Decimal
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, Numeric, String, Text, ForeignKey
+from sqlalchemy import DateTime, Index, Numeric, String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, SoftDeleteMixin
+from app.models.business_document import BusinessDocumentItem
 
 
 class OutsourceVendor(Base, TimestampMixin, SoftDeleteMixin):
@@ -31,6 +32,10 @@ class OutsourceTask(Base, TimestampMixin, SoftDeleteMixin):
     """外协任务"""
     __tablename__ = "outsource_tasks"
 
+    __table_args__ = (
+        Index("ix_outsource_order_item", "order_item_id"),
+    )
+
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     task_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     vendor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("outsource_vendors.id"), nullable=False)
@@ -38,12 +43,16 @@ class OutsourceTask(Base, TimestampMixin, SoftDeleteMixin):
         UUID(as_uuid=True), ForeignKey("business_documents.id"), nullable=True
     )
     related_doc_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    order_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    order_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("business_document_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     source_task_type: Mapped[str | None] = mapped_column(String(32), nullable=True)  # design, production, installation 来源内部任务类型
     source_task_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)  # 来源内部任务 id
     task_type: Mapped[str] = mapped_column(String(32), nullable=False)  # production, installation, design, transport
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=1, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     paid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
@@ -57,6 +66,12 @@ class OutsourceTask(Base, TimestampMixin, SoftDeleteMixin):
     vendor: Mapped["OutsourceVendor"] = relationship(
         lazy="selectin",
         foreign_keys=[vendor_id],
+    )
+
+    order_item: Mapped["BusinessDocumentItem | None"] = relationship(
+        BusinessDocumentItem,
+        lazy="selectin",
+        foreign_keys=[order_item_id],
     )
 
 

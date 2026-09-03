@@ -1,13 +1,17 @@
 from uuid import UUID
 from datetime import datetime
-from decimal import Decimal
-from sqlalchemy import select, func
+from decimal import Decimal, ROUND_HALF_UP
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.outsource_repo import OutsourceVendorRepository, OutsourceTaskRepository, OutsourcePaymentRepository
 from app.services.number_generator import generate_vendor_no, generate_outsource_task_no, generate_outsource_payment_no
-from app.models.outsource import OutsourceVendor, OutsourcePayment
+from app.models.outsource import OutsourceVendor, OutsourcePayment, OutsourceTask
 from app.domain.workflows import OUTSOURCE_TASK_WORKFLOW, ensure_transition
+
+
+MONEY_QUANTUM = Decimal("0.01")
+ITEM_OUTSOURCE_TASK_TYPES = frozenset({"design", "production", "installation"})
 
 
 class OutsourceService:
@@ -16,6 +20,426 @@ class OutsourceService:
         self.vendor_repo = OutsourceVendorRepository(db)
         self.task_repo = OutsourceTaskRepository(db)
         self.payment_repo = OutsourcePaymentRepository(db)
+
+    @staticmethod
+    def _to_decimal(value, default: str = "0") -> Decimal:
+        if value is None or value == "":
+            return Decimal(default)
+        return Decimal(str(value))
+
+    @staticmethod
+    def _to_money(value) -> Decimal:
+        return OutsourceService._to_decimal(value).quantize(
+            MONEY_QUANTUM,
+            rounding=ROUND_HALF_UP,
+        )
+
+    @staticmethod
+    def _to_uuid(value: UUID | str | None) -> UUID | None:
+        if value is None or value == "":
+            return None
+        return value if isinstance(value, UUID) else UUID(str(value))
+
+    def _normalize_task_data(self, data: dict) -> dict:
+        """Normalize compatibility aliases without losing explicit nulls."""
+        normalized = dict(data)
+        normalized.pop("related_project_name", None)
+
+        if "order_id" in normalized:
+            if not normalized.get("related_doc_id"):
+                normalized["related_doc_id"] = normalized["order_id"]
+            normalized.pop("order_id", None)
+
+        for field in (
+            "vendor_id",
+            "related_doc_id",
+            "order_item_id",
+            "source_task_id",
+            "assigned_to",
+        ):
+            if field in normalized:
+                normalized[field] = self._to_uuid(normalized[field])
+
+        # The legacy order_id alias and item-scoped sends both imply an order
+        # document when callers omit the redundant document type.
+        if (
+            "related_doc_type" not in normalized
+            and normalized.get("related_doc_id")
+            and ("order_id" in data or normalized.get("order_item_id") is not None)
+        ):
+            normalized["related_doc_type"] = "order"
+        if "related_doc_id" in normalized and not normalized["related_doc_id"]:
+            normalized["related_doc_id"] = None
+        if "order_item_id" in normalized and not normalized["order_item_id"]:
+            normalized["order_item_id"] = None
+
+        for field in ("quantity", "unit_price", "total_amount", "paid_amount", "unpaid_amount"):
+            if field in normalized and normalized[field] is not None:
+                normalized[field] = self._to_decimal(normalized[field])
+        for field in ("expected_at", "completed_at"):
+            if field in normalized and isinstance(normalized[field], str) and normalized[field]:
+                normalized[field] = datetime.fromisoformat(normalized[field])
+        return normalized
+
+    async def _validate_order_item_link(
+        self,
+        related_doc_id: UUID | None,
+        related_doc_type: str | None,
+        order_item_id: UUID | None,
+        *,
+        allow_inactive: bool = False,
+        order=None,
+        for_update: bool = False,
+    ):
+        """Validate that an item belongs to the selected, active order."""
+        if order_item_id is None:
+            return None
+        if related_doc_type != "order":
+            raise ValueError("订单明细只能关联订单，报价单外协不能绑定订单明细")
+        if related_doc_id is None:
+            raise ValueError("绑定订单明细时必须同时选择订单")
+
+        from app.models.business_document import BusinessDocument, BusinessDocumentItem
+
+        if order is None:
+            order = await self.db.get(BusinessDocument, related_doc_id)
+        if (
+            not order
+            or getattr(order, "doc_type", None) != "order"
+            or getattr(order, "deleted_at", None) is not None
+        ):
+            raise ValueError("所选订单不存在或已删除")
+        if for_update:
+            item_result = await self.db.execute(
+                select(BusinessDocumentItem)
+                .where(BusinessDocumentItem.id == order_item_id)
+                .with_for_update()
+            )
+            item = item_result.scalar_one_or_none()
+        else:
+            item = await self.db.get(BusinessDocumentItem, order_item_id)
+        if not item:
+            raise ValueError("订单明细不存在")
+        if getattr(item, "document_id", None) != related_doc_id:
+            raise ValueError("订单明细不属于所选订单")
+        lifecycle_status = getattr(item, "lifecycle_status", None)
+        if not allow_inactive and lifecycle_status not in (None, "active"):
+            raise ValueError("订单明细已作废，不能发送新的外协任务")
+        return item
+
+    async def _validate_source_task_link(
+        self,
+        related_doc_id: UUID | None,
+        related_doc_type: str | None,
+        source_task_type: str | None,
+        source_task_id: UUID | None,
+    ) -> None:
+        """Validate known internal-task references and their parent order."""
+        if source_task_type is None and source_task_id is None:
+            return
+        if not source_task_type or source_task_id is None:
+            raise ValueError("来源内部任务类型和编号必须同时提供")
+        if related_doc_type != "order" or related_doc_id is None:
+            raise ValueError("来源内部任务必须关联订单")
+
+        from app.models.task import DesignTask, InstallationTask, ProductionTask
+
+        model_map = {
+            "design": DesignTask,
+            "production": ProductionTask,
+            "installation": InstallationTask,
+        }
+        model = model_map.get(source_task_type)
+        if model is None:
+            return
+        source_task = await self.db.get(model, source_task_id)
+        if not source_task:
+            raise ValueError(f"来源任务不存在（{source_task_type}）")
+        source_order_id = getattr(source_task, "document_id", None)
+        if source_order_id != related_doc_id:
+            raise ValueError("来源内部任务不属于所选订单")
+
+    async def _get_active_order(self, order_id: UUID):
+        from app.models.business_document import BusinessDocument
+
+        order = await self.db.get(BusinessDocument, order_id)
+        if (
+            not order
+            or getattr(order, "doc_type", None) != "order"
+            or getattr(order, "deleted_at", None) is not None
+        ):
+            raise ValueError("订单不存在或已删除")
+        return order
+
+    async def list_order_items_for_dropdown(self, order_id: UUID) -> list[dict]:
+        """Return active items for the global external-task form."""
+        await self._get_active_order(order_id)
+        from app.models.business_document import BusinessDocumentItem
+
+        result = await self.db.execute(
+            select(BusinessDocumentItem)
+            .where(
+                BusinessDocumentItem.document_id == order_id,
+                BusinessDocumentItem.lifecycle_status == "active",
+            )
+            .order_by(BusinessDocumentItem.sort_order, BusinessDocumentItem.created_at)
+        )
+        return [
+            {
+                "id": str(item.id),
+                "label": f"{item.sort_order + 1}. {item.item_name} × {self._to_decimal(item.quantity):g}{item.unit or ''}",
+                "item_name": item.item_name,
+                "quantity": float(self._to_decimal(item.quantity)),
+                "unit": item.unit,
+                "group_name": item.group_name,
+                "sort_order": item.sort_order,
+            }
+            for item in result.scalars().all()
+        ]
+
+    async def get_order_item_summary(
+        self,
+        order_id: UUID,
+        *,
+        task_type: str | None = None,
+        source_task_type: str | None = None,
+        source_task_id: UUID | None = None,
+    ) -> dict:
+        """Build the current task's item allocation view for one order."""
+        order = await self._get_active_order(order_id)
+        if source_task_id is not None and not source_task_type:
+            raise ValueError("筛选来源任务时必须提供来源任务类型")
+
+        from app.models.business_document import BusinessDocumentItem
+
+        item_result = await self.db.execute(
+            select(BusinessDocumentItem)
+            .where(
+                BusinessDocumentItem.document_id == order_id,
+                BusinessDocumentItem.lifecycle_status == "active",
+            )
+            .order_by(BusinessDocumentItem.sort_order, BusinessDocumentItem.created_at)
+        )
+        items = list(item_result.scalars().all())
+
+        task_query = select(OutsourceTask).where(
+            OutsourceTask.related_doc_id == order_id,
+            OutsourceTask.related_doc_type == "order",
+            OutsourceTask.order_item_id.isnot(None),
+            OutsourceTask.deleted_at.is_(None),
+            OutsourceTask.status != "cancelled",
+        )
+        if task_type:
+            task_query = task_query.where(OutsourceTask.task_type == task_type)
+        if source_task_type:
+            task_query = task_query.where(OutsourceTask.source_task_type == source_task_type)
+        if source_task_id:
+            task_query = task_query.where(OutsourceTask.source_task_id == source_task_id)
+        task_result = await self.db.execute(task_query)
+        tasks = [
+            task for task in task_result.scalars().all()
+            if getattr(task, "deleted_at", None) is None and task.status != "cancelled"
+        ]
+
+        by_item: dict[UUID, list] = {}
+        for task in tasks:
+            if task.order_item_id is not None:
+                by_item.setdefault(task.order_item_id, []).append(task)
+
+        def item_status(item, item_tasks: list) -> str:
+            if getattr(item, "lifecycle_status", "active") not in (None, "active"):
+                return "已作废"
+            if not item_tasks:
+                return "未外协"
+            quantity = self._to_decimal(item.quantity)
+            allocated = sum((self._to_decimal(t.quantity) for t in item_tasks), Decimal("0"))
+            if allocated < quantity:
+                return "部分外协"
+            statuses = {t.status for t in item_tasks}
+            if statuses and statuses.issubset({"completed", "settled"}):
+                return "已完成"
+            if "in_progress" in statuses:
+                return "进行中"
+            return "待处理"
+
+        summary_items = []
+        for item in items:
+            item_tasks = by_item.get(item.id, [])
+            item_quantity = self._to_decimal(item.quantity)
+            allocated = sum(
+                (self._to_decimal(task.quantity) for task in item_tasks),
+                Decimal("0"),
+            )
+            planned_amount = sum(
+                (self._to_money(task.total_amount) for task in item_tasks),
+                Decimal("0"),
+            )
+            recognized_cost = sum(
+                (
+                    self._to_money(task.total_amount)
+                    for task in item_tasks
+                    if task.status in {"completed", "settled"}
+                ),
+                Decimal("0"),
+            )
+            remaining = max(item_quantity - allocated, Decimal("0"))
+            active = getattr(item, "lifecycle_status", "active") in (None, "active")
+            requires_reason = bool(item_tasks) and allocated >= item_quantity
+            summary_items.append(
+                {
+                    "id": str(item.id),
+                    "item_name": item.item_name,
+                    "quantity": float(item_quantity),
+                    "unit": item.unit,
+                    "group_name": item.group_name,
+                    "sort_order": item.sort_order,
+                    "lifecycle_status": getattr(item, "lifecycle_status", "active"),
+                    "allocated_quantity": float(allocated),
+                    "remaining_quantity": float(remaining),
+                    "planned_amount": float(planned_amount),
+                    "recognized_cost": float(recognized_cost),
+                    "active_task_count": len(item_tasks),
+                    "status": item_status(item, item_tasks),
+                    "can_send": active,
+                    "requires_reason": requires_reason,
+                    "block_reason": "订单明细已作废，不能发送外协" if not active else None,
+                }
+            )
+
+        order_level_tasks = await self.db.execute(
+            select(OutsourceTask).where(
+                OutsourceTask.related_doc_id == order_id,
+                OutsourceTask.related_doc_type == "order",
+                OutsourceTask.order_item_id.is_(None),
+                OutsourceTask.deleted_at.is_(None),
+                OutsourceTask.status != "cancelled",
+            )
+        )
+        order_level = [
+            task for task in order_level_tasks.scalars().all()
+            if getattr(task, "deleted_at", None) is None and task.status != "cancelled"
+        ]
+        if task_type:
+            order_level = [task for task in order_level if task.task_type == task_type]
+        if source_task_type:
+            order_level = [task for task in order_level if task.source_task_type == source_task_type]
+        if source_task_id:
+            order_level = [task for task in order_level if task.source_task_id == source_task_id]
+
+        return {
+            "order_id": str(order.id),
+            "order_no": order.doc_no,
+            "project_name": order.project_name,
+            "task_type": task_type,
+            "source_task_type": source_task_type,
+            "source_task_id": str(source_task_id) if source_task_id else None,
+            "items": summary_items,
+            "order_level_task_count": len(order_level),
+            "order_level_planned_amount": float(
+                sum((self._to_money(task.total_amount) for task in order_level), Decimal("0"))
+            ),
+            "order_level_recognized_cost": float(
+                sum(
+                    (
+                        self._to_money(task.total_amount)
+                        for task in order_level
+                        if task.status in {"completed", "settled"}
+                    ),
+                    Decimal("0"),
+                )
+            ),
+        }
+
+    async def _list_item_tasks(
+        self,
+        order_id: UUID,
+        item_id: UUID,
+        *,
+        task_type: str,
+        source_task_type: str,
+        source_task_id: UUID,
+    ) -> list[OutsourceTask]:
+        result = await self.db.execute(
+            select(OutsourceTask).where(
+                OutsourceTask.related_doc_id == order_id,
+                OutsourceTask.related_doc_type == "order",
+                OutsourceTask.order_item_id == item_id,
+                OutsourceTask.task_type == task_type,
+                OutsourceTask.source_task_type == source_task_type,
+                OutsourceTask.source_task_id == source_task_id,
+                OutsourceTask.deleted_at.is_(None),
+                OutsourceTask.status != "cancelled",
+            )
+        )
+        return list(result.scalars().all())
+
+    async def send_order_item(self, order_id: UUID, item_id: UUID, data: dict) -> dict:
+        """Create an external task owned by one current-order item."""
+        payload = dict(data)
+        task_type = payload.get("task_type")
+        source_task_type = payload.get("source_task_type")
+        source_task_id = self._to_uuid(payload.get("source_task_id"))
+        if task_type not in ITEM_OUTSOURCE_TASK_TYPES:
+            raise ValueError("订单明细外协必须选择设计、制作或安装任务类型")
+        if source_task_type != task_type or source_task_id is None:
+            raise ValueError("来源内部任务必须与外协任务类型一致")
+
+        order = await self._get_active_order(order_id)
+        item = await self._validate_order_item_link(
+            order_id,
+            "order",
+            item_id,
+            order=order,
+            for_update=True,
+        )
+        await self._validate_source_task_link(
+            order_id,
+            "order",
+            source_task_type,
+            source_task_id,
+        )
+
+        existing = await self._list_item_tasks(
+            order_id,
+            item_id,
+            task_type=task_type,
+            source_task_type=source_task_type,
+            source_task_id=source_task_id,
+        )
+        item_quantity = self._to_decimal(item.quantity)
+        allocated_quantity = sum(
+            (self._to_decimal(task.quantity) for task in existing),
+            Decimal("0"),
+        )
+        remaining_quantity = max(item_quantity - allocated_quantity, Decimal("0"))
+        raw_quantity = payload.get("quantity")
+        quantity = remaining_quantity if raw_quantity is None else self._to_decimal(raw_quantity)
+        if quantity <= 0:
+            raise ValueError("该明细已没有可发送数量，请填写追加外协数量")
+        remark = str(payload.get("remark") or "").strip()
+        if quantity > remaining_quantity and not remark:
+            raise ValueError("外协数量超过明细剩余数量，追加外协必须填写备注原因")
+
+        create_data = {
+            "vendor_id": payload.get("vendor_id"),
+            "related_doc_id": order_id,
+            "related_doc_type": "order",
+            "order_item_id": item_id,
+            "source_task_type": source_task_type,
+            "source_task_id": source_task_id,
+            "task_type": task_type,
+            "description": payload.get("description") or item.item_name,
+            "quantity": quantity,
+            "unit_price": payload.get("unit_price", Decimal("0")),
+            "expected_at": payload.get("expected_at"),
+            "remark": remark or None,
+        }
+        return await self._create_task(
+            create_data,
+            validated_item=item,
+            skip_link_validation=True,
+            skip_source_validation=True,
+        )
 
     # ── Vendor ──
 
@@ -55,10 +479,11 @@ class OutsourceService:
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          vendor_id: UUID | None = None, related_doc_id: UUID | None = None,
                          source_task_type: str | None = None, source_task_id: UUID | None = None,
-                         task_type: str | None = None) -> tuple[list, int]:
+                         task_type: str | None = None,
+                         order_item_id: UUID | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
         tasks, total = await self.task_repo.list_tasks(skip, page_size, status, vendor_id, related_doc_id,
-                                                       source_task_type, source_task_id, task_type)
+                                                       source_task_type, source_task_id, task_type, order_item_id)
         result = []
         for t in tasks:
             vname = await self._task_vendor_name(t)
@@ -79,37 +504,45 @@ class OutsourceService:
         return self._task_to_dict(task, vname, pname)
 
     async def create_task(self, data: dict) -> dict:
-        data["task_no"] = await generate_outsource_task_no(self.db)
-        # 移除前端传入的响应-only 字段，避免 ORM 报错
-        data.pop("related_project_name", None)
-        # 向后兼容：接受 order_id 参数，映射到 related_doc_id
-        if "order_id" in data:
-            if not data.get("related_doc_id"):
-                data["related_doc_id"] = data["order_id"]
-            data.pop("order_id")
-        # 空字符串转 None，避免 UUID 字段报错
-        if "related_doc_id" in data and not data["related_doc_id"]:
-            data["related_doc_id"] = None
-        if "quantity" not in data:
-            data["quantity"] = 1
-        qty = Decimal(str(data.get("quantity", 1)))
-        price = Decimal(str(data.get("unit_price", 0)))
-        data["total_amount"] = float(qty * price)
-        data["paid_amount"] = 0
-        data["unpaid_amount"] = data["total_amount"]
-        # 校验来源任务存在（source_task_id 无外键，避免悬空引用）
-        if data.get("source_task_type") and data.get("source_task_id"):
-            st_type = data["source_task_type"]
-            st_id = UUID(str(data["source_task_id"]))
-            from app.models.task import DesignTask, ProductionTask, InstallationTask
-            model_map = {
-                "design": DesignTask,
-                "production": ProductionTask,
-                "installation": InstallationTask,
-            }
-            if st_type in model_map and not await self.db.get(model_map[st_type], st_id):
-                raise ValueError(f"来源任务不存在（{st_type}）")
-        task = await self.task_repo.create(data)
+        return await self._create_task(data)
+
+    async def _create_task(
+        self,
+        data: dict,
+        *,
+        validated_item=None,
+        skip_link_validation: bool = False,
+        skip_source_validation: bool = False,
+    ) -> dict:
+        normalized = self._normalize_task_data(data)
+        item = validated_item
+        if not skip_link_validation:
+            item = await self._validate_order_item_link(
+                normalized.get("related_doc_id"),
+                normalized.get("related_doc_type"),
+                normalized.get("order_item_id"),
+            )
+        if not skip_source_validation:
+            await self._validate_source_task_link(
+                normalized.get("related_doc_id"),
+                normalized.get("related_doc_type"),
+                normalized.get("source_task_type"),
+                normalized.get("source_task_id"),
+            )
+
+        normalized["task_no"] = await generate_outsource_task_no(self.db)
+        quantity = self._to_decimal(normalized.get("quantity", 1))
+        unit_price = self._to_money(normalized.get("unit_price", 0))
+        total_amount = self._to_money(quantity * unit_price)
+        normalized["quantity"] = quantity
+        normalized["unit_price"] = unit_price
+        normalized["total_amount"] = total_amount
+        normalized["paid_amount"] = Decimal("0")
+        normalized["unpaid_amount"] = total_amount
+
+        task = await self.task_repo.create(normalized)
+        if item is not None:
+            task.order_item = item
         vname = await self._task_vendor_name(task)
         pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
         return self._task_to_dict(task, vname, pname)
@@ -122,20 +555,46 @@ class OutsourceService:
             raise ValueError("已取消的外协任务不能编辑，请从回收站流程恢复")
         if task.status == "settled":
             raise ValueError("已结算的外协任务不能编辑")
-        # 移除前端传入的响应-only 字段，避免 ORM 报错
-        data.pop("related_project_name", None)
-        # 向后兼容：接受 order_id 参数，映射到 related_doc_id
-        if "order_id" in data:
-            if not data.get("related_doc_id"):
-                data["related_doc_id"] = data["order_id"]
-            data.pop("order_id")
-        # 空字符串转 None，避免 UUID 字段报错
-        if "related_doc_id" in data and not data["related_doc_id"]:
-            data["related_doc_id"] = None
+        data = self._normalize_task_data(data)
+
+        old_item_id = getattr(task, "order_item_id", None)
+        candidate_item_id = data.get("order_item_id", old_item_id)
+        item_link_changed = any(
+            field in data for field in ("related_doc_id", "related_doc_type", "order_item_id")
+        )
+        item_changed = "order_item_id" in data and candidate_item_id != old_item_id
+        paid_amount = self._to_decimal(task.paid_amount)
+        if item_changed and paid_amount > 0:
+            raise ValueError("已有付款的外协任务不能更换订单明细")
+        if item_changed and task.status in {"completed", "settled"}:
+            raise ValueError("已完成的外协任务不能更换订单明细")
+
+        candidate_doc_id = data.get("related_doc_id", getattr(task, "related_doc_id", None))
+        candidate_doc_type = data.get("related_doc_type", getattr(task, "related_doc_type", None))
+        validated_item = None
+        if candidate_item_id is not None and item_link_changed:
+            validated_item = await self._validate_order_item_link(
+                candidate_doc_id,
+                candidate_doc_type,
+                candidate_item_id,
+            )
+
+        candidate_source_type = data.get("source_task_type", getattr(task, "source_task_type", None))
+        candidate_source_id = data.get("source_task_id", getattr(task, "source_task_id", None))
+        if (
+            any(field in data for field in ("source_task_type", "source_task_id"))
+            or item_link_changed
+        ):
+            await self._validate_source_task_link(
+                candidate_doc_id,
+                candidate_doc_type,
+                candidate_source_type,
+                candidate_source_id,
+            )
         if (
             data.get("vendor_id")
             and UUID(str(data["vendor_id"])) != task.vendor_id
-            and Decimal(str(task.paid_amount or 0)) > 0
+            and paid_amount > 0
         ):
             raise ValueError("已有付款的外协任务不能更换供应商")
         if "status" in data:
@@ -150,20 +609,22 @@ class OutsourceService:
                     data["status"] = "settled"
         # Recalculate total if price or quantity changed
         if "unit_price" in data:
-            price = Decimal(str(data["unit_price"]))
-            qty = Decimal(str(data.get("quantity", task.quantity)))
-            data["total_amount"] = float(qty * price)
+            price = self._to_money(data["unit_price"])
+            qty = self._to_decimal(data.get("quantity", task.quantity))
+            data["total_amount"] = self._to_money(qty * price)
         elif "quantity" in data:
-            qty = Decimal(str(data["quantity"]))
-            price = Decimal(str(task.unit_price))
-            data["total_amount"] = float(qty * price)
+            qty = self._to_decimal(data["quantity"])
+            price = self._to_money(task.unit_price)
+            data["total_amount"] = self._to_money(qty * price)
         if "total_amount" in data:
-            total_amount = Decimal(str(data["total_amount"]))
-            paid_amount = Decimal(str(task.paid_amount or 0))
+            total_amount = self._to_money(data["total_amount"])
             if total_amount < paid_amount:
                 raise ValueError("任务总金额不能低于已付金额")
-            data["unpaid_amount"] = float(total_amount - paid_amount)
+            data["total_amount"] = total_amount
+            data["unpaid_amount"] = total_amount - paid_amount
         task = await self.task_repo.update(task, data)
+        if item_link_changed:
+            task.order_item = validated_item if candidate_item_id is not None else None
         vname = await self._task_vendor_name(task)
         pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
         return self._task_to_dict(task, vname, pname)
@@ -246,7 +707,7 @@ class OutsourceService:
         task = await self.task_repo.get_by_id(task_id)
         if not task:
             return None
-        from sqlalchemy import select, func
+        from sqlalchemy import select
         result = await self.db.execute(
             select(OutsourcePayment).where(OutsourcePayment.task_id == task_id)
             .order_by(OutsourcePayment.created_at.desc())
@@ -333,6 +794,14 @@ class OutsourceService:
         }
 
     def _task_to_dict(self, t, vendor_name: str | None = None, related_project_name: str | None = None) -> dict:
+        order_item = (
+            getattr(t, "order_item", None)
+            if t.related_doc_type == "order" and t.order_item_id
+            else None
+        )
+        order_item_name = getattr(order_item, "item_name", None) if order_item else None
+        if not isinstance(order_item_name, str):
+            order_item_name = None
         return {
             "id": str(t.id), "task_no": t.task_no,
             "vendor_id": str(t.vendor_id),
@@ -341,15 +810,17 @@ class OutsourceService:
             "related_doc_type": t.related_doc_type,
             "related_project_name": related_project_name,
             "order_id": str(t.related_doc_id) if t.related_doc_id else None,
+            "order_item_id": str(t.order_item_id) if t.order_item_id else None,
+            "order_item_name": order_item_name,
             "source_task_type": t.source_task_type,
             "source_task_id": str(t.source_task_id) if t.source_task_id else None,
             "task_type": t.task_type,
             "description": t.description,
-            "quantity": t.quantity,
-            "unit_price": float(t.unit_price),
-            "total_amount": float(t.total_amount),
-            "paid_amount": float(t.paid_amount),
-            "unpaid_amount": float(t.unpaid_amount),
+            "quantity": float(self._to_decimal(t.quantity)),
+            "unit_price": float(self._to_decimal(t.unit_price)),
+            "total_amount": float(self._to_decimal(t.total_amount)),
+            "paid_amount": float(self._to_decimal(t.paid_amount)),
+            "unpaid_amount": float(self._to_decimal(t.unpaid_amount)),
             "status": t.status,
             "expected_at": t.expected_at.isoformat() if t.expected_at else None,
             "completed_at": t.completed_at.isoformat() if t.completed_at else None,

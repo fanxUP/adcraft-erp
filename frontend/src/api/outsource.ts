@@ -1,5 +1,12 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, VendorResponse, OutsourceTaskResponse, OutsourcePaymentResponse, SuccessResponse } from '@/types/api'
+import {
+  PaginatedData,
+  VendorResponse,
+  OutsourceTaskResponse,
+  OutsourcePaymentResponse,
+  OutsourceOrderItemSummaryResponse,
+  SuccessResponse,
+} from '@/types/api'
 
 export interface OutsourcePaymentSummaryItem {
   id: string
@@ -44,8 +51,32 @@ export function deleteOutsourceVendor(id: string) {
   return del<SuccessResponse>(`/outsource/vendors/${id}`)
 }
 
-export function getOutsourceTasks(params: { page?: number; page_size?: number; status?: string; vendor_id?: string; order_id?: string; task_type?: string; source_task_id?: string; source_task_type?: string }) {
+export function getOutsourceTasks(params: { page?: number; page_size?: number; status?: string; vendor_id?: string; order_id?: string; order_item_id?: string; task_type?: string; source_task_id?: string; source_task_type?: string }) {
   return get<PaginatedData<OutsourceTaskResponse>>('/outsource/tasks', { params })
+}
+
+export function getOutsourceOrderItemsSummary(orderId: string, params: { task_type?: string; source_task_type?: string; source_task_id?: string } = {}) {
+  return get<OutsourceOrderItemSummaryResponse>(`/outsource/orders/${orderId}/items-summary`, { params })
+}
+
+export function getOutsourceOrderItems(orderId: string) {
+  return get<{ id: string; label: string; item_name: string; quantity: number; unit?: string | null; group_name?: string | null; sort_order: number }[]>(`/outsource/orders/${orderId}/items-for-dropdown`)
+}
+
+export interface SendOutsourceOrderItemPayload {
+  vendor_id: string
+  task_type: 'design' | 'production' | 'installation'
+  source_task_type: 'design' | 'production' | 'installation'
+  source_task_id: string
+  quantity?: number
+  unit_price: number
+  description?: string
+  expected_at?: string
+  remark?: string
+}
+
+export function sendOutsourceOrderItem(orderId: string, itemId: string, data: SendOutsourceOrderItemPayload) {
+  return post<OutsourceTaskResponse>(`/outsource/orders/${orderId}/items/${itemId}/send`, data)
 }
 
 export function getOutsourceTask(id: string) {
