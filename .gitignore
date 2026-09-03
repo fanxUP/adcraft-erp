@@ -29,3 +29,4 @@ tunnel-watchdog.log
 .vibe/
 rollbacks/
 *.bak-*
+*.tmp

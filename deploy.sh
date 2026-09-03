@@ -186,7 +186,7 @@ normalize_deploy_permissions() {
   chown "$DEPLOY_OWNER:$DEPLOY_GROUP" "$PROJECT_DIR" "$PROJECT_DIR/.git"
   chmod 750 "$PROJECT_DIR" "$PROJECT_DIR/.git"
   chown -R "$DEPLOY_OWNER:$DEPLOY_GROUP" "$PROJECT_DIR/.git"
-  chmod -R u+rwX,g+rX,o-rwx "$PROJECT_DIR/.git"
+  chmod -R u+rwX,g+rX,g-w,o-rwx "$PROJECT_DIR/.git"
 
   # Only normalize source/generated-code paths. Persistent runtime data is
   # deliberately excluded so the adcraft service keeps ownership of it.
@@ -212,7 +212,7 @@ normalize_deploy_permissions() {
     path="$PROJECT_DIR/$relative"
     if [ -e "$path" ]; then
       chown -R "$DEPLOY_OWNER:$DEPLOY_GROUP" "$path"
-      chmod -R u+rwX,g+rX,o-rwx "$path"
+      chmod -R u+rwX,g+rX,g-w,o-rwx "$path"
     fi
   done
 
