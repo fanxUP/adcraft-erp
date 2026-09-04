@@ -415,7 +415,7 @@ function handlePrint() {
 /* 不用 scoped，因为 el-dialog teleport 到 body，scoped 样式无法穿透 */
 .preview-title {
   text-align: center;
-  font-size: 32px;
+  font-size: 64px;
   font-weight: 700;
   margin: 0 0 16px;
   letter-spacing: 8px;
