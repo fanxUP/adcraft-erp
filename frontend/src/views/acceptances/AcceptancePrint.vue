@@ -7,7 +7,7 @@
     @close="$emit('close')"
   >
     <div v-if="loading" v-loading="true" style="height: 200px" />
-    <div v-else-if="form" class="print-area">
+    <div v-else-if="form" class="print-area acceptance-print-area">
       <!-- 标题 -->
       <h2 class="preview-title">验收单</h2>
 
@@ -413,7 +413,7 @@ function handlePrint() {
 
 <style>
 /* 不用 scoped，因为 el-dialog teleport 到 body，scoped 样式无法穿透 */
-.preview-title {
+.acceptance-print-area .preview-title {
   text-align: center;
   font-size: 64px;
   font-weight: 700;
