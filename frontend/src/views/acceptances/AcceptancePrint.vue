@@ -415,7 +415,7 @@ function handlePrint() {
 /* 不用 scoped，因为 el-dialog teleport 到 body，scoped 样式无法穿透 */
 .acceptance-print-area .preview-title {
   text-align: center;
-  font-size: 40px;
+  font-size: 36px;
   font-weight: 700;
   margin: 0 0 16px;
   letter-spacing: 8px;
