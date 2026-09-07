@@ -10,7 +10,16 @@
 
     <div class="summary-bar">
       <span>共 {{ tasks.length }} 个任务</span>
+      <span>阻塞 {{ blockedCount }} 个</span>
+      <span v-if="onlyBlocked">当前显示 {{ visibleTasks.length }} 个</span>
       <span>平均进度 {{ averageProgress }}%</span>
+      <el-switch
+        v-model="onlyBlocked"
+        inline-prompt
+        active-text="阻塞"
+        inactive-text="全部"
+        aria-label="仅查看阻塞任务"
+      />
     </div>
 
     <div class="board" v-loading="loading">
@@ -60,6 +69,7 @@ import type { TaskQueueItem } from '@/types/api'
 
 const loading = ref(false)
 const tasks = ref<TaskQueueItem[]>([])
+const onlyBlocked = ref(false)
 
 const columns = [
   { key: 'design', label: '设计' },
@@ -68,8 +78,13 @@ const columns = [
 ] as const
 
 function colCards(key: TaskQueueItem['stage']) {
-  return tasks.value.filter(task => task.stage === key)
+  return visibleTasks.value.filter(task => task.stage === key)
 }
+
+const blockedCount = computed(() => tasks.value.filter(task => task.is_blocked).length)
+const visibleTasks = computed(() => onlyBlocked.value
+  ? tasks.value.filter(task => task.is_blocked)
+  : tasks.value)
 
 const averageProgress = computed(() => {
   const activeTasks = tasks.value.filter(task => task.status !== 'cancelled')
@@ -151,7 +166,7 @@ onBeforeUnmount(() => {
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .page-header h2 { margin: 0; color: var(--ad-text); }
 .page-hint { margin: 6px 0 0; color: var(--ad-text-secondary); font-size: 13px; }
-.summary-bar { display: flex; gap: 20px; margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 13px; }
+.summary-bar { display: flex; align-items: center; gap: 20px; margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 13px; }
 .board { display: flex; gap: 12px; overflow-x: auto; min-height: 60vh; }
 .board-column { flex: 1; min-width: 280px; background: var(--ad-card); border: 1px solid var(--ad-border); border-radius: 6px; display: flex; flex-direction: column; }
 .column-header { padding: 12px; font-weight: bold; font-size: 16px; color: var(--ad-text); border-bottom: 1px solid var(--ad-border); display: flex; justify-content: center; gap: 8px; align-items: center; }
