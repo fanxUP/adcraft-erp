@@ -21,6 +21,13 @@
           <el-descriptions-item label="联系人">{{ task.contact_name || '-' }}</el-descriptions-item>
           <el-descriptions-item label="联系电话">{{ task.contact_phone || '-' }}</el-descriptions-item>
           <el-descriptions-item label="计划时间">{{ formatDateTimeFull(task.scheduled_at) || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="任务计划">
+            <span v-if="task.planned_start_at || task.planned_end_at">
+              {{ formatDateTimeFull(task.planned_start_at) || '-' }} 至 {{ formatDateTimeFull(task.planned_end_at) || '-' }}
+            </span>
+            <span v-else>-</span>
+            <el-tag v-if="task.is_overdue" type="danger" size="small" style="margin-left: 8px">逾期{{ task.overdue_days ? ` ${task.overdue_days} 天` : '' }}</el-tag>
+          </el-descriptions-item>
           <el-descriptions-item label="验收结果">{{ task.acceptance_result || '-' }}</el-descriptions-item>
         </el-descriptions>
       </el-card>
@@ -105,6 +112,12 @@
               placeholder="选择计划安装时间"
               style="width: 100%"
             />
+          </el-form-item>
+          <el-form-item label="计划开始时间">
+            <el-date-picker v-model="editForm.planned_start_at" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="选择任务计划开始时间" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="计划结束时间">
+            <el-date-picker v-model="editForm.planned_end_at" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="选择任务计划结束时间" style="width: 100%" />
           </el-form-item>
           <el-form-item label="联系人">
             <el-input v-model="editForm.contact_name" />
@@ -191,6 +204,8 @@ const editForm = reactive({
   assigned_to: '',
   address: '',
   scheduled_at: '',
+  planned_start_at: '',
+  planned_end_at: '',
   contact_name: '',
   contact_phone: '',
   acceptance_result: '',
@@ -272,6 +287,21 @@ function progressPct(value: number | undefined) {
   return Math.min(100, Math.max(0, Number(value ?? 0)))
 }
 
+function dateTimeInput(value: string | null | undefined) {
+  if (!value) return ''
+  const normalized = /(Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`
+  const date = new Date(normalized)
+  if (Number.isNaN(date.getTime())) return value.slice(0, 19)
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+function dateTimePayload(value: string | null | undefined) {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toISOString().slice(0, 19)
+}
+
 async function fetchTask() {
   loading.value = true
   try {
@@ -281,6 +311,8 @@ async function fetchTask() {
       assigned_to: data.assigned_to || '',
       address: data.address || '',
       scheduled_at: data.scheduled_at || '',
+      planned_start_at: dateTimeInput(data.planned_start_at),
+      planned_end_at: dateTimeInput(data.planned_end_at),
       contact_name: data.contact_name || '',
       contact_phone: data.contact_phone || '',
       acceptance_result: data.acceptance_result || '',
@@ -320,6 +352,8 @@ async function handleUpdate() {
       ...editForm,
       assigned_to: editForm.assigned_to || null,
       scheduled_at: editForm.scheduled_at || null,
+      planned_start_at: dateTimePayload(editForm.planned_start_at),
+      planned_end_at: dateTimePayload(editForm.planned_end_at),
       progress_pct: progressPct(editForm.progress_pct),
     })
     ElMessage.success('保存成功')

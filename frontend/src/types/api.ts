@@ -466,9 +466,13 @@ export interface DesignTaskResponse {
   project_name: string
   status: string
   progress_pct: number
+  planned_start_at?: string | null
+  planned_end_at?: string | null
   is_blocked?: boolean
   blocked_reason?: string | null
   blocking_tasks?: TaskDependencyTaskSummary[]
+  is_overdue?: boolean
+  overdue_days?: number
   is_outsourced?: boolean
   assigned_to?: string
   assigned_to_name?: string
@@ -494,9 +498,13 @@ export interface ProductionTaskResponse {
   project_name: string
   status: string
   progress_pct: number
+  planned_start_at?: string | null
+  planned_end_at?: string | null
   is_blocked?: boolean
   blocked_reason?: string | null
   blocking_tasks?: TaskDependencyTaskSummary[]
+  is_overdue?: boolean
+  overdue_days?: number
   is_outsourced?: boolean
   assigned_to?: string
   material_id?: string
@@ -526,9 +534,13 @@ export interface InstallationTaskResponse {
   project_name: string
   status: string
   progress_pct: number
+  planned_start_at?: string | null
+  planned_end_at?: string | null
   is_blocked?: boolean
   blocked_reason?: string | null
   blocking_tasks?: TaskDependencyTaskSummary[]
+  is_overdue?: boolean
+  overdue_days?: number
   is_outsourced?: boolean
   assigned_to?: string
   address?: string
@@ -554,9 +566,13 @@ export interface TaskQueueItem {
   project_name: string
   status: string
   progress_pct: number
+  planned_start_at?: string | null
+  planned_end_at?: string | null
   is_blocked?: boolean
   blocked_reason?: string | null
   blocking_tasks?: TaskDependencyTaskSummary[]
+  is_overdue?: boolean
+  overdue_days?: number
   assigned_to?: string
   assigned_to_name?: string
   is_outsourced?: boolean

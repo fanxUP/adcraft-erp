@@ -12,6 +12,7 @@ from app.schemas.task import (
 )
 from app.services.task_service import _attach_outsource_flags, _enrich_task_order
 from app.services.task_dependency_service import enrich_task_dict_with_dependency_state
+from app.services.task_schedule_service import enrich_task_dict_with_schedule_state
 
 
 _TASK_SOURCES = (
@@ -29,6 +30,7 @@ async def list_task_queue(
     stage: str | None = None,
     status: str | None = None,
     order_id: str | None = None,
+    overdue: bool | None = None,
 ) -> tuple[list[dict], int]:
     """Return a normalized, paginated view over all delivery task tables."""
     normalized: list[dict] = []
@@ -54,11 +56,14 @@ async def list_task_queue(
             item["stage"] = task_type
             item["task_no"] = item[no_field]
             item = await _enrich_task_order(db, item)
+            item = enrich_task_dict_with_schedule_state(item)
             item = await enrich_task_dict_with_dependency_state(db, task_type, item)
             items.append(item)
         normalized.extend(await _attach_outsource_flags(db, task_type, items))
 
     normalized.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+    if overdue is not None:
+        normalized = [item for item in normalized if item.get("is_overdue") is overdue]
     total = len(normalized)
     start = (page - 1) * page_size
     page_items = normalized[start:start + page_size]

@@ -66,6 +66,7 @@ export function getTaskQueue(params?: {
   stage?: 'design' | 'production' | 'installation'
   status?: string
   order_id?: string
+  overdue?: boolean
 }) {
   return get<PaginatedData<TaskQueueItem>>('/task-queue/', { params })
 }

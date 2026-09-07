@@ -30,6 +30,10 @@ from app.services.task_dependency_service import (
     enrich_task_dict_with_dependency_state,
     ensure_task_not_blocked,
 )
+from app.services.task_schedule_service import (
+    enrich_task_dict_with_schedule_state,
+    normalize_task_schedule_data,
+)
 
 
 ACTIVE_ORDER_STATUSES = ("designing", "in_production", "in_installation")
@@ -128,7 +132,7 @@ async def _prepare_task_create_data(
         normalized["scheduled_at"] = datetime.fromisoformat(
             normalized["scheduled_at"]
         )
-    return normalized
+    return normalize_task_schedule_data(normalized)
 
 
 async def _attach_outsource_flags(db: AsyncSession, task_type: str, task_dicts: list[dict]) -> list[dict]:
@@ -219,6 +223,7 @@ class DesignTaskService:
         d = DesignTaskResponse.model_validate(task).model_dump(mode="json")
         d["order_id"] = d["document_id"]  # backward-compat alias
         d = await _enrich_task_order(self.db, d)
+        d = enrich_task_dict_with_schedule_state(d)
         return await enrich_task_dict_with_dependency_state(self.db, "design", d)
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
@@ -262,6 +267,11 @@ class DesignTaskService:
         if not task:
             raise ValueError("设计任务不存在")
         old_assigned = task.assigned_to
+        data = normalize_task_schedule_data(
+            data,
+            current_start_at=task.planned_start_at,
+            current_end_at=task.planned_end_at,
+        )
         task = await self.repo.update(task, data)
         # Notify newly assigned user
         new_assigned = data.get("assigned_to")
@@ -402,6 +412,7 @@ class ProductionTaskService:
         d = ProductionTaskResponse.model_validate(task).model_dump(mode="json")
         d["order_id"] = d["document_id"]  # backward-compat alias
         d = await _enrich_task_order(self.db, d)
+        d = enrich_task_dict_with_schedule_state(d)
         return await enrich_task_dict_with_dependency_state(self.db, "production", d)
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
@@ -445,6 +456,11 @@ class ProductionTaskService:
         if not task:
             raise ValueError("制作任务不存在")
         old_assigned = task.assigned_to
+        data = normalize_task_schedule_data(
+            data,
+            current_start_at=task.planned_start_at,
+            current_end_at=task.planned_end_at,
+        )
         task = await self.repo.update(task, data)
         # Notify newly assigned user
         new_assigned = data.get("assigned_to")
@@ -576,6 +592,7 @@ class InstallationTaskService:
         d = InstallationTaskResponse.model_validate(task).model_dump(mode="json")
         d["order_id"] = d["document_id"]  # backward-compat alias
         d = await _enrich_task_order(self.db, d)
+        d = enrich_task_dict_with_schedule_state(d)
         return await enrich_task_dict_with_dependency_state(self.db, "installation", d)
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
@@ -619,6 +636,11 @@ class InstallationTaskService:
         if not task:
             raise ValueError("安装任务不存在")
         old_assigned = task.assigned_to
+        data = normalize_task_schedule_data(
+            data,
+            current_start_at=task.planned_start_at,
+            current_end_at=task.planned_end_at,
+        )
         task = await self.repo.update(task, data)
         # Notify newly assigned user
         new_assigned = data.get("assigned_to")

@@ -17,6 +17,13 @@
           <el-descriptions-item label="任务进度">
             <el-progress :percentage="progressPct(task.progress_pct)" :stroke-width="8" style="width: 220px" />
           </el-descriptions-item>
+          <el-descriptions-item label="计划时间">
+            <span v-if="task.planned_start_at || task.planned_end_at">
+              {{ formatDateTimeFull(task.planned_start_at) || '-' }} 至 {{ formatDateTimeFull(task.planned_end_at) || '-' }}
+            </span>
+            <span v-else>-</span>
+            <el-tag v-if="task.is_overdue" type="danger" size="small" style="margin-left: 8px">逾期{{ task.overdue_days ? ` ${task.overdue_days} 天` : '' }}</el-tag>
+          </el-descriptions-item>
           <el-descriptions-item label="设计说明">{{ task.description || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户意见">{{ task.client_comments || '-' }}</el-descriptions-item>
           <el-descriptions-item label="设计文件">
@@ -70,6 +77,12 @@
           <el-form-item label="任务进度">
             <el-input-number v-model="editForm.progress_pct" :min="0" :max="100" :step="5" />
             <span class="progress-suffix">%</span>
+          </el-form-item>
+          <el-form-item label="计划开始时间">
+            <el-date-picker v-model="editForm.planned_start_at" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="选择计划开始时间" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="计划结束时间">
+            <el-date-picker v-model="editForm.planned_end_at" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="选择计划结束时间" style="width: 100%" />
           </el-form-item>
           <el-form-item>
             <el-button :loading="updating" @click="handleUpdate" type="primary">保存</el-button>
@@ -161,6 +174,8 @@ const editForm = reactive({
   client_comments: '',
   design_file_url: '',
   progress_pct: 0,
+  planned_start_at: '',
+  planned_end_at: '',
 })
 
 const DESIGN_WORKFLOW: Record<string, string[]> = {
@@ -219,6 +234,21 @@ function progressPct(value: number | undefined) {
   return Math.min(100, Math.max(0, Number(value ?? 0)))
 }
 
+function dateTimeInput(value: string | null | undefined) {
+  if (!value) return ''
+  const normalized = /(Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`
+  const date = new Date(normalized)
+  if (Number.isNaN(date.getTime())) return value.slice(0, 19)
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+function dateTimePayload(value: string | null | undefined) {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toISOString().slice(0, 19)
+}
+
 async function fetchTask() {
   loading.value = true
   try {
@@ -230,6 +260,8 @@ async function fetchTask() {
       client_comments: data.client_comments || '',
       design_file_url: data.design_file_url || '',
       progress_pct: progressPct(data.progress_pct),
+      planned_start_at: dateTimeInput(data.planned_start_at),
+      planned_end_at: dateTimeInput(data.planned_end_at),
     })
   } finally { loading.value = false }
 }
@@ -263,6 +295,8 @@ async function handleUpdate() {
       client_comments: editForm.client_comments || '',
       design_file_url: editForm.design_file_url || '', 
       progress_pct: progressPct(editForm.progress_pct),
+      planned_start_at: dateTimePayload(editForm.planned_start_at),
+      planned_end_at: dateTimePayload(editForm.planned_end_at),
     })
     ElMessage.success('保存成功')
     await fetchTask()

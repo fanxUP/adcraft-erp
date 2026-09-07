@@ -30,6 +30,14 @@
         show-icon
         :title="`${blockedTaskCount} 个任务正在等待前置任务完成`"
       />
+      <el-alert
+        v-if="overdueTaskCount > 0"
+        class="overdue-summary"
+        type="error"
+        :closable="false"
+        show-icon
+        :title="`${overdueTaskCount} 个任务已超过计划结束时间`"
+      />
       <el-divider />
       <div class="delivery-summary">
         <div>
@@ -74,6 +82,7 @@ const props = defineProps<{
   installationCount: number
   installationCompleted: number
   blockedTaskCount: number
+  overdueTaskCount: number
   projectProgress: number
 }>()
 
@@ -127,6 +136,7 @@ const metrics = computed(() => [
 .delivery-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .overall-progress { padding: 10px 12px 0; }
 .blocked-summary { margin-top: 12px; }
+.overdue-summary { margin-top: 12px; }
 .overall-progress-header { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--ad-text); }
 .progress-note { margin-top: 6px; color: var(--ad-text-secondary); font-size: 12px; }
 .delivery-summary > div {

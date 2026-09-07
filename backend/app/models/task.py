@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DateTime, Integer, Numeric, String, Text, ForeignKey
@@ -18,6 +19,8 @@ class DesignTask(Base, TimestampMixin):
     project_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(64), default="pending")
     progress_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    planned_start_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    planned_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     design_file_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -40,6 +43,8 @@ class ProductionTask(Base, TimestampMixin):
     project_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(64), default="pending")
     progress_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    planned_start_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    planned_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     material_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("materials.id"), nullable=True)
     process_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("processes.id"), nullable=True)
@@ -67,6 +72,8 @@ class InstallationTask(Base, TimestampMixin):
     project_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(64), default="pending")
     progress_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    planned_start_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    planned_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     contact_name: Mapped[str | None] = mapped_column(String(128), nullable=True)

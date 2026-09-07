@@ -63,6 +63,7 @@ async def list_project_task_queue(
     stage: str | None = None,
     status: str | None = None,
     order_id: str | None = None,
+    overdue: bool | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_any_permission(
         PERM_DESIGN_TASK_READ,
@@ -77,6 +78,7 @@ async def list_project_task_queue(
         stage=stage,
         status=status,
         order_id=order_id,
+        overdue=overdue,
     )
     return success_paginated(tasks, total, page, page_size)
 
@@ -182,7 +184,7 @@ async def update_design_task(
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_UPDATE)),
 ):
     service = DesignTaskService(db)
-    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_none=True))
+    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True))
     return success(task)
 
 
@@ -265,7 +267,7 @@ async def update_production_task(
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_UPDATE)),
 ):
     service = ProductionTaskService(db)
-    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_none=True))
+    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True))
     return success(task)
 
 
@@ -348,7 +350,7 @@ async def update_installation_task(
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_UPDATE)),
 ):
     service = InstallationTaskService(db)
-    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_none=True))
+    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True))
     return success(task)
 
 

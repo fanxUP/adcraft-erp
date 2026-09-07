@@ -33,6 +33,7 @@
             :installation-count="installationTasks.length"
             :installation-completed="installationCompleted"
             :blocked-task-count="blockedTaskCount"
+            :overdue-task-count="overdueTaskCount"
             :project-progress="projectProgress"
             @select-tab="activeTab = $event"
           />
@@ -267,6 +268,7 @@
                     <el-tooltip v-if="row.is_blocked" :content="row.blocked_reason || '前置任务未完成'" placement="top">
                       <el-tag type="warning" size="small">阻塞</el-tag>
                     </el-tooltip>
+                    <el-tag v-if="row.is_overdue" type="danger" size="small">逾期</el-tag>
                   </div>
                 </template>
               </el-table-column>
@@ -298,6 +300,7 @@
                     <el-tooltip v-if="row.is_blocked" :content="row.blocked_reason || '前置任务未完成'" placement="top">
                       <el-tag type="warning" size="small">阻塞</el-tag>
                     </el-tooltip>
+                    <el-tag v-if="row.is_overdue" type="danger" size="small">逾期</el-tag>
                   </div>
                 </template>
               </el-table-column>
@@ -329,6 +332,7 @@
                     <el-tooltip v-if="row.is_blocked" :content="row.blocked_reason || '前置任务未完成'" placement="top">
                       <el-tag type="warning" size="small">阻塞</el-tag>
                     </el-tooltip>
+                    <el-tag v-if="row.is_overdue" type="danger" size="small">逾期</el-tag>
                   </div>
                 </template>
               </el-table-column>
@@ -436,6 +440,8 @@ const productionCompleted = computed(() => productionTasks.value.filter(task => 
 const installationCompleted = computed(() => installationTasks.value.filter(task => task.status === 'completed').length)
 const blockedTaskCount = computed(() => [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
   .filter(task => task.is_blocked).length)
+const overdueTaskCount = computed(() => [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
+  .filter(task => task.is_overdue).length)
 const projectProgress = computed(() => {
   const tasks = [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
     .filter(task => task.status !== 'cancelled')

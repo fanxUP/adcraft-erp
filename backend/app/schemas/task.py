@@ -1,18 +1,36 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from app.schemas.common import CoercedModel
 
 from app.schemas.attachment import AttachmentResponse
 from app.schemas.task_dependency import TaskDependencyTaskSummary
 
 
+def _comparable_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+class TaskScheduleInput(BaseModel):
+    planned_start_at: datetime | None = None
+    planned_end_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_schedule_range(self):
+        if self.planned_start_at and self.planned_end_at:
+            if _comparable_datetime(self.planned_end_at) < _comparable_datetime(self.planned_start_at):
+                raise ValueError("计划结束时间不能早于计划开始时间")
+        return self
+
+
 # -- Design Task --
 
-class DesignTaskCreate(BaseModel):
+class DesignTaskCreate(TaskScheduleInput):
     order_id: str
     customer_id: str | None = None
     project_name: str | None = None
@@ -21,7 +39,7 @@ class DesignTaskCreate(BaseModel):
     progress_pct: int = Field(0, ge=0, le=100)
 
 
-class DesignTaskUpdate(BaseModel):
+class DesignTaskUpdate(TaskScheduleInput):
     project_name: str | None = None
     assigned_to: str | None = None
     description: str | None = None
@@ -40,9 +58,13 @@ class DesignTaskResponse(CoercedModel):
     project_name: str
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    planned_start_at: str | None = None
+    planned_end_at: str | None = None
     is_blocked: bool = False
     blocked_reason: str | None = None
     blocking_tasks: list[TaskDependencyTaskSummary] = Field(default_factory=list)
+    is_overdue: bool = False
+    overdue_days: int = 0
     assigned_to: str | None = None
     description: str | None = None
     design_file_url: str | None = None
@@ -65,7 +87,7 @@ class DesignTaskResponse(CoercedModel):
 
 # -- Production Task --
 
-class ProductionTaskCreate(BaseModel):
+class ProductionTaskCreate(TaskScheduleInput):
     order_id: str
     customer_id: str | None = None
     project_name: str | None = None
@@ -79,7 +101,7 @@ class ProductionTaskCreate(BaseModel):
     progress_pct: int = Field(0, ge=0, le=100)
 
 
-class ProductionTaskUpdate(BaseModel):
+class ProductionTaskUpdate(TaskScheduleInput):
     project_name: str | None = None
     assigned_to: str | None = None
     material_id: str | None = None
@@ -103,9 +125,13 @@ class ProductionTaskResponse(CoercedModel):
     project_name: str
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    planned_start_at: str | None = None
+    planned_end_at: str | None = None
     is_blocked: bool = False
     blocked_reason: str | None = None
     blocking_tasks: list[TaskDependencyTaskSummary] = Field(default_factory=list)
+    is_overdue: bool = False
+    overdue_days: int = 0
     assigned_to: str | None = None
     material_id: str | None = None
     process_id: str | None = None
@@ -128,7 +154,7 @@ class ProductionTaskResponse(CoercedModel):
 
 # -- Installation Task --
 
-class InstallationTaskCreate(BaseModel):
+class InstallationTaskCreate(TaskScheduleInput):
     order_id: str
     customer_id: str | None = None
     project_name: str | None = None
@@ -140,7 +166,7 @@ class InstallationTaskCreate(BaseModel):
     progress_pct: int = Field(0, ge=0, le=100)
 
 
-class InstallationTaskUpdate(BaseModel):
+class InstallationTaskUpdate(TaskScheduleInput):
     project_name: str | None = None
     assigned_to: str | None = None
     address: str | None = None
@@ -161,9 +187,13 @@ class InstallationTaskResponse(CoercedModel):
     project_name: str
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    planned_start_at: str | None = None
+    planned_end_at: str | None = None
     is_blocked: bool = False
     blocked_reason: str | None = None
     blocking_tasks: list[TaskDependencyTaskSummary] = Field(default_factory=list)
+    is_overdue: bool = False
+    overdue_days: int = 0
     assigned_to: str | None = None
     address: str | None = None
     contact_name: str | None = None
@@ -199,9 +229,13 @@ class TaskQueueItem(CoercedModel):
     project_name: str
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    planned_start_at: str | None = None
+    planned_end_at: str | None = None
     is_blocked: bool = False
     blocked_reason: str | None = None
     blocking_tasks: list[TaskDependencyTaskSummary] = Field(default_factory=list)
+    is_overdue: bool = False
+    overdue_days: int = 0
     assigned_to: str | None = None
     assigned_to_name: str | None = None
     is_outsourced: bool = False
