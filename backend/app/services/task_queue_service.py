@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.task import DesignTask, InstallationTask, ProductionTask
+from app.models.task_order_item_link import TaskOrderItemLink
 from app.schemas.task import (
     DesignTaskResponse,
     InstallationTaskResponse,
@@ -47,7 +48,12 @@ async def list_task_queue(
         if order_uuid:
             query = query.where(model.document_id == order_uuid)
         if order_item_uuid:
-            query = query.where(model.order_item_id == order_item_uuid)
+            linked = exists().where(
+                TaskOrderItemLink.task_type == task_type,
+                TaskOrderItemLink.task_id == model.id,
+                TaskOrderItemLink.order_item_id == order_item_uuid,
+            )
+            query = query.where(or_(model.order_item_id == order_item_uuid, linked))
         if statuses:
             query = query.where(model.status.in_(statuses))
         query = query.order_by(model.created_at.desc())
@@ -59,6 +65,7 @@ async def list_task_queue(
             item["task_type"] = task_type
             item["stage"] = task_type
             item["task_no"] = item[no_field]
+            item["_task_type"] = task_type
             item = await _enrich_task_order(db, item)
             item = enrich_task_dict_with_schedule_state(item)
             item = await enrich_task_dict_with_dependency_state(db, task_type, item)

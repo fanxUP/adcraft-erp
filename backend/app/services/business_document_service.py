@@ -15,6 +15,7 @@ from app.repositories.business_document_repo import BusinessDocumentRepository
 from app.repositories.cdr_quote_repo import CdrQuoteRepository
 from app.models.business_document import BusinessDocument
 from app.models.task import DesignTask, ProductionTask, InstallationTask
+from app.models.task_order_item_link import TaskOrderItemLink
 from app.models.outsource import OutsourceTask
 from app.models.project_cost import ProjectCost
 from app.services.quote_calculation import (
@@ -660,6 +661,25 @@ class BusinessDocumentService:
                 task_no = getattr(t, no_attr, "N/A")
                 raise ValueError(f"{label}任务 {task_no} 未完成，请先完成后再流转")
 
+    async def _linked_task_item_ids(self, task_type: str, tasks) -> set[UUID]:
+        """Include both legacy single links and the new multi-link rows."""
+        item_ids = {
+            task.order_item_id
+            for task in tasks
+            if task.order_item_id is not None
+            and task.status != "cancelled"
+        }
+        task_ids = [task.id for task in tasks if task.status != "cancelled"]
+        if task_ids:
+            result = await self.db.execute(
+                select(TaskOrderItemLink.order_item_id).where(
+                    TaskOrderItemLink.task_type == task_type,
+                    TaskOrderItemLink.task_id.in_(task_ids),
+                )
+            )
+            item_ids.update(result.scalars().all())
+        return item_ids
+
     async def _auto_create_design_task(self, doc) -> None:
         from app.models.task import DesignTask
         from app.services.number_generator import generate_design_no
@@ -672,12 +692,10 @@ class BusinessDocumentService:
             existing = await self.db.execute(
                 select(DesignTask).where(DesignTask.document_id == doc.id)
             )
-            existing_item_ids = {
-                task.order_item_id
-                for task in existing.scalars().all()
-                if task.order_item_id is not None
-                and task.status != "cancelled"
-            }
+            existing_item_ids = await self._linked_task_item_ids(
+                "design",
+                existing.scalars().all(),
+            )
             for item in active_items:
                 if item.id in existing_item_ids:
                     continue
@@ -720,12 +738,10 @@ class BusinessDocumentService:
             existing = await self.db.execute(
                 select(ProductionTask).where(ProductionTask.document_id == doc.id)
             )
-            existing_item_ids = {
-                task.order_item_id
-                for task in existing.scalars().all()
-                if task.order_item_id is not None
-                and task.status != "cancelled"
-            }
+            existing_item_ids = await self._linked_task_item_ids(
+                "production",
+                existing.scalars().all(),
+            )
             for item in active_items:
                 if item.id in existing_item_ids:
                     continue
@@ -775,12 +791,10 @@ class BusinessDocumentService:
             existing = await self.db.execute(
                 select(InstallationTask).where(InstallationTask.document_id == doc.id)
             )
-            existing_item_ids = {
-                task.order_item_id
-                for task in existing.scalars().all()
-                if task.order_item_id is not None
-                and task.status != "cancelled"
-            }
+            existing_item_ids = await self._linked_task_item_ids(
+                "installation",
+                existing.scalars().all(),
+            )
             for item in active_items:
                 if item.id in existing_item_ids:
                     continue

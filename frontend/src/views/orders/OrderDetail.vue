@@ -567,7 +567,15 @@ const overdueTaskCount = computed(() => [...designTasks.value, ...productionTask
   .filter(task => task.is_overdue).length)
 
 function findItemTask<T extends OrderProgressTask>(tasks: T[], itemId: string): T | null {
-  return tasks.find(task => task.order_item_id === itemId && task.status !== 'cancelled') || null
+  return tasks.find(task => (
+    (task.order_item_ids?.includes(itemId) || task.order_item_id === itemId)
+    && task.status !== 'cancelled'
+  )) || null
+}
+
+function taskIsUnlinked(task: OrderProgressTask) {
+  return task.status !== 'cancelled'
+    && !(task.order_item_ids?.length || task.order_item_id)
 }
 
 const itemProgressRows = computed<ItemProgressRow[]>(() => {
@@ -592,11 +600,11 @@ const itemProgressRows = computed<ItemProgressRow[]>(() => {
 })
 
 const legacyUnlinkedTaskCount = computed(() => [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
-  .filter(task => task.status !== 'cancelled' && !task.order_item_id).length)
+  .filter(taskIsUnlinked).length)
 
 const legacyUnlinkedTasks = computed<LegacyUnlinkedTaskRow[]>(() => [
   ...designTasks.value
-    .filter(task => task.status !== 'cancelled' && !task.order_item_id)
+    .filter(taskIsUnlinked)
     .map(task => ({
       stageLabel: '设计',
       taskNo: task.design_no,
@@ -606,7 +614,7 @@ const legacyUnlinkedTasks = computed<LegacyUnlinkedTaskRow[]>(() => [
       route: `/design-tasks/${task.id}`,
     })),
   ...productionTasks.value
-    .filter(task => task.status !== 'cancelled' && !task.order_item_id)
+    .filter(taskIsUnlinked)
     .map(task => ({
       stageLabel: '制作',
       taskNo: task.production_no,
@@ -616,7 +624,7 @@ const legacyUnlinkedTasks = computed<LegacyUnlinkedTaskRow[]>(() => [
       route: `/production-tasks/${task.id}`,
     })),
   ...installationTasks.value
-    .filter(task => task.status !== 'cancelled' && !task.order_item_id)
+    .filter(taskIsUnlinked)
     .map(task => ({
       stageLabel: '安装',
       taskNo: task.installation_no,

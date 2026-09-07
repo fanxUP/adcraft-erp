@@ -7,6 +7,7 @@ type ReadonlyTaskFields =
   | 'updated_at'
   | 'attachments'
   | 'assigned_to'
+  | 'item_names'
 
 type TaskUpdateInput<T, NumberField extends string> = Partial<
   Omit<T, ReadonlyTaskFields | NumberField>

@@ -2,9 +2,10 @@ from uuid import UUID
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, exists
+from sqlalchemy import select, func, exists, or_
 
 from app.models.task import DesignTask, ProductionTask, InstallationTask, Attachment
+from app.models.task_order_item_link import TaskOrderItemLink
 from app.models.outsource import OutsourceTask
 
 
@@ -30,7 +31,13 @@ class DesignTaskRepository:
         if order_id:
             q = q.where(DesignTask.document_id == UUID(order_id))
         if order_item_id:
-            q = q.where(DesignTask.order_item_id == UUID(order_item_id))
+            item_id = UUID(order_item_id)
+            linked = exists().where(
+                TaskOrderItemLink.task_type == "design",
+                TaskOrderItemLink.task_id == DesignTask.id,
+                TaskOrderItemLink.order_item_id == item_id,
+            )
+            q = q.where(or_(DesignTask.order_item_id == item_id, linked))
         if assigned_to:
             q = q.where(DesignTask.assigned_to == UUID(assigned_to))
         if outsourced is not None:
@@ -80,7 +87,13 @@ class ProductionTaskRepository:
         if order_id:
             q = q.where(ProductionTask.document_id == UUID(order_id))
         if order_item_id:
-            q = q.where(ProductionTask.order_item_id == UUID(order_item_id))
+            item_id = UUID(order_item_id)
+            linked = exists().where(
+                TaskOrderItemLink.task_type == "production",
+                TaskOrderItemLink.task_id == ProductionTask.id,
+                TaskOrderItemLink.order_item_id == item_id,
+            )
+            q = q.where(or_(ProductionTask.order_item_id == item_id, linked))
         if assigned_to:
             q = q.where(ProductionTask.assigned_to == UUID(assigned_to))
         if outsourced is not None:
@@ -134,7 +147,13 @@ class InstallationTaskRepository:
         if order_id:
             q = q.where(InstallationTask.document_id == UUID(order_id))
         if order_item_id:
-            q = q.where(InstallationTask.order_item_id == UUID(order_item_id))
+            item_id = UUID(order_item_id)
+            linked = exists().where(
+                TaskOrderItemLink.task_type == "installation",
+                TaskOrderItemLink.task_id == InstallationTask.id,
+                TaskOrderItemLink.order_item_id == item_id,
+            )
+            q = q.where(or_(InstallationTask.order_item_id == item_id, linked))
         if assigned_to:
             q = q.where(InstallationTask.assigned_to == UUID(assigned_to))
         if outsourced is not None:

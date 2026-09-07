@@ -3,7 +3,9 @@
     <template #header>
       <div class="card-header">
         <span>任务处理</span>
-        <el-tag v-if="currentItemId" type="success" size="small">已关联明细</el-tag>
+        <el-tag v-if="linkedItemIds.length" type="success" size="small">
+          已关联 {{ linkedItemIds.length }} 条明细
+        </el-tag>
         <el-tag v-else type="warning" size="small">历史整单任务</el-tag>
       </div>
     </template>
@@ -11,40 +13,50 @@
     <section class="task-section order-item-section" aria-labelledby="order-item-section-title">
       <div id="order-item-section-title" class="section-heading">
         <span>订单明细</span>
-        <span v-if="currentItemId" class="section-note">当前任务归属</span>
+        <span v-if="linkedItemIds.length" class="section-note">当前任务归属</span>
         <span v-else class="section-note">请选择一条明细进行关联</span>
       </div>
 
-      <template v-if="currentItemId">
+      <template v-if="linkedItemIds.length">
         <div class="linked-item-summary">
-          <span class="linked-item-title">{{ currentItemName || '明细未命名' }}</span>
-          <span class="linked-item-note">该任务已纳入此明细的进度统计</span>
+          <div class="linked-item-tags">
+            <el-tag
+              v-for="(itemName, index) in linkedItemNames"
+              :key="linkedItemIds[index] || index"
+              type="success"
+              effect="plain"
+              size="small"
+            >
+              {{ itemName || `明细 ${index + 1}` }}
+            </el-tag>
+          </div>
+          <span class="linked-item-note">该任务已纳入以上 {{ linkedItemIds.length }} 条明细的进度统计</span>
         </div>
       </template>
 
       <template v-else>
         <el-alert
-          title="只把这条任务绑定到一个明确的订单明细，不会自动拆分任务或创建下游任务。"
+          title="可选择多条订单明细；任务本身不会被拆分，进度会同步反映到每条已选明细。"
           type="info"
           :closable="false"
           show-icon
         />
 
         <div v-loading="loadingItems" class="link-panel">
-          <div v-if="items.length" class="item-list" role="radiogroup" aria-label="订单明细">
+          <div v-if="items.length" class="item-list" role="group" aria-label="订单明细（可多选）">
             <label
               v-for="item in items"
               :key="item.id"
               class="item-option"
-              :class="{ 'is-selected': selectedItemId === item.id }"
+              :class="{ 'is-selected': selectedItemIds.includes(item.id) }"
             >
               <input
-                v-model="selectedItemId"
-                class="item-option-radio"
-                type="radio"
-                name="task-order-item-link"
+                v-model="selectedItemIds"
+                class="item-option-checkbox"
+                type="checkbox"
                 :value="item.id"
                 :disabled="saving || changing"
+                :aria-label="`选择订单明细 ${item.item_name}`"
               />
               <span class="item-option-body">
                 <span class="item-option-title">{{ item.item_name }}</span>
@@ -67,10 +79,10 @@
             <el-button
               type="primary"
               :loading="saving"
-              :disabled="!selectedItemId || !items.length || changing"
+              :disabled="!selectedItemIds.length || !items.length || changing"
               @click="handleLink"
             >
-              关联到明细
+              {{ selectedItemIds.length ? `关联 ${selectedItemIds.length} 条明细` : '关联到明细' }}
             </el-button>
           </div>
         </div>
@@ -96,7 +108,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getOrder } from '@/api/orders'
 import {
@@ -113,6 +125,8 @@ const props = withDefaults(defineProps<{
   orderId: string
   currentItemId?: string | null
   currentItemName?: string | null
+  currentItemIds?: string[] | null
+  currentItemNames?: string[] | null
   steps: { key: string; label: string }[]
   currentStatus: string
   workflow: Record<string, string[]>
@@ -120,6 +134,8 @@ const props = withDefaults(defineProps<{
 }>(), {
   currentItemId: null,
   currentItemName: null,
+  currentItemIds: () => [],
+  currentItemNames: () => [],
 })
 
 const emit = defineEmits<{
@@ -128,10 +144,21 @@ const emit = defineEmits<{
 }>()
 
 const items = ref<OrderItemResponse[]>([])
-const selectedItemId = ref('')
+const selectedItemIds = ref<string[]>([])
 const loadingItems = ref(false)
 const saving = ref(false)
 const loadError = ref(false)
+
+const linkedItemIds = computed(() => {
+  if (props.currentItemIds?.length) return props.currentItemIds
+  return props.currentItemId ? [props.currentItemId] : []
+})
+
+const linkedItemNames = computed(() => {
+  if (props.currentItemNames?.length) return props.currentItemNames
+  if (props.currentItemName) return [props.currentItemName]
+  return linkedItemIds.value.map(() => '明细未命名')
+})
 
 function itemLabel(item: OrderItemResponse) {
   return item.material_process
@@ -150,8 +177,11 @@ function itemSpec(item: OrderItemResponse) {
 }
 
 async function loadItems() {
-  if (!props.orderId || props.currentItemId) return
-  selectedItemId.value = ''
+  if (!props.orderId || linkedItemIds.value.length) {
+    selectedItemIds.value = []
+    return
+  }
+  selectedItemIds.value = []
   loadingItems.value = true
   loadError.value = false
   try {
@@ -164,23 +194,24 @@ async function loadItems() {
   }
 }
 
-async function updateTaskItem(itemId: string) {
+async function updateTaskItems(itemIds: string[]) {
   if (props.taskType === 'design') {
-    return updateDesignTask(props.taskId, { order_item_id: itemId })
+    return updateDesignTask(props.taskId, { order_item_ids: itemIds })
   }
   if (props.taskType === 'production') {
-    return updateProductionTask(props.taskId, { order_item_id: itemId })
+    return updateProductionTask(props.taskId, { order_item_ids: itemIds })
   }
-  return updateInstallationTask(props.taskId, { order_item_id: itemId })
+  return updateInstallationTask(props.taskId, { order_item_ids: itemIds })
 }
 
 async function handleLink() {
-  const selected = items.value.find(item => item.id === selectedItemId.value)
-  if (!selected) return
+  const selected = items.value.filter(item => selectedItemIds.value.includes(item.id))
+  if (!selected.length) return
+  const selectedLabel = selected.map(itemLabel).join('、')
 
   try {
     await ElMessageBox.confirm(
-      `确认将此任务关联到「${itemLabel(selected)}」？关联后会纳入该明细的进度统计。`,
+      `确认将此任务关联到以下 ${selected.length} 条明细：${selectedLabel}？关联后会纳入这些明细的进度统计。`,
       '确认关联订单明细',
       { confirmButtonText: '确认关联', cancelButtonText: '取消', type: 'warning' },
     )
@@ -190,8 +221,8 @@ async function handleLink() {
 
   saving.value = true
   try {
-    await updateTaskItem(selected.id)
-    ElMessage.success('已关联订单明细')
+    await updateTaskItems(selected.map(item => item.id))
+    ElMessage.success(`已关联 ${selected.length} 条订单明细`)
     emit('linked')
   } catch {
     // API error message is handled by the shared request interceptor.
@@ -204,7 +235,7 @@ function handleWorkflowChange(status: string) {
   emit('change', status)
 }
 
-watch([() => props.orderId, () => props.currentItemId], loadItems)
+watch([() => props.orderId, linkedItemIds], loadItems)
 onMounted(loadItems)
 </script>
 
@@ -235,7 +266,7 @@ onMounted(loadItems)
 
 .linked-item-summary {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px 12px;
   padding: 14px 16px;
@@ -244,9 +275,10 @@ onMounted(loadItems)
   background: var(--el-color-success-light-9);
 }
 
-.linked-item-title {
-  color: var(--ad-text);
-  font-weight: 600;
+.linked-item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .linked-item-note {
@@ -287,7 +319,7 @@ onMounted(loadItems)
   background: var(--el-color-primary-light-9);
 }
 
-.item-option-radio {
+.item-option-checkbox {
   flex: 0 0 auto;
   width: 16px;
   height: 16px;
