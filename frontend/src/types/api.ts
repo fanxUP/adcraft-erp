@@ -453,6 +453,22 @@ export interface TaskDependencyResponse {
   updated_at?: string
 }
 
+export interface TaskHistoryItem {
+  id: string
+  task_type: TaskDependencyTaskType
+  task_id: string
+  action: 'create' | 'update' | 'status_change'
+  user_id?: string | null
+  user_name?: string | null
+  changed_at?: string | null
+  from_status?: string | null
+  to_status?: string | null
+  from_progress_pct?: number | null
+  to_progress_pct?: number | null
+  reason?: string | null
+  changed_fields: string[]
+}
+
 export interface DesignTaskResponse {
   id: string
   design_no: string

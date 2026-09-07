@@ -2,7 +2,7 @@ import os
 import uuid as _uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query, UploadFile, File
+from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -45,6 +45,7 @@ from app.services.task_dependency_service import (
     delete_task_dependency,
     list_task_dependencies,
 )
+from app.services.task_history_service import list_task_history, task_exists
 
 
 def _ensure_uuid(s: str):
@@ -131,6 +132,60 @@ async def remove_task_dependency(
     return success(None)
 
 
+# -- Task change history --
+
+history_router = APIRouter(prefix="/task-history", tags=["Task History"])
+HISTORY_READ_PERMISSIONS = {
+    "design": PERM_DESIGN_TASK_READ,
+    "production": PERM_PRODUCTION_TASK_READ,
+    "installation": PERM_INSTALLATION_TASK_READ,
+}
+
+
+@history_router.get("/")
+async def get_task_history(
+    task_type: str = Query(...),
+    task_id: str = Query(...),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_permission(
+        PERM_DESIGN_TASK_READ,
+        PERM_PRODUCTION_TASK_READ,
+        PERM_INSTALLATION_TASK_READ,
+    )),
+):
+    required_permission = HISTORY_READ_PERMISSIONS.get(task_type)
+    if not required_permission:
+        return {"code": 40001, "message": f"不支持的任务类型: {task_type}", "data": None}
+    granted_permissions = {
+        permission.code
+        for role in current_user.roles
+        for permission in role.permissions
+    }
+    if required_permission not in granted_permissions:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"权限不足: 需要「{required_permission}」权限",
+        )
+    try:
+        task_uuid = _ensure_uuid(task_id)
+        exists = await task_exists(db, task_type, task_uuid)
+    except ValueError as exc:
+        return {"code": 40001, "message": str(exc), "data": None}
+    if not exists:
+        return {"code": 40401, "message": "任务不存在", "data": None}
+
+    items, total = await list_task_history(
+        db,
+        task_type,
+        task_uuid,
+        page=page,
+        page_size=page_size,
+    )
+    return success_paginated(items, total, page, page_size)
+
+
 # -- Design Tasks --
 
 design_router = APIRouter(prefix="/design-tasks", tags=["Design Tasks"])
@@ -159,7 +214,7 @@ async def create_design_task(
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_CREATE)),
 ):
     service = DesignTaskService(db)
-    task = await service.create_task(data.model_dump())
+    task = await service.create_task(data.model_dump(), current_user.id)
     return success(task)
 
 
@@ -184,7 +239,7 @@ async def update_design_task(
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_UPDATE)),
 ):
     service = DesignTaskService(db)
-    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True))
+    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
     return success(task)
 
 
@@ -210,7 +265,7 @@ async def change_design_task_status(
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_CHANGE_STATUS)),
 ):
     service = DesignTaskService(db)
-    task = await service.change_status(_ensure_uuid(task_id), data.to_status, current_user.id)
+    task = await service.change_status(_ensure_uuid(task_id), data.to_status, current_user.id, data.reason)
     return success(task)
 
 
@@ -242,7 +297,7 @@ async def create_production_task(
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_CREATE)),
 ):
     service = ProductionTaskService(db)
-    task = await service.create_task(data.model_dump())
+    task = await service.create_task(data.model_dump(), current_user.id)
     return success(task)
 
 
@@ -267,7 +322,7 @@ async def update_production_task(
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_UPDATE)),
 ):
     service = ProductionTaskService(db)
-    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True))
+    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
     return success(task)
 
 
@@ -293,7 +348,7 @@ async def change_production_task_status(
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_CHANGE_STATUS)),
 ):
     service = ProductionTaskService(db)
-    task = await service.change_status(_ensure_uuid(task_id), data.to_status, current_user.id)
+    task = await service.change_status(_ensure_uuid(task_id), data.to_status, current_user.id, data.reason)
     return success(task)
 
 
@@ -325,7 +380,7 @@ async def create_installation_task(
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_CREATE)),
 ):
     service = InstallationTaskService(db)
-    task = await service.create_task(data.model_dump())
+    task = await service.create_task(data.model_dump(), current_user.id)
     return success(task)
 
 
@@ -350,7 +405,7 @@ async def update_installation_task(
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_UPDATE)),
 ):
     service = InstallationTaskService(db)
-    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True))
+    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
     return success(task)
 
 
@@ -376,7 +431,7 @@ async def change_installation_task_status(
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_CHANGE_STATUS)),
 ):
     service = InstallationTaskService(db)
-    task = await service.change_status(_ensure_uuid(task_id), data.to_status, current_user.id)
+    task = await service.change_status(_ensure_uuid(task_id), data.to_status, current_user.id, data.reason)
     return success(task)
 
 

@@ -213,6 +213,22 @@ class TaskStatusChange(BaseModel):
     reason: str | None = None
 
 
+class TaskHistoryItem(CoercedModel):
+    id: str
+    task_type: Literal["design", "production", "installation"]
+    task_id: str
+    action: Literal["create", "update", "status_change"]
+    user_id: str | None = None
+    user_name: str | None = None
+    changed_at: str | None = None
+    from_status: str | None = None
+    to_status: str | None = None
+    from_progress_pct: int | None = None
+    to_progress_pct: int | None = None
+    reason: str | None = None
+    changed_fields: list[str] = Field(default_factory=list)
+
+
 class TaskQueueItem(CoercedModel):
     """统一项目队列中的任务卡片数据。"""
 

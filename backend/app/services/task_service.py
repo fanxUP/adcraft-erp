@@ -34,6 +34,12 @@ from app.services.task_schedule_service import (
     enrich_task_dict_with_schedule_state,
     normalize_task_schedule_data,
 )
+from app.services.operation_log_service import (
+    ACTION_CREATE,
+    ACTION_STATUS_CHANGE,
+    ACTION_UPDATE,
+)
+from app.services.task_history_service import record_task_event, task_history_snapshot
 
 
 ACTIVE_ORDER_STATUSES = ("designing", "in_production", "in_installation")
@@ -238,7 +244,7 @@ class DesignTaskService:
         task = await self.repo.get_by_id(task_id)
         return await self._to_dict(task) if task else None
 
-    async def create_task(self, data: dict) -> dict:
+    async def create_task(self, data: dict, operated_by: UUID | None = None) -> dict:
         data = await _prepare_task_create_data(
             self.db,
             data,
@@ -248,6 +254,14 @@ class DesignTaskService:
         data["design_no"] = await generate_design_no(self.db)
         data["status"] = "pending"
         task = await self.repo.create(data)
+        await record_task_event(
+            self.db,
+            "design",
+            task,
+            ACTION_CREATE,
+            operated_by,
+            changed_fields=list(data.keys()),
+        )
         # Notify assigned user
         if task.assigned_to:
             from app.services.notification_service import NotificationService
@@ -262,17 +276,27 @@ class DesignTaskService:
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
-    async def update_task(self, task_id: UUID, data: dict) -> dict:
+    async def update_task(self, task_id: UUID, data: dict, operated_by: UUID | None = None) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("设计任务不存在")
         old_assigned = task.assigned_to
+        before = task_history_snapshot(task)
         data = normalize_task_schedule_data(
             data,
             current_start_at=task.planned_start_at,
             current_end_at=task.planned_end_at,
         )
         task = await self.repo.update(task, data)
+        await record_task_event(
+            self.db,
+            "design",
+            task,
+            ACTION_UPDATE,
+            operated_by,
+            before=before,
+            changed_fields=list(data.keys()),
+        )
         # Notify newly assigned user
         new_assigned = data.get("assigned_to")
         if new_assigned and new_assigned != old_assigned:
@@ -288,7 +312,13 @@ class DesignTaskService:
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
-    async def change_status(self, task_id: UUID, to_status: str, operated_by: UUID | None = None) -> dict:
+    async def change_status(
+        self,
+        task_id: UUID,
+        to_status: str,
+        operated_by: UUID | None = None,
+        reason: str | None = None,
+    ) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("设计任务不存在")
@@ -298,11 +328,25 @@ class DesignTaskService:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
         await ensure_task_not_blocked(self.db, "design", task.id, to_status)
 
+        before = task_history_snapshot(task)
         task.status = to_status
         if to_status == "confirmed":
             task.completed_at = datetime.now()
             task.progress_pct = 100
         await self.db.flush()
+        changed_fields = ["status"]
+        if to_status == "confirmed":
+            changed_fields.append("progress_pct")
+        await record_task_event(
+            self.db,
+            "design",
+            task,
+            ACTION_STATUS_CHANGE,
+            operated_by,
+            before=before,
+            reason=reason,
+            changed_fields=changed_fields,
+        )
         # Auto-advance order when all design tasks completed
         if to_status == "confirmed" and task.document_id:
             from sqlalchemy import func
@@ -427,7 +471,7 @@ class ProductionTaskService:
         task = await self.repo.get_by_id(task_id)
         return await self._to_dict(task) if task else None
 
-    async def create_task(self, data: dict) -> dict:
+    async def create_task(self, data: dict, operated_by: UUID | None = None) -> dict:
         data = await _prepare_task_create_data(
             self.db,
             data,
@@ -437,6 +481,14 @@ class ProductionTaskService:
         data["production_no"] = await generate_production_no(self.db)
         data["status"] = "pending"
         task = await self.repo.create(data)
+        await record_task_event(
+            self.db,
+            "production",
+            task,
+            ACTION_CREATE,
+            operated_by,
+            changed_fields=list(data.keys()),
+        )
         # Notify assigned user
         if task.assigned_to:
             from app.services.notification_service import NotificationService
@@ -451,17 +503,27 @@ class ProductionTaskService:
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
-    async def update_task(self, task_id: UUID, data: dict) -> dict:
+    async def update_task(self, task_id: UUID, data: dict, operated_by: UUID | None = None) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("制作任务不存在")
         old_assigned = task.assigned_to
+        before = task_history_snapshot(task)
         data = normalize_task_schedule_data(
             data,
             current_start_at=task.planned_start_at,
             current_end_at=task.planned_end_at,
         )
         task = await self.repo.update(task, data)
+        await record_task_event(
+            self.db,
+            "production",
+            task,
+            ACTION_UPDATE,
+            operated_by,
+            before=before,
+            changed_fields=list(data.keys()),
+        )
         # Notify newly assigned user
         new_assigned = data.get("assigned_to")
         if new_assigned and new_assigned != old_assigned:
@@ -477,7 +539,13 @@ class ProductionTaskService:
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
-    async def change_status(self, task_id: UUID, to_status: str, operated_by: UUID | None = None) -> dict:
+    async def change_status(
+        self,
+        task_id: UUID,
+        to_status: str,
+        operated_by: UUID | None = None,
+        reason: str | None = None,
+    ) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("制作任务不存在")
@@ -487,11 +555,25 @@ class ProductionTaskService:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
         await ensure_task_not_blocked(self.db, "production", task.id, to_status)
 
+        before = task_history_snapshot(task)
         task.status = to_status
         if to_status == "completed":
             task.completed_at = datetime.now()
             task.progress_pct = 100
         await self.db.flush()
+        changed_fields = ["status"]
+        if to_status == "completed":
+            changed_fields.append("progress_pct")
+        await record_task_event(
+            self.db,
+            "production",
+            task,
+            ACTION_STATUS_CHANGE,
+            operated_by,
+            before=before,
+            reason=reason,
+            changed_fields=changed_fields,
+        )
         # Auto-advance order when all production tasks completed
         if to_status == "completed" and task.document_id:
             from sqlalchemy import func
@@ -607,7 +689,7 @@ class InstallationTaskService:
         task = await self.repo.get_by_id(task_id)
         return await self._to_dict(task) if task else None
 
-    async def create_task(self, data: dict) -> dict:
+    async def create_task(self, data: dict, operated_by: UUID | None = None) -> dict:
         data = await _prepare_task_create_data(
             self.db,
             data,
@@ -617,6 +699,14 @@ class InstallationTaskService:
         data["installation_no"] = await generate_installation_no(self.db)
         data["status"] = "pending"
         task = await self.repo.create(data)
+        await record_task_event(
+            self.db,
+            "installation",
+            task,
+            ACTION_CREATE,
+            operated_by,
+            changed_fields=list(data.keys()),
+        )
         # Notify assigned user
         if task.assigned_to:
             from app.services.notification_service import NotificationService
@@ -631,17 +721,27 @@ class InstallationTaskService:
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
-    async def update_task(self, task_id: UUID, data: dict) -> dict:
+    async def update_task(self, task_id: UUID, data: dict, operated_by: UUID | None = None) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("安装任务不存在")
         old_assigned = task.assigned_to
+        before = task_history_snapshot(task)
         data = normalize_task_schedule_data(
             data,
             current_start_at=task.planned_start_at,
             current_end_at=task.planned_end_at,
         )
         task = await self.repo.update(task, data)
+        await record_task_event(
+            self.db,
+            "installation",
+            task,
+            ACTION_UPDATE,
+            operated_by,
+            before=before,
+            changed_fields=list(data.keys()),
+        )
         # Notify newly assigned user
         new_assigned = data.get("assigned_to")
         if new_assigned and new_assigned != old_assigned:
@@ -657,7 +757,13 @@ class InstallationTaskService:
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
-    async def change_status(self, task_id: UUID, to_status: str, operated_by: UUID | None = None) -> dict:
+    async def change_status(
+        self,
+        task_id: UUID,
+        to_status: str,
+        operated_by: UUID | None = None,
+        reason: str | None = None,
+    ) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("安装任务不存在")
@@ -667,11 +773,25 @@ class InstallationTaskService:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
         await ensure_task_not_blocked(self.db, "installation", task.id, to_status)
 
+        before = task_history_snapshot(task)
         task.status = to_status
         if to_status == "completed":
             task.completed_at = datetime.now()
             task.progress_pct = 100
         await self.db.flush()
+        changed_fields = ["status"]
+        if to_status == "completed":
+            changed_fields.append("progress_pct")
+        await record_task_event(
+            self.db,
+            "installation",
+            task,
+            ACTION_STATUS_CHANGE,
+            operated_by,
+            before=before,
+            reason=reason,
+            changed_fields=changed_fields,
+        )
         # Auto-advance only after all design, production, and installation
         # tasks for the order are terminal.
         if to_status == "completed" and task.document_id:
