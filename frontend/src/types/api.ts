@@ -442,6 +442,7 @@ export interface DesignTaskResponse {
   source?: string
   project_name: string
   status: string
+  progress_pct: number
   is_outsourced?: boolean
   assigned_to?: string
   assigned_to_name?: string
@@ -466,6 +467,7 @@ export interface ProductionTaskResponse {
   source?: string
   project_name: string
   status: string
+  progress_pct: number
   is_outsourced?: boolean
   assigned_to?: string
   material_id?: string
@@ -494,6 +496,7 @@ export interface InstallationTaskResponse {
   source?: string
   project_name: string
   status: string
+  progress_pct: number
   is_outsourced?: boolean
   assigned_to?: string
   address?: string
@@ -505,6 +508,26 @@ export interface InstallationTaskResponse {
   created_at?: string
   updated_at?: string
   attachments: AttachmentResponse[]
+}
+
+export interface TaskQueueItem {
+  id: string
+  task_type: 'design' | 'production' | 'installation'
+  stage: 'design' | 'production' | 'installation'
+  task_no: string
+  document_id: string
+  order_id?: string
+  order_no?: string
+  customer_name?: string
+  project_name: string
+  status: string
+  progress_pct: number
+  assigned_to?: string
+  assigned_to_name?: string
+  is_outsourced?: boolean
+  completed_at?: string
+  created_at?: string
+  updated_at?: string
 }
 
 // ---- Product / Material / Process ----

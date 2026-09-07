@@ -32,6 +32,7 @@
             :production-completed="productionCompleted"
             :installation-count="installationTasks.length"
             :installation-completed="installationCompleted"
+            :project-progress="projectProgress"
             @select-tab="activeTab = $event"
           />
           <el-card shadow="never" class="info-card">
@@ -263,6 +264,11 @@
                   <el-tag :type="designStatusColor(row.status)" size="small">{{ designStatusLabel(row.status) }}</el-tag>
                 </template>
               </el-table-column>
+              <el-table-column label="进度" width="150">
+                <template #default="{ row }">
+                  <el-progress :percentage="progressPct(row.progress_pct)" :stroke-width="8" />
+                </template>
+              </el-table-column>
               <el-table-column label="操作" width="100">
                 <template #default="{ row }">
                   <el-button text type="primary" size="small" @click="$router.push(`/design-tasks/${row.id}`)">详情</el-button>
@@ -284,6 +290,11 @@
                   <el-tag :type="prodStatusColor(row.status)" size="small">{{ prodStatusLabel(row.status) }}</el-tag>
                 </template>
               </el-table-column>
+              <el-table-column label="进度" width="150">
+                <template #default="{ row }">
+                  <el-progress :percentage="progressPct(row.progress_pct)" :stroke-width="8" />
+                </template>
+              </el-table-column>
               <el-table-column label="操作" width="100">
                 <template #default="{ row }">
                   <el-button text type="primary" size="small" @click="$router.push(`/production-tasks/${row.id}`)">详情</el-button>
@@ -303,6 +314,11 @@
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
                   <el-tag :type="instStatusColor(row.status)" size="small">{{ instStatusLabel(row.status) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="进度" width="150">
+                <template #default="{ row }">
+                  <el-progress :percentage="progressPct(row.progress_pct)" :stroke-width="8" />
                 </template>
               </el-table-column>
               <el-table-column label="操作" width="100">
@@ -399,9 +415,19 @@ async function fetchItemEditability() {
   }
 }
 
-const designCompleted = computed(() => designTasks.value.filter(task => task.status === 'completed').length)
+const designCompleted = computed(() => designTasks.value.filter(task => ['confirmed', 'completed'].includes(task.status)).length)
 const productionCompleted = computed(() => productionTasks.value.filter(task => task.status === 'completed').length)
 const installationCompleted = computed(() => installationTasks.value.filter(task => task.status === 'completed').length)
+const projectProgress = computed(() => {
+  const tasks = [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
+    .filter(task => task.status !== 'cancelled')
+  if (!tasks.length) return 0
+  return Math.round(tasks.reduce((sum, task) => sum + progressPct(task.progress_pct), 0) / tasks.length)
+})
+
+function progressPct(value: number | undefined) {
+  return Math.min(100, Math.max(0, Number(value ?? 0)))
+}
 
 function toChineseAmount(n: number): string {
   const digits = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖']

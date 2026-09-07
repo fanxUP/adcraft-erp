@@ -27,6 +27,9 @@ from app.services.number_generator import (
 )
 
 
+ACTIVE_ORDER_STATUSES = ("designing", "in_production", "in_installation")
+
+
 def _attachment_to_dict(att) -> dict:
     return AttachmentResponse.model_validate(att).model_dump(mode="json")
 
@@ -158,6 +161,50 @@ async def _clear_outsource_source_refs(db: AsyncSession, task_type: str, task_id
     )
 
 
+async def _all_execution_tasks_completed(db: AsyncSession, doc_id: UUID) -> bool:
+    """Return whether every execution task for an order is terminal."""
+    from app.models.task import DesignTask, InstallationTask, ProductionTask
+
+    task_rules = (
+        (DesignTask, {"confirmed", "completed", "cancelled"}),
+        (ProductionTask, {"completed", "cancelled"}),
+        (InstallationTask, {"completed", "cancelled"}),
+    )
+    found_task = False
+    for model, terminal_statuses in task_rules:
+        result = await db.execute(select(model).where(model.document_id == doc_id))
+        tasks = result.scalars().all()
+        if tasks:
+            found_task = True
+        if any(task.status not in terminal_statuses for task in tasks):
+            return False
+    return found_task
+
+
+async def _maybe_complete_order(db: AsyncSession, doc_id: UUID, operated_by: UUID | None) -> None:
+    """Complete an installation-stage order only after all task types finish."""
+    order = await db.get(BusinessDocument, doc_id)
+    if not order or order.status != "in_installation":
+        return
+    if not await _all_execution_tasks_completed(db, doc_id):
+        return
+
+    from app.services.business_document_service import BusinessDocumentService
+
+    order_svc = BusinessDocumentService(db, doc_type="order")
+    try:
+        await order_svc.change_status(
+            doc_id,
+            "completed",
+            "所有设计、制作、安装任务已完成，系统自动推进",
+            operated_by,
+        )
+    except ValueError:
+        # Keep the task update successful if an unrelated order guard blocks
+        # aggregate completion. The order can still be advanced manually.
+        return
+
+
 class DesignTaskService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -185,7 +232,7 @@ class DesignTaskService:
         data = await _prepare_task_create_data(
             self.db,
             data,
-            allowed_order_statuses=("confirmed", "designing"),
+            allowed_order_statuses=("confirmed", *ACTIVE_ORDER_STATUSES),
             task_label="设计",
         )
         data["design_no"] = await generate_design_no(self.db)
@@ -238,6 +285,7 @@ class DesignTaskService:
         task.status = to_status
         if to_status == "confirmed":
             task.completed_at = datetime.now()
+            task.progress_pct = 100
         await self.db.flush()
         # Auto-advance order when all design tasks completed
         if to_status == "confirmed" and task.document_id:
@@ -274,6 +322,8 @@ class DesignTaskService:
                     await order_svc.repo.create_status_log(task.document_id, "designing", "in_production",
                         "设计任务全部完成，系统自动推进", operated_by)
                     await self.db.flush()
+        if to_status == "confirmed" and task.document_id:
+            await _maybe_complete_order(self.db, task.document_id, operated_by)
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
@@ -361,7 +411,7 @@ class ProductionTaskService:
         data = await _prepare_task_create_data(
             self.db,
             data,
-            allowed_order_statuses=("in_production",),
+            allowed_order_statuses=ACTIVE_ORDER_STATUSES,
             task_label="制作",
         )
         data["production_no"] = await generate_production_no(self.db)
@@ -414,6 +464,7 @@ class ProductionTaskService:
         task.status = to_status
         if to_status == "completed":
             task.completed_at = datetime.now()
+            task.progress_pct = 100
         await self.db.flush()
         # Auto-advance order when all production tasks completed
         if to_status == "completed" and task.document_id:
@@ -449,6 +500,8 @@ class ProductionTaskService:
                     await order_svc.repo.create_status_log(task.document_id, "in_production", "in_installation",
                         "制作任务全部完成，系统自动推进", operated_by)
                     await self.db.flush()
+        if to_status == "completed" and task.document_id:
+            await _maybe_complete_order(self.db, task.document_id, operated_by)
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
@@ -529,7 +582,7 @@ class InstallationTaskService:
         data = await _prepare_task_create_data(
             self.db,
             data,
-            allowed_order_statuses=("in_installation",),
+            allowed_order_statuses=ACTIVE_ORDER_STATUSES,
             task_label="安装",
         )
         data["installation_no"] = await generate_installation_no(self.db)
@@ -582,30 +635,12 @@ class InstallationTaskService:
         task.status = to_status
         if to_status == "completed":
             task.completed_at = datetime.now()
+            task.progress_pct = 100
         await self.db.flush()
-        # Auto-advance order when all installation tasks completed
+        # Auto-advance only after all design, production, and installation
+        # tasks for the order are terminal.
         if to_status == "completed" and task.document_id:
-            from sqlalchemy import func
-            from app.models.task import InstallationTask
-            from app.models.business_document import BusinessDocument
-            from app.services.business_document_service import BusinessDocumentService
-
-            remaining = (await self.db.execute(
-                select(func.count()).select_from(InstallationTask).where(
-                    InstallationTask.document_id == task.document_id,
-                    InstallationTask.status.not_in(["completed", "cancelled"])
-                )
-            )).scalar()
-            if remaining == 0:
-                order = await self.db.get(BusinessDocument, task.document_id)
-                if order and order.status == "in_installation":
-                    order_svc = BusinessDocumentService(self.db, doc_type="order")
-                    try:
-                        await order_svc.change_status(
-                            task.document_id, "completed",
-                            "安装任务全部完成，系统自动推进", operated_by)
-                    except ValueError:
-                        pass
+            await _maybe_complete_order(self.db, task.document_id, operated_by)
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 

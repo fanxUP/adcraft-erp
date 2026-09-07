@@ -89,6 +89,7 @@ def make_mock_installation_task(
     customer_id: UUID = SAMPLE_CUSTOMER_ID,
     project_name: str = "测试安装任务",
     status: str = "pending",
+    progress_pct: int = 0,
     address: str | None = "北京市朝阳区测试路100号",
     contact_name: str | None = "张三",
     contact_phone: str | None = "13800138000",
@@ -108,6 +109,7 @@ def make_mock_installation_task(
     task.customer_id = customer_id
     task.project_name = project_name
     task.status = status
+    task.progress_pct = progress_pct
     task.address = address
     task.contact_name = contact_name
     task.contact_phone = contact_phone
@@ -128,6 +130,7 @@ def make_mock_design_task(
     customer_id: UUID = SAMPLE_CUSTOMER_ID,
     project_name: str = "测试设计任务",
     status: str = "pending",
+    progress_pct: int = 0,
     description: str | None = "这是一个测试设计任务",
     design_file_url: str | None = None,
     client_comments: str | None = None,
@@ -149,6 +152,7 @@ def make_mock_design_task(
     task.customer_id = customer_id
     task.project_name = project_name
     task.status = status
+    task.progress_pct = progress_pct
     task.description = description
     task.design_file_url = design_file_url
     task.client_comments = client_comments
@@ -171,6 +175,7 @@ def make_mock_production_task(
     customer_id: UUID = SAMPLE_CUSTOMER_ID,
     project_name: str = "测试制作任务",
     status: str = "pending",
+    progress_pct: int = 0,
     material_id: UUID | None = None,
     process_id: UUID | None = None,
     length: float | None = 2.5,
@@ -197,6 +202,7 @@ def make_mock_production_task(
     task.customer_id = customer_id
     task.project_name = project_name
     task.status = status
+    task.progress_pct = progress_pct
     task.material_id = material_id
     task.process_id = process_id
     task.length = length

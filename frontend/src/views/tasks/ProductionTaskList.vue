@@ -36,6 +36,11 @@
             <el-tag :type="prodStatusColor(row.status)" size="small">{{ prodStatusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="进度" width="150">
+          <template #default="{ row }">
+            <el-progress :percentage="progressPct(row.progress_pct)" :stroke-width="8" />
+          </template>
+        </el-table-column>
         <el-table-column label="派发" width="90">
           <template #default="{ row }">{{ row.assigned_to_name || row.assigned_to || '-' }}</template>
         </el-table-column>
@@ -89,6 +94,9 @@ function prodStatusLabel(s: string) {
 function prodStatusColor(s: string) {
   const map: Record<string, string> = { pending: 'info', pending_review: 'warning', completed: 'success', cancelled: 'info' }
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+}
+function progressPct(value: number | undefined) {
+  return Math.min(100, Math.max(0, Number(value ?? 0)))
 }
 
 async function fetchData() {

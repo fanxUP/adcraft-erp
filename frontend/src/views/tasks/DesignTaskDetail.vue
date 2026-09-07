@@ -14,6 +14,9 @@
           <el-descriptions-item label="状态">
             <el-tag data-ai-targets="task-status-pending_review task-status-designing task-status-confirmed task-status-revision" :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
           </el-descriptions-item>
+          <el-descriptions-item label="任务进度">
+            <el-progress :percentage="progressPct(task.progress_pct)" :stroke-width="8" style="width: 220px" />
+          </el-descriptions-item>
           <el-descriptions-item label="设计说明">{{ task.description || '-' }}</el-descriptions-item>
           <el-descriptions-item label="客户意见">{{ task.client_comments || '-' }}</el-descriptions-item>
           <el-descriptions-item label="设计文件">
@@ -55,6 +58,10 @@
           </el-form-item>
           <el-form-item label="设计文件">
             <el-input v-model="editForm.design_file_url" placeholder="设计文件链接" />
+          </el-form-item>
+          <el-form-item label="任务进度">
+            <el-input-number v-model="editForm.progress_pct" :min="0" :max="100" :step="5" />
+            <span class="progress-suffix">%</span>
           </el-form-item>
           <el-form-item>
             <el-button :loading="updating" @click="handleUpdate" type="primary">保存</el-button>
@@ -144,6 +151,7 @@ const editForm = reactive({
   description: '',
   client_comments: '',
   design_file_url: '',
+  progress_pct: 0,
 })
 
 const DESIGN_WORKFLOW: Record<string, string[]> = {
@@ -198,6 +206,10 @@ function statusColor(s: string) {
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
+function progressPct(value: number | undefined) {
+  return Math.min(100, Math.max(0, Number(value ?? 0)))
+}
+
 async function fetchTask() {
   loading.value = true
   try {
@@ -208,6 +220,7 @@ async function fetchTask() {
       description: data.description || '',
       client_comments: data.client_comments || '',
       design_file_url: data.design_file_url || '',
+      progress_pct: progressPct(data.progress_pct),
     })
   } finally { loading.value = false }
 }
@@ -240,6 +253,7 @@ async function handleUpdate() {
       description: editForm.description || '',
       client_comments: editForm.client_comments || '',
       design_file_url: editForm.design_file_url || '', 
+      progress_pct: progressPct(editForm.progress_pct),
     })
     ElMessage.success('保存成功')
     await fetchTask()
@@ -280,6 +294,7 @@ onMounted(() => {
 .page { padding: 0; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.progress-suffix { margin-left: 8px; color: var(--ad-text-secondary); }
 .design-file-field { display: flex; width: 100%; gap: 8px; }
 .design-file-field .el-input { flex: 1; }
 @media (max-width: 640px) {

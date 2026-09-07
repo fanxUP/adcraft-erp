@@ -1,5 +1,5 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, AttachmentResponse, SuccessResponse } from '@/types/api'
+import { PaginatedData, DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, TaskQueueItem, AttachmentResponse, SuccessResponse } from '@/types/api'
 
 type ReadonlyTaskFields =
   | 'id'
@@ -59,3 +59,13 @@ export function deleteDesignTask(id: string) { return del<SuccessResponse>(`/des
 export function deleteProductionTask(id: string) { return del<SuccessResponse>(`/production-tasks/${id}`) }
 export function deleteInstallationTask(id: string) { return del<SuccessResponse>(`/installation-tasks/${id}`) }
 export function deleteAttachment(id: string) { return del<SuccessResponse>(`/attachments/${id}`) }
+
+export function getTaskQueue(params?: {
+  page?: number
+  page_size?: number
+  stage?: 'design' | 'production' | 'installation'
+  status?: string
+  order_id?: string
+}) {
+  return get<PaginatedData<TaskQueueItem>>('/task-queue/', { params })
+}

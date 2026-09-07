@@ -38,10 +38,41 @@ from app.services.task_service import (
     InstallationTaskService,
     AttachmentService,
 )
+from app.services.task_queue_service import list_task_queue
 
 
 def _ensure_uuid(s: str):
     return _uuid.UUID(s)
+
+
+# -- Unified project task queue --
+
+queue_router = APIRouter(prefix="/task-queue", tags=["Task Queue"])
+
+
+@queue_router.get("/")
+async def list_project_task_queue(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=200),
+    stage: str | None = None,
+    status: str | None = None,
+    order_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_permission(
+        PERM_DESIGN_TASK_READ,
+        PERM_PRODUCTION_TASK_READ,
+        PERM_INSTALLATION_TASK_READ,
+    )),
+):
+    tasks, total = await list_task_queue(
+        db,
+        page=page,
+        page_size=page_size,
+        stage=stage,
+        status=status,
+        order_id=order_id,
+    )
+    return success_paginated(tasks, total, page, page_size)
 
 
 # -- Design Tasks --

@@ -85,6 +85,7 @@ async def test_completed_sets_timestamp(service, mock_repo):
 
     assert result["status"] == "confirmed"
     assert result["completed_at"] is not None
+    assert result["progress_pct"] == 100
 
 
 @pytest.mark.asyncio
@@ -242,9 +243,9 @@ async def test_create_task_rejects_order_outside_design_stage(service, mock_repo
     service.db.get.return_value = MagicMock(
         doc_type="order",
         deleted_at=None,
-        status="in_production",
+        status="cancelled",
         customer_id=SAMPLE_USER_ID,
-        project_name="已进入生产的订单",
+        project_name="已取消的订单",
     )
 
     with pytest.raises(ValueError, match="当前状态不能创建设计任务"):

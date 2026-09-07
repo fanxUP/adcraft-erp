@@ -80,6 +80,7 @@ async def test_completed_sets_timestamp(service, mock_repo):
 
     assert result["status"] == "completed"
     assert result["completed_at"] is not None
+    assert result["progress_pct"] == 100
 
 
 @pytest.mark.asyncio

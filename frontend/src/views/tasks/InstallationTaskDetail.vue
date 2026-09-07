@@ -14,6 +14,9 @@
           <el-descriptions-item label="状态">
             <el-tag data-ai-targets="task-status-assigned task-status-completed task-status-in_progress task-status-pending_acceptance" :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
           </el-descriptions-item>
+          <el-descriptions-item label="任务进度">
+            <el-progress :percentage="progressPct(task.progress_pct)" :stroke-width="8" style="width: 220px" />
+          </el-descriptions-item>
           <el-descriptions-item label="安装地址">{{ task.address || '-' }}</el-descriptions-item>
           <el-descriptions-item label="联系人">{{ task.contact_name || '-' }}</el-descriptions-item>
           <el-descriptions-item label="联系电话">{{ task.contact_phone || '-' }}</el-descriptions-item>
@@ -104,6 +107,10 @@
           <el-form-item label="验收结果">
             <el-input v-model="editForm.acceptance_result" type="textarea" :rows="3" placeholder="填写验收意见..." />
           </el-form-item>
+          <el-form-item label="任务进度">
+            <el-input-number v-model="editForm.progress_pct" :min="0" :max="100" :step="5" />
+            <span class="progress-suffix">%</span>
+          </el-form-item>
           <el-form-item>
             <el-button :loading="updating" @click="handleUpdate" type="primary">保存</el-button>
           </el-form-item>
@@ -178,6 +185,7 @@ const editForm = reactive({
   contact_name: '',
   contact_phone: '',
   acceptance_result: '',
+  progress_pct: 0,
 })
 const activeDraft = computed(() => {
   const guide = aiStore.activePageGuide
@@ -251,6 +259,10 @@ function statusColor(s: string) {
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
+function progressPct(value: number | undefined) {
+  return Math.min(100, Math.max(0, Number(value ?? 0)))
+}
+
 async function fetchTask() {
   loading.value = true
   try {
@@ -263,6 +275,7 @@ async function fetchTask() {
       contact_name: data.contact_name || '',
       contact_phone: data.contact_phone || '',
       acceptance_result: data.acceptance_result || '',
+      progress_pct: progressPct(data.progress_pct),
     })
   } finally { loading.value = false }
 }
@@ -298,6 +311,7 @@ async function handleUpdate() {
       ...editForm,
       assigned_to: editForm.assigned_to || null,
       scheduled_at: editForm.scheduled_at || null,
+      progress_pct: progressPct(editForm.progress_pct),
     })
     ElMessage.success('保存成功')
     await fetchTask()
@@ -360,6 +374,7 @@ onMounted(() => {
 .page { padding: 0; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.progress-suffix { margin-left: 8px; color: var(--ad-text-secondary); }
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .photo-item { background: #252540; border-radius: 6px; overflow: hidden; border: 1px solid var(--ad-border); }
 .photo-img { width: 100%; height: 160px; object-fit: cover; }

@@ -1,6 +1,8 @@
 from datetime import datetime
 from uuid import UUID
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 from app.schemas.common import CoercedModel
 
@@ -15,6 +17,7 @@ class DesignTaskCreate(BaseModel):
     project_name: str | None = None
     assigned_to: str | None = None
     description: str | None = None
+    progress_pct: int = Field(0, ge=0, le=100)
 
 
 class DesignTaskUpdate(BaseModel):
@@ -23,6 +26,7 @@ class DesignTaskUpdate(BaseModel):
     description: str | None = None
     design_file_url: str | None = None
     client_comments: str | None = None
+    progress_pct: int | None = Field(None, ge=0, le=100)
 
 
 class DesignTaskResponse(CoercedModel):
@@ -34,6 +38,7 @@ class DesignTaskResponse(CoercedModel):
     customer_id: str
     project_name: str
     status: str
+    progress_pct: int = Field(0, ge=0, le=100)
     assigned_to: str | None = None
     description: str | None = None
     design_file_url: str | None = None
@@ -67,6 +72,7 @@ class ProductionTaskCreate(BaseModel):
     width: float | None = None
     height: float | None = None
     quantity: float = 1
+    progress_pct: int = Field(0, ge=0, le=100)
 
 
 class ProductionTaskUpdate(BaseModel):
@@ -80,6 +86,7 @@ class ProductionTaskUpdate(BaseModel):
     quantity: float | None = None
     qc_result: str | None = None
     rework_reason: str | None = None
+    progress_pct: int | None = Field(None, ge=0, le=100)
 
 
 class ProductionTaskResponse(CoercedModel):
@@ -91,6 +98,7 @@ class ProductionTaskResponse(CoercedModel):
     customer_id: str
     project_name: str
     status: str
+    progress_pct: int = Field(0, ge=0, le=100)
     assigned_to: str | None = None
     material_id: str | None = None
     process_id: str | None = None
@@ -122,6 +130,7 @@ class InstallationTaskCreate(BaseModel):
     contact_name: str | None = None
     contact_phone: str | None = None
     scheduled_at: str | None = None
+    progress_pct: int = Field(0, ge=0, le=100)
 
 
 class InstallationTaskUpdate(BaseModel):
@@ -132,6 +141,7 @@ class InstallationTaskUpdate(BaseModel):
     contact_phone: str | None = None
     scheduled_at: str | None = None
     acceptance_result: str | None = None
+    progress_pct: int | None = Field(None, ge=0, le=100)
 
 
 class InstallationTaskResponse(CoercedModel):
@@ -143,6 +153,7 @@ class InstallationTaskResponse(CoercedModel):
     customer_id: str
     project_name: str
     status: str
+    progress_pct: int = Field(0, ge=0, le=100)
     assigned_to: str | None = None
     address: str | None = None
     contact_name: str | None = None
@@ -160,3 +171,27 @@ class InstallationTaskResponse(CoercedModel):
 class TaskStatusChange(BaseModel):
     to_status: str
     reason: str | None = None
+
+
+class TaskQueueItem(CoercedModel):
+    """统一项目队列中的任务卡片数据。"""
+
+    model_config = {"from_attributes": True}
+
+    id: str
+    task_type: Literal["design", "production", "installation"]
+    stage: Literal["design", "production", "installation"]
+    task_no: str
+    document_id: str
+    order_id: str | None = None
+    order_no: str | None = None
+    customer_name: str | None = None
+    project_name: str
+    status: str
+    progress_pct: int = Field(0, ge=0, le=100)
+    assigned_to: str | None = None
+    assigned_to_name: str | None = None
+    is_outsourced: bool = False
+    completed_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None

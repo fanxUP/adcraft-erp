@@ -14,6 +14,9 @@
           <el-descriptions-item label="状态">
             <el-tag data-ai-targets="task-status-completed task-status-in_progress task-status-qc_check task-status-queued task-status-rework" :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
           </el-descriptions-item>
+          <el-descriptions-item label="任务进度">
+            <el-progress :percentage="progressPct(task.progress_pct)" :stroke-width="8" style="width: 220px" />
+          </el-descriptions-item>
           <el-descriptions-item label="尺寸">长{{ task.length }}m × 宽{{ task.width }}m × 高{{ task.height }}m</el-descriptions-item>
           <el-descriptions-item label="数量">{{ task.quantity }}</el-descriptions-item>
         </el-descriptions>
@@ -28,15 +31,6 @@
           :changing="changing"
           @change="handleWorkflowChange"
         />
-        <el-form v-if="showReason" :model="statusForm" inline style="margin-top: 12px">
-          <el-form-item label="原因">
-            <el-input v-model="statusForm.reason" style="width: 240px" />
-          </el-form-item>
-          <el-form-item>
-            <el-button :loading="changing" @click="confirmChange" type="primary">确认变更</el-button>
-            <el-button @click="cancelChange">取消</el-button>
-          </el-form-item>
-        </el-form>
       </el-card>
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>任务分配</span></template>
@@ -89,6 +83,10 @@
           </el-form-item>
           <el-form-item label="返工原因" v-if="editForm.qc_result === 'fail'">
             <el-input v-model="editForm.rework_reason" type="textarea" :rows="2" />
+          </el-form-item>
+          <el-form-item label="任务进度">
+            <el-input-number v-model="editForm.progress_pct" :min="0" :max="100" :step="5" />
+            <span class="progress-suffix">%</span>
           </el-form-item>
           <el-form-item>
             <el-button :loading="updating" @click="handleUpdate" type="primary">保存</el-button>
@@ -154,7 +152,7 @@ const userOptions = ref<UserResponse[]>([])
 const employeeOptions = ref<{ id: string; name: string; employee_no?: string; user_id?: string | null }[]>([])
 const assignTarget = ref('')
 const assigning = ref(false)
-const editForm = reactive({ assigned_to: '', qc_result: '', rework_reason: '' })
+const editForm = reactive({ assigned_to: '', qc_result: '', rework_reason: '', progress_pct: 0 })
 
 const PROD_WORKFLOW: Record<string, string[]> = {
   pending: ['in_progress', 'cancelled'],
@@ -206,6 +204,10 @@ function statusColor(s: string) {
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
+function progressPct(value: number | undefined) {
+  return Math.min(100, Math.max(0, Number(value ?? 0)))
+}
+
 async function fetchTask() {
   loading.value = true
   try {
@@ -215,6 +217,7 @@ async function fetchTask() {
       assigned_to: data.assigned_to || '',
       qc_result: data.qc_result || '',
       rework_reason: data.rework_reason || '',
+      progress_pct: progressPct(data.progress_pct),
     })
   } finally { loading.value = false }
 }
@@ -249,6 +252,7 @@ async function handleUpdate() {
     await updateProductionTask(route.params.id as string, {
       ...editForm,
       assigned_to: editForm.assigned_to || null,
+      progress_pct: progressPct(editForm.progress_pct),
     })
     ElMessage.success('保存成功')
     await fetchTask()
@@ -300,4 +304,5 @@ onMounted(() => {
 .page { padding: 0; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.progress-suffix { margin-left: 8px; color: var(--ad-text-secondary); }
 </style>

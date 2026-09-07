@@ -14,6 +14,15 @@
           <el-tag :type="statusType" size="small">{{ statusLabel }}</el-tag>
         </div>
       </template>
+      <div class="overall-progress">
+        <div class="overall-progress-header">
+          <span>项目总进度</span>
+          <strong>{{ projectProgress }}%</strong>
+        </div>
+        <el-progress :percentage="projectProgress" :stroke-width="10" />
+        <div class="progress-note">按当前订单下所有设计、制作、安装任务的平均进度计算</div>
+      </div>
+      <el-divider />
       <div class="delivery-summary">
         <div>
           <span>设计任务</span>
@@ -56,6 +65,7 @@ const props = defineProps<{
   productionCompleted: number
   installationCount: number
   installationCompleted: number
+  projectProgress: number
 }>()
 
 defineEmits<{
@@ -106,6 +116,9 @@ const metrics = computed(() => [
 .metric-value.danger { color: var(--el-color-danger); }
 .card-header { display: flex; align-items: center; justify-content: space-between; }
 .delivery-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.overall-progress { padding: 10px 12px 0; }
+.overall-progress-header { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--ad-text); }
+.progress-note { margin-top: 6px; color: var(--ad-text-secondary); font-size: 12px; }
 .delivery-summary > div {
   display: flex;
   justify-content: space-between;

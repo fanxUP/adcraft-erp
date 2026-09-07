@@ -35,6 +35,11 @@
             <el-tag :type="designStatusColor(row.status)" size="small">{{ designStatusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="进度" width="150">
+          <template #default="{ row }">
+            <el-progress :percentage="progressPct(row.progress_pct)" :stroke-width="8" />
+          </template>
+        </el-table-column>
         <el-table-column label="派发" width="90">
           <template #default="{ row }">{{ row.assigned_to_name || row.assigned_to || '-' }}</template>
         </el-table-column>
@@ -88,6 +93,9 @@ function designStatusLabel(s: string) {
 function designStatusColor(s: string) {
   const map: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success', cancelled: 'info' }
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+}
+function progressPct(value: number | undefined) {
+  return Math.min(100, Math.max(0, Number(value ?? 0)))
 }
 
 async function fetchData() {
