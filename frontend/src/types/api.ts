@@ -127,6 +127,20 @@ export interface OrderItemResponse {
   lifecycle_status?: string
 }
 
+export type OrderItemStage =
+  | 'designing'
+  | 'in_production'
+  | 'in_installation'
+  | 'completed'
+  | 'not_ready'
+
+export interface TaskOrderItemOption extends OrderItemResponse {
+  stage: OrderItemStage
+  stage_label: string
+  can_select: boolean
+  disabled_reason?: string | null
+}
+
 export interface OrderItemMutationFields {
   item_name?: string
   product_id?: string | null

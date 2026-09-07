@@ -14,7 +14,13 @@ from app.domain.workflows import (
     allowed_targets,
 )
 from app.schemas.attachment import AttachmentResponse
-from app.schemas.task import DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse
+from app.schemas.order import OrderItemResponse
+from app.schemas.task import (
+    DesignTaskResponse,
+    ProductionTaskResponse,
+    InstallationTaskResponse,
+    TaskOrderItemOption,
+)
 
 from app.repositories.task_repo import (
     DesignTaskRepository,
@@ -46,6 +52,42 @@ from app.services.task_history_service import record_task_event, task_history_sn
 
 ACTIVE_ORDER_STATUSES = ("designing", "in_production", "in_installation")
 
+ORDER_ITEM_STAGE_LABELS = {
+    "designing": "设计中",
+    "in_production": "制作中",
+    "in_installation": "安装中",
+    "completed": "已完成",
+    "not_ready": "未就绪",
+}
+TASK_TYPE_STAGES = {
+    "design": "designing",
+    "production": "in_production",
+    "installation": "in_installation",
+}
+TASK_TYPE_LABELS = {
+    "design": "设计",
+    "production": "制作",
+    "installation": "安装",
+}
+
+DESIGN_IN_PROGRESS_STATUSES = {
+    "pending",
+    "designing",
+    "pending_review",
+    "revision",
+}
+DESIGN_COMPLETED_STATUSES = {"confirmed", "completed"}
+PRODUCTION_IN_PROGRESS_STATUSES = {"pending", "in_progress", "rework"}
+PRODUCTION_COMPLETED_STATUSES = {"completed"}
+INSTALLATION_IN_PROGRESS_STATUSES = {
+    "pending",
+    "assigned",
+    "in_progress",
+    "pending_acceptance",
+}
+INSTALLATION_COMPLETED_STATUSES = {"completed"}
+TASK_CANCELLED_STATUS = "cancelled"
+
 
 def _coerce_uuid(value) -> UUID | None:
     """Return a UUID for real model values, ignoring loose test/magic values."""
@@ -76,6 +118,9 @@ async def _validate_order_item_ids(
     db: AsyncSession,
     document_id: UUID,
     raw_item_ids,
+    *,
+    task_type: str | None = None,
+    task_id: UUID | None = None,
 ) -> list[UUID]:
     """Validate a multi-value item link without guessing historical ownership."""
     if raw_item_ids is None:
@@ -100,6 +145,23 @@ async def _validate_order_item_ids(
             raise ValueError("订单明细不存在或不属于当前订单")
         if getattr(item, "lifecycle_status", "active") != "active":
             raise ValueError("已作废的订单明细不能关联新任务")
+
+    if task_type and item_ids:
+        options = await _task_order_item_option_map(
+            db,
+            document_id,
+            task_type,
+            task_id=task_id,
+        )
+        for item_id in item_ids:
+            option = options.get(item_id)
+            if option is None:
+                raise ValueError("订单明细当前进度无法确认，暂不可关联")
+            if not option["can_select"]:
+                raise ValueError(
+                    option["disabled_reason"]
+                    or f"订单明细当前处于{option['stage_label']}，不能关联此任务"
+                )
     return item_ids
 
 
@@ -107,11 +169,20 @@ async def _validate_order_item_id(
     db: AsyncSession,
     document_id: UUID,
     raw_item_id,
+    *,
+    task_type: str | None = None,
+    task_id: UUID | None = None,
 ) -> UUID | None:
     """Validate an optional item link without guessing historical ownership."""
     if raw_item_id in (None, ""):
         return None
-    item_ids = await _validate_order_item_ids(db, document_id, [raw_item_id])
+    item_ids = await _validate_order_item_ids(
+        db,
+        document_id,
+        [raw_item_id],
+        task_type=task_type,
+        task_id=task_id,
+    )
     return item_ids[0] if item_ids else None
 
 
@@ -193,6 +264,223 @@ async def _task_item_ids_by_task(
         if legacy_id is not None and legacy_id not in linked.setdefault(task_id, []):
             linked[task_id].insert(0, legacy_id)
     return linked
+
+
+def _resolve_order_item_stage(
+    order_status: str | None,
+    item_states: dict[str, list[str]],
+    global_states: dict[str, list[str]] | None = None,
+) -> str:
+    """Resolve one order item's delivery stage from its task history.
+
+    The resolver deliberately treats unknown task statuses as ``not_ready``.
+    It may use the order stage as a fallback only when the item has no
+    contradictory active task state; this keeps legacy order-level tasks
+    usable without guessing an item-level completion that is not present.
+    """
+    merged_states = {
+        stage: list(item_states.get(stage, []))
+        for stage in TASK_TYPE_STAGES.values()
+    }
+    for stage, statuses in (global_states or {}).items():
+        merged_states.setdefault(stage, []).extend(statuses)
+
+    recognised_statuses = {
+        "designing": DESIGN_IN_PROGRESS_STATUSES
+        | DESIGN_COMPLETED_STATUSES
+        | {TASK_CANCELLED_STATUS},
+        "in_production": PRODUCTION_IN_PROGRESS_STATUSES
+        | PRODUCTION_COMPLETED_STATUSES
+        | {TASK_CANCELLED_STATUS},
+        "in_installation": INSTALLATION_IN_PROGRESS_STATUSES
+        | INSTALLATION_COMPLETED_STATUSES
+        | {TASK_CANCELLED_STATUS},
+    }
+    for stage, statuses in merged_states.items():
+        if any(status not in recognised_statuses.get(stage, set()) for status in statuses):
+            return "not_ready"
+
+    order_status = order_status or ""
+    later_than_design = {"in_production", "in_installation", "completed"}
+    later_than_production = {"in_installation", "completed"}
+
+    design_statuses = merged_states["designing"]
+    if any(status in DESIGN_IN_PROGRESS_STATUSES for status in design_statuses):
+        return "designing"
+    design_complete = any(
+        status in DESIGN_COMPLETED_STATUSES for status in design_statuses
+    ) or order_status in later_than_design
+    if not design_complete:
+        if order_status in {"confirmed", "designing"}:
+            return "designing"
+        return "not_ready"
+
+    production_statuses = merged_states["in_production"]
+    if any(status in PRODUCTION_IN_PROGRESS_STATUSES for status in production_statuses):
+        return "in_production"
+    production_complete = any(
+        status in PRODUCTION_COMPLETED_STATUSES for status in production_statuses
+    ) or order_status in later_than_production
+    if not production_complete:
+        if order_status in {"designing", "in_production", "in_installation", "completed"}:
+            return "in_production"
+        return "not_ready"
+
+    installation_statuses = merged_states["in_installation"]
+    if any(status in INSTALLATION_IN_PROGRESS_STATUSES for status in installation_statuses):
+        return "in_installation"
+    installation_complete = any(
+        status in INSTALLATION_COMPLETED_STATUSES for status in installation_statuses
+    ) or order_status == "completed"
+    if not installation_complete:
+        if order_status in {"designing", "in_production", "in_installation", "completed"}:
+            return "in_installation"
+        return "not_ready"
+
+    return "completed"
+
+
+async def _task_stage_states_by_item(
+    db: AsyncSession,
+    document_id: UUID,
+) -> tuple[dict[UUID, dict[str, list[str]]], dict[str, list[str]]]:
+    """Collect item-scoped and legacy order-scoped task statuses."""
+    from app.models.task import DesignTask, InstallationTask, ProductionTask
+
+    task_models = (
+        ("design", DesignTask),
+        ("production", ProductionTask),
+        ("installation", InstallationTask),
+    )
+    by_item: dict[UUID, dict[str, list[str]]] = {}
+    global_states: dict[str, list[str]] = {
+        stage: [] for stage in TASK_TYPE_STAGES.values()
+    }
+
+    for task_type, model in task_models:
+        result = await db.execute(
+            select(model).where(model.document_id == document_id)
+        )
+        tasks = list(result.scalars().all())
+        item_ids_by_task = await _task_item_ids_by_task(db, task_type, tasks)
+        stage = TASK_TYPE_STAGES[task_type]
+        for task in tasks:
+            task_id = _coerce_uuid(getattr(task, "id", None))
+            status = getattr(task, "status", None)
+            if task_id is None or not isinstance(status, str):
+                global_states[stage].append("unknown")
+                continue
+            linked_ids = item_ids_by_task.get(task_id, [])
+            if not linked_ids:
+                global_states[stage].append(status)
+                continue
+            for item_id in linked_ids:
+                by_item.setdefault(item_id, {}).setdefault(stage, []).append(status)
+
+    return by_item, global_states
+
+
+async def _task_order_item_option_map(
+    db: AsyncSession,
+    document_id: UUID,
+    task_type: str,
+    *,
+    task_id: UUID | None = None,
+) -> dict[UUID, dict]:
+    """Build the authoritative order-item option catalog for one task type."""
+    if task_type not in TASK_TYPE_STAGES:
+        raise ValueError("不支持的任务类型")
+
+    order = await db.get(BusinessDocument, document_id)
+    if (
+        not order
+        or order.doc_type != "order"
+        or order.deleted_at is not None
+    ):
+        raise ValueError("关联订单不存在或已取消")
+
+    item_result = await db.execute(
+        select(BusinessDocumentItem)
+        .where(
+            BusinessDocumentItem.document_id == document_id,
+            BusinessDocumentItem.lifecycle_status == "active",
+        )
+        .order_by(BusinessDocumentItem.sort_order, BusinessDocumentItem.id)
+    )
+    items = list(item_result.scalars().all())
+    states_by_item, global_states = await _task_stage_states_by_item(
+        db,
+        document_id,
+    )
+    expected_stage = TASK_TYPE_STAGES[task_type]
+    options: dict[UUID, dict] = {}
+
+    for item in items:
+        item_id = _coerce_uuid(item.id)
+        if item_id is None:
+            continue
+        stage = _resolve_order_item_stage(
+            order.status,
+            states_by_item.get(item_id, {}),
+            global_states,
+        )
+        can_select = stage == expected_stage
+        if can_select:
+            disabled_reason = None
+        elif stage == "completed":
+            disabled_reason = "该明细已完成，不能再次关联任务"
+        elif stage == "not_ready":
+            disabled_reason = "当前进度无法确认，暂不可关联"
+        else:
+            disabled_reason = (
+                f"当前处于{ORDER_ITEM_STAGE_LABELS[stage]}，不能关联"
+                f"{TASK_TYPE_LABELS[task_type]}任务"
+            )
+
+        item_payload = {}
+        for field_name in OrderItemResponse.model_fields:
+            value = getattr(item, field_name, None)
+            item_payload[field_name] = str(value) if isinstance(value, UUID) else value
+        payload = {
+            **OrderItemResponse.model_validate(item_payload).model_dump(mode="json"),
+            "stage": stage,
+            "stage_label": ORDER_ITEM_STAGE_LABELS[stage],
+            "can_select": can_select,
+            "disabled_reason": disabled_reason,
+        }
+        options[item_id] = TaskOrderItemOption.model_validate(payload).model_dump(
+            mode="json"
+        )
+
+    return options
+
+
+async def get_task_order_item_options(
+    db: AsyncSession,
+    task_type: str,
+    task_id: UUID,
+) -> list[dict]:
+    """Return active order items with current stage and link eligibility."""
+    from app.models.task import DesignTask, InstallationTask, ProductionTask
+
+    task_models = {
+        "design": DesignTask,
+        "production": ProductionTask,
+        "installation": InstallationTask,
+    }
+    model = task_models.get(task_type)
+    if model is None:
+        raise ValueError("不支持的任务类型")
+    task = await db.get(model, task_id)
+    if not task:
+        raise ValueError("任务不存在")
+    options = await _task_order_item_option_map(
+        db,
+        task.document_id,
+        task_type,
+        task_id=task_id,
+    )
+    return list(options.values())
 
 
 async def _sync_task_order_item_links(
@@ -321,6 +609,7 @@ async def _prepare_task_create_data(
     *,
     allowed_order_statuses: tuple[str, ...],
     task_label: str,
+    task_type: str | None = None,
 ) -> tuple[dict, list[UUID]]:
     """校验父订单并把前端兼容字段转换为任务模型字段。"""
     normalized = dict(data)
@@ -356,12 +645,18 @@ async def _prepare_task_create_data(
         raise ValueError("不能同时提交订单明细编号和订单明细编号列表")
     if has_multiple_item_ids:
         item_ids = await _validate_order_item_ids(
-            db, order_id, normalized.pop("order_item_ids")
+            db,
+            order_id,
+            normalized.pop("order_item_ids"),
+            task_type=task_type,
         )
         normalized["order_item_id"] = item_ids[0] if item_ids else None
     elif has_single_item_id:
         item_id = await _validate_order_item_id(
-            db, order_id, normalized.get("order_item_id")
+            db,
+            order_id,
+            normalized.get("order_item_id"),
+            task_type=task_type,
         )
         item_ids = [item_id] if item_id is not None else []
     else:
@@ -711,6 +1006,7 @@ class DesignTaskService:
             data,
             allowed_order_statuses=("confirmed", *ACTIVE_ORDER_STATUSES),
             task_label="设计",
+            task_type="design",
         )
         data["design_no"] = await generate_design_no(self.db)
         data["status"] = "pending"
@@ -755,12 +1051,20 @@ class DesignTaskService:
             raise ValueError("不能同时提交订单明细编号和订单明细编号列表")
         if "order_item_ids" in data:
             linked_item_ids = await _validate_order_item_ids(
-                self.db, task.document_id, data.pop("order_item_ids")
+                self.db,
+                task.document_id,
+                data.pop("order_item_ids"),
+                task_type="design",
+                task_id=task.id,
             )
             data["order_item_id"] = linked_item_ids[0] if linked_item_ids else None
         elif "order_item_id" in data:
             data["order_item_id"] = await _validate_order_item_id(
-                self.db, task.document_id, data.get("order_item_id")
+                self.db,
+                task.document_id,
+                data.get("order_item_id"),
+                task_type="design",
+                task_id=task.id,
             )
             linked_item_ids = [data["order_item_id"]] if data["order_item_id"] else []
         task = await self.repo.update(task, data)
@@ -1006,6 +1310,7 @@ class ProductionTaskService:
             data,
             allowed_order_statuses=ACTIVE_ORDER_STATUSES,
             task_label="制作",
+            task_type="production",
         )
         data["production_no"] = await generate_production_no(self.db)
         data["status"] = "pending"
@@ -1050,12 +1355,20 @@ class ProductionTaskService:
             raise ValueError("不能同时提交订单明细编号和订单明细编号列表")
         if "order_item_ids" in data:
             linked_item_ids = await _validate_order_item_ids(
-                self.db, task.document_id, data.pop("order_item_ids")
+                self.db,
+                task.document_id,
+                data.pop("order_item_ids"),
+                task_type="production",
+                task_id=task.id,
             )
             data["order_item_id"] = linked_item_ids[0] if linked_item_ids else None
         elif "order_item_id" in data:
             data["order_item_id"] = await _validate_order_item_id(
-                self.db, task.document_id, data.get("order_item_id")
+                self.db,
+                task.document_id,
+                data.get("order_item_id"),
+                task_type="production",
+                task_id=task.id,
             )
             linked_item_ids = [data["order_item_id"]] if data["order_item_id"] else []
         task = await self.repo.update(task, data)
@@ -1284,6 +1597,7 @@ class InstallationTaskService:
             data,
             allowed_order_statuses=ACTIVE_ORDER_STATUSES,
             task_label="安装",
+            task_type="installation",
         )
         data["installation_no"] = await generate_installation_no(self.db)
         data["status"] = "pending"
@@ -1328,12 +1642,20 @@ class InstallationTaskService:
             raise ValueError("不能同时提交订单明细编号和订单明细编号列表")
         if "order_item_ids" in data:
             linked_item_ids = await _validate_order_item_ids(
-                self.db, task.document_id, data.pop("order_item_ids")
+                self.db,
+                task.document_id,
+                data.pop("order_item_ids"),
+                task_type="installation",
+                task_id=task.id,
             )
             data["order_item_id"] = linked_item_ids[0] if linked_item_ids else None
         elif "order_item_id" in data:
             data["order_item_id"] = await _validate_order_item_id(
-                self.db, task.document_id, data.get("order_item_id")
+                self.db,
+                task.document_id,
+                data.get("order_item_id"),
+                task_type="installation",
+                task_id=task.id,
             )
             linked_item_ids = [data["order_item_id"]] if data["order_item_id"] else []
         task = await self.repo.update(task, data)

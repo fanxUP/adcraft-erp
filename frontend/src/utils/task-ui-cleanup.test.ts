@@ -30,4 +30,15 @@ describe('任务详情页界面收敛', () => {
     expect(readSource('api/tasks.ts')).not.toContain('getTaskHistory')
     expect(readSource('types/api.ts')).not.toContain('interface TaskHistoryItem')
   })
+
+  it('任务处理明细按后端阶段展示标签并禁用不可关联明细', () => {
+    const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
+
+    expect(source).toContain('getTaskOrderItemOptions')
+    expect(source).toContain('item.stage_label')
+    expect(source).toContain('item.can_select')
+    expect(source).toContain('!item.can_select')
+    expect(source).toContain('stageTagType')
+    expect(source).not.toContain('getOrder(props.orderId)')
+  })
 })

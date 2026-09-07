@@ -48,24 +48,36 @@
               v-for="item in items"
               :key="item.id"
               class="item-option"
-              :class="{ 'is-selected': selectedItemIds.includes(item.id) }"
+              :class="{
+                'is-selected': selectedItemIds.includes(item.id),
+                'is-disabled': !item.can_select,
+              }"
+              :aria-disabled="!item.can_select"
             >
               <input
                 v-model="selectedItemIds"
                 class="item-option-checkbox"
                 type="checkbox"
                 :value="item.id"
-                :disabled="saving || changing"
+                :disabled="saving || changing || !item.can_select"
                 :aria-label="`选择订单明细 ${item.item_name}`"
               />
               <span class="item-option-body">
-                <span class="item-option-title">{{ item.item_name }}</span>
+                <span class="item-option-title-row">
+                  <span class="item-option-title">{{ item.item_name }}</span>
+                  <el-tag :type="stageTagType(item.stage)" effect="plain" size="small">
+                    {{ item.stage_label }}
+                  </el-tag>
+                </span>
                 <span v-if="item.material_process || itemSpec(item)" class="item-option-subtitle">
                   <span v-if="item.material_process">{{ item.material_process }}</span>
                   <span v-if="item.material_process && itemSpec(item)"> · </span>
                   <span v-if="itemSpec(item)">{{ itemSpec(item) }}</span>
                 </span>
                 <span class="item-option-meta">数量 {{ item.quantity }}{{ item.unit ? ` ${item.unit}` : '' }}</span>
+                <span v-if="!item.can_select && item.disabled_reason" class="item-option-disabled-reason">
+                  {{ item.disabled_reason }}
+                </span>
               </span>
             </label>
           </div>
@@ -110,13 +122,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getOrder } from '@/api/orders'
 import {
+  getTaskOrderItemOptions,
   updateDesignTask,
   updateProductionTask,
   updateInstallationTask,
 } from '@/api/tasks'
-import type { OrderItemResponse, TaskDependencyTaskType } from '@/types/api'
+import type { OrderItemStage, TaskDependencyTaskType, TaskOrderItemOption } from '@/types/api'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 
 const props = withDefaults(defineProps<{
@@ -143,7 +155,7 @@ const emit = defineEmits<{
   change: [status: string]
 }>()
 
-const items = ref<OrderItemResponse[]>([])
+const items = ref<TaskOrderItemOption[]>([])
 const selectedItemIds = ref<string[]>([])
 const loadingItems = ref(false)
 const saving = ref(false)
@@ -160,13 +172,13 @@ const linkedItemNames = computed(() => {
   return linkedItemIds.value.map(() => '明细未命名')
 })
 
-function itemLabel(item: OrderItemResponse) {
+function itemLabel(item: TaskOrderItemOption) {
   return item.material_process
     ? `${item.item_name} · ${item.material_process}`
     : item.item_name
 }
 
-function itemSpec(item: OrderItemResponse) {
+function itemSpec(item: TaskOrderItemOption) {
   if (item.specification) return item.specification
 
   return [
@@ -174,6 +186,14 @@ function itemSpec(item: OrderItemResponse) {
     item.width != null ? `${item.width}${item.width_unit || ''}` : '',
     item.height != null ? `${item.height}${item.height_unit || ''}` : '',
   ].filter(Boolean).join(' × ')
+}
+
+function stageTagType(stage: OrderItemStage): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
+  if (stage === 'designing') return 'primary'
+  if (stage === 'in_production') return 'warning'
+  if (stage === 'in_installation') return 'success'
+  if (stage === 'completed') return 'info'
+  return 'danger'
 }
 
 async function loadItems() {
@@ -185,9 +205,9 @@ async function loadItems() {
   loadingItems.value = true
   loadError.value = false
   try {
-    const order = await getOrder(props.orderId)
-    items.value = (order.items || []).filter(item => item.lifecycle_status !== 'voided')
+    items.value = await getTaskOrderItemOptions(props.taskType, props.taskId)
   } catch {
+    items.value = []
     loadError.value = true
   } finally {
     loadingItems.value = false
@@ -235,7 +255,7 @@ function handleWorkflowChange(status: string) {
   emit('change', status)
 }
 
-watch([() => props.orderId, linkedItemIds], loadItems)
+watch([() => props.orderId, () => props.taskId, () => props.taskType, linkedItemIds], loadItems)
 onMounted(loadItems)
 </script>
 
@@ -315,6 +335,16 @@ onMounted(loadItems)
   background: var(--el-fill-color-light);
 }
 
+.item-option.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  background: var(--el-fill-color-lighter);
+}
+
+.item-option.is-disabled:hover {
+  background: var(--el-fill-color-lighter);
+}
+
 .item-option.is-selected {
   background: var(--el-color-primary-light-9);
 }
@@ -336,6 +366,13 @@ onMounted(loadItems)
   align-items: baseline;
 }
 
+.item-option-title-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .item-option-title {
   color: var(--ad-text);
   font-weight: 600;
@@ -350,6 +387,12 @@ onMounted(loadItems)
 .item-option-meta {
   margin-left: auto;
   white-space: nowrap;
+}
+
+.item-option-disabled-reason {
+  flex-basis: 100%;
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
 }
 
 .link-actions {

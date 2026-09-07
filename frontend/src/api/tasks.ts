@@ -1,5 +1,5 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, TaskQueueItem, AttachmentResponse, SuccessResponse, TaskDependencyResponse, TaskDependencyTaskType } from '@/types/api'
+import { PaginatedData, DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, TaskQueueItem, AttachmentResponse, SuccessResponse, TaskDependencyResponse, TaskDependencyTaskType, TaskOrderItemOption } from '@/types/api'
 
 type ReadonlyTaskFields =
   | 'id'
@@ -71,6 +71,12 @@ export function getTaskQueue(params?: {
   overdue?: boolean
 }) {
   return get<PaginatedData<TaskQueueItem>>('/task-queue/', { params })
+}
+
+export function getTaskOrderItemOptions(taskType: TaskDependencyTaskType, taskId: string) {
+  return get<TaskOrderItemOption[]>('/task-queue/order-item-options', {
+    params: { task_type: taskType, task_id: taskId },
+  })
 }
 
 export function getTaskDependencies(taskType: TaskDependencyTaskType, taskId: string) {

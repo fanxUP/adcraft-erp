@@ -10,11 +10,13 @@ from app.domain.workflows import DESIGN_TASK_WORKFLOW, INSTALLATION_TASK_WORKFLO
 from app.schemas.task import (
     DesignTaskCreate,
     DesignTaskResponse,
+    TaskOrderItemOption,
     TaskQueueItem,
 )
 from app.services.task_service import (
     DesignTaskService,
     InstallationTaskService,
+    _resolve_order_item_stage,
     _validate_order_item_id,
     _validate_order_item_ids,
 )
@@ -53,6 +55,58 @@ def test_task_responses_expose_nullable_order_item_identity():
     response_fields = DesignTaskResponse.model_fields
     assert "order_item_id" in response_fields
     assert "item_name" in response_fields
+
+
+def test_task_order_item_option_exposes_stage_and_selectability():
+    option_fields = TaskOrderItemOption.model_fields
+
+    assert "stage" in option_fields
+    assert "stage_label" in option_fields
+    assert "can_select" in option_fields
+    assert "disabled_reason" in option_fields
+
+
+def test_order_item_stage_resolver_supports_parallel_delivery_progress():
+    assert _resolve_order_item_stage(
+        "designing",
+        {"designing": ["confirmed"]},
+    ) == "in_production"
+    assert _resolve_order_item_stage(
+        "designing",
+        {
+            "designing": ["confirmed"],
+            "in_production": ["in_progress"],
+        },
+    ) == "in_production"
+    assert _resolve_order_item_stage(
+        "in_production",
+        {
+            "designing": ["confirmed"],
+            "in_production": ["completed"],
+        },
+    ) == "in_installation"
+    assert _resolve_order_item_stage(
+        "in_installation",
+        {
+            "designing": ["confirmed"],
+            "in_production": ["completed"],
+            "in_installation": ["completed"],
+        },
+    ) == "completed"
+
+
+def test_order_item_stage_resolver_does_not_guess_unknown_state():
+    assert _resolve_order_item_stage(
+        "in_production",
+        {"designing": ["legacy_unknown_status"]},
+    ) == "not_ready"
+
+
+def test_order_item_stage_resolver_uses_order_stage_when_item_has_no_tasks():
+    assert _resolve_order_item_stage("designing", {}) == "designing"
+    assert _resolve_order_item_stage("in_production", {}) == "in_production"
+    assert _resolve_order_item_stage("in_installation", {}) == "in_installation"
+    assert _resolve_order_item_stage("completed", {}) == "completed"
 
 
 def test_task_contract_carries_multiple_order_item_identity():
@@ -123,6 +177,39 @@ async def test_order_item_ids_validation_rejects_duplicate_ids():
             UUID(ORDER_ID),
             [ITEM_ID, ITEM_ID],
         )
+
+
+@pytest.mark.asyncio
+async def test_order_item_validation_rejects_item_outside_task_stage():
+    db = AsyncMock()
+    item = MagicMock(
+        id=ITEM_UUID,
+        document_id=UUID(ORDER_ID),
+        lifecycle_status="active",
+    )
+    db.get = AsyncMock(return_value=item)
+
+    with patch(
+        "app.services.task_service._task_order_item_option_map",
+        new=AsyncMock(
+            return_value={
+                ITEM_UUID: {
+                    "stage": "in_production",
+                    "stage_label": "制作中",
+                    "can_select": False,
+                    "disabled_reason": "当前处于制作中，不能关联设计任务",
+                    "item_name": "前台发光字",
+                },
+            },
+        ),
+    ):
+        with pytest.raises(ValueError, match="制作中"):
+            await _validate_order_item_ids(
+                db,
+                UUID(ORDER_ID),
+                [ITEM_ID],
+                task_type="design",
+            )
 
 
 def test_many_order_item_link_migration_copies_legacy_links_without_guessing():
@@ -203,7 +290,22 @@ async def test_historical_task_can_be_manually_linked_and_audited():
         }
     )
 
-    with patch("app.services.task_service.record_task_event", new=AsyncMock()):
+    with (
+        patch("app.services.task_service.record_task_event", new=AsyncMock()),
+        patch(
+            "app.services.task_service._task_order_item_option_map",
+            new=AsyncMock(
+                return_value={
+                    ITEM_UUID: {
+                        "stage": "designing",
+                        "stage_label": "设计中",
+                        "can_select": True,
+                        "disabled_reason": None,
+                    },
+                },
+            ),
+        ),
+    ):
         result = await service.update_task(task.id, {"order_item_id": ITEM_ID})
 
     assert task.order_item_id == ITEM_UUID
@@ -235,7 +337,28 @@ async def test_historical_task_can_be_manually_linked_to_multiple_items():
         }
     )
 
-    with patch("app.services.task_service.record_task_event", new=AsyncMock()):
+    with (
+        patch("app.services.task_service.record_task_event", new=AsyncMock()),
+        patch(
+            "app.services.task_service._task_order_item_option_map",
+            new=AsyncMock(
+                return_value={
+                    ITEM_UUID: {
+                        "stage": "designing",
+                        "stage_label": "设计中",
+                        "can_select": True,
+                        "disabled_reason": None,
+                    },
+                    SECOND_ITEM_UUID: {
+                        "stage": "designing",
+                        "stage_label": "设计中",
+                        "can_select": True,
+                        "disabled_reason": None,
+                    },
+                },
+            ),
+        ),
+    ):
         result = await service.update_task(
             task.id,
             {"order_item_ids": [ITEM_ID, SECOND_ITEM_ID]},

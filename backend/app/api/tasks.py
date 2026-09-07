@@ -33,11 +33,13 @@ from app.schemas.task import (
     TaskStatusChange,
 )
 from app.schemas.task_dependency import TaskDependencyCreate
+from app.schemas.task_dependency import TaskType
 from app.services.task_service import (
     DesignTaskService,
     ProductionTaskService,
     InstallationTaskService,
     AttachmentService,
+    get_task_order_item_options,
 )
 from app.services.task_queue_service import list_task_queue
 from app.services.task_dependency_service import (
@@ -84,6 +86,29 @@ async def list_project_task_queue(
         overdue=overdue,
     )
     return success_paginated(tasks, total, page, page_size)
+
+
+@queue_router.get("/order-item-options")
+async def list_task_order_item_options(
+    task_type: TaskType = Query(...),
+    task_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_permission(
+        PERM_DESIGN_TASK_READ,
+        PERM_PRODUCTION_TASK_READ,
+        PERM_INSTALLATION_TASK_READ,
+    )),
+):
+    """返回任务处理页的订单明细阶段与可选性。"""
+    try:
+        options = await get_task_order_item_options(
+            db,
+            task_type,
+            _ensure_uuid(task_id),
+        )
+        return success(options)
+    except ValueError as exc:
+        return {"code": 40001, "message": str(exc), "data": None}
 
 
 # -- Task dependencies --

@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 from app.schemas.common import CoercedModel
+from app.schemas.order import OrderItemResponse
 
 from app.schemas.attachment import AttachmentResponse
 from app.schemas.task_dependency import TaskDependencyTaskSummary
@@ -246,6 +247,21 @@ class TaskHistoryItem(CoercedModel):
     to_progress_pct: int | None = None
     reason: str | None = None
     changed_fields: list[str] = Field(default_factory=list)
+
+
+class TaskOrderItemOption(OrderItemResponse):
+    """任务处理页使用的订单明细阶段与可选性。"""
+
+    stage: Literal[
+        "designing",
+        "in_production",
+        "in_installation",
+        "completed",
+        "not_ready",
+    ]
+    stage_label: str
+    can_select: bool = False
+    disabled_reason: str | None = None
 
 
 class TaskQueueItem(CoercedModel):
