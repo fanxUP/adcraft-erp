@@ -11,6 +11,7 @@ from app.schemas.task import (
     TaskQueueItem,
 )
 from app.services.task_service import _attach_outsource_flags, _enrich_task_order
+from app.services.task_dependency_service import enrich_task_dict_with_dependency_state
 
 
 _TASK_SOURCES = (
@@ -53,6 +54,7 @@ async def list_task_queue(
             item["stage"] = task_type
             item["task_no"] = item[no_field]
             item = await _enrich_task_order(db, item)
+            item = await enrich_task_dict_with_dependency_state(db, task_type, item)
             items.append(item)
         normalized.extend(await _attach_outsource_flags(db, task_type, items))
 

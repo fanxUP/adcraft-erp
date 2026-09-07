@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from app.schemas.common import CoercedModel
 
 from app.schemas.attachment import AttachmentResponse
+from app.schemas.task_dependency import TaskDependencyTaskSummary
 
 
 # -- Design Task --
@@ -39,6 +40,9 @@ class DesignTaskResponse(CoercedModel):
     project_name: str
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    is_blocked: bool = False
+    blocked_reason: str | None = None
+    blocking_tasks: list[TaskDependencyTaskSummary] = Field(default_factory=list)
     assigned_to: str | None = None
     description: str | None = None
     design_file_url: str | None = None
@@ -99,6 +103,9 @@ class ProductionTaskResponse(CoercedModel):
     project_name: str
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    is_blocked: bool = False
+    blocked_reason: str | None = None
+    blocking_tasks: list[TaskDependencyTaskSummary] = Field(default_factory=list)
     assigned_to: str | None = None
     material_id: str | None = None
     process_id: str | None = None
@@ -154,6 +161,9 @@ class InstallationTaskResponse(CoercedModel):
     project_name: str
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    is_blocked: bool = False
+    blocked_reason: str | None = None
+    blocking_tasks: list[TaskDependencyTaskSummary] = Field(default_factory=list)
     assigned_to: str | None = None
     address: str | None = None
     contact_name: str | None = None
@@ -189,6 +199,9 @@ class TaskQueueItem(CoercedModel):
     project_name: str
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    is_blocked: bool = False
+    blocked_reason: str | None = None
+    blocking_tasks: list[TaskDependencyTaskSummary] = Field(default_factory=list)
     assigned_to: str | None = None
     assigned_to_name: str | None = None
     is_outsourced: bool = False

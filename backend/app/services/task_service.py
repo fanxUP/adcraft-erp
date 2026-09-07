@@ -25,6 +25,11 @@ from app.services.number_generator import (
     generate_production_no,
     generate_installation_no,
 )
+from app.services.task_dependency_service import (
+    clear_task_dependencies,
+    enrich_task_dict_with_dependency_state,
+    ensure_task_not_blocked,
+)
 
 
 ACTIVE_ORDER_STATUSES = ("designing", "in_production", "in_installation")
@@ -214,7 +219,7 @@ class DesignTaskService:
         d = DesignTaskResponse.model_validate(task).model_dump(mode="json")
         d["order_id"] = d["document_id"]  # backward-compat alias
         d = await _enrich_task_order(self.db, d)
-        return d
+        return await enrich_task_dict_with_dependency_state(self.db, "design", d)
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
@@ -281,6 +286,7 @@ class DesignTaskService:
         valid = allowed_targets(DESIGN_TASK_WORKFLOW, task.status)
         if to_status not in valid:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
+        await ensure_task_not_blocked(self.db, "design", task.id, to_status)
 
         task.status = to_status
         if to_status == "confirmed":
@@ -382,6 +388,9 @@ class DesignTaskService:
         await _clear_outsource_source_refs(self.db, "design", design_ids)
         await _clear_outsource_source_refs(self.db, "production", prod_ids)
         await _clear_outsource_source_refs(self.db, "installation", inst_ids)
+        await clear_task_dependencies(self.db, "design", design_ids)
+        await clear_task_dependencies(self.db, "production", prod_ids)
+        await clear_task_dependencies(self.db, "installation", inst_ids)
         await self.db.flush()
 
 class ProductionTaskService:
@@ -393,7 +402,7 @@ class ProductionTaskService:
         d = ProductionTaskResponse.model_validate(task).model_dump(mode="json")
         d["order_id"] = d["document_id"]  # backward-compat alias
         d = await _enrich_task_order(self.db, d)
-        return d
+        return await enrich_task_dict_with_dependency_state(self.db, "production", d)
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
@@ -460,6 +469,7 @@ class ProductionTaskService:
         valid = allowed_targets(PRODUCTION_TASK_WORKFLOW, task.status)
         if to_status not in valid:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
+        await ensure_task_not_blocked(self.db, "production", task.id, to_status)
 
         task.status = to_status
         if to_status == "completed":
@@ -553,6 +563,8 @@ class ProductionTaskService:
         # 清空外协任务对已删任务的悬空来源引用
         await _clear_outsource_source_refs(self.db, "production", prod_ids)
         await _clear_outsource_source_refs(self.db, "installation", inst_ids)
+        await clear_task_dependencies(self.db, "production", prod_ids)
+        await clear_task_dependencies(self.db, "installation", inst_ids)
         await self.db.flush()
 
 class InstallationTaskService:
@@ -564,7 +576,7 @@ class InstallationTaskService:
         d = InstallationTaskResponse.model_validate(task).model_dump(mode="json")
         d["order_id"] = d["document_id"]  # backward-compat alias
         d = await _enrich_task_order(self.db, d)
-        return d
+        return await enrich_task_dict_with_dependency_state(self.db, "installation", d)
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
@@ -631,6 +643,7 @@ class InstallationTaskService:
         valid = allowed_targets(INSTALLATION_TASK_WORKFLOW, task.status)
         if to_status not in valid:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
+        await ensure_task_not_blocked(self.db, "installation", task.id, to_status)
 
         task.status = to_status
         if to_status == "completed":
@@ -681,6 +694,7 @@ class InstallationTaskService:
 
         # 清空外协任务对已删任务的悬空来源引用
         await _clear_outsource_source_refs(self.db, "installation", inst_ids)
+        await clear_task_dependencies(self.db, "installation", inst_ids)
         await self.db.flush()
 
 class AttachmentService:

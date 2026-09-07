@@ -430,6 +430,29 @@ export interface AttachmentResponse {
   created_at?: string
 }
 
+export type TaskDependencyTaskType = 'design' | 'production' | 'installation'
+
+export interface TaskDependencyTaskSummary {
+  task_type: TaskDependencyTaskType
+  task_id: string
+  task_no: string
+  order_id?: string
+  project_name: string
+  status: string
+  progress_pct: number
+}
+
+export interface TaskDependencyResponse {
+  id: string
+  dependency_type: 'finish_to_start'
+  predecessor: TaskDependencyTaskSummary
+  successor: TaskDependencyTaskSummary
+  is_satisfied: boolean
+  created_by?: string
+  created_at?: string
+  updated_at?: string
+}
+
 export interface DesignTaskResponse {
   id: string
   design_no: string
@@ -443,6 +466,9 @@ export interface DesignTaskResponse {
   project_name: string
   status: string
   progress_pct: number
+  is_blocked?: boolean
+  blocked_reason?: string | null
+  blocking_tasks?: TaskDependencyTaskSummary[]
   is_outsourced?: boolean
   assigned_to?: string
   assigned_to_name?: string
@@ -468,6 +494,9 @@ export interface ProductionTaskResponse {
   project_name: string
   status: string
   progress_pct: number
+  is_blocked?: boolean
+  blocked_reason?: string | null
+  blocking_tasks?: TaskDependencyTaskSummary[]
   is_outsourced?: boolean
   assigned_to?: string
   material_id?: string
@@ -497,6 +526,9 @@ export interface InstallationTaskResponse {
   project_name: string
   status: string
   progress_pct: number
+  is_blocked?: boolean
+  blocked_reason?: string | null
+  blocking_tasks?: TaskDependencyTaskSummary[]
   is_outsourced?: boolean
   assigned_to?: string
   address?: string
@@ -522,6 +554,9 @@ export interface TaskQueueItem {
   project_name: string
   status: string
   progress_pct: number
+  is_blocked?: boolean
+  blocked_reason?: string | null
+  blocking_tasks?: TaskDependencyTaskSummary[]
   assigned_to?: string
   assigned_to_name?: string
   is_outsourced?: boolean

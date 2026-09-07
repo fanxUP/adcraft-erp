@@ -32,6 +32,7 @@ from app.schemas.task import (
     InstallationTaskCreate, InstallationTaskUpdate,
     TaskStatusChange,
 )
+from app.schemas.task_dependency import TaskDependencyCreate
 from app.services.task_service import (
     DesignTaskService,
     ProductionTaskService,
@@ -39,6 +40,11 @@ from app.services.task_service import (
     AttachmentService,
 )
 from app.services.task_queue_service import list_task_queue
+from app.services.task_dependency_service import (
+    create_task_dependency,
+    delete_task_dependency,
+    list_task_dependencies,
+)
 
 
 def _ensure_uuid(s: str):
@@ -73,6 +79,54 @@ async def list_project_task_queue(
         order_id=order_id,
     )
     return success_paginated(tasks, total, page, page_size)
+
+
+# -- Task dependencies --
+
+dependency_router = APIRouter(prefix="/task-dependencies", tags=["Task Dependencies"])
+
+
+@dependency_router.get("/")
+async def get_task_dependencies(
+    task_type: str = Query(...),
+    task_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_permission(
+        PERM_DESIGN_TASK_READ,
+        PERM_PRODUCTION_TASK_READ,
+        PERM_INSTALLATION_TASK_READ,
+    )),
+):
+    dependencies = await list_task_dependencies(db, task_type, _ensure_uuid(task_id))
+    return success(dependencies)
+
+
+@dependency_router.post("/")
+async def add_task_dependency(
+    data: TaskDependencyCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_permission(
+        PERM_DESIGN_TASK_UPDATE,
+        PERM_PRODUCTION_TASK_UPDATE,
+        PERM_INSTALLATION_TASK_UPDATE,
+    )),
+):
+    dependency = await create_task_dependency(db, data, current_user.id)
+    return success(dependency)
+
+
+@dependency_router.delete("/{dependency_id}")
+async def remove_task_dependency(
+    dependency_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_permission(
+        PERM_DESIGN_TASK_UPDATE,
+        PERM_PRODUCTION_TASK_UPDATE,
+        PERM_INSTALLATION_TASK_UPDATE,
+    )),
+):
+    await delete_task_dependency(db, _ensure_uuid(dependency_id))
+    return success(None)
 
 
 # -- Design Tasks --

@@ -30,7 +30,10 @@
           >
             <div class="card-topline">
               <span class="card-no">{{ card.task_no }}</span>
-              <el-tag size="small" :type="statusColor(card.status)">{{ statusLabel(card) }}</el-tag>
+              <div class="card-statuses">
+                <el-tag v-if="card.is_blocked" size="small" type="warning">阻塞</el-tag>
+                <el-tag size="small" :type="statusColor(card.status)">{{ statusLabel(card) }}</el-tag>
+              </div>
             </div>
             <div class="card-name">{{ card.project_name }}</div>
             <div class="card-meta">
@@ -41,6 +44,7 @@
               <el-progress :percentage="progress(card)" :stroke-width="8" />
               <span>{{ progress(card) }}%</span>
             </div>
+            <div v-if="card.is_blocked" class="blocked-reason">{{ card.blocked_reason }}</div>
             <div v-if="card.assigned_to_name" class="assignee">负责人：{{ card.assigned_to_name }}</div>
           </el-card>
         </div>
@@ -155,6 +159,7 @@ onBeforeUnmount(() => {
 .board-card { margin-bottom: 8px; cursor: pointer; background: var(--ad-card); border: 1px solid var(--ad-border); }
 .board-card:hover { border-color: #e63946; }
 .card-topline { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card-statuses { display: flex; align-items: center; gap: 4px; }
 .card-no { font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-name { font-weight: bold; font-size: 16px; color: var(--ad-text); margin: 8px 0 4px; }
 .card-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #888; }
@@ -162,4 +167,5 @@ onBeforeUnmount(() => {
 .progress-row :deep(.el-progress) { flex: 1; }
 .progress-row > span { width: 38px; text-align: right; font-size: 12px; color: var(--ad-text-secondary); }
 .assignee { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); }
+.blocked-reason { margin-top: 8px; padding: 6px 8px; color: #b88230; background: rgba(230, 162, 60, 0.12); border-radius: 4px; font-size: 12px; line-height: 1.4; }
 </style>

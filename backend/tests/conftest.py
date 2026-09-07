@@ -110,6 +110,9 @@ def make_mock_installation_task(
     task.project_name = project_name
     task.status = status
     task.progress_pct = progress_pct
+    task.is_blocked = False
+    task.blocked_reason = None
+    task.blocking_tasks = []
     task.address = address
     task.contact_name = contact_name
     task.contact_phone = contact_phone
@@ -153,6 +156,9 @@ def make_mock_design_task(
     task.project_name = project_name
     task.status = status
     task.progress_pct = progress_pct
+    task.is_blocked = False
+    task.blocked_reason = None
+    task.blocking_tasks = []
     task.description = description
     task.design_file_url = design_file_url
     task.client_comments = client_comments
@@ -203,6 +209,9 @@ def make_mock_production_task(
     task.project_name = project_name
     task.status = status
     task.progress_pct = progress_pct
+    task.is_blocked = False
+    task.blocked_reason = None
+    task.blocking_tasks = []
     task.material_id = material_id
     task.process_id = process_id
     task.length = length

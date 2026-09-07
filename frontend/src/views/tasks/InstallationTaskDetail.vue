@@ -36,6 +36,14 @@
         />
 
       </el-card>
+      <TaskDependenciesCard
+        :task-type="'installation'"
+        :task-id="task.id"
+        :order-id="task.order_id"
+        :is-blocked="task.is_blocked"
+        :blocked-reason="task.blocked_reason"
+        style="margin-top: 16px"
+      />
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>任务分配</span></template>
         <div data-ai-targets="task-assignee" style="display: flex; align-items: center; gap: 12px;">
@@ -151,6 +159,7 @@ import { formatDateTimeFull } from '@/utils/datetime'
 import { computed, ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
+import TaskDependenciesCard from '@/components/tasks/TaskDependenciesCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { getInstallationTask, updateInstallationTask, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { getUsers } from '@/api/users'

@@ -1,5 +1,5 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, TaskQueueItem, AttachmentResponse, SuccessResponse } from '@/types/api'
+import { PaginatedData, DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, TaskQueueItem, AttachmentResponse, SuccessResponse, TaskDependencyResponse, TaskDependencyTaskType } from '@/types/api'
 
 type ReadonlyTaskFields =
   | 'id'
@@ -68,4 +68,24 @@ export function getTaskQueue(params?: {
   order_id?: string
 }) {
   return get<PaginatedData<TaskQueueItem>>('/task-queue/', { params })
+}
+
+export function getTaskDependencies(taskType: TaskDependencyTaskType, taskId: string) {
+  return get<TaskDependencyResponse[]>('/task-dependencies/', {
+    params: { task_type: taskType, task_id: taskId },
+  })
+}
+
+export function createTaskDependency(data: {
+  predecessor_task_type: TaskDependencyTaskType
+  predecessor_task_id: string
+  successor_task_type: TaskDependencyTaskType
+  successor_task_id: string
+  dependency_type?: 'finish_to_start'
+}) {
+  return post<TaskDependencyResponse>('/task-dependencies/', data)
+}
+
+export function deleteTaskDependency(id: string) {
+  return del<SuccessResponse>(`/task-dependencies/${id}`)
 }
