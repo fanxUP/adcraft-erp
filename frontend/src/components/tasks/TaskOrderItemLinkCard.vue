@@ -14,35 +14,49 @@
       show-icon
     />
 
-    <div v-loading="loadingItems" class="link-row">
-      <el-select
-        v-model="selectedItemId"
-        placeholder="选择要关联的订单明细"
-        filterable
-        clearable
-        style="min-width: 320px; flex: 1"
-        :disabled="loadingItems || saving || !items.length"
-      >
-        <el-option
+    <div v-loading="loadingItems" class="link-panel">
+      <div v-if="items.length" class="item-list" role="radiogroup" aria-label="订单明细">
+        <label
           v-for="item in items"
           :key="item.id"
-          :label="itemLabel(item)"
-          :value="item.id"
-        />
-      </el-select>
-      <el-button
-        type="primary"
-        :loading="saving"
-        :disabled="!selectedItemId || !items.length"
-        @click="handleLink"
-      >
-        关联到明细
-      </el-button>
-    </div>
+          class="item-option"
+          :class="{ 'is-selected': selectedItemId === item.id }"
+        >
+          <input
+            v-model="selectedItemId"
+            class="item-option-radio"
+            type="radio"
+            name="task-order-item-link"
+            :value="item.id"
+            :disabled="saving"
+          />
+          <span class="item-option-body">
+            <span class="item-option-title">{{ item.item_name }}</span>
+            <span v-if="item.material_process || itemSpec(item)" class="item-option-subtitle">
+              <span v-if="item.material_process">{{ item.material_process }}</span>
+              <span v-if="item.material_process && itemSpec(item)"> · </span>
+              <span v-if="itemSpec(item)">{{ itemSpec(item) }}</span>
+            </span>
+            <span class="item-option-meta">数量 {{ item.quantity }}{{ item.unit ? ` ${item.unit}` : '' }}</span>
+          </span>
+        </label>
+      </div>
 
-    <div v-if="loadError" class="link-tip error-tip">订单明细加载失败，请刷新后重试。</div>
-    <div v-else-if="!loadingItems && !items.length" class="link-tip">
-      当前订单没有可关联的有效明细。
+      <div v-if="loadError" class="link-tip error-tip">订单明细加载失败，请刷新后重试。</div>
+      <div v-else-if="!loadingItems && !items.length" class="link-tip">
+        当前订单没有可关联的有效明细。
+      </div>
+
+      <div class="link-actions">
+        <el-button
+          type="primary"
+          :loading="saving"
+          :disabled="!selectedItemId || !items.length"
+          @click="handleLink"
+        >
+          关联到明细
+        </el-button>
+      </div>
     </div>
   </el-card>
 </template>
@@ -83,8 +97,19 @@ function itemLabel(item: OrderItemResponse) {
     : item.item_name
 }
 
+function itemSpec(item: OrderItemResponse) {
+  if (item.specification) return item.specification
+
+  return [
+    item.length != null ? `${item.length}${item.length_unit || ''}` : '',
+    item.width != null ? `${item.width}${item.width_unit || ''}` : '',
+    item.height != null ? `${item.height}${item.height_unit || ''}` : '',
+  ].filter(Boolean).join(' × ')
+}
+
 async function loadItems() {
   if (!props.orderId || props.currentItemId) return
+  selectedItemId.value = ''
   loadingItems.value = true
   loadError.value = false
   try {
@@ -142,11 +167,76 @@ onMounted(loadItems)
   margin-top: 16px;
 }
 
-.link-row {
+.link-panel {
+  margin-top: 16px;
+}
+
+.item-list {
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--el-border-color);
+  border-radius: 6px;
+}
+
+.item-option {
   display: flex;
   gap: 12px;
-  align-items: center;
-  margin-top: 16px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.item-option:last-child {
+  border-bottom: 0;
+}
+
+.item-option:hover {
+  background: var(--el-fill-color-light);
+}
+
+.item-option.is-selected {
+  background: var(--el-color-primary-light-9);
+}
+
+.item-option-radio {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 3px 0 0;
+  accent-color: var(--el-color-primary);
+}
+
+.item-option-body {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-width: 0;
+  align-items: baseline;
+}
+
+.item-option-title {
+  color: var(--ad-text);
+  font-weight: 600;
+}
+
+.item-option-subtitle,
+.item-option-meta {
+  color: var(--ad-text-secondary);
+  font-size: 12px;
+}
+
+.item-option-meta {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.link-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 
 .link-tip {
@@ -160,13 +250,17 @@ onMounted(loadItems)
 }
 
 @media (max-width: 640px) {
-  .link-row {
-    align-items: stretch;
-    flex-direction: column;
+  .item-option {
+    padding: 12px;
   }
 
-  .link-row .el-select {
-    min-width: 0 !important;
+  .item-option-meta {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .link-actions,
+  .link-actions .el-button {
     width: 100%;
   }
 }
