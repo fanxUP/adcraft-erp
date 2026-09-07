@@ -46,12 +46,18 @@
             </template>
             <el-alert
               v-if="legacyUnlinkedTaskCount > 0"
-              type="info"
+              type="warning"
               :closable="false"
               show-icon
               style="margin-bottom: 12px"
-              :title="`${legacyUnlinkedTaskCount} 条历史整单任务未强行归属明细，仍保留在下方任务列表中`"
-            />
+            >
+              <template #title>
+                <div class="legacy-alert-title">
+                  <span>{{ legacyUnlinkedTaskCount }} 条历史整单任务还未关联订单明细</span>
+                  <el-button size="small" type="warning" plain @click="activeTab = 'tasks'">查看并处理</el-button>
+                </div>
+              </template>
+            </el-alert>
             <el-table :data="itemProgressRows" stripe border size="small">
               <el-table-column label="订单明细" min-width="180">
                 <template #default="{ row }">
@@ -310,6 +316,37 @@
         </el-tab-pane>
 
         <el-tab-pane label="任务" name="tasks">
+          <el-card v-if="legacyUnlinkedTasks.length" shadow="never" class="info-card legacy-unlinked-card" style="margin-bottom: 16px">
+            <template #header>
+              <div class="card-header">
+                <span>待关联的历史整单任务</span>
+                <el-tag type="warning" size="small">{{ legacyUnlinkedTasks.length }} 条</el-tag>
+              </div>
+            </template>
+            <div class="legacy-task-note">
+              这些任务仍保留原有进度和状态。进入详情后选择一个有效订单明细即可纳入对应明细的进度统计；系统不会自动拆分任务或创建下游任务。
+            </div>
+            <el-table :data="legacyUnlinkedTasks" stripe size="small">
+              <el-table-column prop="stageLabel" label="阶段" width="90" />
+              <el-table-column prop="taskNo" label="任务编号" min-width="180" />
+              <el-table-column label="状态" width="140">
+                <template #default="{ row }">
+                  <el-tag :type="row.statusType" size="small">{{ row.statusLabel }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="进度" width="150">
+                <template #default="{ row }">
+                  <el-progress :percentage="row.progress" :stroke-width="8" />
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="110">
+                <template #default="{ row }">
+                  <el-button text type="primary" size="small" @click="openLegacyTask(row)">去关联</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+
           <el-card shadow="never" class="info-card" style="margin-bottom: 16px">
             <template #header>
               <div class="card-header">
@@ -470,6 +507,14 @@ const itemEditability = ref<OrderItemEditabilityResponse | null>(null)
 const canEditItems = computed(() => itemEditability.value?.can_edit_items === true)
 
 type OrderProgressTask = DesignTaskResponse | ProductionTaskResponse | InstallationTaskResponse
+type LegacyUnlinkedTaskRow = {
+  stageLabel: string
+  taskNo: string
+  statusLabel: string
+  statusType: 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+  progress: number
+  route: string
+}
 type ItemProgressRow = {
   item: OrderItemResponse
   designTask: DesignTaskResponse | null
@@ -549,6 +594,39 @@ const itemProgressRows = computed<ItemProgressRow[]>(() => {
 const legacyUnlinkedTaskCount = computed(() => [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
   .filter(task => task.status !== 'cancelled' && !task.order_item_id).length)
 
+const legacyUnlinkedTasks = computed<LegacyUnlinkedTaskRow[]>(() => [
+  ...designTasks.value
+    .filter(task => task.status !== 'cancelled' && !task.order_item_id)
+    .map(task => ({
+      stageLabel: '设计',
+      taskNo: task.design_no,
+      statusLabel: designStatusLabel(task.status),
+      statusType: designStatusColor(task.status),
+      progress: progressPct(task.progress_pct),
+      route: `/design-tasks/${task.id}`,
+    })),
+  ...productionTasks.value
+    .filter(task => task.status !== 'cancelled' && !task.order_item_id)
+    .map(task => ({
+      stageLabel: '制作',
+      taskNo: task.production_no,
+      statusLabel: prodStatusLabel(task.status),
+      statusType: prodStatusColor(task.status),
+      progress: progressPct(task.progress_pct),
+      route: `/production-tasks/${task.id}`,
+    })),
+  ...installationTasks.value
+    .filter(task => task.status !== 'cancelled' && !task.order_item_id)
+    .map(task => ({
+      stageLabel: '安装',
+      taskNo: task.installation_no,
+      statusLabel: instStatusLabel(task.status),
+      statusType: instStatusColor(task.status),
+      progress: progressPct(task.progress_pct),
+      route: `/installation-tasks/${task.id}`,
+    })),
+])
+
 const projectProgress = computed(() => {
   if (itemProgressRows.value.length) {
     return Math.round(itemProgressRows.value.reduce((sum, row) => sum + row.overallProgress, 0) / itemProgressRows.value.length)
@@ -561,6 +639,10 @@ const projectProgress = computed(() => {
 
 function progressPct(value: number | undefined) {
   return Math.min(100, Math.max(0, Number(value ?? 0)))
+}
+
+function openLegacyTask(task: LegacyUnlinkedTaskRow) {
+  router.push(task.route)
 }
 
 function stageLabel(task: OrderProgressTask | null, stage: 'design' | 'production' | 'installation') {
@@ -857,6 +939,8 @@ onMounted(() => { fetchOrder(); fetchTasks() })
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .item-progress-card { margin-top: 16px; }
 .item-progress-card .progress-note { color: var(--ad-text-secondary); font-size: 12px; font-weight: normal; }
+.legacy-alert-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.legacy-unlinked-card .legacy-task-note { margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 12px; line-height: 1.6; }
 .item-name { color: var(--ad-text); font-weight: 600; }
 .item-subtitle { margin-top: 3px; color: var(--ad-text-secondary); font-size: 12px; }
 .progress-value { margin-top: 3px; color: var(--ad-text-secondary); font-size: 12px; text-align: right; }
