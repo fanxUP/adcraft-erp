@@ -70,6 +70,7 @@ const fieldNames: Record<string, string> = {
   planned_start_at: '计划开始时间',
   planned_end_at: '计划结束时间',
   assigned_to: '负责人',
+  order_item_id: '订单明细',
 }
 
 function actionLabel(action: TaskHistoryItem['action']) {

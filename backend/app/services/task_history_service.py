@@ -29,6 +29,7 @@ TASK_HISTORY_ACTIONS = (ACTION_CREATE, ACTION_UPDATE, ACTION_STATUS_CHANGE)
 AUDITABLE_FIELDS = {
     "status",
     "progress_pct",
+    "order_item_id",
     "planned_start_at",
     "planned_end_at",
     "assigned_to",
@@ -81,13 +82,17 @@ def _serialize_value(value):
 
 def task_history_snapshot(task) -> dict:
     """Return the deliberately small, non-sensitive audit snapshot."""
-    return {
+    snapshot = {
         "status": task.status,
         "progress_pct": task.progress_pct,
         "planned_start_at": _serialize_value(task.planned_start_at),
         "planned_end_at": _serialize_value(task.planned_end_at),
         "assigned_to": _serialize_value(task.assigned_to),
     }
+    order_item_id = getattr(task, "order_item_id", None)
+    if order_item_id is not None:
+        snapshot["order_item_id"] = _serialize_value(order_item_id)
+    return snapshot
 
 
 async def record_task_event(

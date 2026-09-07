@@ -30,6 +30,14 @@
         </el-descriptions>
       </el-card>
 
+      <TaskOrderItemLinkCard
+        :task-type="'production'"
+        :task-id="task.id"
+        :order-id="task.order_id"
+        :current-item-id="task.order_item_id"
+        @linked="fetchTask"
+      />
+
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>变更状态</span></template>
         <TaskWorkflow
@@ -158,6 +166,7 @@ import { useRoute, useRouter } from 'vue-router'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import TaskDependenciesCard from '@/components/tasks/TaskDependenciesCard.vue'
 import TaskHistoryTimeline from '@/components/tasks/TaskHistoryTimeline.vue'
+import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { getProductionTask, updateProductionTask, changeProductionTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { getUsers } from '@/api/users'

@@ -17,6 +17,7 @@ from app.services.task_service import (
     InstallationTaskService,
     _validate_order_item_id,
 )
+from app.services.task_history_service import task_history_snapshot
 from tests.conftest import make_mock_design_task, make_mock_installation_task
 
 
@@ -122,3 +123,33 @@ async def test_item_scoped_installation_can_finish_without_acceptance_step():
         result = await service.change_status(task.id, "completed")
 
     assert result["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_historical_task_can_be_manually_linked_and_audited():
+    db = AsyncMock()
+    item = MagicMock(document_id=UUID(ORDER_ID), lifecycle_status="active")
+    db.get = AsyncMock(return_value=item)
+    task = make_mock_design_task(status="confirmed")
+    service = DesignTaskService(db)
+    service.repo = MagicMock()
+    service.repo.get_by_id = AsyncMock(return_value=task)
+
+    async def apply_update(current, data):
+        for key, value in data.items():
+            setattr(current, key, value)
+        return current
+
+    service.repo.update = AsyncMock(side_effect=apply_update)
+    service._to_dict = AsyncMock(
+        side_effect=lambda value: {
+            "order_item_id": str(value.order_item_id),
+        }
+    )
+
+    with patch("app.services.task_service.record_task_event", new=AsyncMock()):
+        result = await service.update_task(task.id, {"order_item_id": ITEM_ID})
+
+    assert task.order_item_id == ITEM_UUID
+    assert result["order_item_id"] == ITEM_ID
+    assert task_history_snapshot(task)["order_item_id"] == ITEM_ID
