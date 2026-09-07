@@ -336,6 +336,86 @@ async def _task_order_item_link_rows(
     return [row for row in rows if isinstance(row, TaskOrderItemLink)]
 
 
+def _is_terminal_task_status(task_type: str, task) -> bool:
+    return getattr(task, "status", None) in TASK_TERMINAL_STATUSES.get(task_type, set())
+
+
+def _new_task_item_state(task_type: str, task) -> tuple[str, int]:
+    """Choose a safe initial state for a newly added work unit."""
+    status = getattr(task, "status", "pending")
+    if _is_terminal_task_status(task_type, task):
+        status = {
+            "design": "designing",
+            "production": "in_progress",
+            "installation": "in_progress",
+        }[task_type]
+    return status, _item_status_progress(
+        task_type,
+        status,
+        int(getattr(task, "progress_pct", 0) or 0),
+    )
+
+
+async def _legacy_task_scope_item_ids(
+    db: AsyncSession,
+    task_type: str,
+    task,
+) -> list[UUID]:
+    """Find current-stage items covered by a legacy whole-order task.
+
+    A task with neither the legacy single-item column nor link rows predates
+    item-scoped task processing. Its scope was the order, so narrowing it to
+    the first checked item would make a partial completion look complete.
+    """
+    if _task_order_item_id(task) is not None:
+        return []
+    if await _linked_order_item_ids(db, task_type, task.id):
+        return []
+
+    options = await _task_order_item_option_map(
+        db,
+        task.document_id,
+        task_type,
+        task_id=task.id,
+    )
+    expected_stage = TASK_TYPE_STAGES[task_type]
+    return [
+        item_id
+        for item_id, option in options.items()
+        if option.get("stage") == expected_stage and option.get("can_select")
+    ]
+
+
+async def _materialize_legacy_task_scope(
+    db: AsyncSession,
+    task_type: str,
+    task,
+) -> list[UUID]:
+    """Materialize a legacy order-wide task before a partial status change."""
+    item_ids = await _legacy_task_scope_item_ids(db, task_type, task)
+    if not item_ids:
+        return []
+
+    status, progress = _new_task_item_state(task_type, task)
+    await db.execute(
+        insert(TaskOrderItemLink.__table__),
+        [
+            {
+                "task_type": task_type,
+                "task_id": task.id,
+                "order_item_id": item_id,
+                "position": position,
+                "item_status": status,
+                "item_progress_pct": progress,
+                "item_completed_at": None,
+            }
+            for position, item_id in enumerate(item_ids)
+        ],
+    )
+    await db.flush()
+    return item_ids
+
+
 async def _task_item_state_map(
     db: AsyncSession,
     task_type: str,
@@ -397,12 +477,7 @@ async def _ensure_task_order_item_links(
     new_ids = [item_id for item_id in item_ids if item_id not in existing_ids]
     if not new_ids:
         return
-    status = getattr(task, "status", "pending")
-    progress = _item_status_progress(
-        task_type,
-        status,
-        int(getattr(task, "progress_pct", 0) or 0),
-    )
+    status, progress = _new_task_item_state(task_type, task)
     await db.execute(
         insert(TaskOrderItemLink.__table__),
         [
@@ -435,13 +510,21 @@ async def _prepare_status_item_ids(
             item_ids = [str(legacy_id)]
         else:
             raise ValueError("请先勾选要处理的订单明细")
+
+    legacy_id = _task_order_item_id(task)
+    if (
+        legacy_id is None
+        and not await _linked_order_item_ids(db, task_type, task.id)
+    ):
+        await _materialize_legacy_task_scope(db, task_type, task)
+
     validated = await _validate_order_item_ids(
         db,
         task.document_id,
         item_ids,
         task_type=task_type,
         task_id=task.id,
-        legacy_item_id=_task_order_item_id(task),
+        legacy_item_id=legacy_id,
     )
     await _ensure_task_order_item_links(db, task_type, task, validated)
     return validated
@@ -766,8 +849,19 @@ async def _sync_task_order_item_links(
     task_type: str,
     task,
     item_ids: list[UUID],
+    *,
+    previous_legacy_item_id: UUID | None = None,
 ) -> None:
     """Replace one task's links atomically inside the current transaction."""
+    if previous_legacy_item_id is None:
+        legacy_scope_ids = await _materialize_legacy_task_scope(
+            db,
+            task_type,
+            task,
+        )
+        if legacy_scope_ids:
+            item_ids = list(dict.fromkeys([*legacy_scope_ids, *item_ids]))
+
     existing_rows = await _task_order_item_link_rows(db, task_type, task.id)
     existing_by_item = {
         item_id: row
@@ -781,37 +875,52 @@ async def _sync_task_order_item_links(
         )
     )
     if item_ids:
-        task_status = getattr(task, "status", "pending")
-        task_progress = int(getattr(task, "progress_pct", 0) or 0)
-        await db.execute(
-            insert(TaskOrderItemLink.__table__),
-            [
+        new_status, new_progress = _new_task_item_state(task_type, task)
+        link_payload = []
+        for position, item_id in enumerate(item_ids):
+            existing = existing_by_item.get(item_id)
+            item_status = getattr(existing, "item_status", None) or new_status
+            item_progress = getattr(existing, "item_progress_pct", None)
+            if item_progress is None:
+                item_progress = new_progress
+            item_completed_at = getattr(existing, "item_completed_at", None)
+            if item_completed_at is None and _is_completed_item_status(task_type, item_status):
+                item_completed_at = datetime.now()
+            link_payload.append(
                 {
                     "task_type": task_type,
                     "task_id": task.id,
                     "order_item_id": item_id,
                     "position": position,
-                    "item_status": getattr(existing_by_item.get(item_id), "item_status", None)
-                    or task_status,
-                    "item_progress_pct": (
-                        getattr(existing_by_item.get(item_id), "item_progress_pct", None)
-                        if getattr(existing_by_item.get(item_id), "item_progress_pct", None) is not None
-                        else _item_status_progress(task_type, task_status, task_progress)
-                    ),
-                    "item_completed_at": getattr(
-                        existing_by_item.get(item_id),
-                        "item_completed_at",
-                        None,
-                    ) or (
-                        datetime.now()
-                        if _is_completed_item_status(task_type, task_status)
-                        else None
-                    ),
+                    "item_status": item_status,
+                    "item_progress_pct": item_progress,
+                    "item_completed_at": item_completed_at,
                 }
-                for position, item_id in enumerate(item_ids)
-            ],
+            )
+        await db.execute(
+            insert(TaskOrderItemLink.__table__),
+            link_payload,
         )
     setattr(task, "_linked_order_item_ids", list(item_ids))
+    await db.flush()
+
+    states = await _task_item_state_map(db, task_type, task)
+    aggregate_status = _aggregate_task_status(
+        task_type,
+        [status for status, _ in states.values()],
+    )
+    aggregate_progress = round(
+        sum(item_progress for _, item_progress in states.values()) / len(states)
+    ) if states else 0
+    task.status = aggregate_status
+    task.progress_pct = max(0, min(100, aggregate_progress))
+    if all(
+        _is_completed_item_status(task_type, status)
+        for status, _ in states.values()
+    ) and states:
+        task.completed_at = datetime.now()
+    elif aggregate_status != "cancelled":
+        task.completed_at = None
     await db.flush()
 
 
@@ -1483,6 +1592,7 @@ class DesignTaskService:
         if not task:
             raise ValueError("设计任务不存在")
         old_assigned = task.assigned_to
+        previous_legacy_item_id = _task_order_item_id(task)
         before = task_history_snapshot(task)
         data = normalize_task_schedule_data(
             data,
@@ -1512,10 +1622,16 @@ class DesignTaskService:
                 legacy_item_id=_task_order_item_id(task),
             )
             linked_item_ids = [data["order_item_id"]] if data["order_item_id"] else []
+        if linked_item_ids is not None and previous_legacy_item_id is None:
+            await _materialize_legacy_task_scope(self.db, "design", task)
         task = await self.repo.update(task, data)
         if linked_item_ids is not None:
             await _sync_task_order_item_links(
-                self.db, "design", task, linked_item_ids
+                self.db,
+                "design",
+                task,
+                linked_item_ids,
+                previous_legacy_item_id=previous_legacy_item_id,
             )
         await record_task_event(
             self.db,
@@ -1734,6 +1850,7 @@ class ProductionTaskService:
         if not task:
             raise ValueError("制作任务不存在")
         old_assigned = task.assigned_to
+        previous_legacy_item_id = _task_order_item_id(task)
         before = task_history_snapshot(task)
         data = normalize_task_schedule_data(
             data,
@@ -1763,10 +1880,16 @@ class ProductionTaskService:
                 legacy_item_id=_task_order_item_id(task),
             )
             linked_item_ids = [data["order_item_id"]] if data["order_item_id"] else []
+        if linked_item_ids is not None and previous_legacy_item_id is None:
+            await _materialize_legacy_task_scope(self.db, "production", task)
         task = await self.repo.update(task, data)
         if linked_item_ids is not None:
             await _sync_task_order_item_links(
-                self.db, "production", task, linked_item_ids
+                self.db,
+                "production",
+                task,
+                linked_item_ids,
+                previous_legacy_item_id=previous_legacy_item_id,
             )
         await record_task_event(
             self.db,
@@ -1978,6 +2101,7 @@ class InstallationTaskService:
         if not task:
             raise ValueError("安装任务不存在")
         old_assigned = task.assigned_to
+        previous_legacy_item_id = _task_order_item_id(task)
         before = task_history_snapshot(task)
         data = normalize_task_schedule_data(
             data,
@@ -2007,10 +2131,16 @@ class InstallationTaskService:
                 legacy_item_id=_task_order_item_id(task),
             )
             linked_item_ids = [data["order_item_id"]] if data["order_item_id"] else []
+        if linked_item_ids is not None and previous_legacy_item_id is None:
+            await _materialize_legacy_task_scope(self.db, "installation", task)
         task = await self.repo.update(task, data)
         if linked_item_ids is not None:
             await _sync_task_order_item_links(
-                self.db, "installation", task, linked_item_ids
+                self.db,
+                "installation",
+                task,
+                linked_item_ids,
+                previous_legacy_item_id=previous_legacy_item_id,
             )
         await record_task_event(
             self.db,

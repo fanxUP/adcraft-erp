@@ -20,6 +20,8 @@ from app.services.task_service import (
     InstallationTaskService,
     _aggregate_task_status,
     _apply_task_item_status_change,
+    _ensure_task_order_item_links,
+    _materialize_legacy_task_scope,
     _resolve_order_item_stage,
     _validate_order_item_id,
     _validate_order_item_ids,
@@ -346,6 +348,107 @@ async def test_status_change_only_updates_checked_item_and_keeps_other_item_stat
     assert task.status == "designing"
     assert task.progress_pct == 75
     db.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_installation_status_change_keeps_unchecked_item_in_task_aggregate():
+    db = AsyncMock()
+    task = make_mock_installation_task(status="in_progress", progress_pct=50)
+    task.order_item_id = ITEM_UUID
+    states = {
+        ITEM_UUID: ("in_progress", 50),
+        SECOND_ITEM_UUID: ("in_progress", 50),
+    }
+
+    with (
+        patch(
+            "app.services.task_service._prepare_status_item_ids",
+            new=AsyncMock(return_value=[ITEM_UUID]),
+        ),
+        patch(
+            "app.services.task_service._task_item_state_map",
+            new=AsyncMock(return_value=states),
+        ),
+    ):
+        selected, updated = await _apply_task_item_status_change(
+            db,
+            "installation",
+            task,
+            "completed",
+            [ITEM_ID],
+        )
+
+    assert selected == [ITEM_UUID]
+    assert updated[ITEM_UUID] == ("completed", 100)
+    assert updated[SECOND_ITEM_UUID] == ("in_progress", 50)
+    assert task.status == "in_progress"
+    assert task.progress_pct == 75
+
+
+@pytest.mark.asyncio
+async def test_legacy_whole_order_task_materializes_all_current_stage_items():
+    db = AsyncMock()
+    task = make_mock_installation_task(status="pending_acceptance", progress_pct=75)
+    task.order_item_id = None
+
+    with (
+        patch(
+            "app.services.task_service._linked_order_item_ids",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.task_service._task_order_item_option_map",
+            new=AsyncMock(
+                return_value={
+                    ITEM_UUID: {
+                        "stage": "in_installation",
+                        "can_select": True,
+                    },
+                    SECOND_ITEM_UUID: {
+                        "stage": "in_installation",
+                        "can_select": True,
+                    },
+                },
+            ),
+        ),
+    ):
+        item_ids = await _materialize_legacy_task_scope(
+            db,
+            "installation",
+            task,
+        )
+
+    assert item_ids == [ITEM_UUID, SECOND_ITEM_UUID]
+    insert_payload = db.execute.await_args.args[1]
+    assert [row["order_item_id"] for row in insert_payload] == [
+        ITEM_UUID,
+        SECOND_ITEM_UUID,
+    ]
+    assert {row["item_status"] for row in insert_payload} == {"pending_acceptance"}
+    assert {row["item_progress_pct"] for row in insert_payload} == {75}
+
+
+@pytest.mark.asyncio
+async def test_completed_task_new_item_reopens_with_nonterminal_state():
+    db = AsyncMock()
+    task = make_mock_installation_task(status="completed", progress_pct=100)
+    task.order_item_id = ITEM_UUID
+
+    with patch(
+        "app.services.task_service._linked_order_item_ids",
+        new=AsyncMock(return_value=[ITEM_UUID]),
+    ):
+        await _ensure_task_order_item_links(
+            db,
+            "installation",
+            task,
+            [ITEM_UUID, SECOND_ITEM_UUID],
+        )
+
+    insert_payload = db.execute.await_args.args[1]
+    assert insert_payload[0]["order_item_id"] == SECOND_ITEM_UUID
+    assert insert_payload[0]["item_status"] == "in_progress"
+    assert insert_payload[0]["item_progress_pct"] == 50
 
 
 @pytest.mark.asyncio
