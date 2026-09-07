@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import sys
@@ -69,7 +70,28 @@ async def lifespan(app: FastAPI):
             logger.exception(
                 "AI business-rule startup sync failed; AI will use source rules"
             )
-    yield
+    overdue_notification_task = None
+    if settings.APP_ENV.lower() != "test":
+        from app.services.task_overdue_notification_service import (
+            run_overdue_notification_loop,
+        )
+
+        overdue_notification_task = asyncio.create_task(
+            run_overdue_notification_loop(),
+            name="overdue-task-notifications",
+        )
+        app.state.overdue_notification_task = overdue_notification_task
+        logger.info("Overdue task notification scheduler active (15-minute interval)")
+
+    try:
+        yield
+    finally:
+        if overdue_notification_task is not None:
+            overdue_notification_task.cancel()
+            try:
+                await overdue_notification_task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(
