@@ -573,6 +573,10 @@ class BusinessDocumentService:
                 link=f"/{'orders' if doc.doc_type == 'order' else 'quotes'}/{doc_id}",
             )
 
+        # 状态更新使用数据库侧 onupdate 生成 updated_at。异步 SQLAlchemy 会将该
+        # 字段标记为过期，序列化前必须显式异步刷新，否则同步读取会触发
+        # MissingGreenlet 并让确认订单接口返回 500。
+        await self.db.refresh(doc, attribute_names=["updated_at"])
         return self._to_detail(doc)
 
     async def _cancel_open_tasks(self, doc_id: UUID) -> None:

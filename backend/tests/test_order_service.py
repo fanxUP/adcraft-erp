@@ -148,6 +148,26 @@ async def test_order_with_received_payment_cannot_be_cancelled(service):
 
 
 @pytest.mark.asyncio
+async def test_order_status_change_refreshes_server_updated_at_before_detail(service):
+    """状态流转序列化前刷新数据库侧生成的 updated_at，避免异步懒加载异常。"""
+    order_service, repository, db = service
+    order = make_order(status="pending_confirm")
+    repository.get_by_id.return_value = order
+    order_service._auto_create_design_task = AsyncMock()
+    db.flush = AsyncMock()
+
+    result = await order_service.change_status(
+        SAMPLE_ORDER_ID,
+        "confirmed",
+        reason=None,
+        operated_by=uuid4(),
+    )
+
+    assert result["status"] == "designing"
+    db.refresh.assert_awaited_once_with(order, attribute_names=["updated_at"])
+
+
+@pytest.mark.asyncio
 async def test_order_cancellation_closes_all_open_delivery_tasks(service):
     order_service, repository, db = service
     order = make_order(status="in_installation")
