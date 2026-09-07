@@ -39,19 +39,14 @@
         :task-id="task.id"
         :order-id="task.order_id"
         :current-item-id="task.order_item_id"
+        :current-item-name="task.item_name"
+        :steps="designSteps"
+        :current-status="task.status"
+        :workflow="designWorkflow"
+        :changing="changing"
         @linked="fetchTask"
+        @change="handleWorkflowChange"
       />
-
-      <el-card shadow="never" class="info-card" style="margin-top: 16px">
-        <template #header><span>变更状态</span></template>
-        <TaskWorkflow
-          :steps="designSteps"
-          :current-status="task.status"
-          :workflow="designWorkflow"
-          :changing="changing"
-          @change="handleWorkflowChange"
-        />
-      </el-card>
       <TaskDependenciesCard
         :task-type="'design'"
         :task-id="task.id"
@@ -161,7 +156,6 @@ import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import type { DesignTaskResponse, UserResponse } from '@/types/api'
-import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import TaskDependenciesCard from '@/components/tasks/TaskDependenciesCard.vue'
 import TaskHistoryTimeline from '@/components/tasks/TaskHistoryTimeline.vue'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'

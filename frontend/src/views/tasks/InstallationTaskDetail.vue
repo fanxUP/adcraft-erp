@@ -38,20 +38,14 @@
         :task-id="task.id"
         :order-id="task.order_id"
         :current-item-id="task.order_item_id"
+        :current-item-name="task.item_name"
+        :steps="instSteps"
+        :current-status="task.status"
+        :workflow="instWorkflow"
+        :changing="changing"
         @linked="fetchTask"
+        @change="handleWorkflowChange"
       />
-
-      <el-card shadow="never" class="info-card" style="margin-top: 16px">
-        <template #header><span>变更状态</span></template>
-        <TaskWorkflow
-          :steps="instSteps"
-          :current-status="task.status"
-          :workflow="instWorkflow"
-          :changing="changing"
-          @change="handleWorkflowChange"
-        />
-
-      </el-card>
       <TaskDependenciesCard
         :task-type="'installation'"
         :task-id="task.id"
@@ -185,7 +179,6 @@
 import { formatDateTimeFull } from '@/utils/datetime'
 import { computed, ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import TaskDependenciesCard from '@/components/tasks/TaskDependenciesCard.vue'
 import TaskHistoryTimeline from '@/components/tasks/TaskHistoryTimeline.vue'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
