@@ -13,92 +13,94 @@
     <section class="task-section order-item-section" aria-labelledby="order-item-section-title">
       <div id="order-item-section-title" class="section-heading">
         <span>订单明细</span>
-        <span v-if="linkedItemIds.length" class="section-note">当前任务归属</span>
-        <span v-else class="section-note">请选择一条明细进行关联</span>
+        <span class="section-note">勾选要推进的明细，未勾选明细不会变更</span>
       </div>
 
-      <template v-if="linkedItemIds.length">
-        <div class="linked-item-summary">
-          <div class="linked-item-tags">
-            <el-tag
-              v-for="(itemName, index) in linkedItemNames"
-              :key="linkedItemIds[index] || index"
-              type="success"
-              effect="plain"
-              size="small"
-            >
-              {{ itemName || `明细 ${index + 1}` }}
-            </el-tag>
-          </div>
-          <span class="linked-item-note">该任务已纳入以上 {{ linkedItemIds.length }} 条明细的进度统计</span>
+      <div v-if="linkedItemIds.length" class="linked-item-summary">
+        <div class="linked-item-tags">
+          <el-tag
+            v-for="(itemName, index) in linkedItemNames"
+            :key="linkedItemIds[index] || index"
+            type="success"
+            effect="plain"
+            size="small"
+          >
+            {{ itemName || `明细 ${index + 1}` }}
+          </el-tag>
         </div>
-      </template>
+        <span class="linked-item-note">已纳入 {{ linkedItemIds.length }} 条明细；可继续勾选其中未完成的明细推进状态</span>
+      </div>
 
-      <template v-else>
-        <el-alert
-          title="可选择多条订单明细；任务本身不会被拆分，进度会同步反映到每条已选明细。"
-          type="info"
-          :closable="false"
-          show-icon
-        />
+      <el-alert
+        title="状态变更只作用于下方勾选的订单明细；新勾选明细会在提交状态时自动纳入本任务。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
 
-        <div v-loading="loadingItems" class="link-panel">
-          <div v-if="items.length" class="item-list" role="group" aria-label="订单明细（可多选）">
-            <label
-              v-for="item in items"
-              :key="item.id"
-              class="item-option"
-              :class="{
-                'is-selected': selectedItemIds.includes(item.id),
-                'is-disabled': !item.can_select,
-              }"
-              :aria-disabled="!item.can_select"
-            >
-              <input
-                v-model="selectedItemIds"
-                class="item-option-checkbox"
-                type="checkbox"
-                :value="item.id"
-                :disabled="saving || changing || !item.can_select"
-                :aria-label="`选择订单明细 ${item.item_name}`"
-              />
-              <span class="item-option-body">
-                <span class="item-option-title-row">
-                  <span class="item-option-title">{{ item.item_name }}</span>
-                  <el-tag :type="stageTagType(item.stage)" effect="plain" size="small">
-                    {{ item.stage_label }}
-                  </el-tag>
-                </span>
-                <span v-if="item.material_process || itemSpec(item)" class="item-option-subtitle">
-                  <span v-if="item.material_process">{{ item.material_process }}</span>
-                  <span v-if="item.material_process && itemSpec(item)"> · </span>
-                  <span v-if="itemSpec(item)">{{ itemSpec(item) }}</span>
-                </span>
-                <span class="item-option-meta">数量 {{ item.quantity }}{{ item.unit ? ` ${item.unit}` : '' }}</span>
-                <span v-if="!item.can_select && item.disabled_reason" class="item-option-disabled-reason">
-                  {{ item.disabled_reason }}
-                </span>
+      <div v-loading="loadingItems" class="link-panel">
+        <div v-if="items.length" class="item-list" role="group" aria-label="订单明细（可多选）">
+          <label
+            v-for="item in items"
+            :key="item.id"
+            class="item-option"
+            :class="{
+              'is-selected': selectedItemIds.includes(item.id),
+              'is-disabled': !item.can_select,
+            }"
+            :aria-disabled="!item.can_select"
+          >
+            <input
+              v-model="selectedItemIds"
+              class="item-option-checkbox"
+              type="checkbox"
+              :value="item.id"
+              :disabled="saving || changing || !item.can_select"
+              :aria-label="`选择订单明细 ${item.item_name}`"
+            />
+            <span class="item-option-body">
+              <span class="item-option-title-row">
+                <span class="item-option-title">{{ item.item_name }}</span>
+                <el-tag :type="stageTagType(item.stage)" effect="plain" size="small">
+                  {{ item.stage_label }}
+                </el-tag>
+                <el-tag v-if="item.is_linked && item.task_status_label" :type="taskStatusTagType(item.task_status)" effect="light" size="small">
+                  本任务：{{ item.task_status_label }}
+                </el-tag>
               </span>
-            </label>
-          </div>
-
-          <div v-if="loadError" class="link-tip error-tip">订单明细加载失败，请刷新后重试。</div>
-          <div v-else-if="!loadingItems && !items.length" class="link-tip">
-            当前订单没有可关联的有效明细。
-          </div>
-
-          <div class="link-actions">
-            <el-button
-              type="primary"
-              :loading="saving"
-              :disabled="!selectedItemIds.length || !items.length || changing"
-              @click="handleLink"
-            >
-              {{ selectedItemIds.length ? `关联 ${selectedItemIds.length} 条明细` : '关联到明细' }}
-            </el-button>
-          </div>
+              <span v-if="item.material_process || itemSpec(item)" class="item-option-subtitle">
+                <span v-if="item.material_process">{{ item.material_process }}</span>
+                <span v-if="item.material_process && itemSpec(item)"> · </span>
+                <span v-if="itemSpec(item)">{{ itemSpec(item) }}</span>
+              </span>
+              <span class="item-option-meta">
+                数量 {{ item.quantity }}{{ item.unit ? ` ${item.unit}` : '' }}
+                <span v-if="item.is_linked && item.task_progress_pct != null"> · 本任务进度 {{ item.task_progress_pct }}%</span>
+              </span>
+              <span v-if="!item.can_select && item.disabled_reason" class="item-option-disabled-reason">
+                {{ item.disabled_reason }}
+              </span>
+            </span>
+          </label>
         </div>
-      </template>
+
+        <div v-if="loadError" class="link-tip error-tip">订单明细加载失败，请刷新后重试。</div>
+        <div v-else-if="!loadingItems && !items.length" class="link-tip">
+          当前订单没有可关联的有效明细。
+        </div>
+
+        <div class="link-actions">
+          <el-button
+            type="primary"
+            plain
+            :loading="saving"
+            :disabled="!selectedItemIds.length || !items.length || changing"
+            @click="handleLink"
+          >
+            {{ selectedItemIds.length ? `保存关联 ${selectedItemIds.length} 条明细` : '保存关联' }}
+          </el-button>
+        </div>
+      </div>
     </section>
 
     <el-divider />
@@ -128,11 +130,11 @@ import {
   updateProductionTask,
   updateInstallationTask,
 } from '@/api/tasks'
-import type { OrderItemStage, TaskDependencyTaskType, TaskOrderItemOption } from '@/types/api'
+import type { OrderItemStage, TaskType, TaskOrderItemOption } from '@/types/api'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 
 const props = withDefaults(defineProps<{
-  taskType: TaskDependencyTaskType
+  taskType: TaskType
   taskId: string
   orderId: string
   currentItemId?: string | null
@@ -152,7 +154,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   linked: []
-  change: [status: string]
+  change: [status: string, orderItemIds: string[]]
 }>()
 
 const items = ref<TaskOrderItemOption[]>([])
@@ -196,8 +198,15 @@ function stageTagType(stage: OrderItemStage): 'primary' | 'success' | 'warning' 
   return 'danger'
 }
 
+function taskStatusTagType(status?: string | null): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
+  if (status === 'completed' || status === 'confirmed') return 'success'
+  if (status === 'rework' || status === 'revision' || status === 'cancelled') return 'danger'
+  if (status === 'in_progress' || status === 'designing' || status === 'pending_acceptance') return 'warning'
+  return 'info'
+}
+
 async function loadItems() {
-  if (!props.orderId || linkedItemIds.value.length) {
+  if (!props.orderId) {
     selectedItemIds.value = []
     return
   }
@@ -241,7 +250,9 @@ async function handleLink() {
 
   saving.value = true
   try {
-    await updateTaskItems(selected.map(item => item.id))
+    const allLinkedIds = items.value.filter(item => item.is_linked).map(item => item.id)
+    const itemIds = Array.from(new Set([...allLinkedIds, ...selected.map(item => item.id)]))
+    await updateTaskItems(itemIds)
     ElMessage.success(`已关联 ${selected.length} 条订单明细`)
     emit('linked')
   } catch {
@@ -252,7 +263,11 @@ async function handleLink() {
 }
 
 function handleWorkflowChange(status: string) {
-  emit('change', status)
+  if (!selectedItemIds.value.length) {
+    ElMessage.warning('请先勾选要变更状态的订单明细')
+    return
+  }
+  emit('change', status, [...selectedItemIds.value])
 }
 
 watch([() => props.orderId, () => props.taskId, () => props.taskType, linkedItemIds], loadItems)

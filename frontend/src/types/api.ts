@@ -139,6 +139,10 @@ export interface TaskOrderItemOption extends OrderItemResponse {
   stage_label: string
   can_select: boolean
   disabled_reason?: string | null
+  is_linked: boolean
+  task_status?: string | null
+  task_status_label?: string | null
+  task_progress_pct?: number | null
 }
 
 export interface OrderItemMutationFields {
@@ -444,27 +448,12 @@ export interface AttachmentResponse {
   created_at?: string
 }
 
-export type TaskDependencyTaskType = 'design' | 'production' | 'installation'
+export type TaskType = 'design' | 'production' | 'installation'
 
-export interface TaskDependencyTaskSummary {
-  task_type: TaskDependencyTaskType
-  task_id: string
-  task_no: string
-  order_id?: string
-  project_name: string
+export interface TaskOrderItemState {
   status: string
+  status_label?: string | null
   progress_pct: number
-}
-
-export interface TaskDependencyResponse {
-  id: string
-  dependency_type: 'finish_to_start'
-  predecessor: TaskDependencyTaskSummary
-  successor: TaskDependencyTaskSummary
-  is_satisfied: boolean
-  created_by?: string
-  created_at?: string
-  updated_at?: string
 }
 
 export interface DesignTaskResponse {
@@ -473,6 +462,7 @@ export interface DesignTaskResponse {
   order_id: string
   order_item_id?: string | null
   order_item_ids?: string[]
+  order_item_states?: Record<string, TaskOrderItemState>
   customer_id: string
   order_no?: string
   customer_name?: string
@@ -486,9 +476,6 @@ export interface DesignTaskResponse {
   progress_pct: number
   planned_start_at?: string | null
   planned_end_at?: string | null
-  is_blocked?: boolean
-  blocked_reason?: string | null
-  blocking_tasks?: TaskDependencyTaskSummary[]
   is_overdue?: boolean
   overdue_days?: number
   is_outsourced?: boolean
@@ -509,6 +496,7 @@ export interface ProductionTaskResponse {
   order_id: string
   order_item_id?: string | null
   order_item_ids?: string[]
+  order_item_states?: Record<string, TaskOrderItemState>
   customer_id: string
   order_no?: string
   customer_name?: string
@@ -522,9 +510,6 @@ export interface ProductionTaskResponse {
   progress_pct: number
   planned_start_at?: string | null
   planned_end_at?: string | null
-  is_blocked?: boolean
-  blocked_reason?: string | null
-  blocking_tasks?: TaskDependencyTaskSummary[]
   is_overdue?: boolean
   overdue_days?: number
   is_outsourced?: boolean
@@ -549,6 +534,7 @@ export interface InstallationTaskResponse {
   order_id: string
   order_item_id?: string | null
   order_item_ids?: string[]
+  order_item_states?: Record<string, TaskOrderItemState>
   customer_id: string
   order_no?: string
   customer_name?: string
@@ -562,9 +548,6 @@ export interface InstallationTaskResponse {
   progress_pct: number
   planned_start_at?: string | null
   planned_end_at?: string | null
-  is_blocked?: boolean
-  blocked_reason?: string | null
-  blocking_tasks?: TaskDependencyTaskSummary[]
   is_overdue?: boolean
   overdue_days?: number
   is_outsourced?: boolean
@@ -598,9 +581,6 @@ export interface TaskQueueItem {
   progress_pct: number
   planned_start_at?: string | null
   planned_end_at?: string | null
-  is_blocked?: boolean
-  blocked_reason?: string | null
-  blocking_tasks?: TaskDependencyTaskSummary[]
   is_overdue?: boolean
   overdue_days?: number
   assigned_to?: string

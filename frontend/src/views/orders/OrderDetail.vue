@@ -32,7 +32,6 @@
             :production-completed="productionCompleted"
             :installation-count="installationTasks.length"
             :installation-completed="installationCompleted"
-            :blocked-task-count="blockedTaskCount"
             :overdue-task-count="overdueTaskCount"
             :project-progress="projectProgress"
             @select-tab="activeTab = $event"
@@ -76,7 +75,7 @@
                   <el-progress :percentage="row.designProgress" :stroke-width="8" />
                   <div class="stage-line">
                     <span>{{ row.designTask ? row.item.item_name : stageLabel(row.designTask, 'design') }}</span>
-                    <el-tag v-if="row.designTask" size="small" :type="taskStatusType(row.designTask.status)">{{ designStatusLabel(row.designTask.status) }}</el-tag>
+                    <el-tag v-if="row.designTask" size="small" :type="taskStatusType(itemTaskStatus(row.designTask, row.item.id))">{{ designStatusLabel(itemTaskStatus(row.designTask, row.item.id)) }}</el-tag>
                   </div>
                 </template>
               </el-table-column>
@@ -85,7 +84,7 @@
                   <el-progress :percentage="row.productionProgress" :stroke-width="8" />
                   <div class="stage-line">
                     <span>{{ row.productionTask ? row.item.item_name : stageLabel(row.productionTask, 'production') }}</span>
-                    <el-tag v-if="row.productionTask" size="small" :type="taskStatusType(row.productionTask.status)">{{ prodStatusLabel(row.productionTask.status) }}</el-tag>
+                    <el-tag v-if="row.productionTask" size="small" :type="taskStatusType(itemTaskStatus(row.productionTask, row.item.id))">{{ prodStatusLabel(itemTaskStatus(row.productionTask, row.item.id)) }}</el-tag>
                   </div>
                 </template>
               </el-table-column>
@@ -94,7 +93,7 @@
                   <el-progress :percentage="row.installationProgress" :stroke-width="8" />
                   <div class="stage-line">
                     <span>{{ row.installationTask ? row.item.item_name : stageLabel(row.installationTask, 'installation') }}</span>
-                    <el-tag v-if="row.installationTask" size="small" :type="taskStatusType(row.installationTask.status)">{{ instStatusLabel(row.installationTask.status) }}</el-tag>
+                    <el-tag v-if="row.installationTask" size="small" :type="taskStatusType(itemTaskStatus(row.installationTask, row.item.id))">{{ instStatusLabel(itemTaskStatus(row.installationTask, row.item.id)) }}</el-tag>
                   </div>
                 </template>
               </el-table-column>
@@ -362,9 +361,6 @@
                 <template #default="{ row }">
                   <div class="task-status-cell">
                     <el-tag :type="designStatusColor(row.status)" size="small">{{ designStatusLabel(row.status) }}</el-tag>
-                    <el-tooltip v-if="row.is_blocked" :content="row.blocked_reason || '前置任务未完成'" placement="top">
-                      <el-tag type="warning" size="small">阻塞</el-tag>
-                    </el-tooltip>
                     <el-tag v-if="row.is_overdue" type="danger" size="small">逾期</el-tag>
                   </div>
                 </template>
@@ -397,9 +393,6 @@
                 <template #default="{ row }">
                   <div class="task-status-cell">
                     <el-tag :type="prodStatusColor(row.status)" size="small">{{ prodStatusLabel(row.status) }}</el-tag>
-                    <el-tooltip v-if="row.is_blocked" :content="row.blocked_reason || '前置任务未完成'" placement="top">
-                      <el-tag type="warning" size="small">阻塞</el-tag>
-                    </el-tooltip>
                     <el-tag v-if="row.is_overdue" type="danger" size="small">逾期</el-tag>
                   </div>
                 </template>
@@ -432,9 +425,6 @@
                 <template #default="{ row }">
                   <div class="task-status-cell">
                     <el-tag :type="instStatusColor(row.status)" size="small">{{ instStatusLabel(row.status) }}</el-tag>
-                    <el-tooltip v-if="row.is_blocked" :content="row.blocked_reason || '前置任务未完成'" placement="top">
-                      <el-tag type="warning" size="small">阻塞</el-tag>
-                    </el-tooltip>
                     <el-tag v-if="row.is_overdue" type="danger" size="small">逾期</el-tag>
                   </div>
                 </template>
@@ -561,8 +551,6 @@ async function fetchItemEditability() {
 const designCompleted = computed(() => designTasks.value.filter(task => ['confirmed', 'completed'].includes(task.status)).length)
 const productionCompleted = computed(() => productionTasks.value.filter(task => task.status === 'completed').length)
 const installationCompleted = computed(() => installationTasks.value.filter(task => task.status === 'completed').length)
-const blockedTaskCount = computed(() => [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
-  .filter(task => task.is_blocked).length)
 const overdueTaskCount = computed(() => [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
   .filter(task => task.is_overdue).length)
 
@@ -583,9 +571,9 @@ const itemProgressRows = computed<ItemProgressRow[]>(() => {
     const designTask = findItemTask(designTasks.value, item.id)
     const productionTask = findItemTask(productionTasks.value, item.id)
     const installationTask = findItemTask(installationTasks.value, item.id)
-    const designProgress = progressPct(designTask?.progress_pct)
-    const productionProgress = progressPct(productionTask?.progress_pct)
-    const installationProgress = progressPct(installationTask?.progress_pct)
+    const designProgress = itemTaskProgress(designTask, item.id)
+    const productionProgress = itemTaskProgress(productionTask, item.id)
+    const installationProgress = itemTaskProgress(installationTask, item.id)
     return {
       item,
       designTask,
@@ -647,6 +635,16 @@ const projectProgress = computed(() => {
 
 function progressPct(value: number | undefined) {
   return Math.min(100, Math.max(0, Number(value ?? 0)))
+}
+
+function itemTaskStatus(task: OrderProgressTask | null, itemId: string) {
+  if (!task) return ''
+  return task.order_item_states?.[itemId]?.status || task.status
+}
+
+function itemTaskProgress(task: OrderProgressTask | null, itemId: string) {
+  if (!task) return 0
+  return progressPct(task.order_item_states?.[itemId]?.progress_pct ?? task.progress_pct)
 }
 
 function openLegacyTask(task: LegacyUnlinkedTaskRow) {

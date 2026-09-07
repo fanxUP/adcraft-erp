@@ -23,14 +23,6 @@
         <div class="progress-note">按每条订单明细的设计、制作、安装三阶段进度汇总；历史整单任务按任务进度回退计算</div>
       </div>
       <el-alert
-        v-if="blockedTaskCount > 0"
-        class="blocked-summary"
-        type="warning"
-        :closable="false"
-        show-icon
-        :title="`${blockedTaskCount} 个任务正在等待前置任务完成`"
-      />
-      <el-alert
         v-if="overdueTaskCount > 0"
         class="overdue-summary"
         type="error"
@@ -81,7 +73,6 @@ const props = defineProps<{
   productionCompleted: number
   installationCount: number
   installationCompleted: number
-  blockedTaskCount: number
   overdueTaskCount: number
   projectProgress: number
 }>()
@@ -135,7 +126,6 @@ const metrics = computed(() => [
 .card-header { display: flex; align-items: center; justify-content: space-between; }
 .delivery-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .overall-progress { padding: 10px 12px 0; }
-.blocked-summary { margin-top: 12px; }
 .overdue-summary { margin-top: 12px; }
 .overall-progress-header { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--ad-text); }
 .progress-note { margin-top: 6px; color: var(--ad-text-secondary); font-size: 12px; }

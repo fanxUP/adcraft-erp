@@ -12,7 +12,6 @@ from app.schemas.task import (
     TaskQueueItem,
 )
 from app.services.task_service import _attach_outsource_flags, _enrich_task_order
-from app.services.task_dependency_service import enrich_task_dict_with_dependency_state
 from app.services.task_schedule_service import enrich_task_dict_with_schedule_state
 
 
@@ -68,10 +67,17 @@ async def list_task_queue(
             item["_task_type"] = task_type
             item = await _enrich_task_order(db, item)
             item = enrich_task_dict_with_schedule_state(item)
-            item = await enrich_task_dict_with_dependency_state(db, task_type, item)
             items.append(item)
         normalized.extend(await _attach_outsource_flags(db, task_type, items))
 
+    # The project board is an active-work view. Completed, cancelled, and
+    # fully-progressed aggregate tasks remain available through the stage task
+    # lists and history, but do not occupy the board.
+    normalized = [
+        item for item in normalized
+        if item.get("status") not in {"completed", "confirmed", "cancelled"}
+        and int(item.get("progress_pct") or 0) < 100
+    ]
     normalized.sort(key=lambda item: item.get("created_at") or "", reverse=True)
     if overdue is not None:
         normalized = [item for item in normalized if item.get("is_overdue") is overdue]

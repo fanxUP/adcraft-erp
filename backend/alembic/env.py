@@ -24,7 +24,6 @@ from app.models.business_document import (
 from app.models.operation_log import OperationLog
 from app.models.task import DesignTask, ProductionTask, InstallationTask, Attachment
 from app.models.task_order_item_link import TaskOrderItemLink
-from app.models.task_dependency import TaskDependency
 from app.models.payment import Payment, CustomerStatement, Expense
 from app.models.outsource import OutsourceVendor, OutsourceTask, OutsourcePayment
 from app.models.inventory import InventoryItem, StockRecord

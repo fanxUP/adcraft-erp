@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 import pytest
 
@@ -30,6 +31,11 @@ def service(mock_repo):
     with patch("app.services.task_service.InstallationTaskRepository") as MockRepoClass:
         MockRepoClass.return_value = mock_repo
         db = AsyncMock()
+        db.get = AsyncMock(return_value=MagicMock(
+            id=UUID("55555555-5555-5555-5555-555555555555"),
+            document_id=UUID("33333333-3333-3333-3333-333333333333"),
+            lifecycle_status="active",
+        ))
         # Mock db.execute to return a result that supports .fetchone()
         mock_exec_result = MagicMock()
         mock_exec_result.fetchone.return_value = None
@@ -52,7 +58,7 @@ TRANSITION_TABLE = [
     ("assigned", "completed", False),
     ("in_progress", "pending_acceptance", True),
     ("in_progress", "pending", True),
-    ("in_progress", "completed", False),
+    ("in_progress", "completed", True),
     ("in_progress", "assigned", False),
     ("pending_acceptance", "completed", True),
     ("pending_acceptance", "in_progress", True),
@@ -71,11 +77,21 @@ async def test_status_transitions(service, mock_repo, from_status, to_status, sh
     mock_repo.get_by_id.return_value = task
 
     if should_succeed:
-        result = await service.change_status(SAMPLE_TASK_ID, to_status, SAMPLE_USER_ID)
+        result = await service.change_status(
+            SAMPLE_TASK_ID,
+            to_status,
+            SAMPLE_USER_ID,
+            order_item_ids=[str(task.order_item_id)],
+        )
         assert result["status"] == to_status
     else:
         with pytest.raises(ValueError):
-            await service.change_status(SAMPLE_TASK_ID, to_status, SAMPLE_USER_ID)
+            await service.change_status(
+                SAMPLE_TASK_ID,
+                to_status,
+                SAMPLE_USER_ID,
+                order_item_ids=[str(task.order_item_id)],
+            )
 
 
 @pytest.mark.asyncio
@@ -84,7 +100,12 @@ async def test_completed_sets_timestamp(service, mock_repo):
     task = make_mock_installation_task(status="pending_acceptance")
     mock_repo.get_by_id.return_value = task
 
-    result = await service.change_status(SAMPLE_TASK_ID, "completed", SAMPLE_USER_ID)
+    result = await service.change_status(
+        SAMPLE_TASK_ID,
+        "completed",
+        SAMPLE_USER_ID,
+        order_item_ids=[str(task.order_item_id)],
+    )
 
     assert result["status"] == "completed"
     assert result["completed_at"] is not None

@@ -10,17 +10,9 @@
 
     <div class="summary-bar">
       <span>共 {{ tasks.length }} 个任务</span>
-      <span>阻塞 {{ blockedCount }} 个</span>
       <span>逾期 {{ overdueCount }} 个</span>
-      <span v-if="onlyBlocked || onlyOverdue">当前显示 {{ visibleTasks.length }} 个</span>
+      <span v-if="onlyOverdue">当前显示 {{ visibleTasks.length }} 个</span>
       <span>平均进度 {{ averageProgress }}%</span>
-      <el-switch
-        v-model="onlyBlocked"
-        inline-prompt
-        active-text="阻塞"
-        inactive-text="全部"
-        aria-label="仅查看阻塞任务"
-      />
       <el-switch
         v-model="onlyOverdue"
         inline-prompt
@@ -48,7 +40,6 @@
             <div class="card-topline">
               <span class="card-no">{{ card.task_no }}</span>
               <div class="card-statuses">
-                <el-tag v-if="card.is_blocked" size="small" type="warning">阻塞</el-tag>
                 <el-tag v-if="card.is_overdue" size="small" type="danger">逾期</el-tag>
                 <el-tag size="small" :type="statusColor(card.status)">{{ statusLabel(card) }}</el-tag>
               </div>
@@ -63,7 +54,6 @@
               <el-progress :percentage="progress(card)" :stroke-width="8" />
               <span>{{ progress(card) }}%</span>
             </div>
-            <div v-if="card.is_blocked" class="blocked-reason">{{ card.blocked_reason }}</div>
             <div v-if="card.planned_end_at" class="planned-end">计划结束：{{ formatDateTimeFull(card.planned_end_at) }}</div>
             <div v-if="card.assigned_to_name" class="assignee">负责人：{{ card.assigned_to_name }}</div>
           </el-card>
@@ -81,7 +71,6 @@ import { formatDateTimeFull } from '@/utils/datetime'
 
 const loading = ref(false)
 const tasks = ref<TaskQueueItem[]>([])
-const onlyBlocked = ref(false)
 const onlyOverdue = ref(false)
 
 const columns = [
@@ -94,14 +83,17 @@ function colCards(key: TaskQueueItem['stage']) {
   return visibleTasks.value.filter(task => task.stage === key)
 }
 
-const blockedCount = computed(() => tasks.value.filter(task => task.is_blocked).length)
-const overdueCount = computed(() => tasks.value.filter(task => task.is_overdue).length)
-const visibleTasks = computed(() => tasks.value.filter(task =>
-  (!onlyBlocked.value || task.is_blocked) && (!onlyOverdue.value || task.is_overdue)
-))
+const unfinishedTasks = computed(() => tasks.value.filter(task => (
+  !['completed', 'confirmed', 'cancelled'].includes(task.status)
+  && progress(task) < 100
+)))
+const overdueCount = computed(() => unfinishedTasks.value.filter(task => task.is_overdue).length)
+const visibleTasks = computed(() => unfinishedTasks.value.filter(task => (
+  !onlyOverdue.value || task.is_overdue
+)))
 
 const averageProgress = computed(() => {
-  const activeTasks = tasks.value.filter(task => task.status !== 'cancelled')
+  const activeTasks = unfinishedTasks.value
   if (!activeTasks.length) return 0
   return Math.round(activeTasks.reduce((sum, task) => sum + progress(task), 0) / activeTasks.length)
 })
@@ -197,6 +189,5 @@ onBeforeUnmount(() => {
 .progress-row :deep(.el-progress) { flex: 1; }
 .progress-row > span { width: 38px; text-align: right; font-size: 12px; color: var(--ad-text-secondary); }
 .assignee { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); }
-.blocked-reason { margin-top: 8px; padding: 6px 8px; color: #b88230; background: rgba(230, 162, 60, 0.12); border-radius: 4px; font-size: 12px; line-height: 1.4; }
 .planned-end { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); }
 </style>

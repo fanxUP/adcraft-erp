@@ -30,10 +30,8 @@ from app.schemas.task import (
     DesignTaskCreate, DesignTaskUpdate,
     ProductionTaskCreate, ProductionTaskUpdate,
     InstallationTaskCreate, InstallationTaskUpdate,
-    TaskStatusChange,
+    TaskStatusChange, TaskType,
 )
-from app.schemas.task_dependency import TaskDependencyCreate
-from app.schemas.task_dependency import TaskType
 from app.services.task_service import (
     DesignTaskService,
     ProductionTaskService,
@@ -42,11 +40,6 @@ from app.services.task_service import (
     get_task_order_item_options,
 )
 from app.services.task_queue_service import list_task_queue
-from app.services.task_dependency_service import (
-    create_task_dependency,
-    delete_task_dependency,
-    list_task_dependencies,
-)
 from app.services.task_history_service import list_task_history, task_exists
 
 
@@ -109,54 +102,6 @@ async def list_task_order_item_options(
         return success(options)
     except ValueError as exc:
         return {"code": 40001, "message": str(exc), "data": None}
-
-
-# -- Task dependencies --
-
-dependency_router = APIRouter(prefix="/task-dependencies", tags=["Task Dependencies"])
-
-
-@dependency_router.get("/")
-async def get_task_dependencies(
-    task_type: str = Query(...),
-    task_id: str = Query(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_permission(
-        PERM_DESIGN_TASK_READ,
-        PERM_PRODUCTION_TASK_READ,
-        PERM_INSTALLATION_TASK_READ,
-    )),
-):
-    dependencies = await list_task_dependencies(db, task_type, _ensure_uuid(task_id))
-    return success(dependencies)
-
-
-@dependency_router.post("/")
-async def add_task_dependency(
-    data: TaskDependencyCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_permission(
-        PERM_DESIGN_TASK_UPDATE,
-        PERM_PRODUCTION_TASK_UPDATE,
-        PERM_INSTALLATION_TASK_UPDATE,
-    )),
-):
-    dependency = await create_task_dependency(db, data, current_user.id)
-    return success(dependency)
-
-
-@dependency_router.delete("/{dependency_id}")
-async def remove_task_dependency(
-    dependency_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_permission(
-        PERM_DESIGN_TASK_UPDATE,
-        PERM_PRODUCTION_TASK_UPDATE,
-        PERM_INSTALLATION_TASK_UPDATE,
-    )),
-):
-    await delete_task_dependency(db, _ensure_uuid(dependency_id))
-    return success(None)
 
 
 # -- Task change history --
@@ -295,7 +240,9 @@ async def change_design_task_status(
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_CHANGE_STATUS)),
 ):
     service = DesignTaskService(db)
-    task = await service.change_status(_ensure_uuid(task_id), data.to_status, current_user.id, data.reason)
+    task = await service.change_status(
+        _ensure_uuid(task_id), data.to_status, current_user.id, data.reason, data.order_item_ids
+    )
     return success(task)
 
 
@@ -381,7 +328,9 @@ async def change_production_task_status(
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_CHANGE_STATUS)),
 ):
     service = ProductionTaskService(db)
-    task = await service.change_status(_ensure_uuid(task_id), data.to_status, current_user.id, data.reason)
+    task = await service.change_status(
+        _ensure_uuid(task_id), data.to_status, current_user.id, data.reason, data.order_item_ids
+    )
     return success(task)
 
 
@@ -467,7 +416,9 @@ async def change_installation_task_status(
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_CHANGE_STATUS)),
 ):
     service = InstallationTaskService(db)
-    task = await service.change_status(_ensure_uuid(task_id), data.to_status, current_user.id, data.reason)
+    task = await service.change_status(
+        _ensure_uuid(task_id), data.to_status, current_user.id, data.reason, data.order_item_ids
+    )
     return success(task)
 
 

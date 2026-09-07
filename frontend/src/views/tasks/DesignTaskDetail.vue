@@ -25,12 +25,6 @@
             <span v-else>-</span>
             <el-tag v-if="task.is_overdue" type="danger" size="small" style="margin-left: 8px">逾期{{ task.overdue_days ? ` ${task.overdue_days} 天` : '' }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="设计说明">{{ task.description || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="客户意见">{{ task.client_comments || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="设计文件">
-            <a v-if="task.design_file_url" :href="task.design_file_url" target="_blank" rel="noopener" style="color: var(--ad-primary)">查看文件</a>
-            <span v-else>-</span>
-          </el-descriptions-item>
         </el-descriptions>
       </el-card>
 
@@ -44,18 +38,10 @@
         :current-item-names="task.item_names"
         :steps="designSteps"
         :current-status="task.status"
-        :workflow="designWorkflow"
+        :workflow="DESIGN_WORKFLOW"
         :changing="changing"
         @linked="fetchTask"
         @change="handleWorkflowChange"
-      />
-      <TaskDependenciesCard
-        :task-type="'design'"
-        :task-id="task.id"
-        :order-id="task.order_id"
-        :is-blocked="task.is_blocked"
-        :blocked-reason="task.blocked_reason"
-        style="margin-top: 16px"
       />
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>任务分配</span></template>
@@ -66,34 +52,6 @@
           <el-button :loading="assigning" @click="handleAssign">派发</el-button>
           <span v-if="task?.assigned_to_name" style="color: var(--ad-text-secondary); font-size: 13px;">当前：{{ task.assigned_to_name }}</span>
         </div>
-      </el-card>
-
-      <el-card shadow="never" class="info-card" style="margin-top: 16px">
-        <template #header><span>任务信息</span></template>
-        <el-form :model="editForm" label-width="120px">
-          <el-form-item label="设计说明">
-            <el-input v-model="editForm.description" type="textarea" :rows="3" placeholder="填写设计说明" />
-          </el-form-item>
-          <el-form-item label="客户意见">
-            <el-input v-model="editForm.client_comments" type="textarea" :rows="3" placeholder="填写客户意见" />
-          </el-form-item>
-          <el-form-item label="设计文件">
-            <el-input v-model="editForm.design_file_url" placeholder="设计文件链接" />
-          </el-form-item>
-          <el-form-item label="任务进度">
-            <el-input-number v-model="editForm.progress_pct" :min="0" :max="100" :step="5" />
-            <span class="progress-suffix">%</span>
-          </el-form-item>
-          <el-form-item label="计划开始时间">
-            <el-date-picker v-model="editForm.planned_start_at" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="选择计划开始时间" style="width: 100%" />
-          </el-form-item>
-          <el-form-item label="计划结束时间">
-            <el-date-picker v-model="editForm.planned_end_at" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="选择计划结束时间" style="width: 100%" />
-          </el-form-item>
-          <el-form-item>
-            <el-button :loading="updating" @click="handleUpdate" type="primary">保存</el-button>
-          </el-form-item>
-        </el-form>
       </el-card>
 
       <OutsourceTaskCard
@@ -146,14 +104,12 @@
 
 <script setup lang="ts">
 import { formatDateTimeFull } from '@/utils/datetime'
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDesignTask, updateDesignTask, changeDesignTaskStatus, uploadAttachment } from '@/api/tasks'
-import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
-import type { DesignTaskResponse, UserResponse } from '@/types/api'
-import TaskDependenciesCard from '@/components/tasks/TaskDependenciesCard.vue'
+import type { DesignTaskResponse } from '@/types/api'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { getEmployees } from '@/api/employees'
@@ -169,21 +125,9 @@ const loading = ref(false)
 const changing = ref(false)
 const deleting = ref(false)
 const task = ref<DesignTaskResponse | null>(null)
-const userOptions = ref<UserResponse[]>([])
 const employeeOptions = ref<{ id: string; name: string; employee_no?: string; user_id?: string | null }[]>([])
 const assignTarget = ref('')
 const assigning = ref(false)
-const updating = ref(false)
-const editForm = reactive({
-  assigned_to: '',
-  description: '',
-  client_comments: '',
-  design_file_url: '',
-  progress_pct: 0,
-  planned_start_at: '',
-  planned_end_at: '',
-})
-
 const DESIGN_WORKFLOW: Record<string, string[]> = {
   pending: ['designing', 'cancelled'],
   designing: ['confirmed', 'pending_review', 'pending', 'cancelled'],
@@ -202,16 +146,7 @@ const designSteps = computed(() => {
   ]
 })
 
-const designWorkflow = computed(() => {
-  const isItemScoped = Boolean(task.value?.order_item_id)
-  if (isItemScoped) return DESIGN_WORKFLOW
-  return {
-    ...DESIGN_WORKFLOW,
-    designing: DESIGN_WORKFLOW.designing.filter(status => status !== 'confirmed'),
-  }
-})
-
-async function handleWorkflowChange(to_status: string) {
+async function handleWorkflowChange(to_status: string, orderItemIds: string[]) {
   const labelMap: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待处理', revision: '需调整', confirmed: '已完成', cancelled: '已取消' }
   if (to_status === 'cancelled') {
     const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
@@ -219,19 +154,19 @@ async function handleWorkflowChange(to_status: string) {
       inputPlaceholder: '取消原因',
     })
     if (!reason) return
-    await doChangeStatus(to_status, reason)
+      await doChangeStatus(to_status, reason, orderItemIds)
   } else {
     await ElMessageBox.confirm(`确定将任务状态变更为「${labelMap[to_status]}」？`, '变更状态', {
       confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
     })
-    await doChangeStatus(to_status, '')
+    await doChangeStatus(to_status, '', orderItemIds)
   }
 }
 
-async function doChangeStatus(to_status: string, reason: string) {
+async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[]) {
   changing.value = true
   try {
-    await changeDesignTaskStatus(route.params.id as string, { to_status, reason })
+    await changeDesignTaskStatus(route.params.id as string, { to_status, reason, order_item_ids: orderItemIds })
     ElMessage.success('状态已变更')
     await fetchTask()
     await aiStore.notifyBusinessMutation()
@@ -251,41 +186,12 @@ function progressPct(value: number | undefined) {
   return Math.min(100, Math.max(0, Number(value ?? 0)))
 }
 
-function dateTimeInput(value: string | null | undefined) {
-  if (!value) return ''
-  const normalized = /(Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`
-  const date = new Date(normalized)
-  if (Number.isNaN(date.getTime())) return value.slice(0, 19)
-  const pad = (part: number) => String(part).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-}
-
-function dateTimePayload(value: string | null | undefined) {
-  if (!value) return null
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toISOString().slice(0, 19)
-}
-
 async function fetchTask() {
   loading.value = true
   try {
     const data = await getDesignTask(route.params.id as string)
     task.value = data
-    Object.assign(editForm, {
-      assigned_to: data.assigned_to || '',
-      description: data.description || '',
-      client_comments: data.client_comments || '',
-      design_file_url: data.design_file_url || '',
-      progress_pct: progressPct(data.progress_pct),
-      planned_start_at: dateTimeInput(data.planned_start_at),
-      planned_end_at: dateTimeInput(data.planned_end_at),
-    })
   } finally { loading.value = false }
-}
-
-async function loadUsers() {
-  const data = await getUsers({ page_size: 100 })
-  userOptions.value = data.items
 }
 
 async function loadEmployees() {
@@ -304,23 +210,6 @@ async function handleAssign() {
     assignTarget.value = ''
   } catch { /* handled */ } finally { assigning.value = false }
 }
-async function handleUpdate() {
-  updating.value = true
-  try {
-    await updateDesignTask(route.params.id as string, {
-      description: editForm.description || '',
-      client_comments: editForm.client_comments || '',
-      design_file_url: editForm.design_file_url || '', 
-      progress_pct: progressPct(editForm.progress_pct),
-      planned_start_at: dateTimePayload(editForm.planned_start_at),
-      planned_end_at: dateTimePayload(editForm.planned_end_at),
-    })
-    ElMessage.success('保存成功')
-    await fetchTask()
-    await aiStore.notifyBusinessMutation()
-  } catch { /* handled */ } finally { updating.value = false }
-}
-
 async function handleUpload(req: UploadRequestOptions) {
   try {
     await uploadAttachment('design_task', route.params.id as string, req.file, 'design')
@@ -345,7 +234,6 @@ async function handleDelete() {
 
 onMounted(() => {
   void fetchTask()
-  void loadUsers()
   void loadEmployees()
 })
 </script>

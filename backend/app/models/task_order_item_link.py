@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Index, Integer, String, UniqueConstraint, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,3 +36,6 @@ class TaskOrderItemLink(Base):
         nullable=False,
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    item_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    item_progress_pct: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    item_completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

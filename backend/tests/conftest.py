@@ -27,6 +27,7 @@ SAMPLE_USER_ID = UUID("11111111-1111-1111-1111-111111111111")
 SAMPLE_TASK_ID = UUID("22222222-2222-2222-2222-222222222222")
 SAMPLE_ORDER_ID = UUID("33333333-3333-3333-3333-333333333333")
 SAMPLE_CUSTOMER_ID = UUID("44444444-4444-4444-4444-444444444444")
+SAMPLE_ORDER_ITEM_ID = UUID("55555555-5555-5555-5555-555555555555")
 
 TEST_USERNAME = "testuser"
 TEST_PASSWORD = "TestPass123!"
@@ -106,7 +107,8 @@ def make_mock_installation_task(
     task.installation_no = installation_no
     task.document_id = order_id
     task.order_id = order_id
-    task.order_item_id = None
+    task.order_item_id = SAMPLE_ORDER_ITEM_ID
+    task.order_item_states = {}
     task.item_name = None
     task.customer_id = customer_id
     task.project_name = project_name
@@ -114,9 +116,6 @@ def make_mock_installation_task(
     task.progress_pct = progress_pct
     task.planned_start_at = None
     task.planned_end_at = None
-    task.is_blocked = False
-    task.blocked_reason = None
-    task.blocking_tasks = []
     task.address = address
     task.contact_name = contact_name
     task.contact_phone = contact_phone
@@ -156,7 +155,8 @@ def make_mock_design_task(
     task.design_no = design_no
     task.document_id = order_id
     task.order_id = order_id
-    task.order_item_id = None
+    task.order_item_id = SAMPLE_ORDER_ITEM_ID
+    task.order_item_states = {}
     task.item_name = None
     task.customer_id = customer_id
     task.project_name = project_name
@@ -164,9 +164,6 @@ def make_mock_design_task(
     task.progress_pct = progress_pct
     task.planned_start_at = None
     task.planned_end_at = None
-    task.is_blocked = False
-    task.blocked_reason = None
-    task.blocking_tasks = []
     task.description = description
     task.design_file_url = design_file_url
     task.client_comments = client_comments
@@ -213,7 +210,8 @@ def make_mock_production_task(
     task.production_no = production_no
     task.document_id = order_id
     task.order_id = order_id
-    task.order_item_id = None
+    task.order_item_id = SAMPLE_ORDER_ITEM_ID
+    task.order_item_states = {}
     task.item_name = None
     task.customer_id = customer_id
     task.project_name = project_name
@@ -221,9 +219,6 @@ def make_mock_production_task(
     task.progress_pct = progress_pct
     task.planned_start_at = None
     task.planned_end_at = None
-    task.is_blocked = False
-    task.blocked_reason = None
-    task.blocking_tasks = []
     task.material_id = material_id
     task.process_id = process_id
     task.length = length

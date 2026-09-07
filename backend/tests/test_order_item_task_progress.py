@@ -5,17 +5,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
 import pytest
+from pydantic import ValidationError
 
 from app.domain.workflows import DESIGN_TASK_WORKFLOW, INSTALLATION_TASK_WORKFLOW
 from app.schemas.task import (
     DesignTaskCreate,
     DesignTaskResponse,
+    TaskStatusChange,
     TaskOrderItemOption,
     TaskQueueItem,
 )
 from app.services.task_service import (
     DesignTaskService,
     InstallationTaskService,
+    _aggregate_task_status,
+    _apply_task_item_status_change,
     _resolve_order_item_stage,
     _validate_order_item_id,
     _validate_order_item_ids,
@@ -64,6 +68,23 @@ def test_task_order_item_option_exposes_stage_and_selectability():
     assert "stage_label" in option_fields
     assert "can_select" in option_fields
     assert "disabled_reason" in option_fields
+
+
+def test_status_change_contract_requires_checked_order_items():
+    with pytest.raises(ValidationError):
+        TaskStatusChange(to_status="completed")
+
+    change = TaskStatusChange(
+        to_status="completed",
+        order_item_ids=[ITEM_ID],
+    )
+    assert change.order_item_ids == [ITEM_ID]
+
+
+def test_mixed_item_status_uses_unfinished_state_for_task_summary():
+    assert _aggregate_task_status("design", ["confirmed", "designing"]) == "designing"
+    assert _aggregate_task_status("production", ["completed", "in_progress"]) == "in_progress"
+    assert _aggregate_task_status("installation", ["completed", "assigned"]) == "assigned"
 
 
 def test_order_item_stage_resolver_supports_parallel_delivery_progress():
@@ -227,9 +248,28 @@ def test_many_order_item_link_migration_copies_legacy_links_without_guessing():
     assert "WHERE order_item_id IS NOT NULL" in source
 
 
+def test_item_state_migration_adds_state_columns_and_removes_dependency_graph():
+    migration = next(
+        Path(__file__).parents[1].glob(
+            "alembic/versions/q8r9s0t1u2v3_add_item_state_remove_task_dependencies.py"
+        )
+    )
+    source = migration.read_text()
+
+    for column in ("item_status", "item_progress_pct", "item_completed_at"):
+        assert column in source
+    assert "DROP TABLE IF EXISTS task_dependencies" in source
+    assert 'down_revision: Union[str, None] = "p7q8r9s0t1u2"' in source
+
+
 @pytest.mark.asyncio
 async def test_item_scoped_design_can_finish_without_review_step():
     db = AsyncMock()
+    db.get = AsyncMock(return_value=MagicMock(
+        id=ITEM_UUID,
+        document_id=UUID(ORDER_ID),
+        lifecycle_status="active",
+    ))
     task = make_mock_design_task(status="designing")
     task.order_item_id = ITEM_UUID
     service = DesignTaskService(db)
@@ -238,12 +278,11 @@ async def test_item_scoped_design_can_finish_without_review_step():
     service._to_dict = AsyncMock(side_effect=lambda value: {"status": value.status})
 
     with (
-        patch("app.services.task_service.ensure_task_not_blocked", new=AsyncMock()),
         patch("app.services.task_service.record_task_event", new=AsyncMock()),
         patch("app.services.task_service._item_stage_tasks_completed", new=AsyncMock(return_value=False)),
         patch("app.services.task_service._maybe_complete_order", new=AsyncMock()),
     ):
-        result = await service.change_status(task.id, "confirmed")
+        result = await service.change_status(task.id, "confirmed", order_item_ids=[ITEM_ID])
 
     assert result["status"] == "confirmed"
 
@@ -251,6 +290,11 @@ async def test_item_scoped_design_can_finish_without_review_step():
 @pytest.mark.asyncio
 async def test_item_scoped_installation_can_finish_without_acceptance_step():
     db = AsyncMock()
+    db.get = AsyncMock(return_value=MagicMock(
+        id=ITEM_UUID,
+        document_id=UUID(ORDER_ID),
+        lifecycle_status="active",
+    ))
     task = make_mock_installation_task(status="in_progress")
     task.order_item_id = ITEM_UUID
     service = InstallationTaskService(db)
@@ -259,13 +303,49 @@ async def test_item_scoped_installation_can_finish_without_acceptance_step():
     service._to_dict = AsyncMock(side_effect=lambda value: {"status": value.status})
 
     with (
-        patch("app.services.task_service.ensure_task_not_blocked", new=AsyncMock()),
         patch("app.services.task_service.record_task_event", new=AsyncMock()),
         patch("app.services.task_service._maybe_complete_order", new=AsyncMock()),
     ):
-        result = await service.change_status(task.id, "completed")
+        result = await service.change_status(task.id, "completed", order_item_ids=[ITEM_ID])
 
     assert result["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_status_change_only_updates_checked_item_and_keeps_other_item_state():
+    db = AsyncMock()
+    task = make_mock_design_task(status="designing", progress_pct=50)
+    task.order_item_id = ITEM_UUID
+    second_item = SECOND_ITEM_UUID
+    states = {
+        ITEM_UUID: ("designing", 50),
+        second_item: ("designing", 50),
+    }
+
+    with (
+        patch(
+            "app.services.task_service._prepare_status_item_ids",
+            new=AsyncMock(return_value=[ITEM_UUID]),
+        ),
+        patch(
+            "app.services.task_service._task_item_state_map",
+            new=AsyncMock(return_value=states),
+        ),
+    ):
+        selected, updated = await _apply_task_item_status_change(
+            db,
+            "design",
+            task,
+            "confirmed",
+            [ITEM_ID],
+        )
+
+    assert selected == [ITEM_UUID]
+    assert updated[ITEM_UUID] == ("confirmed", 100)
+    assert updated[second_item] == ("designing", 50)
+    assert task.status == "designing"
+    assert task.progress_pct == 75
+    db.execute.assert_awaited_once()
 
 
 @pytest.mark.asyncio

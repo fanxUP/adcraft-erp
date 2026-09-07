@@ -1,7 +1,7 @@
 from datetime import datetime
 import inspect
 from uuid import UUID
-from sqlalchemy import delete, insert, select, func, text
+from sqlalchemy import delete, insert, select, update, text
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,11 +32,6 @@ from app.services.number_generator import (
     generate_design_no,
     generate_production_no,
     generate_installation_no,
-)
-from app.services.task_dependency_service import (
-    clear_task_dependencies,
-    enrich_task_dict_with_dependency_state,
-    ensure_task_not_blocked,
 )
 from app.services.task_schedule_service import (
     enrich_task_dict_with_schedule_state,
@@ -88,6 +83,87 @@ INSTALLATION_IN_PROGRESS_STATUSES = {
 INSTALLATION_COMPLETED_STATUSES = {"completed"}
 TASK_CANCELLED_STATUS = "cancelled"
 
+TASK_STATUS_PROGRESS = {
+    "design": {
+        "pending": 0,
+        "designing": 50,
+        "pending_review": 60,
+        "revision": 40,
+        "confirmed": 100,
+        "completed": 100,
+        "cancelled": 100,
+    },
+    "production": {
+        "pending": 0,
+        "in_progress": 50,
+        "rework": 30,
+        "completed": 100,
+        "cancelled": 100,
+    },
+    "installation": {
+        "pending": 0,
+        "assigned": 25,
+        "in_progress": 50,
+        "pending_acceptance": 75,
+        "completed": 100,
+        "cancelled": 100,
+    },
+}
+
+TASK_STATUS_LABELS = {
+    "design": {
+        "pending": "待分配",
+        "designing": "设计中",
+        "pending_review": "待处理",
+        "revision": "需修改",
+        "confirmed": "已完成",
+        "completed": "已完成",
+        "cancelled": "已取消",
+    },
+    "production": {
+        "pending": "待制作",
+        "in_progress": "制作中",
+        "rework": "返工",
+        "completed": "已完成",
+        "cancelled": "已取消",
+    },
+    "installation": {
+        "pending": "待分配",
+        "assigned": "已分配",
+        "in_progress": "安装中",
+        "pending_acceptance": "待处理",
+        "completed": "已完成",
+        "cancelled": "已取消",
+    },
+}
+
+TASK_COMPLETED_STATUSES = {
+    "design": {"confirmed", "completed"},
+    "production": {"completed"},
+    "installation": {"completed"},
+}
+
+TASK_TERMINAL_STATUSES = {
+    task_type: statuses | {TASK_CANCELLED_STATUS}
+    for task_type, statuses in TASK_COMPLETED_STATUSES.items()
+}
+
+
+def _item_status_progress(task_type: str, status: str, fallback: int = 0) -> int:
+    return int(TASK_STATUS_PROGRESS.get(task_type, {}).get(status, fallback))
+
+
+def _item_status_label(task_type: str, status: str | None) -> str | None:
+    return TASK_STATUS_LABELS.get(task_type, {}).get(status) if status else None
+
+
+def _is_completed_item_status(task_type: str, status: str) -> bool:
+    return status in TASK_COMPLETED_STATUSES.get(task_type, set())
+
+
+def _is_terminal_item_status(task_type: str, status: str) -> bool:
+    return status in TASK_TERMINAL_STATUSES.get(task_type, set())
+
 
 def _coerce_uuid(value) -> UUID | None:
     """Return a UUID for real model values, ignoring loose test/magic values."""
@@ -121,6 +197,7 @@ async def _validate_order_item_ids(
     *,
     task_type: str | None = None,
     task_id: UUID | None = None,
+    legacy_item_id: UUID | None = None,
 ) -> list[UUID]:
     """Validate a multi-value item link without guessing historical ownership."""
     if raw_item_ids is None:
@@ -146,14 +223,28 @@ async def _validate_order_item_ids(
         if getattr(item, "lifecycle_status", "active") != "active":
             raise ValueError("已作废的订单明细不能关联新任务")
 
-    if task_type and item_ids:
+    linked_ids: set[UUID] = set()
+    if task_type and task_id:
+        linked_ids = set(await _linked_order_item_ids(db, task_type, task_id))
+        # Before the many-link table existed, the task model's legacy
+        # order_item_id was the only relation. Treat it as already linked so
+        # its current work unit can still be progressed after migration.
+        if legacy_item_id is not None:
+            linked_ids.add(legacy_item_id)
+
+    unlinked_item_ids = [item_id for item_id in item_ids if item_id not in linked_ids]
+    if task_type and unlinked_item_ids:
         options = await _task_order_item_option_map(
             db,
             document_id,
             task_type,
             task_id=task_id,
         )
-        for item_id in item_ids:
+        for item_id in unlinked_item_ids:
+            # An item already assigned to this task remains selectable for a
+            # later partial status update even after its order stage advances.
+            if item_id in linked_ids:
+                continue
             option = options.get(item_id)
             if option is None:
                 raise ValueError("订单明细当前进度无法确认，暂不可关联")
@@ -172,6 +263,7 @@ async def _validate_order_item_id(
     *,
     task_type: str | None = None,
     task_id: UUID | None = None,
+    legacy_item_id: UUID | None = None,
 ) -> UUID | None:
     """Validate an optional item link without guessing historical ownership."""
     if raw_item_id in (None, ""):
@@ -182,6 +274,7 @@ async def _validate_order_item_id(
         [raw_item_id],
         task_type=task_type,
         task_id=task_id,
+        legacy_item_id=legacy_item_id,
     )
     return item_ids[0] if item_ids else None
 
@@ -218,6 +311,140 @@ async def _task_order_item_ids(db: AsyncSession, task_type: str, task) -> list[U
     if legacy_id is not None and legacy_id not in ids:
         ids.insert(0, legacy_id)
     return ids
+
+
+async def _task_order_item_link_rows(
+    db: AsyncSession,
+    task_type: str,
+    task_id: UUID,
+) -> list[TaskOrderItemLink]:
+    result = await db.execute(
+        select(TaskOrderItemLink).where(
+            TaskOrderItemLink.task_type == task_type,
+            TaskOrderItemLink.task_id == task_id,
+        ).order_by(TaskOrderItemLink.position, TaskOrderItemLink.order_item_id)
+    )
+    try:
+        scalars = result.scalars()
+        if inspect.isawaitable(scalars):
+            scalars = await scalars
+        rows = scalars.all()
+        if inspect.isawaitable(rows):
+            rows = await rows
+    except AttributeError:
+        rows = []
+    return [row for row in rows if isinstance(row, TaskOrderItemLink)]
+
+
+async def _task_item_state_map(
+    db: AsyncSession,
+    task_type: str,
+    task,
+) -> dict[UUID, tuple[str, int]]:
+    """Return the effective status/progress for every item in one task."""
+    fallback_status = getattr(task, "status", "pending")
+    fallback_progress = int(getattr(task, "progress_pct", 0) or 0)
+    states: dict[UUID, tuple[str, int]] = {
+        item_id: (
+            fallback_status,
+            _item_status_progress(task_type, fallback_status, fallback_progress),
+        )
+        for item_id in await _task_order_item_ids(db, task_type, task)
+    }
+    for link in await _task_order_item_link_rows(db, task_type, task.id):
+        item_id = _coerce_uuid(link.order_item_id)
+        if item_id is None:
+            continue
+        status = link.item_status or fallback_status
+        progress = (
+            int(link.item_progress_pct)
+            if link.item_progress_pct is not None
+            else _item_status_progress(task_type, status, fallback_progress)
+        )
+        states[item_id] = (status, max(0, min(100, progress)))
+    return states
+
+
+def _aggregate_task_status(task_type: str, statuses: list[str]) -> str:
+    """Summarise mixed item states without hiding unfinished work."""
+    if not statuses:
+        return "pending"
+    completed = TASK_COMPLETED_STATUSES.get(task_type, set())
+    terminal = TASK_TERMINAL_STATUSES.get(task_type, set())
+    if all(status in completed for status in statuses):
+        return "confirmed" if task_type == "design" else "completed"
+    if all(status in terminal for status in statuses):
+        return "cancelled"
+
+    priorities = {
+        "design": {"pending": 0, "revision": 1, "designing": 2, "pending_review": 3},
+        "production": {"pending": 0, "rework": 1, "in_progress": 2},
+        "installation": {"pending": 0, "assigned": 1, "in_progress": 2, "pending_acceptance": 3},
+    }
+    unfinished = [status for status in statuses if status not in terminal]
+    priority = priorities.get(task_type, {})
+    return max(unfinished, key=lambda status: priority.get(status, 0))
+
+
+async def _ensure_task_order_item_links(
+    db: AsyncSession,
+    task_type: str,
+    task,
+    item_ids: list[UUID],
+) -> None:
+    """Add selected item links without unlinking existing work units."""
+    existing_ids = set(await _linked_order_item_ids(db, task_type, task.id))
+    new_ids = [item_id for item_id in item_ids if item_id not in existing_ids]
+    if not new_ids:
+        return
+    status = getattr(task, "status", "pending")
+    progress = _item_status_progress(
+        task_type,
+        status,
+        int(getattr(task, "progress_pct", 0) or 0),
+    )
+    await db.execute(
+        insert(TaskOrderItemLink.__table__),
+        [
+            {
+                "task_type": task_type,
+                "task_id": task.id,
+                "order_item_id": item_id,
+                "position": len(existing_ids) + position,
+                "item_status": status,
+                "item_progress_pct": progress,
+                "item_completed_at": datetime.now() if _is_completed_item_status(task_type, status) else None,
+            }
+            for position, item_id in enumerate(new_ids)
+        ],
+    )
+    await db.flush()
+
+
+async def _prepare_status_item_ids(
+    db: AsyncSession,
+    task_type: str,
+    task,
+    raw_item_ids: list[str] | None,
+) -> list[UUID]:
+    """Validate checked items and ensure newly checked items become task links."""
+    item_ids = raw_item_ids or []
+    if not item_ids:
+        legacy_id = _task_order_item_id(task)
+        if legacy_id is not None:
+            item_ids = [str(legacy_id)]
+        else:
+            raise ValueError("请先勾选要处理的订单明细")
+    validated = await _validate_order_item_ids(
+        db,
+        task.document_id,
+        item_ids,
+        task_type=task_type,
+        task_id=task.id,
+        legacy_item_id=_task_order_item_id(task),
+    )
+    await _ensure_task_order_item_links(db, task_type, task, validated)
+    return validated
 
 
 async def _task_item_ids_by_task(
@@ -363,6 +590,28 @@ async def _task_stage_states_by_item(
         )
         tasks = list(result.scalars().all())
         item_ids_by_task = await _task_item_ids_by_task(db, task_type, tasks)
+        link_state_by_item: dict[tuple[UUID, UUID], str] = {}
+        task_ids = [
+            task_id for task in tasks
+            if (task_id := _coerce_uuid(getattr(task, "id", None))) is not None
+        ]
+        if task_ids:
+            link_result = await db.execute(
+                select(TaskOrderItemLink).where(
+                    TaskOrderItemLink.task_type == task_type,
+                    TaskOrderItemLink.task_id.in_(task_ids),
+                )
+            )
+            try:
+                link_rows = list(link_result.scalars().all())
+            except AttributeError:
+                link_rows = []
+            for link in link_rows:
+                task_id = _coerce_uuid(getattr(link, "task_id", None))
+                item_id = _coerce_uuid(getattr(link, "order_item_id", None))
+                item_status = getattr(link, "item_status", None)
+                if task_id and item_id and item_status:
+                    link_state_by_item[(task_id, item_id)] = item_status
         stage = TASK_TYPE_STAGES[task_type]
         for task in tasks:
             task_id = _coerce_uuid(getattr(task, "id", None))
@@ -375,7 +624,8 @@ async def _task_stage_states_by_item(
                 global_states[stage].append(status)
                 continue
             for item_id in linked_ids:
-                by_item.setdefault(item_id, {}).setdefault(stage, []).append(status)
+                item_status = link_state_by_item.get((task_id, item_id), status)
+                by_item.setdefault(item_id, {}).setdefault(stage, []).append(item_status)
 
     return by_item, global_states
 
@@ -413,6 +663,13 @@ async def _task_order_item_option_map(
         document_id,
     )
     expected_stage = TASK_TYPE_STAGES[task_type]
+    linked_by_item: dict[UUID, TaskOrderItemLink] = {}
+    if task_id is not None:
+        linked_by_item = {
+            item_id: link
+            for link in await _task_order_item_link_rows(db, task_type, task_id)
+            if (item_id := _coerce_uuid(link.order_item_id)) is not None
+        }
     options: dict[UUID, dict] = {}
 
     for item in items:
@@ -424,18 +681,35 @@ async def _task_order_item_option_map(
             states_by_item.get(item_id, {}),
             global_states,
         )
-        can_select = stage == expected_stage
-        if can_select:
-            disabled_reason = None
-        elif stage == "completed":
-            disabled_reason = "该明细已完成，不能再次关联任务"
-        elif stage == "not_ready":
-            disabled_reason = "当前进度无法确认，暂不可关联"
+        link = linked_by_item.get(item_id)
+        is_linked = link is not None
+        task_status = link.item_status if link else None
+        task_progress_pct = (
+            int(link.item_progress_pct)
+            if link and link.item_progress_pct is not None
+            else None
+        )
+        if is_linked:
+            can_select = not _is_terminal_item_status(task_type, task_status or "")
+            if can_select:
+                disabled_reason = None
+            elif _is_completed_item_status(task_type, task_status or ""):
+                disabled_reason = "该明细在本任务中已完成，不能再次处理"
+            else:
+                disabled_reason = "该明细在本任务中已取消"
         else:
-            disabled_reason = (
-                f"当前处于{ORDER_ITEM_STAGE_LABELS[stage]}，不能关联"
-                f"{TASK_TYPE_LABELS[task_type]}任务"
-            )
+            can_select = stage == expected_stage
+            if can_select:
+                disabled_reason = None
+            elif stage == "completed":
+                disabled_reason = "该明细已完成，不能再次关联任务"
+            elif stage == "not_ready":
+                disabled_reason = "当前进度无法确认，暂不可关联"
+            else:
+                disabled_reason = (
+                    f"当前处于{ORDER_ITEM_STAGE_LABELS[stage]}，不能关联"
+                    f"{TASK_TYPE_LABELS[task_type]}任务"
+                )
 
         item_payload = {}
         for field_name in OrderItemResponse.model_fields:
@@ -447,6 +721,10 @@ async def _task_order_item_option_map(
             "stage_label": ORDER_ITEM_STAGE_LABELS[stage],
             "can_select": can_select,
             "disabled_reason": disabled_reason,
+            "is_linked": is_linked,
+            "task_status": task_status,
+            "task_status_label": _item_status_label(task_type, task_status),
+            "task_progress_pct": task_progress_pct,
         }
         options[item_id] = TaskOrderItemOption.model_validate(payload).model_dump(
             mode="json"
@@ -490,6 +768,12 @@ async def _sync_task_order_item_links(
     item_ids: list[UUID],
 ) -> None:
     """Replace one task's links atomically inside the current transaction."""
+    existing_rows = await _task_order_item_link_rows(db, task_type, task.id)
+    existing_by_item = {
+        item_id: row
+        for row in existing_rows
+        if (item_id := _coerce_uuid(row.order_item_id)) is not None
+    }
     await db.execute(
         delete(TaskOrderItemLink).where(
             TaskOrderItemLink.task_type == task_type,
@@ -497,6 +781,8 @@ async def _sync_task_order_item_links(
         )
     )
     if item_ids:
+        task_status = getattr(task, "status", "pending")
+        task_progress = int(getattr(task, "progress_pct", 0) or 0)
         await db.execute(
             insert(TaskOrderItemLink.__table__),
             [
@@ -505,6 +791,22 @@ async def _sync_task_order_item_links(
                     "task_id": task.id,
                     "order_item_id": item_id,
                     "position": position,
+                    "item_status": getattr(existing_by_item.get(item_id), "item_status", None)
+                    or task_status,
+                    "item_progress_pct": (
+                        getattr(existing_by_item.get(item_id), "item_progress_pct", None)
+                        if getattr(existing_by_item.get(item_id), "item_progress_pct", None) is not None
+                        else _item_status_progress(task_type, task_status, task_progress)
+                    ),
+                    "item_completed_at": getattr(
+                        existing_by_item.get(item_id),
+                        "item_completed_at",
+                        None,
+                    ) or (
+                        datetime.now()
+                        if _is_completed_item_status(task_type, task_status)
+                        else None
+                    ),
                 }
                 for position, item_id in enumerate(item_ids)
             ],
@@ -594,6 +896,30 @@ async def _enrich_task_order(db, task_dict: dict) -> dict:
     else:
         task_dict["order_item_ids"] = []
         task_dict["item_names"] = []
+
+    item_states: dict[str, dict] = {}
+    if task_type and task_uuid is not None and linked_ids:
+        fallback_status = task_dict.get("status", "pending")
+        fallback_progress = int(task_dict.get("progress_pct", 0) or 0)
+        link_by_item = {
+            item_id: link
+            for link in await _task_order_item_link_rows(db, task_type, task_uuid)
+            if (item_id := _coerce_uuid(link.order_item_id)) is not None
+        }
+        for item_id in linked_ids:
+            link = link_by_item.get(item_id)
+            status = (link.item_status if link and link.item_status else fallback_status)
+            progress = (
+                int(link.item_progress_pct)
+                if link and link.item_progress_pct is not None
+                else _item_status_progress(task_type, status, fallback_progress)
+            )
+            item_states[str(item_id)] = {
+                "status": status,
+                "status_label": _item_status_label(task_type, status),
+                "progress_pct": max(0, min(100, progress)),
+            }
+    task_dict["order_item_states"] = item_states
     return task_dict
 
 
@@ -738,6 +1064,27 @@ async def _all_stage_tasks_completed(
     tasks = list(task_result.scalars().all())
     task_type = _task_type_for_model(model)
     item_ids_by_task = await _task_item_ids_by_task(db, task_type, tasks)
+    link_statuses: dict[tuple[UUID, UUID], str] = {}
+    task_ids = [
+        task_id for task in tasks
+        if (task_id := _coerce_uuid(getattr(task, "id", None))) is not None
+    ]
+    if task_ids:
+        link_result = await db.execute(
+            select(TaskOrderItemLink).where(
+                TaskOrderItemLink.task_type == task_type,
+                TaskOrderItemLink.task_id.in_(task_ids),
+            )
+        )
+        try:
+            for link in link_result.scalars().all():
+                task_id = _coerce_uuid(getattr(link, "task_id", None))
+                item_id = _coerce_uuid(getattr(link, "order_item_id", None))
+                item_status = getattr(link, "item_status", None)
+                if task_id and item_id and item_status:
+                    link_statuses[(task_id, item_id)] = item_status
+        except AttributeError:
+            pass
 
     def linked_items(task) -> list[UUID]:
         task_id = _coerce_uuid(getattr(task, "id", None))
@@ -756,7 +1103,11 @@ async def _all_stage_tasks_completed(
                 if item_id in linked_items(task)
             ]
             if not item_tasks or any(
-                task.status not in terminal_statuses for task in item_tasks
+                link_statuses.get(
+                    (_coerce_uuid(task.id), item_id),
+                    task.status,
+                ) not in terminal_statuses
+                for task in item_tasks
             ):
                 return False
         if any(
@@ -790,8 +1141,31 @@ async def _item_stage_tasks_completed(
         task for task in tasks
         if item_id in item_ids_by_task.get(_coerce_uuid(task.id), [])
     ]
+    link_statuses: dict[tuple[UUID, UUID], str] = {}
+    task_ids = [
+        task_id for task in tasks
+        if (task_id := _coerce_uuid(getattr(task, "id", None))) is not None
+    ]
+    if task_ids:
+        link_result = await db.execute(
+            select(TaskOrderItemLink).where(
+                TaskOrderItemLink.task_type == _task_type_for_model(model),
+                TaskOrderItemLink.task_id.in_(task_ids),
+            )
+        )
+        try:
+            for link in link_result.scalars().all():
+                task_id = _coerce_uuid(getattr(link, "task_id", None))
+                linked_item_id = _coerce_uuid(getattr(link, "order_item_id", None))
+                item_status = getattr(link, "item_status", None)
+                if task_id and linked_item_id and item_status:
+                    link_statuses[(task_id, linked_item_id)] = item_status
+        except AttributeError:
+            pass
     return bool(tasks) and all(
-        task.status in terminal_statuses for task in tasks
+        link_statuses.get((_coerce_uuid(task.id), item_id), task.status)
+        in terminal_statuses
+        for task in tasks
     )
 
 
@@ -970,6 +1344,75 @@ async def _maybe_complete_order(db: AsyncSession, doc_id: UUID, operated_by: UUI
         return
 
 
+async def _apply_task_item_status_change(
+    db: AsyncSession,
+    task_type: str,
+    task,
+    to_status: str,
+    raw_item_ids: list[str] | None,
+) -> tuple[list[UUID], dict[UUID, tuple[str, int]]]:
+    """Apply one status transition only to the checked item work units."""
+    workflows = {
+        "design": DESIGN_TASK_WORKFLOW,
+        "production": PRODUCTION_TASK_WORKFLOW,
+        "installation": INSTALLATION_TASK_WORKFLOW,
+    }
+    workflow = workflows[task_type]
+    selected_ids = await _prepare_status_item_ids(
+        db,
+        task_type,
+        task,
+        raw_item_ids,
+    )
+    states = await _task_item_state_map(db, task_type, task)
+    for item_id in selected_ids:
+        current_status = states.get(item_id, (getattr(task, "status", "pending"), 0))[0]
+        if to_status not in allowed_targets(workflow, current_status):
+            raise ValueError(f"不允许从 {current_status} 流转到 {to_status}")
+
+    progress = _item_status_progress(
+        task_type,
+        to_status,
+        int(getattr(task, "progress_pct", 0) or 0),
+    )
+    await db.execute(
+        update(TaskOrderItemLink)
+        .where(
+            TaskOrderItemLink.task_type == task_type,
+            TaskOrderItemLink.task_id == task.id,
+            TaskOrderItemLink.order_item_id.in_(selected_ids),
+        )
+        .values(
+            item_status=to_status,
+            item_progress_pct=progress,
+            item_completed_at=(
+                datetime.now() if _is_completed_item_status(task_type, to_status) else None
+            ),
+        )
+    )
+    for item_id in selected_ids:
+        states[item_id] = (to_status, progress)
+
+    aggregate_status = _aggregate_task_status(
+        task_type,
+        [status for status, _ in states.values()],
+    )
+    aggregate_progress = round(
+        sum(item_progress for _, item_progress in states.values()) / len(states)
+    ) if states else progress
+    task.status = aggregate_status
+    task.progress_pct = max(0, min(100, aggregate_progress))
+    if all(
+        _is_completed_item_status(task_type, status)
+        for status, _ in states.values()
+    ):
+        task.completed_at = datetime.now()
+    elif aggregate_status != "cancelled":
+        task.completed_at = None
+    await db.flush()
+    return selected_ids, states
+
+
 class DesignTaskService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -981,7 +1424,7 @@ class DesignTaskService:
         d["_task_type"] = "design"
         d = await _enrich_task_order(self.db, d)
         d = enrich_task_dict_with_schedule_state(d)
-        return await enrich_task_dict_with_dependency_state(self.db, "design", d)
+        return d
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
@@ -1056,6 +1499,7 @@ class DesignTaskService:
                 data.pop("order_item_ids"),
                 task_type="design",
                 task_id=task.id,
+                legacy_item_id=_task_order_item_id(task),
             )
             data["order_item_id"] = linked_item_ids[0] if linked_item_ids else None
         elif "order_item_id" in data:
@@ -1065,6 +1509,7 @@ class DesignTaskService:
                 data.get("order_item_id"),
                 task_type="design",
                 task_id=task.id,
+                legacy_item_id=_task_order_item_id(task),
             )
             linked_item_ids = [data["order_item_id"]] if data["order_item_id"] else []
         task = await self.repo.update(task, data)
@@ -1102,34 +1547,20 @@ class DesignTaskService:
         to_status: str,
         operated_by: UUID | None = None,
         reason: str | None = None,
+        order_item_ids: list[str] | None = None,
     ) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("设计任务不存在")
 
-        linked_item_ids = await _task_order_item_ids(self.db, "design", task)
-        valid = allowed_targets(DESIGN_TASK_WORKFLOW, task.status)
-        # The direct designing -> confirmed path is for the new item-scoped
-        # flow. Keep the review path available for historical/unlinked tasks.
-        if (
-            task.status == "designing"
-            and to_status == "confirmed"
-            and not linked_item_ids
-        ):
-            valid = tuple(target for target in valid if target != "confirmed")
-        if to_status not in valid:
-            raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
-        await ensure_task_not_blocked(self.db, "design", task.id, to_status)
-
         before = task_history_snapshot(task)
-        task.status = to_status
-        if to_status == "confirmed":
-            task.completed_at = datetime.now()
-            task.progress_pct = 100
-        await self.db.flush()
-        changed_fields = ["status"]
-        if to_status == "confirmed":
-            changed_fields.append("progress_pct")
+        selected_item_ids, states = await _apply_task_item_status_change(
+            self.db,
+            "design",
+            task,
+            to_status,
+            order_item_ids,
+        )
         await record_task_event(
             self.db,
             "design",
@@ -1138,72 +1569,34 @@ class DesignTaskService:
             operated_by,
             before=before,
             reason=reason,
-            changed_fields=changed_fields,
+            changed_fields=["order_item_ids", "item_status", "status", "progress_pct"],
         )
-        # Item-scoped tasks advance only their own order item.
-        if to_status == "confirmed" and task.document_id:
+        if task.document_id:
             from app.models.task import DesignTask
 
-            if linked_item_ids:
-                for item_id in linked_item_ids:
-                    if await _item_stage_tasks_completed(
+            for item_id in selected_item_ids:
+                item_status = states[item_id][0]
+                if (
+                    _is_completed_item_status("design", item_status)
+                    and await _item_stage_tasks_completed(
                         self.db,
                         task.document_id,
                         item_id,
                         DesignTask,
                         {"confirmed", "completed", "cancelled"},
-                    ):
-                        await _create_production_task_for_item(
-                            self.db,
-                            task,
-                            item_id,
-                        )
-                await _maybe_advance_order_stage(
-                    self.db,
-                    task.document_id,
-                    "designing",
-                    "in_production",
-                    DesignTask,
-                    {"confirmed", "completed", "cancelled"},
-                    "所有订单明细的设计任务已完成，系统自动推进",
-                    operated_by,
-                )
-            else:
-                # Preserve legacy order-level task behaviour.
-                from sqlalchemy import func
-                from app.models.business_document import BusinessDocument
-                from app.models.task import ProductionTask
-                from app.services.number_generator import generate_production_no
-                from app.services.business_document_service import BusinessDocumentService
-
-                remaining = (await self.db.execute(
-                    select(func.count()).select_from(DesignTask).where(
-                        DesignTask.document_id == task.document_id,
-                        DesignTask.status.not_in(["completed", "cancelled", "confirmed"])
                     )
-                )).scalar()
-                if remaining == 0:
-                    order = await self.db.get(BusinessDocument, task.document_id)
-                    if order and order.status == "designing":
-                        existing_pt = (await self.db.execute(
-                            select(ProductionTask).where(ProductionTask.document_id == task.document_id)
-                        )).scalar_one_or_none()
-                        if not existing_pt:
-                            pt = ProductionTask(
-                                production_no=await generate_production_no(self.db),
-                                document_id=task.document_id,
-                                customer_id=order.customer_id,
-                                project_name=order.project_name,
-                                status="pending",
-                                quantity=1,
-                            )
-                            self.db.add(pt)
-                        order.status = "in_production"
-                        order_svc = BusinessDocumentService(self.db, doc_type="order")
-                        await order_svc.repo.create_status_log(task.document_id, "designing", "in_production",
-                            "设计任务全部完成，系统自动推进", operated_by)
-                        await self.db.flush()
-        if to_status == "confirmed" and task.document_id:
+                ):
+                    await _create_production_task_for_item(self.db, task, item_id)
+            await _maybe_advance_order_stage(
+                self.db,
+                task.document_id,
+                "designing",
+                "in_production",
+                DesignTask,
+                {"confirmed", "completed", "cancelled"},
+                "所有订单明细的设计任务已完成，系统自动推进",
+                operated_by,
+            )
             await _maybe_complete_order(self.db, task.document_id, operated_by)
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
@@ -1269,9 +1662,6 @@ class DesignTaskService:
         await _clear_outsource_source_refs(self.db, "design", design_ids)
         await _clear_outsource_source_refs(self.db, "production", prod_ids)
         await _clear_outsource_source_refs(self.db, "installation", inst_ids)
-        await clear_task_dependencies(self.db, "design", design_ids)
-        await clear_task_dependencies(self.db, "production", prod_ids)
-        await clear_task_dependencies(self.db, "installation", inst_ids)
         await self.db.flush()
 
 class ProductionTaskService:
@@ -1285,7 +1675,7 @@ class ProductionTaskService:
         d["_task_type"] = "production"
         d = await _enrich_task_order(self.db, d)
         d = enrich_task_dict_with_schedule_state(d)
-        return await enrich_task_dict_with_dependency_state(self.db, "production", d)
+        return d
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
@@ -1360,6 +1750,7 @@ class ProductionTaskService:
                 data.pop("order_item_ids"),
                 task_type="production",
                 task_id=task.id,
+                legacy_item_id=_task_order_item_id(task),
             )
             data["order_item_id"] = linked_item_ids[0] if linked_item_ids else None
         elif "order_item_id" in data:
@@ -1369,6 +1760,7 @@ class ProductionTaskService:
                 data.get("order_item_id"),
                 task_type="production",
                 task_id=task.id,
+                legacy_item_id=_task_order_item_id(task),
             )
             linked_item_ids = [data["order_item_id"]] if data["order_item_id"] else []
         task = await self.repo.update(task, data)
@@ -1406,26 +1798,20 @@ class ProductionTaskService:
         to_status: str,
         operated_by: UUID | None = None,
         reason: str | None = None,
+        order_item_ids: list[str] | None = None,
     ) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("制作任务不存在")
 
-        linked_item_ids = await _task_order_item_ids(self.db, "production", task)
-        valid = allowed_targets(PRODUCTION_TASK_WORKFLOW, task.status)
-        if to_status not in valid:
-            raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
-        await ensure_task_not_blocked(self.db, "production", task.id, to_status)
-
         before = task_history_snapshot(task)
-        task.status = to_status
-        if to_status == "completed":
-            task.completed_at = datetime.now()
-            task.progress_pct = 100
-        await self.db.flush()
-        changed_fields = ["status"]
-        if to_status == "completed":
-            changed_fields.append("progress_pct")
+        selected_item_ids, states = await _apply_task_item_status_change(
+            self.db,
+            "production",
+            task,
+            to_status,
+            order_item_ids,
+        )
         await record_task_event(
             self.db,
             "production",
@@ -1434,71 +1820,34 @@ class ProductionTaskService:
             operated_by,
             before=before,
             reason=reason,
-            changed_fields=changed_fields,
+            changed_fields=["order_item_ids", "item_status", "status", "progress_pct"],
         )
-        # Item-scoped tasks advance only their own order item.
-        if to_status == "completed" and task.document_id:
+        if task.document_id:
             from app.models.task import ProductionTask
 
-            if linked_item_ids:
-                for item_id in linked_item_ids:
-                    if await _item_stage_tasks_completed(
+            for item_id in selected_item_ids:
+                item_status = states[item_id][0]
+                if (
+                    _is_completed_item_status("production", item_status)
+                    and await _item_stage_tasks_completed(
                         self.db,
                         task.document_id,
                         item_id,
                         ProductionTask,
                         {"completed", "cancelled"},
-                    ):
-                        await _create_installation_task_for_item(
-                            self.db,
-                            task,
-                            item_id,
-                        )
-                await _maybe_advance_order_stage(
-                    self.db,
-                    task.document_id,
-                    "in_production",
-                    "in_installation",
-                    ProductionTask,
-                    {"completed", "cancelled"},
-                    "所有订单明细的制作任务已完成，系统自动推进",
-                    operated_by,
-                )
-            else:
-                # Preserve legacy order-level task behaviour.
-                from sqlalchemy import func
-                from app.models.business_document import BusinessDocument
-                from app.models.task import InstallationTask
-                from app.services.number_generator import generate_installation_no
-                from app.services.business_document_service import BusinessDocumentService
-
-                remaining = (await self.db.execute(
-                    select(func.count()).select_from(ProductionTask).where(
-                        ProductionTask.document_id == task.document_id,
-                        ProductionTask.status.not_in(["completed", "cancelled"])
                     )
-                )).scalar()
-                if remaining == 0:
-                    order = await self.db.get(BusinessDocument, task.document_id)
-                    if order and order.status == "in_production":
-                        existing_it = (await self.db.execute(
-                            select(InstallationTask).where(InstallationTask.document_id == task.document_id)
-                        )).scalar_one_or_none()
-                        if not existing_it:
-                            it = InstallationTask(
-                                installation_no=await generate_installation_no(self.db),
-                                document_id=task.document_id,
-                                customer_id=order.customer_id,
-                                project_name=order.project_name,
-                                status="pending",
-                            )
-                            self.db.add(it)
-                        order.status = "in_installation"
-                        order_svc = BusinessDocumentService(self.db, doc_type="order")
-                        await order_svc.repo.create_status_log(task.document_id, "in_production", "in_installation",
-                            "制作任务全部完成，系统自动推进", operated_by)
-                        await self.db.flush()
-        if to_status == "completed" and task.document_id:
+                ):
+                    await _create_installation_task_for_item(self.db, task, item_id)
+            await _maybe_advance_order_stage(
+                self.db,
+                task.document_id,
+                "in_production",
+                "in_installation",
+                ProductionTask,
+                {"completed", "cancelled"},
+                "所有订单明细的制作任务已完成，系统自动推进",
+                operated_by,
+            )
             await _maybe_complete_order(self.db, task.document_id, operated_by)
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
@@ -1557,8 +1906,6 @@ class ProductionTaskService:
         # 清空外协任务对已删任务的悬空来源引用
         await _clear_outsource_source_refs(self.db, "production", prod_ids)
         await _clear_outsource_source_refs(self.db, "installation", inst_ids)
-        await clear_task_dependencies(self.db, "production", prod_ids)
-        await clear_task_dependencies(self.db, "installation", inst_ids)
         await self.db.flush()
 
 class InstallationTaskService:
@@ -1572,7 +1919,7 @@ class InstallationTaskService:
         d["_task_type"] = "installation"
         d = await _enrich_task_order(self.db, d)
         d = enrich_task_dict_with_schedule_state(d)
-        return await enrich_task_dict_with_dependency_state(self.db, "installation", d)
+        return d
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
@@ -1647,6 +1994,7 @@ class InstallationTaskService:
                 data.pop("order_item_ids"),
                 task_type="installation",
                 task_id=task.id,
+                legacy_item_id=_task_order_item_id(task),
             )
             data["order_item_id"] = linked_item_ids[0] if linked_item_ids else None
         elif "order_item_id" in data:
@@ -1656,6 +2004,7 @@ class InstallationTaskService:
                 data.get("order_item_id"),
                 task_type="installation",
                 task_id=task.id,
+                legacy_item_id=_task_order_item_id(task),
             )
             linked_item_ids = [data["order_item_id"]] if data["order_item_id"] else []
         task = await self.repo.update(task, data)
@@ -1693,34 +2042,20 @@ class InstallationTaskService:
         to_status: str,
         operated_by: UUID | None = None,
         reason: str | None = None,
+        order_item_ids: list[str] | None = None,
     ) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("安装任务不存在")
 
-        linked_item_ids = await _task_order_item_ids(self.db, "installation", task)
-        valid = allowed_targets(INSTALLATION_TASK_WORKFLOW, task.status)
-        # Historical/unlinked installation tasks still support the old
-        # acceptance step; only item-scoped tasks may finish directly.
-        if (
-            task.status == "in_progress"
-            and to_status == "completed"
-            and not linked_item_ids
-        ):
-            valid = tuple(target for target in valid if target != "completed")
-        if to_status not in valid:
-            raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
-        await ensure_task_not_blocked(self.db, "installation", task.id, to_status)
-
         before = task_history_snapshot(task)
-        task.status = to_status
-        if to_status == "completed":
-            task.completed_at = datetime.now()
-            task.progress_pct = 100
-        await self.db.flush()
-        changed_fields = ["status"]
-        if to_status == "completed":
-            changed_fields.append("progress_pct")
+        selected_item_ids, _states = await _apply_task_item_status_change(
+            self.db,
+            "installation",
+            task,
+            to_status,
+            order_item_ids,
+        )
         await record_task_event(
             self.db,
             "installation",
@@ -1729,11 +2064,9 @@ class InstallationTaskService:
             operated_by,
             before=before,
             reason=reason,
-            changed_fields=changed_fields,
+            changed_fields=["order_item_ids", "item_status", "status", "progress_pct"],
         )
-        # Auto-advance only after all design, production, and installation
-        # tasks for the order are terminal.
-        if to_status == "completed" and task.document_id:
+        if task.document_id and selected_item_ids:
             await _maybe_complete_order(self.db, task.document_id, operated_by)
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
@@ -1776,7 +2109,6 @@ class InstallationTaskService:
 
         # 清空外协任务对已删任务的悬空来源引用
         await _clear_outsource_source_refs(self.db, "installation", inst_ids)
-        await clear_task_dependencies(self.db, "installation", inst_ids)
         await self.db.flush()
 
 class AttachmentService:
