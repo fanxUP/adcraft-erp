@@ -22,6 +22,14 @@
         <el-progress :percentage="projectProgress" :stroke-width="10" />
         <div class="progress-note">按当前订单下所有设计、制作、安装任务的平均进度计算</div>
       </div>
+      <el-alert
+        v-if="blockedTaskCount > 0"
+        class="blocked-summary"
+        type="warning"
+        :closable="false"
+        show-icon
+        :title="`${blockedTaskCount} 个任务正在等待前置任务完成`"
+      />
       <el-divider />
       <div class="delivery-summary">
         <div>
@@ -65,6 +73,7 @@ const props = defineProps<{
   productionCompleted: number
   installationCount: number
   installationCompleted: number
+  blockedTaskCount: number
   projectProgress: number
 }>()
 
@@ -117,6 +126,7 @@ const metrics = computed(() => [
 .card-header { display: flex; align-items: center; justify-content: space-between; }
 .delivery-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .overall-progress { padding: 10px 12px 0; }
+.blocked-summary { margin-top: 12px; }
 .overall-progress-header { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--ad-text); }
 .progress-note { margin-top: 6px; color: var(--ad-text-secondary); font-size: 12px; }
 .delivery-summary > div {

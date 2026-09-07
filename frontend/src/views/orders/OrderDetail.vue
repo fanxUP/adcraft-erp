@@ -32,6 +32,7 @@
             :production-completed="productionCompleted"
             :installation-count="installationTasks.length"
             :installation-completed="installationCompleted"
+            :blocked-task-count="blockedTaskCount"
             :project-progress="projectProgress"
             @select-tab="activeTab = $event"
           />
@@ -261,7 +262,12 @@
               <el-table-column prop="design_no" label="编号" width="180" />
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
-                  <el-tag :type="designStatusColor(row.status)" size="small">{{ designStatusLabel(row.status) }}</el-tag>
+                  <div class="task-status-cell">
+                    <el-tag :type="designStatusColor(row.status)" size="small">{{ designStatusLabel(row.status) }}</el-tag>
+                    <el-tooltip v-if="row.is_blocked" :content="row.blocked_reason || '前置任务未完成'" placement="top">
+                      <el-tag type="warning" size="small">阻塞</el-tag>
+                    </el-tooltip>
+                  </div>
                 </template>
               </el-table-column>
               <el-table-column label="进度" width="150">
@@ -287,7 +293,12 @@
               <el-table-column prop="production_no" label="编号" width="180" />
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
-                  <el-tag :type="prodStatusColor(row.status)" size="small">{{ prodStatusLabel(row.status) }}</el-tag>
+                  <div class="task-status-cell">
+                    <el-tag :type="prodStatusColor(row.status)" size="small">{{ prodStatusLabel(row.status) }}</el-tag>
+                    <el-tooltip v-if="row.is_blocked" :content="row.blocked_reason || '前置任务未完成'" placement="top">
+                      <el-tag type="warning" size="small">阻塞</el-tag>
+                    </el-tooltip>
+                  </div>
                 </template>
               </el-table-column>
               <el-table-column label="进度" width="150">
@@ -313,7 +324,12 @@
               <el-table-column prop="installation_no" label="编号" width="180" />
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
-                  <el-tag :type="instStatusColor(row.status)" size="small">{{ instStatusLabel(row.status) }}</el-tag>
+                  <div class="task-status-cell">
+                    <el-tag :type="instStatusColor(row.status)" size="small">{{ instStatusLabel(row.status) }}</el-tag>
+                    <el-tooltip v-if="row.is_blocked" :content="row.blocked_reason || '前置任务未完成'" placement="top">
+                      <el-tag type="warning" size="small">阻塞</el-tag>
+                    </el-tooltip>
+                  </div>
                 </template>
               </el-table-column>
               <el-table-column label="进度" width="150">
@@ -418,6 +434,8 @@ async function fetchItemEditability() {
 const designCompleted = computed(() => designTasks.value.filter(task => ['confirmed', 'completed'].includes(task.status)).length)
 const productionCompleted = computed(() => productionTasks.value.filter(task => task.status === 'completed').length)
 const installationCompleted = computed(() => installationTasks.value.filter(task => task.status === 'completed').length)
+const blockedTaskCount = computed(() => [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
+  .filter(task => task.is_blocked).length)
 const projectProgress = computed(() => {
   const tasks = [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
     .filter(task => task.status !== 'cancelled')
@@ -704,6 +722,7 @@ onMounted(() => { fetchOrder(); fetchTasks() })
 .page { padding: 0; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.task-status-cell { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .item-form :deep(.el-form-item) { margin-bottom: 14px; }
 .impact-section-title { font-weight: 600; color: var(--ad-text); margin: 12px 0 8px; }
 .amount-up { color: var(--el-color-success); }
