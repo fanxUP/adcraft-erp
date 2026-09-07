@@ -17,6 +17,7 @@
         <el-option label="收款通知" value="payment_received" />
         <el-option label="库存预警" value="inventory_alert" />
         <el-option label="任务逾期" value="task_overdue" />
+        <el-option label="逾期升级" value="task_overdue_escalation" />
         <el-option label="用户消息" value="user_message" />
         <el-option label="系统消息" value="system_message" />
       </el-select>
@@ -106,6 +107,7 @@ const iconMap: Record<string, ReturnType<typeof markRaw>> = {
   payment_received: markRaw(Money),
   inventory_alert: markRaw(Warning),
   task_overdue: markRaw(Warning),
+  task_overdue_escalation: markRaw(Warning),
   user_message: markRaw(ChatDotRound),
   system_message: markRaw(Setting),
 }
@@ -117,6 +119,7 @@ const colorMap: Record<string, string> = {
   payment_received: 'var(--el-color-danger)',
   inventory_alert: 'var(--el-color-danger)',
   task_overdue: 'var(--el-color-danger)',
+  task_overdue_escalation: 'var(--el-color-danger)',
   user_message: 'var(--el-color-primary)',
   system_message: 'var(--ad-text-secondary)',
 }
