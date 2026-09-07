@@ -56,11 +56,6 @@
         :blocked-reason="task.blocked_reason"
         style="margin-top: 16px"
       />
-      <TaskHistoryTimeline
-        :key="task.updated_at || task.id"
-        task-type="installation"
-        :task-id="task.id"
-      />
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>任务分配</span></template>
         <div data-ai-targets="task-assignee" style="display: flex; align-items: center; gap: 12px;">
@@ -182,7 +177,6 @@ import { formatDateTimeFull } from '@/utils/datetime'
 import { computed, ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskDependenciesCard from '@/components/tasks/TaskDependenciesCard.vue'
-import TaskHistoryTimeline from '@/components/tasks/TaskHistoryTimeline.vue'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { getInstallationTask, updateInstallationTask, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'

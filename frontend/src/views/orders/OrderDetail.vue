@@ -779,7 +779,7 @@ function statusColor(s: string) {
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
-function designStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '历史待确认', revision: '历史需修改', confirmed: '已完成', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
+function designStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待处理', revision: '需调整', confirmed: '已完成', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
 function designStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
 function prodStatusLabel(s: string) { const m: Record<string, string> = { pending: '待制作', queued: '排队中', in_progress: '制作中', qc_check: '待质检', rework: '返工', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
 function prodStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }

@@ -88,7 +88,7 @@ const filterStatus = ref('')
 const filterOutsourced = ref('')
 
 function prodStatusLabel(s: string) {
-  const map: Record<string, string> = { pending: '初始/待分配', pending_review: '待确认', completed: '已完成', cancelled: '已取消' }
+  const map: Record<string, string> = { pending: '初始/待分配', pending_review: '待处理', completed: '已完成', cancelled: '已取消' }
   return map[s] || s
 }
 function prodStatusColor(s: string) {

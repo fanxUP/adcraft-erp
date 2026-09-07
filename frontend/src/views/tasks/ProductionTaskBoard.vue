@@ -114,8 +114,8 @@ function statusLabel(task: TaskQueueItem) {
   const labels: Record<string, string> = {
     pending: task.stage === 'design' ? '待分配' : task.stage === 'production' ? '待制作' : '待分配',
     designing: '设计中',
-    pending_review: '待确认',
-    revision: '需修改',
+    pending_review: '待处理',
+    revision: '需调整',
     confirmed: '已完成',
     queued: '排队中',
     in_progress: task.stage === 'installation' ? '安装中' : '制作中',

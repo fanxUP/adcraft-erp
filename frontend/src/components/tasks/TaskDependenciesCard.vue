@@ -125,8 +125,8 @@ function statusLabel(status: string) {
   const labels: Record<string, string> = {
     pending: '待开始',
     designing: '设计中',
-    pending_review: '待确认',
-    revision: '需修改',
+    pending_review: '待处理',
+    revision: '需调整',
     confirmed: '设计完成',
     in_progress: '进行中',
     assigned: '已分配',

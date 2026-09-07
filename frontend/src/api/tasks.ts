@@ -1,5 +1,5 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, TaskQueueItem, AttachmentResponse, SuccessResponse, TaskDependencyResponse, TaskDependencyTaskType, TaskHistoryItem } from '@/types/api'
+import { PaginatedData, DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, TaskQueueItem, AttachmentResponse, SuccessResponse, TaskDependencyResponse, TaskDependencyTaskType } from '@/types/api'
 
 type ReadonlyTaskFields =
   | 'id'
@@ -91,10 +91,4 @@ export function createTaskDependency(data: {
 
 export function deleteTaskDependency(id: string) {
   return del<SuccessResponse>(`/task-dependencies/${id}`)
-}
-
-export function getTaskHistory(taskType: TaskDependencyTaskType, taskId: string, page = 1, pageSize = 50) {
-  return get<PaginatedData<TaskHistoryItem>>('/task-history/', {
-    params: { task_type: taskType, task_id: taskId, page, page_size: pageSize },
-  })
 }

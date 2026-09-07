@@ -57,11 +57,6 @@
         :blocked-reason="task.blocked_reason"
         style="margin-top: 16px"
       />
-      <TaskHistoryTimeline
-        :key="task.updated_at || task.id"
-        task-type="design"
-        :task-id="task.id"
-      />
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>任务分配</span></template>
         <div data-ai-targets="task-assignee" style="display: flex; align-items: center; gap: 12px;">
@@ -159,7 +154,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import type { DesignTaskResponse, UserResponse } from '@/types/api'
 import TaskDependenciesCard from '@/components/tasks/TaskDependenciesCard.vue'
-import TaskHistoryTimeline from '@/components/tasks/TaskHistoryTimeline.vue'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { getEmployees } from '@/api/employees'
@@ -199,21 +193,11 @@ const DESIGN_WORKFLOW: Record<string, string[]> = {
   cancelled: [],
 }
 
+// 旧 pending_review/revision 仅保留给后端兼容，不再作为前端任务流程节点展示。
 const designSteps = computed(() => {
-  const currentStatus = task.value?.status
-  const isLegacyReviewTask = !task.value?.order_item_id || currentStatus === 'pending_review' || currentStatus === 'revision'
-  if (!isLegacyReviewTask) {
-    return [
-      { key: 'pending', label: '待分配' },
-      { key: 'designing', label: '设计中' },
-      { key: 'confirmed', label: '已完成' },
-    ]
-  }
   return [
     { key: 'pending', label: '待分配' },
     { key: 'designing', label: '设计中' },
-    { key: 'pending_review', label: '历史待确认' },
-    { key: 'revision', label: '历史需修改' },
     { key: 'confirmed', label: '已完成' },
   ]
 })
@@ -228,7 +212,7 @@ const designWorkflow = computed(() => {
 })
 
 async function handleWorkflowChange(to_status: string) {
-  const labelMap: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已完成', cancelled: '已取消' }
+  const labelMap: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待处理', revision: '需调整', confirmed: '已完成', cancelled: '已取消' }
   if (to_status === 'cancelled') {
     const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
       confirmButtonText: '确定', cancelButtonText: '取消',
@@ -255,7 +239,7 @@ async function doChangeStatus(to_status: string, reason: string) {
 }
 
 function statusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '历史待确认', revision: '历史需修改', confirmed: '已完成', cancelled: '已取消' }
+  const map: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待处理', revision: '需调整', confirmed: '已完成', cancelled: '已取消' }
   return map[s] || s
 }
 function statusColor(s: string) {

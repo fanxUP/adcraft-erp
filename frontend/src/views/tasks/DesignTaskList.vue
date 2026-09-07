@@ -8,8 +8,6 @@
       <el-select v-model="filterStatus" placeholder="状态筛选" clearable style="width: 160px" @change="fetchData">
         <el-option label="待分配" value="pending" />
         <el-option label="设计中" value="designing" />
-        <el-option label="待确认" value="pending_review" />
-        <el-option label="需修改" value="revision" />
         <el-option label="已确认" value="confirmed" />
         <el-option label="已取消" value="cancelled" />
       </el-select>
@@ -87,7 +85,7 @@ const filterStatus = ref('')
 const filterOutsourced = ref('')
 
 function designStatusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已完成', cancelled: '已取消' }
+  const map: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待处理', revision: '需调整', confirmed: '已完成', cancelled: '已取消' }
   return map[s] || s
 }
 function designStatusColor(s: string) {
