@@ -4,7 +4,7 @@ from sqlalchemy import select, func, text
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.business_document import BusinessDocument
+from app.models.business_document import BusinessDocument, BusinessDocumentItem
 from app.domain.workflows import (
     DESIGN_TASK_WORKFLOW,
     INSTALLATION_TASK_WORKFLOW,
@@ -45,6 +45,40 @@ from app.services.task_history_service import record_task_event, task_history_sn
 ACTIVE_ORDER_STATUSES = ("designing", "in_production", "in_installation")
 
 
+def _coerce_uuid(value) -> UUID | None:
+    """Return a UUID for real model values, ignoring loose test/magic values."""
+    if value is None or isinstance(value, UUID):
+        return value
+    try:
+        return UUID(str(value))
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _task_order_item_id(task) -> UUID | None:
+    return _coerce_uuid(getattr(task, "order_item_id", None))
+
+
+async def _validate_order_item_id(
+    db: AsyncSession,
+    document_id: UUID,
+    raw_item_id,
+) -> UUID | None:
+    """Validate an optional item link without guessing historical ownership."""
+    item_id = _coerce_uuid(raw_item_id)
+    if raw_item_id not in (None, "") and item_id is None:
+        raise ValueError("订单明细编号格式不正确")
+    if item_id is None:
+        return None
+
+    item = await db.get(BusinessDocumentItem, item_id)
+    if not item or item.document_id != document_id:
+        raise ValueError("订单明细不存在或不属于当前订单")
+    if getattr(item, "lifecycle_status", "active") != "active":
+        raise ValueError("已作废的订单明细不能关联新任务")
+    return item_id
+
+
 def _attachment_to_dict(att) -> dict:
     return AttachmentResponse.model_validate(att).model_dump(mode="json")
 
@@ -73,6 +107,14 @@ async def _enrich_task_order(db, task_dict: dict) -> dict:
         )).fetchone()
         if user_row:
             task_dict["assigned_to_name"] = user_row[0]
+    order_item_id = task_dict.get("order_item_id")
+    if order_item_id:
+        item_row = (await db.execute(
+            text("SELECT item_name FROM business_document_items WHERE id = :id"),
+            {"id": str(order_item_id)},
+        )).fetchone()
+        if item_row:
+            task_dict["item_name"] = item_row[0]
     return task_dict
 
 
@@ -117,6 +159,10 @@ async def _prepare_task_create_data(
         raise ValueError("订单未关联正式客户，请先完善客户资料")
 
     normalized["document_id"] = order_id
+    if "order_item_id" in normalized:
+        normalized["order_item_id"] = await _validate_order_item_id(
+            db, order_id, normalized.get("order_item_id")
+        )
     normalized["customer_id"] = order.customer_id
     normalized["project_name"] = (
         (normalized.get("project_name") or "").strip()
@@ -176,8 +222,167 @@ async def _clear_outsource_source_refs(db: AsyncSession, task_type: str, task_id
     )
 
 
+async def _all_stage_tasks_completed(
+    db: AsyncSession,
+    doc_id: UUID,
+    model,
+    terminal_statuses: set[str],
+) -> bool:
+    """Check every active order item and preserve legacy order-level tasks."""
+    item_result = await db.execute(
+        select(BusinessDocumentItem).where(
+            BusinessDocumentItem.document_id == doc_id,
+            BusinessDocumentItem.lifecycle_status == "active",
+        )
+    )
+    active_items = list(item_result.scalars().all())
+    task_result = await db.execute(select(model).where(model.document_id == doc_id))
+    tasks = list(task_result.scalars().all())
+
+    if active_items:
+        active_ids = {item.id for item in active_items}
+        relevant_tasks = [
+            task for task in tasks
+            if _task_order_item_id(task) is None
+            or _task_order_item_id(task) in active_ids
+        ]
+        for item_id in active_ids:
+            item_tasks = [
+                task for task in relevant_tasks
+                if _task_order_item_id(task) == item_id
+            ]
+            if not item_tasks or any(
+                task.status not in terminal_statuses for task in item_tasks
+            ):
+                return False
+        if any(
+            task.status not in terminal_statuses
+            for task in relevant_tasks
+            if _task_order_item_id(task) is None
+        ):
+            return False
+        return bool(relevant_tasks)
+
+    return bool(tasks) and all(
+        task.status in terminal_statuses for task in tasks
+    )
+
+
+async def _item_stage_tasks_completed(
+    db: AsyncSession,
+    doc_id: UUID,
+    item_id: UUID,
+    model,
+    terminal_statuses: set[str],
+) -> bool:
+    result = await db.execute(
+        select(model).where(
+            model.document_id == doc_id,
+            model.order_item_id == item_id,
+        )
+    )
+    tasks = list(result.scalars().all())
+    return bool(tasks) and all(
+        task.status in terminal_statuses for task in tasks
+    )
+
+
+async def _create_production_task_for_item(db: AsyncSession, task) -> None:
+    """Create only the production task for the completed design item."""
+    item_id = _task_order_item_id(task)
+    if item_id is None:
+        return
+    from app.models.task import ProductionTask
+
+    item = await db.get(BusinessDocumentItem, item_id)
+    order = await db.get(BusinessDocument, task.document_id)
+    if not item or not order:
+        return
+    existing_result = await db.execute(
+        select(ProductionTask).where(
+            ProductionTask.document_id == task.document_id,
+            ProductionTask.order_item_id == item_id,
+            ProductionTask.status != "cancelled",
+        )
+    )
+    if existing_result.scalars().all():
+        return
+    db.add(ProductionTask(
+        production_no=await generate_production_no(db),
+        document_id=task.document_id,
+        order_item_id=item_id,
+        customer_id=order.customer_id,
+        project_name=order.project_name,
+        status="pending",
+        material_id=item.material_id,
+        process_id=item.process_id,
+        length=item.length,
+        width=item.width,
+        height=item.height,
+        quantity=item.quantity,
+    ))
+
+
+async def _create_installation_task_for_item(db: AsyncSession, task) -> None:
+    """Create only the installation task for the completed production item."""
+    item_id = _task_order_item_id(task)
+    if item_id is None:
+        return
+    from app.models.task import InstallationTask
+
+    item = await db.get(BusinessDocumentItem, item_id)
+    order = await db.get(BusinessDocument, task.document_id)
+    if not item or not order:
+        return
+    existing_result = await db.execute(
+        select(InstallationTask).where(
+            InstallationTask.document_id == task.document_id,
+            InstallationTask.order_item_id == item_id,
+            InstallationTask.status != "cancelled",
+        )
+    )
+    if existing_result.scalars().all():
+        return
+    db.add(InstallationTask(
+        installation_no=await generate_installation_no(db),
+        document_id=task.document_id,
+        order_item_id=item_id,
+        customer_id=order.customer_id,
+        project_name=order.project_name,
+        status="pending",
+        address=order.installation_address,
+        contact_name=order.contact_person,
+        contact_phone=order.contact_phone,
+    ))
+
+
+async def _maybe_advance_order_stage(
+    db: AsyncSession,
+    doc_id: UUID,
+    from_status: str,
+    to_status: str,
+    model,
+    terminal_statuses: set[str],
+    reason: str,
+    operated_by: UUID | None,
+) -> None:
+    order = await db.get(BusinessDocument, doc_id)
+    if not order or order.status != from_status:
+        return
+    if not await _all_stage_tasks_completed(db, doc_id, model, terminal_statuses):
+        return
+    order.status = to_status
+    from app.services.business_document_service import BusinessDocumentService
+
+    order_svc = BusinessDocumentService(db, doc_type="order")
+    await order_svc.repo.create_status_log(
+        doc_id, from_status, to_status, reason, operated_by
+    )
+    await db.flush()
+
+
 async def _all_execution_tasks_completed(db: AsyncSession, doc_id: UUID) -> bool:
-    """Return whether every execution task for an order is terminal."""
+    """Return whether every active item and legacy task is terminal."""
     from app.models.task import DesignTask, InstallationTask, ProductionTask
 
     task_rules = (
@@ -185,15 +390,12 @@ async def _all_execution_tasks_completed(db: AsyncSession, doc_id: UUID) -> bool
         (ProductionTask, {"completed", "cancelled"}),
         (InstallationTask, {"completed", "cancelled"}),
     )
-    found_task = False
     for model, terminal_statuses in task_rules:
-        result = await db.execute(select(model).where(model.document_id == doc_id))
-        tasks = result.scalars().all()
-        if tasks:
-            found_task = True
-        if any(task.status not in terminal_statuses for task in tasks):
+        if not await _all_stage_tasks_completed(
+            db, doc_id, model, terminal_statuses
+        ):
             return False
-    return found_task
+    return True
 
 
 async def _maybe_complete_order(db: AsyncSession, doc_id: UUID, operated_by: UUID | None) -> None:
@@ -234,9 +436,14 @@ class DesignTaskService:
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
-                         outsourced: bool | None = None) -> tuple[list, int]:
+                         outsourced: bool | None = None,
+                         order_item_id: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        tasks, total = await self.repo.list_tasks(skip=skip, limit=page_size, status=status, order_id=order_id, assigned_to=assigned_to, outsourced=outsourced)
+        tasks, total = await self.repo.list_tasks(
+            skip=skip, limit=page_size, status=status, order_id=order_id,
+            assigned_to=assigned_to, outsourced=outsourced,
+            order_item_id=order_item_id,
+        )
         result = [await self._to_dict(t) for t in tasks]
         return await _attach_outsource_flags(self.db, "design", result), total
 
@@ -287,6 +494,10 @@ class DesignTaskService:
             current_start_at=task.planned_start_at,
             current_end_at=task.planned_end_at,
         )
+        if "order_item_id" in data:
+            data["order_item_id"] = await _validate_order_item_id(
+                self.db, task.document_id, data.get("order_item_id")
+            )
         task = await self.repo.update(task, data)
         await record_task_event(
             self.db,
@@ -324,6 +535,14 @@ class DesignTaskService:
             raise ValueError("设计任务不存在")
 
         valid = allowed_targets(DESIGN_TASK_WORKFLOW, task.status)
+        # The direct designing -> confirmed path is for the new item-scoped
+        # flow. Keep the review path available for historical/unlinked tasks.
+        if (
+            task.status == "designing"
+            and to_status == "confirmed"
+            and _task_order_item_id(task) is None
+        ):
+            valid = tuple(target for target in valid if target != "confirmed")
         if to_status not in valid:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
         await ensure_task_not_blocked(self.db, "design", task.id, to_status)
@@ -347,41 +566,65 @@ class DesignTaskService:
             reason=reason,
             changed_fields=changed_fields,
         )
-        # Auto-advance order when all design tasks completed
+        # Item-scoped tasks advance only their own order item.
         if to_status == "confirmed" and task.document_id:
-            from sqlalchemy import func
-            from app.models.business_document import BusinessDocument
-            from app.models.task import DesignTask, ProductionTask
-            from app.services.number_generator import generate_production_no
-            from app.services.business_document_service import BusinessDocumentService
+            from app.models.task import DesignTask
 
-            remaining = (await self.db.execute(
-                select(func.count()).select_from(DesignTask).where(
-                    DesignTask.document_id == task.document_id,
-                    DesignTask.status.not_in(["completed", "cancelled", "confirmed"])
-                )
-            )).scalar()
-            if remaining == 0:
-                order = await self.db.get(BusinessDocument, task.document_id)
-                if order and order.status == "designing":
-                    existing_pt = (await self.db.execute(
-                        select(ProductionTask).where(ProductionTask.document_id == task.document_id)
-                    )).scalar_one_or_none()
-                    if not existing_pt:
-                        pt = ProductionTask(
-                            production_no=await generate_production_no(self.db),
-                            document_id=task.document_id,
-                            customer_id=order.customer_id,
-                            project_name=order.project_name,
-                            status="pending",
-                            quantity=1,
-                        )
-                        self.db.add(pt)
-                    order.status = "in_production"
-                    order_svc = BusinessDocumentService(self.db, doc_type="order")
-                    await order_svc.repo.create_status_log(task.document_id, "designing", "in_production",
-                        "设计任务全部完成，系统自动推进", operated_by)
-                    await self.db.flush()
+            item_id = _task_order_item_id(task)
+            if item_id is not None:
+                if await _item_stage_tasks_completed(
+                    self.db,
+                    task.document_id,
+                    item_id,
+                    DesignTask,
+                    {"confirmed", "completed", "cancelled"},
+                ):
+                    await _create_production_task_for_item(self.db, task)
+                    await _maybe_advance_order_stage(
+                        self.db,
+                        task.document_id,
+                        "designing",
+                        "in_production",
+                        DesignTask,
+                        {"confirmed", "completed", "cancelled"},
+                        "所有订单明细的设计任务已完成，系统自动推进",
+                        operated_by,
+                    )
+            else:
+                # Preserve legacy order-level task behaviour.
+                from sqlalchemy import func
+                from app.models.business_document import BusinessDocument
+                from app.models.task import ProductionTask
+                from app.services.number_generator import generate_production_no
+                from app.services.business_document_service import BusinessDocumentService
+
+                remaining = (await self.db.execute(
+                    select(func.count()).select_from(DesignTask).where(
+                        DesignTask.document_id == task.document_id,
+                        DesignTask.status.not_in(["completed", "cancelled", "confirmed"])
+                    )
+                )).scalar()
+                if remaining == 0:
+                    order = await self.db.get(BusinessDocument, task.document_id)
+                    if order and order.status == "designing":
+                        existing_pt = (await self.db.execute(
+                            select(ProductionTask).where(ProductionTask.document_id == task.document_id)
+                        )).scalar_one_or_none()
+                        if not existing_pt:
+                            pt = ProductionTask(
+                                production_no=await generate_production_no(self.db),
+                                document_id=task.document_id,
+                                customer_id=order.customer_id,
+                                project_name=order.project_name,
+                                status="pending",
+                                quantity=1,
+                            )
+                            self.db.add(pt)
+                        order.status = "in_production"
+                        order_svc = BusinessDocumentService(self.db, doc_type="order")
+                        await order_svc.repo.create_status_log(task.document_id, "designing", "in_production",
+                            "设计任务全部完成，系统自动推进", operated_by)
+                        await self.db.flush()
         if to_status == "confirmed" and task.document_id:
             await _maybe_complete_order(self.db, task.document_id, operated_by)
         await _refresh_task_for_response(self.db, task)
@@ -461,9 +704,14 @@ class ProductionTaskService:
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
-                         outsourced: bool | None = None) -> tuple[list, int]:
+                         outsourced: bool | None = None,
+                         order_item_id: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        tasks, total = await self.repo.list_tasks(skip=skip, limit=page_size, status=status, order_id=order_id, assigned_to=assigned_to, outsourced=outsourced)
+        tasks, total = await self.repo.list_tasks(
+            skip=skip, limit=page_size, status=status, order_id=order_id,
+            assigned_to=assigned_to, outsourced=outsourced,
+            order_item_id=order_item_id,
+        )
         result = [await self._to_dict(t) for t in tasks]
         return await _attach_outsource_flags(self.db, "production", result), total
 
@@ -514,6 +762,10 @@ class ProductionTaskService:
             current_start_at=task.planned_start_at,
             current_end_at=task.planned_end_at,
         )
+        if "order_item_id" in data:
+            data["order_item_id"] = await _validate_order_item_id(
+                self.db, task.document_id, data.get("order_item_id")
+            )
         task = await self.repo.update(task, data)
         await record_task_event(
             self.db,
@@ -574,40 +826,64 @@ class ProductionTaskService:
             reason=reason,
             changed_fields=changed_fields,
         )
-        # Auto-advance order when all production tasks completed
+        # Item-scoped tasks advance only their own order item.
         if to_status == "completed" and task.document_id:
-            from sqlalchemy import func
-            from app.models.business_document import BusinessDocument
-            from app.models.task import ProductionTask, InstallationTask
-            from app.services.number_generator import generate_installation_no
-            from app.services.business_document_service import BusinessDocumentService
+            from app.models.task import ProductionTask
 
-            remaining = (await self.db.execute(
-                select(func.count()).select_from(ProductionTask).where(
-                    ProductionTask.document_id == task.document_id,
-                    ProductionTask.status.not_in(["completed", "cancelled"])
-                )
-            )).scalar()
-            if remaining == 0:
-                order = await self.db.get(BusinessDocument, task.document_id)
-                if order and order.status == "in_production":
-                    existing_it = (await self.db.execute(
-                        select(InstallationTask).where(InstallationTask.document_id == task.document_id)
-                    )).scalar_one_or_none()
-                    if not existing_it:
-                        it = InstallationTask(
-                            installation_no=await generate_installation_no(self.db),
-                            document_id=task.document_id,
-                            customer_id=order.customer_id,
-                            project_name=order.project_name,
-                            status="pending",
-                        )
-                        self.db.add(it)
-                    order.status = "in_installation"
-                    order_svc = BusinessDocumentService(self.db, doc_type="order")
-                    await order_svc.repo.create_status_log(task.document_id, "in_production", "in_installation",
-                        "制作任务全部完成，系统自动推进", operated_by)
-                    await self.db.flush()
+            item_id = _task_order_item_id(task)
+            if item_id is not None:
+                if await _item_stage_tasks_completed(
+                    self.db,
+                    task.document_id,
+                    item_id,
+                    ProductionTask,
+                    {"completed", "cancelled"},
+                ):
+                    await _create_installation_task_for_item(self.db, task)
+                    await _maybe_advance_order_stage(
+                        self.db,
+                        task.document_id,
+                        "in_production",
+                        "in_installation",
+                        ProductionTask,
+                        {"completed", "cancelled"},
+                        "所有订单明细的制作任务已完成，系统自动推进",
+                        operated_by,
+                    )
+            else:
+                # Preserve legacy order-level task behaviour.
+                from sqlalchemy import func
+                from app.models.business_document import BusinessDocument
+                from app.models.task import InstallationTask
+                from app.services.number_generator import generate_installation_no
+                from app.services.business_document_service import BusinessDocumentService
+
+                remaining = (await self.db.execute(
+                    select(func.count()).select_from(ProductionTask).where(
+                        ProductionTask.document_id == task.document_id,
+                        ProductionTask.status.not_in(["completed", "cancelled"])
+                    )
+                )).scalar()
+                if remaining == 0:
+                    order = await self.db.get(BusinessDocument, task.document_id)
+                    if order and order.status == "in_production":
+                        existing_it = (await self.db.execute(
+                            select(InstallationTask).where(InstallationTask.document_id == task.document_id)
+                        )).scalar_one_or_none()
+                        if not existing_it:
+                            it = InstallationTask(
+                                installation_no=await generate_installation_no(self.db),
+                                document_id=task.document_id,
+                                customer_id=order.customer_id,
+                                project_name=order.project_name,
+                                status="pending",
+                            )
+                            self.db.add(it)
+                        order.status = "in_installation"
+                        order_svc = BusinessDocumentService(self.db, doc_type="order")
+                        await order_svc.repo.create_status_log(task.document_id, "in_production", "in_installation",
+                            "制作任务全部完成，系统自动推进", operated_by)
+                        await self.db.flush()
         if to_status == "completed" and task.document_id:
             await _maybe_complete_order(self.db, task.document_id, operated_by)
         await _refresh_task_for_response(self.db, task)
@@ -679,9 +955,14 @@ class InstallationTaskService:
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
-                         outsourced: bool | None = None) -> tuple[list, int]:
+                         outsourced: bool | None = None,
+                         order_item_id: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        tasks, total = await self.repo.list_tasks(skip=skip, limit=page_size, status=status, order_id=order_id, assigned_to=assigned_to, outsourced=outsourced)
+        tasks, total = await self.repo.list_tasks(
+            skip=skip, limit=page_size, status=status, order_id=order_id,
+            assigned_to=assigned_to, outsourced=outsourced,
+            order_item_id=order_item_id,
+        )
         result = [await self._to_dict(t) for t in tasks]
         return await _attach_outsource_flags(self.db, "installation", result), total
 
@@ -732,6 +1013,10 @@ class InstallationTaskService:
             current_start_at=task.planned_start_at,
             current_end_at=task.planned_end_at,
         )
+        if "order_item_id" in data:
+            data["order_item_id"] = await _validate_order_item_id(
+                self.db, task.document_id, data.get("order_item_id")
+            )
         task = await self.repo.update(task, data)
         await record_task_event(
             self.db,
@@ -769,6 +1054,14 @@ class InstallationTaskService:
             raise ValueError("安装任务不存在")
 
         valid = allowed_targets(INSTALLATION_TASK_WORKFLOW, task.status)
+        # Historical/unlinked installation tasks still support the old
+        # acceptance step; only item-scoped tasks may finish directly.
+        if (
+            task.status == "in_progress"
+            and to_status == "completed"
+            and _task_order_item_id(task) is None
+        ):
+            valid = tuple(target for target in valid if target != "completed")
         if to_status not in valid:
             raise ValueError(f"不允许从 {task.status} 流转到 {to_status}")
         await ensure_task_not_blocked(self.db, "installation", task.id, to_status)

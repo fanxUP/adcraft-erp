@@ -473,6 +473,7 @@ export interface DesignTaskResponse {
   id: string
   design_no: string
   order_id: string
+  order_item_id?: string | null
   customer_id: string
   order_no?: string
   customer_name?: string
@@ -480,6 +481,7 @@ export interface DesignTaskResponse {
   total_amount?: number
   source?: string
   project_name: string
+  item_name?: string | null
   status: string
   progress_pct: number
   planned_start_at?: string | null
@@ -505,6 +507,7 @@ export interface ProductionTaskResponse {
   id: string
   production_no: string
   order_id: string
+  order_item_id?: string | null
   customer_id: string
   order_no?: string
   customer_name?: string
@@ -512,6 +515,7 @@ export interface ProductionTaskResponse {
   total_amount?: number
   source?: string
   project_name: string
+  item_name?: string | null
   status: string
   progress_pct: number
   planned_start_at?: string | null
@@ -541,6 +545,7 @@ export interface InstallationTaskResponse {
   id: string
   installation_no: string
   order_id: string
+  order_item_id?: string | null
   customer_id: string
   order_no?: string
   customer_name?: string
@@ -548,6 +553,7 @@ export interface InstallationTaskResponse {
   total_amount?: number
   source?: string
   project_name: string
+  item_name?: string | null
   status: string
   progress_pct: number
   planned_start_at?: string | null
@@ -577,9 +583,11 @@ export interface TaskQueueItem {
   task_no: string
   document_id: string
   order_id?: string
+  order_item_id?: string | null
   order_no?: string
   customer_name?: string
   project_name: string
+  item_name?: string | null
   status: string
   progress_pct: number
   planned_start_at?: string | null

@@ -507,7 +507,7 @@ class BusinessDocumentService:
                     DesignTask,
                     "design_no",
                     "设计",
-                    terminal_statuses=("completed",),
+                    terminal_statuses=("confirmed", "completed"),
                 )
             elif from_status == "in_production" and to_status == "in_installation":
                 await self._require_all_tasks_completed(
@@ -664,6 +664,34 @@ class BusinessDocumentService:
         from app.models.task import DesignTask
         from app.services.number_generator import generate_design_no
 
+        active_items = [
+            item for item in (doc.items or [])
+            if getattr(item, "lifecycle_status", "active") == "active"
+        ]
+        if active_items:
+            existing = await self.db.execute(
+                select(DesignTask).where(DesignTask.document_id == doc.id)
+            )
+            existing_item_ids = {
+                task.order_item_id
+                for task in existing.scalars().all()
+                if task.order_item_id is not None
+                and task.status != "cancelled"
+            }
+            for item in active_items:
+                if item.id in existing_item_ids:
+                    continue
+                self.db.add(DesignTask(
+                    design_no=await generate_design_no(self.db),
+                    document_id=doc.id,
+                    order_item_id=item.id,
+                    customer_id=doc.customer_id,
+                    project_name=doc.project_name,
+                    status="pending",
+                ))
+            await self.db.flush()
+            return
+
         existing = await self.db.execute(
             select(DesignTask).where(DesignTask.document_id == doc.id)
         )
@@ -683,6 +711,40 @@ class BusinessDocumentService:
     async def _auto_create_production_task(self, doc) -> None:
         from app.models.task import ProductionTask
         from app.services.number_generator import generate_production_no
+
+        active_items = [
+            item for item in (doc.items or [])
+            if getattr(item, "lifecycle_status", "active") == "active"
+        ]
+        if active_items:
+            existing = await self.db.execute(
+                select(ProductionTask).where(ProductionTask.document_id == doc.id)
+            )
+            existing_item_ids = {
+                task.order_item_id
+                for task in existing.scalars().all()
+                if task.order_item_id is not None
+                and task.status != "cancelled"
+            }
+            for item in active_items:
+                if item.id in existing_item_ids:
+                    continue
+                self.db.add(ProductionTask(
+                    production_no=await generate_production_no(self.db),
+                    document_id=doc.id,
+                    order_item_id=item.id,
+                    customer_id=doc.customer_id,
+                    project_name=doc.project_name,
+                    status="pending",
+                    material_id=item.material_id,
+                    process_id=item.process_id,
+                    length=item.length,
+                    width=item.width,
+                    height=item.height,
+                    quantity=item.quantity,
+                ))
+            await self.db.flush()
+            return
 
         existing = await self.db.execute(
             select(ProductionTask).where(ProductionTask.document_id == doc.id)
@@ -704,6 +766,37 @@ class BusinessDocumentService:
     async def _auto_create_installation_task(self, doc) -> None:
         from app.models.task import InstallationTask
         from app.services.number_generator import generate_installation_no
+
+        active_items = [
+            item for item in (doc.items or [])
+            if getattr(item, "lifecycle_status", "active") == "active"
+        ]
+        if active_items:
+            existing = await self.db.execute(
+                select(InstallationTask).where(InstallationTask.document_id == doc.id)
+            )
+            existing_item_ids = {
+                task.order_item_id
+                for task in existing.scalars().all()
+                if task.order_item_id is not None
+                and task.status != "cancelled"
+            }
+            for item in active_items:
+                if item.id in existing_item_ids:
+                    continue
+                self.db.add(InstallationTask(
+                    installation_no=await generate_installation_no(self.db),
+                    document_id=doc.id,
+                    order_item_id=item.id,
+                    customer_id=doc.customer_id,
+                    project_name=doc.project_name,
+                    status="pending",
+                    address=doc.installation_address,
+                    contact_name=doc.contact_person,
+                    contact_phone=doc.contact_phone,
+                ))
+            await self.db.flush()
+            return
 
         existing = await self.db.execute(
             select(InstallationTask).where(InstallationTask.document_id == doc.id)

@@ -30,11 +30,13 @@ async def list_task_queue(
     stage: str | None = None,
     status: str | None = None,
     order_id: str | None = None,
+    order_item_id: str | None = None,
     overdue: bool | None = None,
 ) -> tuple[list[dict], int]:
     """Return a normalized, paginated view over all delivery task tables."""
     normalized: list[dict] = []
     order_uuid = UUID(order_id) if order_id else None
+    order_item_uuid = UUID(order_item_id) if order_item_id else None
     statuses = {value.strip() for value in (status or "").split(",") if value.strip()}
 
     for task_type, model, no_field, response_model in _TASK_SOURCES:
@@ -44,6 +46,8 @@ async def list_task_queue(
         query = select(model)
         if order_uuid:
             query = query.where(model.document_id == order_uuid)
+        if order_item_uuid:
+            query = query.where(model.order_item_id == order_item_uuid)
         if statuses:
             query = query.where(model.status.in_(statuses))
         query = query.order_by(model.created_at.desc())

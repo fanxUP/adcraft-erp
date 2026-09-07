@@ -11,6 +11,7 @@
         <el-descriptions :column="2">
           <el-descriptions-item label="任务编号">{{ task.design_no }}</el-descriptions-item>
           <el-descriptions-item label="项目名称">{{ task.project_name }}</el-descriptions-item>
+          <el-descriptions-item label="订单明细">{{ task.item_name || (task.order_item_id ? '明细未命名' : '整单任务') }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag data-ai-targets="task-status-pending_review task-status-designing task-status-confirmed task-status-revision" :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
           </el-descriptions-item>
@@ -38,7 +39,7 @@
         <TaskWorkflow
           :steps="designSteps"
           :current-status="task.status"
-          :workflow="DESIGN_WORKFLOW"
+          :workflow="designWorkflow"
           :changing="changing"
           @change="handleWorkflowChange"
         />
@@ -145,7 +146,7 @@
 
 <script setup lang="ts">
 import { formatDateTimeFull } from '@/utils/datetime'
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDesignTask, updateDesignTask, changeDesignTaskStatus, uploadAttachment } from '@/api/tasks'
 import { getUsers } from '@/api/users'
@@ -186,19 +187,40 @@ const editForm = reactive({
 
 const DESIGN_WORKFLOW: Record<string, string[]> = {
   pending: ['designing', 'cancelled'],
-  designing: ['pending_review', 'pending', 'cancelled'],
+  designing: ['confirmed', 'pending_review', 'pending', 'cancelled'],
   pending_review: ['confirmed', 'revision', 'cancelled'],
   revision: ['designing', 'pending_review', 'cancelled'],
   confirmed: ['cancelled'],
   cancelled: [],
 }
 
-const designSteps = [
-  { key: 'pending', label: '待分配' },
-  { key: 'designing', label: '设计中' },
-  { key: 'pending_review', label: '待确认' },
-  { key: 'confirmed', label: '已完成' },
-]
+const designSteps = computed(() => {
+  const currentStatus = task.value?.status
+  const isLegacyReviewTask = !task.value?.order_item_id || currentStatus === 'pending_review' || currentStatus === 'revision'
+  if (!isLegacyReviewTask) {
+    return [
+      { key: 'pending', label: '待分配' },
+      { key: 'designing', label: '设计中' },
+      { key: 'confirmed', label: '已完成' },
+    ]
+  }
+  return [
+    { key: 'pending', label: '待分配' },
+    { key: 'designing', label: '设计中' },
+    { key: 'pending_review', label: '历史待确认' },
+    { key: 'revision', label: '历史需修改' },
+    { key: 'confirmed', label: '已完成' },
+  ]
+})
+
+const designWorkflow = computed(() => {
+  const isItemScoped = Boolean(task.value?.order_item_id)
+  if (isItemScoped) return DESIGN_WORKFLOW
+  return {
+    ...DESIGN_WORKFLOW,
+    designing: DESIGN_WORKFLOW.designing.filter(status => status !== 'confirmed'),
+  }
+})
 
 async function handleWorkflowChange(to_status: string) {
   const labelMap: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已完成', cancelled: '已取消' }
@@ -228,7 +250,7 @@ async function doChangeStatus(to_status: string, reason: string) {
 }
 
 function statusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已完成', cancelled: '已取消' }
+  const map: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '历史待确认', revision: '历史需修改', confirmed: '已完成', cancelled: '已取消' }
   return map[s] || s
 }
 function statusColor(s: string) {

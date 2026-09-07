@@ -54,6 +54,7 @@
               </div>
             </div>
             <div class="card-name">{{ card.project_name }}</div>
+            <div class="card-item">明细：{{ card.item_name || '整单任务' }}</div>
             <div class="card-meta">
               <span>{{ card.order_no || '-' }}</span>
               <span>{{ card.customer_name || '-' }}</span>
@@ -190,6 +191,7 @@ onBeforeUnmount(() => {
 .card-statuses { display: flex; align-items: center; gap: 4px; }
 .card-no { font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-name { font-weight: bold; font-size: 16px; color: var(--ad-text); margin: 8px 0 4px; }
+.card-item { margin-bottom: 6px; color: var(--ad-primary, #409eff); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #888; }
 .progress-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .progress-row :deep(.el-progress) { flex: 1; }

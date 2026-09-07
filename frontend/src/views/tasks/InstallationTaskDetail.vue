@@ -11,6 +11,7 @@
         <el-descriptions :column="2">
           <el-descriptions-item label="任务编号">{{ task.installation_no }}</el-descriptions-item>
           <el-descriptions-item label="项目名称">{{ task.project_name }}</el-descriptions-item>
+          <el-descriptions-item label="订单明细">{{ task.item_name || (task.order_item_id ? '明细未命名' : '整单任务') }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag data-ai-targets="task-status-assigned task-status-completed task-status-in_progress task-status-pending_acceptance" :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
           </el-descriptions-item>
@@ -37,7 +38,7 @@
         <TaskWorkflow
           :steps="instSteps"
           :current-status="task.status"
-          :workflow="INST_WORKFLOW"
+          :workflow="instWorkflow"
           :changing="changing"
           @change="handleWorkflowChange"
         />
@@ -239,19 +240,39 @@ const draftCurrentValues = computed<Record<string, string>>(() => ({
 const INST_WORKFLOW: Record<string, string[]> = {
   pending: ['assigned', 'in_progress', 'cancelled'],
   assigned: ['in_progress', 'pending', 'cancelled'],
-  in_progress: ['pending_acceptance', 'pending', 'cancelled'],
+  in_progress: ['completed', 'pending_acceptance', 'pending', 'cancelled'],
   pending_acceptance: ['completed', 'in_progress', 'cancelled'],
   completed: [],
   cancelled: [],
 }
 
-const instSteps = [
-  { key: 'pending', label: '待分配' },
-  { key: 'assigned', label: '已分配' },
-  { key: 'in_progress', label: '安装中' },
-  { key: 'pending_acceptance', label: '待验收' },
-  { key: 'completed', label: '已完成' },
-]
+const instSteps = computed(() => {
+  const currentStatus = task.value?.status
+  const isLegacyAcceptanceTask = !task.value?.order_item_id || currentStatus === 'pending_acceptance'
+  if (!isLegacyAcceptanceTask) {
+    return [
+      { key: 'pending', label: '待分配' },
+      { key: 'assigned', label: '已分配' },
+      { key: 'in_progress', label: '安装中' },
+      { key: 'completed', label: '已完成' },
+    ]
+  }
+  return [
+    { key: 'pending', label: '待分配' },
+    { key: 'assigned', label: '已分配' },
+    { key: 'in_progress', label: '安装中' },
+    { key: 'pending_acceptance', label: '历史待验收' },
+    { key: 'completed', label: '已完成' },
+  ]
+})
+
+const instWorkflow = computed(() => {
+  if (task.value?.order_item_id) return INST_WORKFLOW
+  return {
+    ...INST_WORKFLOW,
+    in_progress: INST_WORKFLOW.in_progress.filter(status => status !== 'completed'),
+  }
+})
 
 async function handleWorkflowChange(to_status: string) {
   const labelMap: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成', cancelled: '已取消' }
@@ -281,7 +302,7 @@ async function doChangeStatus(to_status: string, reason: string) {
 }
 
 function statusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '工人验收', completed: '已完成', cancelled: '已取消' }
+  const map: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '历史待验收', completed: '已完成', cancelled: '已取消' }
   return map[s] || s
 }
 function statusColor(s: string) {

@@ -106,6 +106,8 @@ def make_mock_installation_task(
     task.installation_no = installation_no
     task.document_id = order_id
     task.order_id = order_id
+    task.order_item_id = None
+    task.item_name = None
     task.customer_id = customer_id
     task.project_name = project_name
     task.status = status
@@ -154,6 +156,8 @@ def make_mock_design_task(
     task.design_no = design_no
     task.document_id = order_id
     task.order_id = order_id
+    task.order_item_id = None
+    task.item_name = None
     task.customer_id = customer_id
     task.project_name = project_name
     task.status = status
@@ -209,6 +213,8 @@ def make_mock_production_task(
     task.production_no = production_no
     task.document_id = order_id
     task.order_id = order_id
+    task.order_item_id = None
+    task.item_name = None
     task.customer_id = customer_id
     task.project_name = project_name
     task.status = status

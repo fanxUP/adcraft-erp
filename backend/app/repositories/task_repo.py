@@ -18,7 +18,8 @@ class DesignTaskRepository:
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
-                         outsourced: bool | None = None) -> tuple[list[DesignTask], int]:
+                         outsourced: bool | None = None,
+                         order_item_id: str | None = None) -> tuple[list[DesignTask], int]:
         q = select(DesignTask)
         if status:
             status_list = [s.strip() for s in status.split(",") if s.strip()]
@@ -28,6 +29,8 @@ class DesignTaskRepository:
                 q = q.where(DesignTask.status.in_(status_list))
         if order_id:
             q = q.where(DesignTask.document_id == UUID(order_id))
+        if order_item_id:
+            q = q.where(DesignTask.order_item_id == UUID(order_item_id))
         if assigned_to:
             q = q.where(DesignTask.assigned_to == UUID(assigned_to))
         if outsourced is not None:
@@ -69,12 +72,15 @@ class ProductionTaskRepository:
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
-                         outsourced: bool | None = None) -> tuple[list[ProductionTask], int]:
+                         outsourced: bool | None = None,
+                         order_item_id: str | None = None) -> tuple[list[ProductionTask], int]:
         q = select(ProductionTask)
         if status:
             q = q.where(ProductionTask.status == status)
         if order_id:
             q = q.where(ProductionTask.document_id == UUID(order_id))
+        if order_item_id:
+            q = q.where(ProductionTask.order_item_id == UUID(order_item_id))
         if assigned_to:
             q = q.where(ProductionTask.assigned_to == UUID(assigned_to))
         if outsourced is not None:
@@ -116,7 +122,8 @@ class InstallationTaskRepository:
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
-                         outsourced: bool | None = None) -> tuple[list[InstallationTask], int]:
+                         outsourced: bool | None = None,
+                         order_item_id: str | None = None) -> tuple[list[InstallationTask], int]:
         q = select(InstallationTask)
         if status:
             status_list = [s.strip() for s in status.split(",") if s.strip()]
@@ -126,6 +133,8 @@ class InstallationTaskRepository:
                 q = q.where(InstallationTask.status.in_(status_list))
         if order_id:
             q = q.where(InstallationTask.document_id == UUID(order_id))
+        if order_item_id:
+            q = q.where(InstallationTask.order_item_id == UUID(order_item_id))
         if assigned_to:
             q = q.where(InstallationTask.assigned_to == UUID(assigned_to))
         if outsourced is not None:

@@ -32,6 +32,7 @@ class TaskScheduleInput(BaseModel):
 
 class DesignTaskCreate(TaskScheduleInput):
     order_id: str
+    order_item_id: str | None = None
     customer_id: str | None = None
     project_name: str | None = None
     assigned_to: str | None = None
@@ -40,6 +41,7 @@ class DesignTaskCreate(TaskScheduleInput):
 
 
 class DesignTaskUpdate(TaskScheduleInput):
+    order_item_id: str | None = None
     project_name: str | None = None
     assigned_to: str | None = None
     description: str | None = None
@@ -54,8 +56,10 @@ class DesignTaskResponse(CoercedModel):
     design_no: str
     document_id: str
     order_id: str | None = None
+    order_item_id: str | None = None
     customer_id: str
     project_name: str
+    item_name: str | None = None
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
     planned_start_at: str | None = None
@@ -74,11 +78,6 @@ class DesignTaskResponse(CoercedModel):
     department: str | None = None
     total_amount: float | None = None
     source: str | None = None
-    order_no: str | None = None
-    customer_name: str | None = None
-    department: str | None = None
-    total_amount: float | None = None
-    source: str | None = None
     completed_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
@@ -89,6 +88,7 @@ class DesignTaskResponse(CoercedModel):
 
 class ProductionTaskCreate(TaskScheduleInput):
     order_id: str
+    order_item_id: str | None = None
     customer_id: str | None = None
     project_name: str | None = None
     assigned_to: str | None = None
@@ -102,6 +102,7 @@ class ProductionTaskCreate(TaskScheduleInput):
 
 
 class ProductionTaskUpdate(TaskScheduleInput):
+    order_item_id: str | None = None
     project_name: str | None = None
     assigned_to: str | None = None
     material_id: str | None = None
@@ -121,8 +122,10 @@ class ProductionTaskResponse(CoercedModel):
     production_no: str
     document_id: str
     order_id: str | None = None
+    order_item_id: str | None = None
     customer_id: str
     project_name: str
+    item_name: str | None = None
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
     planned_start_at: str | None = None
@@ -156,6 +159,7 @@ class ProductionTaskResponse(CoercedModel):
 
 class InstallationTaskCreate(TaskScheduleInput):
     order_id: str
+    order_item_id: str | None = None
     customer_id: str | None = None
     project_name: str | None = None
     assigned_to: str | None = None
@@ -167,6 +171,7 @@ class InstallationTaskCreate(TaskScheduleInput):
 
 
 class InstallationTaskUpdate(TaskScheduleInput):
+    order_item_id: str | None = None
     project_name: str | None = None
     assigned_to: str | None = None
     address: str | None = None
@@ -183,8 +188,10 @@ class InstallationTaskResponse(CoercedModel):
     installation_no: str
     document_id: str
     order_id: str | None = None
+    order_item_id: str | None = None
     customer_id: str
     project_name: str
+    item_name: str | None = None
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
     planned_start_at: str | None = None
@@ -240,9 +247,11 @@ class TaskQueueItem(CoercedModel):
     task_no: str
     document_id: str
     order_id: str | None = None
+    order_item_id: str | None = None
     order_no: str | None = None
     customer_name: str | None = None
     project_name: str
+    item_name: str | None = None
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
     planned_start_at: str | None = None

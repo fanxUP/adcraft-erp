@@ -37,6 +37,63 @@
             :project-progress="projectProgress"
             @select-tab="activeTab = $event"
           />
+          <el-card v-if="itemProgressRows.length" shadow="never" class="info-card item-progress-card">
+            <template #header>
+              <div class="card-header">
+                <span>订单明细进度</span>
+                <span class="progress-note">每条明细独立推进，允许设计、制作、安装同时处于不同阶段</span>
+              </div>
+            </template>
+            <el-alert
+              v-if="legacyUnlinkedTaskCount > 0"
+              type="info"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 12px"
+              :title="`${legacyUnlinkedTaskCount} 条历史整单任务未强行归属明细，仍保留在下方任务列表中`"
+            />
+            <el-table :data="itemProgressRows" stripe border size="small">
+              <el-table-column label="订单明细" min-width="180">
+                <template #default="{ row }">
+                  <div class="item-name">{{ row.item.item_name }}</div>
+                  <div v-if="row.item.material_process" class="item-subtitle">{{ row.item.material_process }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="明细总进度" width="165">
+                <template #default="{ row }">
+                  <el-progress :percentage="row.overallProgress" :stroke-width="8" />
+                  <div class="progress-value">{{ row.overallProgress }}%</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="设计" min-width="155">
+                <template #default="{ row }">
+                  <el-progress :percentage="row.designProgress" :stroke-width="8" />
+                  <div class="stage-line">
+                    <span>{{ row.designTask ? row.item.item_name : stageLabel(row.designTask, 'design') }}</span>
+                    <el-tag v-if="row.designTask" size="small" :type="taskStatusType(row.designTask.status)">{{ designStatusLabel(row.designTask.status) }}</el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="制作" min-width="155">
+                <template #default="{ row }">
+                  <el-progress :percentage="row.productionProgress" :stroke-width="8" />
+                  <div class="stage-line">
+                    <span>{{ row.productionTask ? row.item.item_name : stageLabel(row.productionTask, 'production') }}</span>
+                    <el-tag v-if="row.productionTask" size="small" :type="taskStatusType(row.productionTask.status)">{{ prodStatusLabel(row.productionTask.status) }}</el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="安装" min-width="155">
+                <template #default="{ row }">
+                  <el-progress :percentage="row.installationProgress" :stroke-width="8" />
+                  <div class="stage-line">
+                    <span>{{ row.installationTask ? row.item.item_name : stageLabel(row.installationTask, 'installation') }}</span>
+                    <el-tag v-if="row.installationTask" size="small" :type="taskStatusType(row.installationTask.status)">{{ instStatusLabel(row.installationTask.status) }}</el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
           <el-card shadow="never" class="info-card">
             <el-descriptions :column="2">
               <el-descriptions-item label="订单编号">{{ order.order_no }}</el-descriptions-item>
@@ -261,6 +318,9 @@
             </template>
             <el-table :data="designTasks" stripe size="small" v-loading="tasksLoading">
               <el-table-column prop="design_no" label="编号" width="180" />
+              <el-table-column label="订单明细" min-width="150">
+                <template #default="{ row }">{{ row.item_name || '整单任务' }}</template>
+              </el-table-column>
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
                   <div class="task-status-cell">
@@ -293,6 +353,9 @@
             </template>
             <el-table :data="productionTasks" stripe size="small" v-loading="tasksLoading">
               <el-table-column prop="production_no" label="编号" width="180" />
+              <el-table-column label="订单明细" min-width="150">
+                <template #default="{ row }">{{ row.item_name || '整单任务' }}</template>
+              </el-table-column>
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
                   <div class="task-status-cell">
@@ -325,6 +388,9 @@
             </template>
             <el-table :data="installationTasks" stripe size="small" v-loading="tasksLoading">
               <el-table-column prop="installation_no" label="编号" width="180" />
+              <el-table-column label="订单明细" min-width="150">
+                <template #default="{ row }">{{ row.item_name || '整单任务' }}</template>
+              </el-table-column>
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
                   <div class="task-status-cell">
@@ -403,6 +469,18 @@ const contactDraft = reactive({ person: '', phone: '' })
 const itemEditability = ref<OrderItemEditabilityResponse | null>(null)
 const canEditItems = computed(() => itemEditability.value?.can_edit_items === true)
 
+type OrderProgressTask = DesignTaskResponse | ProductionTaskResponse | InstallationTaskResponse
+type ItemProgressRow = {
+  item: OrderItemResponse
+  designTask: DesignTaskResponse | null
+  productionTask: ProductionTaskResponse | null
+  installationTask: InstallationTaskResponse | null
+  designProgress: number
+  productionProgress: number
+  installationProgress: number
+  overallProgress: number
+}
+
 function startContactEdit() {
   contactDraft.person = order.value?.contact_person || ''
   contactDraft.phone = order.value?.contact_phone || ''
@@ -442,7 +520,39 @@ const blockedTaskCount = computed(() => [...designTasks.value, ...productionTask
   .filter(task => task.is_blocked).length)
 const overdueTaskCount = computed(() => [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
   .filter(task => task.is_overdue).length)
+
+function findItemTask<T extends OrderProgressTask>(tasks: T[], itemId: string): T | null {
+  return tasks.find(task => task.order_item_id === itemId && task.status !== 'cancelled') || null
+}
+
+const itemProgressRows = computed<ItemProgressRow[]>(() => {
+  return (order.value?.items || []).map(item => {
+    const designTask = findItemTask(designTasks.value, item.id)
+    const productionTask = findItemTask(productionTasks.value, item.id)
+    const installationTask = findItemTask(installationTasks.value, item.id)
+    const designProgress = progressPct(designTask?.progress_pct)
+    const productionProgress = progressPct(productionTask?.progress_pct)
+    const installationProgress = progressPct(installationTask?.progress_pct)
+    return {
+      item,
+      designTask,
+      productionTask,
+      installationTask,
+      designProgress,
+      productionProgress,
+      installationProgress,
+      overallProgress: Math.round((designProgress + productionProgress + installationProgress) / 3),
+    }
+  })
+})
+
+const legacyUnlinkedTaskCount = computed(() => [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
+  .filter(task => task.status !== 'cancelled' && !task.order_item_id).length)
+
 const projectProgress = computed(() => {
+  if (itemProgressRows.value.length) {
+    return Math.round(itemProgressRows.value.reduce((sum, row) => sum + row.overallProgress, 0) / itemProgressRows.value.length)
+  }
   const tasks = [...designTasks.value, ...productionTasks.value, ...installationTasks.value]
     .filter(task => task.status !== 'cancelled')
   if (!tasks.length) return 0
@@ -451,6 +561,23 @@ const projectProgress = computed(() => {
 
 function progressPct(value: number | undefined) {
   return Math.min(100, Math.max(0, Number(value ?? 0)))
+}
+
+function stageLabel(task: OrderProgressTask | null, stage: 'design' | 'production' | 'installation') {
+  if (task) return '已关联任务'
+  return stage === 'design' ? '未生成设计任务' : '未进入此阶段'
+}
+
+function taskStatusType(status: string) {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
+    confirmed: 'success',
+    completed: 'success',
+    pending_review: 'warning',
+    pending_acceptance: 'warning',
+    rework: 'danger',
+    cancelled: 'info',
+  }
+  return map[status] || 'primary'
 }
 
 function toChineseAmount(n: number): string {
@@ -562,11 +689,11 @@ function statusColor(s: string) {
   return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
-function designStatusLabel(s: string) { const m: Record<string, string> = { pending: '初始/待分配', pending_review: '待确认', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
-function designStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', pending_review: 'warning', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
+function designStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '历史待确认', revision: '历史需修改', confirmed: '已完成', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
+function designStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
 function prodStatusLabel(s: string) { const m: Record<string, string> = { pending: '待制作', queued: '排队中', in_progress: '制作中', qc_check: '待质检', rework: '返工', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
 function prodStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
-function instStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
+function instStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '历史待验收', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
 function instStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', assigned: '', in_progress: 'warning', pending_acceptance: 'warning', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
 
 async function fetchOrder() {
@@ -728,6 +855,13 @@ onMounted(() => { fetchOrder(); fetchTasks() })
 .page { padding: 0; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.item-progress-card { margin-top: 16px; }
+.item-progress-card .progress-note { color: var(--ad-text-secondary); font-size: 12px; font-weight: normal; }
+.item-name { color: var(--ad-text); font-weight: 600; }
+.item-subtitle { margin-top: 3px; color: var(--ad-text-secondary); font-size: 12px; }
+.progress-value { margin-top: 3px; color: var(--ad-text-secondary); font-size: 12px; text-align: right; }
+.stage-line { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 3px; color: var(--ad-text-secondary); font-size: 12px; }
+.stage-line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-status-cell { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .item-form :deep(.el-form-item) { margin-bottom: 14px; }
 .impact-section-title { font-weight: 600; color: var(--ad-text); margin: 12px 0 8px; }

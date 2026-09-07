@@ -64,6 +64,7 @@ async def list_project_task_queue(
     stage: str | None = None,
     status: str | None = None,
     order_id: str | None = None,
+    order_item_id: str | None = None,
     overdue: bool | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_any_permission(
@@ -79,6 +80,7 @@ async def list_project_task_queue(
         stage=stage,
         status=status,
         order_id=order_id,
+        order_item_id=order_item_id,
         overdue=overdue,
     )
     return success_paginated(tasks, total, page, page_size)
@@ -197,13 +199,16 @@ async def list_design_tasks(
     page_size: int = Query(20, ge=1, le=100),
     status: str | None = None,
     order_id: str | None = None,
+    order_item_id: str | None = None,
     assigned_to: str | None = None,
     outsourced: bool | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_READ)),
 ):
     service = DesignTaskService(db)
-    tasks, total = await service.list_tasks(page, page_size, status, order_id, assigned_to, outsourced)
+    tasks, total = await service.list_tasks(
+        page, page_size, status, order_id, assigned_to, outsourced, order_item_id
+    )
     return success_paginated(tasks, total, page, page_size)
 
 
@@ -280,13 +285,16 @@ async def list_production_tasks(
     page_size: int = Query(20, ge=1, le=100),
     status: str | None = None,
     order_id: str | None = None,
+    order_item_id: str | None = None,
     assigned_to: str | None = None,
     outsourced: bool | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_READ)),
 ):
     service = ProductionTaskService(db)
-    tasks, total = await service.list_tasks(page, page_size, status, order_id, assigned_to, outsourced)
+    tasks, total = await service.list_tasks(
+        page, page_size, status, order_id, assigned_to, outsourced, order_item_id
+    )
     return success_paginated(tasks, total, page, page_size)
 
 
@@ -363,13 +371,16 @@ async def list_installation_tasks(
     page_size: int = Query(20, ge=1, le=100),
     status: str | None = None,
     order_id: str | None = None,
+    order_item_id: str | None = None,
     assigned_to: str | None = None,
     outsourced: bool | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_READ)),
 ):
     service = InstallationTaskService(db)
-    tasks, total = await service.list_tasks(page, page_size, status, order_id, assigned_to, outsourced)
+    tasks, total = await service.list_tasks(
+        page, page_size, status, order_id, assigned_to, outsourced, order_item_id
+    )
     return success_paginated(tasks, total, page, page_size)
 
 
