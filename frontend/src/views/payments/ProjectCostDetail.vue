@@ -183,7 +183,7 @@
     />
 
     <!-- Create/Edit Dialog -->
-    <el-dialog v-model="showDialog" :title="isEditing ? '编辑成本' : '登记成本'" width="min(92vw, 880px)" class="cost-dialog" :close-on-click-modal="false">
+    <el-dialog v-model="showDialog" :title="isEditing ? '编辑成本' : '登记成本'" width="min(96vw, 1360px)" class="cost-dialog" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-form-item :label="isQuote ? '报价单' : '订单'">
           <el-input :value="(isQuote ? (order?.quote_no || '') : (order?.order_no || '')) + ' ' + (order?.project_name || '')" disabled />
@@ -199,39 +199,70 @@
               <span>订单明细（可多选）</span>
               <span class="cost-scope-count">已选 {{ form.order_item_ids.length }} 项</span>
             </div>
-            <div v-if="costScopeOptions.length" class="cost-scope-items">
-              <div
-                v-for="option in costScopeOptions"
-                :key="option.id"
-                class="cost-scope-option"
-                :class="{ selected: form.order_item_ids.includes(option.id) }"
-                @click="toggleOrderItem(option.id)"
+            <div v-if="scopeTableRows.length" class="cost-scope-table-wrap">
+              <el-table
+                :data="scopeTableRows"
+                row-key="id"
+                border
+                stripe
+                size="small"
+                class="cost-scope-table"
+                :row-class-name="scopeRowClassName"
+                @row-click="handleScopeRowClick"
               >
-                <el-checkbox
-                  :model-value="form.order_item_ids.includes(option.id)"
-                  @change="setOrderItemSelected(option.id, $event)"
-                  @click.stop
-                />
-                <div class="scope-content">
-                  <span class="scope-title">{{ option.label }}</span>
-                  <span class="scope-detail">{{ option.detail || '未填写规格信息' }}</span>
-                  <strong>关联成本 ¥ {{ option.registeredAmount.toFixed(2) }}</strong>
-                </div>
-              </div>
+                <el-table-column label="" width="48" align="center">
+                  <template #default="{ row }">
+                    <el-checkbox
+                      :model-value="isScopeSelected(row)"
+                      :disabled="row.historical"
+                      @change="setOrderItemSelected(row.id, $event)"
+                      @click.stop
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column label="项目内容" min-width="150" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    <div class="scope-project-cell">
+                      <span>{{ row.label }}</span>
+                      <el-tag v-if="row.historical" type="info" size="small">历史明细</el-tag>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column label="产品/材质/工艺" min-width="170" show-overflow-tooltip>
+                  <template #default="{ row }">{{ row.materialProcess || '-' }}</template>
+                </el-table-column>
+                <el-table-column label="规格" min-width="150" show-overflow-tooltip>
+                  <template #default="{ row }">{{ row.specification || '-' }}</template>
+                </el-table-column>
+                <el-table-column label="面积" width="85" align="right">
+                  <template #default="{ row }">{{ formatScopeArea(row) }}</template>
+                </el-table-column>
+                <el-table-column label="数量" width="85" align="right">
+                  <template #default="{ row }">{{ formatScopeNumber(row.quantity) }}</template>
+                </el-table-column>
+                <el-table-column label="单位" width="70" align="center">
+                  <template #default="{ row }">{{ row.unit || '-' }}</template>
+                </el-table-column>
+                <el-table-column label="单价" width="105" align="right">
+                  <template #default="{ row }">{{ formatScopeMoney(row.unitPrice) }}</template>
+                </el-table-column>
+                <el-table-column label="小计" width="120" align="right">
+                  <template #default="{ row }">{{ formatScopeMoney(row.subtotalAmount) }}</template>
+                </el-table-column>
+                <el-table-column label="关联成本" width="140" align="right">
+                  <template #default="{ row }">
+                    <div v-if="row.historical" class="scope-cost-cell">
+                      <span class="scope-cost-muted">原归属</span>
+                    </div>
+                    <div v-else class="scope-cost-cell">
+                      <strong>¥ {{ row.registeredAmount.toFixed(2) }}</strong>
+                      <span>{{ row.recordCount > 0 ? `${row.recordCount} 笔` : '未登记' }}</span>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
             </div>
-            <div
-              v-for="scope in historicalScopes"
-              :key="scope.id"
-              class="cost-scope-option historical selected"
-            >
-              <el-checkbox :model-value="true" disabled />
-              <div class="scope-content">
-                <span class="scope-title">历史明细 · {{ scope.label }}</span>
-                <span class="scope-detail">{{ scope.detail }}</span>
-                <el-tag type="info" size="small">仅保留原归属</el-tag>
-              </div>
-            </div>
-            <el-empty v-if="costScopeOptions.length === 0 && historicalScopes.length === 0" description="暂无可关联的有效订单明细" :image-size="60" />
+            <el-empty v-else description="暂无可关联的有效订单明细" :image-size="60" />
             <div class="form-tip">多选仅表示这笔成本同时涉及这些明细；成本总额只入账一次，不做金额分摊或重复扣减。</div>
           </div>
         </el-form-item>
@@ -410,7 +441,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { ArrowLeft, Plus, Delete, Download } from '@element-plus/icons-vue'
 import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, QuoteDetailResponse, AttachmentResponse, ProjectCostItemSummaryResponse } from '@/types/api'
-import { buildProjectCostScopeOptions, getProjectCostScopeIds } from '@/utils/projectCostScope'
+import { buildProjectCostScopeOptions, getProjectCostScopeIds, type ProjectCostScopeOption } from '@/utils/projectCostScope'
 
 const route = useRoute()
 const router = useRouter()
@@ -446,7 +477,9 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null
 let orderRequestId = 0
 let dataRequestId = 0
 const queryCreateOpened = ref(false)
-const editingHistoricalScopes = ref<Array<{ id: string; label: string; detail: string }>>([])
+const editingScopeSnapshots = ref<Array<{ id: string; label: string; detail: string }>>([])
+
+type ProjectCostScopeTableRow = ProjectCostScopeOption & { historical: boolean }
 
 // Detect source type: order or quote
 const isQuote = computed(() => route.path.includes('/quote-costs/'))
@@ -468,7 +501,35 @@ const orderItems = computed(() => {
 })
 const costScopeOptions = computed(() => buildProjectCostScopeOptions(orderItems.value, costSummary.value?.items || []))
 const activeOrderItemIds = computed(() => new Set(costScopeOptions.value.map(option => option.id)))
-const historicalScopes = computed(() => editingHistoricalScopes.value.filter(scope => !activeOrderItemIds.value.has(scope.id)))
+const historicalScopes = computed(() => editingScopeSnapshots.value
+  .filter(scope => !activeOrderItemIds.value.has(scope.id))
+  .map(scope => {
+    const summary = costSummary.value?.items.find(item => item.order_item_id === scope.id)
+    return {
+      ...scope,
+      registeredAmount: summary?.total_registered || 0,
+      recordCount: summary?.record_count || 0,
+    }
+  }))
+const scopeTableRows = computed<ProjectCostScopeTableRow[]>(() => [
+  ...costScopeOptions.value.map(option => ({ ...option, historical: false })),
+  ...historicalScopes.value.map(scope => ({
+    id: scope.id,
+    label: scope.label,
+    detail: scope.detail,
+    materialProcess: '',
+    specification: scope.detail,
+    area: null,
+    useArea: false,
+    quantity: null,
+    unit: '',
+    unitPrice: null,
+    subtotalAmount: null,
+    registeredAmount: scope.registeredAmount,
+    recordCount: scope.recordCount,
+    historical: true,
+  })),
+])
 
 const form = reactive({
   category: '',
@@ -538,7 +599,7 @@ function resetForm() {
   Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', group_name: '', order_item_id: '', order_item_ids: [], quote_item_id: '', quantity: 0, specification: '', unit: '', unit_price: 0 })
   isEditing.value = false
   editingId.value = ''
-  editingHistoricalScopes.value = []
+  editingScopeSnapshots.value = []
   dialogAttachments.value = []
 }
 
@@ -575,13 +636,11 @@ function openEdit(row: ProjectCostResponse) {
     : (row.order_item_id ? [row.order_item_id] : [])
   const rowScopeNames = new Map((row.item_scopes || []).map(scope => [scope.order_item_id, scope.order_item_name]))
   form.order_item_ids = [...rowItemIds]
-  editingHistoricalScopes.value = rowItemIds
-    .filter(itemId => !activeOrderItemIds.value.has(itemId))
-    .map(itemId => ({
-      id: itemId,
-      label: rowScopeNames.get(itemId) || row.order_item_name || '未命名明细',
-      detail: '该明细已失效，仅保留原成本记录归属',
-    }))
+  editingScopeSnapshots.value = rowItemIds.map(itemId => ({
+    id: itemId,
+    label: rowScopeNames.get(itemId) || row.order_item_name || '未命名明细',
+    detail: '该明细已失效，仅保留原成本记录归属',
+  }))
   dialogAttachments.value = []
   showDialog.value = true
   loadAttachments(row.id)
@@ -598,6 +657,7 @@ function onFileChange(file: UploadFile) {
 }
 
 function setOrderItemSelected(orderItemId: string, selected: boolean) {
+  if (!activeOrderItemIds.value.has(orderItemId)) return
   if (selected) {
     if (!form.order_item_ids.includes(orderItemId)) form.order_item_ids.push(orderItemId)
     return
@@ -606,8 +666,35 @@ function setOrderItemSelected(orderItemId: string, selected: boolean) {
 }
 
 function toggleOrderItem(orderItemId: string) {
-  if (editingHistoricalScopes.value.some(scope => scope.id === orderItemId)) return
+  if (historicalScopes.value.some(scope => scope.id === orderItemId)) return
   setOrderItemSelected(orderItemId, !form.order_item_ids.includes(orderItemId))
+}
+
+function isScopeSelected(row: ProjectCostScopeTableRow) {
+  return form.order_item_ids.includes(row.id)
+}
+
+function handleScopeRowClick(row: ProjectCostScopeTableRow) {
+  if (row.historical) return
+  toggleOrderItem(row.id)
+}
+
+function scopeRowClassName({ row }: { row: ProjectCostScopeTableRow }) {
+  if (row.historical) return 'scope-row-historical'
+  return isScopeSelected(row) ? 'scope-row-selected' : ''
+}
+
+function formatScopeNumber(value: number | null) {
+  if (value == null) return '-'
+  return Number.isInteger(value) ? String(value) : value.toFixed(2)
+}
+
+function formatScopeArea(row: ProjectCostScopeTableRow) {
+  return row.useArea && row.area != null ? row.area.toFixed(2) : '-'
+}
+
+function formatScopeMoney(value: number | null) {
+  return value == null ? '-' : `¥ ${value.toFixed(2)}`
 }
 
 function costScopeLabel(row: ProjectCostResponse) {
@@ -959,6 +1046,11 @@ onUnmounted(stopAutoRefresh)
   white-space: nowrap;
 }
 .search-bar { display: flex; align-items: center; }
+.cost-dialog :deep(.el-dialog__body) {
+  max-height: min(70vh, 760px);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
 .cost-scope-form-item :deep(.el-form-item__content) {
   min-width: 0;
 }
@@ -998,68 +1090,54 @@ onUnmounted(stopAutoRefresh)
   font-size: 12px;
   font-weight: 400;
 }
-.cost-scope-items {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+.cost-scope-table-wrap {
+  width: 100%;
+  overflow-x: auto;
 }
-.cost-scope-option {
+.cost-scope-table {
+  width: 100%;
+  min-width: 1080px;
+}
+.scope-project-cell {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--ad-border, #dcdfe6);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: border-color 0.2s, background-color 0.2s;
-}
-.cost-scope-option:hover,
-.cost-scope-option.selected {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-}
-.cost-scope-option.historical {
-  cursor: default;
-  border-style: dashed;
-  background: var(--el-fill-color-light);
-}
-.cost-scope-option.historical:hover {
-  border-color: var(--ad-border, #dcdfe6);
-  background: var(--el-fill-color-light);
-}
-.cost-scope-option :deep(.el-radio) {
-  margin-right: 0;
-}
-.cost-scope-option :deep(.el-checkbox) {
-  flex: 0 0 auto;
-  margin-right: 0;
-}
-.scope-content {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  color: var(--ad-text-secondary, #888);
-  font-size: 12px;
 }
-.scope-title {
-  grid-column: 1 / -1;
-  overflow: hidden;
-  color: var(--ad-text, #303133);
-  font-size: 13px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.scope-detail {
+.scope-project-cell > span {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.scope-content strong {
+.scope-cost-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  line-height: 1.25;
+}
+.scope-cost-cell strong {
   color: var(--el-color-warning);
   white-space: nowrap;
+}
+.scope-cost-cell span {
+  color: var(--ad-text-secondary, #888);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.scope-cost-cell .scope-cost-muted {
+  color: var(--el-color-info);
+}
+.cost-scope-table :deep(.scope-row-historical td.el-table__cell) {
+  background: var(--el-fill-color-light);
+}
+.cost-scope-table :deep(.scope-row-selected td.el-table__cell) {
+  background: var(--el-color-primary-light-9);
+}
+.cost-scope-table :deep(.scope-row-historical .cell) {
+  color: var(--ad-text-secondary, #888);
 }
 .scope-tags {
   display: flex;
@@ -1074,9 +1152,6 @@ onUnmounted(stopAutoRefresh)
   line-height: 1.5;
 }
 @media (max-width: 760px) {
-  .cost-scope-items {
-    grid-template-columns: 1fr;
-  }
   .cost-scope-mode-row {
     align-items: flex-start;
     flex-wrap: wrap;

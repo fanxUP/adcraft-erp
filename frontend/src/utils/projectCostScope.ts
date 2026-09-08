@@ -9,8 +9,12 @@ export interface ProjectCostScopeItemLike {
   width_unit?: string
   height?: number
   height_unit?: string
+  use_area?: boolean
+  area?: number
   quantity?: number
   unit?: string
+  unit_price?: number
+  subtotal_amount?: number
   lifecycle_status?: string
 }
 
@@ -24,6 +28,14 @@ export interface ProjectCostScopeOption {
   id: string
   label: string
   detail: string
+  materialProcess: string
+  specification: string
+  area: number | null
+  useArea: boolean
+  quantity: number | null
+  unit: string
+  unitPrice: number | null
+  subtotalAmount: number | null
   registeredAmount: number
   recordCount: number
 }
@@ -74,6 +86,14 @@ export function buildProjectCostScopeOptions(
         id: item.id,
         label: item.item_name,
         detail: formatItemDetail(item),
+        materialProcess: item.material_process || '',
+        specification: formatSpecification(item),
+        area: item.area ?? null,
+        useArea: item.use_area === true,
+        quantity: item.quantity ?? null,
+        unit: item.unit || '',
+        unitPrice: item.unit_price ?? null,
+        subtotalAmount: item.subtotal_amount ?? null,
         registeredAmount: summary?.total_registered || 0,
         recordCount: summary?.record_count || 0,
       }

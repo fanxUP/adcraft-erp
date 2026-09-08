@@ -10,8 +10,12 @@ describe('buildProjectCostScopeOptions', () => {
           item_name: '台签纸',
           material_process: '铜版纸彩印',
           specification: '210×297mm',
+          use_area: true,
+          area: 1.25,
           quantity: 20,
           unit: '张',
+          unit_price: 12.5,
+          subtotal_amount: 250,
           lifecycle_status: 'active',
         },
         {
@@ -34,6 +38,14 @@ describe('buildProjectCostScopeOptions', () => {
         id: 'item-active',
         label: '台签纸',
         detail: '铜版纸彩印 · 210×297mm · 20 张',
+        materialProcess: '铜版纸彩印',
+        specification: '210×297mm',
+        area: 1.25,
+        useArea: true,
+        quantity: 20,
+        unit: '张',
+        unitPrice: 12.5,
+        subtotalAmount: 250,
         registeredAmount: 180,
         recordCount: 2,
       },
@@ -41,6 +53,14 @@ describe('buildProjectCostScopeOptions', () => {
         id: 'item-default-active',
         label: '亚克力字',
         detail: '1 套',
+        materialProcess: '',
+        specification: '',
+        area: null,
+        useArea: false,
+        quantity: 1,
+        unit: '套',
+        unitPrice: null,
+        subtotalAmount: null,
         registeredAmount: 0,
         recordCount: 0,
       },
@@ -55,6 +75,36 @@ describe('buildProjectCostScopeOptions', () => {
 
     expect(options).toHaveLength(1)
     expect(options[0].registeredAmount).toBe(0)
+  })
+
+  it('保留面积开关、尺寸回退和零值金额，供明细表逐列展示', () => {
+    const [option] = buildProjectCostScopeOptions(
+      [{
+        id: 'item-area',
+        item_name: '户外展板',
+        length: 1.2,
+        length_unit: 'm',
+        width: 0.8,
+        width_unit: 'm',
+        use_area: false,
+        area: 0.96,
+        quantity: 0,
+        unit_price: 0,
+        subtotal_amount: 0,
+      }],
+      [],
+    )
+
+    expect(option).toMatchObject({
+      materialProcess: '',
+      specification: '1.20m × 0.80m',
+      area: 0.96,
+      useArea: false,
+      quantity: 0,
+      unit: '',
+      unitPrice: 0,
+      subtotalAmount: 0,
+    })
   })
 })
 
