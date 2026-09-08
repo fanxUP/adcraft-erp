@@ -1,23 +1,33 @@
 """Contract tests for task change history backed by operation logs."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import patch
 from uuid import UUID
 
 import pytest
-
-from app.schemas.task import TaskHistoryItem
 from app.services import task_history_service
 from app.services.task_history_service import (
-    build_task_history_item,
+    _utc_now,
     normalize_task_type,
     record_task_event,
     task_history_snapshot,
 )
 
-
 TASK_ID = UUID("22222222-2222-2222-2222-222222222222")
 USER_ID = UUID("11111111-1111-1111-1111-111111111111")
+
+
+def test_task_history_timestamp_helper_returns_naive_utc():
+    expected = datetime(2026, 9, 9, 8, 0, tzinfo=UTC)
+
+    with patch("app.services.task_history_service.datetime") as clock:
+        clock.now.return_value = expected
+        actual = _utc_now()
+
+    clock.now.assert_called_once_with(UTC)
+    assert actual == expected.replace(tzinfo=None)
+    assert actual.tzinfo is None
 
 
 def make_task(**overrides):
@@ -82,29 +92,3 @@ async def test_record_task_event_writes_before_after_snapshots(monkeypatch):
     assert kwargs["after_data"]["status"] == "in_progress"
     assert kwargs["after_data"]["reason"] == "开始制作"
     assert kwargs["after_data"]["changed_fields"] == ["status", "progress_pct"]
-
-
-def test_build_task_history_item_returns_frontend_contract():
-    log = SimpleNamespace(
-        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-        user_id=USER_ID,
-        user_name=None,
-        object_type="installation_task",
-        object_id=TASK_ID,
-        action="update",
-        before_data={"status": "assigned", "progress_pct": 20},
-        after_data={"status": "assigned", "progress_pct": 40, "changed_fields": ["progress_pct"]},
-        created_at=datetime(2026, 9, 7, 10, 0, 0),
-    )
-
-    item = TaskHistoryItem.model_validate(build_task_history_item(log, "李四"))
-
-    assert item.task_type == "installation"
-    assert item.task_id == str(TASK_ID)
-    assert item.action == "update"
-    assert item.user_name == "李四"
-    assert item.from_status == "assigned"
-    assert item.to_status == "assigned"
-    assert item.from_progress_pct == 20
-    assert item.to_progress_pct == 40
-    assert item.changed_fields == ["progress_pct"]

@@ -12,7 +12,6 @@ from .common import action, guidance_result, unknown_guidance
 from .installation_preparation import build_installation_preparation
 from .order_progress import attach_order_overview
 
-
 TASK_CONFIGS = {
     "design_task": {
         "label": "设计任务",

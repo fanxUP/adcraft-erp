@@ -1,12 +1,11 @@
 """Deterministic order progress and anomaly aggregation."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from app.ai_assistant.page_capabilities import build_page_action_semantics
 
 from .installation_preparation import build_installation_preparation
-
 
 STAGES = (
     ("order", "订单确认"),
@@ -72,8 +71,8 @@ def _parse_datetime(value) -> datetime | None:
         except ValueError:
             return None
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=BUSINESS_TIMEZONE).astimezone(timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        return parsed.replace(tzinfo=BUSINESS_TIMEZONE).astimezone(UTC)
+    return parsed.astimezone(UTC)
 
 
 def _workflow_action(
@@ -136,7 +135,7 @@ def build_order_alerts(
         ]
 
     alerts: list[dict] = []
-    now = _parse_datetime(snapshot.get("_now")) or datetime.now(timezone.utc)
+    now = _parse_datetime(snapshot.get("_now")) or datetime.now(UTC)
     deadline = _parse_datetime(snapshot.get("delivery_deadline"))
     if status not in ("completed", "cancelled") and deadline and deadline < now:
         alerts.append(

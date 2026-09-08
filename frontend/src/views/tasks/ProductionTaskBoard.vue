@@ -45,7 +45,7 @@
               </div>
             </div>
             <div class="card-name">{{ card.project_name }}</div>
-            <div class="card-item">明细：{{ card.item_name || '整单任务' }}</div>
+            <div class="card-item">明细：{{ card.item_name || '未关联订单明细' }}</div>
             <div class="card-meta">
               <span>{{ card.order_no || '-' }}</span>
               <span>{{ card.customer_name || '-' }}</span>

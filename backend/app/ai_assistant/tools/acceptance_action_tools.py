@@ -5,7 +5,6 @@ from uuid import UUID
 from app.ai_assistant.tool_registry import AiToolDefinition, ToolRegistry
 from app.domain.workflows import ACCEPTANCE_WORKFLOW, allowed_targets
 
-
 ACCEPTANCE_STATUS_LABELS = {
     "draft": "草稿",
     "pending": "待验收",

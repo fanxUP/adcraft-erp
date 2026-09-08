@@ -1,8 +1,9 @@
 """Permission guard — verify user has permission to use a tool."""
 
 from fastapi import HTTPException, status
-from app.models.user import User
+
 from app.ai_assistant.tool_registry import AiToolDefinition
+from app.models.user import User
 
 
 class PermissionGuard:

@@ -52,7 +52,7 @@
             >
               <template #title>
                 <div class="legacy-alert-title">
-                  <span>{{ legacyUnlinkedTaskCount }} 条历史整单任务还未关联订单明细</span>
+                  <span>{{ legacyUnlinkedTaskCount }} 条历史任务还未关联订单明细</span>
                   <el-button size="small" type="warning" plain @click="activeTab = 'tasks'">查看并处理</el-button>
                 </div>
               </template>
@@ -331,7 +331,7 @@
           <el-card v-if="legacyUnlinkedTasks.length" shadow="never" class="info-card legacy-unlinked-card" style="margin-bottom: 16px">
             <template #header>
               <div class="card-header">
-                <span>待关联的历史整单任务</span>
+                <span>待关联的历史任务</span>
                 <el-tag type="warning" size="small">{{ legacyUnlinkedTasks.length }} 条</el-tag>
               </div>
             </template>
@@ -368,7 +368,7 @@
             <el-table :data="designTasks" stripe size="small" v-loading="tasksLoading">
               <el-table-column prop="design_no" label="编号" width="180" />
               <el-table-column label="订单明细" min-width="150">
-                <template #default="{ row }">{{ row.item_name || '整单任务' }}</template>
+                <template #default="{ row }">{{ row.item_name || '未关联订单明细' }}</template>
               </el-table-column>
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
@@ -400,7 +400,7 @@
             <el-table :data="productionTasks" stripe size="small" v-loading="tasksLoading">
               <el-table-column prop="production_no" label="编号" width="180" />
               <el-table-column label="订单明细" min-width="150">
-                <template #default="{ row }">{{ row.item_name || '整单任务' }}</template>
+                <template #default="{ row }">{{ row.item_name || '未关联订单明细' }}</template>
               </el-table-column>
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
@@ -432,7 +432,7 @@
             <el-table :data="installationTasks" stripe size="small" v-loading="tasksLoading">
               <el-table-column prop="installation_no" label="编号" width="180" />
               <el-table-column label="订单明细" min-width="150">
-                <template #default="{ row }">{{ row.item_name || '整单任务' }}</template>
+                <template #default="{ row }">{{ row.item_name || '未关联订单明细' }}</template>
               </el-table-column>
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">

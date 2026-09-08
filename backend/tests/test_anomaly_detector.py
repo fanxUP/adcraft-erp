@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
-from uuid import uuid4, UUID
-
-import pytest
-
+from uuid import UUID
 
 # Sample test data
 SAMPLE_ORDER_ID = UUID("33333333-3333-3333-3333-333333333333")
@@ -63,9 +59,9 @@ class TestAnomalyDetector:
     def test_severity_classification(self):
         """Verify severity values are consistent across the module."""
         from app.ai.rule_based.anomaly_detector import (
+            INSTALLATION_TERMINAL_STATES,
             ORDER_TERMINAL_STATES,
             OUTSOURCE_TERMINAL_STATES,
-            INSTALLATION_TERMINAL_STATES,
         )
         assert "completed" in ORDER_TERMINAL_STATES
         assert "cancelled" in ORDER_TERMINAL_STATES
@@ -94,6 +90,43 @@ def test_anomaly_alert_schema_validates():
     )
     assert response.mode == "rule_based"
     assert len(response.alerts) == 1
+
+
+def test_cdr_calculation_anomaly_check_reports_invalid_inputs():
+    """试算异常检查应返回可读异常，而不是把非法输入静默吞掉。"""
+    import asyncio
+
+    from app.ai.rule_based.cdr_anomaly_detector import CdrPriceAnomalyDetector
+
+    anomalies = asyncio.run(CdrPriceAnomalyDetector(None).check_calculation({
+        "line_no": 2,
+        "width_mm": 100,
+        "height_mm": 100,
+        "hole_area_mm2": 12000,
+        "unit_price": -1,
+        "quantity": 0,
+    }))
+
+    anomaly_types = {item["type"] for item in anomalies}
+    assert {
+        "hole_area_exceeds_bbox",
+        "negative_unit_price",
+        "invalid_quantity",
+    } <= anomaly_types
+
+
+def test_cdr_calculation_anomaly_check_ignores_optional_missing_geometry():
+    """数量/固定价类报价没有尺寸时不应被误报。"""
+    import asyncio
+
+    from app.ai.rule_based.cdr_anomaly_detector import CdrPriceAnomalyDetector
+
+    anomalies = asyncio.run(CdrPriceAnomalyDetector(None).check_calculation({
+        "unit_price": 0,
+        "quantity": 1,
+    }))
+
+    assert anomalies == []
 
 
 def _async_return(value):

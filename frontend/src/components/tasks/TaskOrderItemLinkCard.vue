@@ -3,10 +3,13 @@
     <template #header>
       <div class="card-header">
         <span>任务处理</span>
-        <el-tag v-if="linkedItemIds.length" type="success" size="small">
+        <el-tag v-if="isHistoricalReadOnly" type="info" size="small">
+          历史任务（只读）
+        </el-tag>
+        <el-tag v-else-if="linkedItemIds.length" type="success" size="small">
           已关联 {{ linkedItemIds.length }} 条明细
         </el-tag>
-        <el-tag v-else type="warning" size="small">历史整单任务</el-tag>
+        <el-tag v-else type="warning" size="small">历史任务待关联明细</el-tag>
       </div>
     </template>
 
@@ -43,8 +46,10 @@
       </div>
 
       <el-alert
-        title="状态变更只作用于下方勾选的订单明细；新勾选明细会在提交状态时自动纳入本任务。"
-        type="info"
+        :title="isHistoricalReadOnly
+          ? '该历史任务未关联订单明细且已结束，不能再次变更任务状态；如需补录历史明细，可使用上方关联操作。'
+          : '状态变更只作用于下方勾选的订单明细；新勾选明细会在提交状态时自动纳入本任务。'"
+        :type="isHistoricalReadOnly ? 'warning' : 'info'"
         :closable="false"
         show-icon
       />
@@ -125,13 +130,15 @@
     <section class="task-section status-section" aria-labelledby="task-status-section-title">
       <div id="task-status-section-title" class="section-heading">
         <span>变更状态</span>
-        <span class="section-note">点击可执行的下一步</span>
+        <span class="section-note">
+          {{ isHistoricalReadOnly ? '历史终态仅支持查看' : '点击可执行的下一步' }}
+        </span>
       </div>
       <TaskWorkflow
         :steps="steps"
         :current-status="currentStatus"
         :workflow="workflow"
-        :changing="changing || saving"
+        :changing="changing || saving || isHistoricalReadOnly"
         @change="handleWorkflowChange"
       />
     </section>
@@ -189,6 +196,17 @@ const linkedItemNames = computed(() => {
   if (props.currentItemNames?.length) return props.currentItemNames
   if (props.currentItemName) return [props.currentItemName]
   return linkedItemIds.value.map(() => '明细未命名')
+})
+
+const terminalStatuses: Record<TaskType, string[]> = {
+  design: ['confirmed', 'cancelled'],
+  production: ['completed', 'cancelled'],
+  installation: ['completed', 'cancelled'],
+}
+
+const isHistoricalReadOnly = computed(() => {
+  if (linkedItemIds.value.length) return false
+  return terminalStatuses[props.taskType]?.includes(props.currentStatus) ?? false
 })
 
 function itemLabel(item: TaskOrderItemOption) {
@@ -280,6 +298,10 @@ async function handleLink() {
 }
 
 function handleWorkflowChange(status: string) {
+  if (isHistoricalReadOnly.value) {
+    ElMessage.info('该历史任务已结束，不能再次变更任务状态')
+    return
+  }
   if (!selectedItemIds.value.length) {
     ElMessage.warning('请先勾选要变更状态的订单明细')
     return

@@ -13,11 +13,10 @@ from app.models.user import User
 from app.schemas.ai_prompt import (
     PromptTemplateCreate,
     PromptTemplateUpdate,
-    PromptVersionCreate,
-    PromptVersionUpdate,
     PromptTestRequest,
+    PromptVersionCreate,
 )
-from app.schemas.common import success, success_paginated, error
+from app.schemas.common import error, success, success_paginated
 from app.services.ai_prompt_service import AIPromptService
 
 logger = logging.getLogger(__name__)

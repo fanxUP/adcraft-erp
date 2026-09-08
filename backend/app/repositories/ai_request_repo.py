@@ -1,15 +1,22 @@
 """Repository for AI Request logging and querying."""
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from typing import Optional
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import Date, bindparam, cast, delete, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ai_request import AIRequest
 from app.models.ai_usage_daily import AIUsageDaily
+
+_BUSINESS_TIMEZONE = ZoneInfo("Asia/Shanghai")
+
+
+def _business_day_start(day: date) -> datetime:
+    return datetime.combine(day, time.min, tzinfo=_BUSINESS_TIMEZONE)
 
 
 class AIRequestRepository:
@@ -64,9 +71,12 @@ class AIRequestRepository:
         if provider_id:
             query = query.where(AIRequest.provider_id == provider_id)
         if start_date:
-            query = query.where(AIRequest.created_at >= datetime.combine(start_date, datetime.min.time()))
+            query = query.where(AIRequest.created_at >= _business_day_start(start_date))
         if end_date:
-            query = query.where(AIRequest.created_at < datetime.combine(end_date, datetime.min.time()).replace(day=end_date.day + 1))
+            query = query.where(
+                AIRequest.created_at
+                < _business_day_start(end_date + timedelta(days=1))
+            )
 
         count_query = select(func.count()).select_from(query.subquery())
         total = (await self.db.execute(count_query)).scalar() or 0
@@ -141,7 +151,6 @@ class AIRequestRepository:
         *,
         start_date: date,
         end_date: date,
-        group_by: str = "day",
         task_code: Optional[str] = None,
     ) -> list[dict]:
         """Get aggregated usage summary."""

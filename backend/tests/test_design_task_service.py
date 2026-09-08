@@ -5,12 +5,26 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
 import pytest
+from app.api import tasks as task_api
+from app.schemas.task import (
+    DesignTaskCreate,
+    InstallationTaskCreate,
+    ProductionTaskCreate,
+)
+from app.services.task_service import (
+    DesignTaskService,
+    InstallationTaskService,
+    ProductionTaskService,
+    _prepare_task_create_data,
+)
 
-from app.services.task_service import DesignTaskService
 from tests.conftest import (
+    SAMPLE_ORDER_ITEM_ID,
     SAMPLE_TASK_ID,
     SAMPLE_USER_ID,
     make_mock_design_task,
+    make_mock_installation_task,
+    make_mock_production_task,
 )
 
 
@@ -117,6 +131,61 @@ async def test_change_status_nonexistent_task(service, mock_repo):
         await service.change_status(SAMPLE_TASK_ID, "designing", SAMPLE_USER_ID)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("service_class", "task_factory", "terminal_status", "next_status"),
+    [
+        (DesignTaskService, make_mock_design_task, "confirmed", "designing"),
+        (ProductionTaskService, make_mock_production_task, "completed", "in_progress"),
+        (InstallationTaskService, make_mock_installation_task, "completed", "in_progress"),
+        (InstallationTaskService, make_mock_installation_task, "cancelled", "in_progress"),
+    ],
+)
+async def test_terminal_unlinked_historical_task_cannot_change_status(
+    service_class,
+    task_factory,
+    terminal_status,
+    next_status,
+):
+    """终态且没有订单明细范围的历史任务只能查看，不能再次流转。"""
+    db = AsyncMock()
+    repo = MagicMock()
+    task = task_factory(
+        status=terminal_status,
+        progress_pct=0 if terminal_status == "cancelled" else 100,
+    )
+    task.order_item_id = None
+    repo.get_by_id = AsyncMock(return_value=task)
+
+    service = service_class(db)
+    service.repo = repo
+
+    with (
+        patch(
+            "app.services.task_service._linked_order_item_ids",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.task_service._materialize_legacy_task_scope",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.task_service._validate_order_item_ids",
+            new=AsyncMock(side_effect=ValueError("baseline status path")),
+        ),
+    ):
+        with pytest.raises(
+            ValueError,
+            match="历史任务未关联订单明细，已结束任务仅可查看，不能变更状态",
+        ):
+            await service.change_status(
+                SAMPLE_TASK_ID,
+                next_status,
+                SAMPLE_USER_ID,
+                order_item_ids=[str(SAMPLE_ORDER_ITEM_ID)],
+            )
+
+
 # --- Get Task Tests ---
 
 @pytest.mark.asyncio
@@ -149,7 +218,6 @@ async def test_get_task_not_found(service, mock_repo):
 @pytest.mark.asyncio
 async def test_to_dict_includes_all_fields(service):
     """_to_dict properly serializes a design task object."""
-    now = datetime.now(timezone.utc)
     task = make_mock_design_task(
         task_id=SAMPLE_TASK_ID,
         design_no="D20260629-0042",
@@ -228,13 +296,19 @@ async def test_list_tasks_with_results(service, mock_repo):
 @pytest.mark.asyncio
 async def test_create_task(service, mock_repo):
     """create_task sets design_no, status, and returns serialized result."""
-    service.db.get.return_value = MagicMock(
+    order = MagicMock(
         doc_type="order",
         deleted_at=None,
         status="confirmed",
         customer_id=SAMPLE_USER_ID,
         project_name="订单项目",
     )
+    item = MagicMock(
+        id=SAMPLE_ORDER_ITEM_ID,
+        document_id=SAMPLE_TASK_ID,
+        lifecycle_status="active",
+    )
+    service.db.get.side_effect = [order, item]
 
     async def create_side_effect(data):
         return make_mock_design_task(
@@ -244,9 +318,16 @@ async def test_create_task(service, mock_repo):
 
     mock_repo.create.side_effect = create_side_effect
 
-    with patch("app.services.task_service.generate_design_no", AsyncMock(return_value="D20260629-0050")):
+    with (
+        patch("app.services.task_service.generate_design_no", AsyncMock(return_value="D20260629-0050")),
+        patch(
+            "app.services.task_service._task_order_item_option_map",
+            AsyncMock(return_value={SAMPLE_ORDER_ITEM_ID: {"can_select": True}}),
+        ),
+    ):
         result = await service.create_task({
             "order_id": SAMPLE_TASK_ID,
+            "order_item_id": SAMPLE_ORDER_ITEM_ID,
             "customer_id": SAMPLE_USER_ID,
             "project_name": "新设计",
         })
@@ -273,6 +354,80 @@ async def test_create_task_rejects_order_outside_design_stage(service, mock_repo
         await service.create_task({"order_id": SAMPLE_TASK_ID})
 
     mock_repo.create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_prepare_task_create_data_requires_order_item(service):
+    """New tasks must be scoped to at least one order detail."""
+    service.db.get.return_value = MagicMock(
+        doc_type="order",
+        deleted_at=None,
+        status="confirmed",
+        customer_id=SAMPLE_USER_ID,
+        project_name="订单项目",
+    )
+
+    with pytest.raises(ValueError, match="至少选择一条订单明细"):
+        await _prepare_task_create_data(
+            service.db,
+            {"order_id": str(SAMPLE_TASK_ID)},
+            allowed_order_statuses=("confirmed",),
+            task_label="设计",
+            task_type="design",
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("endpoint", "service_name", "payload", "expected_key"),
+    [
+        (
+            task_api.create_design_task,
+            "DesignTaskService",
+            DesignTaskCreate(
+                order_id=str(SAMPLE_TASK_ID),
+                order_item_id=str(SAMPLE_ORDER_ITEM_ID),
+            ),
+            "order_item_id",
+        ),
+        (
+            task_api.create_production_task,
+            "ProductionTaskService",
+            ProductionTaskCreate(
+                order_id=str(SAMPLE_TASK_ID),
+                order_item_ids=[str(SAMPLE_ORDER_ITEM_ID)],
+            ),
+            "order_item_ids",
+        ),
+        (
+            task_api.create_installation_task,
+            "InstallationTaskService",
+            InstallationTaskCreate(
+                order_id=str(SAMPLE_TASK_ID),
+                order_item_ids=[str(SAMPLE_ORDER_ITEM_ID)],
+            ),
+            "order_item_ids",
+        ),
+    ],
+)
+async def test_task_create_endpoint_omits_none_item_alias(
+    endpoint,
+    service_name,
+    payload,
+    expected_key,
+):
+    """Create endpoints must not pass the other optional item alias as null."""
+    service = MagicMock()
+    service.create_task = AsyncMock(return_value={"id": "task-id"})
+    current_user = MagicMock(id=SAMPLE_USER_ID)
+
+    with patch.object(task_api, service_name, return_value=service):
+        await endpoint(payload, AsyncMock(), current_user)
+
+    create_payload = service.create_task.await_args.args[0]
+    assert expected_key in create_payload
+    omitted_key = "order_item_ids" if expected_key == "order_item_id" else "order_item_id"
+    assert omitted_key not in create_payload
 
 
 # --- Update Task Tests ---

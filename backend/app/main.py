@@ -12,14 +12,63 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.core.config import settings
-from app.core.performance import PerformanceMiddleware, SLOW_QUERY_MS, SLOW_API_MS, install_slow_query_listener
-from app.middleware.rate_limit import RateLimitMiddleware
-from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup, admin, notifications, conversations, acceptances, contracts, framework_contracts, vehicles, vehicle_agent, vehicle_dashboard, aerial, ai_execute, ai_models, ai_providers, ai_prompts, ai_requests, ai_routes, employees, attendance, departments, salaries, salary_rules, employment_histories, leaves
-from app.api import cdr_quotes
 # AI module routes
-from app.ai.api import ai_anomalies, ai_knowledge, ai_quote, ai_reports, ai_site_photo, ai_payment_ocr
+from app.ai.api import (
+    ai_anomalies,
+    ai_knowledge,
+    ai_payment_ocr,
+    ai_quote,
+    ai_reports,
+    ai_site_photo,
+)
 from app.ai_assistant.router import router as ai_assistant_router
+from app.api import (
+    acceptances,
+    admin,
+    aerial,
+    ai_execute,
+    ai_models,
+    ai_prompts,
+    ai_providers,
+    ai_requests,
+    ai_routes,
+    attendance,
+    auth,
+    backup,
+    cdr_quotes,
+    contracts,
+    conversations,
+    customers,
+    departments,
+    employees,
+    employment_histories,
+    framework_contracts,
+    inventory,
+    leaves,
+    notifications,
+    operation_logs,
+    orders,
+    outsource,
+    payments,
+    products,
+    quotes,
+    reports,
+    salaries,
+    salary_rules,
+    tasks,
+    users,
+    vehicle_agent,
+    vehicle_dashboard,
+    vehicles,
+)
+from app.core.config import settings
+from app.core.performance import (
+    SLOW_API_MS,
+    SLOW_QUERY_MS,
+    PerformanceMiddleware,
+    install_slow_query_listener,
+)
+from app.middleware.rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +87,8 @@ async def lifespan(app: FastAPI):
                  SLOW_QUERY_MS, SLOW_API_MS)
     # Rate limiting: Redis-backed，覆盖 auth/ai/upload 等关键路径防爆破（测试环境跳过，避免干扰用例）
     if settings.APP_ENV.lower() != "test":
-        from app.core.redis import get_redis
         from app.core.rate_limiter import RateLimiter, default_rules
+        from app.core.redis import get_redis
         try:
             _rl_redis = await get_redis()
             _limiter = RateLimiter(_rl_redis)
@@ -159,7 +208,7 @@ async def health_check():
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         db_status = "ok"
-    except Exception:
+    except Exception:  # noqa: BLE001 - health checks convert any database failure into HTTP 503
         db_status = "error"
     status_code = 200 if db_status == "ok" else 503
     return JSONResponse(
@@ -195,7 +244,6 @@ app.include_router(tasks.design_router, prefix="/api/v1")
 app.include_router(tasks.prod_router, prefix="/api/v1")
 app.include_router(tasks.inst_router, prefix="/api/v1")
 app.include_router(tasks.queue_router, prefix="/api/v1")
-app.include_router(tasks.history_router, prefix="/api/v1")
 app.include_router(tasks.att_router, prefix="/api/v1")
 app.include_router(payments.pay_router, prefix="/api/v1")
 app.include_router(payments.stmt_router, prefix="/api/v1")

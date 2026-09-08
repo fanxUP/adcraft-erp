@@ -1,8 +1,12 @@
 """Installation task tools for AI Assistant."""
 
+from datetime import date, datetime
 from uuid import UUID
-from datetime import datetime
-from app.ai_assistant.tool_registry import ToolRegistry, AiToolDefinition
+from zoneinfo import ZoneInfo
+
+from app.ai_assistant.tool_registry import AiToolDefinition, ToolRegistry
+
+_BUSINESS_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 
 async def create_installation_task_draft(db, user, order_id="", customer_name="", project_name="",
@@ -19,7 +23,7 @@ async def create_installation_task_draft(db, user, order_id="", customer_name=""
             "customer_name": customer_name or (order.get("customer_name", "") if order else ""),
             "project_name": project_name or (order.get("project_name", "") if order else ""),
             "install_address": install_address or (order.get("install_address", "") if order else ""),
-            "scheduled_date": scheduled_date or datetime.now().strftime("%Y-%m-%d"),
+            "scheduled_date": scheduled_date or datetime.now(_BUSINESS_TIMEZONE).date().isoformat(),
             "assigned_to": assigned_to or "",
             "notes": notes or "",
         },
@@ -41,7 +45,7 @@ async def create_installation_task_confirmed(db, user, order_id, customer_name="
     }
     if scheduled_date:
         try:
-            data["scheduled_date"] = datetime.strptime(scheduled_date, "%Y-%m-%d").date()
+            data["scheduled_date"] = date.fromisoformat(scheduled_date)
         except ValueError:
             pass
     svc = InstallationTaskService(db)

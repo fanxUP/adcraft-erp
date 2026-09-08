@@ -1,21 +1,21 @@
+from datetime import UTC, datetime
 from uuid import UUID
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.vehicle import (
-    VehicleUseRequest, VehicleDispatch, VehicleTripRecord,
-    VehicleFuelRecord, VehicleMaintenanceRecord, VehicleCostAllocation,
-    VehicleCertificate, VehicleIncident,
-)
-from app.repositories.vehicle_repo import VehicleRepository
 from app.services.operation_log_service import (
-    log_operation, OBJ_VEHICLE, OBJ_VEHICLE_DRIVER, OBJ_VEHICLE_USE_REQUEST, OBJ_VEHICLE_DISPATCH,
-    OBJ_VEHICLE_TRIP_RECORD, OBJ_VEHICLE_FUEL_RECORD, OBJ_VEHICLE_MAINTENANCE_RECORD,
-    OBJ_VEHICLE_COST_ALLOCATION, OBJ_VEHICLE_CERTIFICATE, OBJ_VEHICLE_INCIDENT,
-    ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, ACTION_STATUS_CHANGE,
+    ACTION_CREATE,
+    ACTION_DELETE,
+    ACTION_STATUS_CHANGE,
+    ACTION_UPDATE,
+    OBJ_VEHICLE_CERTIFICATE,
+    OBJ_VEHICLE_INCIDENT,
+    log_operation,
 )
-
 from app.services.vehicle_base_service import VehicleServiceBase
+
+
+def _utc_now() -> datetime:
+    """Return naive UTC for the existing vehicle timestamp columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class VehicleComplianceService(VehicleServiceBase):
@@ -33,8 +33,7 @@ class VehicleComplianceService(VehicleServiceBase):
     async def list_expiring_certificates(self, days=30, vehicle_id=None) -> list[dict]:
         records = await self.repo.list_expiring_certificates(days, vehicle_id)
         result = []
-        from datetime import datetime
-        now = datetime.utcnow()
+        now = _utc_now()
         for r in records:
             d = self._certificate_to_dict(r)
             # Calculate urgency

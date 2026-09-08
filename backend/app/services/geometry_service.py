@@ -5,8 +5,7 @@
 所有计算使用 Decimal，禁止 float。
 """
 
-from decimal import Decimal, ROUND_HALF_UP, ROUND_CEILING
-from typing import Any
+from decimal import Decimal
 
 
 class GeometryService:
@@ -43,7 +42,7 @@ class GeometryService:
                 "hole_ratio": (hole_area / bbox_area).quantize(self.ROUND_4) if bbox_area > 0 else Decimal("0"),
                 "is_estimated": False,
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - invalid geometry returns an estimated safe result
             return {
                 "bbox_area_mm2": None,
                 "hole_area_mm2": None,
@@ -74,7 +73,7 @@ class GeometryService:
                 "area_mm2": area.quantize(self.ROUND_4),
                 "is_estimated": False,
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - invalid curve data returns an estimated safe result
             return {
                 "is_closed": False,
                 "length_mm": Decimal("0"),
@@ -103,7 +102,7 @@ class GeometryService:
                     r = l + Decimal(str(obj.get("width", 0)))
                     b = t + Decimal(str(obj.get("height", 0)))
                     rects.append({"left": l, "top": t, "right": r, "bottom": b})
-                except Exception:
+                except Exception:  # noqa: BLE001 - one malformed object must not abort overlap detection
                     rects.append(None)
 
             n = len(rects)
@@ -131,7 +130,7 @@ class GeometryService:
                 "overlaps": overlaps,
                 "is_estimated": False,
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - overlap analysis degrades to an estimated result
             return {
                 "overlap_count": 0,
                 "overlap_area_mm2": Decimal("0"),
@@ -187,15 +186,11 @@ class GeometryService:
             # 选最优
             if per_sheet2 > per_sheet1:
                 per_sheet = per_sheet2
-                used_w = h  # 旋转后摆放尺寸
-                used_h = w
                 cols = int(sw / h)
                 rows = int(sh / w)
                 rotated = True
             else:
                 per_sheet = per_sheet1
-                used_w = w
-                used_h = h
                 cols = cols1
                 rows = rows1
                 rotated = False
@@ -227,7 +222,7 @@ class GeometryService:
                 "sheet_area_mm2": sheet_area.quantize(self.ROUND_4),
                 "is_estimated": False,
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - invalid sheet dimensions return an estimated result
             return {
                 "sheets_needed": 0,
                 "per_sheet": 0,
@@ -324,7 +319,7 @@ class GeometryService:
                 "utilization_pct": utilization,
                 "is_estimated": False,
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - invalid layout input returns an estimated result
             return {
                 "sheets": [],
                 "total_sheets": 0,
@@ -407,7 +402,7 @@ class GeometryService:
                 } if page else None,
                 "is_estimated": False,
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - invalid analysis input returns an estimated result
             return {
                 "object_count": 0,
                 "type_counts": {},

@@ -9,13 +9,13 @@ The Gateway handles:
   5. Request logging and daily usage aggregation
   6. Cost estimation
 """
-import json
 import logging
 import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,7 +28,6 @@ from app.ai.gateway.providers.base import (
 )
 from app.ai.gateway.providers.openai_chat import OpenAICompatibleAdapter
 from app.ai.gateway.routing.circuit_breaker import (
-    CircuitBreakerConfig,
     CircuitBreakerError,
     circuit_breaker_registry,
 )
@@ -49,6 +48,11 @@ _ADAPTERS: dict[str, BaseProviderAdapter] = {
 # Default pricing per 1K tokens (USD) — used when model pricing not configured
 _DEFAULT_INPUT_PRICE_PER_1K = 0.001
 _DEFAULT_OUTPUT_PRICE_PER_1K = 0.002
+_BUSINESS_TIMEZONE = ZoneInfo("Asia/Shanghai")
+
+
+def _business_today() -> date:
+    return datetime.now(_BUSINESS_TIMEZONE).date()
 
 
 class AIGatewayError(Exception):
@@ -197,7 +201,7 @@ class AIGateway:
                 continue
             except AIGatewayError:
                 raise
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - continue provider fallback chain
                 last_error = e
                 logger.warning("Provider call failed provider=%s model=%s: %s",
                                step["provider_id"], step.get("model_code", "?"), e)
@@ -241,7 +245,7 @@ class AIGateway:
 
         # Upsert daily usage
         if response:
-            today = date.today()
+            today = _business_today()
             await self._request_repo.upsert_usage_daily(
                 tenant_id=tenant_id,
                 usage_date=today,
@@ -453,7 +457,7 @@ class AIGateway:
         if provider.credential_reference:
             try:
                 api_key = decrypt_api_key(provider.credential_reference)
-            except Exception:
+            except Exception:  # noqa: BLE001 - unavailable credentials are non-fatal
                 logger.error("Failed to decrypt API key for provider %s", provider.provider_name)
                 return None
 

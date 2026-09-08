@@ -1,18 +1,23 @@
 """AI Assistant API routes."""
 
+# FastAPI dependency markers are intentionally declared in route signatures.
+# ruff: noqa: B008
+
 import logging
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.ai_assistant.business_rules.service import BusinessRuleSyncService
+from app.ai_assistant.config import settings
+from app.ai_assistant.schemas import AiChatRequest, WorkflowGuidanceRequest
+from app.ai_assistant.service import AiAssistantService
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.permissions import require_role
 from app.models.user import User
-from app.schemas.common import success, error
-from app.ai_assistant.config import settings
-from app.ai_assistant.schemas import AiChatRequest, WorkflowGuidanceRequest
-from app.ai_assistant.service import AiAssistantService
-from app.ai_assistant.business_rules.service import BusinessRuleSyncService
+from app.schemas.common import error, success
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai-assistant", tags=["AI Assistant"])

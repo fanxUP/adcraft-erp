@@ -17,8 +17,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.cdr_quote import QuoteLine, QuoteVersion, QuoteGeometry
 from app.models.business_document import BusinessDocument
+from app.models.cdr_quote import QuoteLine, QuoteVersion
 from app.models.task import ProductionTask
 
 DeviationReport = dict[str, Any]
@@ -196,7 +196,7 @@ class DeviationAnalyzer:
         # Find matching production task(s)
         matching_tasks = [
             t for t in prod_tasks
-            if self._task_matches_line(t, line)
+            if self._task_matches_line(line, t)
         ]
 
         if not matching_tasks:
@@ -206,11 +206,6 @@ class DeviationAnalyzer:
         actual_quantity = sum(float(t.quantity or 0) for t in matching_tasks)
         actual_width = max(float(t.width or 0) for t in matching_tasks) if matching_tasks else None
         actual_height = max(float(t.height or 0) for t in matching_tasks) if matching_tasks else None
-
-        # Get geometry data for estimated usage
-        r_g = None
-        estimated_sheets = None
-        # We can't easily query geometry here without the quote_line_id matching
 
         actual: dict[str, Any] = {
             "width_mm": actual_width * 1000 if actual_width else None,  # convert m to mm

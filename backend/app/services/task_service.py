@@ -1,41 +1,36 @@
-from datetime import datetime
 import inspect
+from datetime import UTC, datetime
 from uuid import UUID
-from sqlalchemy import delete, insert, select, update, text
 
+from sqlalchemy import delete, insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.business_document import BusinessDocument, BusinessDocumentItem
-from app.models.task_order_item_link import TaskOrderItemLink
 from app.domain.workflows import (
     DESIGN_TASK_WORKFLOW,
     INSTALLATION_TASK_WORKFLOW,
     PRODUCTION_TASK_WORKFLOW,
     allowed_targets,
 )
+from app.models.business_document import BusinessDocument, BusinessDocumentItem
+from app.models.task_order_item_link import TaskOrderItemLink
+from app.repositories.task_repo import (
+    AttachmentRepository,
+    DesignTaskRepository,
+    InstallationTaskRepository,
+    ProductionTaskRepository,
+)
 from app.schemas.attachment import AttachmentResponse
 from app.schemas.order import OrderItemResponse
 from app.schemas.task import (
     DesignTaskResponse,
-    ProductionTaskResponse,
     InstallationTaskResponse,
+    ProductionTaskResponse,
     TaskOrderItemOption,
-)
-
-from app.repositories.task_repo import (
-    DesignTaskRepository,
-    ProductionTaskRepository,
-    InstallationTaskRepository,
-    AttachmentRepository,
 )
 from app.services.number_generator import (
     generate_design_no,
-    generate_production_no,
     generate_installation_no,
-)
-from app.services.task_schedule_service import (
-    enrich_task_dict_with_schedule_state,
-    normalize_task_schedule_data,
+    generate_production_no,
 )
 from app.services.operation_log_service import (
     ACTION_CREATE,
@@ -43,7 +38,10 @@ from app.services.operation_log_service import (
     ACTION_UPDATE,
 )
 from app.services.task_history_service import record_task_event, task_history_snapshot
-
+from app.services.task_schedule_service import (
+    enrich_task_dict_with_schedule_state,
+    normalize_task_schedule_data,
+)
 
 ACTIVE_ORDER_STATUSES = ("designing", "in_production", "in_installation")
 
@@ -82,6 +80,11 @@ INSTALLATION_IN_PROGRESS_STATUSES = {
 }
 INSTALLATION_COMPLETED_STATUSES = {"completed"}
 TASK_CANCELLED_STATUS = "cancelled"
+
+
+def _utc_now() -> datetime:
+    """Return naive UTC for the existing task timestamp columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 TASK_STATUS_PROGRESS = {
     "design": {
@@ -326,10 +329,6 @@ async def _validate_order_item_ids(
             task_id=task_id,
         )
         for item_id in unlinked_item_ids:
-            # An item already assigned to this task remains selectable for a
-            # later partial status update even after its order stage advances.
-            if item_id in linked_ids:
-                continue
             option = options.get(item_id)
             if option is None:
                 raise ValueError("订单明细当前进度无法确认，暂不可关联")
@@ -423,6 +422,21 @@ async def _task_order_item_link_rows(
 
 def _is_terminal_task_status(task_type: str, task) -> bool:
     return getattr(task, "status", None) in TASK_TERMINAL_STATUSES.get(task_type, set())
+
+
+async def _ensure_terminal_unlinked_task_is_read_only(
+    db: AsyncSession,
+    task_type: str,
+    task,
+) -> None:
+    """Block status changes for historical tasks without an item scope."""
+    if not _is_terminal_task_status(task_type, task):
+        return
+    if _task_order_item_id(task) is not None:
+        return
+    if await _linked_order_item_ids(db, task_type, task.id):
+        return
+    raise ValueError("历史任务未关联订单明细，已结束任务仅可查看，不能变更状态")
 
 
 def _new_task_item_state(task_type: str, task) -> tuple[str, int]:
@@ -573,7 +587,7 @@ async def _ensure_task_order_item_links(
                 "position": len(existing_ids) + position,
                 "item_status": status,
                 "item_progress_pct": progress,
-                "item_completed_at": datetime.now() if _is_completed_item_status(task_type, status) else None,
+                "item_completed_at": _utc_now() if _is_completed_item_status(task_type, status) else None,
             }
             for position, item_id in enumerate(new_ids)
         ],
@@ -989,7 +1003,7 @@ async def _sync_task_order_item_links(
                 item_progress = new_progress
             item_completed_at = getattr(existing, "item_completed_at", None)
             if item_completed_at is None and _is_completed_item_status(task_type, item_status):
-                item_completed_at = datetime.now()
+                item_completed_at = _utc_now()
             link_payload.append(
                 {
                     "task_type": task_type,
@@ -1022,7 +1036,7 @@ async def _sync_task_order_item_links(
         _is_completed_item_status(task_type, status)
         for status, _ in states.values()
     ) and states:
-        task.completed_at = datetime.now()
+        task.completed_at = _utc_now()
     elif aggregate_status != "cancelled":
         task.completed_at = None
     await db.flush()
@@ -1200,6 +1214,10 @@ async def _prepare_task_create_data(
         item_ids = [item_id] if item_id is not None else []
     else:
         item_ids = []
+    if not item_ids:
+        raise ValueError(
+            f"创建{task_label}任务至少选择一条订单明细，不能创建未关联订单明细任务"
+        )
     normalized["customer_id"] = order.customer_id
     normalized["project_name"] = (
         (normalized.get("project_name") or "").strip()
@@ -1248,6 +1266,7 @@ async def _clear_outsource_source_refs(db: AsyncSession, task_type: str, task_id
     if not task_ids:
         return
     from sqlalchemy import update as sa_update
+
     from app.models.outsource import OutsourceTask
     await db.execute(
         sa_update(OutsourceTask)
@@ -1618,7 +1637,7 @@ async def _apply_task_item_status_change(
             item_status=to_status,
             item_progress_pct=progress,
             item_completed_at=(
-                datetime.now() if _is_completed_item_status(task_type, to_status) else None
+                _utc_now() if _is_completed_item_status(task_type, to_status) else None
             ),
         )
     )
@@ -1638,7 +1657,7 @@ async def _apply_task_item_status_change(
         _is_completed_item_status(task_type, status)
         for status, _ in states.values()
     ):
-        task.completed_at = datetime.now()
+        task.completed_at = _utc_now()
     elif aggregate_status != "cancelled":
         task.completed_at = None
     await db.flush()
@@ -1792,6 +1811,7 @@ class DesignTaskService:
         if not task:
             raise ValueError("设计任务不存在")
 
+        await _ensure_terminal_unlinked_task_is_read_only(self.db, "design", task)
         before = task_history_snapshot(task)
         selected_item_ids, states = await _apply_task_item_status_change(
             self.db,
@@ -1857,7 +1877,7 @@ class DesignTaskService:
         # Revert order to confirmed (pre-design state)
         if doc_id:
             from app.models.business_document import BusinessDocument
-            from app.models.task import ProductionTask, InstallationTask
+            from app.models.task import InstallationTask, ProductionTask
             from app.services.business_document_service import BusinessDocumentService
 
             order = await self.db.get(BusinessDocument, doc_id)
@@ -1888,7 +1908,7 @@ class DesignTaskService:
                     )
                 )
                 for form in ac_result.scalars().all():
-                    form.deleted_at = datetime.now()
+                    form.deleted_at = _utc_now()
 
                 # Revert order
                 old_status = order.status
@@ -2050,6 +2070,7 @@ class ProductionTaskService:
         if not task:
             raise ValueError("制作任务不存在")
 
+        await _ensure_terminal_unlinked_task_is_read_only(self.db, "production", task)
         before = task_history_snapshot(task)
         selected_item_ids, states = await _apply_task_item_status_change(
             self.db,
@@ -2139,7 +2160,7 @@ class ProductionTaskService:
                     )
                 )
                 for form in ac_result.scalars().all():
-                    form.deleted_at = datetime.now()
+                    form.deleted_at = _utc_now()
 
                 old_status = order.status
                 order_svc = BusinessDocumentService(self.db, doc_type="order")
@@ -2301,6 +2322,7 @@ class InstallationTaskService:
         if not task:
             raise ValueError("安装任务不存在")
 
+        await _ensure_terminal_unlinked_task_is_read_only(self.db, "installation", task)
         before = task_history_snapshot(task)
         selected_item_ids, _states = await _apply_task_item_status_change(
             self.db,
@@ -2350,7 +2372,7 @@ class InstallationTaskService:
                     )
                 )
                 for form in ac_result.scalars().all():
-                    form.deleted_at = datetime.now()
+                    form.deleted_at = _utc_now()
 
                 old_status = order.status
                 order_svc = BusinessDocumentService(self.db, doc_type="order")

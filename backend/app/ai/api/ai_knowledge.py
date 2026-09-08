@@ -5,12 +5,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.core.resolver import FeatureResolver
+from app.ai.rule_based.quote_finder import QuoteFinder
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.schemas.common import success
 from app.models.user import User
-from app.ai.rule_based.quote_finder import QuoteFinder
-from app.ai.core.resolver import FeatureResolver
+from app.schemas.common import success
 
 router = APIRouter(prefix="/ai/knowledge", tags=["AI Knowledge Base"])
 

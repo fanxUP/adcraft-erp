@@ -1,7 +1,5 @@
 """PromptBuilder — builds system prompts infused with deep AdCraft ERP business knowledge."""
 
-import json
-from app.ai_assistant.config import settings
 from app.domain.workflows import (
     ACCEPTANCE_WORKFLOW,
     DESIGN_TASK_WORKFLOW,

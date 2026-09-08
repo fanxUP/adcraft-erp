@@ -4,7 +4,6 @@ from uuid import UUID
 
 from app.ai_assistant.tool_registry import AiToolDefinition, ToolRegistry
 
-
 QUOTE_STATUS_LABELS = {
     "draft": "草稿",
     "confirmed": "已确认",

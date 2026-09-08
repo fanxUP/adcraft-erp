@@ -1,9 +1,9 @@
 """Quote draft generation, query and creation tools for AI Assistant."""
 
 from uuid import UUID
-from app.ai_assistant.tool_registry import ToolRegistry, AiToolDefinition
-from app.services.quote_calculation import calculate_quote_item_values
 
+from app.ai_assistant.tool_registry import AiToolDefinition, ToolRegistry
+from app.services.quote_calculation import calculate_quote_item_values
 
 AI_QUOTE_ITEM_FIELDS = (
     "item_name",
@@ -98,7 +98,7 @@ async def create_quote_draft(db, user, customer_id, description, customer_name="
     except ImportError:
         return {"_preview": True, "_note": "预览模式", "description": description,
                 "customer_id": customer_id, "customer_name": customer_name}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - provider failure keeps preview usable
         return {"_preview": True, "_note": f"AI报价暂不可用: {str(e)}", "description": description,
                 "customer_id": customer_id, "customer_name": customer_name}
 

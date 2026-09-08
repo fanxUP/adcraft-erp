@@ -215,7 +215,7 @@ function goToPayment() {
   if (orderId.value) {
     router.push(`/orders/${orderId.value}`)
   } else {
-    router.push('/payments')
+    router.push('/receivables')
   }
 }
 </script>

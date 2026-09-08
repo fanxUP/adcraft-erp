@@ -20,7 +20,7 @@
           <strong>{{ projectProgress }}%</strong>
         </div>
         <el-progress :percentage="projectProgress" :stroke-width="10" />
-        <div class="progress-note">按每条订单明细的设计、制作、安装三阶段进度汇总；历史整单任务按任务进度回退计算</div>
+        <div class="progress-note">按每条订单明细的设计、制作、安装三阶段进度汇总；历史未关联明细任务按任务进度回退计算</div>
       </div>
       <el-alert
         v-if="overdueTaskCount > 0"

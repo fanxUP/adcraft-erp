@@ -4,18 +4,17 @@ from __future__ import annotations
 
 import json
 import logging
-import math
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, func, text as sa_text
+from sqlalchemy import select
+from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.core.ai_client import AIClient, AIClientError, AIAPIError
+from app.ai.core.ai_client import AIAPIError, AIClient, AIClientError
 from app.ai.gateway.gateway import AIGatewayError
 from app.ai.rule_based.quote_finder import QuoteFinder
-from app.models.product import Product, Material, Process
-from app.models.business_document import BusinessDocument, BusinessDocumentItem
+from app.models.product import Material, Process, Product
 
 logger = logging.getLogger(__name__)
 
@@ -204,13 +203,14 @@ class LLMQuoteAssistant:
             # Use raw SQL for efficient aggregation
             rows = await self.db.execute(sa_text("""
                 SELECT
-                    bi.product_id,
                     p.name AS product_name,
                     COUNT(bi.id) AS cnt,
                     ROUND(AVG(bi.unit_price::numeric), 2) AS avg_price,
                     ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY bi.unit_price)::numeric, 2) AS med_price,
                     ROUND(MIN(bi.unit_price::numeric), 2) AS min_price,
-                    ROUND(MAX(bi.unit_price::numeric), 2) AS max_price
+                    ROUND(MAX(bi.unit_price::numeric), 2) AS max_price,
+                    ROUND(AVG(bi.design_fee::numeric), 2) AS avg_design_fee,
+                    ROUND(AVG(bi.installation_fee::numeric), 2) AS avg_installation_fee
                 FROM business_document_items bi
                 JOIN products p ON p.id = bi.product_id
                 WHERE bi.unit_price > 0
@@ -220,7 +220,7 @@ class LLMQuoteAssistant:
                 LIMIT 20
             """))
             history_rows = rows.fetchall()
-        except Exception:
+        except Exception:  # noqa: BLE001 - optional history lookup must not block rule-based quoting
             return None
 
         if not history_rows:
@@ -228,7 +228,7 @@ class LLMQuoteAssistant:
 
         lines = ["--- 历史定价参考（基于过去报价数据） ---"]
         for row in history_rows:
-            product_id, name, cnt, avg_p, med_p, min_p, max_p, avg_df, avg_if = row
+            name, cnt, avg_p, med_p, min_p, max_p, avg_df, avg_if = row
             lines.append(
                 f"- {name}（样本数: {cnt}，中位数价: ¥{float(med_p or 0):.2f}"
                 f"，均价: ¥{float(avg_p or 0):.2f}"
@@ -267,7 +267,7 @@ class LLMQuoteAssistant:
                         f"，价格: ¥{float(a.price_value):.2f}"
                         f"{'，折扣率: ' + str(float(a.discount_rate) * 100) + '%' if a.discount_rate != 1.0 else ''}"
                     )
-        except Exception:
+        except Exception:  # noqa: BLE001 - optional customer enrichment must not block quote generation
             pass
 
         return "\n".join(lines) if lines else None
@@ -349,7 +349,7 @@ class LLMQuoteAssistant:
             for p in result.scalars().all():
                 if any(kw in name_lower for kw in p.name.lower().split()):
                     return str(p.id)
-        except Exception:
+        except Exception:  # noqa: BLE001 - optional product matching falls back to an unlinked item
             pass
         return None
 
@@ -365,7 +365,7 @@ class LLMQuoteAssistant:
             for m in result.scalars().all():
                 if m.name.lower() in name_lower:
                     return str(m.id)
-        except Exception:
+        except Exception:  # noqa: BLE001 - optional material matching falls back to an unlinked item
             pass
         return None
 
@@ -437,7 +437,7 @@ class SmartPricingRecommendation:
                 row = rows.fetchone()
                 if row and row[0]:
                     avg_price = float(row[0])
-            except Exception:
+            except Exception:  # noqa: BLE001 - optional price history falls back to the product default
                 pass
 
         recommended = avg_price or default_price

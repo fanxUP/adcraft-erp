@@ -11,7 +11,7 @@
         <el-descriptions :column="2">
           <el-descriptions-item label="任务编号">{{ task.installation_no }}</el-descriptions-item>
           <el-descriptions-item label="项目名称">{{ task.project_name }}</el-descriptions-item>
-          <el-descriptions-item label="订单明细">{{ task.item_names?.join('、') || task.item_name || (task.order_item_id ? '明细未命名' : '整单任务') }}</el-descriptions-item>
+          <el-descriptions-item label="订单明细">{{ task.item_names?.join('、') || task.item_name || (task.order_item_id ? '明细未命名' : '未关联订单明细') }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag data-ai-targets="task-status-assigned task-status-completed task-status-in_progress task-status-pending_acceptance" :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
           </el-descriptions-item>

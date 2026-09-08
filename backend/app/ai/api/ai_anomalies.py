@@ -3,12 +3,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.core.resolver import FeatureResolver
+from app.ai.rule_based.anomaly_detector import AnomalyDetector
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.schemas.common import success
 from app.models.user import User
-from app.ai.rule_based.anomaly_detector import AnomalyDetector
-from app.ai.core.resolver import FeatureResolver
+from app.schemas.common import success
 
 router = APIRouter(prefix="/ai/anomalies", tags=["AI Anomalies"])
 

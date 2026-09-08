@@ -1,7 +1,8 @@
 """Order query tools for AI Assistant."""
 
 from uuid import UUID
-from app.ai_assistant.tool_registry import ToolRegistry, AiToolDefinition
+
+from app.ai_assistant.tool_registry import AiToolDefinition, ToolRegistry
 
 
 async def search_orders(db, user, keyword="", page=1, page_size=20, status=None, customer_id=None):
@@ -23,8 +24,12 @@ async def get_order_detail(db, user, order_id):
 
 async def get_order_progress(db, user, order_id):
     from app.services.business_document_service import BusinessDocumentService
-    from app.services.task_service import DesignTaskService, ProductionTaskService, InstallationTaskService
     from app.services.payment_service import PaymentService
+    from app.services.task_service import (
+        DesignTaskService,
+        InstallationTaskService,
+        ProductionTaskService,
+    )
     doc_svc = BusinessDocumentService(db, doc_type='order')
     order = await doc_svc.get_by_id(UUID(order_id))
     if not order:

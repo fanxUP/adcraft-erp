@@ -1,14 +1,11 @@
 from datetime import datetime, timezone
-from uuid import UUID
-
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
-from app.schemas.common import CoercedModel
-from app.schemas.order import OrderItemResponse
 
 from app.schemas.attachment import AttachmentResponse
-
+from app.schemas.common import CoercedModel
+from app.schemas.order import OrderItemResponse
 
 TaskType = Literal["design", "production", "installation"]
 
@@ -236,22 +233,6 @@ class TaskStatusChange(BaseModel):
     to_status: str
     reason: str | None = None
     order_item_ids: list[str] = Field(min_length=1, max_length=100)
-
-
-class TaskHistoryItem(CoercedModel):
-    id: str
-    task_type: Literal["design", "production", "installation"]
-    task_id: str
-    action: Literal["create", "update", "status_change"]
-    user_id: str | None = None
-    user_name: str | None = None
-    changed_at: str | None = None
-    from_status: str | None = None
-    to_status: str | None = None
-    from_progress_pct: int | None = None
-    to_progress_pct: int | None = None
-    reason: str | None = None
-    changed_fields: list[str] = Field(default_factory=list)
 
 
 class TaskOrderItemOption(OrderItemResponse):

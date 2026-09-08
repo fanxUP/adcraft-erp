@@ -1,6 +1,6 @@
 """Tool registry — register and look up AI tools."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Coroutine
 
 

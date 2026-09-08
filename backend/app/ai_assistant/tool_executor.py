@@ -1,13 +1,15 @@
 """Tool executor — execute tools with permission checks and logging."""
 
 from uuid import UUID
+
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.user import User
-from app.ai_assistant.tool_registry import ToolRegistry
-from app.ai_assistant.permission_guard import PermissionGuard
-from app.ai_assistant.audit_logger import AuditLogger
+
 from app.ai_assistant.action_confirm import ActionConfirmService
+from app.ai_assistant.audit_logger import AuditLogger
 from app.ai_assistant.config import settings
+from app.ai_assistant.permission_guard import PermissionGuard
+from app.ai_assistant.tool_registry import ToolRegistry
 from app.ai_assistant.tools import register_all_tools
 
 
@@ -29,7 +31,7 @@ class ToolExecutor:
         # 1. Permission check
         try:
             await self.permission_guard.assert_permission(user, tool_def)
-        except Exception as e:
+        except HTTPException as e:
             await self.audit_logger.log_tool_call(
                 session_id=session_id, message_id=message_id, user_id=user.id,
                 tool_name=tool_name, tool_args=args,
@@ -95,7 +97,7 @@ class ToolExecutor:
                 await self.audit_logger.update_tool_call_status(log_entry.id, "success", tool_result={"data": result})
                 return {"status": "success", "result": result}
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - audit every handler failure
             await self.audit_logger.update_tool_call_status(log_entry.id, "failed", error_message=str(e))
             return {"status": "failed", "error_message": str(e)}
 
@@ -114,7 +116,7 @@ class ToolExecutor:
 
         try:
             await self.permission_guard.assert_permission(user, tool_def)
-        except Exception as e:
+        except HTTPException as e:
             return {"status": "blocked", "error_message": str(e)}
 
         if tool_def.risk_level == "level_4":
@@ -145,6 +147,6 @@ class ToolExecutor:
                 after_data=result if isinstance(result, dict) else {"data": result},
                 risk_level=tool_def.risk_level, ip_address=ip_address, user_agent=user_agent)
             return {"status": "success", "result": result}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - persist confirmed action failure
             await self.action_confirm.mark_executed(action_id, error_message=str(e))
             return {"status": "failed", "error_message": str(e)}

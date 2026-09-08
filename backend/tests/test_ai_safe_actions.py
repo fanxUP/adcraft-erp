@@ -1,11 +1,15 @@
 """AI 安全代操作的确认、权限与并发保护测试。"""
 
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
+# Register string-based model relationship targets for isolated tests.
+import app.models.customer  # noqa: F401
+import app.models.task  # noqa: F401
+import app.models.vehicle  # noqa: F401
 import pytest
-
 from app.ai_assistant.tool_executor import ToolExecutor
 from app.ai_assistant.tool_registry import AiToolDefinition
 
@@ -106,6 +110,292 @@ async def test_confirmed_action_rechecks_permission_before_writing():
     assert result["status"] == "blocked"
     write_handler.assert_not_awaited()
     executor.action_confirm.confirm_action.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_does_not_misclassify_unexpected_permission_error():
+    executor = _executor()
+    tool_name = f"test_permission_backend_failure_{uuid4().hex}"
+    executor.registry.register(AiToolDefinition(
+        name=tool_name,
+        description="测试权限后端异常",
+        parameters={"type": "object", "properties": {}},
+        risk_level="level_1",
+        required_permission="order:read",
+        handler=AsyncMock(),
+    ))
+    executor.permission_guard.assert_permission = AsyncMock(
+        side_effect=RuntimeError("permission backend unavailable"),
+    )
+
+    with pytest.raises(RuntimeError, match="permission backend unavailable"):
+        await executor.execute_tool(
+            tool_name,
+            {},
+            _user(),
+            session_id=uuid4(),
+        )
+
+    executor.audit_logger.log_tool_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_confirmed_action_does_not_misclassify_unexpected_permission_error():
+    executor = _executor()
+    tool_name = f"test_confirmed_permission_backend_failure_{uuid4().hex}"
+    executor.registry.register(AiToolDefinition(
+        name=tool_name,
+        description="测试确认动作权限后端异常",
+        parameters={"type": "object", "properties": {}},
+        risk_level="level_3",
+        required_permission="order:change_status",
+        handler=AsyncMock(),
+    ))
+    owner = _user()
+    executor.action_confirm.get_pending_action = AsyncMock(
+        return_value=SimpleNamespace(
+            user_id=owner.id,
+            status="waiting_confirmation",
+            tool_name=tool_name,
+        ),
+    )
+    executor.permission_guard.assert_permission = AsyncMock(
+        side_effect=RuntimeError("permission backend unavailable"),
+    )
+    executor.action_confirm.confirm_action = AsyncMock()
+
+    with pytest.raises(RuntimeError, match="permission backend unavailable"):
+        await executor.execute_confirmed_action(uuid4(), owner)
+
+    executor.action_confirm.confirm_action.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_tool_handler_failure_returns_failed_and_updates_audit():
+    executor = _executor()
+    tool_name = f"test_handler_failure_{uuid4().hex}"
+    executor.registry.register(AiToolDefinition(
+        name=tool_name,
+        description="测试工具处理异常",
+        parameters={"type": "object", "properties": {}},
+        risk_level="level_1",
+        handler=AsyncMock(side_effect=RuntimeError("handler failed")),
+    ))
+
+    result = await executor.execute_tool(
+        tool_name,
+        {},
+        _user(),
+        session_id=uuid4(),
+    )
+
+    assert result == {
+        "status": "failed",
+        "error_message": "handler failed",
+    }
+    executor.audit_logger.update_tool_call_status.assert_awaited_once()
+    assert (
+        executor.audit_logger.update_tool_call_status.call_args.kwargs[
+            "error_message"
+        ]
+        == "handler failed"
+    )
+
+
+@pytest.mark.asyncio
+async def test_confirmed_action_failure_marks_action_failed():
+    executor = _executor()
+    tool_name = f"test_confirmed_handler_failure_{uuid4().hex}"
+    executor.registry.register(AiToolDefinition(
+        name=tool_name,
+        description="测试确认动作处理异常",
+        parameters={"type": "object", "properties": {}},
+        risk_level="level_3",
+        required_permission="order:change_status",
+        handler=AsyncMock(side_effect=RuntimeError("confirmed handler failed")),
+    ))
+    owner = _user("order:change_status")
+    action_id = uuid4()
+    pending = SimpleNamespace(
+        id=action_id,
+        user_id=owner.id,
+        session_id=uuid4(),
+        action_type=tool_name,
+        tool_name=tool_name,
+        tool_args={},
+        preview_data={},
+        status="waiting_confirmation",
+    )
+    executor.action_confirm.get_pending_action = AsyncMock(return_value=pending)
+    executor.action_confirm.confirm_action = AsyncMock(return_value=pending)
+    executor.action_confirm.mark_executed = AsyncMock()
+
+    result = await executor.execute_confirmed_action(action_id, owner)
+
+    assert result == {
+        "status": "failed",
+        "error_message": "confirmed handler failed",
+    }
+    executor.action_confirm.mark_executed.assert_awaited_once_with(
+        action_id,
+        error_message="confirmed handler failed",
+    )
+
+
+@pytest.mark.asyncio
+async def test_pending_action_expiry_uses_explicit_naive_utc():
+    from app.ai_assistant.action_confirm import ActionConfirmService
+
+    db = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    fixed_now = datetime(2026, 9, 8, 12, 0)
+    service = ActionConfirmService(db)
+
+    with patch(
+        "app.ai_assistant.action_confirm._utc_now",
+        return_value=fixed_now,
+    ):
+        await service.create_pending_action(
+            session_id=uuid4(),
+            user_id=uuid4(),
+            action_type="test_action",
+            tool_name="test_tool",
+            tool_args={},
+            preview_data={},
+        )
+
+    action = db.add.call_args.args[0]
+    assert action.expires_at == fixed_now + timedelta(minutes=30)
+    assert action.expires_at.tzinfo is None
+
+
+@pytest.mark.asyncio
+async def test_confirm_action_atomically_claims_unexpired_action():
+    from app.ai_assistant.action_confirm import ActionConfirmService
+
+    claimed = SimpleNamespace(status="confirmed")
+    statement_result = MagicMock()
+    statement_result.scalar_one_or_none.return_value = claimed
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=statement_result)
+    db.commit = AsyncMock()
+    fixed_now = datetime(2026, 9, 8, 12, 0)
+
+    with patch(
+        "app.ai_assistant.action_confirm._utc_now",
+        return_value=fixed_now,
+    ):
+        result = await ActionConfirmService(db).confirm_action(uuid4(), uuid4())
+
+    assert result is claimed
+    db.execute.assert_awaited_once()
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_confirm_action_marks_expired_action_without_claiming_it():
+    from app.ai_assistant.action_confirm import ActionConfirmService
+
+    statement_result = MagicMock()
+    statement_result.scalar_one_or_none.return_value = None
+    db = MagicMock()
+    db.execute = AsyncMock(
+        side_effect=[statement_result, MagicMock()],
+    )
+    db.commit = AsyncMock()
+    fixed_now = datetime(2026, 9, 8, 12, 0)
+
+    with patch(
+        "app.ai_assistant.action_confirm._utc_now",
+        return_value=fixed_now,
+    ):
+        result = await ActionConfirmService(db).confirm_action(uuid4(), uuid4())
+
+    assert result is None
+    assert db.execute.await_count == 2
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_audit_logger_uses_explicit_naive_utc_for_terminal_status():
+    from app.ai_assistant.audit_logger import AuditLogger
+
+    log = SimpleNamespace(status="running", finished_at=None, error_message=None)
+    db = MagicMock()
+    db.get = AsyncMock(return_value=log)
+    db.commit = AsyncMock()
+    fixed_now = datetime(2026, 9, 8, 12, 0)
+
+    with patch(
+        "app.ai_assistant.audit_logger._utc_now",
+        return_value=fixed_now,
+    ):
+        await AuditLogger(db).update_tool_call_status(
+            uuid4(),
+            "failed",
+            error_message="handler failed",
+        )
+
+    assert log.status == "failed"
+    assert log.finished_at == fixed_now
+    assert log.finished_at.tzinfo is None
+    assert log.error_message == "handler failed"
+
+
+@pytest.mark.asyncio
+async def test_cancel_action_records_explicit_naive_utc():
+    from app.ai_assistant.action_confirm import ActionConfirmService
+
+    action = SimpleNamespace(status="waiting_confirmation", cancelled_at=None)
+    db = MagicMock()
+    db.get = AsyncMock(return_value=action)
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    fixed_now = datetime(2026, 9, 8, 12, 0)
+
+    with patch(
+        "app.ai_assistant.action_confirm._utc_now",
+        return_value=fixed_now,
+    ):
+        result = await ActionConfirmService(db).cancel_action(uuid4())
+
+    assert result is action
+    assert action.status == "cancelled"
+    assert action.cancelled_at == fixed_now
+    assert action.cancelled_at.tzinfo is None
+    db.commit.assert_awaited_once()
+    db.refresh.assert_awaited_once_with(action)
+
+
+@pytest.mark.asyncio
+async def test_mark_executed_failure_records_explicit_naive_utc():
+    from app.ai_assistant.action_confirm import ActionConfirmService
+
+    action = SimpleNamespace(
+        status="confirmed",
+        executed_at=None,
+        error_message=None,
+    )
+    db = MagicMock()
+    db.get = AsyncMock(return_value=action)
+    db.commit = AsyncMock()
+    fixed_now = datetime(2026, 9, 8, 12, 0)
+
+    with patch(
+        "app.ai_assistant.action_confirm._utc_now",
+        return_value=fixed_now,
+    ):
+        await ActionConfirmService(db).mark_executed(
+            uuid4(),
+            error_message="执行失败",
+        )
+
+    assert action.status == "failed"
+    assert action.executed_at == fixed_now
+    assert action.executed_at.tzinfo is None
+    assert action.error_message == "执行失败"
+    db.commit.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -261,10 +551,10 @@ async def test_task_status_execution_rejects_stale_preview():
 
 
 def test_core_task_status_tools_are_registered_with_scoped_permissions():
+    from app.ai_assistant.tool_registry import ToolRegistry
     from app.ai_assistant.tools.task_status_action_tools import (
         register_task_status_action_tools,
     )
-    from app.ai_assistant.tool_registry import ToolRegistry
 
     register_task_status_action_tools()
     registry = ToolRegistry()
@@ -359,8 +649,8 @@ async def test_acceptance_execution_passes_reason_and_operator():
 
 
 def test_quote_progress_tools_use_separate_business_permissions():
-    from app.ai_assistant.tools.quote_action_tools import register_quote_action_tools
     from app.ai_assistant.tool_registry import ToolRegistry
+    from app.ai_assistant.tools.quote_action_tools import register_quote_action_tools
 
     register_quote_action_tools()
     registry = ToolRegistry()

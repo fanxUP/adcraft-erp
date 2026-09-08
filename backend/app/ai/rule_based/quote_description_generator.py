@@ -12,16 +12,23 @@ Generates:
 
 from __future__ import annotations
 
-from datetime import date, timedelta
-from decimal import Decimal
+from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.cdr_quote import QuoteLine, QuoteVersion, QuoteLineProcess
+from app.models.cdr_quote import QuoteLine, QuoteVersion
 from app.models.customer import Customer
+
+_BUSINESS_TIMEZONE = ZoneInfo("Asia/Shanghai")
+
+
+def _business_today() -> date:
+    """Return the current date in the application's business timezone."""
+    return datetime.now(_BUSINESS_TIMEZONE).date()
 
 # ── Template sections ──────────────────────────────────────────
 
@@ -108,8 +115,7 @@ def _format_dimensions(line: QuoteLine) -> str:
 def _format_processes(line: QuoteLine) -> str:
     if not line.processes:
         return "标准制作"
-    names = []
-    # We'd need process names — for now just return placeholders
+    # Process names aren't loaded here — use IDs as placeholders for now.
     return "、".join([f"工艺#{p.process_id}" for p in line.processes]) or "标准制作"
 
 
@@ -230,7 +236,7 @@ class QuoteDescriptionGenerator:
 
     def _build_project_overview(self, quote_doc, version, opts) -> str:
         """Build project overview section."""
-        today = date.today()
+        today = _business_today()
         valid_days = opts.get("valid_days", 15)
         valid_until = opts.get("valid_until", (today + timedelta(days=valid_days)).isoformat())
         quote_date = opts.get("quote_date", today.isoformat())
@@ -311,7 +317,7 @@ class QuoteDescriptionGenerator:
         valid_until = opts.get("valid_until")
 
         if not valid_until:
-            valid_until = (date.today() + timedelta(days=15)).isoformat()
+            valid_until = (_business_today() + timedelta(days=15)).isoformat()
 
         if tax_rate > 0:
             return TERMS_OTHER_NO_TAX_TPL.format(

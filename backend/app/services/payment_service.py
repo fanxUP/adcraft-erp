@@ -1,14 +1,28 @@
-from uuid import UUID
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.payment import Payment, CustomerStatement, Expense
 from app.models.business_document import BusinessDocument
-from app.services.business_document_service import BusinessDocumentService
-from app.repositories.payment_repo import PaymentRepository, StatementRepository, ExpenseRepository
+from app.models.payment import CustomerStatement, Expense, Payment
+from app.repositories.payment_repo import (
+    ExpenseRepository,
+    PaymentRepository,
+    StatementRepository,
+)
 from app.schemas.payment import StatementPaymentItem
-from app.services.number_generator import generate_payment_no, generate_statement_no, generate_expense_no
+from app.services.business_document_service import BusinessDocumentService
+from app.services.number_generator import (
+    generate_expense_no,
+    generate_payment_no,
+    generate_statement_no,
+)
+
+
+def _utc_now() -> datetime:
+    """Return naive UTC for the existing payment timestamp columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class PaymentService:
@@ -77,7 +91,7 @@ class PaymentService:
                 type_="payment_received",
                 title=f"收款到账: {payment.payment_no}",
                 content=f"单据 {doc.doc_no} 收到 {data['amount']} 元",
-                link=f"/payments",
+                link="/receivables",
             )
 
         paid = existing_paid + amount
@@ -189,7 +203,7 @@ class StatementService:
             raise ValueError("对账单不存在")
         if s.status != "draft":
             raise ValueError("仅草稿对账单可以确认")
-        await self.repo.update(s, {"status": "confirmed", "confirmed_at": datetime.now(), "confirmed_by": confirmed_by})
+        await self.repo.update(s, {"status": "confirmed", "confirmed_at": _utc_now(), "confirmed_by": confirmed_by})
         return await self._to_detail(s)
 
     def _to_summary(self, s: CustomerStatement) -> dict:

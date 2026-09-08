@@ -1,25 +1,27 @@
 import os
 import uuid
+from datetime import datetime
 from uuid import UUID
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from zoneinfo import ZoneInfo
 
 from app.core.config import settings
-
-from app.models.vehicle import (
-    VehicleUseRequest, VehicleDispatch, VehicleTripRecord,
-    VehicleFuelRecord, VehicleMaintenanceRecord, VehicleCostAllocation,
-    VehicleCertificate, VehicleIncident,
-)
-from app.repositories.vehicle_repo import VehicleRepository
 from app.services.operation_log_service import (
-    log_operation, OBJ_VEHICLE, OBJ_VEHICLE_DRIVER, OBJ_VEHICLE_USE_REQUEST, OBJ_VEHICLE_DISPATCH,
-    OBJ_VEHICLE_TRIP_RECORD, OBJ_VEHICLE_FUEL_RECORD, OBJ_VEHICLE_MAINTENANCE_RECORD,
-    OBJ_VEHICLE_COST_ALLOCATION, OBJ_VEHICLE_CERTIFICATE, OBJ_VEHICLE_INCIDENT,
-    ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, ACTION_STATUS_CHANGE,
+    ACTION_CREATE,
+    ACTION_DELETE,
+    ACTION_STATUS_CHANGE,
+    ACTION_UPDATE,
+    OBJ_VEHICLE,
+    OBJ_VEHICLE_DRIVER,
+    log_operation,
 )
-
 from app.services.vehicle_base_service import VehicleServiceBase
+
+_BUSINESS_TIMEZONE = ZoneInfo("Asia/Shanghai")
+
+
+def _business_now() -> datetime:
+    """Return the current vehicle business time in Asia/Shanghai."""
+    return datetime.now(_BUSINESS_TIMEZONE)
 
 
 class VehicleRegistryService(VehicleServiceBase):
@@ -44,9 +46,8 @@ class VehicleRegistryService(VehicleServiceBase):
 
     async def list_vehicles_expiring(self, days: int = 30) -> list[dict]:
         """保险/年检在 N 天内到期或已过期的车辆，附 days_left 与 urgency。"""
-        from datetime import datetime
         vehicles = await self.repo.list_expiring_vehicles(days)
-        now = datetime.now().date()
+        now = _business_now().date()
         result = []
         for v in vehicles:
             item = {
@@ -167,15 +168,15 @@ class VehicleRegistryService(VehicleServiceBase):
         return before
 
     async def disable_vehicle(self, vehicle_id: UUID) -> dict:
-        return await self._change_status(vehicle_id, "disabled", "停用")
+        return await self._change_status(vehicle_id, "disabled")
 
     async def enable_vehicle(self, vehicle_id: UUID) -> dict:
-        return await self._change_status(vehicle_id, "available", "启用")
+        return await self._change_status(vehicle_id, "available")
 
     async def scrap_vehicle(self, vehicle_id: UUID) -> dict:
-        return await self._change_status(vehicle_id, "scrapped", "报废")
+        return await self._change_status(vehicle_id, "scrapped")
 
-    async def _change_status(self, vehicle_id: UUID, new_status: str, action_label: str) -> dict:
+    async def _change_status(self, vehicle_id: UUID, new_status: str) -> dict:
         v = await self.repo.get_by_id(vehicle_id)
         if not v:
             raise ValueError("车辆不存在")
@@ -321,12 +322,12 @@ class VehicleRegistryService(VehicleServiceBase):
         return before
 
     async def disable_driver(self, driver_id: UUID) -> dict:
-        return await self._change_driver_status(driver_id, "disabled", "停用")
+        return await self._change_driver_status(driver_id, "disabled")
 
     async def enable_driver(self, driver_id: UUID) -> dict:
-        return await self._change_driver_status(driver_id, "active", "启用")
+        return await self._change_driver_status(driver_id, "active")
 
-    async def _change_driver_status(self, driver_id: UUID, new_status: str, action_label: str) -> dict:
+    async def _change_driver_status(self, driver_id: UUID, new_status: str) -> dict:
         d = await self.repo.get_driver_by_id(driver_id)
         if not d:
             raise ValueError("司机不存在")
@@ -370,9 +371,8 @@ class VehicleRegistryService(VehicleServiceBase):
 
     async def save_upload_file(self, file):
         """把上传文件落盘到 {LOCAL_UPLOAD_DIR}/{YYYYMM}/uuid.ext，返回 /uploads/ 相对路径。"""
-        from datetime import datetime
         upload_dir = settings.LOCAL_UPLOAD_DIR
-        date_dir = datetime.now().strftime("%Y%m")
+        date_dir = _business_now().strftime("%Y%m")
         dest_dir = os.path.join(upload_dir, date_dir)
         os.makedirs(dest_dir, exist_ok=True)
         ext = file.filename.rsplit(".", 1)[1] if file.filename and "." in file.filename else ""

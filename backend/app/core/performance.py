@@ -11,8 +11,8 @@ import os
 import time
 from pathlib import Path
 
-from fastapi import Request, Response
 import sqlalchemy.event as sa_event
+from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 logger = logging.getLogger(__name__)
@@ -66,11 +66,11 @@ def install_slow_query_listener(engine) -> None:
     _start_times: dict[int, float] = {}
 
     @sa_event.listens_for(sync_engine, "before_cursor_execute")
-    def _before(conn, cursor, statement, parameters, context, executemany):
+    def _before(conn, _cursor, _statement, _parameters, _context, _executemany):
         _start_times[id(conn)] = time.perf_counter()
 
     @sa_event.listens_for(sync_engine, "after_cursor_execute")
-    def _after(conn, cursor, statement, parameters, context, executemany):
+    def _after(conn, _cursor, statement, _parameters, _context, _executemany):
         start = _start_times.pop(id(conn), None)
         if start is None:
             return
