@@ -16,6 +16,9 @@ class OrderListResponse(BaseModel):
     department: str | None = None
     contact_person: str | None = None
     contact_phone: str | None = None
+    design_progress_pct: int = Field(0, ge=0, le=100)
+    production_progress_pct: int = Field(0, ge=0, le=100)
+    installation_progress_pct: int = Field(0, ge=0, le=100)
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}

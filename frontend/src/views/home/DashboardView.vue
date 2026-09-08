@@ -109,6 +109,18 @@
               <span>{{ card.customer_name || '-' }}</span>
               <span>¥{{ card.total_amount?.toFixed(2) }}</span>
             </div>
+            <div v-if="col.key !== 'queue'" class="card-progress">
+              <div class="card-progress-header">
+                <span>{{ col.label }}进度</span>
+                <strong>{{ stageProgress(card, col.key) }}%</strong>
+              </div>
+              <el-progress
+                :percentage="stageProgress(card, col.key)"
+                :stroke-width="8"
+                :show-text="false"
+                :color="stageProgressColor(col.key)"
+              />
+            </div>
           </el-card>
         </div>
       </div>
@@ -145,6 +157,32 @@ const columns = [
   { key: 'production', label: '制作', statuses: ['in_production'] },
   { key: 'installation', label: '安装', statuses: ['in_installation'] },
 ]
+
+type BoardColumnKey = (typeof columns)[number]['key']
+
+function progressPct(value: number | undefined) {
+  return Math.min(100, Math.max(0, Number(value ?? 0)))
+}
+
+function stageProgress(card: OrderListResponse, columnKey: BoardColumnKey) {
+  const progressByColumn: Record<BoardColumnKey, number> = {
+    queue: 0,
+    designing: card.design_progress_pct ?? 0,
+    production: card.production_progress_pct ?? 0,
+    installation: card.installation_progress_pct ?? 0,
+  }
+  return progressPct(progressByColumn[columnKey])
+}
+
+function stageProgressColor(columnKey: BoardColumnKey) {
+  const colors: Record<BoardColumnKey, string> = {
+    queue: '#909399',
+    designing: '#409eff',
+    production: '#e6a23c',
+    installation: '#67c23a',
+  }
+  return colors[columnKey]
+}
 
 function colCards(key: string) {
   const col = columns.find(c => c.key === key)
@@ -252,6 +290,9 @@ onBeforeUnmount(() => {
 .card-no { font-size: 12px; color: #888; }
 .card-name { font-weight: bold; font-size: 16px; color: var(--ad-text); margin: 4px 0; }
 .card-meta { display: flex; justify-content: center; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: #888; }
+.card-progress { margin-top: 12px; }
+.card-progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; color: var(--ad-text-secondary); font-size: 12px; }
+.card-progress-header strong { color: var(--ad-text); font-weight: 600; }
 .stat-card { background: var(--ad-card); border: 1px solid var(--ad-border); text-align: center; padding: 18px 12px; border-radius: 10px; }
 .stat-label { font-size: 13px; color: var(--ad-text-secondary); margin-bottom: 10px; }
 .stat-value { font-size: 22px; font-weight: 700; color: var(--ad-text); }

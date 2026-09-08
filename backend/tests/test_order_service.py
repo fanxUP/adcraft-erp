@@ -1,6 +1,7 @@
 """统一业务单据服务的订单路径回归测试。"""
 
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -190,6 +191,27 @@ async def test_list_orders(service):
         keyword=None,
         exclude_status=None,
     )
+
+
+def test_order_summary_exposes_stage_progress_for_workbench_board(service):
+    def task(status: str, progress_pct: int):
+        return SimpleNamespace(status=status, progress_pct=progress_pct)
+
+    order = make_order(
+        design_tasks=[
+            task("designing", 40),
+            task("confirmed", 0),
+            task("cancelled", 90),
+        ],
+        production_tasks=[task("in_progress", 25), task("completed", 100)],
+        installation_tasks=[task("pending", 0)],
+    )
+
+    summary = service[0]._to_summary(order)
+
+    assert summary["design_progress_pct"] == 70
+    assert summary["production_progress_pct"] == 63
+    assert summary["installation_progress_pct"] == 0
 
 
 @pytest.mark.asyncio

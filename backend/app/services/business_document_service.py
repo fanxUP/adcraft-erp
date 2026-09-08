@@ -112,6 +112,24 @@ class OrderItemMutationConflict(ValueError):
     """客户端提交的订单版本已经过期。"""
 
 
+def _stage_progress(tasks, completed_statuses: frozenset[str]) -> int:
+    """Aggregate one delivery-stage progress value for the workbench board."""
+    values: list[int] = []
+    for task in tasks or []:
+        status = getattr(task, "status", None)
+        if status == "cancelled":
+            continue
+        if status in completed_statuses:
+            values.append(100)
+            continue
+        try:
+            progress = int(getattr(task, "progress_pct", 0) or 0)
+        except (TypeError, ValueError):
+            progress = 0
+        values.append(max(0, min(100, progress)))
+    return int(sum(values) / len(values) + 0.5) if values else 0
+
+
 def _business_today() -> date:
     """业务日期：北京时间今天（服务器为 UTC，直接 date.today() 在凌晨会差一天）。"""
     return datetime.now(_BUSINESS_TZ).date()
@@ -4112,6 +4130,18 @@ class BusinessDocumentService:
                 "unpaid_amount": float(d.unpaid_amount),
                 "cost_amount": float(d.cost_amount),
                 "gross_profit": float(d.gross_profit),
+                "design_progress_pct": _stage_progress(
+                    d.design_tasks,
+                    frozenset({"confirmed", "completed"}),
+                ),
+                "production_progress_pct": _stage_progress(
+                    d.production_tasks,
+                    frozenset({"completed"}),
+                ),
+                "installation_progress_pct": _stage_progress(
+                    d.installation_tasks,
+                    frozenset({"completed"}),
+                ),
             })
         else:
             base.update({

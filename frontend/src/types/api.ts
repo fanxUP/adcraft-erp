@@ -89,6 +89,9 @@ export interface OrderListResponse {
   paid_amount: number
   unpaid_amount: number
   department?: string
+  design_progress_pct?: number
+  production_progress_pct?: number
+  installation_progress_pct?: number
   created_at?: string
 }
 

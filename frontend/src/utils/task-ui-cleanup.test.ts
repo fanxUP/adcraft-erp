@@ -45,4 +45,15 @@ describe('任务详情页界面收敛', () => {
     expect(source).toContain('刷新状态')
     expect(source).not.toContain('getOrder(props.orderId)')
   })
+
+  it('工作台项目看板显示设计、制作、安装阶段进度条', () => {
+    const source = readSource('views/home/DashboardView.vue')
+
+    expect(source).toContain('design_progress_pct')
+    expect(source).toContain('production_progress_pct')
+    expect(source).toContain('installation_progress_pct')
+    expect(source).toContain('{{ col.label }}进度')
+    expect(source).toContain('<el-progress')
+    expect(source).toContain(':show-text="false"')
+  })
 })
