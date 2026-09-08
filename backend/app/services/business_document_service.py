@@ -7,7 +7,8 @@ from zoneinfo import ZoneInfo
 from decimal import Decimal
 from uuid import UUID, uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.domain.workflows import ORDER_WORKFLOW, QUOTE_WORKFLOW, allowed_targets
@@ -17,7 +18,7 @@ from app.models.business_document import BusinessDocument
 from app.models.task import DesignTask, ProductionTask, InstallationTask
 from app.models.task_order_item_link import TaskOrderItemLink
 from app.models.outsource import OutsourceTask
-from app.models.project_cost import ProjectCost
+from app.models.project_cost import ProjectCost, ProjectCostItemLink
 from app.services.quote_calculation import (
     calculate_quote_item_values,
     calculate_quote_totals,
@@ -415,6 +416,13 @@ class BusinessDocumentService:
         costs = (await self.db.execute(
             select(ProjectCost).where(ProjectCost.document_id == doc.id)
         )).scalars().all()
+        cost_ids = [cost.id for cost in costs]
+        if cost_ids:
+            await self.db.execute(
+                delete(ProjectCostItemLink).where(
+                    ProjectCostItemLink.project_cost_id.in_(cost_ids)
+                )
+            )
         for c in costs:
             c.document_id = None
             c.document_item_id = None
@@ -1664,7 +1672,9 @@ class BusinessDocumentService:
                 relation_type="item" if record.order_item_id else "document",
             )
 
-        cost_query = select(ProjectCost).where(
+        cost_query = select(ProjectCost).options(
+            selectinload(ProjectCost.item_links)
+        ).where(
             or_(
                 ProjectCost.document_id == doc.id,
                 ProjectCost.document_item_id.in_(
@@ -1675,7 +1685,9 @@ class BusinessDocumentService:
             )
         )
         if item_id:
-            cost_query = select(ProjectCost).where(
+            cost_query = select(ProjectCost).options(
+                selectinload(ProjectCost.item_links)
+            ).where(
                 or_(
                     ProjectCost.document_id == doc.id,
                     ProjectCost.document_item_id == item_id,
@@ -1689,7 +1701,12 @@ class BusinessDocumentService:
                 record,
                 record_no=record.cost_no,
                 status="settled" if record.is_settled else "active",
-                relation_type="item" if record.document_item_id else "document",
+                relation_type=(
+                    "item"
+                    if record.document_item_id
+                    or getattr(record, "item_links", None)
+                    else "document"
+                ),
             )
 
         simple_models = (
@@ -1987,7 +2004,12 @@ class BusinessDocumentService:
             # SET NULL 仍会丢失明细维度的成本解释，因此单独阻断。
             "item_project_costs": await self._count(
                 select(func.count(ProjectCost.id)).where(
-                    ProjectCost.document_item_id == item_id
+                    or_(
+                        ProjectCost.document_item_id == item_id,
+                        ProjectCost.item_links.any(
+                            ProjectCostItemLink.document_item_id == item_id
+                        ),
+                    )
                     if item_id
                     else ProjectCost.document_id == doc.id,
                 )

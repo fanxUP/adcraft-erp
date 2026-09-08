@@ -727,9 +727,12 @@ export interface ProjectCostResponse {
   related_project_name?: string
   quote_no?: string
   order_item_id?: string
+  order_item_ids?: string[]
   quote_item_id?: string
   order_item_name?: string
   quote_item_name?: string
+  item_scopes?: ProjectCostItemScope[]
+  scope_type?: 'document' | 'item'
   group_name?: string
   customer_id?: string
   customer_name?: string
@@ -755,6 +758,11 @@ export interface ProjectCostResponse {
   created_at?: string
   attachment_count?: number
   attachments?: AttachmentResponse[]
+}
+
+export interface ProjectCostItemScope {
+  order_item_id: string
+  order_item_name?: string
 }
 
 export interface DebtResponse {

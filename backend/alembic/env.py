@@ -27,7 +27,7 @@ from app.models.task_order_item_link import TaskOrderItemLink
 from app.models.payment import Payment, CustomerStatement, Expense
 from app.models.outsource import OutsourceVendor, OutsourceTask, OutsourcePayment
 from app.models.inventory import InventoryItem, StockRecord
-from app.models.project_cost import ProjectCost
+from app.models.project_cost import ProjectCost, ProjectCostItemLink
 from app.models.chat import Conversation, ConversationMember, Message, MessageReadReceipt, UserPresence
 from app.models.notification import Notification
 from app.models.acceptance import AcceptanceForm, AcceptanceItem, AcceptanceAttachment

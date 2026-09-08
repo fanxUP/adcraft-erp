@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildProjectCostScopeOptions } from './projectCostScope'
+import { buildProjectCostScopeOptions, getProjectCostScopeIds } from './projectCostScope'
 
 describe('buildProjectCostScopeOptions', () => {
   it('只返回当前有效明细，并带出已登记成本和明细描述', () => {
@@ -55,5 +55,19 @@ describe('buildProjectCostScopeOptions', () => {
 
     expect(options).toHaveLength(1)
     expect(options[0].registeredAmount).toBe(0)
+  })
+})
+
+describe('getProjectCostScopeIds', () => {
+  it('优先返回多明细归属，并去除重复ID', () => {
+    expect(getProjectCostScopeIds({
+      order_item_id: 'legacy-item',
+      order_item_ids: ['item-a', 'item-b', 'item-a'],
+    })).toEqual(['item-a', 'item-b'])
+  })
+
+  it('兼容历史单明细响应', () => {
+    expect(getProjectCostScopeIds({ order_item_id: 'legacy-item' })).toEqual(['legacy-item'])
+    expect(getProjectCostScopeIds({})).toEqual([])
   })
 })

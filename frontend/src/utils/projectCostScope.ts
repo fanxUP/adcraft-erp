@@ -28,6 +28,16 @@ export interface ProjectCostScopeOption {
   recordCount: number
 }
 
+export function getProjectCostScopeIds(cost: {
+  order_item_id?: string | null
+  order_item_ids?: string[] | null
+}): string[] {
+  const ids = cost.order_item_ids?.length
+    ? cost.order_item_ids
+    : (cost.order_item_id ? [cost.order_item_id] : [])
+  return [...new Set(ids)]
+}
+
 function formatNumber(value: number | undefined) {
   if (value == null) return ''
   return Number.isInteger(value) ? String(value) : value.toFixed(2)

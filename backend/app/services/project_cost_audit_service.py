@@ -34,6 +34,7 @@ REQUIRED_COLUMNS: dict[str, set[str]] = {
         "amount",
         "deleted_at",
     },
+    "project_cost_item_links": {"project_cost_id", "document_item_id"},
     "outsource_tasks": {
         "related_doc_id",
         "related_doc_type",
@@ -185,20 +186,33 @@ class ProjectCostAuditService:
         result = await self.db.execute(
             text(
                 f"""
+                WITH item_refs AS (
+                    SELECT
+                        pc.id AS project_cost_id,
+                        pc.document_item_id
+                    FROM project_costs pc
+                    WHERE pc.document_item_id IS NOT NULL
+                    UNION
+                    SELECT
+                        link.project_cost_id,
+                        link.document_item_id
+                    FROM project_cost_item_links link
+                )
                 SELECT
                     pc.id::text AS record_id,
                     pc.cost_no,
                     pc.document_id::text AS document_id,
                     (bd.id IS NOT NULL) AS document_exists,
                     bd.doc_type AS document_type,
-                    pc.document_item_id::text AS item_id,
+                    refs.document_item_id::text AS item_id,
                     (bi.id IS NOT NULL) AS item_exists,
                     bi.document_id::text AS item_document_id,
                     {lifecycle_expression} AS item_lifecycle_status,
                     pc.amount
                 FROM project_costs pc
                 LEFT JOIN business_documents bd ON bd.id = pc.document_id
-                LEFT JOIN business_document_items bi ON bi.id = pc.document_item_id
+                LEFT JOIN item_refs refs ON refs.project_cost_id = pc.id
+                LEFT JOIN business_document_items bi ON bi.id = refs.document_item_id
                 WHERE pc.deleted_at IS NULL
                 ORDER BY pc.created_at NULLS LAST, pc.cost_no
                 """
@@ -239,11 +253,25 @@ class ProjectCostAuditService:
                         document_id,
                         COALESCE(SUM(amount), 0) AS manual_cost,
                         COUNT(*) AS manual_record_count,
-                        COUNT(*) FILTER (WHERE document_item_id IS NULL)
+                        COUNT(*) FILTER (
+                            WHERE document_item_id IS NULL
+                              AND NOT EXISTS (
+                                  SELECT 1
+                                  FROM project_cost_item_links link
+                                  WHERE link.project_cost_id = project_costs.id
+                              )
+                        )
                             AS manual_order_scope_count,
-                        COUNT(*) FILTER (WHERE document_item_id IS NOT NULL)
+                        COUNT(*) FILTER (
+                            WHERE document_item_id IS NOT NULL
+                               OR EXISTS (
+                                  SELECT 1
+                                  FROM project_cost_item_links link
+                                  WHERE link.project_cost_id = project_costs.id
+                              )
+                        )
                             AS manual_item_scope_count
-                    FROM project_costs
+                        FROM project_costs
                     WHERE deleted_at IS NULL
                     GROUP BY document_id
                 )
@@ -332,7 +360,8 @@ class ProjectCostAuditService:
                 "schema": schema,
                 "cost_scope": {
                     "status": cost_scope_status,
-                    "active_record_count": len(references),
+                    "active_record_count": len({reference.get("record_id") for reference in references}),
+                    "item_reference_count": len(references),
                     "issue_record_count": len(issue_records),
                     "issue_counts": dict(issue_counts),
                     "issues": issue_records,

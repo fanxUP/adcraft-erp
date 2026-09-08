@@ -515,7 +515,12 @@ async def create_project_cost(
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_PROJECT_COST, UUID(cost["id"]), ACTION_CREATE,
                         ip_address=request.client.host if request.client else None,
-                        after_data={"cost_no": cost["cost_no"], "amount": cost["amount"], "category": cost["category"]})
+                        after_data={
+                            "cost_no": cost["cost_no"],
+                            "amount": cost["amount"],
+                            "category": cost["category"],
+                            "order_item_ids": cost.get("order_item_ids", []),
+                        })
     # Direct SQL fallback for group_name (session auto-commits on exit)
     if payload.get("group_name"):
         from sqlalchemy import text
@@ -538,6 +543,7 @@ async def update_project_cost(
     service = ProjectCostService(db)
     cid = UUID(cost_id)
     try:
+        before = await service.get_cost(cid)
         # exclude_unset preserves an explicit null so the service can clear
         # an existing item association back to whole-order scope.
         cost = await service.update_cost(cid, data.model_dump(exclude_unset=True))
@@ -545,7 +551,15 @@ async def update_project_cost(
         return {"code": 40401, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_PROJECT_COST, cid, ACTION_UPDATE,
-                        ip_address=request.client.host if request.client else None)
+                        ip_address=request.client.host if request.client else None,
+                        before_data={
+                            "amount": before.get("amount") if before else None,
+                            "order_item_ids": before.get("order_item_ids", []) if before else [],
+                        },
+                        after_data={
+                            "amount": cost.get("amount"),
+                            "order_item_ids": cost.get("order_item_ids", []),
+                        })
     return success(cost)
 
 

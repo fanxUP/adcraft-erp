@@ -2,7 +2,7 @@ import uuid
 from decimal import Decimal
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Numeric, String, Text, ForeignKey
+from sqlalchemy import Boolean, DateTime, Index, Numeric, String, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,4 +43,39 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
 
     document: Mapped["BusinessDocument | None"] = relationship(foreign_keys=[document_id], lazy="selectin")
     document_item: Mapped["BusinessDocumentItem | None"] = relationship(foreign_keys=[document_item_id], lazy="selectin")
+    item_links: Mapped[list["ProjectCostItemLink"]] = relationship(
+        back_populates="project_cost",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
     customer: Mapped["Customer"] = relationship(lazy="selectin")
+
+
+class ProjectCostItemLink(Base, TimestampMixin):
+    """订单成本与订单明细的多值归属关系，不承载金额分摊。"""
+
+    __tablename__ = "project_cost_item_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_cost_id",
+            "document_item_id",
+            name="uq_project_cost_item_link",
+        ),
+        Index("ix_project_cost_item_links_cost", "project_cost_id"),
+        Index("ix_project_cost_item_links_item", "document_item_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_cost_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("project_costs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    document_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("business_document_items.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+
+    project_cost: Mapped["ProjectCost"] = relationship(back_populates="item_links")
+    document_item: Mapped["BusinessDocumentItem"] = relationship(lazy="selectin")

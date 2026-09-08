@@ -1,5 +1,5 @@
 from app.schemas.common import CoercedModel
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from uuid import UUID
 from decimal import Decimal
@@ -164,6 +164,7 @@ class ProjectCostCreate(BaseModel):
     receipt_url: str | None = None
     remark: str | None = None
     order_item_id: str | None = None
+    order_item_ids: list[UUID] | None = Field(default=None, max_length=100)
     quote_item_id: str | None = None
     group_name: str | None = None
     payment_method: str | None = None
@@ -212,6 +213,12 @@ class ProjectCostUpdate(BaseModel):
     unit: str | None = None
     unit_price: float | None = None
     summary: str | None = None
+    order_item_ids: list[UUID] | None = Field(default=None, max_length=100)
+
+
+class ProjectCostItemScope(CoercedModel):
+    order_item_id: str
+    order_item_name: str | None = None
 
 
 class ProjectCostResponse(CoercedModel):
@@ -222,6 +229,7 @@ class ProjectCostResponse(CoercedModel):
     quote_id: str | None = None
     quote_no: str | None = None
     order_item_id: str | None = None
+    order_item_ids: list[str] = Field(default_factory=list)
     quote_item_id: str | None = None
     order_item_name: str | None = None
     quote_item_name: str | None = None
@@ -254,6 +262,8 @@ class ProjectCostResponse(CoercedModel):
     doc_type: str | None = None
     document_item_id: str | None = None
     document_item_name: str | None = None
+    item_scopes: list[ProjectCostItemScope] = Field(default_factory=list)
+    scope_type: str = "document"
     attachment_count: int = 0
 
     model_config = {"from_attributes": True}
