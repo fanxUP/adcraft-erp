@@ -232,12 +232,6 @@ def build_order_alerts(
                         if has_order_address
                         else "订单和任务均未填写地址，请补充后再安排人员和车辆。"
                     ),
-                    _workflow_action(
-                        "补充安装地址",
-                        task_page,
-                        task_path,
-                        "installation-address",
-                    ),
                 )
             )
         if not current_task.get("scheduled_at"):
@@ -247,12 +241,6 @@ def build_order_alerts(
                     "warning",
                     "安装时间尚未安排",
                     "设置计划安装时间，便于协调现场与施工人员。",
-                    _workflow_action(
-                        "安排安装时间",
-                        task_page,
-                        task_path,
-                        "installation-schedule",
-                    ),
                 )
             )
 

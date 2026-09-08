@@ -74,17 +74,6 @@
       ]
     },
     {
-      "target_key": "installation-address",
-      "business_types": ["installation_task", "order"],
-      "routes": [
-        {
-          "name": "InstallationTaskDetail",
-          "path": "/installation-tasks/:id",
-          "marker_files": ["frontend/src/views/tasks/InstallationTaskDetail.vue"]
-        }
-      ]
-    },
-    {
       "target_key": "installation-draft",
       "business_types": ["installation_task", "order"],
       "routes": [
@@ -94,17 +83,6 @@
           "marker_files": [
             "frontend/src/components/ai-assistant/AiInstallationDraftCard.vue"
           ]
-        }
-      ]
-    },
-    {
-      "target_key": "installation-schedule",
-      "business_types": ["installation_task", "order"],
-      "routes": [
-        {
-          "name": "InstallationTaskDetail",
-          "path": "/installation-tasks/:id",
-          "marker_files": ["frontend/src/views/tasks/InstallationTaskDetail.vue"]
         }
       ]
     },
@@ -509,15 +487,6 @@
       "requires_confirmation": true,
       "required_permissions": {"DesignTaskDetail": "design_task:update"}
     },
-    "installation-address": {
-      "purpose": "补充可用于导航和进场的准确安装地址",
-      "prerequisites": ["已与客户核对门牌、楼层和进场位置"],
-      "completion_signal": "安装任务详情显示完整安装地址",
-      "blocking_conditions": ["地址信息不完整、任务已锁定或权限不足"],
-      "effect": "write",
-      "requires_confirmation": true,
-      "required_permissions": {"InstallationTaskDetail": "installation_task:update"}
-    },
     "installation-draft": {
       "purpose": "预览由订单信息生成的安装准备草稿",
       "prerequisites": ["安装任务存在且订单可提供参考信息"],
@@ -526,15 +495,6 @@
       "effect": "read",
       "requires_confirmation": false,
       "required_permissions": {"InstallationTaskDetail": "installation_task:read"}
-    },
-    "installation-schedule": {
-      "purpose": "安排与客户及施工人员确认后的实际进场时间",
-      "prerequisites": ["已协调客户现场与施工人员时间"],
-      "completion_signal": "安装任务详情显示计划安装时间",
-      "blocking_conditions": ["时间未协调、任务已锁定或权限不足"],
-      "effect": "write",
-      "requires_confirmation": true,
-      "required_permissions": {"InstallationTaskDetail": "installation_task:update"}
     },
     "order-create-design": {
       "purpose": "为已确认订单创建设计任务",
