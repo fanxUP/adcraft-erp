@@ -148,6 +148,13 @@ TASK_TERMINAL_STATUSES = {
     for task_type, statuses in TASK_COMPLETED_STATUSES.items()
 }
 
+OUTSOURCE_BLOCKING_TASK_TYPES = frozenset({"production", "installation"})
+OUTSOURCE_BLOCKING_STATUSES = frozenset({"pending", "in_progress"})
+OUTSOURCE_BLOCKING_STATUS_LABELS = {
+    "pending": "外协待处理",
+    "in_progress": "外协任务进行中",
+}
+
 
 def _item_status_progress(task_type: str, status: str, fallback: int = 0) -> int:
     return int(TASK_STATUS_PROGRESS.get(task_type, {}).get(status, fallback))
@@ -177,6 +184,84 @@ def _coerce_uuid(value) -> UUID | None:
 
 def _task_order_item_id(task) -> UUID | None:
     return _coerce_uuid(getattr(task, "order_item_id", None))
+
+
+async def _blocking_outsource_map(
+    db: AsyncSession,
+    document_id: UUID,
+    task_type: str,
+    item_ids: list[UUID] | set[UUID],
+) -> dict[UUID, dict]:
+    """Return active item-level outsource work that still blocks progression.
+
+    External work is scoped by order, item, and the current production stage.
+    Order-level outsource tasks intentionally do not get guessed onto items.
+    """
+    if task_type not in OUTSOURCE_BLOCKING_TASK_TYPES:
+        return {}
+
+    normalized_item_ids = {
+        item_id
+        for raw_item_id in item_ids
+        if (item_id := _coerce_uuid(raw_item_id)) is not None
+    }
+    if not normalized_item_ids:
+        return {}
+
+    from app.models.outsource import OutsourceTask
+
+    result = await db.execute(
+        select(OutsourceTask).where(
+            OutsourceTask.related_doc_id == document_id,
+            OutsourceTask.related_doc_type == "order",
+            OutsourceTask.order_item_id.in_(normalized_item_ids),
+            OutsourceTask.task_type == task_type,
+            OutsourceTask.status.in_(OUTSOURCE_BLOCKING_STATUSES),
+            OutsourceTask.deleted_at.is_(None),
+        )
+    )
+    try:
+        scalars = result.scalars()
+        if inspect.isawaitable(scalars):
+            scalars = await scalars
+        values = scalars.all()
+        if inspect.isawaitable(values):
+            values = await values
+        tasks = list(values)
+    except AttributeError:
+        tasks = []
+
+    blocked: dict[UUID, dict] = {}
+    status_priority = {"pending": 1, "in_progress": 2}
+    for outsource_task in tasks:
+        item_id = _coerce_uuid(getattr(outsource_task, "order_item_id", None))
+        status = getattr(outsource_task, "status", None)
+        if (
+            item_id not in normalized_item_ids
+            or status not in OUTSOURCE_BLOCKING_STATUSES
+            or getattr(outsource_task, "deleted_at", None) is not None
+        ):
+            continue
+
+        summary = blocked.setdefault(
+            item_id,
+            {
+                "outsource_blocked": True,
+                "outsource_status": status,
+                "outsource_status_label": OUTSOURCE_BLOCKING_STATUS_LABELS[status],
+                "outsource_task_count": 0,
+                "outsource_task_nos": [],
+            },
+        )
+        summary["outsource_task_count"] += 1
+        task_no = getattr(outsource_task, "task_no", None)
+        if task_no and task_no not in summary["outsource_task_nos"]:
+            summary["outsource_task_nos"].append(str(task_no))
+        if status_priority[status] > status_priority[summary["outsource_status"]]:
+            summary["outsource_status"] = status
+            summary["outsource_status_label"] = OUTSOURCE_BLOCKING_STATUS_LABELS[status]
+
+    return blocked
 
 
 def _task_type_for_model(model) -> str:
@@ -753,6 +838,12 @@ async def _task_order_item_option_map(
             for link in await _task_order_item_link_rows(db, task_type, task_id)
             if (item_id := _coerce_uuid(link.order_item_id)) is not None
         }
+    outsource_by_item = await _blocking_outsource_map(
+        db,
+        document_id,
+        task_type,
+        [item_id for item in items if (item_id := _coerce_uuid(item.id)) is not None],
+    )
     options: dict[UUID, dict] = {}
 
     for item in items:
@@ -772,6 +863,13 @@ async def _task_order_item_option_map(
             if link and link.item_progress_pct is not None
             else None
         )
+        outsource = outsource_by_item.get(item_id, {
+            "outsource_blocked": False,
+            "outsource_status": None,
+            "outsource_status_label": None,
+            "outsource_task_count": 0,
+            "outsource_task_nos": [],
+        })
         if is_linked:
             can_select = not _is_terminal_item_status(task_type, task_status or "")
             if can_select:
@@ -781,8 +879,13 @@ async def _task_order_item_option_map(
             else:
                 disabled_reason = "该明细在本任务中已取消"
         else:
-            can_select = stage == expected_stage
-            if can_select:
+            can_select = stage == expected_stage and not outsource["outsource_blocked"]
+            if outsource["outsource_blocked"]:
+                disabled_reason = (
+                    f"{outsource['outsource_status_label']}，完成后才能关联"
+                    f"{TASK_TYPE_LABELS[task_type]}任务"
+                )
+            elif can_select:
                 disabled_reason = None
             elif stage == "completed":
                 disabled_reason = "该明细已完成，不能再次关联任务"
@@ -808,6 +911,7 @@ async def _task_order_item_option_map(
             "task_status": task_status,
             "task_status_label": _item_status_label(task_type, task_status),
             "task_progress_pct": task_progress_pct,
+            **outsource,
         }
         options[item_id] = TaskOrderItemOption.model_validate(payload).model_dump(
             mode="json"
@@ -1478,6 +1582,25 @@ async def _apply_task_item_status_change(
         current_status = states.get(item_id, (getattr(task, "status", "pending"), 0))[0]
         if to_status not in allowed_targets(workflow, current_status):
             raise ValueError(f"不允许从 {current_status} 流转到 {to_status}")
+
+    if task_type in OUTSOURCE_BLOCKING_TASK_TYPES and _is_completed_item_status(task_type, to_status):
+        blocked_outsource = await _blocking_outsource_map(
+            db,
+            task.document_id,
+            task_type,
+            selected_ids,
+        )
+        if blocked_outsource:
+            task_nos = [
+                task_no
+                for summary in blocked_outsource.values()
+                for task_no in summary["outsource_task_nos"]
+            ]
+            task_ref = f"（外协任务：{'、'.join(task_nos)}）" if task_nos else ""
+            raise ValueError(
+                f"所选订单明细存在未完成的外协任务{task_ref}，"
+                f"外协完成后才能完成{TASK_TYPE_LABELS[task_type]}任务"
+            )
 
     progress = _item_status_progress(
         task_type,

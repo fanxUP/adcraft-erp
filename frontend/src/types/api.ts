@@ -143,6 +143,11 @@ export interface TaskOrderItemOption extends OrderItemResponse {
   task_status?: string | null
   task_status_label?: string | null
   task_progress_pct?: number | null
+  outsource_blocked: boolean
+  outsource_status?: 'pending' | 'in_progress' | null
+  outsource_status_label?: string | null
+  outsource_task_count: number
+  outsource_task_nos: string[]
 }
 
 export interface OrderItemMutationFields {

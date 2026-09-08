@@ -1,6 +1,7 @@
 """第七阶段：订单明细级并行进度契约测试。"""
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
@@ -8,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.domain.workflows import DESIGN_TASK_WORKFLOW, INSTALLATION_TASK_WORKFLOW
+from app.schemas.order import OrderItemResponse
 from app.schemas.task import (
     DesignTaskCreate,
     DesignTaskResponse,
@@ -20,6 +22,7 @@ from app.services.task_service import (
     InstallationTaskService,
     _aggregate_task_status,
     _apply_task_item_status_change,
+    _blocking_outsource_map,
     _ensure_task_order_item_links,
     _materialize_legacy_task_scope,
     _resolve_order_item_stage,
@@ -70,6 +73,44 @@ def test_task_order_item_option_exposes_stage_and_selectability():
     assert "stage_label" in option_fields
     assert "can_select" in option_fields
     assert "disabled_reason" in option_fields
+    assert "outsource_blocked" in option_fields
+    assert "outsource_status" in option_fields
+    assert "outsource_status_label" in option_fields
+    assert "outsource_task_count" in option_fields
+    assert "outsource_task_nos" in option_fields
+
+
+def _mock_result(items):
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = items
+    return result
+
+
+def _mock_outsource_task(
+    *,
+    item_id=ITEM_UUID,
+    status="in_progress",
+    task_no="OT20260908-0001",
+    deleted_at=None,
+    task_type="production",
+):
+    return SimpleNamespace(
+        order_item_id=item_id,
+        status=status,
+        task_no=task_no,
+        deleted_at=deleted_at,
+        task_type=task_type,
+    )
+
+
+def _mock_order_item(item_id=ITEM_ID, name="前台发光字"):
+    return OrderItemResponse(
+        id=item_id,
+        item_name=name,
+        quantity=1,
+        unit_price=100,
+        subtotal_amount=100,
+    )
 
 
 def test_status_change_contract_requires_checked_order_items():
@@ -233,6 +274,174 @@ async def test_order_item_validation_rejects_item_outside_task_stage():
                 [ITEM_ID],
                 task_type="design",
             )
+
+
+@pytest.mark.asyncio
+async def test_blocking_outsource_map_only_keeps_active_pending_or_in_progress_tasks():
+    db = AsyncMock()
+    db.execute = AsyncMock(
+        return_value=_mock_result(
+            [
+                _mock_outsource_task(status="pending", task_no="OT-PENDING"),
+                _mock_outsource_task(status="in_progress", task_no="OT-RUNNING"),
+                _mock_outsource_task(status="completed", task_no="OT-DONE"),
+                _mock_outsource_task(status="settled", task_no="OT-SETTLED"),
+                _mock_outsource_task(status="cancelled", task_no="OT-CANCELLED"),
+                _mock_outsource_task(
+                    status="in_progress",
+                    task_no="OT-DELETED",
+                    deleted_at=SimpleNamespace(),
+                ),
+            ]
+        )
+    )
+
+    blocked = await _blocking_outsource_map(
+        db,
+        UUID(ORDER_ID),
+        "production",
+        [ITEM_UUID],
+    )
+
+    assert blocked[ITEM_UUID]["outsource_blocked"] is True
+    assert blocked[ITEM_UUID]["outsource_status"] == "in_progress"
+    assert blocked[ITEM_UUID]["outsource_status_label"] == "外协任务进行中"
+    assert blocked[ITEM_UUID]["outsource_task_count"] == 2
+    assert blocked[ITEM_UUID]["outsource_task_nos"] == ["OT-PENDING", "OT-RUNNING"]
+
+
+@pytest.mark.asyncio
+async def test_design_task_does_not_query_or_block_for_outsource_task():
+    db = AsyncMock()
+
+    blocked = await _blocking_outsource_map(
+        db,
+        UUID(ORDER_ID),
+        "design",
+        [ITEM_UUID],
+    )
+
+    assert blocked == {}
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_production_option_disables_unlinked_item_with_active_outsource_task():
+    db = AsyncMock()
+    db.get = AsyncMock(
+        return_value=SimpleNamespace(
+            doc_type="order",
+            deleted_at=None,
+            status="in_production",
+        )
+    )
+    db.execute = AsyncMock(
+        side_effect=[
+            _mock_result([_mock_order_item()]),
+            _mock_result([_mock_outsource_task(task_type="production")]),
+        ]
+    )
+
+    with (
+        patch(
+            "app.services.task_service._task_stage_states_by_item",
+            new=AsyncMock(return_value=({}, {})),
+        ),
+        patch(
+            "app.services.task_service._task_order_item_link_rows",
+            new=AsyncMock(return_value=[]),
+        ),
+    ):
+        from app.services.task_service import _task_order_item_option_map
+
+        options = await _task_order_item_option_map(
+            db,
+            UUID(ORDER_ID),
+            "production",
+            task_id=UUID("99999999-9999-9999-9999-999999999999"),
+        )
+
+    option = options[ITEM_UUID]
+    assert option["outsource_blocked"] is True
+    assert option["outsource_status_label"] == "外协任务进行中"
+    assert option["can_select"] is False
+    assert "外协" in option["disabled_reason"]
+
+
+@pytest.mark.asyncio
+async def test_installation_completion_is_blocked_before_link_status_update():
+    db = AsyncMock()
+    task = make_mock_installation_task(status="pending_acceptance")
+    task.order_item_id = ITEM_UUID
+    states = {ITEM_UUID: ("pending_acceptance", 75)}
+    db.execute = AsyncMock(
+        return_value=_mock_result([_mock_outsource_task(task_type="installation")])
+    )
+
+    with (
+        patch(
+            "app.services.task_service._prepare_status_item_ids",
+            new=AsyncMock(return_value=[ITEM_UUID]),
+        ),
+        patch(
+            "app.services.task_service._task_item_state_map",
+            new=AsyncMock(return_value=states),
+        ),
+    ):
+        with pytest.raises(ValueError, match="外协任务"):
+            await _apply_task_item_status_change(
+                db,
+                "installation",
+                task,
+                "completed",
+                [ITEM_ID],
+            )
+
+    assert task.status == "pending_acceptance"
+    db.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_production_completion_is_allowed_after_outsource_task_is_completed():
+    db = AsyncMock()
+    task = SimpleNamespace(
+        id=UUID("99999999-9999-9999-9999-999999999999"),
+        document_id=UUID(ORDER_ID),
+        order_item_id=ITEM_UUID,
+        status="in_progress",
+        progress_pct=50,
+        completed_at=None,
+    )
+    states = {ITEM_UUID: ("in_progress", 50)}
+    db.execute = AsyncMock(
+        side_effect=[
+            _mock_result([_mock_outsource_task(status="completed")]),
+            MagicMock(),
+        ]
+    )
+
+    with (
+        patch(
+            "app.services.task_service._prepare_status_item_ids",
+            new=AsyncMock(return_value=[ITEM_UUID]),
+        ),
+        patch(
+            "app.services.task_service._task_item_state_map",
+            new=AsyncMock(return_value=states),
+        ),
+    ):
+        selected, updated = await _apply_task_item_status_change(
+            db,
+            "production",
+            task,
+            "completed",
+            [ITEM_ID],
+        )
+
+    assert selected == [ITEM_UUID]
+    assert updated[ITEM_UUID] == ("completed", 100)
+    assert task.status == "completed"
+    assert db.execute.await_count == 2
 
 
 def test_many_order_item_link_migration_copies_legacy_links_without_guessing():

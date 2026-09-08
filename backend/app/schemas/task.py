@@ -271,6 +271,11 @@ class TaskOrderItemOption(OrderItemResponse):
     task_status: str | None = None
     task_status_label: str | None = None
     task_progress_pct: int | None = Field(default=None, ge=0, le=100)
+    outsource_blocked: bool = False
+    outsource_status: Literal["pending", "in_progress"] | None = None
+    outsource_status_label: str | None = None
+    outsource_task_count: int = Field(default=0, ge=0)
+    outsource_task_nos: list[str] = Field(default_factory=list)
 
 
 class TaskQueueItem(CoercedModel):

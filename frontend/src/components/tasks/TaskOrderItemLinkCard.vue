@@ -12,8 +12,19 @@
 
     <section class="task-section order-item-section" aria-labelledby="order-item-section-title">
       <div id="order-item-section-title" class="section-heading">
-        <span>订单明细</span>
-        <span class="section-note">勾选要推进的明细，未勾选明细不会变更</span>
+        <div class="section-heading-main">
+          <span>订单明细</span>
+          <span class="section-note">勾选要推进的明细，未勾选明细不会变更</span>
+        </div>
+        <el-button
+          text
+          size="small"
+          :loading="loadingItems"
+          :disabled="saving || changing"
+          @click="loadItems"
+        >
+          刷新状态
+        </el-button>
       </div>
 
       <div v-if="linkedItemIds.length" class="linked-item-summary">
@@ -67,6 +78,9 @@
                 <el-tag v-if="item.is_linked && item.task_status_label" :type="taskStatusTagType(item.task_status)" effect="light" size="small">
                   本任务：{{ item.task_status_label }}
                 </el-tag>
+                <el-tag v-if="item.outsource_blocked" type="warning" effect="light" size="small">
+                  {{ item.outsource_status_label || '外协任务进行中' }}
+                </el-tag>
               </span>
               <span v-if="item.material_process || itemSpec(item)" class="item-option-subtitle">
                 <span v-if="item.material_process">{{ item.material_process }}</span>
@@ -79,6 +93,9 @@
               </span>
               <span v-if="!item.can_select && item.disabled_reason" class="item-option-disabled-reason">
                 {{ item.disabled_reason }}
+              </span>
+              <span v-if="item.outsource_blocked && item.can_select" class="item-option-outsourcing-reason">
+                外协完成后才能推进该明细到下一阶段
               </span>
             </span>
           </label>
@@ -267,6 +284,19 @@ function handleWorkflowChange(status: string) {
     ElMessage.warning('请先勾选要变更状态的订单明细')
     return
   }
+  if (
+    status === 'completed'
+    && (props.taskType === 'production' || props.taskType === 'installation')
+  ) {
+    const blockedItems = items.value.filter(
+      item => selectedItemIds.value.includes(item.id) && item.outsource_blocked,
+    )
+    if (blockedItems.length) {
+      const names = blockedItems.map(itemLabel).join('、')
+      ElMessage.warning(`${names}存在未完成的外协任务，外协完成后才能完成本任务`)
+      return
+    }
+  }
   emit('change', status, [...selectedItemIds.value])
 }
 
@@ -286,11 +316,18 @@ onMounted(loadItems)
 .section-heading {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   margin-bottom: 12px;
   color: var(--ad-text);
   font-size: 15px;
   font-weight: 600;
+}
+
+.section-heading-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .section-note {
@@ -410,6 +447,12 @@ onMounted(loadItems)
   font-size: 12px;
 }
 
+.item-option-outsourcing-reason {
+  flex-basis: 100%;
+  color: var(--el-color-warning-dark-2);
+  font-size: 12px;
+}
+
 .link-actions {
   display: flex;
   justify-content: flex-end;
@@ -455,6 +498,12 @@ onMounted(loadItems)
   }
 
   .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .section-heading-main {
     align-items: flex-start;
     flex-direction: column;
     gap: 4px;
