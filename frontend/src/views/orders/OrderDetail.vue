@@ -279,6 +279,19 @@
                   <template v-if="row.type === 'item'">{{ row.item.remark || '-' }}</template>
                 </template>
               </el-table-column>
+              <el-table-column label="成本" width="110" fixed="right">
+                <template #default="{ row }">
+                  <el-button
+                    v-if="row.type === 'item' && (row.item.lifecycle_status == null || row.item.lifecycle_status === 'active')"
+                    text
+                    type="primary"
+                    size="small"
+                    @click="openItemCost(row.item.id)"
+                  >
+                    登记成本
+                  </el-button>
+                </template>
+              </el-table-column>
             </el-table>
 
             <!-- 明细合计 -->
@@ -649,6 +662,13 @@ function itemTaskProgress(task: OrderProgressTask | null, itemId: string) {
 
 function openLegacyTask(task: LegacyUnlinkedTaskRow) {
   router.push(task.route)
+}
+
+function openItemCost(itemId: string) {
+  router.push({
+    path: `/project-costs/${route.params.id as string}`,
+    query: { order_item_id: itemId },
+  })
 }
 
 function stageLabel(task: OrderProgressTask | null, stage: 'design' | 'production' | 'installation') {

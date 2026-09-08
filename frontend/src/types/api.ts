@@ -807,6 +807,20 @@ export interface ProjectCostSummaryResponse {
   costs: Record<string, number>
 }
 
+export interface ProjectCostItemSummary {
+  order_item_id: string
+  total_registered: number
+  record_count: number
+}
+
+export interface ProjectCostItemSummaryResponse {
+  order_id: string
+  total_registered: number
+  order_scope_registered: number
+  item_scope_registered: number
+  items: ProjectCostItemSummary[]
+}
+
 // ---- Inventory ----
 
 export interface InventoryItemResponse {

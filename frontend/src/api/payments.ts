@@ -1,5 +1,5 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse } from '@/types/api'
+import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, ProjectCostItemSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse } from '@/types/api'
 
 export function getPayments(params?: { page?: number; page_size?: number; order_id?: string; customer_id?: string; status?: string }) { return get<PaginatedData<PaymentResponse>>('/payments/', { params }) }
 export function getPayment(id: string) { return get<PaymentResponse>(`/payments/${id}`) }
@@ -31,7 +31,7 @@ export function getCustomerDebt() { return get<CustomerDebtItem[]>('/reports/cus
 
 // ── Project Costs ──
 
-export function getProjectCosts(params?: { page?: number; page_size?: number; order_id?: string; quote_id?: string; category?: string; date_from?: string; date_to?: string }) {
+export function getProjectCosts(params?: { page?: number; page_size?: number; order_id?: string; order_item_id?: string; quote_id?: string; category?: string; date_from?: string; date_to?: string }) {
   return get<PaginatedData<ProjectCostResponse>>('/project-costs/', { params })
 }
 export function createProjectCost(data: Omit<Partial<ProjectCostResponse>, 'id' | 'cost_no' | 'customer_id' | 'customer_name' | 'project_name' | 'created_by' | 'created_at'> & { quote_id?: string }) {
@@ -49,6 +49,9 @@ export function batchDeleteProjectCosts(ids: string[]) {
 }
 export function getProjectCostSummary(orderIds: string[]) {
   return get<ProjectCostSummaryResponse>('/project-costs/summary', { params: { order_ids: orderIds.join(',') } })
+}
+export function getOrderProjectCostItemSummary(orderId: string) {
+  return get<ProjectCostItemSummaryResponse>(`/project-costs/orders/${orderId}/item-summary`)
 }
 export function importProjectCosts(file: File, orderId?: string, quoteId?: string, sourceType: string = 'order') {
   const form = new FormData()

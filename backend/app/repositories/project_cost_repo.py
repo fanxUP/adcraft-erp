@@ -44,6 +44,7 @@ class ProjectCostRepository:
         category: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        document_item_id: UUID | None = None,
     ) -> tuple[list[ProjectCost], int]:
         q = select(ProjectCost).options(
             selectinload(ProjectCost.document),
@@ -63,6 +64,8 @@ class ProjectCostRepository:
             q = q.where(ProjectCost.cost_date >= date_from)
         if date_to:
             q = q.where(ProjectCost.cost_date <= date_to)
+        if document_item_id:
+            q = q.where(ProjectCost.document_item_id == document_item_id)
 
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
@@ -76,9 +79,16 @@ class ProjectCostRepository:
         await self.db.flush()
         return cost
 
-    async def update(self, cost: ProjectCost, data: dict) -> ProjectCost:
+    async def update(
+        self,
+        cost: ProjectCost,
+        data: dict,
+        *,
+        allow_null_fields: set[str] | None = None,
+    ) -> ProjectCost:
+        allow_null_fields = allow_null_fields or set()
         for k, v in data.items():
-            if v is not None:
+            if v is not None or k in allow_null_fields:
                 setattr(cost, k, v)
         await self.db.flush()
         return cost
@@ -119,3 +129,26 @@ class ProjectCostRepository:
             .group_by(ProjectCost.document_id)
         )
         return {str(row[0]): float(row[1]) for row in result.all()}
+
+    async def get_document_item_cost_summary(self, document_id: UUID) -> list[dict]:
+        """Group active manual costs by whole-document or item scope."""
+        result = await self.db.execute(
+            select(
+                ProjectCost.document_item_id,
+                func.coalesce(func.sum(ProjectCost.amount), 0),
+                func.count(ProjectCost.id),
+            )
+            .where(
+                ProjectCost.document_id == document_id,
+                ProjectCost.deleted_at.is_(None),
+            )
+            .group_by(ProjectCost.document_item_id)
+        )
+        return [
+            {
+                "document_item_id": row[0],
+                "amount": Decimal(str(row[1] or 0)),
+                "record_count": int(row[2] or 0),
+            }
+            for row in result.all()
+        ]

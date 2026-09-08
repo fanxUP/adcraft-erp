@@ -28,6 +28,9 @@
             <span class="value" style="color: var(--el-color-warning); font-weight: bold; font-size: 18px">
               ¥ {{ totalCost.toFixed(2) }}
             </span>
+            <span v-if="!isQuote && costSummary" class="cost-summary-note">
+              整单 ¥ {{ orderScopeCost.toFixed(2) }} · 明细 ¥ {{ itemScopeCost.toFixed(2) }}
+            </span>
           </div>
         </div>
       </el-card>
@@ -88,6 +91,12 @@
           <span v-else-if="row.order_item_name">{{ row.order_item_name }}</span>
           <span v-else-if="row.quote_item_name">{{ row.quote_item_name }}</span>
           <span v-else></span>
+        </template>
+      </el-table-column>
+      <el-table-column label="成本归属" min-width="180" show-overflow-tooltip>
+        <template #default="{ row }">
+          <div>{{ costScopeLabel(row as ProjectCostResponse) }}</div>
+          <el-tag v-if="isHistoricalCost(row as ProjectCostResponse)" type="info" size="small">历史明细</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="cost_date" label="日期" width="120" sortable>
@@ -168,6 +177,47 @@
       <el-form :model="form" label-width="100px">
         <el-form-item :label="isQuote ? '报价单' : '订单'">
           <el-input :value="(isQuote ? (order?.quote_no || '') : (order?.order_no || '')) + ' ' + (order?.project_name || '')" disabled />
+        </el-form-item>
+        <el-form-item v-if="!isQuote" label="成本归属" required>
+          <el-radio-group v-model="form.order_item_id" class="cost-scope-list">
+            <div
+              class="cost-scope-option"
+              :class="{ selected: form.order_item_id === '' }"
+              @click="selectCostScope('')"
+            >
+              <el-radio value="">整单成本</el-radio>
+              <div class="scope-content">
+                <span>不指定某项订单明细</span>
+                <strong>已登记 ¥ {{ orderScopeCost.toFixed(2) }}</strong>
+              </div>
+            </div>
+            <div
+              v-for="option in costScopeOptions"
+              :key="option.id"
+              class="cost-scope-option"
+              :class="{ selected: form.order_item_id === option.id }"
+              @click="selectCostScope(option.id)"
+            >
+              <el-radio :value="option.id">{{ option.label }}</el-radio>
+              <div class="scope-content">
+                <span>{{ option.detail || '未填写规格信息' }}</span>
+                <strong>已登记 ¥ {{ option.registeredAmount.toFixed(2) }}</strong>
+              </div>
+            </div>
+            <div
+              v-if="historicalScope"
+              class="cost-scope-option historical"
+              :class="{ selected: form.order_item_id === historicalScope.id }"
+            >
+              <el-radio :value="historicalScope.id" disabled>历史明细 · {{ historicalScope.label }}</el-radio>
+              <div class="scope-content">
+                <span>{{ historicalScope.detail }}</span>
+                <el-tag type="info" size="small">仅保留原归属</el-tag>
+              </div>
+            </div>
+            <el-empty v-if="costScopeOptions.length === 0" description="暂无可关联的有效订单明细" :image-size="60" />
+          </el-radio-group>
+          <div class="form-tip">新登记成本只能关联当前有效明细；已失效明细仅在历史成本记录中保留。</div>
         </el-form-item>
         <el-form-item label="分项">
           <el-input v-model="form.group_name" placeholder="输入分项名称（可选）" clearable />
@@ -336,14 +386,15 @@ import { ref, reactive, onActivated, onDeactivated, onMounted, onUnmounted, comp
 import { useRoute, useRouter } from 'vue-router'
 import {
   getProjectCosts, createProjectCost, updateProjectCost, deleteProjectCost, batchDeleteProjectCosts, importProjectCosts,
-  getProjectCostAttachments, uploadProjectCostAttachment, deleteProjectCostAttachment,
+  getProjectCostAttachments, uploadProjectCostAttachment, deleteProjectCostAttachment, getOrderProjectCostItemSummary,
 } from '@/api/payments'
 import { getOrder } from '@/api/orders'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { ArrowLeft, Plus, Delete, Download } from '@element-plus/icons-vue'
-import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, QuoteDetailResponse, AttachmentResponse } from '@/types/api'
+import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, QuoteDetailResponse, AttachmentResponse, ProjectCostItemSummaryResponse } from '@/types/api'
+import { buildProjectCostScopeOptions } from '@/utils/projectCostScope'
 
 const route = useRoute()
 const router = useRouter()
@@ -366,6 +417,7 @@ const showImport = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
 const order = ref<OrderDetailResponse | QuoteDetailResponse | null>(null)
+const costSummary = ref<ProjectCostItemSummaryResponse | null>(null)
 const selectedFile = ref<File | null>(null)
 const importResult = ref<ProjectCostImportResponse | null>(null)
 const dialogAttachments = ref<AttachmentResponse[]>([])
@@ -377,6 +429,8 @@ const REFRESH_INTERVAL_MS = 15000
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let orderRequestId = 0
 let dataRequestId = 0
+const queryCreateOpened = ref(false)
+const editingHistoricalScope = ref<{ id: string; label: string; detail: string } | null>(null)
 
 // Detect source type: order or quote
 const isQuote = computed(() => route.path.includes('/quote-costs/'))
@@ -386,7 +440,22 @@ const sourceId = computed(() => {
 })
 
 const totalCost = computed(() => {
+  if (!isQuote.value && costSummary.value) return costSummary.value.total_registered
   return list.value.reduce((sum, c) => sum + (c.amount || 0), 0)
+})
+
+const orderScopeCost = computed(() => costSummary.value?.order_scope_registered || 0)
+const itemScopeCost = computed(() => costSummary.value?.item_scope_registered || 0)
+const orderItems = computed(() => {
+  if (isQuote.value) return []
+  return (order.value as OrderDetailResponse | null)?.items || []
+})
+const costScopeOptions = computed(() => buildProjectCostScopeOptions(orderItems.value, costSummary.value?.items || []))
+const activeOrderItemIds = computed(() => new Set(costScopeOptions.value.map(option => option.id)))
+const historicalScope = computed(() => {
+  const scope = editingHistoricalScope.value
+  if (!scope || activeOrderItemIds.value.has(scope.id)) return null
+  return scope
 })
 
 const form = reactive({
@@ -439,6 +508,7 @@ async function handleBatchDelete() {
     ElMessage.success(`已删除 ${selectedIds.value.length} 条记录`)
     selectedIds.value = []
     fetchData()
+    void fetchCostSummary()
   } catch {
     // cancelled or API error
   }
@@ -448,11 +518,16 @@ function resetForm() {
   Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', group_name: '', order_item_id: '', quote_item_id: '', quantity: 0, specification: '', unit: '', unit_price: 0 })
   isEditing.value = false
   editingId.value = ''
+  editingHistoricalScope.value = null
   dialogAttachments.value = []
 }
 
-function openCreate() {
+function openCreate(orderItemId?: string) {
   resetForm()
+  const requestedItemId = orderItemId || (typeof route.query.order_item_id === 'string' ? route.query.order_item_id : '')
+  if (!isQuote.value && requestedItemId && activeOrderItemIds.value.has(requestedItemId)) {
+    form.order_item_id = requestedItemId
+  }
   showDialog.value = true
 }
 
@@ -475,6 +550,13 @@ function openEdit(row: ProjectCostResponse) {
   form.group_name = row.group_name || ''
   form.order_item_id = row.order_item_id || ''
   form.quote_item_id = row.quote_item_id || ''
+  editingHistoricalScope.value = row.order_item_id && !activeOrderItemIds.value.has(row.order_item_id)
+    ? {
+        id: row.order_item_id,
+        label: row.order_item_name || '未命名明细',
+        detail: '该明细已失效，仅保留原成本记录归属',
+      }
+    : null
   dialogAttachments.value = []
   showDialog.value = true
   loadAttachments(row.id)
@@ -488,6 +570,21 @@ function openImport() {
 
 function onFileChange(file: UploadFile) {
   selectedFile.value = file.raw || null
+}
+
+function selectCostScope(orderItemId: string) {
+  form.order_item_id = orderItemId
+}
+
+function costScopeLabel(row: ProjectCostResponse) {
+  if (isQuote.value) {
+    return row.quote_item_id ? `报价明细 · ${row.quote_item_name || '未命名明细'}` : '报价单'
+  }
+  return row.order_item_id ? `订单明细 · ${row.order_item_name || '未命名明细'}` : '整单成本'
+}
+
+function isHistoricalCost(row: ProjectCostResponse) {
+  return !isQuote.value && Boolean(row.order_item_id && !activeOrderItemIds.value.has(row.order_item_id))
 }
 
 function downloadTemplate() {
@@ -522,9 +619,28 @@ async function fetchOrder() {
       if (requestId === orderRequestId) order.value = latest
     } else {
       const latest = await getOrder(sourceId.value)
-      if (requestId === orderRequestId) order.value = latest
+      if (requestId === orderRequestId) {
+        order.value = latest
+        const requestedItemId = typeof route.query.order_item_id === 'string' ? route.query.order_item_id : ''
+        if (!queryCreateOpened.value && requestedItemId && latest.items.some(item => item.id === requestedItemId && (item.lifecycle_status == null || item.lifecycle_status === 'active'))) {
+          queryCreateOpened.value = true
+          openCreate(requestedItemId)
+        }
+      }
     }
   } catch { /* ignore */ }
+}
+
+async function fetchCostSummary() {
+  if (isQuote.value) {
+    costSummary.value = null
+    return
+  }
+  try {
+    costSummary.value = await getOrderProjectCostItemSummary(sourceId.value)
+  } catch {
+    costSummary.value = null
+  }
 }
 
 async function fetchData() {
@@ -575,8 +691,11 @@ async function handleSave() {
       if (form.description) payload.description = form.description
       payload.summary = form.summary
       if (form.remark) payload.remark = form.remark
-      if (form.order_item_id) payload.order_item_id = form.order_item_id
-      if (form.quote_item_id) payload.quote_item_id = form.quote_item_id
+      if (isQuote.value) {
+        if (form.quote_item_id) payload.quote_item_id = form.quote_item_id
+      } else {
+        payload.order_item_id = form.order_item_id || null
+      }
       if (form.group_name) payload.group_name = form.group_name
       await updateProjectCost(editingId.value, payload)
       ElMessage.success('成本已更新')
@@ -627,6 +746,7 @@ async function handleSave() {
     showDialog.value = false
     resetForm()
     fetchData()
+    void fetchCostSummary()
   } catch {
     // API error handled by interceptor
   } finally {
@@ -644,6 +764,7 @@ async function handleDelete(row: ProjectCostResponse) {
     await deleteProjectCost(row.id)
     ElMessage.success('已删除')
     fetchData()
+    void fetchCostSummary()
   } catch {
     // User cancelled or API error
   }
@@ -668,6 +789,7 @@ async function handleImport() {
     importResult.value = result
     if (result.created > 0) {
       fetchData()
+      void fetchCostSummary()
     }
   } catch {
     // API error handled by interceptor
@@ -729,12 +851,14 @@ function refreshIfVisible() {
   if (document.hidden || loading.value) return
   void fetchOrder()
   void fetchData()
+  void fetchCostSummary()
 }
 
 function handleVisibilityChange() {
   if (!document.hidden) {
     void fetchOrder()
     void fetchData()
+    void fetchCostSummary()
   }
 }
 
@@ -755,6 +879,7 @@ function stopAutoRefresh() {
 onMounted(() => {
   void fetchOrder()
   void fetchData()
+  void fetchCostSummary()
   startAutoRefresh()
 })
 onActivated(startAutoRefresh)
@@ -785,7 +910,64 @@ onUnmounted(stopAutoRefresh)
   font-size: 14px;
   color: var(--ad-text);
 }
+.cost-summary-note {
+  font-size: 11px;
+  color: var(--ad-text-secondary, #888);
+  white-space: nowrap;
+}
 .search-bar { display: flex; align-items: center; }
+.cost-scope-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.cost-scope-option {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ad-border, #dcdfe6);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.cost-scope-option:hover,
+.cost-scope-option.selected {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+.cost-scope-option.historical {
+  cursor: default;
+  border-style: dashed;
+  background: var(--el-fill-color-light);
+}
+.cost-scope-option.historical:hover {
+  border-color: var(--ad-border, #dcdfe6);
+  background: var(--el-fill-color-light);
+}
+.cost-scope-option :deep(.el-radio) {
+  margin-right: 0;
+}
+.scope-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ad-text-secondary, #888);
+  font-size: 12px;
+}
+.scope-content strong {
+  color: var(--el-color-warning);
+  white-space: nowrap;
+}
+.form-tip {
+  margin-top: 6px;
+  color: var(--ad-text-secondary, #888);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .att-thumb {
   position: relative;
   width: 80px;

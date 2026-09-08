@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from app.models.business_document import BusinessDocument
+from app.models.business_document import BusinessDocument, BusinessDocumentItem
 from app.models.project_cost import ProjectCost
 from app.models.task import Attachment
 from app.repositories.project_cost_repo import ProjectCostRepository
@@ -47,9 +47,20 @@ class ProjectCostService:
         category: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        order_item_id: UUID | None = None,
     ) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        costs, total = await self.repo.list_costs(skip, page_size, order_id, quote_id, source_type, category, date_from, date_to)
+        costs, total = await self.repo.list_costs(
+            skip,
+            page_size,
+            order_id,
+            quote_id,
+            source_type,
+            category,
+            date_from,
+            date_to,
+            order_item_id,
+        )
         result = [self._to_dict(c) for c in costs]
         # Populate attachment counts
         if result:
@@ -58,6 +69,64 @@ class ProjectCostService:
             for d in result:
                 d["attachment_count"] = counts.get(d["id"], 0)
         return result, total
+
+    async def _resolve_document_item_id(
+        self,
+        data: dict,
+        document_id: UUID | None,
+        document_type: str | None,
+        *,
+        existing_item_id: UUID | None = None,
+    ) -> UUID | None:
+        """Resolve and validate the item reference for one cost record.
+
+        A project cost can be whole-document (no item reference) or linked to
+        exactly one item belonging to the same document.  Inactive items may
+        only be retained by an existing historical record; they cannot be
+        selected for a new record or used to move a record to another item.
+        """
+        refs = []
+        for key in ("document_item_id", "order_item_id", "quote_item_id"):
+            if data.get(key) is not None:
+                refs.append((key, data[key]))
+
+        if len(refs) > 1:
+            raise ValueError("一条成本只能关联一个业务明细")
+
+        if document_type == "order" and data.get("quote_item_id") is not None:
+            raise ValueError("订单成本不能关联报价明细")
+        if document_type == "quote" and data.get("order_item_id") is not None:
+            raise ValueError("报价成本不能关联订单明细")
+
+        raw_item_id = refs[0][1] if refs else None
+        if raw_item_id is None:
+            # An explicit null is meaningful on update: it clears the item
+            # association and turns the record back into document scope.
+            if any(key in data for key in ("document_item_id", "order_item_id", "quote_item_id")):
+                return None
+            return existing_item_id
+
+        if not document_id:
+            raise ValueError("成本明细必须关联订单或报价单")
+        try:
+            item_id = UUID(str(raw_item_id))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise ValueError("成本明细ID无效") from exc
+
+        result = await self.db.execute(
+            select(BusinessDocumentItem).where(
+                BusinessDocumentItem.id == item_id,
+                BusinessDocumentItem.document_id == document_id,
+            )
+        )
+        item = result.scalar_one_or_none()
+        if not item:
+            raise ValueError("成本明细不属于当前业务单据")
+
+        lifecycle_status = getattr(item, "lifecycle_status", None)
+        if lifecycle_status not in (None, "active") and item_id != existing_item_id:
+            raise ValueError("只能关联当前有效明细")
+        return item_id
 
     async def get_cost(self, cost_id: UUID) -> dict | None:
         c = await self.repo.get_by_id(cost_id)
@@ -109,13 +178,11 @@ class ProjectCostService:
             doc_type_val = doc.doc_type
 
         # Resolve document_item_id from backward-compat params
-        document_item_id = None
-        if data.get("document_item_id"):
-            document_item_id = UUID(data["document_item_id"])
-        elif data.get("order_item_id"):
-            document_item_id = UUID(data["order_item_id"])
-        elif data.get("quote_item_id"):
-            document_item_id = UUID(data["quote_item_id"])
+        document_item_id = await self._resolve_document_item_id(
+            data,
+            document_id,
+            doc_type_val,
+        )
 
         debt_amount = data.get("debt_amount")
         if debt_amount is not None:
@@ -196,9 +263,40 @@ class ProjectCostService:
         c = await self.repo.get_by_id(cost_id)
         if not c:
             raise ValueError("项目成本记录不存在")
-        if "cost_date" in data and data["cost_date"] is not None:
-            data = {**data, "cost_date": datetime.fromisoformat(data["cost_date"])}
-        await self.repo.update(c, data)
+
+        normalized = dict(data)
+        item_fields_present = any(
+            key in normalized for key in ("document_item_id", "order_item_id", "quote_item_id")
+        )
+        if item_fields_present:
+            document_type = c.document.doc_type if c.document else None
+            if document_type is None and c.document_id:
+                result = await self.db.execute(
+                    select(BusinessDocument.doc_type).where(BusinessDocument.id == c.document_id)
+                )
+                document_type = result.scalar_one_or_none()
+
+            normalized["document_item_id"] = await self._resolve_document_item_id(
+                normalized,
+                c.document_id,
+                document_type,
+                existing_item_id=c.document_item_id,
+            )
+            normalized.pop("order_item_id", None)
+            normalized.pop("quote_item_id", None)
+
+        if "cost_date" in normalized and normalized["cost_date"] is not None:
+            normalized["cost_date"] = datetime.fromisoformat(normalized["cost_date"])
+        allow_null_fields = (
+            {"document_item_id"}
+            if "document_item_id" in normalized and normalized["document_item_id"] is None
+            else set()
+        )
+        await self.repo.update(
+            c,
+            normalized,
+            allow_null_fields=allow_null_fields,
+        )
         await self._sync_document_cost(c.document_id)
         # Re-fetch with relationships loaded for response
         c = await self.repo.get_by_id(cost_id)
@@ -230,6 +328,46 @@ class ProjectCostService:
     async def get_costs_summary(self, document_ids: list[UUID]) -> dict[str, float]:
         """Return {document_id: total_cost} for a batch of documents."""
         return await self.repo.get_costs_summary(document_ids)
+
+    async def get_order_cost_summary(self, order_id: UUID) -> dict:
+        """Return manual cost totals split between whole-order and item scope."""
+        result = await self.db.execute(
+            select(BusinessDocument).where(
+                BusinessDocument.id == order_id,
+                BusinessDocument.deleted_at.is_(None),
+            )
+        )
+        document = result.scalar_one_or_none()
+        if not document:
+            raise ValueError("订单不存在")
+        if document.doc_type != "order":
+            raise ValueError("仅订单支持订单明细成本汇总")
+
+        rows = await self.repo.get_document_item_cost_summary(order_id)
+        order_scope = Decimal("0")
+        item_scope = Decimal("0")
+        items = []
+        for row in rows:
+            amount = Decimal(str(row["amount"] or 0))
+            if row["document_item_id"] is None:
+                order_scope += amount
+                continue
+            item_scope += amount
+            items.append(
+                {
+                    "order_item_id": str(row["document_item_id"]),
+                    "total_registered": float(amount),
+                    "record_count": int(row["record_count"] or 0),
+                }
+            )
+
+        return {
+            "order_id": str(order_id),
+            "total_registered": float(order_scope + item_scope),
+            "order_scope_registered": float(order_scope),
+            "item_scope_registered": float(item_scope),
+            "items": items,
+        }
 
     async def list_debts(
         self,
