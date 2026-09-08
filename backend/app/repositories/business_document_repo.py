@@ -76,14 +76,9 @@ class BusinessDocumentRepository:
         exclude_status: str | list[str] | tuple[str, ...] | None = None,
     ) -> tuple[list[BusinessDocument], int]:
         """列出所有活跃单据，支持 doc_type 过滤。"""
-        load_options = [selectinload(BusinessDocument.customer)]
-        if self.doc_type == "order":
-            load_options.extend([
-                selectinload(BusinessDocument.design_tasks),
-                selectinload(BusinessDocument.production_tasks),
-                selectinload(BusinessDocument.installation_tasks),
-            ])
-        q = select(BusinessDocument).options(*load_options).where(
+        q = select(BusinessDocument).options(
+            selectinload(BusinessDocument.customer),
+        ).where(
             BusinessDocument.deleted_at.is_(None)
         )
         if self.doc_type:

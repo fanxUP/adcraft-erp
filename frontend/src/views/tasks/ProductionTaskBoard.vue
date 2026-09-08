@@ -51,8 +51,8 @@
               <span>{{ card.customer_name || '-' }}</span>
             </div>
             <div class="progress-row">
-              <el-progress :percentage="progress(card)" :stroke-width="8" />
-              <span>{{ progress(card) }}%</span>
+              <el-progress :percentage="taskProgress(card)" :stroke-width="8" />
+              <span>{{ taskProgress(card) }}%</span>
             </div>
             <div v-if="card.planned_end_at" class="planned-end">计划结束：{{ formatDateTimeFull(card.planned_end_at) }}</div>
             <div v-if="card.assigned_to_name" class="assignee">负责人：{{ card.assigned_to_name }}</div>
@@ -68,24 +68,20 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getTaskQueue } from '@/api/tasks'
 import type { TaskQueueItem } from '@/types/api'
 import { formatDateTimeFull } from '@/utils/datetime'
+import { isTaskVisible, TASK_BOARD_COLUMNS, taskProgress } from '@/utils/task-board'
 
 const loading = ref(false)
 const tasks = ref<TaskQueueItem[]>([])
 const onlyOverdue = ref(false)
 
-const columns = [
-  { key: 'design', label: '设计' },
-  { key: 'production', label: '制作' },
-  { key: 'installation', label: '安装' },
-] as const
+const columns = TASK_BOARD_COLUMNS
 
 function colCards(key: TaskQueueItem['stage']) {
   return visibleTasks.value.filter(task => task.stage === key)
 }
 
 const unfinishedTasks = computed(() => tasks.value.filter(task => (
-  !['completed', 'confirmed', 'cancelled'].includes(task.status)
-  && progress(task) < 100
+  isTaskVisible(task)
 )))
 const overdueCount = computed(() => unfinishedTasks.value.filter(task => task.is_overdue).length)
 const visibleTasks = computed(() => unfinishedTasks.value.filter(task => (
@@ -95,12 +91,8 @@ const visibleTasks = computed(() => unfinishedTasks.value.filter(task => (
 const averageProgress = computed(() => {
   const activeTasks = unfinishedTasks.value
   if (!activeTasks.length) return 0
-  return Math.round(activeTasks.reduce((sum, task) => sum + progress(task), 0) / activeTasks.length)
+  return Math.round(activeTasks.reduce((sum, task) => sum + taskProgress(task), 0) / activeTasks.length)
 })
-
-function progress(task: TaskQueueItem) {
-  return Math.min(100, Math.max(0, Number(task.progress_pct ?? 0)))
-}
 
 function statusLabel(task: TaskQueueItem) {
   const labels: Record<string, string> = {
