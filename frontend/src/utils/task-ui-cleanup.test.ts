@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { getTaskWorkflowControl } from './taskItemWorkflow'
 
 const srcRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -90,5 +91,53 @@ describe('任务详情页界面收敛', () => {
     expect(cardSource).not.toContain('明细：')
     expect(cardSource).not.toContain('class="card-item"')
     expect(cardSource).not.toContain('itemSummary')
+  })
+})
+
+describe('按已选订单明细控制任务状态', () => {
+  const designWorkflow = {
+    pending: ['designing', 'cancelled'],
+    designing: ['confirmed', 'pending', 'cancelled'],
+    confirmed: [],
+  }
+
+  it('任务整体已在设计中时，待分配明细仍可单独推进到设计中', () => {
+    const control = getTaskWorkflowControl(
+      [{ id: 'sign', is_linked: true, task_status: 'pending' }],
+      ['sign'],
+      'designing',
+      designWorkflow,
+    )
+
+    expect(control.currentStatus).toBe('pending')
+    expect(control.workflow.pending).toContain('designing')
+    expect(control.workflow.pending).not.toContain('confirmed')
+  })
+
+  it('新勾选但尚未写入关联表的明细按待分配处理', () => {
+    const control = getTaskWorkflowControl(
+      [{ id: 'sign', is_linked: false, task_status: null }],
+      ['sign'],
+      'designing',
+      designWorkflow,
+    )
+
+    expect(control.currentStatus).toBe('pending')
+    expect(control.workflow.pending).toEqual(['designing', 'cancelled'])
+  })
+
+  it('混合状态批量选择只保留所有明细都允许的目标状态', () => {
+    const control = getTaskWorkflowControl(
+      [
+        { id: 'pending-item', is_linked: true, task_status: 'pending' },
+        { id: 'designing-item', is_linked: true, task_status: 'designing' },
+      ],
+      ['pending-item', 'designing-item'],
+      'designing',
+      designWorkflow,
+    )
+
+    expect(control.currentStatus).toBe('__selected_mixed__')
+    expect(control.workflow.__selected_mixed__).toEqual(['cancelled'])
   })
 })

@@ -1711,7 +1711,22 @@ async def _apply_task_item_status_change(
     for item_id in selected_ids:
         current_status = states.get(item_id, (getattr(task, "status", "pending"), 0))[0]
         if to_status not in allowed_targets(workflow, current_status):
-            raise ValueError(f"不允许从 {current_status} 流转到 {to_status}")
+            current_label = _item_status_label(task_type, current_status) or "当前状态"
+            target_label = _item_status_label(task_type, to_status) or "目标状态"
+            next_statuses = [
+                status
+                for status in allowed_targets(workflow, current_status)
+                if status != TASK_CANCELLED_STATUS
+            ]
+            if next_statuses:
+                next_label = _item_status_label(task_type, next_statuses[0]) or "下一步状态"
+                raise ValueError(
+                    f"所选订单明细当前为“{current_label}”，不能直接标记为“{target_label}”，"
+                    f"请先推进到“{next_label}”。"
+                )
+            raise ValueError(
+                f"所选订单明细当前为“{current_label}”，不能变更为“{target_label}”。"
+            )
 
     if task_type in OUTSOURCE_BLOCKING_TASK_TYPES and _is_completed_item_status(task_type, to_status):
         blocked_outsource = await _blocking_outsource_map(

@@ -137,13 +137,17 @@
       <div id="task-status-section-title" class="section-heading">
         <span>变更状态</span>
         <span class="section-note">
-          {{ isHistoricalReadOnly ? '历史终态仅支持查看' : '点击可执行的下一步' }}
+          {{ isHistoricalReadOnly
+            ? '历史终态仅支持查看'
+            : workflowControl.hasMixedStatuses
+              ? '已选明细状态不同，请选择状态相同的明细后再批量推进'
+              : '点击可执行的下一步' }}
         </span>
       </div>
       <TaskWorkflow
         :steps="steps"
-        :current-status="currentStatus"
-        :workflow="workflow"
+        :current-status="workflowControl.currentStatus"
+        :workflow="workflowControl.workflow"
         :changing="changing || saving || isHistoricalReadOnly || !canChangeTaskStatus"
         @change="handleWorkflowChange"
       />
@@ -163,6 +167,7 @@ import {
 import type { ActionCapability, TaskType, TaskOrderItemOption } from '@/types/api'
 import { StatusTag } from '@/components/ui'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
+import { getTaskWorkflowControl } from '@/utils/taskItemWorkflow'
 
 const props = withDefaults(defineProps<{
   taskType: TaskType
@@ -224,6 +229,13 @@ const canChangeTaskStatus = computed(() => (
 ))
 const changeStatusDisabledReason = computed(() => (
   changeStatusCapability.value?.disabled_reason || '该任务当前状态不允许继续变更'
+))
+
+const workflowControl = computed(() => getTaskWorkflowControl(
+  items.value,
+  selectedItemIds.value,
+  props.currentStatus,
+  props.workflow,
 ))
 
 function itemLabel(item: TaskOrderItemOption) {
