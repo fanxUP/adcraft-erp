@@ -482,6 +482,34 @@ async def test_quote_create_preserves_explicit_quote_date():
 
     assert captured["quote_date"] == date(2026, 8, 10)
 
+
+@pytest.mark.asyncio
+async def test_quote_create_refreshes_server_updated_at_before_detail():
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
+    db.refresh = AsyncMock()
+    doc = MagicMock()
+    doc.doc_type = "quote"
+    doc.customer_id = uuid4()
+    doc.id = uuid4()
+
+    service = BusinessDocumentService(db, doc_type="quote")
+    service.repo.create = AsyncMock(return_value=doc)
+    service._calculate_quote = AsyncMock()
+    service._sync_customer_agreements = AsyncMock()
+    service._sync_contact_to_customer = AsyncMock()
+    service._to_detail = MagicMock(return_value={})
+
+    await service.create({
+        "customer_id": str(doc.customer_id),
+        "project_name": "测试报价",
+    })
+
+    db.refresh.assert_awaited_once_with(
+        doc,
+        ["customer", "items", "groups", "status_logs", "updated_at"],
+    )
+
 # ─────────────────────────────────────────
 # repo.update 清空可空日期字段（修复清空无效）
 # ─────────────────────────────────────────

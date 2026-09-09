@@ -198,7 +198,12 @@ class BusinessDocumentService:
         if doc.doc_type == "quote":
             await self._calculate_quote(doc.id)
         # Refresh to load relationships (e.g. customer) in async context
-        await self.db.refresh(doc, ["customer", "items", "groups", "status_logs"])
+        # _calculate_quote() flushes server-side onupdate(updated_at). Refresh
+        # the scalar timestamp before _to_detail() to avoid async lazy loading.
+        await self.db.refresh(
+            doc,
+            ["customer", "items", "groups", "status_logs", "updated_at"],
+        )
         # 自动同步客户协议价
         await self._sync_customer_agreements(doc)
         # 反向同步联系人：单据里填的联系人自动存入客户管理的联系人列表
