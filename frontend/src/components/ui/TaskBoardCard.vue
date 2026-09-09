@@ -17,7 +17,6 @@
     </div>
 
     <div class="card-name" :title="task.project_name">{{ task.project_name }}</div>
-    <div class="card-item" :title="itemSummary">明细：{{ itemSummary }}</div>
 
     <div class="card-order-context">
       <div class="card-field">
@@ -52,7 +51,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { TaskQueueItem } from '@/types/api'
 import ProgressBar from './ProgressBar.vue'
 import StatusTag from './StatusTag.vue'
@@ -60,19 +58,13 @@ import { formatDateTimeFull } from '@/utils/datetime'
 import { formatMoney } from '@/utils/format'
 import { taskProgress } from '@/utils/task-board'
 
-const props = defineProps<{
+defineProps<{
   task: TaskQueueItem
 }>()
 
 const emit = defineEmits<{
   open: []
 }>()
-
-const itemSummary = computed(() => (
-  props.task.item_name
-  || props.task.item_names?.filter(Boolean).join('、')
-  || '未关联订单明细'
-))
 
 function openTask() {
   emit('open')
@@ -141,16 +133,6 @@ function handleKeydown(event: KeyboardEvent) {
   color: var(--ad-text);
   font-size: 16px;
   font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.card-item {
-  margin-bottom: 10px;
-  overflow: hidden;
-  color: var(--ad-primary, #409eff);
-  font-size: 13px;
-  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

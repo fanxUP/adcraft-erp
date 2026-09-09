@@ -83,4 +83,12 @@ describe('任务详情页界面收敛', () => {
       expect(source).toContain('<TaskBoardCard')
     }
   })
+
+  it('项目看板任务卡片不显示订单明细摘要', () => {
+    const cardSource = readSource('components/ui/TaskBoardCard.vue')
+
+    expect(cardSource).not.toContain('明细：')
+    expect(cardSource).not.toContain('class="card-item"')
+    expect(cardSource).not.toContain('itemSummary')
+  })
 })
