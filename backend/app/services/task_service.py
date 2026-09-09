@@ -484,6 +484,19 @@ def _new_task_item_state(task_type: str, task) -> tuple[str, int]:
     )
 
 
+def _new_unstarted_item_state(task_type: str, task) -> tuple[str, int]:
+    """Return the initial state for an item newly added to an open task.
+
+    A task card can already be in progress because another order item is being
+    processed. A newly arrived item must still start at the beginning of the
+    stage; inheriting the aggregate task state would make it look partially or
+    fully completed before anyone handled it.
+    """
+    if _is_terminal_task_status(task_type, task):
+        return _new_task_item_state(task_type, task)
+    return "pending", 0
+
+
 async def _legacy_task_scope_item_ids(
     db: AsyncSession,
     task_type: str,
@@ -605,7 +618,7 @@ async def _ensure_task_order_item_links(
     new_ids = [item_id for item_id in item_ids if item_id not in existing_ids]
     if not new_ids:
         return
-    status, progress = _new_task_item_state(task_type, task)
+    status, progress = _new_unstarted_item_state(task_type, task)
     await db.execute(
         insert(TaskOrderItemLink.__table__),
         [
@@ -1038,7 +1051,7 @@ async def _sync_task_order_item_links(
         )
     )
     if item_ids:
-        new_status, new_progress = _new_task_item_state(task_type, task)
+        new_status, new_progress = _new_unstarted_item_state(task_type, task)
         link_payload = []
         for position, item_id in enumerate(item_ids):
             existing = existing_by_item.get(item_id)
@@ -1453,7 +1466,12 @@ async def _create_production_task_for_item(
     task,
     item_id: UUID | None = None,
 ) -> None:
-    """Create production tasks for every item covered by a completed design task."""
+    """Add an item to the order's active production task card.
+
+    Automatic stage progression used to create one production row per item.
+    Reuse the first open card instead and let the link table carry the
+    independent item state.
+    """
     item_ids = (
         [item_id]
         if item_id is not None
@@ -1466,15 +1484,19 @@ async def _create_production_task_for_item(
     order = await db.get(BusinessDocument, task.document_id)
     if not order:
         return
-    for item_id in item_ids:
-        item = await db.get(BusinessDocumentItem, item_id)
+    for current_item_id in item_ids:
+        if current_item_id is None:
+            continue
+        item = await db.get(BusinessDocumentItem, current_item_id)
         if not item:
             continue
         existing_result = await db.execute(
-            select(ProductionTask).where(
+            select(ProductionTask)
+            .where(
                 ProductionTask.document_id == task.document_id,
                 ProductionTask.status != "cancelled",
             )
+            .order_by(ProductionTask.created_at.asc(), ProductionTask.id.asc())
         )
         existing_tasks = list(existing_result.scalars().all())
         existing_item_ids = await _task_item_ids_by_task(
@@ -1483,25 +1505,44 @@ async def _create_production_task_for_item(
             existing_tasks,
         )
         if any(
-            item_id in linked_ids
+            current_item_id in linked_ids
             for linked_ids in existing_item_ids.values()
         ):
             continue
-        db.add(ProductionTask(
-            production_no=await generate_production_no(db),
-            document_id=task.document_id,
-            order_item_id=item_id,
-            customer_id=order.customer_id,
-            project_name=order.project_name,
-            status="pending",
-            material_id=item.material_id,
-            process_id=item.process_id,
-            length=item.length,
-            width=item.width,
-            height=item.height,
-            quantity=item.quantity,
-        ))
-        await db.flush()
+
+        target = next(
+            (
+                candidate
+                for candidate in existing_tasks
+                if candidate.status not in {"completed", "cancelled"}
+            ),
+            None,
+        )
+        if target is None:
+            target = ProductionTask(
+                production_no=await generate_production_no(db),
+                document_id=task.document_id,
+                order_item_id=None,
+                customer_id=order.customer_id,
+                project_name=order.project_name,
+                status="pending",
+                material_id=item.material_id,
+                process_id=item.process_id,
+                length=item.length,
+                width=item.width,
+                height=item.height,
+                quantity=item.quantity,
+            )
+            db.add(target)
+            await db.flush()
+
+        target_item_ids = await _task_order_item_ids(db, "production", target)
+        await _sync_task_order_item_links(
+            db,
+            "production",
+            target,
+            list(dict.fromkeys([*target_item_ids, current_item_id])),
+        )
 
 
 async def _create_installation_task_for_item(
@@ -1509,7 +1550,7 @@ async def _create_installation_task_for_item(
     task,
     item_id: UUID | None = None,
 ) -> None:
-    """Create installation tasks for every item covered by a completed production task."""
+    """Add an item to the order's active installation task card."""
     item_ids = (
         [item_id]
         if item_id is not None
@@ -1522,15 +1563,19 @@ async def _create_installation_task_for_item(
     order = await db.get(BusinessDocument, task.document_id)
     if not order:
         return
-    for item_id in item_ids:
-        item = await db.get(BusinessDocumentItem, item_id)
+    for current_item_id in item_ids:
+        if current_item_id is None:
+            continue
+        item = await db.get(BusinessDocumentItem, current_item_id)
         if not item:
             continue
         existing_result = await db.execute(
-            select(InstallationTask).where(
+            select(InstallationTask)
+            .where(
                 InstallationTask.document_id == task.document_id,
                 InstallationTask.status != "cancelled",
             )
+            .order_by(InstallationTask.created_at.asc(), InstallationTask.id.asc())
         )
         existing_tasks = list(existing_result.scalars().all())
         existing_item_ids = await _task_item_ids_by_task(
@@ -1539,22 +1584,41 @@ async def _create_installation_task_for_item(
             existing_tasks,
         )
         if any(
-            item_id in linked_ids
+            current_item_id in linked_ids
             for linked_ids in existing_item_ids.values()
         ):
             continue
-        db.add(InstallationTask(
-            installation_no=await generate_installation_no(db),
-            document_id=task.document_id,
-            order_item_id=item_id,
-            customer_id=order.customer_id,
-            project_name=order.project_name,
-            status="pending",
-            address=order.installation_address,
-            contact_name=order.contact_person,
-            contact_phone=order.contact_phone,
-        ))
-        await db.flush()
+
+        target = next(
+            (
+                candidate
+                for candidate in existing_tasks
+                if candidate.status not in {"completed", "cancelled"}
+            ),
+            None,
+        )
+        if target is None:
+            target = InstallationTask(
+                installation_no=await generate_installation_no(db),
+                document_id=task.document_id,
+                order_item_id=None,
+                customer_id=order.customer_id,
+                project_name=order.project_name,
+                status="pending",
+                address=order.installation_address,
+                contact_name=order.contact_person,
+                contact_phone=order.contact_phone,
+            )
+            db.add(target)
+            await db.flush()
+
+        target_item_ids = await _task_order_item_ids(db, "installation", target)
+        await _sync_task_order_item_links(
+            db,
+            "installation",
+            target,
+            list(dict.fromkeys([*target_item_ids, current_item_id])),
+        )
 
 
 async def _maybe_advance_order_stage(

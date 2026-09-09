@@ -689,153 +689,155 @@ class BusinessDocumentService:
             item_ids.update(result.scalars().all())
         return item_ids
 
-    async def _auto_create_design_task(self, doc) -> None:
-        from app.models.task import DesignTask
-        from app.services.number_generator import generate_design_no
+    async def _auto_create_stage_task(self, doc, task_type: str) -> None:
+        """Create one automatic card per order stage and link its active items.
 
+        The old implementation created one task row for every order item. That
+        made a single order appear as multiple cards even though the task UI
+        already supports many item links and independent item progress. Keep
+        the legacy single-item column only as a compatibility fallback; new
+        automatic tasks are scoped through ``task_order_item_links``.
+        """
+        from app.services.number_generator import (
+            generate_design_no,
+            generate_installation_no,
+            generate_production_no,
+        )
+        from app.services.task_service import _sync_task_order_item_links
+
+        task_config = {
+            "design": {
+                "model": DesignTask,
+                "number_field": "design_no",
+                "generate_no": generate_design_no,
+                "terminal_statuses": {"confirmed", "completed"},
+            },
+            "production": {
+                "model": ProductionTask,
+                "number_field": "production_no",
+                "generate_no": generate_production_no,
+                "terminal_statuses": {"completed"},
+            },
+            "installation": {
+                "model": InstallationTask,
+                "number_field": "installation_no",
+                "generate_no": generate_installation_no,
+                "terminal_statuses": {"completed"},
+            },
+        }.get(task_type)
+        if task_config is None:
+            raise ValueError(f"不支持的自动任务类型: {task_type}")
+
+        model = task_config["model"]
+        result = await self.db.execute(
+            select(model)
+            .where(
+                model.document_id == doc.id,
+                model.status != "cancelled",
+            )
+            .order_by(model.created_at.asc(), model.id.asc())
+        )
+        existing_tasks = list(result.scalars().all())
+        terminal_statuses = set(task_config["terminal_statuses"]) | {"cancelled"}
         active_items = [
-            item for item in (doc.items or [])
+            item
+            for item in (doc.items or [])
             if getattr(item, "lifecycle_status", "active") == "active"
         ]
-        if active_items:
-            existing = await self.db.execute(
-                select(DesignTask).where(DesignTask.document_id == doc.id)
-            )
-            existing_item_ids = await self._linked_task_item_ids(
-                "design",
-                existing.scalars().all(),
-            )
-            for item in active_items:
-                if item.id in existing_item_ids:
-                    continue
-                self.db.add(DesignTask(
-                    design_no=await generate_design_no(self.db),
-                    document_id=doc.id,
-                    order_item_id=item.id,
-                    customer_id=doc.customer_id,
-                    project_name=doc.project_name,
-                    status="pending",
-                ))
-            await self.db.flush()
+        existing_item_ids = await self._linked_task_item_ids(
+            task_type,
+            existing_tasks,
+        )
+        task = next(
+            (
+                candidate
+                for candidate in existing_tasks
+                if getattr(candidate, "status", None) not in terminal_statuses
+            ),
+            None,
+        )
+
+        if task is None and existing_tasks and not any(
+            item.id not in existing_item_ids for item in active_items
+        ):
+            # All active order items already belong to a terminal historical
+            # task. Do not create an empty successor card.
             return
 
-        existing = await self.db.execute(
-            select(DesignTask).where(DesignTask.document_id == doc.id)
-        )
-        if existing.scalar_one_or_none():
-            return
-
-        task = DesignTask(
-            design_no=await generate_design_no(self.db),
-            document_id=doc.id,
-            customer_id=doc.customer_id,
-            project_name=doc.project_name,
-            status="pending",
-        )
-        self.db.add(task)
-        await self.db.flush()
-
-    async def _auto_create_production_task(self, doc) -> None:
-        from app.models.task import ProductionTask
-        from app.services.number_generator import generate_production_no
-
-        active_items = [
-            item for item in (doc.items or [])
-            if getattr(item, "lifecycle_status", "active") == "active"
-        ]
-        if active_items:
-            existing = await self.db.execute(
-                select(ProductionTask).where(ProductionTask.document_id == doc.id)
-            )
-            existing_item_ids = await self._linked_task_item_ids(
-                "production",
-                existing.scalars().all(),
-            )
-            for item in active_items:
-                if item.id in existing_item_ids:
-                    continue
-                self.db.add(ProductionTask(
-                    production_no=await generate_production_no(self.db),
-                    document_id=doc.id,
-                    order_item_id=item.id,
-                    customer_id=doc.customer_id,
-                    project_name=doc.project_name,
-                    status="pending",
-                    material_id=item.material_id,
-                    process_id=item.process_id,
-                    length=item.length,
-                    width=item.width,
-                    height=item.height,
-                    quantity=item.quantity,
-                ))
-            await self.db.flush()
-            return
-
-        existing = await self.db.execute(
-            select(ProductionTask).where(ProductionTask.document_id == doc.id)
-        )
-        if existing.scalar_one_or_none():
-            return
-
-        task = ProductionTask(
-            production_no=await generate_production_no(self.db),
-            document_id=doc.id,
-            customer_id=doc.customer_id,
-            project_name=doc.project_name,
-            status="pending",
-            quantity=1,
-        )
-        self.db.add(task)
-        await self.db.flush()
-
-    async def _auto_create_installation_task(self, doc) -> None:
-        from app.models.task import InstallationTask
-        from app.services.number_generator import generate_installation_no
-
-        active_items = [
-            item for item in (doc.items or [])
-            if getattr(item, "lifecycle_status", "active") == "active"
-        ]
-        if active_items:
-            existing = await self.db.execute(
-                select(InstallationTask).where(InstallationTask.document_id == doc.id)
-            )
-            existing_item_ids = await self._linked_task_item_ids(
-                "installation",
-                existing.scalars().all(),
-            )
-            for item in active_items:
-                if item.id in existing_item_ids:
-                    continue
-                self.db.add(InstallationTask(
-                    installation_no=await generate_installation_no(self.db),
-                    document_id=doc.id,
-                    order_item_id=item.id,
-                    customer_id=doc.customer_id,
-                    project_name=doc.project_name,
-                    status="pending",
+        if task is None:
+            first_item = active_items[0] if active_items else None
+            task_kwargs = {
+                task_config["number_field"]: await task_config["generate_no"](self.db),
+                "document_id": doc.id,
+                # A multi-item automatic task must not pretend to belong to a
+                # single detail. The link table is the source of truth.
+                "order_item_id": None,
+                "customer_id": doc.customer_id,
+                "project_name": doc.project_name,
+                "status": "pending",
+            }
+            if task_type == "production":
+                task_kwargs.update(
+                    material_id=getattr(first_item, "material_id", None),
+                    process_id=getattr(first_item, "process_id", None),
+                    length=getattr(first_item, "length", None),
+                    width=getattr(first_item, "width", None),
+                    height=getattr(first_item, "height", None),
+                    quantity=getattr(first_item, "quantity", None) or 1,
+                )
+            elif task_type == "installation":
+                task_kwargs.update(
                     address=doc.installation_address,
                     contact_name=doc.contact_person,
                     contact_phone=doc.contact_phone,
-                ))
+                )
+            task = model(**task_kwargs)
+            self.db.add(task)
             await self.db.flush()
+            existing_tasks.append(task)
+
+        if not active_items:
             return
 
-        existing = await self.db.execute(
-            select(InstallationTask).where(InstallationTask.document_id == doc.id)
-        )
-        if existing.scalar_one_or_none():
-            return
+        linked_item_ids = existing_item_ids
+        target_item_ids: list[UUID] = []
+        legacy_item_id = getattr(task, "order_item_id", None)
+        if legacy_item_id is not None:
+            target_item_ids.append(legacy_item_id)
+        task_id = getattr(task, "id", None)
+        if task_id is not None:
+            link_result = await self.db.execute(
+                select(TaskOrderItemLink.order_item_id).where(
+                    TaskOrderItemLink.task_type == task_type,
+                    TaskOrderItemLink.task_id == task_id,
+                )
+            )
+            target_item_ids.extend(
+                item_id
+                for item_id in link_result.scalars().all()
+                if item_id not in target_item_ids
+            )
 
-        task = InstallationTask(
-            installation_no=await generate_installation_no(self.db),
-            document_id=doc.id,
-            customer_id=doc.customer_id,
-            project_name=doc.project_name,
-            status="pending",
-        )
-        self.db.add(task)
-        await self.db.flush()
+        for item in active_items:
+            if item.id not in linked_item_ids and item.id not in target_item_ids:
+                target_item_ids.append(item.id)
+
+        if target_item_ids:
+            await _sync_task_order_item_links(
+                self.db,
+                task_type,
+                task,
+                list(dict.fromkeys(target_item_ids)),
+            )
+
+    async def _auto_create_design_task(self, doc) -> None:
+        await self._auto_create_stage_task(doc, "design")
+
+    async def _auto_create_production_task(self, doc) -> None:
+        await self._auto_create_stage_task(doc, "production")
+
+    async def _auto_create_installation_task(self, doc) -> None:
+        await self._auto_create_stage_task(doc, "installation")
 
     # ═══════════════════════════════════════════
     # 订单成本
