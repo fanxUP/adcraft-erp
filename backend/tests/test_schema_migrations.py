@@ -92,7 +92,7 @@ def test_order_item_lifecycle_migration_is_additive_and_reversible():
     source = next(
         path.read_text(encoding="utf-8")
         for path in versions_dir.glob("*.py")
-        if 'revision = "j1k2l3m4n5o6"' in path.read_text(encoding="utf-8")
+        if path.name.startswith("j1k2l3m4n5o6_")
     )
 
     assert 'op.add_column(' in source
