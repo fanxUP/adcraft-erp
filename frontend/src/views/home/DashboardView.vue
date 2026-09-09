@@ -116,36 +116,12 @@
 
           <template v-else>
             <el-empty v-if="!stageCards(col.key).length" description="暂无任务" :image-size="56" />
-            <el-card
+            <TaskBoardCard
               v-for="task in stageCards(col.key)"
               :key="task.id"
-              shadow="hover"
-              class="board-card"
-              @click="handleTaskCardClick(task)"
-            >
-              <div class="card-topline">
-                <span class="card-no">{{ task.task_no }}</span>
-                <div class="card-statuses">
-                  <el-tag v-if="task.is_overdue" size="small" type="danger">逾期</el-tag>
-                  <StatusTag :status="task.status_view || task.status" size="sm" />
-                </div>
-              </div>
-              <div class="card-name">{{ task.project_name }}</div>
-              <div class="card-item">明细：{{ task.item_name || '未关联订单明细' }}</div>
-              <div class="card-meta">
-                <span>{{ task.order_no || '-' }}</span>
-                <span>{{ task.customer_name || '-' }}</span>
-              </div>
-              <ProgressBar
-                :percentage="taskProgress(task)"
-                :tone="task.status_view?.tone"
-                label="任务进度"
-                size="sm"
-                aria-label="任务进度"
-              />
-              <div v-if="task.planned_end_at" class="planned-end">计划结束：{{ formatDateTimeFull(task.planned_end_at) }}</div>
-              <div v-if="task.assigned_to_name" class="assignee">负责人：{{ task.assigned_to_name }}</div>
-            </el-card>
+              :task="task"
+              @open="handleTaskCardClick(task)"
+            />
           </template>
         </div>
       </div>
@@ -160,9 +136,8 @@ import { getOrders } from '@/api/orders'
 import { getTaskQueue } from '@/api/tasks'
 import { getQuotes } from '@/api/quotes'
 import type { CustomerDebtItem, OrderListResponse, QuoteListResponse, TaskQueueItem } from '@/types/api'
-import { formatDateTimeFull } from '@/utils/datetime'
-import { ProgressBar, StatusTag } from '@/components/ui'
-import { isTaskVisible, TASK_BOARD_COLUMNS, taskProgress } from '@/utils/task-board'
+import TaskBoardCard from '@/components/ui/TaskBoardCard.vue'
+import { isTaskVisible, TASK_BOARD_COLUMNS } from '@/utils/task-board'
 
 const loading = ref(false)
 const data = reactive({
@@ -279,15 +254,7 @@ onBeforeUnmount(() => {
 .column-header { padding: 12px; font-weight: bold; font-size: 16px; color: var(--ad-text); border-bottom: 1px solid var(--ad-border); display: flex; justify-content: center; gap: 8px; align-items: center; }
 .column-body { padding: 8px; flex: 1; overflow-y: auto; }
 .board-card { margin-bottom: 8px; cursor: pointer; background: var(--ad-card); border: 1px solid var(--ad-border); }
-.board-card:hover { border-color: #e63946; }
-.card-topline { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.card-statuses { display: flex; align-items: center; gap: 4px; }
-.card-no { font-size: 12px; color: #888; }
-.card-name { font-weight: bold; font-size: 16px; color: var(--ad-text); margin: 4px 0; }
-.card-item { margin-bottom: 6px; color: var(--ad-primary, #409eff); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-meta { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: #888; }
-.planned-end { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); }
-.assignee { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); }
 .stat-card { background: var(--ad-card); border: 1px solid var(--ad-border); text-align: center; padding: 18px 12px; border-radius: 10px; }
 .stat-label { font-size: 13px; color: var(--ad-text-secondary); margin-bottom: 10px; }
 .stat-value { font-size: 22px; font-weight: 700; color: var(--ad-text); }

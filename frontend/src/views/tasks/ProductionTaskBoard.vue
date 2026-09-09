@@ -30,36 +30,12 @@
         </div>
         <div class="column-body">
           <el-empty v-if="colCards(col.key).length === 0" description="暂无任务" :image-size="56" />
-          <el-card
+          <TaskBoardCard
             v-for="card in colCards(col.key)"
             :key="card.id"
-            shadow="hover"
-            class="board-card"
-            @click="handleCardClick(card)"
-          >
-            <div class="card-topline">
-              <span class="card-no">{{ card.task_no }}</span>
-              <div class="card-statuses">
-                <el-tag v-if="card.is_overdue" size="small" type="danger">逾期</el-tag>
-                <StatusTag :status="card.status_view || card.status" size="sm" />
-              </div>
-            </div>
-            <div class="card-name">{{ card.project_name }}</div>
-            <div class="card-item">明细：{{ card.item_name || '未关联订单明细' }}</div>
-            <div class="card-meta">
-              <span>{{ card.order_no || '-' }}</span>
-              <span>{{ card.customer_name || '-' }}</span>
-            </div>
-            <ProgressBar
-              :percentage="taskProgress(card)"
-              :tone="card.status_view?.tone"
-              label="任务进度"
-              size="sm"
-              aria-label="任务进度"
-            />
-            <div v-if="card.planned_end_at" class="planned-end">计划结束：{{ formatDateTimeFull(card.planned_end_at) }}</div>
-            <div v-if="card.assigned_to_name" class="assignee">负责人：{{ card.assigned_to_name }}</div>
-          </el-card>
+            :task="card"
+            @open="handleCardClick(card)"
+          />
         </div>
       </div>
     </div>
@@ -70,8 +46,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getTaskQueue } from '@/api/tasks'
 import type { TaskQueueItem } from '@/types/api'
-import { ProgressBar, StatusTag } from '@/components/ui'
-import { formatDateTimeFull } from '@/utils/datetime'
+import TaskBoardCard from '@/components/ui/TaskBoardCard.vue'
 import { isTaskVisible, TASK_BOARD_COLUMNS, taskProgress } from '@/utils/task-board'
 
 const loading = ref(false)
@@ -141,14 +116,4 @@ onBeforeUnmount(() => {
 .board-column { flex: 1; min-width: 280px; background: var(--ad-card); border: 1px solid var(--ad-border); border-radius: 6px; display: flex; flex-direction: column; }
 .column-header { padding: 12px; font-weight: bold; font-size: 16px; color: var(--ad-text); border-bottom: 1px solid var(--ad-border); display: flex; justify-content: center; gap: 8px; align-items: center; }
 .column-body { padding: 8px; flex: 1; overflow-y: auto; }
-.board-card { margin-bottom: 8px; cursor: pointer; background: var(--ad-card); border: 1px solid var(--ad-border); }
-.board-card:hover { border-color: #e63946; }
-.card-topline { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.card-statuses { display: flex; align-items: center; gap: 4px; }
-.card-no { font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-name { font-weight: bold; font-size: 16px; color: var(--ad-text); margin: 8px 0 4px; }
-.card-item { margin-bottom: 6px; color: var(--ad-primary, #409eff); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #888; }
-.assignee { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); }
-.planned-end { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); }
 </style>

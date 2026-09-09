@@ -85,6 +85,26 @@ def test_task_payload_uses_server_status_semantics_and_object_capability():
     }
 
 
+def test_task_queue_payload_keeps_order_context_for_board_cards():
+    payload = TaskQueueItem.model_validate({
+        "id": "task-1",
+        "task_type": "design",
+        "stage": "design",
+        "task_no": "D20260909-0002",
+        "document_id": "order-1",
+        "order_no": "O20260909-0001",
+        "customer_name": "示例客户",
+        "department": "市场部",
+        "project_name": "门店导视",
+        "status": "in_progress",
+        "progress_pct": 40,
+        "total_amount": 12800.5,
+    })
+
+    assert payload.department == "市场部"
+    assert payload.total_amount == 12800.5
+
+
 def test_cost_payload_exposes_scope_state_without_changing_amounts():
     payload = ProjectCostService._add_cost_contract({
         "amount": 1200.5,

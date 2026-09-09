@@ -279,11 +279,13 @@ class TaskQueueItem(CoercedModel):
     order_item_ids: list[str] = Field(default_factory=list)
     order_no: str | None = None
     customer_name: str | None = None
+    department: str | None = None
     project_name: str
     item_name: str | None = None
     item_names: list[str] = Field(default_factory=list)
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    total_amount: float | None = None
     status_view: StatusView | None = None
     capabilities: dict[str, ActionCapability] = Field(default_factory=dict)
     planned_start_at: str | None = None

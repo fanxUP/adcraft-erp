@@ -624,12 +624,14 @@ export interface TaskQueueItem {
   order_item_id?: string | null
   order_item_ids?: string[]
   order_no?: string
-  customer_name?: string
+  customer_name?: string | null
+  department?: string | null
   project_name: string
   item_name?: string | null
   item_names?: string[]
   status: string
   progress_pct: number
+  total_amount?: number | null
   status_view?: StatusView | null
   capabilities?: Record<string, ActionCapability>
   planned_start_at?: string | null

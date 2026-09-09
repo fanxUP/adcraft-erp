@@ -50,7 +50,7 @@ describe('P08 UI/UX quality guardrails', () => {
     ]
     for (const relativePath of corePages) {
       const source = readSource(relativePath)
-      expect(includesAny(source, ['<AppPage', '<PageShell', 'StatePanel', '<StatusTag', '<ProgressBar'])).toBe(true)
+      expect(includesAny(source, ['<AppPage', '<PageShell', 'StatePanel', '<StatusTag', '<ProgressBar', '<TaskBoardCard'])).toBe(true)
     }
 
     const mobileInstallation = readSource('views/tasks/MobileInstallation.vue')
