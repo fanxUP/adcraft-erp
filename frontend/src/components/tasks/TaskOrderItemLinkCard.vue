@@ -141,7 +141,7 @@
             ? '历史终态仅支持查看'
             : workflowControl.hasMixedStatuses
               ? '已选明细状态不同，请选择状态相同的明细后再批量推进'
-              : '点击可执行的下一步' }}
+              : '点击可执行的下一步或回退' }}
         </span>
       </div>
       <TaskWorkflow

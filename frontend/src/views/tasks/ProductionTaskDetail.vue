@@ -131,7 +131,7 @@ const assignTarget = ref('')
 const assigning = ref(false)
 const PROD_WORKFLOW: Record<string, string[]> = {
   pending: ['in_progress', 'cancelled'],
-  in_progress: ['completed', 'rework', 'cancelled'],
+  in_progress: ['completed', 'rework', 'pending', 'cancelled'],
   rework: ['in_progress', 'cancelled'],
   completed: [],
   cancelled: [],

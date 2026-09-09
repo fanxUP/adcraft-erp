@@ -140,4 +140,32 @@ describe('按已选订单明细控制任务状态', () => {
     expect(control.currentStatus).toBe('__selected_mixed__')
     expect(control.workflow.__selected_mixed__).toEqual(['cancelled'])
   })
+
+  it('制作中明细支持回退到待制作，同时保留完成入口', () => {
+    const productionWorkflow = {
+      pending: ['in_progress', 'cancelled'],
+      in_progress: ['completed', 'rework', 'pending', 'cancelled'],
+      rework: ['in_progress', 'cancelled'],
+      completed: [],
+      cancelled: [],
+    }
+    const control = getTaskWorkflowControl(
+      [{ id: 'production-item', is_linked: true, task_status: 'in_progress' }],
+      ['production-item'],
+      'in_progress',
+      productionWorkflow,
+    )
+
+    expect(control.workflow.in_progress).toContain('pending')
+    expect(control.workflow.in_progress).toContain('completed')
+  })
+
+  it('制作任务页面和状态条明确提供回退入口', () => {
+    const productionSource = readSource('views/tasks/ProductionTaskDetail.vue')
+    const workflowSource = readSource('components/workflow/TaskWorkflow.vue')
+
+    expect(productionSource).toContain("in_progress: ['completed', 'rework', 'pending', 'cancelled']")
+    expect(workflowSource).toContain('function isRollback')
+    expect(workflowSource).toContain('可回退')
+  })
 })

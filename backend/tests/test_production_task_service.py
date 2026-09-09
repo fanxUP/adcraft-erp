@@ -65,7 +65,7 @@ TRANSITION_TABLE = [
     ("pending", "completed", False),
     ("in_progress", "rework", True),
     ("in_progress", "completed", True),
-    ("in_progress", "pending", False),
+    ("in_progress", "pending", True),
     ("rework", "in_progress", True),
     ("rework", "completed", False),
     ("completed", "in_progress", False),
@@ -89,6 +89,8 @@ async def test_status_transitions(service, mock_repo, from_status, to_status, sh
             order_item_ids=[str(task.order_item_id)],
         )
         assert result["status"] == to_status
+        if to_status == "pending":
+            assert result["progress_pct"] == 0
     else:
         with pytest.raises(ValueError):
             await service.change_status(

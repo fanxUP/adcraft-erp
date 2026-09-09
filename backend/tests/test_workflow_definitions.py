@@ -26,6 +26,12 @@ def test_invalid_transition_raises_consistent_error():
 
 
 def test_delivery_workflows_are_centralized():
+    assert allowed_targets(PRODUCTION_TASK_WORKFLOW, "in_progress") == (
+        "completed",
+        "rework",
+        "pending",
+        "cancelled",
+    )
     assert allowed_targets(PRODUCTION_TASK_WORKFLOW, "rework") == (
         "in_progress",
         "cancelled",

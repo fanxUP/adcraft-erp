@@ -9,12 +9,13 @@
             @click="handleClick(step.key)"
           >
             <div class="tw-icon" :class="iconClass(step.key)">
-              <el-icon v-if="isPast(step.key)" :size="16"><Check /></el-icon>
+              <el-icon v-if="isPast(step.key) && !isRollback(step.key)" :size="16"><Check /></el-icon>
               <span v-else>{{ i + 1 }}</span>
             </div>
             <div class="tw-text">
               <div class="tw-label">{{ step.label }}</div>
               <div v-if="step.key === currentStatus" class="tw-tag cur-tag">当前</div>
+              <div v-else-if="isRollback(step.key)" class="tw-tag ready-tag">可回退</div>
               <div v-else-if="isPast(step.key)" class="tw-tag done-tag">已完成</div>
               <div v-else-if="isReachable(step.key)" class="tw-tag ready-tag">可点击</div>
               <div v-else class="tw-tag future-tag">待进行</div>
@@ -59,6 +60,11 @@ function isReachable(status: string): boolean {
   return (props.workflow[props.currentStatus] || []).includes(status)
 }
 
+function isRollback(status: string): boolean {
+  const idx = props.steps.findIndex(s => s.key === status)
+  return isReachable(status) && idx >= 0 && currentIdx.value >= 0 && idx < currentIdx.value
+}
+
 function handleClick(status: string) {
   if (!isReachable(status)) return
   emit('change', status)
@@ -66,6 +72,7 @@ function handleClick(status: string) {
 
 function cardClass(status: string) {
   if (status === props.currentStatus) return 'card-current'
+  if (isRollback(status)) return 'card-ready'
   if (isPast(status)) return 'card-done'
   if (isReachable(status)) return 'card-ready'
   return 'card-disabled'
@@ -73,6 +80,7 @@ function cardClass(status: string) {
 
 function iconClass(status: string) {
   if (status === props.currentStatus) return 'icon-current'
+  if (isRollback(status)) return 'icon-ready'
   if (isPast(status)) return 'icon-done'
   if (isReachable(status)) return 'icon-ready'
   return 'icon-disabled'
