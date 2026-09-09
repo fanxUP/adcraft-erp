@@ -1,0 +1,23 @@
+version: 1
+plan: QSI-P01
+tasks:
+  - id: P01
+    title: 清单解析和预览
+    depends_on: []
+    acceptance: A01
+  - id: P02
+    title: 显式面积和金额计算
+    depends_on: [P01]
+    acceptance: A02
+  - id: P03
+    title: 报价批量提交
+    depends_on: [P01, P02]
+    acceptance: A03
+  - id: P04
+    title: 报价列表导入入口
+    depends_on: [P01, P03]
+    acceptance: A04
+  - id: P05
+    title: 回归和发布验证
+    depends_on: [P02, P03, P04]
+    acceptance: A05

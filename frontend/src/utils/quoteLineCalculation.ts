@@ -9,6 +9,7 @@ export interface QuoteLineCalculationFields {
   quantity?: number
   unit?: string
   use_area?: boolean
+  quantity_mode?: 'piece' | 'area'
   unit_price?: number
   other_fee?: number
 }
@@ -26,6 +27,9 @@ export function dimensionToMillimeters(value: number, unit?: string): number {
 }
 
 export function calcQuoteLineArea(line: QuoteLineCalculationFields): number {
+  if (!line.use_area && line.quantity_mode === 'area') {
+    return Math.round(Number(line.quantity || 0) * 100) / 100
+  }
   const width = toMeters(Number(line.width || 0), line.width_unit)
   const height = toMeters(Number(line.height || 0), line.height_unit)
   const area = width * height * Number(line.pieces || 1)
@@ -46,6 +50,7 @@ export function syncQuoteLineAreaQuantity(line: QuoteLineCalculationFields): voi
   if (!line.use_area) return
   line.quantity = Math.max(0.01, calcQuoteLineArea(line))
   line.unit = '㎡'
+  line.quantity_mode = 'area'
 }
 
 export function migrateLegacyQuoteDimensions<T extends QuoteLineCalculationFields>(line: T): T {

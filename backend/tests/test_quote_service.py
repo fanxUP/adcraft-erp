@@ -358,6 +358,35 @@ async def test_calculate_quote_amount(service):
     assert quote.total_amount == Decimal("600")
 
 
+@pytest.mark.asyncio
+async def test_calculate_quote_amount_preserves_explicit_area_quantity(service):
+    quote_service, repository = service
+    item = make_quote_item(
+        quantity=Decimal("243"),
+        quantity_mode="area",
+        use_area=False,
+        unit="㎡",
+        width=None,
+        height=None,
+        unit_price=Decimal("300"),
+        area=Decimal("0"),
+        subtotal_amount=Decimal("0"),
+    )
+    quote = make_quote(
+        subtotal_amount=Decimal("0"),
+        discount_amount=Decimal("0"),
+        tax_rate=Decimal("0"),
+    )
+    repository.get_by_id.return_value = quote
+    repository.get_items.return_value = [item]
+
+    await quote_service._calculate_quote(SAMPLE_QUOTE_ID)
+
+    assert item.area == Decimal("243.00")
+    assert item.subtotal_amount == Decimal("72900.00")
+    assert quote.total_amount == Decimal("72900.00")
+
+
 # ─────────────────────────────────────────────
 # quote_date（报价日期）往返
 # ─────────────────────────────────────────────

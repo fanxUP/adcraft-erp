@@ -6,6 +6,7 @@
           <el-button v-if="authStore.isAdmin" @click="$router.push('/orders/recycle')" type="warning">
             <el-icon><Delete /></el-icon> 订单回收站
           </el-button>
+          <el-button type="primary" @click="openSchoolImport">批量导入学校清单</el-button>
           <el-button @click="$router.push('/quotes/new')" type="danger">新建常规报价</el-button>
         </template>
       </PageHeader>
@@ -110,6 +111,79 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="schoolImportVisible" title="批量导入学校清单" width="920px" :close-on-click-modal="false" destroy-on-close>
+      <el-alert
+        title="系统会先生成预览，确认后才会创建报价草稿。每所学校生成一张报价。"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px"
+      />
+      <el-form :model="schoolImportForm" label-width="90px" inline>
+        <el-form-item label="客户名称" required>
+          <el-input v-model="schoolImportForm.customerName" readonly style="width: 310px" />
+        </el-form-item>
+        <el-form-item label="项目名称" required>
+          <el-input v-model="schoolImportForm.projectName" readonly style="width: 430px" />
+        </el-form-item>
+      </el-form>
+
+      <div class="school-import-upload">
+        <el-upload
+          :auto-upload="false"
+          :show-file-list="false"
+          accept=".xlsx"
+          :on-change="handleSchoolFileChange"
+        >
+          <el-button :disabled="schoolPreviewing || schoolImporting">选择学校清单 Excel</el-button>
+        </el-upload>
+        <span class="school-import-file">{{ schoolFile?.name || '尚未选择文件' }}</span>
+        <el-button type="primary" :loading="schoolPreviewing" :disabled="!schoolFile || schoolImporting" @click="handleSchoolPreview">
+          生成预览
+        </el-button>
+      </div>
+
+      <template v-if="schoolPreview">
+        <div class="school-import-summary">
+          <span>学校：<strong>{{ schoolPreview.school_count }}</strong> 所</span>
+          <span>明细：<strong>{{ schoolPreview.item_count }}</strong> 条</span>
+          <span>合计：<strong>{{ formatMoney(schoolPreview.total_amount) }}</strong></span>
+          <span v-if="schoolPreview.skipped_rows.length">跳过：{{ schoolPreview.skipped_rows.length }} 行</span>
+        </div>
+        <el-alert v-if="schoolPreview.errors.length" title="预览存在错误，请修正原文件后重新上传" type="error" :closable="false" show-icon>
+          <div v-for="error in schoolPreview.errors" :key="`${error.row}-${error.message}`">第 {{ error.row }} 行：{{ error.message }}</div>
+        </el-alert>
+        <el-alert v-else-if="schoolPreview.warnings.length" title="部分原始小计与数量×单价存在差异，系统将按数量×单价重算" type="warning" :closable="false" show-icon>
+          共 {{ schoolPreview.warnings.length }} 行，详见预览结果
+        </el-alert>
+        <el-table v-if="schoolPreview.schools.length" :data="schoolPreview.schools" stripe border max-height="360" style="margin-top: 14px">
+          <el-table-column prop="department" label="部门/科室" min-width="280" />
+          <el-table-column prop="item_count" label="明细数量" width="100" align="right" />
+          <el-table-column prop="area_item_count" label="面积明细" width="100" align="right" />
+          <el-table-column label="报价金额" width="150" align="right">
+            <template #default="{ row }">{{ formatMoney(row.subtotal_amount) }}</template>
+          </el-table-column>
+          <el-table-column label="单位类型" min-width="220">
+            <template #default="{ row }">
+              <span v-for="(count, unit) in row.unit_counts" :key="unit" class="unit-count">{{ unit }} {{ count }}条</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
+
+      <template #footer>
+        <el-button @click="schoolImportVisible = false" :disabled="schoolImporting">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="schoolImporting"
+          :disabled="!schoolPreview?.valid || schoolPreviewing"
+          @click="handleSchoolImport"
+        >
+          确认导入 {{ schoolPreview?.school_count || 0 }} 张报价
+        </el-button>
+      </template>
+    </el-dialog>
+
     <QuotePreview :visible="previewVisible" :quote-id="previewQuoteId" @close="previewVisible = false" />
 
   </AppPage>
@@ -119,10 +193,10 @@
 import { formatDate } from '@/utils/datetime'
 import { formatMoney } from '@/utils/format'
 import { ref, reactive, computed, onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
-import { getQuotes, deleteQuote, previewDeleteQuote, cancelQuote, revertQuoteToDraft } from '@/api/quotes'
+import { getQuotes, deleteQuote, previewDeleteQuote, cancelQuote, revertQuoteToDraft, previewSchoolQuoteImport, commitSchoolQuoteImport } from '@/api/quotes'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { QuoteListResponse } from '@/types/api'
+import type { QuoteListResponse, SchoolQuoteImportPreview } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
 import { getErrorMessage } from '@/utils/error'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel, StatusTag } from '@/components/ui'
@@ -146,6 +220,16 @@ const pendingDeleteQuote = ref<QuoteListResponse | null>(null)
 const deleting = ref(false)
 const deleteAssociations = ref<Array<{ label: string; count: number }>>([])
 
+const schoolImportVisible = ref(false)
+const schoolPreviewing = ref(false)
+const schoolImporting = ref(false)
+const schoolFile = ref<File | null>(null)
+const schoolPreview = ref<SchoolQuoteImportPreview | null>(null)
+const schoolImportForm = reactive({
+  customerName: '新疆知味居经营管理有限公司',
+  projectName: '喀什市思政教育一体化项目-教育教学文化阵地建设项目',
+})
+
 const REFRESH_INTERVAL_MS = 15000
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let fetchRequestId = 0
@@ -159,6 +243,65 @@ const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
 function handlePreview(row: QuoteListResponse) {
   previewQuoteId.value = row.id
   previewVisible.value = true
+}
+
+function openSchoolImport() {
+  schoolFile.value = null
+  schoolPreview.value = null
+  schoolImportVisible.value = true
+}
+
+function handleSchoolFileChange(uploadFile: { raw?: File }) {
+  schoolFile.value = uploadFile.raw || null
+  schoolPreview.value = null
+}
+
+async function handleSchoolPreview() {
+  if (!schoolFile.value) return
+  schoolPreviewing.value = true
+  try {
+    schoolPreview.value = await previewSchoolQuoteImport(
+      schoolFile.value,
+      schoolImportForm.customerName,
+      schoolImportForm.projectName,
+    )
+    if (!schoolPreview.value.valid) ElMessage.warning('清单预览存在错误，请检查后再提交')
+    else ElMessage.success(`预览完成：${schoolPreview.value.school_count} 所学校，${schoolPreview.value.item_count} 条明细`)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '清单预览失败'))
+  } finally {
+    schoolPreviewing.value = false
+  }
+}
+
+async function handleSchoolImport() {
+  if (!schoolFile.value || !schoolPreview.value?.valid) return
+  try {
+    await ElMessageBox.confirm(
+      `确认创建 ${schoolPreview.value.school_count} 张报价草稿吗？共 ${schoolPreview.value.item_count} 条明细，合计 ${formatMoney(schoolPreview.value.total_amount)}。已有相同客户、项目和学校的报价时，本次不会写入。`,
+      '确认批量导入',
+      { confirmButtonText: '确认导入', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+
+  schoolImporting.value = true
+  try {
+    const result = await commitSchoolQuoteImport(
+      schoolFile.value,
+      schoolImportForm.customerName,
+      schoolImportForm.projectName,
+      schoolPreview.value.preview_id,
+    )
+    ElMessage.success(`导入完成：已创建 ${result.school_count} 张报价草稿`)
+    schoolImportVisible.value = false
+    await fetchData()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '批量导入失败，未完成写入'))
+  } finally {
+    schoolImporting.value = false
+  }
 }
 
 
@@ -289,4 +432,9 @@ onUnmounted(stopAutoRefresh)
 .delete-associations { margin-top: 16px; padding: 12px; background: var(--ad-darker); border: 1px solid var(--ad-border); border-radius: 6px; }
 .delete-associations-title { margin-bottom: 8px; font-weight: 600; }
 .delete-association-row { display: flex; justify-content: space-between; padding: 4px 0; }
+.school-import-upload { display: flex; align-items: center; gap: 12px; margin: 4px 0 16px; }
+.school-import-file { flex: 1; color: var(--ad-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.school-import-summary { display: flex; gap: 24px; flex-wrap: wrap; margin: 12px 0; color: var(--ad-text-secondary); }
+.school-import-summary strong { color: var(--ad-text); }
+.unit-count { display: inline-block; margin-right: 12px; color: var(--ad-text-secondary); }
 </style>

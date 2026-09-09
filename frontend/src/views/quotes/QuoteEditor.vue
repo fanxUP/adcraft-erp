@@ -149,7 +149,8 @@
             <template v-if="row.type === 'item'">
               <div style="display: flex; align-items: center; gap: 4px;">
                 <span>{{ calcArea(row.item).toFixed(2) }}</span>
-                <el-switch v-model="row.item.use_area" :disabled="isReadonly" size="small" @change="(val: boolean) => onAreaToggle(row.item, val)" />
+                <el-tag v-if="row.item.quantity_mode === 'area' && !row.item.use_area" type="info" size="small">按面积数量</el-tag>
+                <el-switch v-else v-model="row.item.use_area" :disabled="isReadonly" size="small" @change="(val: boolean) => onAreaToggle(row.item, val)" />
               </div>
             </template>
           </template>
@@ -370,6 +371,7 @@ const newItem = (groupId?: string, groupName?: string): QuoteItemResponse => ({
   quantity: 1,
   unit: '',
   use_area: false,
+  quantity_mode: 'piece',
   pieces: 1,
   unit_price: 0,
   other_fee: 0,
@@ -462,10 +464,12 @@ function onAreaToggle(row: QuoteItemResponse, val: boolean) {
     // 开启面积模式：数量自动 = 面积，单位设为㎡
     row.quantity = Math.max(0.01, calcArea(row))
     row.unit = '㎡'
+    row.quantity_mode = 'area'
   } else {
     // 关闭面积模式：重置数量，清空单位
     row.quantity = 1
     row.unit = ''
+    row.quantity_mode = 'piece'
   }
 }
 
@@ -1033,6 +1037,7 @@ async function doCreateNewQuote(): Promise<QuoteDetailResponse> {
     quantity: item.quantity || 1,
     unit: item.unit || null,
     use_area: item.use_area || false,
+    quantity_mode: item.quantity_mode || (item.use_area ? 'area' : 'piece'),
     pieces: item.pieces || 1,
     unit_price: item.unit_price || 0,
     other_fee: item.other_fee || 0,
@@ -1082,6 +1087,7 @@ async function handleSave() {
         quantity: item.quantity,
         unit: item.unit || undefined,
         use_area: item.use_area || false,
+        quantity_mode: item.quantity_mode || (item.use_area ? 'area' : 'piece'),
         pieces: item.pieces || 1,
         unit_price: item.unit_price || 0,
         other_fee: item.other_fee || 0,

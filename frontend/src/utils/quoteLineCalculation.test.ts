@@ -38,6 +38,22 @@ describe('quoteLineCalculation', () => {
     })).toBe(1.01)
   })
 
+  it('shows an explicit source area without requiring width and height', () => {
+    expect(calcQuoteLineArea({
+      quantity: 243,
+      quantity_mode: 'area',
+      unit: '㎡',
+      use_area: false,
+    })).toBe(243)
+    expect(calcQuoteLineSubtotal({
+      quantity: 243,
+      quantity_mode: 'area',
+      unit: '㎡',
+      use_area: false,
+      unit_price: 300,
+    })).toBe(72900)
+  })
+
   it('synchronizes area quantity and unit', () => {
     const changed = { ...line, quantity: 1, unit: '' }
 

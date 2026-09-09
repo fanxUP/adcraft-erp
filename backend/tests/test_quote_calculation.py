@@ -51,6 +51,22 @@ def test_quantity_quote_ignores_geometry_for_pricing():
     assert values["subtotal_amount"] == Decimal("600.00")
 
 
+def test_explicit_area_quantity_uses_source_area_without_dimensions():
+    values = normalize_quote_item_data(
+        {
+            "item_name": "文化长廊",
+            "quantity": 243,
+            "unit": "㎡",
+            "quantity_mode": "area",
+            "use_area": False,
+            "unit_price": 300,
+        }
+    )
+
+    assert values["area"] == Decimal("243.00")
+    assert values["subtotal_amount"] == Decimal("72900.00")
+
+
 def test_quote_totals_use_percentage_tax_rate():
     totals = calculate_quote_totals(
         [Decimal("1000"), Decimal("500")],

@@ -52,14 +52,27 @@ def calculate_quote_item_values(item: Mapping[str, Any]) -> dict[str, Decimal]:
     if unit_price < ZERO or any(fee < ZERO for fee in fees):
         raise ValueError("报价明细单价和附加费用不能为负数")
 
-    area = (width * height * pieces).quantize(
-        AREA_QUANTUM,
-        rounding=ROUND_HALF_UP,
-    )
     use_area = bool(item.get("use_area"))
-    if use_area and area <= ZERO:
-        raise ValueError("面积计价明细必须填写大于 0 的宽和高")
-    base = area if use_area else quantity
+    quantity_mode = str(item.get("quantity_mode") or "piece").strip().lower()
+    if use_area:
+        area = (width * height * pieces).quantize(
+            AREA_QUANTUM,
+            rounding=ROUND_HALF_UP,
+        )
+        if area <= ZERO:
+            raise ValueError("面积计价明细必须填写大于 0 的宽和高")
+        base = area
+    elif quantity_mode == "area":
+        # 显式面积数量来自清单的“数量”列，不需要宽高；
+        # 与 use_area=True 的几何面积模式保持语义区分。
+        area = quantity.quantize(AREA_QUANTUM, rounding=ROUND_HALF_UP)
+        base = quantity
+    else:
+        area = (width * height * pieces).quantize(
+            AREA_QUANTUM,
+            rounding=ROUND_HALF_UP,
+        )
+        base = quantity
     subtotal = base * unit_price
     # 工艺费/安装费/设计费/运输费已移除，仅其他费计入行小计
     subtotal += as_decimal(item.get("other_fee"))

@@ -1144,6 +1144,57 @@ export interface QuoteDetailResponse {
   groups: QuoteGroupResponse[]
 }
 
+export interface SchoolQuoteImportItemPreview {
+  row: number
+  item_name: string
+  quantity: number
+  source_unit: string
+  unit: string
+  measure_kind: 'area' | 'quantity' | 'length' | 'volume' | 'weight'
+  quantity_mode: 'piece' | 'area'
+  unit_price: number
+  subtotal_amount: number
+  remark?: string | null
+}
+
+export interface SchoolQuoteImportSchoolPreview {
+  department: string
+  item_count: number
+  area_item_count: number
+  subtotal_amount: number
+  unit_counts: Record<string, number>
+  items: SchoolQuoteImportItemPreview[]
+}
+
+export interface SchoolQuoteImportPreview {
+  preview_id: string
+  source_sha256: string
+  customer_name: string
+  project_name: string
+  valid: boolean
+  school_count: number
+  item_count: number
+  total_amount: number
+  skipped_rows: Array<{ row: number; reason: string }>
+  errors: Array<{ row: number; message: string }>
+  warnings: Array<{ row: number; message: string }>
+  schools: SchoolQuoteImportSchoolPreview[]
+}
+
+export interface SchoolQuoteImportCommitResponse {
+  preview_id: string
+  school_count: number
+  item_count: number
+  total_amount: number
+  quotes: Array<{
+    id: string
+    quote_no: string
+    department: string
+    item_count: number
+    total_amount: number
+  }>
+}
+
 // ---- Contract ----
 
 export interface ContractListResponse {

@@ -3,8 +3,8 @@ from datetime import date
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi.responses import JSONResponse, StreamingResponse
 from io import BytesIO
 from openpyxl import Workbook
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,13 @@ from app.models.user import User
 from app.schemas.quote import QuoteCreate, QuoteUpdate, QuoteItemCreate, QuoteItemUpdate
 from app.schemas.common import success, success_paginated, error
 from app.services.business_document_service import BusinessDocumentService
+from app.services.quote_school_import_service import (
+    SchoolQuoteImportFormatError,
+    commit_school_quote_preview,
+    find_existing_school_quotes,
+    parse_school_quote_workbook,
+    resolve_customer_id,
+)
 from app.utils.excel_import import ExcelImportResult, parse_excel, format_value, parse_number
 
 logger = logging.getLogger(__name__)
@@ -173,6 +180,106 @@ async def download_quote_template(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
     )
+
+
+@router.post("/import/school-list/preview")
+async def preview_school_list_import(
+    file: UploadFile = File(...),
+    customer_name: str = Form(...),
+    project_name: str = Form(...),
+    current_user: User = Depends(require_permission(PERM_QUOTE_CREATE)),
+):
+    """Preview a school-list workbook without writing any quote data."""
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        return JSONResponse(
+            status_code=400,
+            content=error(40001, "学校清单导入仅支持 .xlsx 格式的 Excel 文件"),
+        )
+    content = await file.read()
+    try:
+        preview = parse_school_quote_workbook(
+            content,
+            customer_name=customer_name,
+            project_name=project_name,
+        )
+    except SchoolQuoteImportFormatError as exc:
+        return JSONResponse(status_code=400, content=error(40002, str(exc)))
+    return success(preview.to_response())
+
+
+@router.post("/import/school-list/commit")
+async def commit_school_list_import(
+    file: UploadFile = File(...),
+    customer_name: str = Form(...),
+    project_name: str = Form(...),
+    preview_id: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_QUOTE_CREATE)),
+):
+    """Commit a previously previewed school-list workbook atomically."""
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        return JSONResponse(
+            status_code=400,
+            content=error(40001, "学校清单导入仅支持 .xlsx 格式的 Excel 文件"),
+        )
+    content = await file.read()
+    try:
+        preview = parse_school_quote_workbook(
+            content,
+            customer_name=customer_name,
+            project_name=project_name,
+        )
+    except SchoolQuoteImportFormatError as exc:
+        return JSONResponse(status_code=400, content=error(40002, str(exc)))
+
+    if preview.preview_id != preview_id:
+        return JSONResponse(
+            status_code=409,
+            content=error(40901, "预览已失效，请重新上传并生成预览"),
+        )
+    if not preview.valid:
+        return JSONResponse(
+            status_code=400,
+            content=error(40003, "清单预览存在错误，不能提交", data=preview.to_response()),
+        )
+
+    try:
+        customer_id = await resolve_customer_id(db, preview.customer_name)
+        conflicts = await find_existing_school_quotes(
+            db,
+            customer_name=preview.customer_name,
+            customer_id=customer_id,
+            project_name=preview.project_name,
+            departments=[group.department for group in preview.groups],
+        )
+        if conflicts:
+            return JSONResponse(
+                status_code=409,
+                content=error(
+                    40902,
+                    "检测到相同客户、项目和学校的已有报价，未写入任何数据",
+                    data={"conflicts": conflicts},
+                ),
+            )
+        created = await commit_school_quote_preview(
+            db,
+            preview,
+            customer_id=customer_id,
+        )
+    except ValueError as exc:
+        await db.rollback()
+        return JSONResponse(status_code=400, content=error(40004, str(exc)))
+    except Exception:
+        await db.rollback()
+        raise
+
+    return success({
+        "preview_id": preview.preview_id,
+        "school_count": len(created),
+        "item_count": preview.item_count,
+        "total_amount": float(preview.total_amount),
+        "quotes": created,
+    })
 
 
 @router.post("/import")
