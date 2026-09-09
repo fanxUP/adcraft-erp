@@ -1149,6 +1149,10 @@ class BusinessDocumentService:
             await self._restore_delivery_chain(doc_id)
         doc.status = await self._pre_cancel_status(doc)
         await self.db.flush()
+        # repo.restore()/flush() 会触发数据库侧 onupdate(updated_at)。异步
+        # SQLAlchemy 会将该字段标记为过期，序列化前必须显式刷新，避免同步
+        # 读取时触发 MissingGreenlet 并让恢复接口返回 500。
+        await self.db.refresh(doc, attribute_names=["updated_at"])
         return self._to_detail(doc)
 
     async def _pre_cancel_status(self, doc) -> str:

@@ -1,5 +1,6 @@
 """统一业务单据服务的订单路径回归测试。"""
 
+from datetime import datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -132,6 +133,39 @@ async def test_order_status_change_refreshes_server_updated_at_before_detail(ser
     )
 
     assert result["status"] == "designing"
+    db.refresh.assert_awaited_once_with(order, attribute_names=["updated_at"])
+
+
+@pytest.mark.asyncio
+async def test_order_restore_refreshes_server_updated_at_before_detail(service):
+    """恢复订单后必须先刷新数据库生成的时间戳，再序列化响应。"""
+    order_service, repository, db = service
+    order = make_order(status="cancelled", deleted_at=datetime(2026, 9, 9, 10, 25, 48))
+    repository.get_deleted_by_id = AsyncMock(return_value=order)
+    repository.restore = AsyncMock()
+    order_service._restore_delivery_chain = AsyncMock()
+    order_service._pre_cancel_status = AsyncMock(return_value="in_installation")
+
+    refreshed_at = "2026-09-09T10:30:00"
+    order_service._to_detail = MagicMock(
+        side_effect=lambda document: {
+            "status": document.status,
+            "updated_at": document.updated_at,
+        }
+    )
+
+    async def refresh(document, attribute_names=None):
+        assert attribute_names == ["updated_at"]
+        document.updated_at = refreshed_at
+
+    db.flush = AsyncMock()
+    db.refresh = AsyncMock(side_effect=refresh)
+
+    result = await order_service.restore(SAMPLE_ORDER_ID)
+
+    assert result == {"status": "in_installation", "updated_at": refreshed_at}
+    repository.restore.assert_awaited_once_with(order)
+    order_service._restore_delivery_chain.assert_awaited_once_with(SAMPLE_ORDER_ID)
     db.refresh.assert_awaited_once_with(order, attribute_names=["updated_at"])
 
 
