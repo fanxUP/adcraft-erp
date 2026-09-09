@@ -3,7 +3,7 @@
 from decimal import Decimal
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -34,6 +34,47 @@ def test_order_edit_request_does_not_accept_client_calculated_totals():
     assert request.header.project_name == "新门头项目"
     assert request.items[0].item_name == "灯箱字"
     assert not hasattr(request.items[0], "subtotal_amount")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route_name", ["preview", "apply"])
+async def test_order_batch_routes_preserve_explicit_null_item_fields(route_name):
+    """清空订单明细可空字段时，路由不能把显式 null 丢掉。"""
+    import app.api.orders as orders_api
+
+    request_data = OrderEditRequest(
+        reason="清空订单明细备注",
+        expected_updated_at="2026-09-09T10:00:00",
+        header={"project_name": "测试订单"},
+        items=[
+            {
+                "id": str(uuid4()),
+                "item_name": "标志",
+                "remark": None,
+            }
+        ],
+    )
+    service = MagicMock()
+    service.preview_order_edit = AsyncMock(return_value={})
+    service.apply_order_edit = AsyncMock(return_value={})
+    db = MagicMock()
+    current_user = SimpleNamespace(id=uuid4(), real_name="测试用户", username="tester")
+    http_request = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"))
+
+    with patch.object(orders_api, "BusinessDocumentService", return_value=service):
+        if route_name == "preview":
+            await orders_api.preview_order_edit(
+                str(uuid4()), request_data, db, current_user
+            )
+            called = service.preview_order_edit.call_args.kwargs
+        else:
+            await orders_api.apply_order_edit(
+                str(uuid4()), request_data, http_request, db, current_user
+            )
+            called = service.apply_order_edit.call_args.kwargs
+
+    assert "remark" in called["items"][0]
+    assert called["items"][0]["remark"] is None
 
 
 @pytest.mark.asyncio

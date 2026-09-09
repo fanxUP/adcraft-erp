@@ -138,7 +138,8 @@ async def preview_order_edit(
             await service.preview_order_edit(
                 UUID(order_id),
                 header=data.header.model_dump(exclude_unset=True),
-                items=[item.model_dump(exclude_none=True) for item in data.items],
+                # 批量编辑是完整明细快照；显式 null 表示用户要清空字段，不能丢弃。
+                items=[item.model_dump(exclude_unset=True) for item in data.items],
                 groups=[group.model_dump() for group in data.groups],
                 expected_updated_at=data.expected_updated_at,
                 reason=data.reason,
@@ -168,7 +169,8 @@ async def apply_order_edit(
             await service.apply_order_edit(
                 UUID(order_id),
                 header=data.header.model_dump(exclude_unset=True),
-                items=[item.model_dump(exclude_none=True) for item in data.items],
+                # 与预检保持一致，保留显式 null，确保预检与正式保存的字段语义一致。
+                items=[item.model_dump(exclude_unset=True) for item in data.items],
                 groups=[group.model_dump() for group in data.groups],
                 expected_updated_at=data.expected_updated_at,
                 reason=data.reason,
