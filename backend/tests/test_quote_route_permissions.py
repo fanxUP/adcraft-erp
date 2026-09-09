@@ -38,6 +38,8 @@ def test_delete_quote_uses_quote_delete_permission():
         ("POST", "/quotes/import", PERM_QUOTE_CREATE),
         ("POST", "/quotes/import/school-list/preview", PERM_QUOTE_CREATE),
         ("POST", "/quotes/import/school-list/commit", PERM_QUOTE_CREATE),
+        ("POST", "/quotes/import/school-list/dimensions/preview", PERM_QUOTE_UPDATE),
+        ("POST", "/quotes/import/school-list/dimensions/commit", PERM_QUOTE_UPDATE),
         ("GET", "/quotes/{quote_id}", PERM_QUOTE_READ),
         ("PUT", "/quotes/{quote_id}", PERM_QUOTE_UPDATE),
         ("POST", "/quotes/{quote_id}/items", PERM_QUOTE_UPDATE),

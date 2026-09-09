@@ -7,6 +7,7 @@
             <el-icon><Delete /></el-icon> 订单回收站
           </el-button>
           <el-button type="primary" @click="openSchoolImport">批量导入学校清单</el-button>
+          <el-button type="success" @click="openSchoolDimensionBackfill">清洗报价宽高</el-button>
           <el-button @click="$router.push('/quotes/new')" type="danger">新建常规报价</el-button>
         </template>
       </PageHeader>
@@ -184,6 +185,83 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="dimensionBackfillVisible" title="清洗现有报价宽高" width="1180px" :close-on-click-modal="false" destroy-on-close>
+      <el-alert
+        title="仅回填已存在的学校报价草稿；原始产品/材质/工艺、数量、单价和报价金额不会改变。三维尺寸和无法唯一归属的尺寸不会自动写入。"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px"
+      />
+      <el-form :model="schoolDimensionForm" label-width="90px" inline>
+        <el-form-item label="客户名称" required>
+          <el-input v-model="schoolDimensionForm.customerName" readonly style="width: 310px" />
+        </el-form-item>
+        <el-form-item label="项目名称" required>
+          <el-input v-model="schoolDimensionForm.projectName" readonly style="width: 430px" />
+        </el-form-item>
+      </el-form>
+
+      <div class="school-import-upload">
+        <el-upload
+          :auto-upload="false"
+          :show-file-list="false"
+          accept=".xlsx"
+          :on-change="handleDimensionFileChange"
+        >
+          <el-button :disabled="dimensionPreviewing || dimensionBackfilling">选择学校清单 Excel</el-button>
+        </el-upload>
+        <span class="school-import-file">{{ dimensionFile?.name || '尚未选择文件' }}</span>
+        <el-button type="primary" :loading="dimensionPreviewing" :disabled="!dimensionFile || dimensionBackfilling" @click="handleDimensionPreview">
+          生成清洗预览
+        </el-button>
+      </div>
+
+      <template v-if="dimensionBackfillPreview">
+        <div class="school-import-summary">
+          <span>目标报价：<strong>{{ dimensionBackfillPreview.backfill.expected_quote_count }}</strong> 张</span>
+          <span>成功匹配：<strong>{{ dimensionBackfillPreview.backfill.matched_quote_count }}</strong> 张</span>
+          <span>可回填：<strong>{{ dimensionBackfillPreview.backfill.change_count }}</strong> 条</span>
+          <span>待复核：<strong>{{ dimensionBackfillPreview.backfill.review_count }}</strong> 条</span>
+          <span>无尺寸：<strong>{{ dimensionBackfillPreview.backfill.skipped_count }}</strong> 条</span>
+          <span>冲突：<strong>{{ dimensionBackfillPreview.backfill.conflict_count }}</strong> 条</span>
+        </div>
+        <el-alert v-if="dimensionBackfillPreview.backfill.conflict_count" title="存在匹配冲突，本次禁止写入。请先确认目标报价未被修改，或重新生成清单预览。" type="error" :closable="false" show-icon />
+        <el-alert v-else-if="dimensionBackfillPreview.backfill.review_count" title="三维尺寸仅展示候选值，不会自动写入；可在报价编辑页手工确认。" type="warning" :closable="false" show-icon />
+        <el-table :data="dimensionPreviewRows" stripe border max-height="430" style="margin-top: 14px">
+          <el-table-column prop="row" label="原始行" width="74" align="right" />
+          <el-table-column prop="department" label="学校" width="180" show-overflow-tooltip />
+          <el-table-column prop="quote_no" label="报价编号" width="150" />
+          <el-table-column prop="item_name" label="项目内容" width="150" show-overflow-tooltip />
+          <el-table-column prop="dimension_source" label="识别来源" min-width="190" show-overflow-tooltip />
+          <el-table-column label="宽" width="90" align="right">
+            <template #default="{ row }">{{ dimensionValue(row.width, row.width_unit) }}</template>
+          </el-table-column>
+          <el-table-column label="高" width="90" align="right">
+            <template #default="{ row }">{{ dimensionValue(row.height, row.height_unit) }}</template>
+          </el-table-column>
+          <el-table-column label="处理" width="100">
+            <template #default="{ row }">
+              <el-tag :type="dimensionRowTagType(row.status)" size="small">{{ dimensionRowStatus(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="reason" label="说明" min-width="260" show-overflow-tooltip />
+        </el-table>
+      </template>
+
+      <template #footer>
+        <el-button @click="dimensionBackfillVisible = false" :disabled="dimensionBackfilling">取消</el-button>
+        <el-button
+          type="success"
+          :loading="dimensionBackfilling"
+          :disabled="!dimensionBackfillPreview?.backfill.valid || !dimensionBackfillPreview.backfill.change_count || dimensionPreviewing"
+          @click="handleDimensionBackfill"
+        >
+          确认回填 {{ dimensionBackfillPreview?.backfill.change_count || 0 }} 条
+        </el-button>
+      </template>
+    </el-dialog>
+
     <QuotePreview :visible="previewVisible" :quote-id="previewQuoteId" @close="previewVisible = false" />
 
   </AppPage>
@@ -193,10 +271,10 @@
 import { formatDate } from '@/utils/datetime'
 import { formatMoney } from '@/utils/format'
 import { ref, reactive, computed, onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
-import { getQuotes, deleteQuote, previewDeleteQuote, cancelQuote, revertQuoteToDraft, previewSchoolQuoteImport, commitSchoolQuoteImport } from '@/api/quotes'
+import { getQuotes, deleteQuote, previewDeleteQuote, cancelQuote, revertQuoteToDraft, previewSchoolQuoteImport, commitSchoolQuoteImport, previewSchoolQuoteDimensionBackfill, commitSchoolQuoteDimensionBackfill } from '@/api/quotes'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { QuoteListResponse, SchoolQuoteImportPreview } from '@/types/api'
+import type { QuoteListResponse, SchoolQuoteImportPreview, SchoolQuoteDimensionBackfillPreview, SchoolQuoteDimensionBackfillRow } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
 import { getErrorMessage } from '@/utils/error'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel, StatusTag } from '@/components/ui'
@@ -229,6 +307,15 @@ const schoolImportForm = reactive({
   customerName: '新疆知味居经营管理有限公司',
   projectName: '喀什市思政教育一体化项目-教育教学文化阵地建设项目',
 })
+const dimensionBackfillVisible = ref(false)
+const dimensionPreviewing = ref(false)
+const dimensionBackfilling = ref(false)
+const dimensionFile = ref<File | null>(null)
+const dimensionBackfillPreview = ref<SchoolQuoteDimensionBackfillPreview | null>(null)
+const schoolDimensionForm = reactive({
+  customerName: '新疆知味居经营管理有限公司',
+  projectName: '喀什市思政教育一体化项目-教育教学文化阵地建设项目',
+})
 
 const REFRESH_INTERVAL_MS = 15000
 let refreshTimer: ReturnType<typeof setInterval> | null = null
@@ -254,6 +341,93 @@ function openSchoolImport() {
 function handleSchoolFileChange(uploadFile: { raw?: File }) {
   schoolFile.value = uploadFile.raw || null
   schoolPreview.value = null
+}
+
+type DimensionPreviewRow = SchoolQuoteDimensionBackfillRow & { status: 'change' | 'review' | 'skip' | 'conflict' }
+
+const dimensionPreviewRows = computed<DimensionPreviewRow[]>(() => {
+  const report = dimensionBackfillPreview.value?.backfill
+  if (!report) return []
+  return [
+    ...report.changes.map(row => ({ ...row, status: 'change' as const, reason: row.reason || '将回填结构化宽高' })),
+    ...report.review_rows.map(row => ({ ...row, status: 'review' as const })),
+    ...report.skipped_rows.map(row => ({ ...row, status: 'skip' as const })),
+    ...report.conflicts.map(row => ({ ...row, status: 'conflict' as const })),
+  ]
+})
+
+function openSchoolDimensionBackfill() {
+  dimensionFile.value = null
+  dimensionBackfillPreview.value = null
+  dimensionBackfillVisible.value = true
+}
+
+function handleDimensionFileChange(uploadFile: { raw?: File }) {
+  dimensionFile.value = uploadFile.raw || null
+  dimensionBackfillPreview.value = null
+}
+
+function dimensionValue(value: number | null | undefined, unit: string | null | undefined) {
+  if (value === null || value === undefined) return '-'
+  return `${value}${unit || 'm'}`
+}
+
+function dimensionRowStatus(status: DimensionPreviewRow['status']) {
+  return { change: '可回填', review: '待复核', skip: '不写入', conflict: '冲突' }[status]
+}
+
+function dimensionRowTagType(status: DimensionPreviewRow['status']) {
+  return { change: 'success', review: 'warning', skip: 'info', conflict: 'danger' }[status] as 'success' | 'warning' | 'info' | 'danger'
+}
+
+async function handleDimensionPreview() {
+  if (!dimensionFile.value) return
+  dimensionPreviewing.value = true
+  try {
+    dimensionBackfillPreview.value = await previewSchoolQuoteDimensionBackfill(
+      dimensionFile.value,
+      schoolDimensionForm.customerName,
+      schoolDimensionForm.projectName,
+    )
+    const report = dimensionBackfillPreview.value.backfill
+    if (!report.valid) ElMessage.error(`清洗预览存在 ${report.conflict_count} 个冲突，本次不能回填`)
+    else ElMessage.success(`预览完成：可回填 ${report.change_count} 条，待复核 ${report.review_count} 条`)
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '尺寸清洗预览失败'))
+  } finally {
+    dimensionPreviewing.value = false
+  }
+}
+
+async function handleDimensionBackfill() {
+  const current = dimensionBackfillPreview.value
+  if (!dimensionFile.value || !current?.backfill.valid || !current.backfill.change_count) return
+  try {
+    await ElMessageBox.confirm(
+      `确认回填 ${current.backfill.change_count} 条报价明细的宽、高字段吗？原始文本、数量、单价和金额不会改变。`,
+      '确认清洗报价宽高',
+      { confirmButtonText: '确认回填', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+
+  dimensionBackfilling.value = true
+  try {
+    const result = await commitSchoolQuoteDimensionBackfill(
+      dimensionFile.value,
+      schoolDimensionForm.customerName,
+      schoolDimensionForm.projectName,
+      current.source.preview_id,
+    )
+    ElMessage.success(`清洗完成：已回填 ${result.change_count} 条，待复核 ${result.review_count} 条`)
+    dimensionBackfillVisible.value = false
+    await fetchData()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '尺寸清洗失败，未完成写入'))
+  } finally {
+    dimensionBackfilling.value = false
+  }
 }
 
 async function handleSchoolPreview() {

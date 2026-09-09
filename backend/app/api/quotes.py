@@ -26,8 +26,10 @@ from app.services.business_document_service import BusinessDocumentService
 from app.services.quote_school_import_service import (
     SchoolQuoteImportFormatError,
     commit_school_quote_preview,
+    commit_school_quote_dimension_backfill,
     find_existing_school_quotes,
     parse_school_quote_workbook,
+    preview_school_quote_dimension_backfill,
     resolve_customer_id,
 )
 from app.utils.excel_import import ExcelImportResult, parse_excel, format_value, parse_number
@@ -280,6 +282,96 @@ async def commit_school_list_import(
         "total_amount": float(preview.total_amount),
         "quotes": created,
     })
+
+
+@router.post("/import/school-list/dimensions/preview")
+async def preview_school_list_dimension_backfill(
+    file: UploadFile = File(...),
+    customer_name: str = Form(...),
+    project_name: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_QUOTE_UPDATE)),
+):
+    """Preview structured-dimension backfill for existing school quote drafts."""
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        return JSONResponse(
+            status_code=400,
+            content=error(40001, "学校清单尺寸清洗仅支持 .xlsx 格式的 Excel 文件"),
+        )
+    content = await file.read()
+    try:
+        preview = parse_school_quote_workbook(
+            content,
+            customer_name=customer_name,
+            project_name=project_name,
+        )
+        if not preview.valid:
+            return JSONResponse(
+                status_code=400,
+                content=error(40003, "清单预览存在错误，不能执行尺寸清洗", data=preview.to_response()),
+            )
+        customer_id = await resolve_customer_id(db, preview.customer_name)
+        backfill = await preview_school_quote_dimension_backfill(
+            db,
+            preview,
+            customer_id=customer_id,
+        )
+    except SchoolQuoteImportFormatError as exc:
+        return JSONResponse(status_code=400, content=error(40002, str(exc)))
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content=error(40004, str(exc)))
+    return success({"source": preview.to_response(), "backfill": backfill})
+
+
+@router.post("/import/school-list/dimensions/commit")
+async def commit_school_list_dimension_backfill(
+    file: UploadFile = File(...),
+    customer_name: str = Form(...),
+    project_name: str = Form(...),
+    preview_id: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_QUOTE_UPDATE)),
+):
+    """Commit a validated structured-dimension backfill atomically."""
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        return JSONResponse(
+            status_code=400,
+            content=error(40001, "学校清单尺寸清洗仅支持 .xlsx 格式的 Excel 文件"),
+        )
+    content = await file.read()
+    try:
+        preview = parse_school_quote_workbook(
+            content,
+            customer_name=customer_name,
+            project_name=project_name,
+        )
+    except SchoolQuoteImportFormatError as exc:
+        return JSONResponse(status_code=400, content=error(40002, str(exc)))
+    if preview.preview_id != preview_id:
+        return JSONResponse(
+            status_code=409,
+            content=error(40901, "预览已失效，请重新上传并生成预览"),
+        )
+    if not preview.valid:
+        return JSONResponse(
+            status_code=400,
+            content=error(40003, "清单预览存在错误，不能执行尺寸清洗", data=preview.to_response()),
+        )
+
+    try:
+        customer_id = await resolve_customer_id(db, preview.customer_name)
+        report = await commit_school_quote_dimension_backfill(
+            db,
+            preview,
+            customer_id=customer_id,
+        )
+    except ValueError as exc:
+        await db.rollback()
+        return JSONResponse(status_code=409, content=error(40903, str(exc)))
+    except Exception:
+        await db.rollback()
+        raise
+    return success(report)
 
 
 @router.post("/import")

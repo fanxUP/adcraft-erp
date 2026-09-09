@@ -1155,12 +1155,23 @@ export interface SchoolQuoteImportItemPreview {
   unit_price: number
   subtotal_amount: number
   remark?: string | null
+  length?: number | null
+  length_unit?: string | null
+  width?: number | null
+  width_unit?: string | null
+  height?: number | null
+  height_unit?: string | null
+  dimension_status: 'auto' | 'review' | 'none'
+  dimension_source?: string | null
+  dimension_reason?: string | null
 }
 
 export interface SchoolQuoteImportSchoolPreview {
   department: string
   item_count: number
   area_item_count: number
+  dimension_auto_count: number
+  dimension_review_count: number
   subtotal_amount: number
   unit_counts: Record<string, number>
   items: SchoolQuoteImportItemPreview[]
@@ -1175,6 +1186,9 @@ export interface SchoolQuoteImportPreview {
   school_count: number
   item_count: number
   total_amount: number
+  dimension_auto_count: number
+  dimension_review_count: number
+  dimension_empty_count: number
   skipped_rows: Array<{ row: number; reason: string }>
   errors: Array<{ row: number; message: string }>
   warnings: Array<{ row: number; message: string }>
@@ -1193,6 +1207,46 @@ export interface SchoolQuoteImportCommitResponse {
     item_count: number
     total_amount: number
   }>
+}
+
+export interface SchoolQuoteDimensionBackfillRow {
+  department: string
+  quote_no?: string
+  item_id?: string
+  row?: number
+  item_name?: string
+  dimension_source?: string | null
+  reason?: string
+  fields?: Record<string, string | null>
+  length?: number | null
+  length_unit?: string | null
+  width?: number | null
+  width_unit?: string | null
+  height?: number | null
+  height_unit?: string | null
+}
+
+export interface SchoolQuoteDimensionBackfillReport {
+  valid: boolean
+  preview_id: string
+  customer_name: string
+  project_name: string
+  expected_quote_count: number
+  matched_quote_count: number
+  change_count: number
+  unchanged_count: number
+  review_count: number
+  skipped_count: number
+  conflict_count: number
+  changes: SchoolQuoteDimensionBackfillRow[]
+  review_rows: SchoolQuoteDimensionBackfillRow[]
+  skipped_rows: SchoolQuoteDimensionBackfillRow[]
+  conflicts: SchoolQuoteDimensionBackfillRow[]
+}
+
+export interface SchoolQuoteDimensionBackfillPreview {
+  source: SchoolQuoteImportPreview
+  backfill: SchoolQuoteDimensionBackfillReport
 }
 
 // ---- Contract ----

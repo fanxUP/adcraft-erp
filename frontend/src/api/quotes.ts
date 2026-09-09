@@ -1,5 +1,5 @@
 import { get, post, put, del, apiClient } from './index'
-import { PaginatedData, QuoteListResponse, QuoteDetailResponse, QuoteGroupInput, SuccessResponse, OrderDetailResponse, ImportResponse, SchoolQuoteImportPreview, SchoolQuoteImportCommitResponse } from '@/types/api'
+import { PaginatedData, QuoteListResponse, QuoteDetailResponse, QuoteGroupInput, SuccessResponse, OrderDetailResponse, ImportResponse, SchoolQuoteImportPreview, SchoolQuoteImportCommitResponse, SchoolQuoteDimensionBackfillPreview, SchoolQuoteDimensionBackfillReport } from '@/types/api'
 
 export function getQuotes(params: { page?: number; page_size?: number; status?: string; customer_id?: string }) {
   return get<PaginatedData<QuoteListResponse>>('/quotes/', { params })
@@ -66,6 +66,27 @@ export function commitSchoolQuoteImport(file: File, customerName: string, projec
   formData.append('project_name', projectName)
   formData.append('preview_id', previewId)
   return post<SchoolQuoteImportCommitResponse>('/quotes/import/school-list/commit', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function previewSchoolQuoteDimensionBackfill(file: File, customerName: string, projectName: string) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('customer_name', customerName)
+  formData.append('project_name', projectName)
+  return post<SchoolQuoteDimensionBackfillPreview>('/quotes/import/school-list/dimensions/preview', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function commitSchoolQuoteDimensionBackfill(file: File, customerName: string, projectName: string, previewId: string) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('customer_name', customerName)
+  formData.append('project_name', projectName)
+  formData.append('preview_id', previewId)
+  return post<SchoolQuoteDimensionBackfillReport>('/quotes/import/school-list/dimensions/commit', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
