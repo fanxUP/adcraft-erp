@@ -1,12 +1,13 @@
+from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, update
+from sqlalchemy import select, func, and_, or_, update
 from sqlalchemy.orm import selectinload
 
-from app.models.project_cost import ProjectCost
+from app.models.project_cost import ProjectCost, ProjectCostItemLink
 from app.models.business_document import BusinessDocument
 
 
@@ -25,6 +26,9 @@ class ProjectCostRepository:
             .options(
                 selectinload(ProjectCost.document),
                 selectinload(ProjectCost.document_item),
+                selectinload(ProjectCost.item_links).selectinload(
+                    ProjectCostItemLink.document_item
+                ),
                 selectinload(ProjectCost.customer),
             )
             .where(ProjectCost.id == cost_id, ProjectCost.deleted_at.is_(None))
@@ -44,10 +48,14 @@ class ProjectCostRepository:
         category: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        document_item_id: UUID | None = None,
     ) -> tuple[list[ProjectCost], int]:
         q = select(ProjectCost).options(
             selectinload(ProjectCost.document),
             selectinload(ProjectCost.document_item),
+            selectinload(ProjectCost.item_links).selectinload(
+                ProjectCostItemLink.document_item
+            ),
             selectinload(ProjectCost.customer),
         ).where(ProjectCost.deleted_at.is_(None))
 
@@ -63,6 +71,15 @@ class ProjectCostRepository:
             q = q.where(ProjectCost.cost_date >= date_from)
         if date_to:
             q = q.where(ProjectCost.cost_date <= date_to)
+        if document_item_id:
+            q = q.where(
+                or_(
+                    ProjectCost.document_item_id == document_item_id,
+                    ProjectCost.item_links.any(
+                        ProjectCostItemLink.document_item_id == document_item_id
+                    ),
+                )
+            )
 
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
@@ -76,9 +93,16 @@ class ProjectCostRepository:
         await self.db.flush()
         return cost
 
-    async def update(self, cost: ProjectCost, data: dict) -> ProjectCost:
+    async def update(
+        self,
+        cost: ProjectCost,
+        data: dict,
+        *,
+        allow_null_fields: set[str] | None = None,
+    ) -> ProjectCost:
+        allow_null_fields = allow_null_fields or set()
         for k, v in data.items():
-            if v is not None:
+            if v is not None or k in allow_null_fields:
                 setattr(cost, k, v)
         await self.db.flush()
         return cost
@@ -119,3 +143,59 @@ class ProjectCostRepository:
             .group_by(ProjectCost.document_id)
         )
         return {str(row[0]): float(row[1]) for row in result.all()}
+
+    async def get_document_item_cost_summary(self, document_id: UUID) -> dict:
+        """Summarize costs by scope without multiplying a shared cost record.
+
+        The per-item rows intentionally repeat a shared cost's amount for
+        association display.  ``item_scope_registered`` is calculated from
+        each cost record once, so the order total remains authoritative.
+        """
+        result = await self.db.execute(
+            select(ProjectCost)
+            .options(selectinload(ProjectCost.item_links))
+            .where(
+                ProjectCost.document_id == document_id,
+                ProjectCost.deleted_at.is_(None),
+            )
+        )
+        costs = result.scalars().all()
+        item_amounts: defaultdict[UUID, Decimal] = defaultdict(lambda: Decimal("0"))
+        item_counts: defaultdict[UUID, int] = defaultdict(int)
+        order_scope = Decimal("0")
+        item_scope = Decimal("0")
+
+        for cost in costs:
+            link_ids = {
+                link.document_item_id
+                for link in (getattr(cost, "item_links", None) or [])
+                if link.document_item_id
+            }
+            # Compatibility for rows created before the relation table was
+            # introduced or during a rolling deployment.
+            if not link_ids and cost.document_item_id:
+                link_ids.add(cost.document_item_id)
+
+            amount = Decimal(str(cost.amount or 0))
+            if not link_ids:
+                order_scope += amount
+                continue
+
+            item_scope += amount
+            for item_id in link_ids:
+                item_amounts[item_id] += amount
+                item_counts[item_id] += 1
+
+        return {
+            "total_registered": order_scope + item_scope,
+            "order_scope_registered": order_scope,
+            "item_scope_registered": item_scope,
+            "items": [
+                {
+                    "document_item_id": item_id,
+                    "amount": amount,
+                    "record_count": item_counts[item_id],
+                }
+                for item_id, amount in item_amounts.items()
+            ],
+        }

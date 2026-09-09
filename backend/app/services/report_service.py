@@ -1,14 +1,24 @@
-from datetime import datetime, date
+from datetime import datetime
+from uuid import UUID
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
 
 from app.models.business_document import BusinessDocument
-from app.models.payment import Payment
-from app.models.task import DesignTask, ProductionTask, InstallationTask
-from app.models.customer import Customer
 from app.models.contract import Contract, ContractDocument
+from app.models.customer import Customer
+from app.models.payment import Payment
+from app.models.task import DesignTask, InstallationTask, ProductionTask
 from app.services.business_document_service import BusinessDocumentService
 from app.services.vehicle_dashboard_service import VehicleDashboardService
+
+_BUSINESS_TIMEZONE = ZoneInfo("Asia/Shanghai")
+
+
+def _business_now_naive() -> datetime:
+    """Return Shanghai business time as naive datetime for existing DB columns."""
+    return datetime.now(_BUSINESS_TIMEZONE).replace(tzinfo=None)
 
 
 class ReportService:
@@ -16,7 +26,7 @@ class ReportService:
         self.db = db
 
     async def get_dashboard(self) -> dict:
-        now = datetime.now()
+        now = _business_now_naive()
         today = now.date()
         month_start = today.replace(day=1)
 
@@ -57,7 +67,7 @@ class ReportService:
         if report_date:
             d = datetime.fromisoformat(report_date)
         else:
-            d = datetime.now()
+            d = _business_now_naive()
         day_start = datetime(d.year, d.month, d.day)
         day_end = datetime(d.year, d.month, d.day, 23, 59, 59)
 
@@ -86,7 +96,7 @@ class ReportService:
         }
 
     async def get_monthly_report(self, year: int | None = None, month: int | None = None) -> dict:
-        now = datetime.now()
+        now = _business_now_naive()
         y = year or now.year
         m = month or now.month
         month_start = datetime(y, m, 1)
@@ -172,7 +182,10 @@ class ReportService:
         last_payments = {r.customer_id: r.last_payment for r in lp_result.all()}
 
         # 框架合同项目关联的单据（contract_id → document_ids 映射，用于填充框架合同下的 orders/quotes）
-        from app.models.framework_contract import FrameworkContractProject, FrameworkContractProjectDocument as FCPD
+        from app.models.framework_contract import FrameworkContractProject
+        from app.models.framework_contract import (
+            FrameworkContractProjectDocument as FCPD,
+        )
         all_contract_ids = [ct.id for ct in all_contracts]
         fw_doc_ids_by_contract: dict[UUID, set[UUID]] = {}
         fw_contract_ids = [ct.id for ct in all_contracts if ct.contract_type == "框架合同"]
@@ -346,7 +359,7 @@ class ReportService:
         return result.scalar() or 0
 
     async def _count_overdue_orders(self) -> int:
-        now = datetime.now()
+        now = _business_now_naive()
         result = await self.db.execute(
             select(func.count()).select_from(BusinessDocument).where(
                 and_(

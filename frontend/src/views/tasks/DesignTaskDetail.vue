@@ -11,28 +11,41 @@
         <el-descriptions :column="2">
           <el-descriptions-item label="任务编号">{{ task.design_no }}</el-descriptions-item>
           <el-descriptions-item label="项目名称">{{ task.project_name }}</el-descriptions-item>
+          <el-descriptions-item label="订单明细">{{ task.item_names?.join('、') || task.item_name || (task.order_item_id ? '明细未命名' : '未关联订单明细') }}</el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag data-ai-targets="task-status-pending_review task-status-designing task-status-confirmed task-status-revision" :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
+            <span data-ai-targets="task-status-pending_review task-status-designing task-status-confirmed task-status-revision">
+              <StatusTag :status="task.status_view || task.status" size="sm" />
+            </span>
           </el-descriptions-item>
-          <el-descriptions-item label="设计说明">{{ task.description || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="客户意见">{{ task.client_comments || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="设计文件">
-            <a v-if="task.design_file_url" :href="task.design_file_url" target="_blank" rel="noopener" style="color: var(--ad-primary)">查看文件</a>
+          <el-descriptions-item label="任务进度">
+            <ProgressBar :percentage="task.progress_pct" :tone="task.status_view?.tone" style="width: 220px" aria-label="任务进度" />
+          </el-descriptions-item>
+          <el-descriptions-item label="计划时间">
+            <span v-if="task.planned_start_at || task.planned_end_at">
+              {{ formatDateTimeFull(task.planned_start_at) || '-' }} 至 {{ formatDateTimeFull(task.planned_end_at) || '-' }}
+            </span>
             <span v-else>-</span>
+            <el-tag v-if="task.is_overdue" type="danger" size="small" style="margin-left: 8px">逾期{{ task.overdue_days ? ` ${task.overdue_days} 天` : '' }}</el-tag>
           </el-descriptions-item>
         </el-descriptions>
       </el-card>
 
-      <el-card shadow="never" class="info-card" style="margin-top: 16px">
-        <template #header><span>变更状态</span></template>
-        <TaskWorkflow
-          :steps="designSteps"
-          :current-status="task.status"
-          :workflow="DESIGN_WORKFLOW"
-          :changing="changing"
-          @change="handleWorkflowChange"
-        />
-      </el-card>
+      <TaskOrderItemLinkCard
+        :task-type="'design'"
+        :task-id="task.id"
+        :order-id="task.order_id"
+        :current-item-id="task.order_item_id"
+        :current-item-name="task.item_name"
+        :current-item-ids="task.order_item_ids"
+        :current-item-names="task.item_names"
+        :task-capabilities="task.capabilities"
+        :steps="designSteps"
+        :current-status="task.status"
+        :workflow="DESIGN_WORKFLOW"
+        :changing="changing"
+        @linked="fetchTask"
+        @change="handleWorkflowChange"
+      />
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header><span>任务分配</span></template>
         <div data-ai-targets="task-assignee" style="display: flex; align-items: center; gap: 12px;">
@@ -42,24 +55,6 @@
           <el-button :loading="assigning" @click="handleAssign">派发</el-button>
           <span v-if="task?.assigned_to_name" style="color: var(--ad-text-secondary); font-size: 13px;">当前：{{ task.assigned_to_name }}</span>
         </div>
-      </el-card>
-
-      <el-card shadow="never" class="info-card" style="margin-top: 16px">
-        <template #header><span>任务信息</span></template>
-        <el-form :model="editForm" label-width="120px">
-          <el-form-item label="设计说明">
-            <el-input v-model="editForm.description" type="textarea" :rows="3" placeholder="填写设计说明" />
-          </el-form-item>
-          <el-form-item label="客户意见">
-            <el-input v-model="editForm.client_comments" type="textarea" :rows="3" placeholder="填写客户意见" />
-          </el-form-item>
-          <el-form-item label="设计文件">
-            <el-input v-model="editForm.design_file_url" placeholder="设计文件链接" />
-          </el-form-item>
-          <el-form-item>
-            <el-button :loading="updating" @click="handleUpdate" type="primary">保存</el-button>
-          </el-form-item>
-        </el-form>
       </el-card>
 
       <OutsourceTaskCard
@@ -112,15 +107,15 @@
 
 <script setup lang="ts">
 import { formatDateTimeFull } from '@/utils/datetime'
-import { ref, reactive, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDesignTask, updateDesignTask, changeDesignTaskStatus, uploadAttachment } from '@/api/tasks'
-import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
-import type { DesignTaskResponse, UserResponse } from '@/types/api'
-import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
+import type { DesignTaskResponse } from '@/types/api'
+import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
+import { ProgressBar, StatusTag } from '@/components/ui'
 import { getEmployees } from '@/api/employees'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { useAuthStore } from '@/stores/auth'
@@ -134,68 +129,52 @@ const loading = ref(false)
 const changing = ref(false)
 const deleting = ref(false)
 const task = ref<DesignTaskResponse | null>(null)
-const userOptions = ref<UserResponse[]>([])
 const employeeOptions = ref<{ id: string; name: string; employee_no?: string; user_id?: string | null }[]>([])
 const assignTarget = ref('')
 const assigning = ref(false)
-const updating = ref(false)
-const editForm = reactive({
-  assigned_to: '',
-  description: '',
-  client_comments: '',
-  design_file_url: '',
-})
-
 const DESIGN_WORKFLOW: Record<string, string[]> = {
   pending: ['designing', 'cancelled'],
-  designing: ['pending_review', 'pending', 'cancelled'],
+  designing: ['confirmed', 'pending_review', 'pending', 'cancelled'],
   pending_review: ['confirmed', 'revision', 'cancelled'],
   revision: ['designing', 'pending_review', 'cancelled'],
   confirmed: ['cancelled'],
   cancelled: [],
 }
 
-const designSteps = [
-  { key: 'pending', label: '待分配' },
-  { key: 'designing', label: '设计中' },
-  { key: 'pending_review', label: '待确认' },
-  { key: 'confirmed', label: '已完成' },
-]
+// 旧 pending_review/revision 仅保留给后端兼容，不再作为前端任务流程节点展示。
+const designSteps = computed(() => {
+  return [
+    { key: 'pending', label: '待分配' },
+    { key: 'designing', label: '设计中' },
+    { key: 'confirmed', label: '已完成' },
+  ]
+})
 
-async function handleWorkflowChange(to_status: string) {
-  const labelMap: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已完成', cancelled: '已取消' }
+async function handleWorkflowChange(to_status: string, orderItemIds: string[]) {
+  const labelMap: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待处理', revision: '需调整', confirmed: '已完成', cancelled: '已取消' }
   if (to_status === 'cancelled') {
     const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
       confirmButtonText: '确定', cancelButtonText: '取消',
       inputPlaceholder: '取消原因',
     })
     if (!reason) return
-    await doChangeStatus(to_status, reason)
+      await doChangeStatus(to_status, reason, orderItemIds)
   } else {
     await ElMessageBox.confirm(`确定将任务状态变更为「${labelMap[to_status]}」？`, '变更状态', {
       confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
     })
-    await doChangeStatus(to_status, '')
+    await doChangeStatus(to_status, '', orderItemIds)
   }
 }
 
-async function doChangeStatus(to_status: string, reason: string) {
+async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[]) {
   changing.value = true
   try {
-    await changeDesignTaskStatus(route.params.id as string, { to_status, reason })
+    await changeDesignTaskStatus(route.params.id as string, { to_status, reason, order_item_ids: orderItemIds })
     ElMessage.success('状态已变更')
     await fetchTask()
     await aiStore.notifyBusinessMutation()
   } catch { /* handled */ } finally { changing.value = false }
-}
-
-function statusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待确认', revision: '需修改', confirmed: '已完成', cancelled: '已取消' }
-  return map[s] || s
-}
-function statusColor(s: string) {
-  const map: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success', cancelled: 'info' }
-  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
 async function fetchTask() {
@@ -203,18 +182,7 @@ async function fetchTask() {
   try {
     const data = await getDesignTask(route.params.id as string)
     task.value = data
-    Object.assign(editForm, {
-      assigned_to: data.assigned_to || '',
-      description: data.description || '',
-      client_comments: data.client_comments || '',
-      design_file_url: data.design_file_url || '',
-    })
   } finally { loading.value = false }
-}
-
-async function loadUsers() {
-  const data = await getUsers({ page_size: 100 })
-  userOptions.value = data.items
 }
 
 async function loadEmployees() {
@@ -233,20 +201,6 @@ async function handleAssign() {
     assignTarget.value = ''
   } catch { /* handled */ } finally { assigning.value = false }
 }
-async function handleUpdate() {
-  updating.value = true
-  try {
-    await updateDesignTask(route.params.id as string, {
-      description: editForm.description || '',
-      client_comments: editForm.client_comments || '',
-      design_file_url: editForm.design_file_url || '', 
-    })
-    ElMessage.success('保存成功')
-    await fetchTask()
-    await aiStore.notifyBusinessMutation()
-  } catch { /* handled */ } finally { updating.value = false }
-}
-
 async function handleUpload(req: UploadRequestOptions) {
   try {
     await uploadAttachment('design_task', route.params.id as string, req.file, 'design')
@@ -271,7 +225,6 @@ async function handleDelete() {
 
 onMounted(() => {
   void fetchTask()
-  void loadUsers()
   void loadEmployees()
 })
 </script>
@@ -280,6 +233,7 @@ onMounted(() => {
 .page { padding: 0; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.progress-suffix { margin-left: 8px; color: var(--ad-text-secondary); }
 .design-file-field { display: flex; width: 100%; gap: 8px; }
 .design-file-field .el-input { flex: 1; }
 @media (max-width: 640px) {

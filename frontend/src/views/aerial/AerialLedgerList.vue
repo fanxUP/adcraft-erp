@@ -1,12 +1,11 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>每日出车台账</h2>
-      <div class="ledger-actions">
+  <AppPage>
+    <template #header><PageHeader title="每日出车台账" description="记录高空车作业、收款状态和结算明细。">
+      <template #actions>
         <el-button @click="handleExport" :disabled="!filters.dateRange?.length">导出 Excel</el-button>
-        <el-button @click="handleCreate" type="danger">+ 新增台账</el-button>
-      </div>
-    </div>
+        <el-button @click="handleCreate" type="primary">新增台账</el-button>
+      </template>
+    </PageHeader></template>
 
     <!-- 筛选 -->
     <el-card shadow="never" class="filter-card">
@@ -42,7 +41,8 @@
     </el-card>
 
     <!-- 列表 -->
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" @sort-change="handleSortChange"
+    <DataTableShell :state="tableState" aria-label="每日出车台账列表">
+    <el-table :data="list" stripe style="margin-top: 16px" @sort-change="handleSortChange"
       :show-summary="list.length > 0" :summary-method="summaryMethod">
       <el-table-column prop="ledger_no" label="台账编号" width="140" sortable="custom" show-overflow-tooltip fixed="left" />
       <el-table-column prop="work_date" label="出车日期" width="100" sortable="custom" />
@@ -80,13 +80,15 @@
         </template>
       </el-table-column>
     </el-table>
-
-    <el-pagination
-      v-model:current-page="page" v-model:page-size="pageSize"
-      :total="total" :page-sizes="[10, 20, 50, 100]"
-      layout="total, sizes, prev, pager, next" style="margin-top: 16px; justify-content: flex-end"
-      @change="fetchData"
-    />
+    <template #error><StatePanel state="error" action-label="重新加载" @action="fetchData" /></template>
+    <template #footer>
+      <el-pagination
+        v-model:current-page="page" v-model:page-size="pageSize"
+        :total="total" :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next" @change="fetchData"
+      />
+    </template>
+    </DataTableShell>
 
     <!-- 新增/编辑对话框 -->
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑台账' : '新增台账'" width="800px" destroy-on-close :close-on-click-modal="false">
@@ -307,12 +309,12 @@
         <el-button v-if="!settleReadonly" @click="handleSettleSubmit" :loading="settling" type="primary">确认结算</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, ElTag } from 'element-plus'
 // 手动引入的组件不经过 unplugin-vue-components 自动按需补样式，需显式引入，否则表格/标签无样式
 import 'element-plus/es/components/tag/style/css'
@@ -329,6 +331,7 @@ import {
   type AerialVehicle,
 } from '@/api/aerial'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -357,6 +360,8 @@ const settleForm = reactive({
 const vehicleOptions = ref<AerialVehicle[]>([])
 const personnelOptions = ref<AerialPersonnel[]>([])
 const locationOptions = ref<string[]>([])
+const loadError = ref('')
+const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : list.value.length ? 'ready' : 'empty')
 
 const filters = reactive({
   dateRange: [] as string[],
@@ -394,6 +399,7 @@ const form = reactive({
 
 async function fetchData() {
   loading.value = true
+  loadError.value = ''
   try {
     const params: AerialQueryParams = { page: page.value, page_size: pageSize.value }
     if (filters.dateRange?.length === 2) {
@@ -413,7 +419,8 @@ async function fetchData() {
     total.value = res.total || 0
     summary.value = res.summary || null
   } catch (error: unknown) {
-    ElMessage.error(getErrorMessage(error, '加载失败'))
+    loadError.value = getErrorMessage(error, '加载失败')
+    ElMessage.error(loadError.value)
   } finally {
     loading.value = false
   }
@@ -673,10 +680,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
-.ledger-actions { display: flex; gap: 8px; }
 .filter-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); margin-bottom: 16px; }
 /* 排序箭头与表头文字同行：收窄 caret、表头不换行，避免 4 字表头被箭头挤到两行 */
 .el-table :deep(th.el-table__cell .caret-wrapper) { width: 12px; }

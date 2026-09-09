@@ -1,14 +1,15 @@
 """AI Assistant main service."""
 
 from uuid import UUID
-from sqlalchemy import select, desc, func
+
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.user import User
-from app.ai_assistant.orchestrator import AiOrchestrator
-from app.ai_assistant.memory_service import MemoryService
+
 from app.ai_assistant.action_confirm import ActionConfirmService
-from app.ai_assistant.tool_executor import ToolExecutor
 from app.ai_assistant.audit_logger import AuditLogger
+from app.ai_assistant.memory_service import MemoryService
+from app.ai_assistant.orchestrator import AiOrchestrator
+from app.ai_assistant.tool_executor import ToolExecutor
 
 
 class AiAssistantService:

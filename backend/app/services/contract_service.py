@@ -7,6 +7,7 @@ from app.repositories.contract_repo import ContractRepository
 from app.schemas.contract import ContractListResponse, ContractDetailResponse
 from app.services.number_generator import generate_contract_no
 from app.services.business_document_service import BusinessDocumentService
+from app.domain.presentation import make_contract_status_view
 
 
 _BUSINESS_TZ = ZoneInfo("Asia/Shanghai")
@@ -152,6 +153,7 @@ class ContractService:
         departments = list({d.department for d in docs if d.department})
         d["department"] = "、".join(departments) if departments else ""
         d["source"] = "订单" if docs else ""
+        d["status_view"] = make_contract_status_view(contract.status).model_dump(mode="json")
         return d
 
     def _to_detail(self, contract) -> dict:
@@ -160,6 +162,7 @@ class ContractService:
         departments = list({d.department for d in docs if d.department})
         d["department"] = "、".join(departments) if departments else ""
         d["source"] = "订单" if docs else ""
+        d["status_view"] = make_contract_status_view(contract.status).model_dump(mode="json")
         d["documents"] = [BusinessDocumentService._to_ref(d) for d in docs]
         d["orders"] = [BusinessDocumentService._to_ref(d) for d in docs if d.doc_type == "order"]
         return d

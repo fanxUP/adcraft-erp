@@ -11,7 +11,6 @@ from app.domain.workflows import (
     allowed_targets,
 )
 
-
 TASK_CONFIGS = {
     "design_task": {
         "label": "设计任务",

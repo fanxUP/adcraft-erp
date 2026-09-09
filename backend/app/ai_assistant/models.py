@@ -5,17 +5,16 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
     String,
     Text,
-    Integer,
-    DateTime,
-    Boolean,
-    ForeignKey,
-    func,
-    Index,
     UniqueConstraint,
+    func,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin

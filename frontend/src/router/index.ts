@@ -1,11 +1,18 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { canAccessRoute } from '@/config/access'
 
 const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     component: () => import('@/layouts/BlankLayout.vue'),
     children: [{ path: '', name: 'Login', component: () => import('@/views/login/LoginView.vue') }],
+  },
+  {
+    path: '/forbidden',
+    component: () => import('@/layouts/BlankLayout.vue'),
+    meta: { requiresAuth: true },
+    children: [{ path: '', name: 'Forbidden', component: () => import('@/views/ForbiddenView.vue') }],
   },
   {
     path: '/',
@@ -24,6 +31,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'contracts/:id', name: 'ContractDetail', component: () => import('@/views/contracts/ContractDetail.vue') },
       { path: 'orders', name: 'OrderList', component: () => import('@/views/orders/OrderList.vue') },
       { path: 'orders/recycle', name: 'OrderRecycle', meta: { roles: ['admin'] }, component: () => import('@/views/orders/OrderRecycle.vue') },
+      { path: 'orders/:id/edit', name: 'OrderEdit', component: () => import('@/views/orders/OrderEditor.vue') },
       { path: 'orders/:id', name: 'OrderDetail', component: () => import('@/views/orders/OrderDetail.vue') },
       { path: 'acceptances', name: 'AcceptanceList', component: () => import('@/views/acceptances/AcceptanceList.vue') },
       { path: 'acceptances/:id', name: 'AcceptanceDetail', component: () => import('@/views/acceptances/AcceptanceDetail.vue') },
@@ -158,15 +166,14 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  // Role-based guard
-  if (to.meta.roles && authStore.user) {
-    const userRoles: string[] = authStore.user.roles || []
-    const required: string[] = to.meta.roles as string[]
-    const hasAccess = required.some(r => userRoles.includes(r))
-    if (!hasAccess) {
-      next('/')
-      return
-    }
+  // Page visibility guard. The backend remains the final authorization layer;
+  // this only prevents a known-inaccessible page from rendering after a direct URL visit.
+  const legacyRoles = Array.isArray(to.meta.roles)
+    ? to.meta.roles.filter((role): role is string => typeof role === 'string')
+    : []
+  if (!canAccessRoute(to.name, authStore.roles, legacyRoles)) {
+    next({ name: 'Forbidden', query: { from: to.fullPath } })
+    return
   }
 
   // Mobile auto-detect on first visit to desktop home
@@ -179,27 +186,6 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   next()
-})
-
-// 每次路由切换时检查是否有版本更新
-const VERSION_KEY = 'app_version'
-router.afterEach(async () => {
-  try {
-    const res = await fetch(`/version.json?t=${Date.now()}`)
-    if (!res.ok) return
-    const data = await res.json()
-    const currentVersion = data.version || ''
-    if (!currentVersion) return
-    const storedVersion = localStorage.getItem(VERSION_KEY)
-    if (storedVersion && storedVersion !== currentVersion) {
-      // 版本已变化，标记为有更新（UpdateNotification 会显示提示条）
-    }
-    if (!storedVersion) {
-      localStorage.setItem(VERSION_KEY, currentVersion)
-    }
-  } catch {
-    // ignore
-  }
 })
 
 export default router

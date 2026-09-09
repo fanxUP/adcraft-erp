@@ -1,20 +1,16 @@
 <template>
-  <div class="provider-list">
-    <div class="page-header">
-      <h2>AI 模型中心</h2>
-      <div class="header-actions">
-        <el-input
-          v-model="searchText"
-          placeholder="搜索供应商..."
-          clearable
-          style="width: 240px"
-          @input="onSearch"
-        />
-        <el-button @click="showCreate = true" type="danger">
+  <AppPage class="provider-list">
+    <PageHeader title="AI 模型中心" description="统一管理模型供应商、健康状态和模型能力。">
+      <template #actions>
+        <el-button @click="showCreate = true" type="primary">
           <el-icon><Plus /></el-icon>新增供应商
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
+
+    <PageToolbar aria-label="模型供应商筛选">
+      <el-input v-model="searchText" placeholder="搜索供应商..." clearable style="width: 240px" @input="onSearch" />
+    </PageToolbar>
 
     <!-- Stats bar -->
     <el-row :gutter="16" class="stats-bar">
@@ -53,8 +49,9 @@
     </el-row>
 
     <!-- Provider cards -->
-    <div v-loading="loading" class="card-grid">
-      <el-empty v-if="!loading && providers.length === 0" description="暂无供应商，点击右上角新增" />
+    <DataTableShell :state="tableState" aria-label="AI 模型供应商列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="loadProviders" /></template>
+      <div v-loading="loading" class="card-grid">
 
       <el-card
         v-for="p in filteredProviders"
@@ -127,7 +124,8 @@
           </div>
         </div>
       </el-card>
-    </div>
+      </div>
+    </DataTableShell>
 
     <!-- Create/Edit dialog -->
     <ProviderForm
@@ -170,7 +168,7 @@
         </div>
       </div>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -189,8 +187,10 @@ import {
   type TestResult,
 } from '@/api/ai-admin'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const loading = ref(false)
+const loadError = ref(false)
 const providers = ref<AIProviderItem[]>([])
 const searchText = ref('')
 const showCreate = ref(false)
@@ -203,6 +203,12 @@ const testResult = ref<TestResult | null>(null)
 const enabledCount = computed(() => providers.value.filter(p => p.enabled).length)
 const degradedCount = computed(() => providers.value.filter(p => p.health_status === 'degraded' || p.health_status === 'down').length)
 const totalModels = computed(() => providers.value.reduce((s, p) => s + p.model_count, 0))
+
+const tableState = computed(() => {
+  if (loadError.value) return 'error' as const
+  if (loading.value) return 'loading' as const
+  return filteredProviders.value.length ? 'ready' as const : 'empty' as const
+})
 
 const filteredProviders = computed(() => {
   if (!searchText.value) return providers.value
@@ -244,10 +250,12 @@ function protocolLabel(p: string) {
 
 async function loadProviders() {
   loading.value = true
+  loadError.value = false
   try {
     const res = await getProviders({ page_size: 100 })
     providers.value = res.items || []
   } catch {
+    loadError.value = true
     ElMessage.error('加载供应商列表失败')
   } finally {
     loading.value = false
@@ -318,10 +326,6 @@ onMounted(loadProviders)
 </script>
 
 <style scoped>
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.page-header h2 { margin: 0; font-size: 20px; }
-.header-actions { display: flex; gap: 12px; }
-
 .stats-bar { margin-bottom: 20px; }
 .stat-item { text-align: center; padding: 8px 0; }
 .stat-value { font-size: 28px; font-weight: 700; color: var(--el-color-primary); }

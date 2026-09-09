@@ -1,10 +1,14 @@
 """Task query tools for AI Assistant."""
 
-from app.ai_assistant.tool_registry import ToolRegistry, AiToolDefinition
+from app.ai_assistant.tool_registry import AiToolDefinition, ToolRegistry
 
 
 async def list_today_tasks(db, user, task_type=None):
-    from app.services.task_service import DesignTaskService, ProductionTaskService, InstallationTaskService
+    from app.services.task_service import (
+        DesignTaskService,
+        InstallationTaskService,
+        ProductionTaskService,
+    )
     result = {}
     if not task_type or task_type == "design":
         svc = DesignTaskService(db); t, n = await svc.list_tasks(page=1, page_size=50)

@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from app.models.business_document import BusinessDocument
-from app.models.project_cost import ProjectCost
+from app.domain.presentation import make_action_capability, make_status_view
+from app.models.business_document import BusinessDocument, BusinessDocumentItem
+from app.models.project_cost import ProjectCost, ProjectCostItemLink
 from app.models.task import Attachment
 from app.repositories.project_cost_repo import ProjectCostRepository
 from app.repositories.task_repo import AttachmentRepository
@@ -47,9 +48,20 @@ class ProjectCostService:
         category: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        order_item_id: UUID | None = None,
     ) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        costs, total = await self.repo.list_costs(skip, page_size, order_id, quote_id, source_type, category, date_from, date_to)
+        costs, total = await self.repo.list_costs(
+            skip,
+            page_size,
+            order_id,
+            quote_id,
+            source_type,
+            category,
+            date_from,
+            date_to,
+            order_item_id,
+        )
         result = [self._to_dict(c) for c in costs]
         # Populate attachment counts
         if result:
@@ -58,6 +70,134 @@ class ProjectCostService:
             for d in result:
                 d["attachment_count"] = counts.get(d["id"], 0)
         return result, total
+
+    @staticmethod
+    def _coerce_item_ids(raw_ids) -> list[UUID]:
+        if raw_ids is None:
+            return []
+        if isinstance(raw_ids, (str, UUID)):
+            raw_ids = [raw_ids]
+
+        item_ids: list[UUID] = []
+        for raw_id in raw_ids:
+            try:
+                item_ids.append(UUID(str(raw_id)))
+            except (TypeError, ValueError, AttributeError) as exc:
+                raise ValueError("成本明细ID无效") from exc
+
+        if len(item_ids) != len(set(item_ids)):
+            raise ValueError("成本明细不能重复选择")
+        return item_ids
+
+    @classmethod
+    def _item_scope_request(cls, data: dict) -> tuple[bool, list[UUID]]:
+        """Return whether the payload changes item scope and its requested IDs."""
+        scalar_refs = [
+            data[key]
+            for key in ("document_item_id", "order_item_id", "quote_item_id")
+            if key in data and data[key] is not None
+        ]
+        collection_key_present = "order_item_ids" in data
+        collection_value = data.get("order_item_ids")
+        collection_is_request = collection_key_present and (
+            collection_value is not None or not scalar_refs
+        )
+
+        if collection_is_request and scalar_refs:
+            raise ValueError("不能同时提交单个明细和多明细归属")
+        if collection_is_request:
+            return True, cls._coerce_item_ids(collection_value)
+        if scalar_refs:
+            if len(scalar_refs) > 1:
+                raise ValueError("一条成本只能使用一种明细归属字段")
+            return True, cls._coerce_item_ids(scalar_refs[0])
+        if any(key in data for key in ("document_item_id", "order_item_id", "quote_item_id")):
+            return True, []
+        return False, []
+
+    @staticmethod
+    def _item_ids_for_cost(cost: ProjectCost) -> list[UUID]:
+        link_ids = {
+            link.document_item_id
+            for link in (getattr(cost, "item_links", None) or [])
+            if link.document_item_id
+        }
+        if not link_ids and cost.document_item_id:
+            link_ids.add(cost.document_item_id)
+        return list(link_ids)
+
+    @staticmethod
+    def _historical_item_ids_for_cost(cost: ProjectCost) -> set[UUID]:
+        historical_ids: set[UUID] = set()
+        for link in (getattr(cost, "item_links", None) or []):
+            item = getattr(link, "document_item", None)
+            lifecycle_status = getattr(item, "lifecycle_status", None)
+            if (
+                link.document_item_id
+                and isinstance(lifecycle_status, str)
+                and lifecycle_status != "active"
+            ):
+                historical_ids.add(link.document_item_id)
+        legacy_item = getattr(cost, "document_item", None)
+        legacy_status = getattr(legacy_item, "lifecycle_status", None)
+        if (
+            cost.document_item_id
+            and isinstance(legacy_status, str)
+            and legacy_status != "active"
+        ):
+            historical_ids.add(cost.document_item_id)
+        return historical_ids
+
+    @staticmethod
+    def _set_item_links(cost: ProjectCost, item_ids: list[UUID]) -> None:
+        """Replace associations while keeping the old one-item column compatible."""
+        cost.document_item_id = item_ids[0] if len(item_ids) == 1 else None
+        cost.item_links = [ProjectCostItemLink(document_item_id=item_id) for item_id in item_ids]
+
+    async def _resolve_document_item_ids(
+        self,
+        data: dict,
+        document_id: UUID | None,
+        document_type: str | None,
+        *,
+        existing_item_ids: set[UUID] | None = None,
+    ) -> tuple[bool, list[UUID]]:
+        """Resolve and validate one or more item references for a cost record."""
+        scope_requested, item_ids = self._item_scope_request(data)
+        if not scope_requested:
+            return False, list(existing_item_ids or set())
+
+        if document_type == "order" and data.get("quote_item_id") is not None:
+            raise ValueError("订单成本不能关联报价明细")
+        if document_type == "quote" and (
+            data.get("order_item_id") is not None
+            or data.get("order_item_ids")
+        ):
+            raise ValueError("报价成本不能关联订单明细")
+
+        existing_item_ids = existing_item_ids or set()
+        if not item_ids:
+            return True, []
+        if not document_id:
+            raise ValueError("成本明细必须关联订单或报价单")
+
+        result = await self.db.execute(
+            select(BusinessDocumentItem).where(
+                BusinessDocumentItem.id.in_(item_ids),
+                BusinessDocumentItem.document_id == document_id,
+            )
+        )
+        items = list(result.scalars().all())
+        items_by_id = {item.id: item for item in items}
+        if len(items_by_id) != len(item_ids):
+            raise ValueError("成本明细不属于当前业务单据")
+
+        for item_id in item_ids:
+            lifecycle_status = getattr(items_by_id[item_id], "lifecycle_status", None)
+            if lifecycle_status not in (None, "active") and item_id not in existing_item_ids:
+                raise ValueError("只能关联当前有效明细")
+
+        return True, item_ids
 
     async def get_cost(self, cost_id: UUID) -> dict | None:
         c = await self.repo.get_by_id(cost_id)
@@ -108,14 +248,12 @@ class ProjectCostService:
             doc_no_val = doc.doc_no
             doc_type_val = doc.doc_type
 
-        # Resolve document_item_id from backward-compat params
-        document_item_id = None
-        if data.get("document_item_id"):
-            document_item_id = UUID(data["document_item_id"])
-        elif data.get("order_item_id"):
-            document_item_id = UUID(data["order_item_id"])
-        elif data.get("quote_item_id"):
-            document_item_id = UUID(data["quote_item_id"])
+        # Resolve one or more item IDs from backward-compatible params.
+        _, item_ids = await self._resolve_document_item_ids(
+            data,
+            document_id,
+            doc_type_val,
+        )
 
         debt_amount = data.get("debt_amount")
         if debt_amount is not None:
@@ -138,7 +276,7 @@ class ProjectCostService:
             unit=data.get("unit"),
             unit_price=data.get("unit_price"),
             remark=data.get("remark"),
-            document_item_id=document_item_id,
+            document_item_id=item_ids[0] if len(item_ids) == 1 else None,
             payment_method=data.get("payment_method"),
             payee_company_name=data.get("payee_company_name"),
             debt_amount=debt_amount,
@@ -149,10 +287,11 @@ class ProjectCostService:
         # Explicitly set group_name after constructor (SQLAlchemy kwarg issue)
         if data.get("group_name"):
             cost.group_name = data["group_name"]
+        self._set_item_links(cost, item_ids)
         await self.repo.create(cost)
         if document_id and not skip_sync:
             await self._sync_document_cost(document_id)
-        return {
+        return self._add_cost_contract({
             "id": str(cost.id),
             "cost_no": cost.cost_no,
             "source_type": doc_type_val,
@@ -164,7 +303,13 @@ class ProjectCostService:
             "quote_no": doc_no_val if doc_type_val == "quote" else None,
             "document_item_id": str(cost.document_item_id) if cost.document_item_id else None,
             "order_item_id": str(cost.document_item_id) if cost.document_item_id and doc_type_val == "order" else None,
+            "order_item_ids": [str(item_id) for item_id in item_ids] if doc_type_val == "order" else [],
             "quote_item_id": str(cost.document_item_id) if cost.document_item_id and doc_type_val == "quote" else None,
+            "item_scopes": [
+                {"order_item_id": str(item_id), "order_item_name": None}
+                for item_id in item_ids
+            ] if doc_type_val == "order" else [],
+            "scope_type": "item" if item_ids else "document",
             "group_name": cost.group_name,
             "order_item_name": None,  # populated via document_item relationship on read
             "quote_item_name": None,
@@ -190,15 +335,54 @@ class ProjectCostService:
             "remark": cost.remark,
             "created_by": str(cost.created_by) if cost.created_by else None,
             "created_at": cost.created_at.isoformat() if cost.created_at else None,
-        }
+        })
 
     async def update_cost(self, cost_id: UUID, data: dict) -> dict:
         c = await self.repo.get_by_id(cost_id)
         if not c:
             raise ValueError("项目成本记录不存在")
-        if "cost_date" in data and data["cost_date"] is not None:
-            data = {**data, "cost_date": datetime.fromisoformat(data["cost_date"])}
-        await self.repo.update(c, data)
+
+        normalized = dict(data)
+        item_fields_present = any(
+            key in normalized
+            for key in ("document_item_id", "order_item_id", "order_item_ids", "quote_item_id")
+        )
+        if item_fields_present:
+            document_type = c.document.doc_type if c.document else None
+            if document_type is None and c.document_id:
+                result = await self.db.execute(
+                    select(BusinessDocument.doc_type).where(BusinessDocument.id == c.document_id)
+                )
+                document_type = result.scalar_one_or_none()
+
+            existing_item_ids = set(self._item_ids_for_cost(c))
+            protected_item_ids = self._historical_item_ids_for_cost(c)
+            _, item_ids = await self._resolve_document_item_ids(
+                normalized,
+                c.document_id,
+                document_type,
+                existing_item_ids=existing_item_ids,
+            )
+            if not protected_item_ids.issubset(set(item_ids)):
+                raise ValueError("历史明细归属不可移除")
+            normalized["document_item_id"] = item_ids[0] if len(item_ids) == 1 else None
+            normalized.pop("order_item_id", None)
+            normalized.pop("order_item_ids", None)
+            normalized.pop("quote_item_id", None)
+            self._set_item_links(c, item_ids)
+
+        if "cost_date" in normalized and normalized["cost_date"] is not None:
+            normalized["cost_date"] = datetime.fromisoformat(normalized["cost_date"])
+        allow_null_fields = (
+            {"document_item_id"}
+            if "document_item_id" in normalized and normalized["document_item_id"] is None
+            else set()
+        )
+        await self.repo.update(
+            c,
+            normalized,
+            allow_null_fields=allow_null_fields,
+        )
         await self._sync_document_cost(c.document_id)
         # Re-fetch with relationships loaded for response
         c = await self.repo.get_by_id(cost_id)
@@ -231,6 +415,38 @@ class ProjectCostService:
         """Return {document_id: total_cost} for a batch of documents."""
         return await self.repo.get_costs_summary(document_ids)
 
+    async def get_order_cost_summary(self, order_id: UUID) -> dict:
+        """Return manual cost totals split between whole-order and item scope."""
+        result = await self.db.execute(
+            select(BusinessDocument).where(
+                BusinessDocument.id == order_id,
+                BusinessDocument.deleted_at.is_(None),
+            )
+        )
+        document = result.scalar_one_or_none()
+        if not document:
+            raise ValueError("订单不存在")
+        if document.doc_type != "order":
+            raise ValueError("仅订单支持订单明细成本汇总")
+
+        summary = await self.repo.get_document_item_cost_summary(order_id)
+        items = [
+            {
+                "order_item_id": str(row["document_item_id"]),
+                "total_registered": float(Decimal(str(row["amount"] or 0))),
+                "record_count": int(row["record_count"] or 0),
+            }
+            for row in summary["items"]
+        ]
+
+        return {
+            "order_id": str(order_id),
+            "total_registered": float(Decimal(str(summary["total_registered"] or 0))),
+            "order_scope_registered": float(Decimal(str(summary["order_scope_registered"] or 0))),
+            "item_scope_registered": float(Decimal(str(summary["item_scope_registered"] or 0))),
+            "items": items,
+        }
+
     async def list_debts(
         self,
         page: int,
@@ -245,6 +461,9 @@ class ProjectCostService:
         skip = (page - 1) * page_size
         q = select(ProjectCost).options(
             selectinload(ProjectCost.document),
+            selectinload(ProjectCost.item_links).selectinload(
+                ProjectCostItemLink.document_item
+            ),
             selectinload(ProjectCost.customer),
         ).where(
             ProjectCost.deleted_at.is_(None),
@@ -477,6 +696,44 @@ class ProjectCostService:
         )
         return {str(row[0]): row[1] for row in result.all()}
 
+    @staticmethod
+    def _add_cost_contract(data: dict) -> dict:
+        """Attach canonical cost status and object-state capabilities."""
+        is_settled = bool(data.get("is_settled"))
+        is_debt = bool(data.get("is_debt"))
+        if is_settled:
+            status_view = make_status_view(
+                "settled",
+                "已结清",
+                tone="success",
+                terminal=True,
+            )
+            settle_reason = "该欠款已结清"
+        elif is_debt:
+            status_view = make_status_view(
+                "debt",
+                "待结清",
+                tone="warning",
+                terminal=False,
+            )
+            settle_reason = None
+        else:
+            status_view = make_status_view(
+                "registered",
+                "已登记",
+                tone="info",
+                terminal=False,
+            )
+            settle_reason = "非欠款成本无需结清"
+        data["status_view"] = status_view.model_dump(mode="json")
+        data["capabilities"] = {
+            "settle": make_action_capability(
+                is_debt and not is_settled,
+                settle_reason,
+            ).model_dump(mode="json"),
+        }
+        return data
+
     def _to_dict(self, c: ProjectCost) -> dict:
         """Pydantic model_validate + 手动补充关系派生字段和向后兼容别名。"""
         d = ProjectCostResponse.model_validate(c).model_dump(mode="json")
@@ -490,12 +747,42 @@ class ProjectCostService:
         d["project_name"] = doc.project_name if doc else None
         d["customer_name"] = c.customer.name if c.customer else None
 
-        # 从 document_item 关系取字段
-        d["document_item_name"] = c.document_item.item_name if c.document_item else None
+        # 从多值归属关系取字段；旧单值字段仅作为迁移窗口的兼容回退。
+        item_scopes = []
+        for link in (getattr(c, "item_links", None) or []):
+            item = getattr(link, "document_item", None)
+            if not link.document_item_id:
+                continue
+            item_scopes.append(
+                {
+                    "order_item_id": str(link.document_item_id),
+                    "order_item_name": getattr(item, "item_name", None),
+                }
+            )
+        if not item_scopes and c.document_item_id:
+            item_scopes.append(
+                {
+                    "order_item_id": str(c.document_item_id),
+                    "order_item_name": c.document_item.item_name if c.document_item else None,
+                }
+            )
+
+        item_scopes = list({scope["order_item_id"]: scope for scope in item_scopes}.values())
+        is_order = doc_type == "order"
+        d["item_scopes"] = item_scopes if is_order else []
+        d["order_item_ids"] = [scope["order_item_id"] for scope in item_scopes] if is_order else []
+        d["scope_type"] = "item" if item_scopes else "document"
+
+        # Keep singular fields accurate for old clients; a multi-item record
+        # deliberately returns null instead of pretending to belong to one item.
+        singular_item_id = item_scopes[0]["order_item_id"] if len(item_scopes) == 1 else None
+        singular_item_name = item_scopes[0]["order_item_name"] if len(item_scopes) == 1 else None
+        d["document_item_id"] = singular_item_id
+        d["document_item_name"] = singular_item_name
 
         # 向后兼容别名
         doc_id = d.get("document_id")
-        item_id = d.get("document_item_id")
+        item_id = singular_item_id
         item_name = d["document_item_name"]
         d["order_id"] = doc_id
         d["quote_id"] = doc_id if doc_type == "quote" else None
@@ -505,4 +792,4 @@ class ProjectCostService:
         d["quote_item_id"] = item_id if doc_type == "quote" else None
         d["order_item_name"] = item_name if doc_type == "order" else None
         d["quote_item_name"] = item_name if doc_type == "quote" else None
-        return d
+        return self._add_cost_contract(d)

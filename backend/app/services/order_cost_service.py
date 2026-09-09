@@ -31,6 +31,8 @@ class OrderCostAggregationService:
         outsource = await self._sum(
             select(func.coalesce(func.sum(OutsourceTask.total_amount), 0)).where(
                 OutsourceTask.related_doc_id == document_id,
+                OutsourceTask.related_doc_type == "order",
+                OutsourceTask.deleted_at.is_(None),
                 OutsourceTask.status.in_(("completed", "settled")),
             )
         )

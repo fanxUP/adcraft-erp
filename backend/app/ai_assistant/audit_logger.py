@@ -1,9 +1,15 @@
 """Audit logging for AI operations."""
 
-from uuid import UUID
-from datetime import datetime
+from datetime import UTC, datetime
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.ai_assistant.models import AiToolCallLog, AiOperationAuditLog
+
+from app.ai_assistant.models import AiOperationAuditLog, AiToolCallLog
+
+
+def _utc_now() -> datetime:
+    """Return naive UTC for the existing timestamp-without-timezone columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class AuditLogger:
@@ -31,7 +37,7 @@ class AuditLogger:
             if error_message is not None:
                 log.error_message = error_message
             if status in ("success", "failed"):
-                log.finished_at = datetime.utcnow()
+                log.finished_at = _utc_now()
             await self.db.commit()
 
     async def log_audit(self, user_id, session_id, action_type, business_type=None,

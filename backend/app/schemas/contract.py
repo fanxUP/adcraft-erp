@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from app.schemas.common import CoercedModel
+from app.schemas.common import StatusView
 from datetime import datetime
 
 
@@ -48,6 +49,7 @@ class ContractListResponse(CoercedModel):
     unpaid_amount: float
     contract_type: str | None = None
     status: str
+    status_view: StatusView | None = None
     sign_date: str | None = None
     start_date: str | None = None
     end_date: str | None = None

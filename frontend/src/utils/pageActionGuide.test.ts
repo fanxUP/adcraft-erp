@@ -91,11 +91,11 @@ describe('page action guidance helpers', () => {
     )).toBe(true)
   })
 
-  it('verifies an installation field action from its matching checklist item', () => {
-    const addressGuide: AiPageActionGuide = {
-      label: '补充安装地址',
+  it('verifies a real task control from its matching checklist item', () => {
+    const assigneeGuide: AiPageActionGuide = {
+      label: '分配任务负责人',
       target_path: '/installation-tasks/44444444-4444-4444-4444-444444444444',
-      target_key: 'installation-address',
+      target_key: 'task-assignee',
     }
     const checklist = {
       title: '安装准备清单',
@@ -103,22 +103,22 @@ describe('page action guidance helpers', () => {
       total_items: 1,
       items: [
         {
-          key: 'address' as const,
-          label: '安装地址',
+          key: 'assigned_to' as const,
+          label: '负责人',
           state: 'pending' as const,
           detail: '待处理',
           action: {
-            label: '处理安装地址',
+            label: '处理负责人',
             target_page: '安装任务详情',
-            target_path: addressGuide.target_path,
-            target_key: addressGuide.target_key,
+            target_path: assigneeGuide.target_path,
+            target_key: assigneeGuide.target_key,
           },
         },
       ],
     }
 
-    expect(hasPageActionCompleted(addressGuide, guidance({ checklist }))).toBe(false)
-    expect(hasPageActionCompleted(addressGuide, guidance({
+    expect(hasPageActionCompleted(assigneeGuide, guidance({ checklist }))).toBe(false)
+    expect(hasPageActionCompleted(assigneeGuide, guidance({
       checklist: {
         ...checklist,
         completed_items: 1,

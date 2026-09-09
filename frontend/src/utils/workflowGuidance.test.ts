@@ -166,12 +166,6 @@ describe('workflow guidance helpers', () => {
             label: '补充安装地址',
             state: 'pending',
             detail: '可引用订单地址',
-            action: {
-              label: '补充安装地址',
-              target_page: '安装任务详情',
-              target_path: '/installation-tasks/44444444-4444-4444-4444-444444444444',
-              target_key: 'installation-address',
-            },
           },
         ],
         draft_action: {
@@ -210,7 +204,6 @@ describe('workflow guidance helpers', () => {
           {
             key: 'address',
             state: 'pending',
-            action: { target_key: 'installation-address' },
           },
         ],
         draft_action: {

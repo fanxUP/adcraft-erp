@@ -1,8 +1,13 @@
+from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
+# Register string-based model relationship targets for isolated tests.
+import app.models.customer  # noqa: F401
+import app.models.task  # noqa: F401
+import app.models.vehicle  # noqa: F401
 import pytest
-
 from app.ai_assistant.business_rules.catalog import (
     BusinessRuleSpec,
     build_business_rule_catalog,
@@ -247,7 +252,7 @@ async def test_rule_status_includes_contract_health_and_recent_sync_history():
 
     assert status["in_sync"] is True
     assert status["contract"]["in_sync"] is True
-    assert status["contract"]["semantic_complete_count"] == 32
+    assert status["contract"]["semantic_complete_count"] == 30
     assert status["last_sync"]["catalog_digest"] == "abc123"
     assert len(status["recent_syncs"]) == 1
 
@@ -286,3 +291,24 @@ async def test_orchestrator_loads_published_rules_once_per_tool_loop():
         ]
         == "published rules"
     )
+
+
+@pytest.mark.asyncio
+async def test_installation_task_draft_defaults_to_business_date():
+    from app.ai_assistant.tools.installation_tools import (
+        create_installation_task_draft,
+    )
+
+    fake_now = datetime(2026, 9, 8, 0, 5)
+    with patch(
+        "app.ai_assistant.tools.installation_tools.datetime"
+    ) as datetime_mock:
+        datetime_mock.now.return_value = fake_now
+
+        draft = await create_installation_task_draft(
+            db=MagicMock(),
+            user=SimpleNamespace(),
+        )
+
+    assert draft["fields"]["scheduled_date"] == "2026-09-08"
+    datetime_mock.now.assert_called_once_with(ZoneInfo("Asia/Shanghai"))

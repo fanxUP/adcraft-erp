@@ -1,5 +1,7 @@
 """订单与财务路由的细粒度权限契约。"""
 
+import inspect
+
 import pytest
 
 from app.api import orders, payments
@@ -24,6 +26,14 @@ def _route_permission(router, method: str, path: str) -> str | None:
     [
         ("GET", "/orders/", "order:read"),
         ("GET", "/orders/{order_id}", "order:read"),
+        ("GET", "/orders/{order_id}/items/editability", "order:read"),
+        ("GET", "/orders/{order_id}/items/change-batches", "order:read"),
+        ("GET", "/orders/{order_id}/items/change-batches/{change_batch_id}", "order:read"),
+        ("GET", "/orders/{order_id}/items/reconciliation", "order:read"),
+        ("POST", "/orders/{order_id}/items/preview", "order:update"),
+        ("POST", "/orders/{order_id}/items", "order:update"),
+        ("PATCH", "/orders/{order_id}/items/{item_id}", "order:update"),
+        ("DELETE", "/orders/{order_id}/items/{item_id}", "order:update"),
         ("POST", "/orders/{order_id}/set-cost", "order:update"),
         ("POST", "/orders/{order_id}/auto-cost", "order:update"),
         ("DELETE", "/orders/{order_id}", "order:delete"),
@@ -53,6 +63,7 @@ def test_expense_routes_require_business_permissions(method, path, permission):
     [
         ("GET", "/project-costs/", "expense:read"),
         ("GET", "/project-costs/summary", "expense:read"),
+        ("GET", "/project-costs/orders/{order_id}/item-summary", "expense:read"),
         ("GET", "/project-costs/template", "expense:read"),
         ("GET", "/project-costs/quotes", "expense:read"),
         ("GET", "/project-costs/debts/list", "expense:read"),
@@ -70,3 +81,19 @@ def test_expense_routes_require_business_permissions(method, path, permission):
 )
 def test_project_cost_routes_require_expense_permissions(method, path, permission):
     assert _route_permission(payments.cost_router, method, path) == permission
+
+
+def test_project_cost_mutations_keep_operation_log_contract():
+    handlers = (
+        payments.create_project_cost,
+        payments.update_project_cost,
+        payments.batch_delete_project_costs,
+        payments.delete_project_cost,
+        payments.import_project_costs,
+        payments.settle_cost_debt,
+    )
+
+    for handler in handlers:
+        source = inspect.getsource(handler)
+        assert "log_operation" in source
+        assert "OBJ_PROJECT_COST" in source

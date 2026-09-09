@@ -9,7 +9,6 @@ from uuid import UUID
 from app.ai_assistant.tool_registry import AiToolDefinition, ToolRegistry
 from app.domain.workflows import ORDER_WORKFLOW, allowed_targets
 
-
 ORDER_STATUS_LABELS = {
     "pending_confirm": "待确认",
     "confirmed": "已确认",

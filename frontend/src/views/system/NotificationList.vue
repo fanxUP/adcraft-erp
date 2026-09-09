@@ -1,14 +1,13 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2 style="color: var(--ad-text)">消息中心</h2>
-      <el-button @click="handleMarkAllRead" :disabled="notificationStore.unreadCount === 0">
-        全部已读
-      </el-button>
-    </div>
+  <AppPage>
+    <PageHeader title="消息中心" description="统一查看订单、任务、收款和系统通知。">
+      <template #actions>
+        <el-button @click="handleMarkAllRead" :disabled="notificationStore.unreadCount === 0">全部已读</el-button>
+      </template>
+    </PageHeader>
 
     <!-- Filters -->
-    <div class="filters">
+    <PageToolbar aria-label="通知筛选">
       <el-select v-model="typeFilter" placeholder="通知类型" clearable style="width: 160px" @change="handleFilterChange">
         <el-option label="全部类型" value="" />
         <el-option label="订单状态" value="order_status" />
@@ -16,6 +15,8 @@
         <el-option label="报价状态" value="quote_status" />
         <el-option label="收款通知" value="payment_received" />
         <el-option label="库存预警" value="inventory_alert" />
+        <el-option label="任务逾期" value="task_overdue" />
+        <el-option label="逾期升级" value="task_overdue_escalation" />
         <el-option label="用户消息" value="user_message" />
         <el-option label="系统消息" value="system_message" />
       </el-select>
@@ -24,13 +25,11 @@
         <el-option label="未读" :value="false" />
         <el-option label="已读" :value="true" />
       </el-select>
-    </div>
+    </PageToolbar>
 
     <!-- Notification List -->
-    <el-card shadow="never" v-loading="notificationStore.loading">
-      <div v-if="notificationStore.notifications.length === 0" class="empty-state">
-        <el-empty description="暂无通知" />
-      </div>
+    <DataTableShell :state="notificationTableState" aria-label="通知列表">
+      <div v-loading="notificationStore.loading">
       <div
         v-for="item in notificationStore.notifications"
         :key="item.id"
@@ -58,24 +57,19 @@
           </el-button>
         </div>
       </div>
-    </el-card>
+      </div>
 
     <!-- Pagination -->
-    <div class="pagination" v-if="total > pageSize">
-      <el-pagination
-        v-model:current-page="currentPage"
-        :page-size="pageSize"
-        :total="total"
-        layout="prev, pager, next"
-        @current-change="handlePageChange"
-      />
-    </div>
-  </div>
+      <template #footer>
+        <el-pagination v-if="total > pageSize" v-model:current-page="currentPage" :page-size="pageSize" :total="total" layout="prev, pager, next" @current-change="handlePageChange" />
+      </template>
+    </DataTableShell>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDateTimeFull } from '@/utils/datetime'
-import { ref, onMounted, markRaw } from 'vue'
+import { ref, computed, onMounted, markRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
 import type { NotificationResponse } from '@/types/api'
@@ -88,6 +82,7 @@ import {
   Setting,
   Delete,
 } from '@element-plus/icons-vue'
+import { AppPage, DataTableShell, PageHeader, PageToolbar } from '@/components/ui'
 
 const router = useRouter()
 const notificationStore = useNotificationStore()
@@ -98,12 +93,19 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 
+const notificationTableState = computed(() => {
+  if (notificationStore.loading) return 'loading' as const
+  return notificationStore.notifications.length ? 'ready' as const : 'empty' as const
+})
+
 const iconMap: Record<string, ReturnType<typeof markRaw>> = {
   order_status: markRaw(Document),
   task_assigned: markRaw(List),
   quote_status: markRaw(Document),
   payment_received: markRaw(Money),
   inventory_alert: markRaw(Warning),
+  task_overdue: markRaw(Warning),
+  task_overdue_escalation: markRaw(Warning),
   user_message: markRaw(ChatDotRound),
   system_message: markRaw(Setting),
 }
@@ -114,6 +116,8 @@ const colorMap: Record<string, string> = {
   quote_status: 'var(--el-color-warning)',
   payment_received: 'var(--el-color-danger)',
   inventory_alert: 'var(--el-color-danger)',
+  task_overdue: 'var(--el-color-danger)',
+  task_overdue_escalation: 'var(--el-color-danger)',
   user_message: 'var(--el-color-primary)',
   system_message: 'var(--ad-text-secondary)',
 }
@@ -173,19 +177,6 @@ onMounted(fetchList)
 </script>
 
 <style scoped>
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.filters {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
 .notification-row {
   display: flex;
   align-items: flex-start;

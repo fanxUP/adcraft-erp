@@ -23,3 +23,10 @@ backend/uploads/*
 public_url.txt
 .tunnel_last_restart
 tunnel-watchdog.log
+
+# Deployment/workflow artifacts kept outside the application source tree.
+.deployed-commit
+.vibe/
+rollbacks/
+*.bak-*
+*.tmp

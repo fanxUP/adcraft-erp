@@ -1,21 +1,26 @@
+from datetime import UTC, datetime
 from uuid import UUID
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+
+from sqlalchemy import func, select
 
 from app.models.vehicle import (
-    VehicleUseRequest, VehicleDispatch, VehicleTripRecord,
-    VehicleFuelRecord, VehicleMaintenanceRecord, VehicleCostAllocation,
-    VehicleCertificate, VehicleIncident,
+    VehicleDispatch,
+    VehicleUseRequest,
 )
-from app.repositories.vehicle_repo import VehicleRepository
 from app.services.operation_log_service import (
-    log_operation, OBJ_VEHICLE, OBJ_VEHICLE_DRIVER, OBJ_VEHICLE_USE_REQUEST, OBJ_VEHICLE_DISPATCH,
-    OBJ_VEHICLE_TRIP_RECORD, OBJ_VEHICLE_FUEL_RECORD, OBJ_VEHICLE_MAINTENANCE_RECORD,
-    OBJ_VEHICLE_COST_ALLOCATION, OBJ_VEHICLE_CERTIFICATE, OBJ_VEHICLE_INCIDENT,
-    ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, ACTION_STATUS_CHANGE,
+    ACTION_CREATE,
+    ACTION_STATUS_CHANGE,
+    ACTION_UPDATE,
+    OBJ_VEHICLE_DISPATCH,
+    OBJ_VEHICLE_USE_REQUEST,
+    log_operation,
 )
-
 from app.services.vehicle_base_service import VehicleServiceBase
+
+
+def _utc_now() -> datetime:
+    """Return naive UTC for the existing vehicle timestamp columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class VehicleDispatchService(VehicleServiceBase):
@@ -43,8 +48,7 @@ class VehicleDispatchService(VehicleServiceBase):
         data.setdefault("requester_id", self.current_user.id if self.current_user else None)
         data.setdefault("status", "draft")
         # 生成申请单号
-        from datetime import datetime
-        now = datetime.utcnow()
+        now = _utc_now()
         count = (await self.db.execute(
             select(func.count()).select_from(VehicleUseRequest).where(
                 VehicleUseRequest.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -123,11 +127,10 @@ class VehicleDispatchService(VehicleServiceBase):
         if r.status != "pending":
             raise ValueError("只有待审批的申请可以审批")
 
-        from datetime import datetime
         before = self._request_to_dict(r)
         r.status = "approved"
         r.approver_id = self.current_user.id if self.current_user else None
-        r.approved_at = datetime.utcnow()
+        r.approved_at = _utc_now()
         await self.db.flush()
         await self.db.refresh(r)
 
@@ -151,11 +154,10 @@ class VehicleDispatchService(VehicleServiceBase):
         if r.status != "pending":
             raise ValueError("只有待审批的申请可以驳回")
 
-        from datetime import datetime
         before = self._request_to_dict(r)
         r.status = "rejected"
         r.approver_id = self.current_user.id if self.current_user else None
-        r.approved_at = datetime.utcnow()
+        r.approved_at = _utc_now()
         r.reject_reason = reject_reason
         await self.db.flush()
         await self.db.refresh(r)
@@ -286,8 +288,7 @@ class VehicleDispatchService(VehicleServiceBase):
                 raise ValueError("该车辆在指定时间段已有派车安排")
 
         # Generate dispatch_no
-        from datetime import datetime
-        now = datetime.utcnow()
+        now = _utc_now()
         count = (await self.db.execute(
             select(func.count()).select_from(VehicleDispatch).where(
                 VehicleDispatch.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -421,8 +422,7 @@ class VehicleDispatchService(VehicleServiceBase):
         before = self._dispatch_to_dict(d)
 
         # 更新派车单实际出车时间
-        from datetime import datetime as dt
-        now = dt.utcnow()
+        now = _utc_now()
         d.actual_start_time = data.get("start_time") or now
         d.start_mileage = data.get("start_mileage")
         d.status = "started"
@@ -431,7 +431,7 @@ class VehicleDispatchService(VehicleServiceBase):
         import uuid as _uuid
         trip_id = _uuid.uuid4()
         trip_no = f"TC{now.strftime('%Y%m%d')}{str(trip_id)[:8]}"
-        trip = await self.repo.create_trip_record({
+        await self.repo.create_trip_record({
             "id": trip_id,
             "trip_no": trip_no,
             "dispatch_id": d.id,
@@ -475,7 +475,6 @@ class VehicleDispatchService(VehicleServiceBase):
             raise ValueError("只有已出车状态可以标记到达")
 
         before = self._dispatch_to_dict(d)
-        from datetime import datetime as dt
         d.status = "arrived"
 
         # 更新台账
@@ -538,8 +537,7 @@ class VehicleDispatchService(VehicleServiceBase):
 
         before = self._dispatch_to_dict(d)
 
-        from datetime import datetime as dt
-        now = dt.utcnow()
+        now = _utc_now()
         d.actual_return_time = data.get("return_time") or now
         d.end_mileage = data.get("end_mileage")
 

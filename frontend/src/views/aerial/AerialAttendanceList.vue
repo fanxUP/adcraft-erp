@@ -1,8 +1,7 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>🚜 高空作业考勤表</h2>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <AppPage flush>
+    <template #header><PageHeader title="高空作业考勤表" description="按车辆或人员查看出车、趟数、收款和利润明细。">
+      <template #actions><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <el-radio-group v-model="targetType" @change="fetchData">
           <el-radio-button value="vehicle">车辆</el-radio-button>
           <el-radio-button value="personnel">人员</el-radio-button>
@@ -11,8 +10,8 @@
         <el-button @click="fetchData" type="primary">刷新</el-button>
         <el-button @click="openCreate">录入考勤</el-button>
         <el-button @click="handlePrint" type="primary">🖨️ 打印预览</el-button>
-      </div>
-    </div>
+      </div></template>
+    </PageHeader></template>
 
     <!-- 汇总卡片 -->
     <el-row :gutter="12" style="margin-bottom:16px">
@@ -136,7 +135,7 @@
         <el-button @click="handleSave" :loading="saving" type="primary">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -150,6 +149,7 @@ import {
 } from "@/api/aerial"
 import type { PaginatedData } from "@/types/api"
 import { getErrorMessage } from "@/utils/error"
+import { AppPage, PageHeader } from "@/components/ui"
 
 /* ====== state ====== */
 const targetType = ref<"vehicle" | "personnel">("vehicle")

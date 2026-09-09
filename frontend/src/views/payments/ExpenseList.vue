@@ -1,11 +1,13 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>支出管理</h2>
-      <el-button @click="openCreate">登记支出</el-button>
-    </div>
+  <AppPage>
+    <template #header>
+      <PageHeader title="支出管理" description="统一登记和维护经营支出，金额与日期格式保持一致。">
+        <template #actions><el-button @click="openCreate" type="danger">登记支出</el-button></template>
+      </PageHeader>
+    </template>
 
-    <div class="search-bar">
+    <template #toolbar>
+      <PageToolbar aria-label="支出筛选">
       <el-select v-model="filterCategory" placeholder="支出分类" clearable style="width: 160px" @change="fetchData">
         <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
       </el-select>
@@ -20,9 +22,12 @@
         @change="fetchData"
       />
       <el-button style="margin-left: 12px" @click="fetchData" type="primary">搜索</el-button>
-    </div>
+      </PageToolbar>
+    </template>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <DataTableShell :state="tableState" aria-label="支出列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
+      <el-table :data="list" stripe>
       <el-table-column prop="expense_no" label="编号" width="180" />
       <el-table-column prop="category" label="分类" width="100">
         <template #default="{ row }">
@@ -31,7 +36,7 @@
         </template>
       </el-table-column>
       <el-table-column label="金额" width="120">
-        <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
+        <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
       </el-table-column>
       <el-table-column label="日期" width="120">
         <template #default="{ row }">{{ formatDate(row.expense_date) || '-' }}</template>
@@ -43,17 +48,18 @@
           <el-button v-if="authStore.isAdmin" text type="danger" size="small" @click="handleDelete(row as ExpenseResponse)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
-
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :page-sizes="[10, 20, 50, 100]"
-      :total="total"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 16px; justify-content: flex-end"
-      @change="fetchData"
-    />
+      </el-table>
+      <template #footer>
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next"
+          @change="fetchData"
+        />
+      </template>
+    </DataTableShell>
 
     <el-dialog v-model="showDialog" :title="isEditing ? '编辑支出' : '登记支出'" width="480px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
@@ -77,16 +83,18 @@
         <el-button :loading="saving" @click="handleSave" type="primary">{{ isEditing ? '保存' : '登记' }}</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
-import { ref, reactive, onMounted } from 'vue'
+import { formatMoney } from '@/utils/format'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/api/payments'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExpenseResponse } from '@/types/api'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const authStore = useAuthStore()
 
@@ -98,12 +106,19 @@ const list = ref<ExpenseResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const loadError = ref(false)
 const filterCategory = ref('')
 const dateRange = ref<string[] | null>(null)
 const showDialog = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
 const form = reactive({ category: '', amount: 0, expense_date: '', description: '' })
+
+const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
+  if (loadError.value) return 'error'
+  if (loading.value) return 'loading'
+  return list.value.length ? 'ready' : 'empty'
+})
 
 function resetForm() {
   Object.assign(form, { category: '', amount: 0, expense_date: '', description: '' })
@@ -128,6 +143,7 @@ function openEdit(row: ExpenseResponse) {
 
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try {
     const params = {
       page: page.value, page_size: pageSize.value,
@@ -137,6 +153,8 @@ async function fetchData() {
     const data = await getExpenses(params)
     list.value = data.items
     total.value = data.total
+  } catch {
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -183,9 +201,5 @@ onMounted(fetchData)
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
-.search-bar { display: flex; align-items: center; }
 .muted { color: var(--ad-text-secondary, #888); }
 </style>

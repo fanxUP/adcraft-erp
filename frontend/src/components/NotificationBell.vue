@@ -79,6 +79,8 @@ const iconMap: Record<string, ReturnType<typeof markRaw>> = {
   quote_status: markRaw(Document),
   payment_received: markRaw(Money),
   inventory_alert: markRaw(Warning),
+  task_overdue: markRaw(Warning),
+  task_overdue_escalation: markRaw(Warning),
   user_message: markRaw(ChatDotRound),
   system_message: markRaw(Setting),
 }
@@ -89,6 +91,8 @@ const colorMap: Record<string, string> = {
   quote_status: 'var(--el-color-warning)',
   payment_received: 'var(--el-color-danger)',
   inventory_alert: 'var(--el-color-danger)',
+  task_overdue: 'var(--el-color-danger)',
+  task_overdue_escalation: 'var(--el-color-danger)',
   user_message: 'var(--el-color-primary)',
   system_message: 'var(--ad-text-secondary)',
 }

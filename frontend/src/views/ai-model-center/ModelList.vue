@@ -11,7 +11,9 @@
       </el-button>
     </div>
 
-    <el-table v-loading="loading" :data="models" stripe style="width: 100%">
+    <DataTableShell :state="tableState" aria-label="模型列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="loadModels" /></template>
+      <el-table v-loading="loading" :data="models" stripe style="width: 100%">
       <el-table-column prop="display_name" label="显示名称" min-width="140" />
       <el-table-column prop="upstream_model_code" label="上游模型" min-width="140">
         <template #default="{ row }">
@@ -60,7 +62,8 @@
           </el-popconfirm>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+    </DataTableShell>
 
     <!-- Add model dialog -->
     <el-dialog
@@ -104,7 +107,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import {
@@ -117,13 +120,21 @@ import {
   type ModelCreateData,
 } from '@/api/ai-admin'
 import { getErrorMessage } from '@/utils/error'
+import { DataTableShell, StatePanel } from '@/components/ui'
 
 const props = defineProps<{ provider: AIProviderItem }>()
 const emit = defineEmits<{ close: [] }>()
 
 const visible = ref(true)
 const loading = ref(false)
+const loadError = ref(false)
 const models = ref<AIModelItem[]>([])
+
+const tableState = computed(() => {
+  if (loadError.value) return 'error' as const
+  if (loading.value) return 'loading' as const
+  return models.value.length ? 'ready' as const : 'empty' as const
+})
 const showAdd = ref(false)
 const addLoading = ref(false)
 const addFormRef = ref()
@@ -154,10 +165,12 @@ function roleTagType(role: string | null): '' | 'primary' | 'warning' | 'success
 
 async function loadModels() {
   loading.value = true
+  loadError.value = false
   try {
     const res = await getModels({ provider_id: props.provider.id, page_size: 100 })
     models.value = res.items || []
   } catch {
+    loadError.value = true
     ElMessage.error('加载模型列表失败')
   } finally {
     loading.value = false

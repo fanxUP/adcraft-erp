@@ -1,12 +1,13 @@
 """Finance/debt query tools for AI Assistant."""
 
 from uuid import UUID
-from app.ai_assistant.tool_registry import ToolRegistry, AiToolDefinition
+
+from app.ai_assistant.tool_registry import AiToolDefinition, ToolRegistry
 
 
 async def get_customer_receivables(db, user, customer_id):
-    from app.services.payment_service import PaymentService
     from app.services.business_document_service import BusinessDocumentService
+    from app.services.payment_service import PaymentService
     pay_svc = PaymentService(db)
     payments, _ = await pay_svc.list_payments(page=1, page_size=999, customer_id=UUID(customer_id), is_voided=False)
     total_paid = sum(float(p.get("amount", 0)) for p in payments)

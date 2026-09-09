@@ -1,9 +1,8 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>车辆管理</h2>
-      <el-button @click="handleCreate" type="danger">新增车辆</el-button>
-    </div>
+  <AppPage>
+    <PageHeader title="车辆管理" description="统一维护车辆档案、状态和到期提醒。">
+      <template #actions><el-button @click="handleCreate" type="primary">新增车辆</el-button></template>
+    </PageHeader>
 
     <!-- 保险/年检到期提醒 -->
     <el-alert
@@ -25,18 +24,20 @@
       </template>
     </el-alert>
 
-    <div class="search-bar">
+    <PageToolbar aria-label="车辆筛选">
       <el-input v-model="filters.keyword" placeholder="搜索车牌号/名称" clearable style="width: 240px" @keyup.enter="fetchData" />
-      <el-select v-model="filters.vehicle_type" placeholder="车辆类型" clearable style="width: 140px; margin-left: 12px">
+      <el-select v-model="filters.vehicle_type" placeholder="车辆类型" clearable style="width: 140px">
         <el-option v-for="t in vehicleTypes" :key="t.value" :label="t.label" :value="t.value" />
       </el-select>
-      <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px; margin-left: 12px">
+      <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px">
         <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
       </el-select>
-      <el-button style="margin-left: 12px" @click="fetchData" type="primary">搜索</el-button>
-    </div>
+      <el-button @click="fetchData" type="primary">搜索</el-button>
+    </PageToolbar>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <DataTableShell :state="tableState" aria-label="车辆列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
+      <el-table :data="list" v-loading="loading" stripe>
       <el-table-column prop="plate_number" label="车牌号" width="120" />
       <el-table-column prop="vehicle_name" label="车辆名称" min-width="140" />
       <el-table-column label="车辆类型" width="100">
@@ -80,17 +81,20 @@
           </el-popconfirm>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
 
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :page-sizes="[10, 20, 50, 100]"
-      :total="total"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 16px; justify-content: flex-end"
-      @change="fetchData"
-    />
+      <template #footer>
+        <el-pagination
+          v-if="total > 0"
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next"
+          @change="fetchData"
+        />
+      </template>
+    </DataTableShell>
 
     <!-- 新增/编辑对话框 -->
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑车辆' : '新增车辆'" width="800px" :close-on-click-modal="false">
@@ -198,12 +202,12 @@
         <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import {
@@ -218,13 +222,21 @@ import type { VehicleCreateData, VehicleUpdateData } from '@/api/vehicles'
 import type { VehicleResponse } from '@/api/vehicles'
 import { VEHICLE_ATTACHMENT_TYPE_LABELS, VEHICLE_ATTACHMENT_TYPE_TAGS } from '@/config/attachment'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const loading = ref(false)
+const loadError = ref(false)
 const saving = ref(false)
 const list = ref<VehicleResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+
+const tableState = computed(() => {
+  if (loadError.value) return 'error' as const
+  if (loading.value) return 'loading' as const
+  return list.value.length ? 'ready' as const : 'empty' as const
+})
 const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
 
@@ -364,6 +376,7 @@ async function handleDeleteAttachment(aid: string) {
 
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try {
     const data = await getVehicles({
       page: page.value,
@@ -374,6 +387,9 @@ async function fetchData() {
     })
     list.value = data.items
     total.value = data.total
+  } catch (e: unknown) {
+    loadError.value = true
+    ElMessage.error(getErrorMessage(e, '车辆列表加载失败'))
   } finally {
     loading.value = false
   }
@@ -470,10 +486,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
-.search-bar { display: flex; align-items: center; }
 .att-upload-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .att-list { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .att-link { text-decoration: none; }

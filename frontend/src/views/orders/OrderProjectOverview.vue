@@ -11,9 +11,22 @@
       <template #header>
         <div class="card-header">
           <strong>项目工作台</strong>
-          <el-tag :type="statusType" size="small">{{ statusLabel }}</el-tag>
+          <StatusTag :status="statusView || status" size="sm" />
         </div>
       </template>
+      <div class="overall-progress">
+        <ProgressBar :percentage="projectProgress" label="项目总进度" aria-label="项目总进度" />
+        <div class="progress-note">按每条订单明细的设计、制作、安装三阶段进度汇总；历史未关联明细任务按任务进度回退计算</div>
+      </div>
+      <el-alert
+        v-if="overdueTaskCount > 0"
+        class="overdue-summary"
+        type="error"
+        :closable="false"
+        show-icon
+        :title="`${overdueTaskCount} 个任务已超过计划结束时间`"
+      />
+      <el-divider />
       <div class="delivery-summary">
         <div>
           <span>设计任务</span>
@@ -42,10 +55,13 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ProgressBar, StatusTag } from '@/components/ui'
+import type { StatusView } from '@/types/api'
 
 const props = defineProps<{
   orderId: string
   status: string
+  statusView?: StatusView | null
   totalAmount: number
   paidAmount: number
   costAmount: number
@@ -56,28 +72,13 @@ const props = defineProps<{
   productionCompleted: number
   installationCount: number
   installationCompleted: number
+  overdueTaskCount: number
+  projectProgress: number
 }>()
 
 defineEmits<{
   'select-tab': [tab: string]
 }>()
-
-const labels: Record<string, string> = {
-  pending_confirm: '待确认',
-  confirmed: '已确认',
-  designing: '设计中',
-  in_production: '生产中',
-  in_installation: '安装中',
-  completed: '已完成',
-  cancelled: '已取消',
-}
-
-const statusLabel = computed(() => labels[props.status] || props.status)
-const statusType = computed(() => {
-  if (props.status === 'completed') return 'success'
-  if (props.status === 'cancelled') return 'danger'
-  return 'primary'
-})
 
 const money = (value: number) => `¥ ${value.toFixed(2)}`
 const metrics = computed(() => [
@@ -106,6 +107,9 @@ const metrics = computed(() => [
 .metric-value.danger { color: var(--el-color-danger); }
 .card-header { display: flex; align-items: center; justify-content: space-between; }
 .delivery-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.overall-progress { padding: 10px 12px 0; }
+.overdue-summary { margin-top: 12px; }
+.progress-note { margin-top: 6px; color: var(--ad-text-secondary); font-size: 12px; }
 .delivery-summary > div {
   display: flex;
   justify-content: space-between;

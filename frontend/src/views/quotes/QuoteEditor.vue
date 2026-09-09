@@ -194,8 +194,8 @@
 
         <el-table-column label="小计" width="120">
           <template #default="{ row }">
-            <template v-if="row.type === 'item'">¥ {{ calcItemSubtotal(row.item).toFixed(2) }}</template>
-            <template v-else-if="row.type === 'group-total'"><strong>¥ {{ row.total.toFixed(2) }}</strong></template>
+            <template v-if="row.type === 'item'">{{ formatMoney(calcItemSubtotal(row.item)) }}</template>
+            <template v-else-if="row.type === 'group-total'"><strong>{{ formatMoney(row.total) }}</strong></template>
           </template>
         </el-table-column>
         <el-table-column label="样图" width="90">
@@ -239,13 +239,13 @@
       <el-row :gutter="20">
         <el-col :span="16" />
         <el-col :span="8">
-          <div class="summary-item"><span>明细合计：</span><strong>¥ {{ calcQuoteSubtotal().toFixed(2) }}</strong></div>
+          <div class="summary-item"><span>明细合计：</span><strong>{{ formatMoney(calcQuoteSubtotal()) }}</strong></div>
           <div class="summary-item">
             <span>优惠金额：</span>
             <el-input-number v-model="form.discount_amount" :precision="2" :min="0" :max="calcQuoteSubtotal()" :disabled="isReadonly" size="small" style="width: 140px" @click="(e: MouseEvent) => (e.target as HTMLInputElement).select()" />
           </div>
-          <div class="summary-item"><span>税额：</span><strong>¥ {{ calcTax().toFixed(2) }}</strong></div>
-          <div class="summary-item total"><span>总计：</span><strong>¥ {{ calcTotal().toFixed(2) }}</strong></div>
+          <div class="summary-item"><span>税额：</span><strong>{{ formatMoney(calcTax()) }}</strong></div>
+          <div class="summary-item total"><span>总计：</span><strong>{{ formatMoney(calcTotal()) }}</strong></div>
           <div style="text-align: right; font-size: 13px; color: var(--ad-text-secondary); margin-top: 4px;">
             大写金额：{{ toChineseAmount(calcTotal()) }}
           </div>
@@ -280,6 +280,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { formatMoney } from '@/utils/format'
 import Sortable from 'sortablejs'
 import QuoteWorkflow from './QuoteWorkflow.vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -686,11 +687,11 @@ function handleDragStart(evt: Sortable.SortableEvent) {
       .filter((element): element is HTMLElement => Boolean(element)),
     rows: block.map((row, index) => {
       if (row.type === 'group-header') return { type: row.type, label: `⠿ 分项名称：${row.groupName}` }
-      if (row.type === 'group-total') return { type: row.type, label: `分项合计：¥ ${row.total.toFixed(2)}` }
+      if (row.type === 'group-total') return { type: row.type, label: `分项合计：${formatMoney(row.total)}` }
       return {
         type: row.type,
         label: `${index}. ${row.item.item_name?.trim() || '未填写项目内容'}`,
-        amount: `¥ ${calcSubtotal(row.item).toFixed(2)}`,
+        amount: formatMoney(calcSubtotal(row.item)),
       }
     }),
     clientX: de?.clientX ?? 0,

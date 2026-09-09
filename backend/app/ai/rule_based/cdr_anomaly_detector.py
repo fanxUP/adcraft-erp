@@ -11,18 +11,18 @@ Zero AI dependency — statistical rule-based.
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cdr_quote import (
-    QuoteLine, QuoteVersion, QuoteGeometry,
+    QuoteGeometry,
+    QuoteLine,
+    QuoteVersion,
 )
-from app.models.business_document import BusinessDocument, BusinessDocumentItem
-from app.models.product import Product
 
 PriceAnomaly = dict[str, Any]
 
@@ -86,33 +86,128 @@ class CdrPriceAnomalyDetector:
         return anomalies
 
     async def check_calculation(self, data: dict) -> list[PriceAnomaly]:
-        """Check a single pricing calculation for anomalies (no DB dependency for basic checks)."""
+        """Check a single pricing calculation for anomalies without a DB round trip.
+
+        The endpoint accepts a plain mapping because it is also used by the CDR
+        plug-in.  Validate numeric values here instead of allowing malformed
+        input to disappear silently or raise an unhandled ``Decimal`` error.
+        Missing dimensions remain valid for quantity/fixed-price products.
+        """
         anomalies: list[PriceAnomaly] = []
 
-        width = data.get("width_mm")
-        height = data.get("height_mm")
-        hole_area = data.get("hole_area_mm2")
-        unit_price = data.get("unit_price")
-        quantity = data.get("quantity", 1)
+        line_no = data.get("line_no")
+
+        def parse_decimal(
+            key: str, default: Decimal | None = None
+        ) -> tuple[Decimal | None, bool]:
+            if key not in data:
+                return default, False
+            value = data.get(key)
+            if value is None or (isinstance(value, str) and not value.strip()):
+                return None, False
+            try:
+                parsed = Decimal(str(value))
+            except (InvalidOperation, TypeError, ValueError):
+                return None, True
+            if not parsed.is_finite():
+                return None, True
+            return parsed, False
+
+        width, width_invalid = parse_decimal("width_mm")
+        height, height_invalid = parse_decimal("height_mm")
+        hole_area, hole_area_invalid = parse_decimal("hole_area_mm2")
+        unit_price, unit_price_invalid = parse_decimal("unit_price")
+        quantity, quantity_invalid = parse_decimal("quantity", Decimal("1"))
+
+        for key, label, invalid in (
+            ("width_mm", "宽度", width_invalid),
+            ("height_mm", "高度", height_invalid),
+            ("hole_area_mm2", "孔洞面积", hole_area_invalid),
+            ("unit_price", "单价", unit_price_invalid),
+            ("quantity", "数量", quantity_invalid),
+        ):
+            if invalid:
+                anomalies.append({
+                    "type": "invalid_input",
+                    "severity": "warning",
+                    "line_no": line_no,
+                    "field": key,
+                    "title": f"{label}格式无效",
+                    "detail": f"{label}必须是有限数字，当前值无法参与试算",
+                    "suggestion": f"请填写有效的{label}",
+                })
+
+        invalid_dimensions = [
+            label
+            for value, label in ((width, "宽度"), (height, "高度"))
+            if value is not None and value <= 0
+        ]
+        if invalid_dimensions:
+            anomalies.append({
+                "type": "invalid_dimensions",
+                "severity": "warning",
+                "line_no": line_no,
+                "title": "尺寸必须大于0",
+                "detail": f"{'、'.join(invalid_dimensions)}不能小于或等于0",
+                "suggestion": "请检查宽度和高度后再进行试算",
+            })
+
+        if quantity is not None and quantity <= 0:
+            anomalies.append({
+                "type": "invalid_quantity",
+                "severity": "warning",
+                "line_no": line_no,
+                "title": "数量必须大于0",
+                "detail": f"当前数量为 {quantity}",
+                "suggestion": "请填写大于0的数量",
+            })
+
+        if unit_price is not None and unit_price < 0:
+            anomalies.append({
+                "type": "negative_unit_price",
+                "severity": "warning",
+                "line_no": line_no,
+                "title": "单价不能为负数",
+                "detail": f"当前单价为 {unit_price}",
+                "suggestion": "请确认单价，免费项目请使用0而不是负数",
+            })
+
+        bbox_area = None
+        if width is not None and height is not None and width > 0 and height > 0:
+            bbox_area = width * height
+
+        if hole_area is not None and hole_area < 0:
+            anomalies.append({
+                "type": "invalid_hole_area",
+                "severity": "warning",
+                "line_no": line_no,
+                "title": "孔洞面积不能为负数",
+                "detail": f"当前孔洞面积为 {hole_area}mm²",
+                "suggestion": "请检查几何解析结果",
+            })
+
+        if bbox_area is not None and hole_area is not None and hole_area > bbox_area:
+            anomalies.append({
+                "type": "hole_area_exceeds_bbox",
+                "severity": "warning",
+                "line_no": line_no,
+                "title": "孔洞面积超过包围盒面积",
+                "detail": f"孔洞面积 {hole_area}mm² 大于包围盒面积 {bbox_area}mm²",
+                "suggestion": "请检查图形解析结果，确认宽高和孔洞面积单位一致",
+            })
 
         # Check hole ratio
-        if width and height and hole_area:
-            bbox_area = Decimal(str(width)) * Decimal(str(height))
-            if bbox_area > 0:
-                hole_ratio = Decimal(str(hole_area)) / bbox_area
-                if hole_ratio > Decimal("0.3"):
-                    anomalies.append({
-                        "type": "high_hole_ratio",
-                        "severity": "info",
-                        "line_no": data.get("line_no"),
-                        "title": "孔洞比例超过30%",
-                        "detail": f"孔洞面积 {float(hole_area):.0f}mm² vs 包围盒 {float(bbox_area):.0f}mm²（占比 {float(hole_ratio)*100:.1f}%），建议确认是否按净面积计价",
-                        "suggestion": "考虑使用孔洞扣除定价策略，避免客户承担过多材料浪费",
-                    })
-
-        width_str = str(data.get("width_mm", 0))
-        height_str = str(data.get("height_mm", 0))
-        unit_price_val = data.get("unit_price", 0)
+        if bbox_area is not None and hole_area is not None and 0 < hole_area <= bbox_area:
+            hole_ratio = hole_area / bbox_area
+            if hole_ratio > Decimal("0.3"):
+                anomalies.append({
+                    "type": "high_hole_ratio",
+                    "severity": "info",
+                    "line_no": line_no,
+                    "title": "孔洞比例超过30%",
+                    "detail": f"孔洞面积 {hole_area:.0f}mm² vs 包围盒 {bbox_area:.0f}mm²（占比 {hole_ratio * 100:.1f}%），建议确认是否按净面积计价",
+                    "suggestion": "考虑使用孔洞扣除定价策略，避免客户承担过多材料浪费",
+                })
 
         return anomalies
 
@@ -169,7 +264,6 @@ class CdrPriceAnomalyDetector:
 
         # Check deviation
         if avg_price > 0 and std_dev > 0:
-            deviation = (unit_price_per_area - avg_price) / std_dev
             deviation_pct = (unit_price_per_area - avg_price) / avg_price * 100
 
             if abs(deviation_pct) > 50:

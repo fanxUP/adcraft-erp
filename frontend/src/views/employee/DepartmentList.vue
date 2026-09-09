@@ -1,10 +1,11 @@
 <template>
-  <div class="page">
-    <div class="page-header"><h2>部门管理</h2></div>
-    <div class="page-create">
-      <el-button @click="openCreate" type="danger">新建部门</el-button>
-    </div>
-    <el-table :data="list" v-loading="loading" stripe>
+  <AppPage>
+    <PageHeader title="部门管理" description="统一维护组织部门、启用状态和排序。">
+      <template #actions><el-button @click="openCreate" type="primary">新建部门</el-button></template>
+    </PageHeader>
+    <DataTableShell :state="tableState" aria-label="部门列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
+      <el-table :data="list" v-loading="loading" stripe>
       <el-table-column prop="code" label="编码" width="120" />
       <el-table-column prop="name" label="名称" width="120" />
       <el-table-column label="启用" width="80"><template #default="{row}"><el-tag :type="row.is_active?'success':'info'" size="small">{{ row.is_active?'是':'否' }}</el-tag></template></el-table-column>
@@ -13,7 +14,8 @@
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
-    </el-table>
+      </el-table>
+    </DataTableShell>
     <el-dialog v-model="showDialog" :title="isEditing?'编辑部门':'新建部门'" width="500px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
         <el-form-item label="名称" required><el-input v-model="form.name" /></el-form-item>
@@ -24,18 +26,20 @@
       </el-form>
       <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 <script setup lang="ts">
-import { ref, onMounted } from "vue"
+import { ref, computed, onMounted } from "vue"
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment, type DepartmentItem } from "@/api/departments"
 import { ElMessage, ElMessageBox } from "element-plus"
+import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
 
-const list=ref<DepartmentItem[]>([]); const loading=ref(false)
+const list=ref<DepartmentItem[]>([]); const loading=ref(false); const loadError=ref(false)
+const tableState = computed(() => loadError.value ? 'error' as const : loading.value ? 'loading' as const : list.value.length ? 'ready' as const : 'empty' as const)
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const form=ref<Record<string, unknown>>({name:"",code:"",sort_order:0,description:"",is_active:true})
 
-async function fetchData(){loading.value=true;try{list.value=(await getDepartments())||[]}finally{loading.value=false}}
+async function fetchData(){loading.value=true;loadError.value=false;try{list.value=(await getDepartments())||[]}catch(e:unknown){loadError.value=true;ElMessage.error((e as {message?:string})?.message||'部门列表加载失败')}finally{loading.value=false}}
 function openCreate(){isEditing.value=false;editId.value="";form.value={name:"",code:"",sort_order:0,description:"",is_active:true};showDialog.value=true}
 function openEdit(r:DepartmentItem){isEditing.value=true;editId.value=r.id;form.value={...r};showDialog.value=true}
 async function handleSave(){saving.value=true;try{if(isEditing.value){await updateDepartment(editId.value,form.value);ElMessage.success("已更新")}else{await createDepartment(form.value);ElMessage.success("已创建")}showDialog.value=false;await fetchData()}catch(e:unknown){ElMessage.error((e as {message?:string})?.message||"操作失败")}finally{saving.value=false}}

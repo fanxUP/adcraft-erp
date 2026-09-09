@@ -1,13 +1,12 @@
 <template>
-  <div class="page">
-    <div class="page-header"><h2>高空车档案</h2></div>
-    <div class="page-create">
-      <el-button @click="handleCreate" type="danger">+ 新增高空车</el-button>
-    </div>
-    <div class="search-bar">
+  <AppPage>
+    <PageHeader title="高空车档案" description="统一维护高空作业车辆、附件和到期提醒。">
+      <template #actions><el-button @click="handleCreate" type="primary">新增高空车</el-button></template>
+    </PageHeader>
+    <PageToolbar aria-label="高空车筛选">
       <el-input v-model="keyword" placeholder="车牌号/名称搜索" clearable style="width: 200px" @keyup.enter="fetchData" />
       <el-button @click="fetchData" type="primary">搜索</el-button>
-    </div>
+    </PageToolbar>
     <el-alert
       v-if="expiringVehicles.length"
       :title="`有 ${expiringVehicles.length} 辆车保险/年检即将到期或已过期`"
@@ -26,7 +25,9 @@
         <div v-if="expiringVehicles.length > 5" style="color: var(--ad-text-secondary); margin-top: 4px">...还有 {{ expiringVehicles.length - 5 }} 辆</div>
       </template>
     </el-alert>
-    <el-table :data="list" stripe v-loading="loading">
+    <DataTableShell :state="tableState" aria-label="高空车列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
+      <el-table :data="list" stripe v-loading="loading">
       <el-table-column prop="plate_number" label="车牌号" width="110" />
       <el-table-column prop="vehicle_name" label="车辆名称" width="140" />
       <el-table-column prop="brand_model" label="品牌型号" width="120" />
@@ -66,8 +67,11 @@
           </el-popconfirm>
         </template>
       </el-table-column>
-    </el-table>
-    <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px" @current-change="fetchData" />
+      </el-table>
+      <template #footer>
+        <el-pagination v-if="total > 0" v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" @current-change="fetchData" />
+      </template>
+    </DataTableShell>
 
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑高空车' : '新增高空车'" width="600px" destroy-on-close :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
@@ -113,12 +117,12 @@
       </el-form>
       <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import {
@@ -139,9 +143,16 @@ import {
 } from '@/api/aerial'
 import { VEHICLE_ATTACHMENT_TYPE_LABELS, VEHICLE_ATTACHMENT_TYPE_TAGS } from '@/config/attachment'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
-const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
+const loading = ref(false); const loadError = ref(false); const saving = ref(false); const dialogVisible = ref(false)
 const list = ref<AerialVehicle[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
+
+const tableState = computed(() => {
+  if (loadError.value) return 'error' as const
+  if (loading.value) return 'loading' as const
+  return list.value.length ? 'ready' as const : 'empty' as const
+})
 const keyword = ref(''); const editingId = ref<string | null>(null)
 const personnelOptions = ref<AerialPersonnel[]>([])
 
@@ -190,8 +201,9 @@ const form = reactive({
 
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try { const res = await getAerialVehicles({ keyword: keyword.value, page: page.value, page_size: pageSize.value }); list.value = res.items || []; total.value = res.total || 0 }
-  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
+  catch (error: unknown) { loadError.value = true; ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
 function handleCreate() {
@@ -274,8 +286,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
 .att-upload-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .att-list { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .att-link { text-decoration: none; }

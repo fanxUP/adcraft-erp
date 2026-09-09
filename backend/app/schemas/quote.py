@@ -1,5 +1,20 @@
 from pydantic import BaseModel, Field, model_validator
 from datetime import datetime, date
+from app.schemas.common import StatusView
+
+
+class QuoteGroupCreate(BaseModel):
+    group_id: str = Field(..., min_length=1)
+    group_name: str | None = None
+    sort_order: int = 0
+
+
+class QuoteGroupResponse(BaseModel):
+    id: str
+    quote_id: str
+    group_id: str
+    group_name: str | None = None
+    sort_order: int = 0
 
 
 class QuoteGroupCreate(BaseModel):
@@ -160,6 +175,7 @@ class QuoteListResponse(BaseModel):
     customer_name: str | None = None
     project_name: str
     status: str
+    status_view: StatusView | None = None
     total_amount: float
     valid_until: str | None = None
     quote_date: str | None = None
@@ -179,6 +195,7 @@ class QuoteDetailResponse(BaseModel):
     project_name: str
     sales_user_id: str | None = None
     status: str
+    status_view: StatusView | None = None
     subtotal_amount: float
     discount_amount: float
     tax_rate: float

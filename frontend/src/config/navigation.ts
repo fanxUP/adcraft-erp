@@ -1,110 +1,111 @@
+import { canAccess, type AccessKey } from './access'
+
 export interface NavigationItem {
   label: string
   path?: string
   icon?: string
-  roles?: string[]
+  accessKey?: AccessKey
   children?: NavigationItem[]
 }
 
-const SALES_ROLES = ['admin', 'sales']
-const DELIVERY_ROLES = ['admin', 'sales', 'designer', 'production', 'installer']
-const FINANCE_ROLES = ['admin', 'finance']
-
 export const navigationItems: NavigationItem[] = [
-  { label: '工作台', path: '/', icon: 'DataAnalysis' },
-  { label: '项目看板', path: '/production-tasks/board', icon: 'Grid', roles: ['admin', 'production'] },
+  { label: '工作台', path: '/', icon: 'DataAnalysis', accessKey: 'authenticated' },
+  { label: '项目看板', path: '/production-tasks/board', icon: 'Grid', accessKey: 'production' },
   {
     label: '客户与销售',
     icon: 'User',
-    roles: SALES_ROLES,
+    accessKey: 'sales',
     children: [
-      { label: '客户管理', path: '/customers' },
-      { label: '常规报价', path: '/quotes' },
-      { label: '智能报价', path: '/cdr/quotes' },
-      { label: '定价规则', path: '/cdr/price-rules' },
-      { label: '合同管理', path: '/contracts' },
-      { label: '订单管理', path: '/orders' },
+      { label: '客户管理', path: '/customers', accessKey: 'sales' },
+      { label: '常规报价', path: '/quotes', accessKey: 'sales' },
+      { label: '智能报价', path: '/cdr/quotes', accessKey: 'sales' },
+      { label: '定价规则', path: '/cdr/price-rules', accessKey: 'sales' },
+      { label: '合同管理', path: '/contracts', accessKey: 'sales' },
+      { label: '订单管理', path: '/orders', accessKey: 'sales' },
     ],
   },
   {
     label: '项目交付',
     icon: 'List',
-    roles: DELIVERY_ROLES,
+    accessKey: 'authenticated',
     children: [
-      { label: '设计任务', path: '/design-tasks', roles: ['admin', 'designer'] },
-      { label: '制作任务', path: '/production-tasks', roles: ['admin', 'production'] },
-      { label: '安装任务', path: '/installation-tasks', roles: ['admin', 'installer'] },
-      { label: '验收管理', path: '/acceptances', roles: SALES_ROLES },
-      { label: '外协任务', path: '/outsource/tasks', roles: ['admin', 'production'] },
-      { label: '外协商', path: '/outsource/vendors', roles: ['admin', 'production'] },
-      { label: '库存管理', path: '/inventory', roles: ['admin', 'production'] },
-      { label: '产品/材质/工艺定价', path: '/products', roles: ['admin', 'designer', 'production'] },
+      { label: '设计任务', path: '/design-tasks', accessKey: 'design' },
+      { label: '制作任务', path: '/production-tasks', accessKey: 'production' },
+      { label: '安装任务', path: '/installation-tasks', accessKey: 'installation' },
+      { label: '验收管理', path: '/acceptances', accessKey: 'sales' },
+      { label: '外协任务', path: '/outsource/tasks', accessKey: 'outsource' },
+      { label: '外协商', path: '/outsource/vendors', accessKey: 'outsource' },
+      { label: '库存管理', path: '/inventory', accessKey: 'inventory' },
+      { label: '产品/材质/工艺定价', path: '/products', accessKey: 'product' },
     ],
   },
   {
     label: '财务中心',
     icon: 'Money',
-    roles: FINANCE_ROLES,
+    accessKey: 'finance',
     children: [
-      { label: '应收管理', path: '/receivables' },
-      { label: '支出管理', path: '/expenses' },
-      { label: '项目成本', path: '/project-costs' },
-      { label: '成本欠款', path: '/cost-debts' },
-      { label: '外协付款', path: '/outsource/payments' },
-      { label: '客户对账', path: '/statements' },
+      { label: '应收管理', path: '/receivables', accessKey: 'finance' },
+      { label: '支出管理', path: '/expenses', accessKey: 'finance' },
+      { label: '项目成本', path: '/project-costs', accessKey: 'finance' },
+      { label: '成本欠款', path: '/cost-debts', accessKey: 'finance' },
+      { label: '外协付款', path: '/outsource/payments', accessKey: 'finance' },
+      { label: '客户对账', path: '/statements', accessKey: 'finance' },
     ],
   },
   {
     label: '人事管理',
     icon: 'UserFilled',
-    roles: ['admin'],
+    accessKey: 'system',
     children: [
-      { label: '员工管理', path: '/employees' },
-      { label: '考勤记录', path: '/attendance/records' },
-      { label: '考勤规则', path: '/attendance/rules' },
-      { label: "部门管理", path: "/departments" },
-      { label: "工资管理", path: "/salaries" },
-      { label: "工资报表", path: "/salary-report" },
-      { label: "工资规则", path: "/salary-rules" },
-      { label: "员工履历", path: "/employment-histories" },
-      { label: "请假审批", path: "/leaves" },
+      { label: '员工管理', path: '/employees', accessKey: 'system' },
+      { label: '考勤记录', path: '/attendance/records', accessKey: 'system' },
+      { label: '考勤规则', path: '/attendance/rules', accessKey: 'system' },
+      { label: '部门管理', path: '/departments', accessKey: 'system' },
+      { label: '工资管理', path: '/salaries', accessKey: 'system' },
+      { label: '工资报表', path: '/salary-report', accessKey: 'system' },
+      { label: '工资规则', path: '/salary-rules', accessKey: 'system' },
+      { label: '员工履历', path: '/employment-histories', accessKey: 'system' },
+      { label: '请假审批', path: '/leaves', accessKey: 'system' },
     ],
   },
   {
     label: '资源中心',
     icon: 'Van',
+    accessKey: 'authenticated',
     children: [
       {
         label: '公司车辆',
         icon: 'Van',
+        accessKey: 'authenticated',
         children: [
-          { label: '车辆看板', path: '/vehicle-dashboard' },
-          { label: '用车申请', path: '/vehicle-use-requests' },
-          { label: '派车管理', path: '/vehicle-dispatches', roles: ['admin', 'production', 'installer'] },
-          { label: '出车台账', path: '/vehicle-trip-records', roles: ['admin', 'production', 'installer'] },
-          { label: '车辆费用', path: '/vehicle-expenses', roles: ['admin', 'production', 'installer', 'finance'] },
-          { label: '违章事故', path: '/vehicle-incidents' },
-          { label: '车辆报表', path: '/vehicle-reports', roles: ['admin', 'finance', 'production'] },
-          { label: '车辆档案', path: '/vehicles', roles: ['admin', 'production', 'installer', 'finance'] },
-          { label: '司机管理', path: '/vehicle-drivers', roles: ['admin', 'production', 'installer'] },
-          { label: '消息识别', path: '/vehicle-agent-drafts' },
+          { label: '车辆看板', path: '/vehicle-dashboard', accessKey: 'vehicleRead' },
+          { label: '用车申请', path: '/vehicle-use-requests', accessKey: 'vehicleRead' },
+          { label: '派车管理', path: '/vehicle-dispatches', accessKey: 'vehicleOperations' },
+          { label: '出车台账', path: '/vehicle-trip-records', accessKey: 'vehicleOperations' },
+          { label: '车辆费用', path: '/vehicle-expenses', accessKey: 'vehicleExpenses' },
+          { label: '违章事故', path: '/vehicle-incidents', accessKey: 'vehicleRead' },
+          { label: '车辆报表', path: '/vehicle-reports', accessKey: 'vehicleReports' },
+          { label: '车辆档案', path: '/vehicles', accessKey: 'vehicleFleet' },
+          { label: '司机管理', path: '/vehicle-drivers', accessKey: 'vehicleDrivers' },
+          { label: '消息识别', path: '/vehicle-agent-drafts', accessKey: 'vehicleRead' },
         ],
       },
       {
         label: '高空作业车',
         icon: 'Platform',
+        accessKey: 'authenticated',
         children: [
-          { label: '经营看板', path: '/aerial-dashboard' },
-          { label: '出车台账', path: '/aerial-ledgers' },
-          { label: '安全检查', path: '/aerial-safety-checks' },
-          { label: '垫付报销', path: '/aerial-personnel-expenses', roles: ['admin', 'finance', 'production'] },
-          { label: '人员工资', path: '/aerial-personnel-wages', roles: FINANCE_ROLES },
-          { label: '车辆费用', path: '/aerial-vehicle-costs', roles: ['admin', 'finance', 'production'] },
-          { label: '经营报表', path: '/aerial-reports', roles: ['admin', 'finance', 'production'] },
-          { label: '车辆档案', path: '/aerial-vehicles', roles: ['admin', 'production'] },
-          { label: '人员管理', path: '/aerial-personnel', roles: ['admin', 'production'] },
-          { label: '考勤表', path: '/aerial-attendance', roles: ['admin', 'production'] },
-          { label: 'Agent 草稿', path: '/aerial-agent-drafts', roles: ['admin', 'finance', 'production'] },
+          { label: '经营看板', path: '/aerial-dashboard', accessKey: 'aerialRead' },
+          { label: '出车台账', path: '/aerial-ledgers', accessKey: 'aerialRead' },
+          { label: '安全检查', path: '/aerial-safety-checks', accessKey: 'aerialRead' },
+          { label: '垫付报销', path: '/aerial-personnel-expenses', accessKey: 'aerialFinanceOperations' },
+          { label: '人员工资', path: '/aerial-personnel-wages', accessKey: 'aerialFinance' },
+          { label: '车辆费用', path: '/aerial-vehicle-costs', accessKey: 'aerialFinanceOperations' },
+          { label: '经营报表', path: '/aerial-reports', accessKey: 'aerialFinanceOperations' },
+          { label: '车辆档案', path: '/aerial-vehicles', accessKey: 'aerialOperations' },
+          { label: '人员管理', path: '/aerial-personnel', accessKey: 'aerialOperations' },
+          { label: '考勤表', path: '/aerial-attendance', accessKey: 'aerialOperations' },
+          { label: 'Agent 草稿', path: '/aerial-agent-drafts', accessKey: 'aerialFinanceOperations' },
         ],
       },
     ],
@@ -112,26 +113,26 @@ export const navigationItems: NavigationItem[] = [
   {
     label: '经营分析',
     icon: 'TrendCharts',
-    roles: ['admin', 'sales', 'finance'],
+    accessKey: 'reports',
     children: [
-      { label: '销售日报', path: '/reports/daily' },
-      { label: '销售月报', path: '/reports/monthly' },
-      { label: '异常提醒', path: '/ai/anomalies' },
-      { label: '经营报告', path: '/ai/reports' },
+      { label: '销售日报', path: '/reports/daily', accessKey: 'reports' },
+      { label: '销售月报', path: '/reports/monthly', accessKey: 'reports' },
+      { label: '异常提醒', path: '/ai/anomalies', accessKey: 'aiReports' },
+      { label: '经营报告', path: '/ai/reports', accessKey: 'aiReports' },
     ],
   },
   {
     label: '系统管理',
     icon: 'Tools',
-    roles: ['admin'],
+    accessKey: 'system',
     children: [
-      { label: '用户管理', path: '/admin/users' },
-      { label: '角色权限', path: '/admin/roles' },
-      { label: '系统设置', path: '/admin/settings' },
-      { label: '操作日志', path: '/operation-logs' },
-      { label: '备份管理', path: '/backups' },
-      { label: 'AI 模型中心', path: '/admin/ai/providers' },
-      { label: 'AI 业务知识健康', path: '/admin/ai/knowledge-health' },
+      { label: '用户管理', path: '/admin/users', accessKey: 'system' },
+      { label: '角色权限', path: '/admin/roles', accessKey: 'system' },
+      { label: '系统设置', path: '/admin/settings', accessKey: 'system' },
+      { label: '操作日志', path: '/operation-logs', accessKey: 'system' },
+      { label: '备份管理', path: '/backups', accessKey: 'system' },
+      { label: 'AI 模型中心', path: '/admin/ai/providers', accessKey: 'system' },
+      { label: 'AI 业务知识健康', path: '/admin/ai/knowledge-health', accessKey: 'system' },
     ],
   },
 ]
@@ -141,7 +142,7 @@ export function filterNavigation(
   roles: string[],
 ): NavigationItem[] {
   return items.flatMap(item => {
-    if (item.roles && !item.roles.some(role => roles.includes(role))) return []
+    if (!canAccess(item.accessKey || 'authenticated', roles)) return []
     const children = item.children
       ? filterNavigation(item.children, roles)
       : undefined

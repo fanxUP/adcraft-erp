@@ -1,0 +1,108 @@
+version: 1
+name: ui-ux-full-stack-consistency
+objective: >-
+  在不改变现有业务事实规则的前提下，统一 AdCraft ERP 的视觉语言、页面交互、
+  状态/进度/权限呈现和 API 契约，并以订单、任务、项目成本为首个验证闭环。
+nodes:
+  - id: UIX-P01
+    title: 基线盘点与规范冻结
+    acceptance: A-UIX-01
+    depends_on: []
+  - id: UIX-P02
+    title: 设计 Token 与通用页面原语
+    acceptance: A-UIX-02
+    depends_on: [UIX-P01]
+  - id: UIX-P03
+    title: 应用壳层、导航与权限可见性统一
+    acceptance: A-UIX-03
+    depends_on: [UIX-P02]
+  - id: UIX-P04
+    title: 后端 API、状态视图与错误契约收口
+    acceptance: A-UIX-04
+    depends_on: [UIX-P01]
+  - id: UIX-P05
+    title: 订单/任务/成本核心链路试点迁移
+    acceptance: A-UIX-05
+    depends_on: [UIX-P02, UIX-P03, UIX-P04]
+  - id: UIX-P06
+    title: 销售与财务模块波次迁移
+    acceptance: A-UIX-06
+    depends_on: [UIX-P05]
+  - id: UIX-P07
+    title: 资源、AI、人事与系统模块迁移
+    acceptance: A-UIX-07
+    depends_on: [UIX-P06]
+  - id: UIX-P08
+    title: 跨端 QA、清理与发布
+    acceptance: A-UIX-08
+    depends_on: [UIX-P07]
+edges:
+  - from: UIX-P01
+    to: UIX-P02
+  - from: UIX-P01
+    to: UIX-P04
+  - from: UIX-P02
+    to: UIX-P03
+  - from: UIX-P02
+    to: UIX-P05
+  - from: UIX-P03
+    to: UIX-P05
+  - from: UIX-P04
+    to: UIX-P05
+  - from: UIX-P05
+    to: UIX-P06
+  - from: UIX-P06
+    to: UIX-P07
+  - from: UIX-P07
+    to: UIX-P08
+backlog:
+  - id: OPT-01
+    title: 状态、进度、动作能力单一事实来源
+    priority: P0
+    owner_phases: [UIX-P01, UIX-P04, UIX-P05]
+    covered_by: [A-UIX-01, A-UIX-04, A-UIX-05]
+  - id: OPT-02
+    title: 批量选择与写操作安全
+    priority: P0
+    owner_phases: [UIX-P04, UIX-P05, UIX-P08]
+    covered_by: [A-UIX-04, A-UIX-05, A-UIX-08]
+  - id: OPT-03
+    title: 加载、空态、错误、权限、冲突和成功反馈
+    priority: P1
+    owner_phases: [UIX-P02, UIX-P03, UIX-P05]
+    covered_by: [A-UIX-02, A-UIX-03, A-UIX-05]
+  - id: OPT-04
+    title: 响应式与可访问性
+    priority: P1
+    owner_phases: [UIX-P03, UIX-P05, UIX-P08]
+    covered_by: [A-UIX-03, A-UIX-05, A-UIX-08]
+  - id: OPT-05
+    title: 样式与组件维护成本
+    priority: P1
+    owner_phases: [UIX-P02, UIX-P05, UIX-P06, UIX-P07, UIX-P08]
+    covered_by: [A-UIX-02, A-UIX-05, A-UIX-08]
+  - id: OPT-06
+    title: 请求、分页、缓存和列表性能
+    priority: P1
+    owner_phases: [UIX-P04, UIX-P05, UIX-P08]
+    covered_by: [A-UIX-04, A-UIX-05, A-UIX-08]
+  - id: OPT-07
+    title: 文案、金额、日期和数量格式
+    priority: P1
+    owner_phases: [UIX-P01, UIX-P02, UIX-P05, UIX-P06]
+    covered_by: [A-UIX-01, A-UIX-02, A-UIX-05, A-UIX-06]
+  - id: OPT-08
+    title: 安全和敏感信息治理
+    priority: P0
+    owner_phases: [UIX-P03, UIX-P04, UIX-P08]
+    covered_by: [A-UIX-03, A-UIX-04, A-UIX-08]
+  - id: B01
+    title: Storybook 或独立设计系统站点
+  - id: B02
+    title: OpenAPI 自动生成前端类型
+  - id: B03
+    title: 端到端浏览器回归平台
+  - id: B04
+    title: 审计日志可视化和用户行为指标
+  - id: B05
+    title: 打印模板与 PDF 视觉规范

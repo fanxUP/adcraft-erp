@@ -1,15 +1,11 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>
-        <el-button text @click="$router.push('/outsource/tasks')">
-          <el-icon><ArrowLeft /></el-icon> 返回外协任务
-        </el-button>
-        外协任务回收站
-      </h2>
-    </div>
+  <AppPage>
+    <template #header><PageHeader title="外协任务回收站" description="查看已删除的外协任务并恢复需要继续保留的记录。">
+      <template #actions><el-button text @click="$router.push('/outsource/tasks')"><el-icon><ArrowLeft /></el-icon> 返回外协任务</el-button></template>
+    </PageHeader></template>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="回收站暂无内容">
+    <DataTableShell :state="tableState" aria-label="外协任务回收站列表">
+      <el-table :data="list" stripe>
       <el-table-column prop="task_no" label="任务编号" width="180" />
       <el-table-column prop="vendor_name" label="外协商" width="140" />
       <el-table-column label="关联任务" width="160" show-overflow-tooltip>
@@ -20,7 +16,7 @@
       </el-table-column>
       <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
       <el-table-column prop="total_amount" label="总金额" width="120" align="right">
-        <template #default="{ row }">¥{{ row.total_amount?.toFixed(2) }}</template>
+        <template #default="{ row }">{{ formatMoney(row.total_amount) }}</template>
       </el-table-column>
       <el-table-column label="原状态" width="100">
         <template #default="{ row }">
@@ -35,9 +31,11 @@
           <el-button text type="success" @click="handleRestore(row)">恢复</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+      <template #error><StatePanel state="error" action-label="重新加载" @action="fetchData" /></template>
+    </DataTableShell>
 
-    <el-pagination
+    <el-pagination v-if="tableState === 'ready'"
       v-model:current-page="page"
       v-model:page-size="pageSize"
       :page-sizes="[10, 20, 50, 100]"
@@ -46,21 +44,25 @@
       style="margin-top: 16px; justify-content: flex-end"
       @change="fetchData"
     />
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDateTimeFull } from '@/utils/datetime'
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { getDeletedOutsourceTasks, restoreOutsourceTask } from '@/api/outsource'
 import type { OutsourceTaskResponse } from '@/types/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
+import { formatMoney } from '@/utils/format'
 
 const loading = ref(false)
 const list = ref<OutsourceTaskResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const loadError = ref('')
+const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : list.value.length ? 'ready' : 'empty')
 
 function statusLabel(val: string) {
   const map: Record<string, string> = { pending: '待处理', in_progress: '进行中', completed: '已完成', settled: '已结算', cancelled: '已取消' }
@@ -74,10 +76,14 @@ function statusTagType(val: string) {
 
 async function fetchData() {
   loading.value = true
+  loadError.value = ''
   try {
     const data = await getDeletedOutsourceTasks({ page: page.value, page_size: pageSize.value })
     list.value = data.items as OutsourceTaskResponse[]
     total.value = data.total
+  } catch (error: unknown) {
+    loadError.value = error instanceof Error ? error.message : '加载回收站失败'
+    ElMessage.error(loadError.value)
   } finally {
     loading.value = false
   }
@@ -98,7 +104,4 @@ onMounted(fetchData)
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); display: flex; align-items: center; gap: 8px; }
 </style>

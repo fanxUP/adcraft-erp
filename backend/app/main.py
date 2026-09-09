@@ -1,26 +1,99 @@
+import asyncio
 import logging
 import os
 import sys
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.core.config import settings
-from app.core.performance import PerformanceMiddleware, SLOW_QUERY_MS, SLOW_API_MS, install_slow_query_listener
-from app.middleware.rate_limit import RateLimitMiddleware
-from app.api import auth, users, customers, products, quotes, orders, tasks, payments, reports, outsource, inventory, operation_logs, backup, admin, notifications, conversations, acceptances, contracts, framework_contracts, vehicles, vehicle_agent, vehicle_dashboard, aerial, ai_execute, ai_models, ai_providers, ai_prompts, ai_requests, ai_routes, employees, attendance, departments, salaries, salary_rules, employment_histories, leaves
-from app.api import cdr_quotes
 # AI module routes
-from app.ai.api import ai_anomalies, ai_knowledge, ai_quote, ai_reports, ai_site_photo, ai_payment_ocr
+from app.ai.api import (
+    ai_anomalies,
+    ai_knowledge,
+    ai_payment_ocr,
+    ai_quote,
+    ai_reports,
+    ai_site_photo,
+)
 from app.ai_assistant.router import router as ai_assistant_router
+from app.api import (
+    acceptances,
+    admin,
+    aerial,
+    ai_execute,
+    ai_models,
+    ai_prompts,
+    ai_providers,
+    ai_requests,
+    ai_routes,
+    attendance,
+    auth,
+    backup,
+    cdr_quotes,
+    contracts,
+    conversations,
+    customers,
+    departments,
+    employees,
+    employment_histories,
+    framework_contracts,
+    inventory,
+    leaves,
+    notifications,
+    operation_logs,
+    orders,
+    outsource,
+    payments,
+    products,
+    quotes,
+    reports,
+    salaries,
+    salary_rules,
+    tasks,
+    users,
+    vehicle_agent,
+    vehicle_dashboard,
+    vehicles,
+)
+from app.core.config import settings
+from app.core.performance import (
+    SLOW_API_MS,
+    SLOW_QUERY_MS,
+    PerformanceMiddleware,
+    install_slow_query_listener,
+)
+from app.middleware.rate_limit import RateLimitMiddleware
+from app.schemas.common import error
 
 logger = logging.getLogger(__name__)
+
+REQUEST_ID_HEADER = "X-Request-ID"
+
+
+def _request_id(request: Request) -> str:
+    """Return a bounded correlation id without trusting arbitrary header text."""
+    candidate = (request.headers.get(REQUEST_ID_HEADER) or "").strip()
+    if 1 <= len(candidate) <= 128 and all(
+        char.isalnum() or char in "-_" for char in candidate
+    ):
+        return candidate
+    return uuid4().hex
+
+
+def _error_meta(request: Request) -> dict:
+    return {
+        "request_id": getattr(request.state, "request_id", None),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @asynccontextmanager
@@ -37,8 +110,8 @@ async def lifespan(app: FastAPI):
                  SLOW_QUERY_MS, SLOW_API_MS)
     # Rate limiting: Redis-backed，覆盖 auth/ai/upload 等关键路径防爆破（测试环境跳过，避免干扰用例）
     if settings.APP_ENV.lower() != "test":
-        from app.core.redis import get_redis
         from app.core.rate_limiter import RateLimiter, default_rules
+        from app.core.redis import get_redis
         try:
             _rl_redis = await get_redis()
             _limiter = RateLimiter(_rl_redis)
@@ -69,7 +142,28 @@ async def lifespan(app: FastAPI):
             logger.exception(
                 "AI business-rule startup sync failed; AI will use source rules"
             )
-    yield
+    overdue_notification_task = None
+    if settings.APP_ENV.lower() != "test":
+        from app.services.task_overdue_notification_service import (
+            run_overdue_notification_loop,
+        )
+
+        overdue_notification_task = asyncio.create_task(
+            run_overdue_notification_loop(),
+            name="overdue-task-notifications",
+        )
+        app.state.overdue_notification_task = overdue_notification_task
+        logger.info("Overdue task notification scheduler active (15-minute interval)")
+
+    try:
+        yield
+    finally:
+        if overdue_notification_task is not None:
+            overdue_notification_task.cancel()
+            try:
+                await overdue_notification_task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(
@@ -84,12 +178,63 @@ app = FastAPI(
 
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError):
-    return JSONResponse(status_code=400, content={"code": 40001, "message": str(exc), "data": None})
+    return JSONResponse(
+        status_code=400,
+        content=error(40001, str(exc), meta=_error_meta(request)),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error_handler(request: Request, exc: RequestValidationError):
+    fields = [
+        {
+            "loc": [str(part) for part in item.get("loc", ())],
+            "msg": str(item.get("msg", "请求参数错误")),
+            "type": item.get("type"),
+        }
+        for item in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content=error(
+            42200,
+            "请求参数错误",
+            data={"fields": fields},
+            meta=_error_meta(request),
+        ),
+    )
 
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    return JSONResponse(status_code=exc.status_code, content={"code": exc.status_code * 100, "message": exc.detail, "data": None})
+    detail = exc.detail
+    message = detail if isinstance(detail, str) else "请求失败"
+    explicit_code = None
+    if exc.headers:
+        raw_code = exc.headers.get("X-Error-Code")
+        if raw_code and raw_code.isdigit():
+            explicit_code = int(raw_code)
+    code = explicit_code or exc.status_code * 100
+    if exc.status_code == 403 and message == "请先修改初始密码":
+        code = 40300
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error(code, message, meta=_error_meta(request)),
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception(
+        "Unhandled API error request_id=%s",
+        getattr(request.state, "request_id", None),
+        exc_info=exc,
+    )
+    return JSONResponse(
+        status_code=500,
+        content=error(50000, "服务器内部错误，请稍后重试", meta=_error_meta(request)),
+    )
 
 
 app.add_middleware(
@@ -99,6 +244,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request.state.request_id = _request_id(request)
+    response = await call_next(request)
+    response.headers[REQUEST_ID_HEADER] = request.state.request_id
+    return response
 
 # 全局限流中间件（Redis 未就绪时自动放行，规则见 core/rate_limiter.default_rules）
 app.add_middleware(RateLimitMiddleware)
@@ -133,7 +286,7 @@ async def health_check():
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         db_status = "ok"
-    except Exception:
+    except Exception:  # noqa: BLE001 - health checks convert any database failure into HTTP 503
         db_status = "error"
     status_code = 200 if db_status == "ok" else 503
     return JSONResponse(
@@ -168,6 +321,7 @@ app.include_router(leaves.router, prefix="/api/v1")
 app.include_router(tasks.design_router, prefix="/api/v1")
 app.include_router(tasks.prod_router, prefix="/api/v1")
 app.include_router(tasks.inst_router, prefix="/api/v1")
+app.include_router(tasks.queue_router, prefix="/api/v1")
 app.include_router(tasks.att_router, prefix="/api/v1")
 app.include_router(payments.pay_router, prefix="/api/v1")
 app.include_router(payments.stmt_router, prefix="/api/v1")

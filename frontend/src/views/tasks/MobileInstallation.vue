@@ -158,15 +158,6 @@
         </div>
         <div v-else class="photo-empty">暂无现场照片，请拍摄或上传</div>
 
-        <!-- Installation notes (for completion/acceptance) -->
-        <div class="section-title">安装备注</div>
-        <textarea
-          v-model="installationNotes"
-          class="notes-input"
-          rows="3"
-          placeholder="填写安装完成情况、验收备注等…"
-        ></textarea>
-
         <!-- Status actions -->
         <div class="status-actions">
           <button
@@ -197,7 +188,6 @@ import {
   getInstallationTasks,
   getInstallationTask,
   changeInstallationTaskStatus,
-  updateInstallationTask,
   uploadAttachment,
   deleteAttachment,
 } from '@/api/tasks'
@@ -220,7 +210,6 @@ const activeTab = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploadLoading = ref(false)
 const previewImage = ref('')
-const installationNotes = ref('')
 const pullDistance = ref(0)
 let touchStartY = 0
 
@@ -352,7 +341,6 @@ async function fetchTasks(isRefresh = false) {
 async function openTask(task: InstallationTaskResponse) {
   try {
     currentTask.value = await getInstallationTask(task.id)
-    installationNotes.value = currentTask.value.acceptance_result || ''
     drawerVisible.value = true
   } catch {
     ElMessage.error('加载任务详情失败')
@@ -411,21 +399,23 @@ async function deletePhoto(attId: string) {
 // --- Status change ---
 async function changeStatus(toStatus: string) {
   if (!currentTask.value) return
+  const orderItemIds = currentTask.value.order_item_ids?.length
+    ? currentTask.value.order_item_ids
+    : currentTask.value.order_item_id
+      ? [currentTask.value.order_item_id]
+      : []
+  if (!orderItemIds.length) {
+    ElMessage.warning('该历史任务尚未关联订单明细，请先在任务处理页关联')
+    return
+  }
   await ElMessageBox.confirm(`确定将安装状态变更为「${toStatus}」？`, '变更状态', {
     confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
   })
   try {
     await changeInstallationTaskStatus(currentTask.value.id, {
       to_status: toStatus,
-      reason: installationNotes.value || undefined,
+      order_item_ids: orderItemIds,
     })
-
-    // If completing, also save acceptance_result
-    if (toStatus === 'completed' && installationNotes.value) {
-      await updateInstallationTask(currentTask.value.id, {
-        acceptance_result: installationNotes.value,
-      })
-    }
 
     ElMessage.success('状态已更新')
     currentTask.value = await getInstallationTask(currentTask.value.id)
@@ -861,25 +851,6 @@ watch(() => document.visibilityState, (state) => {
   padding: 20px 0;
   margin-bottom: 16px;
 }
-
-/* Notes textarea */
-.notes-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px 12px;
-  border: 1px solid #2a2a3e;
-  border-radius: 10px;
-  background: #1e1e30;
-  color: var(--ad-text, #e0e0e0);
-  font-size: 14px;
-  font-family: inherit;
-  resize: vertical;
-  margin-bottom: 16px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-.notes-input:focus { border-color: var(--ad-red, #e63946); }
-.notes-input::placeholder { color: #555; }
 
 /* Status action buttons */
 .status-actions { margin-top: 4px; }

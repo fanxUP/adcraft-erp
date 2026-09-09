@@ -1,11 +1,12 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>用户管理</h2>
-      <el-button @click="openCreate" type="danger">新增用户</el-button>
-    </div>
+  <AppPage>
+    <PageHeader title="用户管理" description="统一管理账号、角色、启停状态和密码操作。">
+      <template #actions><el-button @click="openCreate" type="primary">新增用户</el-button></template>
+    </PageHeader>
 
-    <el-table :data="list" v-loading="loading" stripe>
+    <DataTableShell :state="tableState" aria-label="用户列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
+      <el-table :data="list" v-loading="loading" stripe>
       <el-table-column prop="username" label="用户名" width="140" />
       <el-table-column prop="real_name" label="姓名" width="120" />
       <el-table-column prop="phone" label="手机号" width="130" />
@@ -27,17 +28,12 @@
           <el-button v-if="row.username !== 'admin'" text type="danger" size="small" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
 
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :page-sizes="[10, 20, 50]"
-      :total="total"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 16px; justify-content: flex-end"
-      @change="fetchData"
-    />
+      <template #footer>
+        <el-pagination v-if="total > 0" v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50]" :total="total" layout="total, sizes, prev, pager, next" @change="fetchData" />
+      </template>
+    </DataTableShell>
 
     <!-- Create/Edit Dialog -->
     <el-dialog v-model="showDialog" :title="isEditing ? '编辑用户' : '新增用户'" width="480px" :close-on-click-modal="false">
@@ -71,15 +67,16 @@
         <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getUsers, createUser, updateUser, deleteUser, resetPassword } from '@/api/users'
 import { getRoles, type RoleItem } from '@/api/admin'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UserResponse } from '@/types/api'
+import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
 
 const ROLE_MAP: Record<string, string> = {
   admin: '管理员', sales: '销售', designer: '设计师',
@@ -88,6 +85,7 @@ const ROLE_MAP: Record<string, string> = {
 function roleLabel(name: string) { return ROLE_MAP[name] || name }
 
 const loading = ref(false)
+const loadError = ref(false)
 const saving = ref(false)
 const list = ref<UserResponse[]>([])
 const total = ref(0)
@@ -97,6 +95,8 @@ const showDialog = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
 const roleOptions = ref<RoleItem[]>([])
+
+const tableState = computed(() => loadError.value ? 'error' as const : loading.value ? 'loading' as const : list.value.length ? 'ready' as const : 'empty' as const)
 
 const form = reactive({
   username: '', password: '', real_name: '', phone: '', email: '',
@@ -111,11 +111,12 @@ function resetForm() {
 
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try {
     const data = await getUsers({ page: page.value, page_size: pageSize.value })
     list.value = data.items
     total.value = data.total
-  } finally { loading.value = false }
+  } catch { loadError.value = true } finally { loading.value = false }
 }
 
 async function loadRoles() {
@@ -197,7 +198,4 @@ onMounted(() => { fetchData(); loadRoles() })
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
 </style>

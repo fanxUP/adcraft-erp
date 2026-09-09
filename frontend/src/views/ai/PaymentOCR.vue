@@ -1,9 +1,8 @@
 <template>
-  <div class="payment-ocr">
-    <div class="page-header">
-      <h2>收款截图识别</h2>
-      <el-tag :type="modeTagType">{{ modeLabel }}</el-tag>
-    </div>
+  <AppPage class="payment-ocr">
+    <PageHeader title="收款截图识别" description="上传收款凭证并将识别结果带入登记收款流程。">
+      <template #actions><el-tag :type="modeTagType">{{ modeLabel }}</el-tag></template>
+    </PageHeader>
 
     <el-row :gutter="16">
       <!-- Upload section -->
@@ -110,7 +109,7 @@
       <el-icon :size="64"><Picture /></el-icon>
       <p>上传收款截图，系统将自动识别金额、时间、付款方等信息</p>
     </div>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -121,6 +120,7 @@ import { UploadFilled, Search, Picture } from '@element-plus/icons-vue'
 import { recognizePaymentScreenshot } from '@/api/ai'
 import type { OCRRecognizeResponse } from '@/types/api'
 import type { UploadFile } from 'element-plus'
+import { AppPage, PageHeader } from '@/components/ui'
 
 const router = useRouter()
 const loading = ref(false)
@@ -215,22 +215,12 @@ function goToPayment() {
   if (orderId.value) {
     router.push(`/orders/${orderId.value}`)
   } else {
-    router.push('/payments')
+    router.push('/receivables')
   }
 }
 </script>
 
 <style scoped>
-.payment-ocr { padding: 0; }
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.page-header h2 { margin: 0; color: var(--ad-text); }
-
 .upload-card { margin-bottom: 16px; }
 
 .upload-text { color: var(--ad-text-muted); margin-top: 8px; }

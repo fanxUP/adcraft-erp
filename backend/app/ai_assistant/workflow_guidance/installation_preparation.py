@@ -52,7 +52,6 @@ def build_installation_preparation(
             "value": _text_value(task.get("address")),
             "source": "task",
             "suggested_value": _text_value(order_address),
-            "target_key": "installation-address",
             "pending_detail": (
                 "可引用订单安装地址，应用后仍需现场确认"
                 if _text_value(order_address)
@@ -71,7 +70,6 @@ def build_installation_preparation(
             "value": _text_value(task.get("scheduled_at")),
             "source": "task",
             "suggested_value": _text_value(order_deadline),
-            "target_key": "installation-schedule",
             "pending_detail": (
                 "可将订单交付期限作为时间草稿，应用后需确认实际进场时间"
                 if _text_value(order_deadline)
@@ -103,19 +101,20 @@ def build_installation_preparation(
             continue
 
         suggested_value = field.get("suggested_value")
-        items.append(
-            {
-                "key": field["key"],
-                "label": field["label"],
-                "state": "pending",
-                "detail": field["pending_detail"],
-                "action": _action(
-                    f"处理{field['label']}",
-                    task_path,
-                    field["target_key"],
-                ),
-            }
-        )
+        item = {
+            "key": field["key"],
+            "label": field["label"],
+            "state": "pending",
+            "detail": field["pending_detail"],
+        }
+        target_key = field.get("target_key")
+        if target_key:
+            item["action"] = _action(
+                f"处理{field['label']}",
+                task_path,
+                target_key,
+            )
+        items.append(item)
         draft_fields.append(
             {
                 "key": field["key"],

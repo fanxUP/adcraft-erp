@@ -1,8 +1,8 @@
-from datetime import datetime
 from decimal import Decimal
-from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+from app.schemas.common import ActionCapability, StatusView
 
 
 # ── Vendor ──
@@ -50,11 +50,12 @@ class OutsourceTaskCreate(BaseModel):
     related_doc_type: str | None = None
     related_project_name: str | None = None
     order_id: str | None = None
+    order_item_id: str | None = None
     source_task_type: str | None = None
     source_task_id: str | None = None
     task_type: str = Field(...)
     description: str | None = None
-    quantity: int = Field(1, gt=0)
+    quantity: Decimal = Field(Decimal("1"), gt=0, max_digits=14, decimal_places=3)
     unit_price: Decimal = Field(Decimal("0"), ge=0)
     expected_at: str | None = None
     remark: str | None = None
@@ -64,11 +65,12 @@ class OutsourceTaskUpdate(BaseModel):
     vendor_id: str | None = None
     related_doc_id: str | None = None
     related_doc_type: str | None = None
+    order_item_id: str | None = None
     source_task_type: str | None = None
     source_task_id: str | None = None
     task_type: str | None = None
     description: str | None = None
-    quantity: int | None = Field(None, gt=0)
+    quantity: Decimal | None = Field(None, gt=0, max_digits=14, decimal_places=3)
     unit_price: Decimal | None = Field(None, ge=0)
     status: str | None = None
     expected_at: str | None = None
@@ -85,21 +87,39 @@ class OutsourceTaskResponse(BaseModel):
     related_doc_type: str | None = None
     related_project_name: str | None = None
     order_id: str | None = None
+    order_item_id: str | None = None
+    order_item_name: str | None = None
     source_task_type: str | None = None
     source_task_id: str | None = None
     task_type: str
     description: str | None = None
-    quantity: int = 1
+    quantity: Decimal = Decimal("1")
     unit_price: float = 0
     total_amount: float = 0
     paid_amount: float = 0
     unpaid_amount: float = 0
     status: str = "pending"
+    status_view: StatusView | None = None
+    capabilities: dict[str, ActionCapability] = Field(default_factory=dict)
     expected_at: str | None = None
     completed_at: str | None = None
     remark: str | None = None
     created_at: str | None = None
     deleted_at: str | None = None
+
+
+class OutsourceOrderItemSend(BaseModel):
+    """订单明细范围内发送外协时允许客户端填写的业务字段。"""
+
+    vendor_id: str = Field(...)
+    task_type: str = Field(..., min_length=1, max_length=32)
+    source_task_type: str = Field(..., min_length=1, max_length=32)
+    source_task_id: str = Field(...)
+    quantity: Decimal | None = Field(None, gt=0, max_digits=14, decimal_places=3)
+    unit_price: Decimal = Field(Decimal("0"), ge=0, max_digits=14, decimal_places=2)
+    description: str | None = None
+    expected_at: str | None = None
+    remark: str | None = None
 
 
 # ── Payment ──

@@ -1,8 +1,9 @@
 <template>
-  <div class="page">
-    <div class="page-header"><h2>安全检查</h2></div>
+  <AppPage>
+    <template #header><PageHeader title="安全检查" description="按作业台账查看出车前与收车后的安全检查记录。" /></template>
 
-    <el-form :inline="true" style="margin-bottom: 16px">
+    <PageToolbar aria-label="安全检查筛选">
+    <el-form :inline="true">
       <el-form-item label="台账">
         <el-select v-model="selectedLedgerId" filterable remote :remote-method="searchLedgers" placeholder="输入台账编号搜索" style="width: 260px" @change="loadChecks">
           <el-option v-for="l in ledgerOptions" :key="l.id" :label="`${l.ledger_no} - ${l.work_location}`" :value="l.id" />
@@ -10,8 +11,10 @@
       </el-form-item>
       <el-button @click="showAddDialog = true" :disabled="!selectedLedgerId" type="danger">+ 新增检查</el-button>
     </el-form>
+    </PageToolbar>
 
-    <el-table :data="checks" stripe v-loading="loading">
+    <DataTableShell :state="tableState" aria-label="安全检查记录">
+      <el-table :data="checks" stripe>
       <el-table-column prop="check_type" label="类型" width="100">
         <template #default="{ row }">{{ row.check_type === 'before_work' ? '出车前' : '收车后' }}</template>
       </el-table-column>
@@ -28,9 +31,9 @@
       <el-table-column label="安全带" width="70"><template #default="{ row }"><el-tag :type="row.safety_belt_ok ? 'success' : 'danger'" size="small">{{ row.safety_belt_ok ? '正常' : '异常' }}</el-tag></template></el-table-column>
       <el-table-column prop="issue_description" label="异常说明" min-width="180" show-overflow-tooltip />
       <el-table-column prop="checked_at" label="检查时间" width="160" />
-    </el-table>
-
-    <el-empty v-if="!loading && checks.length === 0 && selectedLedgerId" description="暂无安全检查记录" />
+      </el-table>
+      <template #error><StatePanel state="error" action-label="重新加载" @action="loadChecks" /></template>
+    </DataTableShell>
 
     <el-dialog v-model="showAddDialog" title="新增安全检查" width="700px" destroy-on-close :close-on-click-modal="false">
       <el-form :model="checkForm" label-width="100px">
@@ -52,11 +55,11 @@
       </el-form>
       <template #footer><el-button @click="showAddDialog = false">取消</el-button><el-button @click="handleSaveCheck" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { computed, ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   getAerialSafetyChecks,
@@ -66,11 +69,19 @@ import {
   type AerialSafetyCheck,
 } from '@/api/aerial'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const loading = ref(false); const saving = ref(false); const showAddDialog = ref(false)
 const selectedLedgerId = ref('')
 const ledgerOptions = ref<AerialLedger[]>([])
 const checks = ref<AerialSafetyCheck[]>([])
+const loadError = ref('')
+const tableState = computed(() => {
+  if (loading.value) return 'loading'
+  if (loadError.value) return 'error'
+  if (!selectedLedgerId.value || !checks.value.length) return 'empty'
+  return 'ready'
+})
 
 const checkItems = [
   { key: 'vehicle_appearance_ok', label: '车辆外观' }, { key: 'tire_ok', label: '轮胎' },
@@ -98,9 +109,9 @@ async function searchLedgers(query: string) {
 
 async function loadChecks() {
   if (!selectedLedgerId.value) return
-  loading.value = true
+  loading.value = true; loadError.value = ''
   try { checks.value = await getAerialSafetyChecks({ ledger_id: selectedLedgerId.value }) || [] }
-  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
+  catch (error: unknown) { loadError.value = getErrorMessage(error); ElMessage.error(loadError.value) } finally { loading.value = false }
 }
 
 async function handleSaveCheck() {
@@ -111,5 +122,3 @@ async function handleSaveCheck() {
   } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { saving.value = false }
 }
 </script>
-
-<style scoped>.page-header { margin-bottom: 16px; }</style>

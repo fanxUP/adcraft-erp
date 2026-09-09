@@ -280,13 +280,25 @@ async def list_project_costs(
     category: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    order_item_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     service = ProjectCostService(db)
     oid = UUID(order_id) if order_id else None
     qid = UUID(quote_id) if quote_id else None
-    costs, total = await service.list_costs(page, page_size, oid, qid, source_type, category, date_from, date_to)
+    item_id = UUID(order_item_id) if order_item_id else None
+    costs, total = await service.list_costs(
+        page,
+        page_size,
+        oid,
+        qid,
+        source_type,
+        category,
+        date_from,
+        date_to,
+        item_id,
+    )
     return success_paginated(costs, total, page, page_size)
 
 
@@ -300,6 +312,21 @@ async def get_project_costs_summary(
     ids = [UUID(oid.strip()) for oid in order_ids.split(",") if oid.strip()]
     costs = await service.get_costs_summary(ids)
     return success({"costs": costs})
+
+
+@cost_router.get("/orders/{order_id}/item-summary")
+async def get_order_project_cost_item_summary(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
+):
+    """Get manual project costs split by whole order and order item."""
+    service = ProjectCostService(db)
+    try:
+        summary = await service.get_order_cost_summary(UUID(order_id))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+    return success(summary)
 
 
 @cost_router.get("/template")
@@ -488,7 +515,12 @@ async def create_project_cost(
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_PROJECT_COST, UUID(cost["id"]), ACTION_CREATE,
                         ip_address=request.client.host if request.client else None,
-                        after_data={"cost_no": cost["cost_no"], "amount": cost["amount"], "category": cost["category"]})
+                        after_data={
+                            "cost_no": cost["cost_no"],
+                            "amount": cost["amount"],
+                            "category": cost["category"],
+                            "order_item_ids": cost.get("order_item_ids", []),
+                        })
     # Direct SQL fallback for group_name (session auto-commits on exit)
     if payload.get("group_name"):
         from sqlalchemy import text
@@ -511,12 +543,23 @@ async def update_project_cost(
     service = ProjectCostService(db)
     cid = UUID(cost_id)
     try:
-        cost = await service.update_cost(cid, data.model_dump(exclude_none=True))
+        before = await service.get_cost(cid)
+        # exclude_unset preserves an explicit null so the service can clear
+        # an existing item association back to whole-order scope.
+        cost = await service.update_cost(cid, data.model_dump(exclude_unset=True))
     except ValueError as e:
         return {"code": 40401, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_PROJECT_COST, cid, ACTION_UPDATE,
-                        ip_address=request.client.host if request.client else None)
+                        ip_address=request.client.host if request.client else None,
+                        before_data={
+                            "amount": before.get("amount") if before else None,
+                            "order_item_ids": before.get("order_item_ids", []) if before else [],
+                        },
+                        after_data={
+                            "amount": cost.get("amount"),
+                            "order_item_ids": cost.get("order_item_ids", []),
+                        })
     return success(cost)
 
 

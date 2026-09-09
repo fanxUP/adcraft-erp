@@ -7,33 +7,37 @@
           <span v-if="!navigationCollapsed" class="logo-text">AdCraft ERP</span>
         </div>
         <div class="sidebar-menu-wrap">
-        <AppSidebarMenu
-          :active-path="route.path"
-          :collapsed="navigationCollapsed"
-          :roles="authStore.roles"
-        />
+          <AppSidebarMenu
+            :active-path="route.path"
+            :collapsed="navigationCollapsed"
+            :roles="authStore.roles"
+          />
         </div>
       </el-aside>
 
       <el-container>
         <el-header class="header">
           <div class="header-left">
-            <el-button text @click="appStore.toggleSidebar()">
+            <el-button text aria-label="切换侧栏" @click="appStore.toggleSidebar()">
               <el-icon :size="20"><Fold v-if="!navigationCollapsed" /><Expand v-else /></el-icon>
             </el-button>
+            <span class="header-page-title">{{ currentPageTitle }}</span>
           </div>
           <div class="header-right">
-            <el-dropdown @command="handleSmartTool">
+            <el-dropdown v-if="smartTools.length" @command="handleSmartTool">
               <el-button text>
                 <el-icon :size="18"><MagicStick /></el-icon>
-                <span v-if="!navigationCollapsed">智能工具</span>
+                <span v-if="!narrowViewport">智能工具</span>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="/ai/quotes">AI 报价助手</el-dropdown-item>
-                  <el-dropdown-item command="/ai/knowledge">报价知识库</el-dropdown-item>
-                  <el-dropdown-item command="/ai/site-photos">现场照片识别</el-dropdown-item>
-                  <el-dropdown-item command="/ai/payment-ocr">收款截图识别</el-dropdown-item>
+                  <el-dropdown-item
+                    v-for="tool in smartTools"
+                    :key="tool.path"
+                    :command="tool.path"
+                  >
+                    {{ tool.label }}
+                  </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -81,6 +85,7 @@ import NotificationBell from '@/components/NotificationBell.vue'
 import AiAssistantButton from '@/components/ai-assistant/AiAssistantButton.vue'
 import AiAssistantDrawer from '@/components/ai-assistant/AiAssistantDrawer.vue'
 import AppSidebarMenu from '@/components/navigation/AppSidebarMenu.vue'
+import { filterSmartTools, getRouteTitle } from '@/config/access'
 import { resolvePageContext } from '@/config/pageContext'
 
 const route = useRoute()
@@ -95,6 +100,8 @@ const narrowViewport = ref(false)
 const navigationCollapsed = computed(() =>
   sidebarCollapsed.value || narrowViewport.value,
 )
+const currentPageTitle = computed(() => getRouteTitle(route.name))
+const smartTools = computed(() => filterSmartTools(authStore.roles))
 
 function updateViewportState() {
   narrowViewport.value = window.innerWidth <= 600
@@ -146,22 +153,23 @@ onUnmounted(() => {
 <style scoped>
 .default-layout {
   min-height: 100vh;
-  background: var(--ad-dark);
+  background: var(--ui-bg);
 }
 
 .sidebar {
-  background-color: var(--ad-darker);
-  transition: width 0.3s;
+  background-color: var(--ui-surface-subtle);
+  border-right: 1px solid var(--ui-border);
+  transition: width var(--ui-duration-normal) var(--ui-ease-standard);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   height: 100vh;
 
   :deep(.el-menu) {
-    --el-menu-bg-color: var(--ad-darker);
-    --el-menu-text-color: var(--ad-text-secondary);
-    --el-menu-active-color: var(--ad-red);
-    --el-menu-hover-bg-color: var(--ad-card);
+    --el-menu-bg-color: var(--ui-surface-subtle);
+    --el-menu-text-color: var(--ui-text-secondary);
+    --el-menu-active-color: var(--ui-brand);
+    --el-menu-hover-bg-color: var(--ui-surface);
     border-right: none;
 
     .el-menu-item,
@@ -171,7 +179,7 @@ onUnmounted(() => {
     }
 
     .el-menu-item.is-active {
-      background: var(--ad-accent-glow);
+      background: var(--ui-brand-soft);
       position: relative;
 
       &::before {
@@ -183,7 +191,7 @@ onUnmounted(() => {
         width: 3px;
         height: 18px;
         border-radius: 0 2px 2px 0;
-        background: var(--ad-red);
+        background: var(--ui-brand);
       }
     }
   }
@@ -202,7 +210,7 @@ onUnmounted(() => {
   background: transparent;
 }
 .sidebar-menu-wrap::-webkit-scrollbar-thumb {
-  background: var(--ad-border);
+  background: var(--ui-border);
   border-radius: 2px;
 }
 
@@ -212,9 +220,9 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   padding: 0 16px;
-  color: var(--ad-text);
+  color: var(--ui-text);
   font-weight: 700;
-  border-bottom: 1px solid var(--ad-border);
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .logo-mark {
@@ -224,7 +232,7 @@ onUnmounted(() => {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, var(--ui-brand), var(--ui-brand-hover));
   color: #fff;
   font-size: 18px;
   font-weight: 800;
@@ -238,12 +246,28 @@ onUnmounted(() => {
 }
 
 .header {
-  background: var(--ad-darker);
-  border-bottom: 1px solid var(--ad-border);
+  background: var(--ui-surface-subtle);
+  border-bottom: 1px solid var(--ui-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  min-width: 0;
+}
+
+.header-page-title {
+  overflow: hidden;
+  color: var(--ui-text);
+  font-size: var(--ui-font-size-base);
+  font-weight: var(--ui-font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-right {
@@ -253,7 +277,7 @@ onUnmounted(() => {
 }
 
 .user-info {
-  color: var(--ad-text);
+  color: var(--ui-text);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -273,14 +297,15 @@ onUnmounted(() => {
 .main-content {
   padding: 20px;
   min-height: calc(100vh - 60px);
+  background: var(--ui-bg);
 }
 </style>
 
 <style>
 .el-menu--popup {
-  --el-menu-bg-color: var(--ad-card) !important;
-  --el-menu-text-color: var(--ad-text-secondary) !important;
-  --el-menu-hover-bg-color: var(--ad-darker) !important;
-  --el-menu-active-color: var(--ad-red) !important;
+  --el-menu-bg-color: var(--ui-surface) !important;
+  --el-menu-text-color: var(--ui-text-secondary) !important;
+  --el-menu-hover-bg-color: var(--ui-surface-subtle) !important;
+  --el-menu-active-color: var(--ui-brand) !important;
 }
 </style>

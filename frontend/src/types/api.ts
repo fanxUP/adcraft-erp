@@ -6,6 +6,39 @@
 
 // ---- Common ----
 
+export type UiTone = 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral'
+
+export interface ApiMeta {
+  request_id?: string
+  timestamp?: string
+}
+
+export interface ApiFieldError {
+  loc: Array<string | number>
+  msg: string
+  type?: string
+}
+
+export interface ApiEnvelope<T> {
+  code: number
+  message: string
+  data: T | null
+  meta?: ApiMeta
+}
+
+export interface StatusView {
+  code: string
+  label: string
+  tone: UiTone
+  terminal: boolean
+}
+
+export interface ActionCapability {
+  allowed: boolean
+  disabled_reason?: string | null
+  requires_confirmation: boolean
+}
+
 export interface PaginatedData<T> {
   items: T[]
   total: number
@@ -85,6 +118,7 @@ export interface OrderListResponse {
   customer_name?: string
   project_name: string
   status: string
+  status_view?: StatusView | null
   total_amount: number
   paid_amount: number
   unpaid_amount: number
@@ -109,6 +143,7 @@ export interface OrderItemResponse {
   use_area?: boolean
   quantity_mode?: 'piece' | 'area'
   area?: number
+  pieces?: number
   unit_price: number
   process_fee?: number
   installation_fee?: number
@@ -123,6 +158,272 @@ export interface OrderItemResponse {
   group_name?: string
   material_process?: string
   specification?: string
+  lifecycle_status?: string
+}
+
+export type OrderItemStage =
+  | 'designing'
+  | 'in_production'
+  | 'in_installation'
+  | 'completed'
+  | 'not_ready'
+
+export interface TaskOrderItemOption extends OrderItemResponse {
+  stage: OrderItemStage
+  stage_label: string
+  stage_view: StatusView
+  can_select: boolean
+  disabled_reason?: string | null
+  is_linked: boolean
+  task_status?: string | null
+  task_status_label?: string | null
+  task_status_view?: StatusView | null
+  task_progress_pct?: number | null
+  capabilities?: Record<string, ActionCapability>
+  outsource_blocked: boolean
+  outsource_status?: 'pending' | 'in_progress' | null
+  outsource_status_label?: string | null
+  outsource_task_count: number
+  outsource_task_nos: string[]
+}
+
+export interface OrderItemMutationFields {
+  item_name?: string
+  product_id?: string | null
+  material_id?: string | null
+  process_id?: string | null
+  length?: number | null
+  length_unit?: string | null
+  width?: number | null
+  width_unit?: string | null
+  height?: number | null
+  height_unit?: string | null
+  quantity?: number
+  unit?: string | null
+  use_area?: boolean
+  quantity_mode?: string
+  pieces?: number | null
+  unit_price?: number
+  process_fee?: number
+  installation_fee?: number
+  design_fee?: number
+  transport_fee?: number
+  other_fee?: number
+  remark?: string | null
+  image_url?: string | null
+  sort_order?: number
+  group_name?: string | null
+  group_id?: string | null
+  material_process?: string | null
+}
+
+export interface OrderEditItem extends OrderItemMutationFields {
+  id?: string
+}
+
+export interface OrderEditGroup {
+  group_id: string
+  group_name?: string | null
+  sort_order: number
+}
+
+export interface OrderEditHeader {
+  customer_id?: string | null
+  customer_name?: string | null
+  project_name?: string | null
+  department?: string | null
+  contact_person?: string | null
+  contact_phone?: string | null
+  delivery_deadline?: string | null
+  installation_address?: string | null
+  remark?: string | null
+}
+
+export interface OrderEditRequest {
+  reason: string
+  expected_updated_at: string
+  header: OrderEditHeader
+  items: OrderEditItem[]
+  groups: OrderEditGroup[]
+  preview_id?: string
+  plan_hash?: string
+  preview_expires_at?: string
+  confirm_high_risk?: boolean
+}
+
+export interface OrderEditItemDiff {
+  operation: 'add' | 'update' | 'delete'
+  item_id?: string | null
+  item_name?: string | null
+  changed_fields: string[]
+  before?: Record<string, unknown> | null
+  after?: Record<string, unknown> | null
+}
+
+export interface OrderEditImpactResponse {
+  order_id: string
+  order_no: string
+  status: string
+  updated_at?: string
+  operation: 'batch'
+  preview_id: string
+  preview_expires_at: string
+  plan_hash: string
+  change_status?: 'PREVIEWED' | string
+  verification_status?: 'PENDING' | string
+  before: OrderItemFinancialSnapshot
+  after: OrderItemFinancialSnapshot
+  delta: number
+  diff: {
+    added: number
+    updated: number
+    deleted: number
+    header_changed: number
+    groups_changed: boolean
+  }
+  header_diff: Array<{ field: string; before: unknown; after: unknown }>
+  item_diffs: OrderEditItemDiff[]
+  decision: 'DIRECT_APPLY' | 'CONFIRM_AND_REFRESH' | 'APPROVAL_AND_ADJUSTMENT' | 'BLOCK' | string
+  associated_edit_enabled?: boolean
+  requires_confirmation: boolean
+  requires_high_risk_ack: boolean
+  association_count: number
+  lock_reasons: Array<{ code: string; message: string }>
+  can_apply: boolean
+  association_catalog: OrderItemRelationCatalogEntry[]
+  refresh_plan?: OrderItemRelationCatalogEntry[]
+  relations: Record<string, unknown>
+}
+
+export interface OrderGroupResponse {
+  id: string
+  quote_id: string
+  group_id: string
+  group_name?: string | null
+  sort_order: number
+}
+
+export interface OrderItemRelationCatalogEntry {
+  module: string
+  label: string
+  relation_type: 'document' | 'item' | 'snapshot' | 'source' | string
+  record_id: string
+  record_no?: string | null
+  status?: string | null
+  action: string
+  risk: 'low' | 'medium' | 'high' | string
+  fields?: string[]
+  note?: string
+}
+
+export interface OrderItemFinancialSnapshot {
+  total_amount: number
+  paid_amount: number
+  unpaid_amount: number
+  cost_amount: number
+  gross_profit: number
+  line_count: number
+}
+
+export interface OrderItemEditabilityResponse {
+  order_id: string
+  order_no: string
+  status: string
+  updated_at?: string
+  can_edit_items: boolean
+  associated_edit_enabled?: boolean
+  editable_statuses: string[]
+  decision: 'DIRECT_APPLY' | 'CONFIRM_AND_REFRESH' | 'APPROVAL_AND_ADJUSTMENT' | 'BLOCK' | string
+  requires_confirmation: boolean
+  requires_high_risk_ack: boolean
+  association_count: number
+  lock_reasons: Array<{ code: string; message: string }>
+  association_catalog: OrderItemRelationCatalogEntry[]
+  relations: Record<string, unknown>
+}
+
+export interface OrderItemRefreshResult {
+  status: 'VERIFIED' | 'PENDING_ADJUSTMENT' | 'BLOCKED' | string
+  change_batch_id: string
+  auto_refreshed: Array<Record<string, unknown>>
+  preserved_facts: Array<Record<string, unknown>>
+  pending_review: Array<Record<string, unknown>>
+  adjustments: Array<Record<string, unknown>>
+  blocked: Array<Record<string, unknown>>
+  counts?: Record<string, number>
+}
+
+export interface OrderItemChangeBatch {
+  change_batch_id: string
+  version_id: string
+  version_no: number
+  created_at?: string | null
+  created_by?: string | null
+  operator_id?: string | null
+  change_type?: string | null
+  reason?: string | null
+  status: string
+  status_history?: string[]
+  verification_status: string
+  counts?: Record<string, number>
+  before?: Record<string, unknown> | null
+  after?: Record<string, unknown> | null
+  impact?: Record<string, unknown> | null
+  refresh_result?: OrderItemRefreshResult
+}
+
+export interface OrderItemChangeBatchListResponse {
+  order_id: string
+  order_no: string
+  total: number
+  batches: OrderItemChangeBatch[]
+}
+
+export interface OrderItemReconciliationCheck {
+  ok: boolean
+  actual: number | string | null
+  expected: number | string | null
+}
+
+export interface OrderItemReconciliationResponse {
+  order_id: string
+  order_no: string
+  checked_at: string
+  status: 'PASS' | 'ATTENTION' | string
+  checks: Record<string, OrderItemReconciliationCheck>
+  financials: Record<string, number | string | null>
+  associations: Record<string, unknown>
+  orphan_references: Array<Record<string, unknown>>
+  history: Record<string, unknown>
+  change_batch?: OrderItemChangeBatch | null
+}
+
+export interface OrderItemMutationImpactResponse {
+  order_id: string
+  order_no: string
+  status: string
+  updated_at?: string
+  operation: 'add' | 'update' | 'delete'
+  item_id?: string | null
+  before: OrderItemFinancialSnapshot
+  after: OrderItemFinancialSnapshot
+  delta: number
+  projected_item?: Record<string, unknown> | null
+  associated_edit_enabled?: boolean
+  decision: 'DIRECT_APPLY' | 'CONFIRM_AND_REFRESH' | 'APPROVAL_AND_ADJUSTMENT' | 'BLOCK' | string
+  requires_confirmation: boolean
+  requires_high_risk_ack: boolean
+  association_count: number
+  lock_reasons: Array<{ code: string; message: string }>
+  can_apply: boolean
+  preview_id: string
+  preview_expires_at: string
+  plan_hash: string
+  change_status?: 'PREVIEWED' | string
+  verification_status?: 'PENDING' | string
+  association_catalog: OrderItemRelationCatalogEntry[]
+  refresh_plan?: OrderItemRelationCatalogEntry[]
+  relations: Record<string, unknown>
 }
 
 export interface OrderStatusLogResponse {
@@ -146,6 +447,7 @@ export interface OrderDetailResponse {
   project_name: string
   sales_user_id?: string
   status: string
+  status_view?: StatusView | null
   total_amount: number
   paid_amount: number
   unpaid_amount: number
@@ -156,8 +458,19 @@ export interface OrderDetailResponse {
   contact_person?: string
   contact_phone?: string
   created_at?: string
+  updated_at?: string
+  source_quote_id?: string
   items: OrderItemResponse[]
+  groups: OrderGroupResponse[]
   status_logs: OrderStatusLogResponse[]
+  change_batch?: {
+    change_batch_id: string
+    status: string
+    status_history?: string[]
+    verification_status?: string
+    idempotent_replay?: boolean
+    refresh_result?: OrderItemRefreshResult
+  }
   cost_amount?: number
   gross_profit?: number
 }
@@ -178,10 +491,23 @@ export interface AttachmentResponse {
   created_at?: string
 }
 
+export type TaskType = 'design' | 'production' | 'installation'
+
+export interface TaskOrderItemState {
+  status: string
+  status_label?: string | null
+  progress_pct: number
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
+}
+
 export interface DesignTaskResponse {
   id: string
   design_no: string
   order_id: string
+  order_item_id?: string | null
+  order_item_ids?: string[]
+  order_item_states?: Record<string, TaskOrderItemState>
   customer_id: string
   order_no?: string
   customer_name?: string
@@ -189,7 +515,16 @@ export interface DesignTaskResponse {
   total_amount?: number
   source?: string
   project_name: string
+  item_name?: string | null
+  item_names?: string[]
   status: string
+  progress_pct: number
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
+  planned_start_at?: string | null
+  planned_end_at?: string | null
+  is_overdue?: boolean
+  overdue_days?: number
   is_outsourced?: boolean
   assigned_to?: string
   assigned_to_name?: string
@@ -206,6 +541,9 @@ export interface ProductionTaskResponse {
   id: string
   production_no: string
   order_id: string
+  order_item_id?: string | null
+  order_item_ids?: string[]
+  order_item_states?: Record<string, TaskOrderItemState>
   customer_id: string
   order_no?: string
   customer_name?: string
@@ -213,7 +551,16 @@ export interface ProductionTaskResponse {
   total_amount?: number
   source?: string
   project_name: string
+  item_name?: string | null
+  item_names?: string[]
   status: string
+  progress_pct: number
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
+  planned_start_at?: string | null
+  planned_end_at?: string | null
+  is_overdue?: boolean
+  overdue_days?: number
   is_outsourced?: boolean
   assigned_to?: string
   material_id?: string
@@ -234,6 +581,9 @@ export interface InstallationTaskResponse {
   id: string
   installation_no: string
   order_id: string
+  order_item_id?: string | null
+  order_item_ids?: string[]
+  order_item_states?: Record<string, TaskOrderItemState>
   customer_id: string
   order_no?: string
   customer_name?: string
@@ -241,7 +591,16 @@ export interface InstallationTaskResponse {
   total_amount?: number
   source?: string
   project_name: string
+  item_name?: string | null
+  item_names?: string[]
   status: string
+  progress_pct: number
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
+  planned_start_at?: string | null
+  planned_end_at?: string | null
+  is_overdue?: boolean
+  overdue_days?: number
   is_outsourced?: boolean
   assigned_to?: string
   address?: string
@@ -253,6 +612,36 @@ export interface InstallationTaskResponse {
   created_at?: string
   updated_at?: string
   attachments: AttachmentResponse[]
+}
+
+export interface TaskQueueItem {
+  id: string
+  task_type: 'design' | 'production' | 'installation'
+  stage: 'design' | 'production' | 'installation'
+  task_no: string
+  document_id: string
+  order_id?: string
+  order_item_id?: string | null
+  order_item_ids?: string[]
+  order_no?: string
+  customer_name?: string
+  project_name: string
+  item_name?: string | null
+  item_names?: string[]
+  status: string
+  progress_pct: number
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
+  planned_start_at?: string | null
+  planned_end_at?: string | null
+  is_overdue?: boolean
+  overdue_days?: number
+  assigned_to?: string
+  assigned_to_name?: string
+  is_outsourced?: boolean
+  completed_at?: string
+  created_at?: string
+  updated_at?: string
 }
 
 // ---- Product / Material / Process ----
@@ -318,6 +707,7 @@ export interface PaymentResponse {
   paid_at?: string
   remark?: string
   is_voided: boolean
+  status_view?: StatusView | null
   void_reason?: string
   voided_at?: string
   receipt_url?: string
@@ -335,6 +725,8 @@ export interface StatementResponse {
   total_paid_amount: number
   total_unpaid_amount: number
   status: string
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
   confirmed_at?: string
   confirmed_by?: string
   created_at?: string
@@ -345,6 +737,7 @@ export interface StatementOrderItem {
   order_no: string
   project_name: string
   status: string
+  status_view?: StatusView | null
   total_amount: number
   paid_amount: number
   unpaid_amount: number
@@ -386,15 +779,20 @@ export interface ProjectCostResponse {
   related_project_name?: string
   quote_no?: string
   order_item_id?: string
+  order_item_ids?: string[]
   quote_item_id?: string
   order_item_name?: string
   quote_item_name?: string
+  item_scopes?: ProjectCostItemScope[]
+  scope_type?: 'document' | 'item'
   group_name?: string
   customer_id?: string
   customer_name?: string
   project_name?: string
   category: string
   amount: number
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
   quantity?: number
   unit?: string
   unit_price?: number
@@ -414,6 +812,11 @@ export interface ProjectCostResponse {
   created_at?: string
   attachment_count?: number
   attachments?: AttachmentResponse[]
+}
+
+export interface ProjectCostItemScope {
+  order_item_id: string
+  order_item_name?: string
 }
 
 export interface DebtResponse {
@@ -438,6 +841,8 @@ export interface DebtResponse {
   payee_company_name?: string
   debt_amount: number
   is_settled: boolean
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
   settled_at?: string
   cost_date?: string
   description?: string
@@ -452,6 +857,7 @@ export interface QuoteCostResponse {
   project_name: string
   customer_name?: string
   status: string
+  status_view?: StatusView | null
   total_amount: number
   cost_amount: number
   created_at?: string
@@ -464,6 +870,20 @@ export interface ProjectCostImportResponse {
 
 export interface ProjectCostSummaryResponse {
   costs: Record<string, number>
+}
+
+export interface ProjectCostItemSummary {
+  order_item_id: string
+  total_registered: number
+  record_count: number
+}
+
+export interface ProjectCostItemSummaryResponse {
+  order_id: string
+  total_registered: number
+  order_scope_registered: number
+  item_scope_registered: number
+  items: ProjectCostItemSummary[]
 }
 
 // ---- Inventory ----
@@ -520,6 +940,8 @@ export interface OutsourceTaskResponse {
   related_doc_type?: string
   related_project_name?: string
   order_id?: string
+  order_item_id?: string | null
+  order_item_name?: string | null
   source_task_type?: string
   source_task_id?: string
   task_type: string
@@ -530,11 +952,69 @@ export interface OutsourceTaskResponse {
   paid_amount: number
   unpaid_amount: number
   status: string
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
   expected_at?: string
   completed_at?: string
   remark?: string
   created_at?: string
   deleted_at?: string
+}
+
+export interface OutsourceTaskGroupResponse {
+  group_key: string
+  group_kind: 'source_task' | 'related_document' | 'unresolved_source' | 'unresolved_document' | 'unlinked' | string
+  group_label: string
+  source_task_type?: string | null
+  source_task_id?: string | null
+  source_task_no?: string | null
+  source_task_status?: string | null
+  source_task_exists?: boolean | null
+  related_doc_type?: string | null
+  related_doc_id?: string | null
+  related_doc_no?: string | null
+  related_project_name?: string | null
+  related_project_amount?: number | null
+  consistency_warning?: string | null
+  task_count: number
+  active_task_count: number
+  status_counts: Record<string, number>
+  planned_amount: number
+  recognized_cost: number
+  paid_amount: number
+  unpaid_amount: number
+}
+
+export interface OutsourceOrderItemSummary {
+  id: string
+  item_name: string
+  quantity: number
+  unit?: string | null
+  group_name?: string | null
+  sort_order: number
+  lifecycle_status?: string
+  allocated_quantity: number
+  remaining_quantity: number
+  planned_amount: number
+  recognized_cost: number
+  active_task_count: number
+  status: string
+  can_send: boolean
+  requires_reason: boolean
+  block_reason?: string | null
+}
+
+export interface OutsourceOrderItemSummaryResponse {
+  order_id: string
+  order_no: string
+  project_name: string
+  task_type?: string | null
+  source_task_type?: string | null
+  source_task_id?: string | null
+  items: OutsourceOrderItemSummary[]
+  order_level_task_count: number
+  order_level_planned_amount: number
+  order_level_recognized_cost: number
 }
 
 export interface OutsourcePaymentResponse {
@@ -612,6 +1092,7 @@ export interface QuoteListResponse {
   customer_name?: string
   project_name: string
   status: string
+  status_view?: StatusView | null
   total_amount: number
   valid_until?: string
   quote_date?: string
@@ -644,6 +1125,7 @@ export interface QuoteDetailResponse {
   project_name: string
   sales_user_id?: string
   status: string
+  status_view?: StatusView | null
   subtotal_amount: number
   discount_amount: number
   tax_rate: number
@@ -672,6 +1154,7 @@ export interface ContractListResponse {
   unpaid_amount: number
   contract_type?: string
   status: string
+  status_view?: StatusView | null
   sign_date?: string
   start_date?: string
   end_date?: string
@@ -728,6 +1211,7 @@ export interface OrderWithoutContractItem {
   project_name: string
   department?: string
   status?: string
+  status_view?: StatusView | null
   total_amount?: number
   created_at?: string
 }
@@ -792,6 +1276,7 @@ export interface CustomerDebtContract {
   paid_amount: number
   unpaid_amount: number
   status: string
+  status_view?: StatusView | null
   contract_type?: string
   department?: string
   orders?: CustomerDebtOrder[]
@@ -807,6 +1292,7 @@ export interface CustomerDebtOrder {
   paid_amount: number
   unpaid_amount: number
   status: string
+  status_view?: StatusView | null
 }
 
 export interface CustomerDebtQuote {
@@ -816,6 +1302,7 @@ export interface CustomerDebtQuote {
   department?: string
   total_amount: number
   status: string
+  status_view?: StatusView | null
 }
 
 export interface CustomerDebtItem {

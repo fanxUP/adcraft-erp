@@ -2,10 +2,8 @@
 
 from typing import Any, Literal, Optional
 from uuid import UUID
-from datetime import datetime
 
 from pydantic import BaseModel, Field
-
 
 # ── Request schemas ──
 

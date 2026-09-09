@@ -7,9 +7,12 @@
 <style scoped>
 .blank-layout {
   min-height: 100vh;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--ad-dark);
+  padding: var(--ui-space-4);
+  background: var(--ui-bg);
+  color: var(--ui-text);
 }
 </style>
