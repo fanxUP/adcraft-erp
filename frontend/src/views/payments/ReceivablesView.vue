@@ -1,8 +1,17 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>应收管理</h2>
-    </div>
+  <AppPage class="page">
+    <PageHeader title="应收管理" description="统一查看客户欠款、收款记录和订单回款状态">
+      <template #actions>
+        <el-button
+          v-if="activeTab === 'payments'"
+          data-ai-target="receivable-register-payment"
+          type="primary"
+          @click="openPaymentDialog()"
+        >
+          登记收款
+        </el-button>
+      </template>
+    </PageHeader>
 
     <el-tabs v-model="activeTab">
       <!-- ===== Tab 1: 客户欠款总览 ===== -->
@@ -12,19 +21,19 @@
           <el-col :span="6">
             <el-card shadow="never" class="stat-card">
               <div class="stat-label">合同总金额</div>
-              <div class="stat-value">¥ {{ stats.totalOrder.toFixed(2) }}</div>
+              <div class="stat-value">{{ formatMoney(stats.totalOrder) }}</div>
             </el-card>
           </el-col>
           <el-col :span="6">
             <el-card shadow="never" class="stat-card">
               <div class="stat-label">已收金额</div>
-              <div class="stat-value" style="color: var(--el-color-success)">¥ {{ stats.totalPaid.toFixed(2) }}</div>
+              <div class="stat-value text-success">{{ formatMoney(stats.totalPaid) }}</div>
             </el-card>
           </el-col>
           <el-col :span="6">
             <el-card shadow="never" class="stat-card">
               <div class="stat-label">待收欠款</div>
-              <div class="stat-value" style="color: #e63946">¥ {{ stats.totalDebt.toFixed(2) }}</div>
+              <div class="stat-value text-danger">{{ formatMoney(stats.totalDebt) }}</div>
             </el-card>
           </el-col>
           <el-col :span="6">
@@ -36,13 +45,15 @@
         </el-row>
 
         <!-- 客户欠款表（可展开） -->
-        <el-table
-          :data="debtList"
-          v-loading="debtLoading"
-          stripe
-          empty-text="暂无欠款客户"
-          row-key="customer_id"
-        >
+        <DataTableShell :state="debtTableState" aria-label="客户欠款总览">
+          <template #error><StatePanel state="error" action-label="重试" @action="fetchDebts" /></template>
+          <el-table
+            :data="debtList"
+            v-loading="debtLoading"
+            stripe
+            empty-text="暂无欠款客户"
+            row-key="customer_id"
+          >
           <el-table-column type="expand">
             <template #default="{ row }">
               <!-- 合同（主要） -->
@@ -61,19 +72,19 @@
                           </el-table-column>
                           <el-table-column prop="project_name" label="项目名称" min-width="200" />
                           <el-table-column label="订单金额" width="120">
-                            <template #default="{ row: o }">¥ {{ o.total_amount?.toFixed(2) }}</template>
+                              <template #default="{ row: o }">{{ formatMoney(o.total_amount) }}</template>
                           </el-table-column>
                           <el-table-column label="已收" width="120">
-                            <template #default="{ row: o }">¥ {{ o.paid_amount?.toFixed(2) }}</template>
+                              <template #default="{ row: o }">{{ formatMoney(o.paid_amount) }}</template>
                           </el-table-column>
                           <el-table-column label="欠款" width="120">
                             <template #default="{ row: o }">
-                              <span style="color: #e63946; font-weight: 600">¥ {{ o.unpaid_amount?.toFixed(2) }}</span>
+                              <span class="text-danger">{{ formatMoney(o.unpaid_amount) }}</span>
                             </template>
                           </el-table-column>
                           <el-table-column label="状态" width="100">
                             <template #default="{ row: o }">
-                              <el-tag size="small" :type="orderStatusTag(o.status)">{{ orderStatusLabel(o.status) }}</el-tag>
+                              <StatusTag :status="o.status_view || o.status" size="sm" />
                             </template>
                           </el-table-column>
                         </el-table>
@@ -87,11 +98,11 @@
                           </el-table-column>
                           <el-table-column prop="project_name" label="项目名称" min-width="200" />
                           <el-table-column label="金额" width="120">
-                            <template #default="{ row: q }">¥ {{ q.total_amount?.toFixed(2) }}</template>
+                              <template #default="{ row: q }">{{ formatMoney(q.total_amount) }}</template>
                           </el-table-column>
                           <el-table-column label="状态" width="100">
                             <template #default="{ row: q }">
-                              <el-tag size="small" :type="quoteStatusTag(q.status)">{{ quoteStatusLabel(q.status) }}</el-tag>
+                              <StatusTag :status="q.status_view || q.status" size="sm" />
                             </template>
                           </el-table-column>
                         </el-table>
@@ -102,14 +113,14 @@
                   <el-table-column prop="project_name" label="合同名称" min-width="180" />
                   <el-table-column prop="contract_type" label="合同类型" width="100" />
                   <el-table-column label="合同金额" width="120">
-                    <template #default="{ row: ct }">¥ {{ ct.total_amount?.toFixed(2) }}</template>
+                    <template #default="{ row: ct }">{{ formatMoney(ct.total_amount) }}</template>
                   </el-table-column>
                   <el-table-column label="已收" width="120">
-                    <template #default="{ row: ct }">¥ {{ ct.paid_amount?.toFixed(2) }}</template>
+                    <template #default="{ row: ct }">{{ formatMoney(ct.paid_amount) }}</template>
                   </el-table-column>
                   <el-table-column label="欠款" width="120">
                     <template #default="{ row: ct }">
-                      <span style="color: #e63946; font-weight: 600">¥ {{ ct.unpaid_amount?.toFixed(2) }}</span>
+                      <span class="text-danger">{{ formatMoney(ct.unpaid_amount) }}</span>
                     </template>
                   </el-table-column>
                   <el-table-column label="类型" width="100">
@@ -120,7 +131,7 @@
                   </el-table-column>
                   <el-table-column label="状态" width="100">
                     <template #default="{ row: ct }">
-                      <el-tag size="small" :type="contractStatusTag(ct.status)">{{ contractStatusLabel(ct.status) }}</el-tag>
+                      <StatusTag :status="ct.status_view || ct.status" size="sm" />
                     </template>
                   </el-table-column>
                 </el-table>
@@ -132,50 +143,44 @@
             <template #default="{ row }">{{ row.contract_count }}</template>
           </el-table-column>
           <el-table-column label="合同总额" width="120">
-            <template #default="{ row }">¥ {{ row.total_order_amount?.toFixed(2) }}</template>
+            <template #default="{ row }">{{ formatMoney(row.total_order_amount) }}</template>
           </el-table-column>
           <el-table-column label="已收金额" width="120">
-            <template #default="{ row }">¥ {{ row.total_paid?.toFixed(2) }}</template>
+            <template #default="{ row }">{{ formatMoney(row.total_paid) }}</template>
           </el-table-column>
           <el-table-column label="欠款金额" width="120">
             <template #default="{ row }">
-              <span style="color: #e63946; font-weight: 600">¥ {{ row.debt_amount?.toFixed(2) }}</span>
+              <span class="text-danger">{{ formatMoney(row.debt_amount) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="最后收款" width="120">
             <template #default="{ row }">{{ formatDate(row.last_payment_date) || '-' }}</template>
           </el-table-column>
-        </el-table>
+          </el-table>
+        </DataTableShell>
       </el-tab-pane>
 
       <!-- ===== Tab 2: 收款记录 ===== -->
       <el-tab-pane label="收款记录" name="payments">
-        <div class="page-header" style="margin-top: 8px">
-          <span></span>
-          <el-button
-            data-ai-target="receivable-register-payment"
-            @click="openPaymentDialog()"
-          >
-            登记收款
-          </el-button>
-        </div>
-        <div class="search-bar">
+        <PageToolbar aria-label="收款记录筛选">
           <el-select v-model="filterOrderId" placeholder="筛选订单" clearable filterable style="width: 240px" @change="fetchPayments">
-            <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
+            <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ${formatMoney(o.total_amount)}`" :value="o.id" />
           </el-select>
-          <el-select v-model="filterCustomerId" placeholder="筛选客户" clearable filterable style="width: 200px; margin-left: 12px" @change="fetchPayments">
+          <el-select v-model="filterCustomerId" placeholder="筛选客户" clearable filterable style="width: 200px" @change="fetchPayments">
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
-          <el-button style="margin-left: 12px" @click="fetchPayments" type="primary">搜索</el-button>
-        </div>
+          <el-button @click="fetchPayments" type="primary">搜索</el-button>
+        </PageToolbar>
 
-        <el-table :data="paymentList" v-loading="paymentLoading" stripe style="margin-top: 16px">
+        <DataTableShell :state="paymentTableState" aria-label="收款记录">
+          <template #error><StatePanel state="error" action-label="重试" @action="fetchPayments" /></template>
+          <el-table :data="paymentList" v-loading="paymentLoading" stripe>
           <el-table-column prop="payment_no" label="收款编号" width="180" />
           <el-table-column prop="order_no" label="订单编号" width="180" />
           <el-table-column prop="customer_name" label="客户名称" width="160" />
           <el-table-column prop="project_name" label="项目名称" min-width="200" />
           <el-table-column label="金额" width="120">
-            <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
+            <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
           </el-table-column>
           <el-table-column prop="payment_method" label="方式" width="100" />
           <el-table-column label="收款日期" width="120">
@@ -183,7 +188,7 @@
           </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="{ row }">
-              <el-tag :type="row.is_voided ? 'danger' : 'success'" size="small">{{ row.is_voided ? '已作废' : '有效' }}</el-tag>
+              <StatusTag :status="row.status_view || (row.is_voided ? 'voided' : 'active')" size="sm" />
             </template>
           </el-table-column>
           <el-table-column prop="remark" label="备注" min-width="180" />
@@ -192,17 +197,19 @@
               <el-button v-if="!row.is_voided" text type="danger" size="small" @click="handleVoid(row)">作废</el-button>
             </template>
           </el-table-column>
-        </el-table>
-
-        <el-pagination
-          v-model:current-page="payPage"
-          v-model:page-size="payPageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="payTotal"
-          layout="total, sizes, prev, pager, next"
-          style="margin-top: 16px; justify-content: flex-end"
-          @change="fetchPayments"
-        />
+          </el-table>
+          <template #footer>
+            <el-pagination
+              v-if="payTotal > 0"
+              v-model:current-page="payPage"
+              v-model:page-size="payPageSize"
+              :page-sizes="[10, 20, 50, 100]"
+              :total="payTotal"
+              layout="total, sizes, prev, pager, next"
+              @change="fetchPayments"
+            />
+          </template>
+        </DataTableShell>
       </el-tab-pane>
     </el-tabs>
 
@@ -211,7 +218,7 @@
       <el-form :model="form" label-width="100px">
         <el-form-item label="订单">
           <el-select v-model="form.order_id" placeholder="选择订单" filterable style="width: 100%" @change="onOrderSelect">
-            <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ¥${(o.total_amount || 0).toFixed(2)}`" :value="o.id" />
+          <el-option v-for="o in orderOptions" :key="o.id" :label="`${o.order_no} — ${o.department || '-'} — ${o.project_name} — ${formatMoney(o.total_amount)}`" :value="o.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="收款金额">
@@ -238,11 +245,12 @@
         <el-button :loading="saving" @click="handleCreate" type="primary">确认收款</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
+import { formatMoney } from '@/utils/format'
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getPayments, createPayment, voidPayment, getCustomerDebt } from '@/api/payments'
@@ -251,6 +259,7 @@ import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { PaymentResponse, OrderListResponse, CustomerResponse, CustomerDebtItem, CustomerDebtOrder } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel, StatusTag } from '@/components/ui'
 
 const route = useRoute()
 const aiStore = useAiAssistantStore()
@@ -263,6 +272,13 @@ const activeTab = ref('debt')
 
 const debtLoading = ref(false)
 const debtList = ref<CustomerDebtItem[]>([])
+const debtError = ref(false)
+
+const debtTableState = computed(() => {
+  if (debtError.value) return 'error' as const
+  if (debtLoading.value) return 'loading' as const
+  return debtList.value.length ? 'ready' as const : 'empty' as const
+})
 
 const stats = computed(() => {
   const totalOrder = debtList.value.reduce((s, c) => s + c.total_order_amount, 0)
@@ -271,56 +287,13 @@ const stats = computed(() => {
   return { totalOrder, totalPaid, totalDebt }
 })
 
-function contractStatusTag(status: string): "" | "success" | "warning" | "info" | "danger" | "primary" {
-  const map: Record<string, "" | "success" | "warning" | "info" | "danger" | "primary"> = {
-    draft: 'info', pending_sign: 'warning', active: 'success', completed: 'success', terminated: 'danger',
-  }
-  return map[status] || 'info'
-}
-
-function contractStatusLabel(status: string) {
-  const map: Record<string, string> = {
-    draft: '草稿', pending_sign: '待签约', active: '执行中', completed: '已完成', terminated: '已终止',
-  }
-  return map[status] || status
-}
-
-function orderStatusTag(status: string) {
-  const map: Record<string, string> = {
-    pending_confirm: 'warning', confirmed: 'primary', in_progress: 'warning',
-    in_production: '', in_installation: '', completed: 'success', cancelled: 'danger',
-  }
-  return map[status] || 'info'
-}
-
-function orderStatusLabel(status: string) {
-  const map: Record<string, string> = {
-    pending_confirm: '待确认', confirmed: '已确认', in_progress: '进行中',
-    in_production: '生产中', in_installation: '安装中', completed: '已完成', cancelled: '已取消',
-  }
-  return map[status] || status
-}
-
-function quoteStatusTag(status: string): "" | "success" | "warning" | "info" | "danger" | "primary" {
-  const map: Record<string, "" | "success" | "warning" | "info" | "danger" | "primary"> = {
-    draft: 'info', confirmed: 'success', converted: 'info', cancelled: 'danger',
-  }
-  return map[status] || 'info'
-}
-
-function quoteStatusLabel(status: string) {
-  const map: Record<string, string> = {
-    draft: '草稿', confirmed: '已确认', converted: '已转订单', cancelled: '已取消',
-  }
-  return map[status] || status
-}
-
 async function fetchDebts() {
   debtLoading.value = true
+  debtError.value = false
   try {
     debtList.value = await getCustomerDebt()
   } catch {
-    // handled by interceptor
+    debtError.value = true
   } finally { debtLoading.value = false }
 }
 
@@ -329,6 +302,7 @@ async function fetchDebts() {
 const paymentLoading = ref(false)
 const saving = ref(false)
 const paymentList = ref<PaymentResponse[]>([])
+const paymentError = ref(false)
 const payTotal = ref(0)
 const payPage = ref(1)
 const payPageSize = ref(20)
@@ -337,8 +311,15 @@ const filterCustomerId = ref('')
 const orderOptions = ref<OrderListResponse[]>([])
 const customerOptions = ref<CustomerResponse[]>([])
 
+const paymentTableState = computed(() => {
+  if (paymentError.value) return 'error' as const
+  if (paymentLoading.value) return 'loading' as const
+  return paymentList.value.length ? 'ready' as const : 'empty' as const
+})
+
 async function fetchPayments() {
   paymentLoading.value = true
+  paymentError.value = false
   try {
     const data = await getPayments({
       page: payPage.value,
@@ -348,6 +329,8 @@ async function fetchPayments() {
     })
     paymentList.value = data.items
     payTotal.value = data.total
+  } catch {
+    paymentError.value = true
   } finally { paymentLoading.value = false }
 }
 
@@ -454,10 +437,6 @@ watch(
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
-.search-bar { display: flex; align-items: center; }
 
 .stat-card { text-align: center; border: 1px solid var(--ad-border); }
 .stat-label { font-size: 13px; color: var(--ad-text-secondary); margin-bottom: 4px; }

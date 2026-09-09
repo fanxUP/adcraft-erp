@@ -1,11 +1,17 @@
 """Pending action confirmation service."""
 
-from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy import or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.ai_assistant.models import AiPendingAction
+
 from app.ai_assistant.config import settings
+from app.ai_assistant.models import AiPendingAction
+
+
+def _utc_now() -> datetime:
+    """Return naive UTC for the existing timestamp-without-timezone columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class ActionConfirmService:
@@ -13,7 +19,7 @@ class ActionConfirmService:
         self.db = db
 
     async def create_pending_action(self, session_id, user_id, action_type, tool_name, tool_args, preview_data):
-        expires_at = datetime.utcnow() + timedelta(minutes=settings.AI_PENDING_ACTION_EXPIRE_MINUTES)
+        expires_at = _utc_now() + timedelta(minutes=settings.AI_PENDING_ACTION_EXPIRE_MINUTES)
         action = AiPendingAction(
             session_id=session_id, user_id=user_id, action_type=action_type,
             tool_name=tool_name, tool_args=tool_args, preview_data=preview_data,
@@ -29,7 +35,7 @@ class ActionConfirmService:
 
     async def confirm_action(self, action_id, user_id):
         """Atomically claim an action so concurrent confirmations execute once."""
-        now = datetime.utcnow()
+        now = _utc_now()
         stmt = (
             update(AiPendingAction)
             .where(
@@ -64,7 +70,7 @@ class ActionConfirmService:
         if not action or action.status != "waiting_confirmation":
             return None
         action.status = "cancelled"
-        action.cancelled_at = datetime.utcnow()
+        action.cancelled_at = _utc_now()
         await self.db.commit()
         await self.db.refresh(action)
         return action
@@ -74,6 +80,6 @@ class ActionConfirmService:
         if not action:
             return
         action.status = "executed" if not error_message else "failed"
-        action.executed_at = datetime.utcnow()
+        action.executed_at = _utc_now()
         action.error_message = error_message
         await self.db.commit()

@@ -145,6 +145,7 @@ def service():
     db = MagicMock()
     db.execute = AsyncMock()
     db.flush = AsyncMock()
+    db.refresh = AsyncMock()
     with patch(
         "app.services.business_document_service.BusinessDocumentRepository"
     ) as repository_class:
@@ -503,4 +504,3 @@ async def test_quote_update_preserves_unset_date_fields():
     assert doc.quote_date == date(2026, 8, 1)
     assert doc.valid_until == date(2026, 9, 1)
     assert doc.project_name == "改名"
-

@@ -78,7 +78,9 @@ class BusinessDocumentRepository:
         """列出所有活跃单据，支持 doc_type 过滤。"""
         q = select(BusinessDocument).options(
             selectinload(BusinessDocument.customer),
-        ).where(BusinessDocument.deleted_at.is_(None))
+        ).where(
+            BusinessDocument.deleted_at.is_(None)
+        )
         if self.doc_type:
             q = q.where(BusinessDocument.doc_type == self.doc_type)
         if self.quote_mode:
@@ -216,7 +218,10 @@ class BusinessDocumentRepository:
     async def get_items(self, doc_id: UUID) -> list[BusinessDocumentItem]:
         result = await self.db.execute(
             select(BusinessDocumentItem)
-            .where(BusinessDocumentItem.document_id == doc_id)
+            .where(
+                BusinessDocumentItem.document_id == doc_id,
+                BusinessDocumentItem.lifecycle_status == "active",
+            )
             .order_by(BusinessDocumentItem.sort_order)
         )
         return list(result.scalars().all())
@@ -234,6 +239,7 @@ class BusinessDocumentRepository:
         item_id: UUID,
         *,
         document_id: UUID | None = None,
+        include_inactive: bool = False,
     ) -> BusinessDocumentItem | None:
         query = select(BusinessDocumentItem).where(
             BusinessDocumentItem.id == item_id
@@ -242,6 +248,8 @@ class BusinessDocumentRepository:
             query = query.where(
                 BusinessDocumentItem.document_id == document_id
             )
+        if not include_inactive:
+            query = query.where(BusinessDocumentItem.lifecycle_status == "active")
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 

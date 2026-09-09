@@ -7,15 +7,9 @@
     @close="$emit('close')"
   >
     <div v-if="loading" v-loading="true" style="height: 200px" />
-    <div v-else-if="form" class="print-area">
-      <!-- 公司信息 -->
-      <div class="print-company">
-        <div class="print-company-name">{{ companyName || '广告制作公司' }}</div>
-        <div class="print-company-detail">联系电话: {{ companyPhone || '__________' }}</div>
-      </div>
-
+    <div v-else-if="form" class="print-area acceptance-print-area">
       <!-- 标题 -->
-      <h2 class="preview-title">{{ form.project_name || '' }} 验收单</h2>
+      <h2 class="preview-title">验收单</h2>
 
       <!-- 基本信息 -->
       <div class="preview-info">
@@ -125,7 +119,7 @@
           <div class="signature-label">验收签字：</div>
           <div class="signature-blank"></div>
           <div class="signature-label">联系电话：{{ form.contact_phone || '' }}</div>
-          <div v-if="!form.contact_phone" class="signature-blank"></div>
+          <div class="signature-blank"></div>
           <div class="signature-date">日期：________年____月____日</div>
         </div>
         <div class="signature-block">
@@ -134,7 +128,7 @@
           <div class="signature-label">负责人签字：</div>
           <div class="signature-blank"></div>
           <div class="signature-label">联系电话：{{ companyPhone || '' }}</div>
-          <div v-if="!companyPhone" class="signature-blank"></div>
+          <div class="signature-blank"></div>
           <div class="signature-date">日期：________年____月____日</div>
         </div>
       </div>
@@ -419,25 +413,12 @@ function handlePrint() {
 
 <style>
 /* 不用 scoped，因为 el-dialog teleport 到 body，scoped 样式无法穿透 */
-.print-company {
+.acceptance-print-area .preview-title {
   text-align: center;
-  margin-bottom: 4px;
-}
-.print-company-name {
-  font-size: 20px;
+  font-size: 36px;
   font-weight: 700;
-  color: var(--ad-text);
-}
-.print-company-detail {
-  font-size: 13px;
-  color: var(--ad-text-secondary);
-  margin-top: 2px;
-}
-.preview-title {
-  text-align: center;
-  font-size: 22px;
-  margin: 16px 0;
-  letter-spacing: 4px;
+  margin: 0 0 16px;
+  letter-spacing: 8px;
   padding-bottom: 12px;
   border-bottom: 2px solid #333;
 }
@@ -508,6 +489,8 @@ function handlePrint() {
 }
 .signature-block {
   width: 45%;
+  display: flex;
+  flex-direction: column;
 }
 .signature-label {
   font-size: 16px;
@@ -521,6 +504,7 @@ function handlePrint() {
   font-size: 16px;
   font-weight: bold;
   color: var(--ad-text-secondary);
+  margin-top: auto;
 }
 
 .group-header-row td {

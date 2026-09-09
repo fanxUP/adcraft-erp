@@ -41,6 +41,9 @@ ACTION_STOCK_IN = "stock_in"
 ACTION_STOCK_OUT = "stock_out"
 ACTION_CONFIRM = "confirm"
 ACTION_CONVERT = "convert"  # quote -> order
+ACTION_ITEM_ADD = "item_add"
+ACTION_ITEM_UPDATE = "item_update"
+ACTION_ITEM_DELETE = "item_delete"
 
 
 async def log_operation(

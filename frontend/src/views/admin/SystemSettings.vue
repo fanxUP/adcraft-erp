@@ -1,8 +1,6 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>系统设置</h2>
-    </div>
+  <AppPage>
+    <template #header><PageHeader title="系统设置" description="统一管理界面风格、安全控制、文字显示和系统运行参数。" /></template>
 
     <!-- Theme Selector -->
     <el-card shadow="never" style="margin-bottom: 16px">
@@ -139,7 +137,7 @@
         </el-form-item>
       </el-form>
     </el-card>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -147,6 +145,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { getSystemSettings, updateSystemSettings, type SystemSettings } from '@/api/admin'
 import { useAppStore, THEME_LIST, FONT_WEIGHT_OPTIONS } from '@/stores/app'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AppPage, PageHeader } from '@/components/ui'
 
 const appStore = useAppStore()
 const themes = THEME_LIST
@@ -244,9 +243,6 @@ onMounted(fetchSettings)
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
 .theme-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

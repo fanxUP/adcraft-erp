@@ -1,8 +1,8 @@
 <template>
-  <div class="page">
-    <h2 style="margin-bottom: 16px; color: var(--ad-text)">操作日志</h2>
+  <AppPage>
+    <PageHeader title="操作日志" description="按对象、操作和日期追踪系统操作记录。" />
 
-    <el-card shadow="never" class="filter-card">
+    <PageToolbar aria-label="操作日志筛选">
       <el-form :model="filters" inline>
         <el-form-item label="对象类型">
           <el-select v-model="filters.object_type" clearable placeholder="全部" style="width: 140px">
@@ -44,9 +44,10 @@
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
-    </el-card>
+    </PageToolbar>
 
-    <el-card shadow="never" class="table-card" style="margin-top: 16px">
+    <DataTableShell :state="tableState" aria-label="操作日志列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchLogs" /></template>
       <el-table :data="logs" stripe size="small" v-loading="loading" empty-text="暂无操作日志">
         <el-table-column label="时间" width="160">
           <template #default="{ row }">{{ formatDateTimeFull(row.created_at) }}</template>
@@ -67,7 +68,7 @@
               状态: {{ row.after_data.status }}
               <span v-if="row.after_data?.reason">({{ row.after_data.reason }})</span>
             </span>
-            <span v-else-if="row.after_data?.amount">金额: ¥{{ row.after_data.amount }}</span>
+            <span v-else-if="row.after_data?.amount">金额: {{ formatMoney(row.after_data.amount) }}</span>
             <span v-else-if="row.after_data?.quantity">
               {{ row.after_data.record_type === 'in' ? '入库' : '出库' }}: {{ row.after_data.quantity }}
             </span>
@@ -82,7 +83,7 @@
         </el-table-column>
       </el-table>
 
-      <div class="pagination-wrap">
+      <template #footer>
         <el-pagination
           v-model:current-page="page"
           :page-size="pageSize"
@@ -90,8 +91,8 @@
           layout="total, prev, pager, next"
           @current-change="fetchLogs"
         />
-      </div>
-    </el-card>
+      </template>
+    </DataTableShell>
 
     <el-drawer v-model="drawerVisible" title="日志详情" size="500px">
       <template v-if="currentLog">
@@ -120,16 +121,19 @@
         />
       </template>
     </el-drawer>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDateTimeFull } from '@/utils/datetime'
-import { ref, reactive, onMounted } from 'vue'
+import { formatMoney } from '@/utils/format'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getOperationLogs } from '@/api/operation_logs'
 import type { OperationLogResponse } from '@/types/api'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const loading = ref(false)
+const loadError = ref(false)
 const logs = ref<OperationLogResponse[]>([])
 const page = ref(1)
 const pageSize = ref(50)
@@ -142,6 +146,7 @@ const filters = reactive({
   action: '',
 })
 const dateRange = ref<[string, string] | null>(null)
+const tableState = computed(() => loadError.value ? 'error' as const : loading.value ? 'loading' as const : logs.value.length ? 'ready' as const : 'empty' as const)
 
 function objectTypeLabel(t: string | null | undefined) {
   const map: Record<string, string> = {
@@ -178,6 +183,7 @@ function showDetail(row: OperationLogResponse) {
 
 async function fetchLogs() {
   loading.value = true
+  loadError.value = false
   try {
     const params = {
       page: page.value, page_size: pageSize.value,
@@ -189,7 +195,7 @@ async function fetchLogs() {
     logs.value = res.items
     total.value = res.total
   } catch {
-    // API error handled by interceptor
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -212,8 +218,4 @@ onMounted(fetchLogs)
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.filter-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
-.table-card { background: var(--ad-card); border: 1px solid var(--ad-border); }
-.pagination-wrap { margin-top: 16px; display: flex; justify-content: flex-end; }
 </style>

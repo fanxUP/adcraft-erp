@@ -1,10 +1,12 @@
 <template>
-  <div class="page">
-    <div class="page-header"><h2>考勤规则</h2></div>
-    <div class="page-create">
-      <el-button @click="openCreate" type="danger">新建规则</el-button>
-    </div>
-    <el-table :data="rules" v-loading="loading" stripe>
+  <AppPage>
+    <template #header>
+      <PageHeader title="考勤规则" description="维护员工考勤时间、迟到阈值和启用状态。">
+        <template #actions><el-button @click="openCreate" type="primary">新建规则</el-button></template>
+      </PageHeader>
+    </template>
+    <DataTableShell :state="tableState" aria-label="考勤规则列表">
+      <el-table :data="rules" stripe>
       <el-table-column prop="name" label="规则名称" width="160" />
       <el-table-column label="适用部门" width="120"><template #default="{row}">{{row.department||"全局"}}</template></el-table-column>
       <el-table-column prop="check_in_time" label="上班时间" width="100" />
@@ -15,7 +17,9 @@
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
-    </el-table>
+      </el-table>
+      <template #error><StatePanel state="error" action-label="重新加载" @action="fetchData" /></template>
+    </DataTableShell>
     <el-dialog v-model="showDialog" :title="isEditing?'编辑规则':'新建规则'" width="500px" :close-on-click-modal="false">
       <el-form :model="form" label-width="120px">
         <el-form-item label="规则名称" required><el-input v-model="form.name" /></el-form-item>
@@ -28,15 +32,19 @@
       </el-form>
       <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 <script setup lang="ts">
-import { ref, onMounted } from "vue"
+import { computed, ref, onMounted } from "vue"
 import { getAttendanceRules, createAttendanceRule, updateAttendanceRule, deleteAttendanceRule, type AttendanceRuleItem } from "@/api/attendance"
 import { ElMessage, ElMessageBox } from "element-plus"
+import { AppPage, DataTableShell, PageHeader, StatePanel } from "@/components/ui"
+import { getErrorMessage } from "@/utils/error"
 const rules=ref<AttendanceRuleItem[]>([]); const loading=ref(false); const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false)
+const loadError=ref("")
+const tableState=computed(() => loading.value ? "loading" : loadError.value ? "error" : rules.value.length ? "ready" : "empty")
 const form=ref<Record<string, unknown>>({name:"",check_in_time:"09:00",check_out_time:"18:00",department:"",late_threshold:0,early_leave_threshold:0,overtime_rate:1.5,is_active:true})
-async function fetchData(){loading.value=true;try{rules.value=(await getAttendanceRules())||[]}finally{loading.value=false}}
+async function fetchData(){loading.value=true;loadError.value="";try{rules.value=(await getAttendanceRules())||[]}catch(error:unknown){loadError.value=getErrorMessage(error);ElMessage.error(loadError.value)}finally{loading.value=false}}
 function openCreate(){isEditing.value=false;form.value={name:"",check_in_time:"09:00",check_out_time:"18:00",department:"",late_threshold:0,early_leave_threshold:0,overtime_rate:1.5,is_active:true};showDialog.value=true}
 function openEdit(r:AttendanceRuleItem){isEditing.value=true;form.value={...r};showDialog.value=true}
 async function handleSave(){saving.value=true;try{if(isEditing.value){await updateAttendanceRule(form.value.id as string,form.value)}else{await createAttendanceRule(form.value)};ElMessage.success(isEditing.value?"已更新":"已创建");showDialog.value=false;await fetchData()}finally{saving.value=false}}

@@ -21,10 +21,10 @@ describe('filterNavigation', () => {
     const system = filterNavigation(navigationItems, ['admin'])
       .find(item => item.label === '系统管理')
 
-    expect(system?.children).toContainEqual({
+    expect(system?.children).toContainEqual(expect.objectContaining({
       label: 'AI 业务知识健康',
       path: '/admin/ai/knowledge-health',
-    })
+    }))
   })
 
   it('places 项目看板 as a top-level item right below 工作台 for production roles', () => {

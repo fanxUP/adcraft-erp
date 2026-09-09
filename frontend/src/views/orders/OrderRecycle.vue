@@ -39,7 +39,6 @@
       <el-table-column label="操作" width="200">
         <template #default="{ row }">
           <el-button text type="success" @click="handleRestore(row as OrderListResponse)">恢复</el-button>
-          <el-button text type="warning" @click="handleConvertToQuote(row as OrderListResponse)">转报价</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -59,12 +58,9 @@
 <script setup lang="ts">
 import { formatDateTimeFull } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { getDeletedOrders, restoreOrder, convertOrderToQuote } from '@/api/orders'
+import { getDeletedOrders, restoreOrder } from '@/api/orders'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { OrderListResponse } from '@/types/api'
-
-const router = useRouter()
 
 const loading = ref(false)
 const list = ref<OrderListResponse[]>([])
@@ -119,21 +115,6 @@ async function handleRestore(row: OrderListResponse) {
   await restoreOrder(row.id)
   ElMessage.success('订单已恢复')
   fetchData()
-}
-
-async function handleConvertToQuote(row: OrderListResponse) {
-  await ElMessageBox.confirm(
-    `确定将订单「${row.order_no}」转为报价单？\n若该订单已关联合同，将自动解除合同关联（不再关联任何单据的合同/项目会一并删除）。`,
-    '转报价',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    },
-  )
-  await convertOrderToQuote(row.id)
-  ElMessage.success('订单已转为报价单')
-  router.push('/quotes')
 }
 
 onMounted(fetchData)

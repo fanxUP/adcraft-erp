@@ -1,10 +1,11 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>外协任务付款</h2>
-    </div>
+  <AppPage>
+    <template #header>
+      <PageHeader title="外协任务付款" description="统一查看外协应付金额、付款状态和付款记录。" />
+    </template>
 
-    <div class="search-bar">
+    <template #toolbar>
+      <PageToolbar aria-label="外协付款筛选">
       <el-select v-model="statusFilter" placeholder="状态" clearable style="width: 140px">
         <el-option label="待处理" value="pending" />
         <el-option label="进行中" value="in_progress" />
@@ -16,10 +17,13 @@
         <el-option v-for="v in vendors" :key="v.id" :label="v.name" :value="v.id" />
       </el-select>
       <el-button @click="fetchData" style="margin-left: 12px" type="primary">搜索</el-button>
-    </div>
+      </PageToolbar>
+    </template>
 
     <!-- 任务付款汇总列表 -->
-    <el-table :data="taskList" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协任务">
+    <DataTableShell :state="tableState" aria-label="外协任务付款列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
+      <el-table :data="taskList" stripe>
       <el-table-column prop="task_no" label="任务编号" width="180" />
       <el-table-column prop="vendor_name" label="外协商" width="140" />
       <el-table-column label="项目" width="160" show-overflow-tooltip>
@@ -30,21 +34,21 @@
       </el-table-column>
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+          <StatusTag :status="row.status_view || row.status" size="sm" />
         </template>
       </el-table-column>
       <el-table-column prop="total_amount" label="总金额" width="120" align="right">
-        <template #default="{ row }">¥{{ row.total_amount?.toFixed(2) }}</template>
+        <template #default="{ row }">{{ formatMoney(row.total_amount) }}</template>
       </el-table-column>
       <el-table-column label="已付金额" width="120" align="right">
         <template #default="{ row }">
-          <span style="color: var(--el-color-success)">¥{{ row.paid_amount?.toFixed(2) }}</span>
+          <span class="text-success">{{ formatMoney(row.paid_amount) }}</span>
         </template>
       </el-table-column>
       <el-table-column label="未付金额" width="120" align="right">
         <template #default="{ row }">
-          <span v-if="row.unpaid_amount > 0" style="color: var(--el-color-danger); font-weight: 600">¥{{ row.unpaid_amount?.toFixed(2) }}</span>
-          <span v-else style="color: var(--el-color-success)">已结清</span>
+          <span v-if="row.unpaid_amount > 0" class="text-danger">{{ formatMoney(row.unpaid_amount) }}</span>
+          <span v-else class="text-success">已结清</span>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="200">
@@ -53,17 +57,18 @@
           <el-button text type="primary" @click="handleViewPayments(row)">付款记录</el-button>
         </template>
       </el-table-column>
-    </el-table>
-
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :page-sizes="[10, 20, 50, 100]"
-      :total="total"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 16px; justify-content: flex-end"
-      @change="fetchData"
-    />
+      </el-table>
+      <template #footer>
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next"
+          @change="fetchData"
+        />
+      </template>
+    </DataTableShell>
 
     <!-- 付款对话框 -->
     <el-dialog v-model="payDialogVisible" title="外协付款" width="500px" :close-on-click-modal="false">
@@ -83,15 +88,15 @@
         <div class="pay-divider"></div>
         <div class="pay-summary-row">
           <span class="label">总金额：</span>
-          <span class="value total">¥{{ payTask.total_amount?.toFixed(2) }}</span>
+          <span class="value total">{{ formatMoney(payTask.total_amount) }}</span>
         </div>
         <div class="pay-summary-row">
           <span class="label">已付金额：</span>
-          <span class="value paid">¥{{ payTask.paid_amount?.toFixed(2) }}</span>
+          <span class="value paid">{{ formatMoney(payTask.paid_amount) }}</span>
         </div>
         <div class="pay-summary-row">
           <span class="label">待付金额：</span>
-          <span class="value unpaid">¥{{ payTask.unpaid_amount?.toFixed(2) }}</span>
+          <span class="value unpaid">{{ formatMoney(payTask.unpaid_amount) }}</span>
         </div>
         <div class="pay-divider"></div>
       </div>
@@ -128,7 +133,7 @@
       <el-table :data="paymentRecords" stripe empty-text="暂无付款记录">
         <el-table-column prop="payment_no" label="付款编号" width="180" />
         <el-table-column prop="amount" label="金额" width="120" align="right">
-          <template #default="{ row }">¥{{ row.amount?.toFixed(2) }}</template>
+          <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
         </el-table-column>
         <el-table-column label="付款方式" width="120">
           <template #default="{ row }">{{ paymentMethodLabel(row.payment_method) }}</template>
@@ -141,11 +146,13 @@
         <el-button @click="recordDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { computed } from 'vue'
+import { formatMoney } from '@/utils/format'
 import {
   getOutsourceVendors, getOutsourceTasks, getOutsourceTaskPaymentSummary,
   createOutsourcePayment,
@@ -153,6 +160,7 @@ import {
 import type { OutsourcePaymentSummaryItem, OutsourceTaskPaymentSummary } from '@/api/outsource'
 import { ElMessage } from 'element-plus'
 import { OutsourceTaskResponse } from '@/types/api'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel, StatusTag } from '@/components/ui'
 
 const loading = ref(false)
 const taskList = ref<OutsourceTaskResponse[]>([])
@@ -162,6 +170,13 @@ const pageSize = ref(20)
 const statusFilter = ref('')
 const vendorFilter = ref('')
 const vendors = ref<{id: string; name: string}[]>([])
+const loadError = ref(false)
+
+const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
+  if (loadError.value) return 'error'
+  if (loading.value) return 'loading'
+  return taskList.value.length ? 'ready' : 'empty'
+})
 
 // 付款对话框
 const payDialogVisible = ref(false)
@@ -181,16 +196,6 @@ function paymentMethodLabel(val: string | null) {
   return map[val || ''] || val || '-'
 }
 
-function statusType(val: string) {
-  const map: Record<string, string> = { pending: 'info', in_progress: 'warning', completed: 'success', settled: '', cancelled: 'danger' }
-  return (map[val] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
-}
-
-function statusLabel(val: string) {
-  const map: Record<string, string> = { pending: '待处理', in_progress: '进行中', completed: '已完成', settled: '已结算', cancelled: '已取消' }
-  return map[val] || val
-}
-
 async function loadVendors() {
   try {
     const data = await getOutsourceVendors({ page: 1, page_size: 100 })
@@ -200,6 +205,7 @@ async function loadVendors() {
 
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try {
     const data = await getOutsourceTasks({
       page: page.value, page_size: pageSize.value,
@@ -208,6 +214,8 @@ async function fetchData() {
     })
     taskList.value = data.items
     total.value = data.total
+  } catch {
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -283,11 +291,6 @@ onMounted(() => { fetchData(); loadVendors() })
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
-.search-bar { display: flex; align-items: center; }
-
 .pay-summary {
   background: var(--el-fill-color-light);
   border-radius: 6px;

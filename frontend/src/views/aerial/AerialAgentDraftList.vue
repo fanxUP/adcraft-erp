@@ -1,11 +1,8 @@
 <template>
-  <div class="draft-list-page">
-    <div class="page-header">
-      <h2>Agent 草稿中心</h2>
-      <el-button @click="showIngestDialog = true">
-        <el-icon><ChatDotRound /></el-icon>模拟消息
-      </el-button>
-    </div>
+  <AppPage>
+    <template #header><PageHeader title="Agent 草稿中心" description="查看 AI 识别出的业务草稿，确认后再进入正式业务流程。">
+      <template #actions><el-button @click="showIngestDialog = true"><el-icon><ChatDotRound /></el-icon>模拟消息</el-button></template>
+    </PageHeader></template>
 
     <!-- 筛选 -->
     <el-card class="filter-card" shadow="never">
@@ -25,7 +22,8 @@
     </el-card>
 
     <!-- 草稿列表 -->
-    <el-table :data="drafts" v-loading="loading" stripe style="width: 100%"
+    <DataTableShell :state="tableState" aria-label="Agent 草稿列表">
+    <el-table :data="drafts" stripe style="width: 100%"
       :row-class-name="({ row }) => row.status === 'pending' ? 'row-pending' : ''">
       <el-table-column prop="created_at" label="时间" width="160">
         <template #default="{ row }">
@@ -71,6 +69,8 @@
         </template>
       </el-table-column>
     </el-table>
+    <template #error><StatePanel state="error" action-label="重新加载" @action="loadDrafts" /></template>
+    </DataTableShell>
 
     <!-- 分页 -->
     <div class="pagination-wrap">
@@ -190,12 +190,12 @@
         <el-button @click="doReject" :loading="rejecting" type="primary">确认拒绝</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDateTimeFull } from '@/utils/datetime'
-import { ref, onMounted, reactive } from 'vue'
+import { computed, ref, onMounted, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound } from '@element-plus/icons-vue'
 import {
@@ -207,11 +207,14 @@ import {
   type AerialAgentDraft,
 } from '@/api/aerial'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
 
 const loading = ref(false)
 const drafts = ref<AerialAgentDraft[]>([])
 const filters = reactive({ status: 'pending' })
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
+const loadError = ref('')
+const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : drafts.value.length ? 'ready' : 'empty')
 
 const showDetailDialog = ref(false)
 const detailDraft = ref<AerialAgentDraft | null>(null)
@@ -231,6 +234,7 @@ const rejecting = ref(false)
 
 const loadDrafts = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const res = await getAerialAgentDrafts({
       status: filters.status || undefined,
@@ -239,6 +243,9 @@ const loadDrafts = async () => {
     })
     drafts.value = res?.items || []
     pagination.total = res?.total || 0
+  } catch (error: unknown) {
+    loadError.value = getErrorMessage(error, '加载草稿失败')
+    ElMessage.error(loadError.value)
   } finally {
     loading.value = false
   }
@@ -400,19 +407,6 @@ onMounted(loadDrafts)
 </script>
 
 <style scoped>
-.draft-list-page {
-  padding: 20px;
-}
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.page-header h2 {
-  margin: 0;
-  font-size: 20px;
-}
 .filter-card {
   margin-bottom: 16px;
 }

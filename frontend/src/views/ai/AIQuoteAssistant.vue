@@ -1,9 +1,8 @@
 <template>
-  <div class="ai-quote-assistant">
-    <div class="page-header">
-      <h2>AI 报价助手</h2>
-      <el-tag :type="modeTagType">{{ modeLabel }}</el-tag>
-    </div>
+  <AppPage>
+    <template #header><PageHeader title="AI 报价助手" description="根据需求描述生成可编辑的报价草稿，保存前仍由业务人员确认。">
+      <template #meta><el-tag :type="modeTagType">{{ modeLabel }}</el-tag></template>
+    </PageHeader></template>
 
     <el-row :gutter="20">
       <!-- Input panel -->
@@ -128,7 +127,7 @@
         </el-card>
       </el-col>
     </el-row>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -139,6 +138,7 @@ import { MagicStick } from '@element-plus/icons-vue'
 import { assistQuote, saveAssistedQuote } from '@/api/ai'
 import { getCustomers } from '@/api/customers'
 import type { AIQuoteAssistResponse, CustomerResponse } from '@/types/api'
+import { AppPage, PageHeader } from '@/components/ui'
 
 const router = useRouter()
 const modeTagType = computed(() => draft.value?.mode === "ai_enhanced" ? "success" : "info")
@@ -211,9 +211,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.ai-quote-assistant { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
 .empty-state { text-align: center; padding: 80px 20px; color: var(--ad-text-muted); }
 .project-name { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .project-name .label { font-weight: 600; white-space: nowrap; }

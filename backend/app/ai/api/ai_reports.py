@@ -5,13 +5,13 @@ import logging
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
-from app.core.deps import get_current_user
-from app.schemas.common import success
-from app.models.user import User
-from app.ai.rule_based.report_composer import ReportComposer
 from app.ai.core.resolver import FeatureResolver
 from app.ai.gateway_providers.gateway_ai_client import GatewayAIClient
+from app.ai.rule_based.report_composer import ReportComposer
+from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.models.user import User
+from app.schemas.common import success
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,25 @@
 <template>
-  <div class="page">
-    <el-button text @click="$router.back()">
-      <el-icon><ArrowLeft /></el-icon> 返回
-    </el-button>
+  <AppPage class="page">
+    <PageHeader
+      :title="customer?.name || '客户详情'"
+      :description="customer ? `客户编号：${customer.customer_no}` : '查看客户资料与联系人'"
+    >
+      <template #actions>
+        <el-button text @click="$router.back()">
+          <el-icon><ArrowLeft /></el-icon> 返回
+        </el-button>
+        <el-button v-if="customer" type="primary" plain @click="handleEdit">编辑客户</el-button>
+      </template>
+    </PageHeader>
 
-    <div v-if="customer" class="detail" v-loading="loading">
+    <StatePanel
+      v-if="loadError && !customer"
+      state="error"
+      action-label="重试"
+      @action="fetchData"
+    />
+
+    <div v-else-if="customer" class="detail" v-loading="loading">
       <el-card class="info-card" shadow="never">
         <template #header>
           <div class="card-header">
@@ -97,7 +112,7 @@
         <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -107,12 +122,14 @@ import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { getCustomer, updateCustomer } from '@/api/customers'
 import type { CustomerResponse } from '@/types/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AppPage, PageHeader, StatePanel } from '@/components/ui'
 
 const route = useRoute()
 const aiStore = useAiAssistantStore()
 const loading = ref(false)
 const saving = ref(false)
 const customer = ref<CustomerResponse | null>(null)
+const loadError = ref(false)
 const dialogVisible = ref(false)
 const editForm = reactive({ name: '', customer_type: '', level: '', phone: '', address: '' })
 
@@ -124,6 +141,7 @@ const contactForm = reactive({ name: '', phone: '', wechat: '', position: '', is
 
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try {
     customer.value = await getCustomer(route.params.id as string)
     if (customer.value) {
@@ -133,6 +151,8 @@ async function fetchData() {
         customer_no: customer.value.customer_no,
       })
     }
+  } catch {
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -232,7 +252,6 @@ onMounted(fetchData)
 </script>
 
 <style scoped>
-.page { padding: 0; }
 .detail { margin-top: 16px; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }

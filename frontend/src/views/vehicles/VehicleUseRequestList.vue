@@ -1,21 +1,20 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>用车申请</h2>
-    </div>
-    <div class="page-create">
-      <el-button @click="handleCreate" type="danger">新建申请</el-button>
-    </div>
+  <AppPage>
+    <PageHeader title="用车申请" description="统一查看申请、审批、派车和取消状态。">
+      <template #actions><el-button @click="handleCreate" type="primary">新建申请</el-button></template>
+    </PageHeader>
 
-    <div class="search-bar">
+    <PageToolbar aria-label="用车申请筛选">
       <el-input v-model="filters.keyword" placeholder="搜索原因/目的地" clearable style="width: 220px" @keyup.enter="fetchData" />
-      <el-select v-model="filters.status" placeholder="状态" clearable style="width: 140px; margin-left: 12px">
+      <el-select v-model="filters.status" placeholder="状态" clearable style="width: 140px">
         <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
       </el-select>
-      <el-button style="margin-left: 12px" @click="fetchData" type="primary">搜索</el-button>
-    </div>
+      <el-button @click="fetchData" type="primary">搜索</el-button>
+    </PageToolbar>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <DataTableShell :state="tableState" aria-label="用车申请列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
+      <el-table :data="list" v-loading="loading" stripe>
       <el-table-column prop="requester_name" label="申请人" width="100" />
       <el-table-column prop="reason" label="用车原因" min-width="160" />
       <el-table-column prop="destination" label="目的地" width="160" />
@@ -41,17 +40,10 @@
           <el-button v-if="!['cancelled', 'completed', 'dispatched'].includes(row.status)" text type="danger" @click="handleCancel(row)">取消</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
 
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :page-sizes="[10, 20, 50, 100]"
-      :total="total"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 16px; justify-content: flex-end"
-      @change="fetchData"
-    />
+      <template #footer><el-pagination v-if="total > 0" v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]" :total="total" layout="total, sizes, prev, pager, next" @change="fetchData" /></template>
+    </DataTableShell>
 
     <!-- 新增/编辑对话框 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="650px" :close-on-click-modal="false">
@@ -138,12 +130,12 @@
         <el-button @click="confirmReject" :loading="rejecting" type="primary">确认驳回</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDateTime } from '@/utils/datetime'
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getVehicleUseRequests,
@@ -157,13 +149,17 @@ import {
   type VehicleUseRequestResponse,
   type VehicleUseRequestCreateData,
 } from '@/api/vehicleUseRequests'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const list = ref<VehicleUseRequestResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
+const loadError = ref(false)
 const saving = ref(false)
+
+const tableState = computed(() => loadError.value ? 'error' as const : loading.value ? 'loading' as const : list.value.length ? 'ready' as const : 'empty' as const)
 
 const filters = reactive({
   keyword: '',
@@ -235,6 +231,7 @@ const rejecting = ref(false)
 
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try {
     const res = await getVehicleUseRequests({
       page: page.value,
@@ -244,6 +241,8 @@ async function fetchData() {
     })
     list.value = res.items
     total.value = res.total
+  } catch {
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -361,8 +360,4 @@ onMounted(fetchData)
 </script>
 
 <style scoped>
-.page { padding: 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.page-header h2 { margin: 0; font-size: 20px; }
-.search-bar { display: flex; align-items: center; }
 </style>

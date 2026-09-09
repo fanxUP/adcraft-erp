@@ -1,23 +1,26 @@
 <template>
   <div class="mobile-layout">
     <!-- Page content area -->
-    <div class="mobile-content">
+    <div class="mobile-content" :class="{ 'has-bottom-tabs': showTabs }">
       <router-view />
     </div>
 
     <!-- Bottom tab bar -->
-    <div class="bottom-tabs" v-if="showTabs">
-      <div
+    <nav v-if="showTabs" class="bottom-tabs" aria-label="移动端主导航">
+      <button
         v-for="tab in tabs"
         :key="tab.path"
+        type="button"
         class="tab-item"
         :class="{ active: currentTab === tab.path }"
+        :aria-current="currentTab === tab.path ? 'page' : undefined"
+        :aria-label="`前往${tab.label}`"
         @click="switchTab(tab.path)"
       >
         <span class="tab-icon">{{ tab.icon }}</span>
         <span class="tab-label">{{ tab.label }}</span>
-      </div>
-    </div>
+      </button>
+    </nav>
   </div>
 </template>
 
@@ -53,8 +56,8 @@ function switchTab(path: string) {
   max-width: 480px;
   margin: 0 auto;
   min-height: 100vh;
-  background: #0f0f1a;
-  color: var(--ad-text, #e0e0e0);
+  background: var(--ui-bg);
+  color: var(--ui-text);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -62,7 +65,10 @@ function switchTab(path: string) {
 
 .mobile-content {
   flex: 1;
-  padding-bottom: 64px; /* space for bottom tabs */
+}
+
+.mobile-content.has-bottom-tabs {
+  padding-bottom: 64px;
 }
 
 /* Bottom Tab Bar */
@@ -74,11 +80,11 @@ function switchTab(path: string) {
   width: 100%;
   max-width: 480px;
   display: flex;
-  background: #1a1a2e;
-  border-top: 1px solid #2a2a3e;
+  background: var(--ui-surface-subtle);
+  border-top: 1px solid var(--ui-border);
   z-index: 100;
   padding: 6px 0 env(safe-area-inset-bottom, 6px) 0;
-  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 -2px 12px rgb(15 23 42 / 18%);
 }
 
 .tab-item {
@@ -92,10 +98,19 @@ function switchTab(path: string) {
   transition: all 0.15s;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  outline: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
 }
 
 .tab-item:active {
   opacity: 0.7;
+}
+
+.tab-item:focus-visible {
+  box-shadow: var(--ui-focus-ring);
 }
 
 .tab-icon {
@@ -105,13 +120,13 @@ function switchTab(path: string) {
 
 .tab-label {
   font-size: 11px;
-  color: #888;
+  color: var(--ui-text-muted);
   font-weight: 500;
   transition: color 0.15s;
 }
 
 .tab-item.active .tab-label {
-  color: var(--ad-red, #e63946);
+  color: var(--ui-brand);
 }
 
 .tab-item.active .tab-icon {
@@ -120,7 +135,7 @@ function switchTab(path: string) {
 
 /* Safe area for notched devices */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .mobile-content {
+  .mobile-content.has-bottom-tabs {
     padding-bottom: calc(64px + env(safe-area-inset-bottom));
   }
 }

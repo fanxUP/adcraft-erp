@@ -1,9 +1,8 @@
 <template>
-  <div class="site-photo-recognition">
-    <div class="page-header">
-      <h2>现场照片识别</h2>
-      <el-tag :type="modeTagType">{{ modeLabel }}</el-tag>
-    </div>
+  <AppPage class="site-photo-recognition">
+    <PageHeader title="现场照片识别" description="上传现场照片，识别安装风险、现场条件和注意事项。">
+      <template #actions><el-tag :type="modeTagType">{{ modeLabel }}</el-tag></template>
+    </PageHeader>
 
     <el-row :gutter="16">
       <!-- Upload section -->
@@ -106,7 +105,7 @@
       <el-icon :size="64"><Picture /></el-icon>
       <p>上传现场照片，系统将分析安装风险和注意事项</p>
     </div>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -116,6 +115,7 @@ import { UploadFilled, Camera, Picture } from '@element-plus/icons-vue'
 import { analyzeSitePhoto } from '@/api/ai'
 import type { SitePhotoAnalyzeResponse } from '@/types/api'
 import type { UploadFile } from 'element-plus'
+import { AppPage, PageHeader } from '@/components/ui'
 
 const loading = ref(false)
 const selectedFile = ref<File | null>(null)
@@ -204,16 +204,6 @@ async function doAnalyze() {
 </script>
 
 <style scoped>
-.site-photo-recognition { padding: 0; }
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.page-header h2 { margin: 0; color: var(--ad-text); }
-
 .upload-card { margin-bottom: 16px; }
 
 .upload-text { color: var(--ad-text-muted); margin-top: 8px; }

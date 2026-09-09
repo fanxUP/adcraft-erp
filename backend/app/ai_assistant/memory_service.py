@@ -1,10 +1,12 @@
 """Session and message management for AI Assistant."""
 
 from uuid import UUID
-from sqlalchemy import select, desc
+
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.ai_assistant.models import AiChatSession, AiChatMessage
+
 from app.ai_assistant.config import settings
+from app.ai_assistant.models import AiChatMessage, AiChatSession
 
 
 class MemoryService:

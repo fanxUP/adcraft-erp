@@ -1,5 +1,10 @@
 <template>
-  <el-menu :default-active="activePath" router :collapse="collapsed">
+  <el-menu
+    :default-active="activePath"
+    router
+    :collapse="collapsed"
+    aria-label="主导航"
+  >
     <SidebarNavItem
       v-for="(item, index) in visibleItems"
       :key="item.path || index"

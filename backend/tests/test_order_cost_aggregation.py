@@ -25,3 +25,35 @@ async def test_cost_breakdown_aggregates_all_supported_sources():
     assert breakdown.inventory == Decimal("300.25")
     assert breakdown.manual == Decimal("99.25")
     assert breakdown.total == Decimal("1600.00")
+
+
+@pytest.mark.asyncio
+async def test_outsource_cost_query_excludes_soft_deleted_tasks():
+    db = MagicMock()
+    results = []
+    for value in (Decimal("0"), Decimal("0"), Decimal("0")):
+        result = MagicMock()
+        result.scalar.return_value = value
+        results.append(result)
+    db.execute = AsyncMock(side_effect=results)
+
+    await OrderCostAggregationService(db).calculate(uuid4())
+
+    outsource_query = str(db.execute.call_args_list[0].args[0].whereclause)
+    assert "outsource_tasks.deleted_at IS NULL" in outsource_query
+
+
+@pytest.mark.asyncio
+async def test_outsource_cost_query_only_counts_order_documents():
+    db = MagicMock()
+    results = []
+    for value in (Decimal("0"), Decimal("0"), Decimal("0")):
+        result = MagicMock()
+        result.scalar.return_value = value
+        results.append(result)
+    db.execute = AsyncMock(side_effect=results)
+
+    await OrderCostAggregationService(db).calculate(uuid4())
+
+    outsource_query = str(db.execute.call_args_list[0].args[0].whereclause)
+    assert "outsource_tasks.related_doc_type = :related_doc_type_1" in outsource_query

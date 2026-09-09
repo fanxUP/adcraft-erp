@@ -33,7 +33,12 @@
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="prodStatusColor(row.status)" size="small">{{ prodStatusLabel(row.status) }}</el-tag>
+            <StatusTag :status="row.status_view || row.status" size="sm" />
+          </template>
+        </el-table-column>
+        <el-table-column label="进度" width="150">
+          <template #default="{ row }">
+            <ProgressBar :percentage="row.progress_pct" :tone="row.status_view?.tone" size="sm" aria-label="制作任务进度" />
           </template>
         </el-table-column>
         <el-table-column label="派发" width="90">
@@ -73,6 +78,7 @@ import { formatDate } from '@/utils/datetime'
 import { ref, onMounted } from 'vue'
 import { getProductionTasks } from '@/api/tasks'
 import { ProductionTaskResponse } from '@/types/api'
+import { ProgressBar, StatusTag } from '@/components/ui'
 
 const loading = ref(false)
 const list = ref<ProductionTaskResponse[]>([])
@@ -81,15 +87,6 @@ const page = ref(1)
 const pageSize = ref(20)
 const filterStatus = ref('')
 const filterOutsourced = ref('')
-
-function prodStatusLabel(s: string) {
-  const map: Record<string, string> = { pending: '初始/待分配', pending_review: '待确认', completed: '已完成', cancelled: '已取消' }
-  return map[s] || s
-}
-function prodStatusColor(s: string) {
-  const map: Record<string, string> = { pending: 'info', pending_review: 'warning', completed: 'success', cancelled: 'info' }
-  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
-}
 
 async function fetchData() {
   loading.value = true

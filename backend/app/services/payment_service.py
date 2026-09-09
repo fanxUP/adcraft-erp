@@ -1,14 +1,29 @@
-from uuid import UUID
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.payment import Payment, CustomerStatement, Expense
 from app.models.business_document import BusinessDocument
-from app.services.business_document_service import BusinessDocumentService
-from app.repositories.payment_repo import PaymentRepository, StatementRepository, ExpenseRepository
+from app.models.payment import CustomerStatement, Expense, Payment
+from app.repositories.payment_repo import (
+    ExpenseRepository,
+    PaymentRepository,
+    StatementRepository,
+)
 from app.schemas.payment import StatementPaymentItem
-from app.services.number_generator import generate_payment_no, generate_statement_no, generate_expense_no
+from app.services.business_document_service import BusinessDocumentService
+from app.services.number_generator import (
+    generate_expense_no,
+    generate_payment_no,
+    generate_statement_no,
+)
+from app.domain.presentation import make_action_capability, make_payment_status_view, make_statement_status_view
+
+
+def _utc_now() -> datetime:
+    """Return naive UTC for the existing payment timestamp columns."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class PaymentService:
@@ -77,7 +92,7 @@ class PaymentService:
                 type_="payment_received",
                 title=f"收款到账: {payment.payment_no}",
                 content=f"单据 {doc.doc_no} 收到 {data['amount']} 元",
-                link=f"/payments",
+                link="/receivables",
             )
 
         paid = existing_paid + amount
@@ -129,6 +144,7 @@ class PaymentService:
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
             "remark": p.remark,
             "is_voided": p.is_voided,
+            "status_view": make_payment_status_view(p.is_voided).model_dump(mode="json"),
             "void_reason": p.void_reason,
             "voided_at": p.voided_at.isoformat() if p.voided_at else None,
             "receipt_url": p.receipt_url,
@@ -189,7 +205,7 @@ class StatementService:
             raise ValueError("对账单不存在")
         if s.status != "draft":
             raise ValueError("仅草稿对账单可以确认")
-        await self.repo.update(s, {"status": "confirmed", "confirmed_at": datetime.now(), "confirmed_by": confirmed_by})
+        await self.repo.update(s, {"status": "confirmed", "confirmed_at": _utc_now(), "confirmed_by": confirmed_by})
         return await self._to_detail(s)
 
     def _to_summary(self, s: CustomerStatement) -> dict:
@@ -202,6 +218,13 @@ class StatementService:
             "total_paid_amount": float(s.total_paid_amount),
             "total_unpaid_amount": float(s.total_unpaid_amount),
             "status": s.status,
+            "status_view": make_statement_status_view(s.status).model_dump(mode="json"),
+            "capabilities": {
+                "confirm": make_action_capability(
+                    s.status == "draft",
+                    "对账单已确认，不能重复确认" if s.status != "draft" else None,
+                ).model_dump(mode="json"),
+            },
             "confirmed_at": s.confirmed_at.isoformat() if s.confirmed_at else None,
             "confirmed_by": str(s.confirmed_by) if s.confirmed_by else None,
             "created_at": s.created_at.isoformat() if s.created_at else None,

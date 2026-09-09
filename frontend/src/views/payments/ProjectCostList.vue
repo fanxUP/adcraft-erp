@@ -51,7 +51,7 @@
       </el-table-column>
       <el-table-column v-if="filterType !== 'quote'" label="状态" width="100">
         <template #default="{ row }">
-          <el-tag v-if="row._type === 'order'" :type="statusColor(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+          <StatusTag v-if="row._type === 'order'" :status="row.status_view || row.status" size="sm" />
           <span v-else>-</span>
         </template>
       </el-table-column>
@@ -98,6 +98,7 @@ import { ref, computed, onActivated, onDeactivated, onMounted, onUnmounted } fro
 import { getOrders } from '@/api/orders'
 import { getProjectCostSummary, getQuotesForCost } from '@/api/payments'
 import type { OrderListResponse, QuoteCostResponse } from '@/types/api'
+import { StatusTag } from '@/components/ui'
 
 const loading = ref(false)
 const keyword = ref('')
@@ -120,19 +121,6 @@ let fetchRequestId = 0
 
 // Cost summary map for orders
 const costMap = ref<Record<string, number>>({})
-
-function statusLabel(s: string) {
-  const map: Record<string, string> = {
-    pending_confirm: '待确认', confirmed: '已确认', in_progress: '进行中',
-    in_production: '生产中', in_installation: '安装中',
-    completed: '已完成', cancelled: '已取消',
-  }
-  return map[s] || s
-}
-function statusColor(s: string) {
-  const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', in_progress: '', in_production: '', in_installation: '', completed: 'success', cancelled: 'danger' }
-  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
-}
 
 // Total count for pagination (client-side filtered)
 const totalCount = computed(() => {

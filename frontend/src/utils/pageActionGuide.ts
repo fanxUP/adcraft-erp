@@ -1,4 +1,5 @@
 import type {
+  AiFormDraftFieldKey,
   AiPageActionGuide,
   AiWorkflowAction,
   AiWorkflowGuidance,
@@ -24,11 +25,9 @@ export function hasPageActionCompleted(
     )
   }
   if (checklist) {
-    const targetByItemKey = {
+    const targetByItemKey: Partial<Record<AiFormDraftFieldKey, string>> = {
       assigned_to: 'task-assignee',
-      address: 'installation-address',
-      scheduled_at: 'installation-schedule',
-    } as const
+    }
     const matchingItem = checklist.items.find(item =>
       item.action?.target_key === guide.target_key
       || targetByItemKey[item.key] === guide.target_key,

@@ -1,9 +1,8 @@
 <template>
-  <div class="anomaly-dashboard">
-    <div class="page-header">
-      <h2>智能异常提醒</h2>
-      <el-tag :type="modeTagType" v-if="loaded">{{ modeLabel }}</el-tag>
-    </div>
+  <AppPage class="anomaly-dashboard">
+    <PageHeader title="智能异常提醒" description="扫描业务数据并统一展示风险等级和处理入口。">
+      <template #actions><el-tag :type="modeTagType" v-if="loaded">{{ modeLabel }}</el-tag></template>
+    </PageHeader>
 
     <!-- Summary cards -->
     <el-row :gutter="16" class="summary-row">
@@ -82,7 +81,7 @@
         </el-table-column>
       </el-table>
     </el-card>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -92,6 +91,7 @@ import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { scanAnomalies } from '@/api/ai'
 import type { AnomalyAlert, AnomalyScanResponse, AnomalySummary } from '@/types/api'
+import { AppPage, PageHeader } from '@/components/ui'
 
 const router = useRouter()
 const loading = ref(false)
@@ -180,16 +180,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.anomaly-dashboard { padding: 0; }
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.page-header h2 { margin: 0; color: var(--ad-text); }
-
 .summary-row { margin-bottom: 16px; }
 
 .summary-card { text-align: center; }

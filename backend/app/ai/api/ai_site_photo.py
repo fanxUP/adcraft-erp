@@ -1,25 +1,29 @@
 """AI Site Photo API — analyze installation site photos for risks."""
 
-import os
-from uuid import uuid4, UUID
-from datetime import datetime
 import logging
+import os
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.gateway_providers.gateway_ai_client import GatewayAIClient
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.config import settings
-from app.schemas.common import success
 from app.models.user import User
-from app.ai.core.resolver import FeatureResolver
-from app.ai.gateway_providers.gateway_ai_client import GatewayAIClient
+from app.schemas.common import success
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai/site-photos", tags=["AI Site Photos"])
+
+
+def _utc_month_dir() -> str:
+    """Return the UTC month used for shared upload archive paths."""
+    return datetime.now(UTC).strftime("%Y%m")
 
 
 @router.post("/analyze")
@@ -28,7 +32,7 @@ async def analyze_site_photo(
     installation_task_id: str = Query(None),
     remark: str = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    _current_user: User = Depends(get_current_user),
 ):
     """Upload and analyze an installation site photo.
 
@@ -39,7 +43,7 @@ async def analyze_site_photo(
     """
     # 1. Save file
     file_bytes = await file.read()
-    month_dir = datetime.now().strftime("%Y%m")
+    month_dir = _utc_month_dir()
     upload_dir = os.path.join(settings.LOCAL_UPLOAD_DIR, month_dir)
     os.makedirs(upload_dir, exist_ok=True)
 
@@ -69,13 +73,15 @@ async def analyze_site_photo(
     # Only run AI analysis if a vision-capable model is configured
     _vision_available = False
     try:
-        from sqlalchemy import select as _sel, func as _fnc
+        from sqlalchemy import func as _fnc
+        from sqlalchemy import select as _sel
+
         from app.models.ai_model import AIModel
         _qr = await db.execute(_sel(_fnc.count()).select_from(AIModel).where(
             AIModel.supports_vision == True, AIModel.enabled == True
         ))
         _vision_available = _qr.scalar() > 0
-    except Exception:
+    except Exception:  # noqa: BLE001 - optional vision capability probe must keep rule-based analysis available
         pass
 
     if _vision_available:

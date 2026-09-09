@@ -1,15 +1,14 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>角色权限管理</h2>
-      <el-button @click="openCreate" type="danger">新增角色</el-button>
-    </div>
+  <AppPage>
+    <template #header><PageHeader title="角色权限管理" description="维护角色与权限配置，角色列表和权限面板保持同一页面层级。">
+      <template #actions><el-button @click="openCreate" type="primary">新增角色</el-button></template>
+    </PageHeader></template>
 
     <el-row :gutter="20">
       <!-- Role list -->
       <el-col :span="10">
-        <el-card shadow="never">
-          <el-table :data="roles" v-loading="loading" stripe highlight-current-row @current-change="onRoleSelect">
+        <DataTableShell :state="roleTableState" aria-label="角色列表">
+          <el-table :data="roles" stripe highlight-current-row @current-change="onRoleSelect">
             <el-table-column prop="name" label="角色" width="120">
               <template #default="{ row }">{{ roleLabel(row.name) }}</template>
             </el-table-column>
@@ -24,7 +23,8 @@
               </template>
             </el-table-column>
           </el-table>
-        </el-card>
+          <template #error><StatePanel state="error" action-label="重新加载" @action="fetchRoles" /></template>
+        </DataTableShell>
       </el-col>
 
       <!-- Permission assignment -->
@@ -72,13 +72,15 @@
         <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getRoles, createRole, updateRole, deleteRole, setRolePermissions, getPermissions, type RoleItem, type PermissionItem } from '@/api/admin'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
+import { getErrorMessage } from '@/utils/error'
 
 const ROLE_MAP: Record<string, string> = {
   admin: '管理员', sales: '销售', designer: '设计师',
@@ -108,6 +110,8 @@ const showDialog = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
 const form = reactive({ name: '', description: '' })
+const loadError = ref('')
+const roleTableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : roles.value.length ? 'ready' : 'empty')
 
 const groupedPerms = computed(() => {
   const groups: Record<string, PermissionItem[]> = {}
@@ -128,7 +132,8 @@ function handleCheckAll(val: boolean) {
 
 async function fetchRoles() {
   loading.value = true
-  try { roles.value = await getRoles() } finally { loading.value = false }
+  loadError.value = ''
+  try { roles.value = await getRoles() } catch (error: unknown) { loadError.value = getErrorMessage(error); ElMessage.error(loadError.value) } finally { loading.value = false }
 }
 
 async function fetchPerms() {
@@ -199,9 +204,3 @@ async function handleSavePerms() {
 
 onMounted(() => { fetchRoles(); fetchPerms() })
 </script>
-
-<style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
-</style>

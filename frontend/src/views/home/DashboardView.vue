@@ -86,30 +86,67 @@
     </el-row>
   </div>
 
-  <!-- 制作看板 -->
+  <!-- 项目看板 -->
   <div class="page" style="margin-top: 24px">
     <h2 style="margin: 0 0 16px; color: var(--ad-text)">项目看板</h2>
     <div class="board" v-loading="boardLoading">
       <div v-for="col in columns" :key="col.key" class="board-column">
         <div class="column-header">
           <span>{{ col.label }}</span>
-          <el-tag size="small" type="danger">{{ colCards(col.key).length }}</el-tag>
+          <el-tag size="small" type="danger">{{ columnCount(col.key) }}</el-tag>
         </div>
         <div class="column-body">
-          <el-card
-            v-for="card in colCards(col.key)"
-            :key="card.id"
-            shadow="hover"
-            class="board-card"
-            @click="handleCardClick(card, col.key)"
-          >
-            <div class="card-no">{{ card.order_no }}</div>
-            <div class="card-name">{{ card.project_name }}</div>
-            <div class="card-meta">
-              <span>{{ card.customer_name || '-' }}</span>
-              <span>¥{{ card.total_amount?.toFixed(2) }}</span>
-            </div>
-          </el-card>
+          <template v-if="col.key === 'queue'">
+            <el-empty v-if="!queueCards().length" description="暂无项目" :image-size="56" />
+            <el-card
+              v-for="card in queueCards()"
+              :key="card.id"
+              shadow="hover"
+              class="board-card"
+              @click="handleOrderCardClick(card)"
+            >
+              <div class="card-no">{{ card.order_no }}</div>
+              <div class="card-name">{{ card.project_name }}</div>
+              <div class="card-meta">
+                <span>{{ card.customer_name || '-' }}</span>
+                <span>¥{{ card.total_amount?.toFixed(2) }}</span>
+              </div>
+            </el-card>
+          </template>
+
+          <template v-else>
+            <el-empty v-if="!stageCards(col.key).length" description="暂无任务" :image-size="56" />
+            <el-card
+              v-for="task in stageCards(col.key)"
+              :key="task.id"
+              shadow="hover"
+              class="board-card"
+              @click="handleTaskCardClick(task)"
+            >
+              <div class="card-topline">
+                <span class="card-no">{{ task.task_no }}</span>
+                <div class="card-statuses">
+                  <el-tag v-if="task.is_overdue" size="small" type="danger">逾期</el-tag>
+                  <StatusTag :status="task.status_view || task.status" size="sm" />
+                </div>
+              </div>
+              <div class="card-name">{{ task.project_name }}</div>
+              <div class="card-item">明细：{{ task.item_name || '未关联订单明细' }}</div>
+              <div class="card-meta">
+                <span>{{ task.order_no || '-' }}</span>
+                <span>{{ task.customer_name || '-' }}</span>
+              </div>
+              <ProgressBar
+                :percentage="taskProgress(task)"
+                :tone="task.status_view?.tone"
+                label="任务进度"
+                size="sm"
+                aria-label="任务进度"
+              />
+              <div v-if="task.planned_end_at" class="planned-end">计划结束：{{ formatDateTimeFull(task.planned_end_at) }}</div>
+              <div v-if="task.assigned_to_name" class="assignee">负责人：{{ task.assigned_to_name }}</div>
+            </el-card>
+          </template>
         </div>
       </div>
     </div>
@@ -120,10 +157,12 @@
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { getDashboard } from '@/api/payments'
 import { getOrders } from '@/api/orders'
-import { getDesignTasks, getProductionTasks, getInstallationTasks } from '@/api/tasks'
-import { getAcceptances } from '@/api/acceptances'
+import { getTaskQueue } from '@/api/tasks'
 import { getQuotes } from '@/api/quotes'
-import type { CustomerDebtItem, OrderListResponse, QuoteListResponse } from '@/types/api'
+import type { CustomerDebtItem, OrderListResponse, QuoteListResponse, TaskQueueItem } from '@/types/api'
+import { formatDateTimeFull } from '@/utils/datetime'
+import { ProgressBar, StatusTag } from '@/components/ui'
+import { isTaskVisible, TASK_BOARD_COLUMNS, taskProgress } from '@/utils/task-board'
 
 const loading = ref(false)
 const data = reactive({
@@ -138,24 +177,36 @@ const quoteList = ref<QuoteListResponse[]>([])
 
 const boardLoading = ref(false)
 const allProjects = ref<OrderListResponse[]>([])
+const taskCards = ref<TaskQueueItem[]>([])
 
 const columns = [
-  { key: 'queue', label: '项目队列', statuses: ['pending_confirm', 'confirmed'] },
-  { key: 'designing', label: '设计', statuses: ['designing'] },
-  { key: 'production', label: '制作', statuses: ['in_production'] },
-  { key: 'installation', label: '安装', statuses: ['in_installation'] },
-]
+  { key: 'queue', label: '项目队列' },
+  ...TASK_BOARD_COLUMNS,
+] as const
 
-function colCards(key: string) {
-  const col = columns.find(c => c.key === key)
-  return allProjects.value.filter(t => col ? col.statuses.includes(t.status) : false)
+type BoardColumnKey = (typeof columns)[number]['key']
+
+function queueCards() {
+  return allProjects.value.filter(project => ['pending_confirm', 'confirmed'].includes(project.status))
+}
+
+function stageCards(stage: string) {
+  return taskCards.value.filter(task => task.stage === stage && isTaskVisible(task))
+}
+
+function columnCount(columnKey: BoardColumnKey) {
+  return columnKey === 'queue' ? queueCards().length : stageCards(columnKey).length
 }
 
 async function fetchBoardData() {
   boardLoading.value = true
   try {
-    const r = await getOrders({ page_size: 100 })
-    allProjects.value = r.items
+    const [orders, tasks] = await Promise.all([
+      getOrders({ page_size: 100 }),
+      getTaskQueue({ page: 1, page_size: 200 }).catch(() => ({ items: [] as TaskQueueItem[] })),
+    ])
+    allProjects.value = orders.items
+    taskCards.value = tasks.items
   } finally { boardLoading.value = false }
 }
 
@@ -188,37 +239,17 @@ function goQuote(item: QuoteListResponse) {
   window.location.href = `/quotes/${item.id}/edit`
 }
 
-async function handleCardClick(card: OrderListResponse, colKey: string) {
-  if (colKey === 'designing') {
-    try {
-      const res = await getDesignTasks({ order_id: card.id, page_size: 1 })
-      if (res.items.length > 0) {
-        return window.location.href = '/design-tasks/' + res.items[0].id
-      }
-    } catch {}
-  } else if (colKey === 'production') {
-    try {
-      const res = await getProductionTasks({ order_id: card.id, page_size: 1 })
-      if (res.items.length > 0) {
-        return window.location.href = '/production-tasks/' + res.items[0].id
-      }
-    } catch {}
-  } else if (colKey === 'installation') {
-    try {
-      const res = await getInstallationTasks({ order_id: card.id, page_size: 1 })
-      if (res.items.length > 0) {
-        return window.location.href = '/installation-tasks/' + res.items[0].id
-      }
-    } catch {}
-  } else if (colKey === 'acceptance') {
-    try {
-      const res = await getAcceptances({ order_id: card.id, page_size: 1 })
-      if (res.items.length > 0) {
-        return window.location.href = '/acceptances/' + res.items[0].id
-      }
-    } catch {}
-  }
+function handleOrderCardClick(card: OrderListResponse) {
   window.location.href = '/orders/' + card.id
+}
+
+function handleTaskCardClick(task: TaskQueueItem) {
+  const routeByType: Record<TaskQueueItem['task_type'], string> = {
+    design: '/design-tasks/',
+    production: '/production-tasks/',
+    installation: '/installation-tasks/',
+  }
+  window.location.href = routeByType[task.task_type] + task.id
 }
 
 // 从详情页返回时浏览器可能走 bfcache 恢复页面（onMounted 不再触发），
@@ -249,9 +280,14 @@ onBeforeUnmount(() => {
 .column-body { padding: 8px; flex: 1; overflow-y: auto; }
 .board-card { margin-bottom: 8px; cursor: pointer; background: var(--ad-card); border: 1px solid var(--ad-border); }
 .board-card:hover { border-color: #e63946; }
+.card-topline { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card-statuses { display: flex; align-items: center; gap: 4px; }
 .card-no { font-size: 12px; color: #888; }
 .card-name { font-weight: bold; font-size: 16px; color: var(--ad-text); margin: 4px 0; }
-.card-meta { display: flex; justify-content: center; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: #888; }
+.card-item { margin-bottom: 6px; color: var(--ad-primary, #409eff); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-meta { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: #888; }
+.planned-end { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); }
+.assignee { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); }
 .stat-card { background: var(--ad-card); border: 1px solid var(--ad-border); text-align: center; padding: 18px 12px; border-radius: 10px; }
 .stat-label { font-size: 13px; color: var(--ad-text-secondary); margin-bottom: 10px; }
 .stat-value { font-size: 22px; font-weight: 700; color: var(--ad-text); }

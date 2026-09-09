@@ -1,12 +1,11 @@
 """Deterministic order progress and anomaly aggregation."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from app.ai_assistant.page_capabilities import build_page_action_semantics
 
 from .installation_preparation import build_installation_preparation
-
 
 STAGES = (
     ("order", "订单确认"),
@@ -72,8 +71,8 @@ def _parse_datetime(value) -> datetime | None:
         except ValueError:
             return None
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=BUSINESS_TIMEZONE).astimezone(timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        return parsed.replace(tzinfo=BUSINESS_TIMEZONE).astimezone(UTC)
+    return parsed.astimezone(UTC)
 
 
 def _workflow_action(
@@ -136,7 +135,7 @@ def build_order_alerts(
         ]
 
     alerts: list[dict] = []
-    now = _parse_datetime(snapshot.get("_now")) or datetime.now(timezone.utc)
+    now = _parse_datetime(snapshot.get("_now")) or datetime.now(UTC)
     deadline = _parse_datetime(snapshot.get("delivery_deadline"))
     if status not in ("completed", "cancelled") and deadline and deadline < now:
         alerts.append(
@@ -232,12 +231,6 @@ def build_order_alerts(
                         if has_order_address
                         else "订单和任务均未填写地址，请补充后再安排人员和车辆。"
                     ),
-                    _workflow_action(
-                        "补充安装地址",
-                        task_page,
-                        task_path,
-                        "installation-address",
-                    ),
                 )
             )
         if not current_task.get("scheduled_at"):
@@ -247,12 +240,6 @@ def build_order_alerts(
                     "warning",
                     "安装时间尚未安排",
                     "设置计划安装时间，便于协调现场与施工人员。",
-                    _workflow_action(
-                        "安排安装时间",
-                        task_page,
-                        task_path,
-                        "installation-schedule",
-                    ),
                 )
             )
 

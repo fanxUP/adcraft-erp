@@ -1,15 +1,14 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2><el-icon><Money /></el-icon> 工资表</h2>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <AppPage flush>
+    <template #header><PageHeader title="工资表" description="按月份核算工资、编辑指标和维护发放状态。">
+      <template #actions><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <el-date-picker v-model="curMonth" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:160px" @change="fetchGrid" />
         <el-button @click="fetchGrid" type="primary">刷新</el-button>
         <el-button :loading="computing" @click="computeAll"><el-icon><Cpu /></el-icon> 计算</el-button>
         <el-button @click="openItems"><el-icon><Setting /></el-icon> 指标设置</el-button>
         <el-button plain @click="openParams"><el-icon><Tools /></el-icon> 参数</el-button>
-      </div>
-    </div>
+      </div></template>
+    </PageHeader></template>
 
     <!-- 汇总 -->
     <el-row :gutter="16" style="margin-bottom:16px">
@@ -170,11 +169,11 @@
         <el-button :loading="paramsSaving" @click="saveParams" type="primary">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { Money, Cpu, Setting, Tools } from '@element-plus/icons-vue'
+import { Cpu, Setting, Tools } from '@element-plus/icons-vue'
 import { ref, computed, onMounted } from "vue"
 import {
   getSalaryItems, getSalaryGrid, computeSalaryGrid, saveSalaryGrid,
@@ -184,6 +183,7 @@ import {
   type SalaryItem, type SalaryItemTemplate, type SalaryItemSnapshot, type SalaryGridRow, type SalaryParam,
 } from "@/api/salaries"
 import { ElMessage, ElMessageBox } from "element-plus"
+import { AppPage, PageHeader } from "@/components/ui"
 import { buildCols, buildHeaderRows, gridTotals, hdrStyle, fmtVal, deptLabel, isStrong, type Col, type HCell } from "@/composables/useSalaryGrid"
 
 /* ====== state ====== */

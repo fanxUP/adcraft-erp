@@ -7,7 +7,6 @@ from app.domain.workflows import (
 )
 
 from .common import action, guidance_result, unknown_guidance
-from .order_progress import attach_order_overview
 from .tasks import build_order_task_guidance
 
 

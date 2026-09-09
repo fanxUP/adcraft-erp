@@ -1,16 +1,30 @@
 """Tests for ProductionTaskService: status transitions, CRUD, validation."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 import pytest
+from app.services.task_service import ProductionTaskService, _utc_now
 
-from app.services.task_service import ProductionTaskService
 from tests.conftest import (
+    SAMPLE_ORDER_ITEM_ID,
     SAMPLE_TASK_ID,
     SAMPLE_USER_ID,
     make_mock_production_task,
 )
+
+
+def test_task_timestamp_helper_returns_naive_utc():
+    expected = datetime(2026, 9, 9, 8, 0, tzinfo=UTC)
+
+    with patch("app.services.task_service.datetime") as clock:
+        clock.now.return_value = expected
+        actual = _utc_now()
+
+    clock.now.assert_called_once_with(UTC)
+    assert actual == expected.replace(tzinfo=None)
+    assert actual.tzinfo is None
 
 
 @pytest.fixture
@@ -30,6 +44,11 @@ def service(mock_repo):
     with patch("app.services.task_service.ProductionTaskRepository") as MockRepoClass:
         MockRepoClass.return_value = mock_repo
         db = AsyncMock()
+        db.get = AsyncMock(return_value=MagicMock(
+            id=UUID("55555555-5555-5555-5555-555555555555"),
+            document_id=UUID("33333333-3333-3333-3333-333333333333"),
+            lifecycle_status="active",
+        ))
         # Mock db.execute to return a result that supports .fetchone()
         mock_exec_result = MagicMock()
         mock_exec_result.fetchone.return_value = None
@@ -63,11 +82,21 @@ async def test_status_transitions(service, mock_repo, from_status, to_status, sh
     mock_repo.get_by_id.return_value = task
 
     if should_succeed:
-        result = await service.change_status(SAMPLE_TASK_ID, to_status, SAMPLE_USER_ID)
+        result = await service.change_status(
+            SAMPLE_TASK_ID,
+            to_status,
+            SAMPLE_USER_ID,
+            order_item_ids=[str(task.order_item_id)],
+        )
         assert result["status"] == to_status
     else:
         with pytest.raises(ValueError):
-            await service.change_status(SAMPLE_TASK_ID, to_status, SAMPLE_USER_ID)
+            await service.change_status(
+                SAMPLE_TASK_ID,
+                to_status,
+                SAMPLE_USER_ID,
+                order_item_ids=[str(task.order_item_id)],
+            )
 
 
 @pytest.mark.asyncio
@@ -76,10 +105,16 @@ async def test_completed_sets_timestamp(service, mock_repo):
     task = make_mock_production_task(status="in_progress")
     mock_repo.get_by_id.return_value = task
 
-    result = await service.change_status(SAMPLE_TASK_ID, "completed", SAMPLE_USER_ID)
+    result = await service.change_status(
+        SAMPLE_TASK_ID,
+        "completed",
+        SAMPLE_USER_ID,
+        order_item_ids=[str(task.order_item_id)],
+    )
 
     assert result["status"] == "completed"
     assert result["completed_at"] is not None
+    assert result["progress_pct"] == 100
 
 
 @pytest.mark.asyncio
@@ -123,7 +158,6 @@ async def test_get_task_not_found(service, mock_repo):
 @pytest.mark.asyncio
 async def test_to_dict_includes_all_fields(service):
     """_to_dict properly serializes a production task object."""
-    now = datetime.now(timezone.utc)
     task = make_mock_production_task(
         task_id=SAMPLE_TASK_ID,
         production_no="P20260629-0042",
@@ -229,13 +263,19 @@ async def test_list_tasks_with_results(service, mock_repo):
 @pytest.mark.asyncio
 async def test_create_task(service, mock_repo):
     """create_task sets production_no, status, and returns serialized result."""
-    service.db.get.return_value = MagicMock(
+    order = MagicMock(
         doc_type="order",
         deleted_at=None,
         status="in_production",
         customer_id=SAMPLE_USER_ID,
         project_name="订单项目",
     )
+    item = MagicMock(
+        id=SAMPLE_ORDER_ITEM_ID,
+        document_id=SAMPLE_TASK_ID,
+        lifecycle_status="active",
+    )
+    service.db.get.side_effect = [order, item]
 
     async def create_side_effect(data):
         return make_mock_production_task(
@@ -246,9 +286,16 @@ async def test_create_task(service, mock_repo):
 
     mock_repo.create.side_effect = create_side_effect
 
-    with patch("app.services.task_service.generate_production_no", AsyncMock(return_value="P20260629-0050")):
+    with (
+        patch("app.services.task_service.generate_production_no", AsyncMock(return_value="P20260629-0050")),
+        patch(
+            "app.services.task_service._task_order_item_option_map",
+            AsyncMock(return_value={SAMPLE_ORDER_ITEM_ID: {"can_select": True}}),
+        ),
+    ):
         result = await service.create_task({
             "order_id": SAMPLE_TASK_ID,
+            "order_item_id": SAMPLE_ORDER_ITEM_ID,
             "customer_id": SAMPLE_USER_ID,
             "project_name": "新制作",
             "quantity": 5,

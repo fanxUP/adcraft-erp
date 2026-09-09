@@ -1,8 +1,7 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>⚙️ 工资规则</h2>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <AppPage flush>
+    <template #header><PageHeader title="工资规则" description="维护员工工资标准、社保金额和生效日期。">
+      <template #actions><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <el-select v-model="fEmp" placeholder="全部员工" clearable filterable style="width:200px">
           <el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" />
         </el-select>
@@ -11,8 +10,8 @@
         </el-select>
         <el-button @click="fetchData" type="primary">刷新</el-button>
         <el-button @click="openBatchEdit">批量设置</el-button>
-      </div>
-    </div>
+      </div></template>
+    </PageHeader></template>
 
     <!-- 汇总 -->
     <el-row :gutter="16" style="margin-bottom:16px">
@@ -86,7 +85,7 @@
       </el-form>
       <template #footer><el-button @click="showBatchDialog=false">取消</el-button><el-button @click="handleBatchSave" :loading="batchSaving" type="primary">批量保存</el-button></template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -94,6 +93,7 @@ import { ref, computed, onMounted } from "vue"
 import { getSalaryRules, createSalaryRule, updateSalaryRule, deleteSalaryRule } from "@/api/salaryRules"
 import { getAttendanceEmployees, type EmployeeOption } from "@/api/attendance"
 import { ElMessage, ElMessageBox } from "element-plus"
+import { AppPage, PageHeader } from "@/components/ui"
 
 const DEPTS = [{ value: "design", label: "设计部" }, { value: "production", label: "生产部" }, { value: "installation", label: "安装部" }, { value: "sales", label: "销售部" }, { value: "finance", label: "财务部" }, { value: "admin", label: "行政部" }]
 

@@ -3,21 +3,20 @@
 import json
 import logging
 import re
-from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.user import User
-from app.ai_assistant.config import settings
-from app.ai_assistant.llm_client import LlmClient
-from app.ai_assistant.prompt_builder import PromptBuilder
-from app.ai_assistant.memory_service import MemoryService
-from app.ai_assistant.tool_executor import ToolExecutor
-from app.ai_assistant.tool_registry import ToolRegistry
+
 from app.ai_assistant.business_rules.catalog import (
     build_business_rule_catalog,
     render_business_rules_context,
 )
 from app.ai_assistant.business_rules.service import BusinessRuleSyncService
-
+from app.ai_assistant.config import settings
+from app.ai_assistant.llm_client import LlmClient
+from app.ai_assistant.memory_service import MemoryService
+from app.ai_assistant.prompt_builder import PromptBuilder
+from app.ai_assistant.tool_executor import ToolExecutor
+from app.ai_assistant.tool_registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +135,7 @@ class AiOrchestrator:
                 llm_response = await self.llm_client.chat_completion(
                     prompt=full_prompt, system_prompt=system_prompt,
                     temperature=settings.AI_DEFAULT_TEMPERATURE)
-            except Exception as e:
+            except Exception:
                 if round_count == 1:
                     raise
                 break

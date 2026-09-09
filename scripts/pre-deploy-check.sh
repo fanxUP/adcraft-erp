@@ -13,6 +13,9 @@ NC='\033[0m'
 PASS=0
 FAIL=0
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
 check() {
     local desc="$1"
     shift
@@ -33,7 +36,7 @@ echo ""
 # ── 1. 迁移检查 ──────────────────────────────────────────
 echo -e "${YELLOW}[1/4] 数据库迁移检查${NC}"
 
-cd "$(dirname "$0")/../backend"
+cd "$PROJECT_ROOT/backend"
 
 # 检查是否有未提交的模型变更（通过比较模型和最新迁移）
 if [ -f "alembic.ini" ]; then
@@ -62,7 +65,7 @@ fi
 echo ""
 echo -e "${YELLOW}[2/4] 前端构建检查${NC}"
 
-cd "$(dirname "$0")/../frontend"
+cd "$PROJECT_ROOT/frontend"
 check "npm 依赖已安装" test -d node_modules
 if [ -d node_modules ]; then
     check "Vite 可以构建" npx vite build
@@ -72,7 +75,7 @@ fi
 echo ""
 echo -e "${YELLOW}[3/4] Git 状态检查${NC}"
 
-cd "$(dirname "$0")/.."
+cd "$PROJECT_ROOT"
 check "工作区干净（无未提交的改动）" git diff --quiet
 check "暂存区干净" git diff --cached --quiet
 

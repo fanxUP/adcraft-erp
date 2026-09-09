@@ -4,14 +4,14 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
-from app.core.deps import get_current_user
-from app.schemas.common import success
-from app.ai.schemas.ai_quote import AIQuoteAssistRequest
-from app.models.user import User
-from app.ai.rule_based.quote_finder import QuoteFinder
 from app.ai.core.resolver import FeatureResolver
 from app.ai.gateway_providers.gateway_ai_client import GatewayAIClient
+from app.ai.rule_based.quote_finder import QuoteFinder
+from app.ai.schemas.ai_quote import AIQuoteAssistRequest
+from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.models.user import User
+from app.schemas.common import success
 
 router = APIRouter(prefix="/ai/quotes", tags=["AI Quotes"])
 

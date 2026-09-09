@@ -1,11 +1,8 @@
 <template>
-  <div class="page-container">
-    <div class="page-header">
-      <h2>违章事故</h2>
-      <el-button @click="showAddDialog" type="danger">
-        <el-icon><Plus /></el-icon> 新增异常
-      </el-button>
-    </div>
+  <AppPage>
+    <template #header><PageHeader title="违章事故" description="集中处理车辆异常、责任归属和后续处置状态。">
+      <template #actions><el-button @click="showAddDialog" type="primary"><el-icon><Plus /></el-icon> 新增异常</el-button></template>
+    </PageHeader></template>
 
     <!-- 待处理提醒 -->
     <el-alert
@@ -18,6 +15,7 @@
     />
 
     <!-- 筛选条件 -->
+    <PageToolbar aria-label="违章事故筛选">
     <el-form :inline="true" class="filter-form">
       <el-form-item label="车辆">
         <el-select v-model="filters.vehicle_id" placeholder="选择车辆" clearable filterable>
@@ -55,9 +53,11 @@
         <el-button @click="resetFilters">重置</el-button>
       </el-form-item>
     </el-form>
+    </PageToolbar>
 
     <!-- 异常列表 -->
-    <el-table :data="incidents" v-loading="loading" stripe>
+    <DataTableShell :state="tableState" aria-label="车辆异常列表">
+      <el-table :data="incidents" stripe>
       <el-table-column prop="vehicle_name" label="车辆" width="150">
         <template #default="{ row }">
           {{ row.plate_number }} {{ row.vehicle_name }}
@@ -80,12 +80,12 @@
       <el-table-column prop="driver_name" label="司机" width="100" />
       <el-table-column prop="fine_amount" label="罚款" width="120" align="right">
         <template #default="{ row }">
-          {{ row.fine_amount > 0 ? `¥${row.fine_amount.toFixed(2)}` : '-' }}
+          {{ row.fine_amount > 0 ? formatMoney(row.fine_amount) : '-' }}
         </template>
       </el-table-column>
       <el-table-column prop="repair_amount" label="维修费" width="120" align="right">
         <template #default="{ row }">
-          {{ row.repair_amount > 0 ? `¥${row.repair_amount.toFixed(2)}` : '-' }}
+          {{ row.repair_amount > 0 ? formatMoney(row.repair_amount) : '-' }}
         </template>
       </el-table-column>
       <el-table-column label="状态" width="100">
@@ -104,10 +104,12 @@
           <el-button v-if="canManage" type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+      <template #error><StatePanel state="error" action-label="重新加载" @action="loadData" /></template>
+    </DataTableShell>
 
     <!-- 分页 -->
-    <el-pagination
+    <el-pagination v-if="tableState === 'ready'"
       v-model:current-page="pagination.page"
       v-model:page-size="pagination.pageSize"
       :total="pagination.total"
@@ -272,12 +274,12 @@
         <el-descriptions-item label="更新时间">{{ currentDetail.updated_at }}</el-descriptions-item>
       </el-descriptions>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
-import { ref, onMounted, computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
@@ -294,6 +296,8 @@ import {
   type VehicleDriverResponse,
 } from '@/api/vehicles'
 import { getUsers } from '@/api/users'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
+import { formatMoney } from '@/utils/format'
 
 const authStore = useAuthStore()
 const canManage = computed(() => authStore.hasAnyRole(['admin', 'finance', 'production']))
@@ -316,6 +320,8 @@ const pagination = ref({
   pageSize: 20,
   total: 0,
 })
+const loadError = ref('')
+const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : incidents.value.length ? 'ready' : 'empty')
 
 const dialogVisible = ref(false)
 const isEdit = ref(false)
@@ -403,6 +409,7 @@ function getStatusType(status: string) {
 
 async function loadData() {
   loading.value = true
+  loadError.value = ''
   try {
     const params: Record<string, unknown> = {
       page: pagination.value.page,
@@ -418,7 +425,8 @@ async function loadData() {
       pendingCount.value = res.items.filter((i: IncidentResponse) => i.status === 'pending').length
     }
   } catch {
-    ElMessage.error('加载数据失败')
+    loadError.value = '加载数据失败'
+    ElMessage.error(loadError.value)
   } finally {
     loading.value = false
   }
@@ -596,15 +604,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page-container {
-  padding: 20px;
-}
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
 .filter-form {
   margin-bottom: 16px;
 }
