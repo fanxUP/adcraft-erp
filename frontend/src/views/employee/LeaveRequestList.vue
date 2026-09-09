@@ -1,7 +1,9 @@
 <template>
-  <div class="page">
-    <div class="page-header"><h2>请假审批</h2>
-      <div style="display:flex;gap:8px;align-items:center">
+  <AppPage>
+    <PageHeader title="请假审批" description="统一查看请假申请、审批状态和处理动作。">
+      <template #actions><el-button @click="openCreate" type="primary">新建申请</el-button></template>
+    </PageHeader>
+    <PageToolbar aria-label="请假申请筛选">
         <el-select v-model="fEmp" placeholder="员工" clearable filterable style="width:200px" @change="fetchData">
           <el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" />
         </el-select>
@@ -11,12 +13,10 @@
         <el-select v-model="fType" placeholder="请假类型" clearable style="width:120px" @change="fetchData">
           <el-option label="年假" value="annual" /><el-option label="病假" value="sick" /><el-option label="事假" value="personal" /><el-option label="产假" value="maternity" /><el-option label="其他" value="other" />
         </el-select>
-      </div>
-    </div>
-    <div class="page-create">
-      <el-button @click="openCreate" type="danger">新建申请</el-button>
-    </div>
-    <el-table :data="list" v-loading="loading" stripe style="width:100%">
+    </PageToolbar>
+    <DataTableShell :state="tableState" aria-label="请假申请列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
+      <el-table :data="list" v-loading="loading" stripe style="width:100%">
       <el-table-column label="员工" width="140"><template #default="{row}">{{row.employee_name||row.employee_id}}</template></el-table-column>
       <el-table-column label="请假类型" width="100"><template #default="{row}"><el-tag size="small">{{typeLabel(row.leave_type)}}</el-tag></template></el-table-column>
       <el-table-column prop="start_date" label="开始日期" width="120" />
@@ -32,8 +32,9 @@
           <el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
-    <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10,20,50]" :total="total" layout="total,sizes,prev,pager,next" style="margin-top:16px" @change="fetchData" />
+      </el-table>
+      <template #footer><el-pagination v-if="total > 0" v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10,20,50]" :total="total" layout="total,sizes,prev,pager,next" @change="fetchData" /></template>
+    </DataTableShell>
     <el-dialog v-model="showDialog" :title="isEditing?'编辑申请':'新建请假申请'" width="560px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
         <el-form-item label="员工" v-if="!isEditing" required><el-select v-model="form.employee_id" filterable style="width:100%"><el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" /></el-select></el-form-item>
@@ -46,15 +47,16 @@
       </el-form>
       <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 <script setup lang="ts">
-import { ref, onMounted } from "vue"
+import { ref, computed, onMounted } from "vue"
 import { getLeaveRequests, createLeaveRequest, updateLeaveRequest, approveLeaveRequest, deleteLeaveRequest, type LeaveRequestItem } from "@/api/leaves"
 import { getAttendanceEmployees, type EmployeeOption } from "@/api/attendance"
 import { ElMessage, ElMessageBox } from "element-plus"
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
-const list=ref<LeaveRequestItem[]>([]); const employees=ref<EmployeeOption[]>([]); const loading=ref(false)
+const list=ref<LeaveRequestItem[]>([]); const employees=ref<EmployeeOption[]>([]); const loading=ref(false); const loadError=ref(false)
 const page=ref(1); const pageSize=ref(20); const total=ref(0); const fEmp=ref(""); const fStatus=ref(""); const fType=ref("")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const initForm={employee_id:"",leave_type:"annual",start_date:"",end_date:"",duration_days:1,reason:"",remark:""}
@@ -63,10 +65,11 @@ const form=ref<any>({...initForm})
 const typeLabel=(s:string)=>({annual:"年假",sick:"病假",personal:"事假",maternity:"产假",other:"其他"})[s]||s
 const statusLabel=(s:string)=>({pending:"待审批",approved:"已通过",rejected:"已驳回",cancelled:"已取消"})[s]||s
 const statusColor=(s:string)=>({pending:"info",approved:"success",rejected:"danger",cancelled:"info"})[s]||"info"
+const tableState = computed(() => loadError.value ? 'error' as const : loading.value ? 'loading' as const : list.value.length ? 'ready' as const : 'empty' as const)
 function calcDays(){if(form.value.start_date&&form.value.end_date){const s=new Date(form.value.start_date);const e=new Date(form.value.end_date);const d=Math.ceil((e.getTime()-s.getTime())/(86400000))+1;form.value.duration_days=Math.max(0.5,d)}}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchData(){loading.value=true;try{const p:any={page:page.value,page_size:pageSize.value};if(fEmp.value)p.employee_id=fEmp.value;if(fStatus.value)p.status=fStatus.value;if(fType.value)p.leave_type=fType.value;const r=await getLeaveRequests(p);list.value=r?.items||[];total.value=r?.total||0}finally{loading.value=false}}
+async function fetchData(){loading.value=true;loadError.value=false;try{const p:any={page:page.value,page_size:pageSize.value};if(fEmp.value)p.employee_id=fEmp.value;if(fStatus.value)p.status=fStatus.value;if(fType.value)p.leave_type=fType.value;const r=await getLeaveRequests(p);list.value=r?.items||[];total.value=r?.total||0}catch(e:unknown){loadError.value=true;ElMessage.error((e as {message?:string})?.message||'请假申请加载失败')}finally{loading.value=false}}
 async function loadEmps(){employees.value=(await getAttendanceEmployees())||[]}
 function openCreate(){isEditing.value=false;editId.value="";form.value={...initForm};showDialog.value=true}
 function openEdit(r:LeaveRequestItem){isEditing.value=true;editId.value=r.id;form.value={...r};showDialog.value=true}

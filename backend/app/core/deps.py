@@ -51,5 +51,9 @@ async def get_current_user(
         )
     # 强制改密：初始密码未修改前，仅放行认证相关接口（/me、/change-password 等）
     if getattr(user, "must_change_password", False) and not request.url.path.startswith("/api/v1/auth/"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="请先修改初始密码")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="请先修改初始密码",
+            headers={"X-Error-Code": "40300"},
+        )
     return user

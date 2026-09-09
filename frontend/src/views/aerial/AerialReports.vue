@@ -1,6 +1,6 @@
 <template>
-  <div class="page">
-    <h2 style="margin-bottom: 16px">高空车统计报表</h2>
+  <AppPage>
+    <template #header><PageHeader title="高空车统计报表" description="按月查看出车、应收、报销、费用和人员汇总。" /></template>
 
     <el-tabs v-model="activeTab" @tab-change="handleTabChange">
       <!-- 月度统计 -->
@@ -21,15 +21,15 @@
 
       <!-- 待收款 -->
       <el-tab-pane label="待收款" name="receivables">
-        <el-table :data="receivables.items || []" stripe v-loading="loading">
+          <el-table :data="receivables.items || []" stripe v-loading="loading">
           <el-table-column prop="work_date" label="日期" width="100" />
           <el-table-column prop="customer_name" label="客户" width="120" />
           <el-table-column prop="work_location" label="地点" width="140" />
-          <el-table-column prop="final_amount" label="应收" width="90" align="right"><template #default="{ row }">¥{{ row.final_amount }}</template></el-table-column>
-          <el-table-column prop="received_amount" label="实收" width="90" align="right"><template #default="{ row }">¥{{ row.received_amount }}</template></el-table-column>
-          <el-table-column prop="unpaid_amount" label="未收" width="90" align="right"><template #default="{ row }"><span style="color: var(--el-color-danger)">¥{{ row.unpaid_amount }}</span></template></el-table-column>
+          <el-table-column prop="final_amount" label="应收" width="90" align="right"><template #default="{ row }">{{ formatMoney(row.final_amount) }}</template></el-table-column>
+          <el-table-column prop="received_amount" label="实收" width="90" align="right"><template #default="{ row }">{{ formatMoney(row.received_amount) }}</template></el-table-column>
+          <el-table-column prop="unpaid_amount" label="未收" width="90" align="right"><template #default="{ row }"><span style="color: var(--el-color-danger)">{{ formatMoney(row.unpaid_amount) }}</span></template></el-table-column>
         </el-table>
-        <div style="margin-top: 12px; font-weight: 600">待收总额：¥{{ receivables.total_unpaid || 0 }}</div>
+        <div style="margin-top: 12px; font-weight: 600">待收总额：{{ formatMoney(receivables.total_unpaid) }}</div>
       </el-tab-pane>
 
       <!-- 待报销 -->
@@ -39,7 +39,7 @@
           <el-table-column prop="expense_date" label="日期" width="100" />
           <el-table-column prop="name" label="人员" width="80" />
           <el-table-column prop="expense_type" label="类型" width="80" />
-          <el-table-column prop="amount" label="金额" width="80" align="right"><template #default="{ row }">¥{{ row.amount }}</template></el-table-column>
+          <el-table-column prop="amount" label="金额" width="80" align="right"><template #default="{ row }">{{ formatMoney(row.amount) }}</template></el-table-column>
         </el-table>
       </el-tab-pane>
 
@@ -51,7 +51,7 @@
         </el-form>
         <el-table :data="costData" stripe v-loading="loading">
           <el-table-column prop="cost_type" label="费用类型" width="150"><template #default="{ row }">{{ costTypeLabel(row.cost_type) }}</template></el-table-column>
-          <el-table-column prop="total" label="金额" width="120" align="right"><template #default="{ row }">¥{{ row.total }}</template></el-table-column>
+          <el-table-column prop="total" label="金额" width="120" align="right"><template #default="{ row }">{{ formatMoney(row.total) }}</template></el-table-column>
         </el-table>
       </el-tab-pane>
 
@@ -64,13 +64,13 @@
         <el-table :data="personnelData" stripe v-loading="loading">
           <el-table-column prop="name" label="人员" width="120" />
           <el-table-column prop="trip_count" label="出车趟数" width="90" />
-          <el-table-column prop="receivable" label="应收" width="100" align="right"><template #default="{ row }">¥{{ row.receivable }}</template></el-table-column>
-          <el-table-column prop="received" label="实收" width="100" align="right"><template #default="{ row }">¥{{ row.received }}</template></el-table-column>
-          <el-table-column prop="wages" label="工资" width="100" align="right"><template #default="{ row }">¥{{ row.wages }}</template></el-table-column>
+          <el-table-column prop="receivable" label="应收" width="100" align="right"><template #default="{ row }">{{ formatMoney(row.receivable) }}</template></el-table-column>
+          <el-table-column prop="received" label="实收" width="100" align="right"><template #default="{ row }">{{ formatMoney(row.received) }}</template></el-table-column>
+          <el-table-column prop="wages" label="工资" width="100" align="right"><template #default="{ row }">{{ formatMoney(row.wages) }}</template></el-table-column>
         </el-table>
       </el-tab-pane>
     </el-tabs>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -86,6 +86,8 @@ import {
   type AerialSummary,
 } from '@/api/aerial'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, PageHeader } from '@/components/ui'
+import { formatMoney } from '@/utils/format'
 
 const loading = ref(false)
 const activeTab = ref('monthly')
@@ -107,15 +109,15 @@ const monthlyCards = computed(() => {
   return [
     { label: '出车天数', value: d?.work_days || 0, color: 'var(--el-color-primary)' },
     { label: '出车趟数', value: d?.trip_count || 0 },
-    { label: '应收金额', value: `¥${d?.receivable || 0}` },
-    { label: '实收金额', value: `¥${d?.received || 0}` },
-    { label: '待收金额', value: `¥${d?.unpaid || 0}`, color: (d?.unpaid || 0) > 0 ? 'var(--el-color-danger)' : 'var(--ad-text-secondary)' },
-    { label: '人员工资', value: `¥${d?.wages || 0}` },
-    { label: '报 销', value: `¥${d?.reimbursements || 0}` },
-    { label: '车辆费用', value: `¥${d?.vehicle_costs || 0}` },
-    { label: '毛利润', value: `¥${d?.gross_profit || 0}`, color: (d?.gross_profit || 0) >= 0 ? 'var(--el-color-success)' : 'var(--el-color-danger)' },
-    { label: '平均趟收入', value: `¥${d?.avg_trip_revenue || 0}` },
-    { label: '平均趟利润', value: `¥${d?.avg_trip_profit || 0}` },
+    { label: '应收金额', value: formatMoney(d?.receivable) },
+    { label: '实收金额', value: formatMoney(d?.received) },
+    { label: '待收金额', value: formatMoney(d?.unpaid), color: (d?.unpaid || 0) > 0 ? 'var(--el-color-danger)' : 'var(--ad-text-secondary)' },
+    { label: '人员工资', value: formatMoney(d?.wages) },
+    { label: '报 销', value: formatMoney(d?.reimbursements) },
+    { label: '车辆费用', value: formatMoney(d?.vehicle_costs) },
+    { label: '毛利润', value: formatMoney(d?.gross_profit), color: (d?.gross_profit || 0) >= 0 ? 'var(--el-color-success)' : 'var(--el-color-danger)' },
+    { label: '平均趟收入', value: formatMoney(d?.avg_trip_revenue) },
+    { label: '平均趟利润', value: formatMoney(d?.avg_trip_profit) },
   ]
 })
 
@@ -166,5 +168,3 @@ function costTypeLabel(t: string) {
 
 onMounted(loadMonthly)
 </script>
-
-<style scoped>.page-header { margin-bottom: 16px; }</style>

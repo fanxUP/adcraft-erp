@@ -15,4 +15,17 @@ describe('统一任务看板进度', () => {
     expect(isTaskVisible({ status: 'cancelled', progress_pct: 20 })).toBe(false)
     expect(isTaskVisible({ status: 'in_progress', progress_pct: 100 })).toBe(false)
   })
+
+  it('服务端终态优先于页面自己的旧状态判断', () => {
+    expect(isTaskVisible({
+      status: 'in_progress',
+      progress_pct: 60,
+      status_view: { code: 'completed', label: '已完成', tone: 'success', terminal: true },
+    })).toBe(false)
+    expect(isTaskVisible({
+      status: 'completed',
+      progress_pct: 60,
+      status_view: { code: 'reopened', label: '已重新打开', tone: 'info', terminal: false },
+    })).toBe(true)
+  })
 })

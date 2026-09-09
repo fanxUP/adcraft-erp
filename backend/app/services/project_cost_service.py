@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
+from app.domain.presentation import make_action_capability, make_status_view
 from app.models.business_document import BusinessDocument, BusinessDocumentItem
 from app.models.project_cost import ProjectCost, ProjectCostItemLink
 from app.models.task import Attachment
@@ -290,7 +291,7 @@ class ProjectCostService:
         await self.repo.create(cost)
         if document_id and not skip_sync:
             await self._sync_document_cost(document_id)
-        return {
+        return self._add_cost_contract({
             "id": str(cost.id),
             "cost_no": cost.cost_no,
             "source_type": doc_type_val,
@@ -334,7 +335,7 @@ class ProjectCostService:
             "remark": cost.remark,
             "created_by": str(cost.created_by) if cost.created_by else None,
             "created_at": cost.created_at.isoformat() if cost.created_at else None,
-        }
+        })
 
     async def update_cost(self, cost_id: UUID, data: dict) -> dict:
         c = await self.repo.get_by_id(cost_id)
@@ -695,6 +696,44 @@ class ProjectCostService:
         )
         return {str(row[0]): row[1] for row in result.all()}
 
+    @staticmethod
+    def _add_cost_contract(data: dict) -> dict:
+        """Attach canonical cost status and object-state capabilities."""
+        is_settled = bool(data.get("is_settled"))
+        is_debt = bool(data.get("is_debt"))
+        if is_settled:
+            status_view = make_status_view(
+                "settled",
+                "已结清",
+                tone="success",
+                terminal=True,
+            )
+            settle_reason = "该欠款已结清"
+        elif is_debt:
+            status_view = make_status_view(
+                "debt",
+                "待结清",
+                tone="warning",
+                terminal=False,
+            )
+            settle_reason = None
+        else:
+            status_view = make_status_view(
+                "registered",
+                "已登记",
+                tone="info",
+                terminal=False,
+            )
+            settle_reason = "非欠款成本无需结清"
+        data["status_view"] = status_view.model_dump(mode="json")
+        data["capabilities"] = {
+            "settle": make_action_capability(
+                is_debt and not is_settled,
+                settle_reason,
+            ).model_dump(mode="json"),
+        }
+        return data
+
     def _to_dict(self, c: ProjectCost) -> dict:
         """Pydantic model_validate + 手动补充关系派生字段和向后兼容别名。"""
         d = ProjectCostResponse.model_validate(c).model_dump(mode="json")
@@ -753,4 +792,4 @@ class ProjectCostService:
         d["quote_item_id"] = item_id if doc_type == "quote" else None
         d["order_item_name"] = item_name if doc_type == "order" else None
         d["quote_item_name"] = item_name if doc_type == "quote" else None
-        return d
+        return self._add_cost_contract(d)

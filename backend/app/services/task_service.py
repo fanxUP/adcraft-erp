@@ -11,6 +11,7 @@ from app.domain.workflows import (
     PRODUCTION_TASK_WORKFLOW,
     allowed_targets,
 )
+from app.domain.presentation import make_action_capability, make_status_view
 from app.models.business_document import BusinessDocument, BusinessDocumentItem
 from app.models.task_order_item_link import TaskOrderItemLink
 from app.repositories.task_repo import (
@@ -165,6 +166,34 @@ def _item_status_progress(task_type: str, status: str, fallback: int = 0) -> int
 
 def _item_status_label(task_type: str, status: str | None) -> str | None:
     return TASK_STATUS_LABELS.get(task_type, {}).get(status) if status else None
+
+
+def _task_status_view(task_type: str, status: str | None):
+    normalized = status or "unknown"
+    return make_status_view(
+        normalized,
+        _item_status_label(task_type, normalized),
+        terminal=normalized in TASK_TERMINAL_STATUSES.get(task_type, set()),
+    )
+
+
+def _task_capabilities(task_type: str, status: str | None) -> dict:
+    normalized = status or "unknown"
+    terminal = normalized in TASK_TERMINAL_STATUSES.get(task_type, set())
+    return {
+        "change_status": make_action_capability(
+            not terminal,
+            "任务已完成或已取消，不能继续变更状态" if terminal else None,
+        ).model_dump(mode="json"),
+    }
+
+
+def add_task_contract_fields(task_dict: dict, task_type: str) -> dict:
+    """Add canonical status and object-state capabilities to a task payload."""
+    status = task_dict.get("status")
+    task_dict["status_view"] = _task_status_view(task_type, status).model_dump(mode="json")
+    task_dict["capabilities"] = _task_capabilities(task_type, status)
+    return task_dict
 
 
 def _is_completed_item_status(task_type: str, status: str) -> bool:
@@ -919,12 +948,28 @@ async def _task_order_item_option_map(
             **OrderItemResponse.model_validate(item_payload).model_dump(mode="json"),
             "stage": stage,
             "stage_label": ORDER_ITEM_STAGE_LABELS[stage],
+            "stage_view": make_status_view(
+                stage,
+                ORDER_ITEM_STAGE_LABELS[stage],
+                terminal=stage == "completed",
+            ).model_dump(mode="json"),
             "can_select": can_select,
             "disabled_reason": disabled_reason,
             "is_linked": is_linked,
             "task_status": task_status,
             "task_status_label": _item_status_label(task_type, task_status),
+            "task_status_view": (
+                _task_status_view(task_type, task_status).model_dump(mode="json")
+                if task_status
+                else None
+            ),
             "task_progress_pct": task_progress_pct,
+            "capabilities": {
+                "select": make_action_capability(
+                    can_select,
+                    disabled_reason,
+                ).model_dump(mode="json"),
+            },
             **outsource,
         }
         options[item_id] = TaskOrderItemOption.model_validate(payload).model_dump(
@@ -1145,6 +1190,8 @@ async def _enrich_task_order(db, task_dict: dict) -> dict:
                 "status": status,
                 "status_label": _item_status_label(task_type, status),
                 "progress_pct": max(0, min(100, progress)),
+                "status_view": _task_status_view(task_type, status).model_dump(mode="json"),
+                "capabilities": _task_capabilities(task_type, status),
             }
     task_dict["order_item_states"] = item_states
     return task_dict
@@ -1675,7 +1722,7 @@ class DesignTaskService:
         d["_task_type"] = "design"
         d = await _enrich_task_order(self.db, d)
         d = enrich_task_dict_with_schedule_state(d)
-        return d
+        return add_task_contract_fields(d, "design")
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
@@ -1934,7 +1981,7 @@ class ProductionTaskService:
         d["_task_type"] = "production"
         d = await _enrich_task_order(self.db, d)
         d = enrich_task_dict_with_schedule_state(d)
-        return d
+        return add_task_contract_fields(d, "production")
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
@@ -2186,7 +2233,7 @@ class InstallationTaskService:
         d["_task_type"] = "installation"
         d = await _enrich_task_order(self.db, d)
         d = enrich_task_dict_with_schedule_state(d)
-        return d
+        return add_task_contract_fields(d, "installation")
 
     async def list_tasks(self, page: int, page_size: int, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,

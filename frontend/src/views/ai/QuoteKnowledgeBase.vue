@@ -1,9 +1,8 @@
 <template>
-  <div class="quote-knowledge-base">
-    <div class="page-header">
-      <h2>报价知识库</h2>
-      <el-tag type="success">AI 知识库</el-tag>
-    </div>
+  <AppPage class="quote-knowledge-base">
+    <PageHeader title="报价知识库" description="按历史报价检索相似项目、价格区间和毛利参考。">
+      <template #actions><el-tag type="success">AI 知识库</el-tag></template>
+    </PageHeader>
 
     <!-- Search form -->
     <el-card class="search-card">
@@ -105,7 +104,7 @@
         </el-table-column>
       </el-table>
     </el-card>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -115,6 +114,7 @@ import { ElMessage } from 'element-plus'
 import { Search, MagicStick } from '@element-plus/icons-vue'
 import { findSimilarQuotes, searchByDescription } from '@/api/ai'
 import type { SimilarQuoteResult, PricingSummary } from '@/types/api'
+import { AppPage, PageHeader } from '@/components/ui'
 
 const loading = ref(false)
 const searchKeyword = ref('')
@@ -177,16 +177,6 @@ async function doSearchByDesc() {
 </script>
 
 <style scoped>
-.quote-knowledge-base { padding: 0; }
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.page-header h2 { margin: 0; color: var(--ad-text); }
-
 .search-card { margin-bottom: 16px; }
 
 .pricing-row { margin-bottom: 16px; }

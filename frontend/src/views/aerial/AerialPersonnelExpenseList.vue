@@ -1,10 +1,7 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>人员垫付/报销</h2>
-    </div>
-
-    <div class="search-bar">
+  <AppPage>
+    <template #header><PageHeader title="人员垫付 / 报销" description="统一查看高空作业人员费用垫付与报销状态。" /></template>
+    <PageToolbar aria-label="人员垫付筛选">
       <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="width: 260px" />
       <el-select v-model="filters.personnel_id" placeholder="人员" clearable style="width: 120px">
         <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
@@ -14,16 +11,17 @@
       </el-select>
       <el-button @click="fetchData" type="primary">搜索</el-button>
       <el-button @click="resetFilters">重置</el-button>
-    </div>
+    </PageToolbar>
 
-    <el-table :data="list" stripe v-loading="loading">
+    <DataTableShell :state="tableState" aria-label="人员垫付列表">
+      <el-table :data="list" stripe>
       <el-table-column prop="expense_date" label="日期" width="120" />
       <el-table-column prop="name" label="人员" width="100" />
       <el-table-column prop="expense_type" label="费用类型" width="100">
         <template #default="{ row }">{{ expenseTypeLabel(row.expense_type) }}</template>
       </el-table-column>
       <el-table-column prop="amount" label="金额" width="120" align="right">
-        <template #default="{ row }">¥{{ row.amount }}</template>
+        <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
       </el-table-column>
       <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
       <el-table-column prop="reimbursement_status" label="报销状态" width="100">
@@ -38,14 +36,15 @@
           <el-button link type="primary" size="small" @click="handleReimburse(row)" v-if="row.reimbursement_status === 'pending_reimbursement'">标记已报销</el-button>
         </template>
       </el-table-column>
-    </el-table>
-
-    <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" :page-sizes="[20, 50]" layout="total, sizes, prev, pager, next" style="margin-top: 16px" @current-change="fetchData" @size-change="fetchData" />
-  </div>
+      </el-table>
+      <template #error><StatePanel state="error" action-label="重新加载" @action="fetchData" /></template>
+      <template #footer><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" :page-sizes="[20, 50]" layout="total, sizes, prev, pager, next" @current-change="fetchData" @size-change="fetchData" /></template>
+    </DataTableShell>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getAerialPersonnelExpenses,
@@ -56,6 +55,8 @@ import {
   type AerialQueryParams,
 } from '@/api/aerial'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
+import { formatMoney } from '@/utils/format'
 
 const loading = ref(false)
 const list = ref<AerialPersonnelExpense[]>([])
@@ -64,9 +65,11 @@ const page = ref(1)
 const pageSize = ref(20)
 const personnelOptions = ref<AerialPersonnel[]>([])
 const filters = reactive({ dateRange: [] as string[], personnel_id: '', reimbursement_status: '' })
+const loadError = ref('')
+const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : list.value.length ? 'ready' : 'empty')
 
 async function fetchData() {
-  loading.value = true
+  loading.value = true; loadError.value = ''
   try {
     const params: AerialQueryParams = { page: page.value, page_size: pageSize.value }
     if (filters.dateRange?.length === 2) { params.date_from = filters.dateRange[0]; params.date_to = filters.dateRange[1] }
@@ -74,7 +77,7 @@ async function fetchData() {
     if (filters.reimbursement_status) params.reimbursement_status = filters.reimbursement_status
     const res = await getAerialPersonnelExpenses(params)
     list.value = res.items || []; total.value = res.total || 0
-  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
+  } catch (error: unknown) { loadError.value = getErrorMessage(error); ElMessage.error(loadError.value) } finally { loading.value = false }
 }
 
 function resetFilters() {
@@ -101,8 +104,3 @@ onMounted(async () => {
   try { const d = await getAerialPersonnel({ page_size: 100 }); personnelOptions.value = d.items || [] } catch {}
 })
 </script>
-
-<style scoped>
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.search-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-</style>

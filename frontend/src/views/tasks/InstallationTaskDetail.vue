@@ -13,10 +13,12 @@
           <el-descriptions-item label="项目名称">{{ task.project_name }}</el-descriptions-item>
           <el-descriptions-item label="订单明细">{{ task.item_names?.join('、') || task.item_name || (task.order_item_id ? '明细未命名' : '未关联订单明细') }}</el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag data-ai-targets="task-status-assigned task-status-completed task-status-in_progress task-status-pending_acceptance" :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
+            <span data-ai-targets="task-status-assigned task-status-completed task-status-in_progress task-status-pending_acceptance">
+              <StatusTag :status="task.status_view || task.status" size="sm" />
+            </span>
           </el-descriptions-item>
           <el-descriptions-item label="任务进度">
-            <el-progress :percentage="progressPct(task.progress_pct)" :stroke-width="8" style="width: 220px" />
+            <ProgressBar :percentage="task.progress_pct" :tone="task.status_view?.tone" style="width: 220px" aria-label="任务进度" />
           </el-descriptions-item>
           <el-descriptions-item label="安装地址">{{ task.address || '-' }}</el-descriptions-item>
           <el-descriptions-item label="联系人">{{ task.contact_name || '-' }}</el-descriptions-item>
@@ -40,6 +42,7 @@
         :current-item-name="task.item_name"
         :current-item-ids="task.order_item_ids"
         :current-item-names="task.item_names"
+        :task-capabilities="task.capabilities"
         :steps="instSteps"
         :current-status="task.status"
         :workflow="instWorkflow"
@@ -106,6 +109,7 @@ import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
+import { ProgressBar, StatusTag } from '@/components/ui'
 import { getInstallationTask, updateInstallationTask, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
@@ -188,19 +192,6 @@ async function doChangeStatus(to_status: string, reason: string, orderItemIds: s
     await fetchTask()
     await aiStore.notifyBusinessMutation()
   } catch { /* handled */ } finally { changing.value = false }
-}
-
-function statusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '历史待验收', completed: '已完成', cancelled: '已取消' }
-  return map[s] || s
-}
-function statusColor(s: string) {
-  const map: Record<string, string> = { pending: 'info', assigned: '', in_progress: 'warning', pending_acceptance: 'warning', completed: 'success', cancelled: 'info' }
-  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
-}
-
-function progressPct(value: number | undefined) {
-  return Math.min(100, Math.max(0, Number(value ?? 0)))
 }
 
 async function fetchTask() {

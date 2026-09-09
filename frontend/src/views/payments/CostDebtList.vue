@@ -1,15 +1,19 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>成本欠款</h2>
-      <div class="summary-bar">
+  <AppPage>
+    <template #header>
+      <PageHeader title="成本欠款" description="统一查看成本欠款、结清状态和可执行的结算动作。">
+        <template #meta>
+          <div class="summary-bar">
         <span style="color: var(--el-color-warning); font-weight: bold; font-size: 16px">
-          待结清欠款：¥ {{ pendingTotal.toFixed(2) }}
+          待结清欠款：{{ formatMoney(pendingTotal) }}
         </span>
-      </div>
-    </div>
+          </div>
+        </template>
+      </PageHeader>
+    </template>
 
-    <el-card shadow="never" class="filter-card">
+    <template #toolbar>
+      <PageToolbar aria-label="成本欠款筛选">
       <el-form :model="filters" inline>
         <el-form-item label="关键词">
           <el-input v-model="filters.keyword" placeholder="订单编号/项目名称/客户" clearable style="width: 220px" @keyup.enter="handleSearch" />
@@ -25,9 +29,12 @@
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
-    </el-card>
+      </PageToolbar>
+    </template>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <DataTableShell :state="tableState" aria-label="成本欠款列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
+      <el-table :data="list" stripe>
       <el-table-column prop="cost_no" label="成本编号" width="180" />
       <el-table-column prop="order_no" label="订单编号" width="180" />
       <el-table-column prop="project_name" label="项目名称" min-width="200" show-overflow-tooltip />
@@ -38,17 +45,16 @@
         </template>
       </el-table-column>
       <el-table-column label="成本金额" width="120" align="right">
-        <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
+        <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
       </el-table-column>
       <el-table-column label="欠款金额" width="120" align="right">
         <template #default="{ row }">
-          <span style="color: var(--el-color-warning); font-weight: bold">¥ {{ row.debt_amount?.toFixed(2) }}</span>
+          <span class="text-warning">{{ formatMoney(row.debt_amount) }}</span>
         </template>
       </el-table-column>
       <el-table-column label="状态" width="100" align="center">
         <template #default="{ row }">
-          <el-tag v-if="!row.is_settled" type="danger" size="small">待结清</el-tag>
-          <el-tag v-else type="success" size="small">已结清</el-tag>
+          <StatusTag :status="row.status_view || (row.is_settled ? 'settled' : 'debt')" size="sm" />
         </template>
       </el-table-column>
       <el-table-column label="日期" width="120">
@@ -58,7 +64,7 @@
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button
-            v-if="!row.is_settled"
+            v-if="row.capabilities?.settle?.allowed ?? !row.is_settled"
             size="small"
             @click="openSettle(row)"
           >
@@ -67,17 +73,18 @@
           <span v-else style="color: var(--ad-text-secondary); font-size: 12px">{{ formatDate(row.settled_at) }}</span>
         </template>
       </el-table-column>
-    </el-table>
-
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :page-sizes="[10, 20, 50, 100]"
-      :total="total"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 16px; justify-content: flex-end"
-      @change="fetchData"
-    />
+      </el-table>
+      <template #footer>
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next"
+          @change="fetchData"
+        />
+      </template>
+    </DataTableShell>
 
     <!-- Settle Dialog -->
     <el-dialog v-model="showSettle" title="冲红结清欠款" width="480px" :close-on-click-modal="false">
@@ -105,15 +112,17 @@
         <el-button :loading="settling" @click="handleSettle" type="primary">确认冲红结清</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
+import { formatMoney } from '@/utils/format'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getCostDebts, settleCostDebt } from '@/api/payments'
 import { ElMessage } from 'element-plus'
 import type { DebtResponse } from '@/types/api'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel, StatusTag } from '@/components/ui'
 
 const PAYMENT_METHODS = ['现金支付', '微信支付', '转账支付', '对公支付', '其它支付']
 
@@ -125,6 +134,7 @@ const page = ref(1)
 const pageSize = ref(20)
 const showSettle = ref(false)
 const settleTarget = ref<DebtResponse | null>(null)
+const loadError = ref(false)
 
 const filters = reactive({
   keyword: '',
@@ -143,8 +153,15 @@ const settleForm = reactive({
   remark: '',
 })
 
+const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
+  if (loadError.value) return 'error'
+  if (loading.value) return 'loading'
+  return list.value.length ? 'ready' : 'empty'
+})
+
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try {
     const params: Record<string, unknown> = {
       page: page.value,
@@ -155,6 +172,8 @@ async function fetchData() {
     const data = await getCostDebts(params)
     list.value = data.items
     total.value = data.total
+  } catch {
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -203,9 +222,6 @@ onMounted(fetchData)
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
 .summary-bar { display: flex; align-items: center; gap: 8px; }
 .filter-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); margin-bottom: 16px; }
 </style>

@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.attachment import AttachmentResponse
-from app.schemas.common import CoercedModel
+from app.schemas.common import ActionCapability, CoercedModel, StatusView
 from app.schemas.order import OrderItemResponse
 
 TaskType = Literal["design", "production", "installation"]
@@ -34,6 +34,8 @@ class TaskOrderItemState(BaseModel):
     status: str
     status_label: str | None = None
     progress_pct: int = Field(0, ge=0, le=100)
+    status_view: StatusView | None = None
+    capabilities: dict[str, ActionCapability] = Field(default_factory=dict)
 
 
 # -- Design Task --
@@ -246,12 +248,15 @@ class TaskOrderItemOption(OrderItemResponse):
         "not_ready",
     ]
     stage_label: str
+    stage_view: StatusView
     can_select: bool = False
     disabled_reason: str | None = None
     is_linked: bool = False
     task_status: str | None = None
     task_status_label: str | None = None
+    task_status_view: StatusView | None = None
     task_progress_pct: int | None = Field(default=None, ge=0, le=100)
+    capabilities: dict[str, ActionCapability] = Field(default_factory=dict)
     outsource_blocked: bool = False
     outsource_status: Literal["pending", "in_progress"] | None = None
     outsource_status_label: str | None = None
@@ -279,6 +284,8 @@ class TaskQueueItem(CoercedModel):
     item_names: list[str] = Field(default_factory=list)
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    status_view: StatusView | None = None
+    capabilities: dict[str, ActionCapability] = Field(default_factory=dict)
     planned_start_at: str | None = None
     planned_end_at: str | None = None
     is_overdue: bool = False

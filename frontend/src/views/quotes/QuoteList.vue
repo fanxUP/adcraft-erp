@@ -1,18 +1,18 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>报价管理</h2>
-      <div class="quote-actions">
-        <el-button v-if="authStore.isAdmin" @click="$router.push('/orders/recycle')" type="warning">
-          <el-icon><Delete /></el-icon> 订单回收站
-        </el-button>
-      </div>
-    </div>
-    <div class="page-create">
-      <el-button @click="$router.push('/quotes/new')" type="danger">新建常规报价</el-button>
-    </div>
+  <AppPage>
+    <template #header>
+      <PageHeader title="报价管理" description="统一管理报价状态、金额和转订单流程。">
+        <template #actions>
+          <el-button v-if="authStore.isAdmin" @click="$router.push('/orders/recycle')" type="warning">
+            <el-icon><Delete /></el-icon> 订单回收站
+          </el-button>
+          <el-button @click="$router.push('/quotes/new')" type="danger">新建常规报价</el-button>
+        </template>
+      </PageHeader>
+    </template>
 
-    <el-card shadow="never" class="filter-card">
+    <template #toolbar>
+      <PageToolbar aria-label="报价筛选">
       <el-form :model="filters" inline>
         <el-form-item label="关键词">
           <el-input v-model="filters.keyword" placeholder="编号/项目名称" clearable style="width: 200px" @keyup.enter="handleSearch" />
@@ -41,20 +41,25 @@
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
-    </el-card>
+      </PageToolbar>
+    </template>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <DataTableShell :state="tableState" aria-label="报价列表">
+      <template #error>
+        <StatePanel state="error" action-label="重试" @action="fetchData" />
+      </template>
+      <el-table :data="list" stripe>
       <el-table-column prop="quote_no" label="报价编号" width="180" />
       <el-table-column prop="customer_name" label="客户名称" width="160" />
       <el-table-column prop="department" label="部门/科室" width="120" />
       <el-table-column prop="project_name" label="项目名称" min-width="200" />
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="statusColor(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+          <StatusTag :status="row.status_view || row.status" size="sm" />
         </template>
       </el-table-column>
       <el-table-column label="总金额" width="120">
-        <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
+        <template #default="{ row }">{{ formatMoney(row.total_amount) }}</template>
       </el-table-column>
       <el-table-column label="有效期" width="120">
         <template #default="{ row }">{{ row.valid_until || '-' }}</template>
@@ -74,7 +79,18 @@
           <el-button text type="danger" @click="handleDelete(row as QuoteListResponse)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+      <template #footer>
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next"
+          @change="fetchData"
+        />
+      </template>
+    </DataTableShell>
 
     <el-dialog v-model="deleteDialogVisible" title="确认硬删除报价" width="460px" :close-on-click-modal="false">
       <div class="delete-confirm-content">
@@ -96,28 +112,20 @@
 
     <QuotePreview :visible="previewVisible" :quote-id="previewQuoteId" @close="previewVisible = false" />
 
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :page-sizes="[10, 20, 50, 100]"
-      :total="total"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 16px; justify-content: flex-end"
-      @change="fetchData"
-    />
-
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
-import { ref, reactive, onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
+import { formatMoney } from '@/utils/format'
+import { ref, reactive, computed, onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
 import { getQuotes, deleteQuote, previewDeleteQuote, cancelQuote, revertQuoteToDraft } from '@/api/quotes'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { QuoteListResponse } from '@/types/api'
 import QuotePreview from './QuotePreview.vue'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel, StatusTag } from '@/components/ui'
 
 const authStore = useAuthStore()
 
@@ -126,6 +134,7 @@ const list = ref<QuoteListResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const loadError = ref(false)
 
 const filters = reactive({ keyword: '', status: '' })
 const dateRange = ref<[string, string] | null>(null)
@@ -141,24 +150,22 @@ const REFRESH_INTERVAL_MS = 15000
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let fetchRequestId = 0
 
+const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
+  if (loadError.value) return 'error'
+  if (loading.value) return 'loading'
+  return list.value.length ? 'ready' : 'empty'
+})
+
 function handlePreview(row: QuoteListResponse) {
   previewQuoteId.value = row.id
   previewVisible.value = true
 }
 
 
-function statusLabel(s: string) {
-  const map: Record<string, string> = { draft: '草稿', confirmed: '已确认', converted: '已转订单', cancelled: '已作废' }
-  return map[s] || s
-}
-function statusColor(s: string) {
-  const map: Record<string, string> = { draft: 'info', confirmed: 'success', converted: '', cancelled: 'danger' }
-  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
-}
-
 async function fetchData() {
   const requestId = ++fetchRequestId
   loading.value = true
+  loadError.value = false
   try {
     const params = {
       page: page.value, page_size: pageSize.value,
@@ -171,6 +178,8 @@ async function fetchData() {
       list.value = data.items
       total.value = data.total
     }
+  } catch {
+    if (requestId === fetchRequestId) loadError.value = true
   } finally {
     if (requestId === fetchRequestId) loading.value = false
   }
@@ -272,9 +281,6 @@ onUnmounted(stopAutoRefresh)
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
 .quote-actions { display: flex; gap: 8px; }
 .filter-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); margin-bottom: 16px; }
 .delete-confirm-content p { margin: 0; line-height: 1.7; }

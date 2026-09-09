@@ -3,9 +3,12 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -69,8 +72,28 @@ from app.core.performance import (
     install_slow_query_listener,
 )
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.schemas.common import error
 
 logger = logging.getLogger(__name__)
+
+REQUEST_ID_HEADER = "X-Request-ID"
+
+
+def _request_id(request: Request) -> str:
+    """Return a bounded correlation id without trusting arbitrary header text."""
+    candidate = (request.headers.get(REQUEST_ID_HEADER) or "").strip()
+    if 1 <= len(candidate) <= 128 and all(
+        char.isalnum() or char in "-_" for char in candidate
+    ):
+        return candidate
+    return uuid4().hex
+
+
+def _error_meta(request: Request) -> dict:
+    return {
+        "request_id": getattr(request.state, "request_id", None),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @asynccontextmanager
@@ -155,15 +178,62 @@ app = FastAPI(
 
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError):
-    return JSONResponse(status_code=400, content={"code": 40001, "message": str(exc), "data": None})
+    return JSONResponse(
+        status_code=400,
+        content=error(40001, str(exc), meta=_error_meta(request)),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error_handler(request: Request, exc: RequestValidationError):
+    fields = [
+        {
+            "loc": [str(part) for part in item.get("loc", ())],
+            "msg": str(item.get("msg", "请求参数错误")),
+            "type": item.get("type"),
+        }
+        for item in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content=error(
+            42200,
+            "请求参数错误",
+            data={"fields": fields},
+            meta=_error_meta(request),
+        ),
+    )
 
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    detail = exc.detail
+    message = detail if isinstance(detail, str) else "请求失败"
+    explicit_code = None
+    if exc.headers:
+        raw_code = exc.headers.get("X-Error-Code")
+        if raw_code and raw_code.isdigit():
+            explicit_code = int(raw_code)
+    code = explicit_code or exc.status_code * 100
+    if exc.status_code == 403 and message == "请先修改初始密码":
+        code = 40300
     return JSONResponse(
         status_code=exc.status_code,
-        content={"code": exc.status_code * 100, "message": exc.detail, "data": None},
+        content=error(code, message, meta=_error_meta(request)),
         headers=exc.headers,
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception(
+        "Unhandled API error request_id=%s",
+        getattr(request.state, "request_id", None),
+        exc_info=exc,
+    )
+    return JSONResponse(
+        status_code=500,
+        content=error(50000, "服务器内部错误，请稍后重试", meta=_error_meta(request)),
     )
 
 
@@ -174,6 +244,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request.state.request_id = _request_id(request)
+    response = await call_next(request)
+    response.headers[REQUEST_ID_HEADER] = request.state.request_id
+    return response
 
 # 全局限流中间件（Redis 未就绪时自动放行，规则见 core/rate_limiter.default_rules）
 app.add_middleware(RateLimitMiddleware)

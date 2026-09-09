@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.outsource_repo import OutsourceVendorRepository, OutsourceTaskRepository, OutsourcePaymentRepository
 from app.services.number_generator import generate_vendor_no, generate_outsource_task_no, generate_outsource_payment_no
 from app.models.outsource import OutsourceVendor, OutsourcePayment, OutsourceTask
+from app.domain.presentation import make_action_capability, make_outsource_status_view
 from app.domain.workflows import OUTSOURCE_TASK_WORKFLOW, ensure_transition
 
 
@@ -1112,6 +1113,14 @@ class OutsourceService:
         order_item_name = getattr(order_item, "item_name", None) if order_item else None
         if not isinstance(order_item_name, str):
             order_item_name = None
+        status = t.status
+        is_terminal = status in {"completed", "settled", "cancelled"}
+        paid_amount = float(self._to_decimal(t.paid_amount))
+        cancel_reason = None
+        if is_terminal:
+            cancel_reason = "已完成、已结算或已取消的外协任务不能取消"
+        elif paid_amount > 0:
+            cancel_reason = "已有付款的外协任务不能取消"
         return {
             "id": str(t.id), "task_no": t.task_no,
             "vendor_id": str(t.vendor_id),
@@ -1129,9 +1138,20 @@ class OutsourceService:
             "quantity": float(self._to_decimal(t.quantity)),
             "unit_price": float(self._to_decimal(t.unit_price)),
             "total_amount": float(self._to_decimal(t.total_amount)),
-            "paid_amount": float(self._to_decimal(t.paid_amount)),
+            "paid_amount": paid_amount,
             "unpaid_amount": float(self._to_decimal(t.unpaid_amount)),
-            "status": t.status,
+            "status": status,
+            "status_view": make_outsource_status_view(status).model_dump(mode="json"),
+            "capabilities": {
+                "cancel": make_action_capability(
+                    not is_terminal and paid_amount <= 0,
+                    cancel_reason,
+                ).model_dump(mode="json"),
+                "revert": make_action_capability(
+                    status == "completed",
+                    "只有已完成的外协任务可以退回" if status != "completed" else None,
+                ).model_dump(mode="json"),
+            },
             "expected_at": t.expected_at.isoformat() if t.expected_at else None,
             "completed_at": t.completed_at.isoformat() if t.completed_at else None,
             "remark": t.remark,

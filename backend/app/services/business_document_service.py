@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.domain.workflows import ORDER_WORKFLOW, QUOTE_WORKFLOW, allowed_targets
+from app.domain.presentation import make_order_status_view, make_quote_status_view
 from app.repositories.business_document_repo import BusinessDocumentRepository
 from app.repositories.cdr_quote_repo import CdrQuoteRepository
 from app.models.business_document import BusinessDocument
@@ -4099,6 +4100,9 @@ class BusinessDocumentService:
             "customer_name": d.customer_name or (d.customer.name if d.customer else None),
             "department": d.department or "",
             "status": d.status or "",
+            "status_view": (
+                make_quote_status_view(d.status) if d.doc_type == "quote" else make_order_status_view(d.status)
+            ).model_dump(mode="json"),
             "total_amount": float(d.total_amount) if d.total_amount else 0,
         }
         if d.doc_type == "quote":
@@ -4120,6 +4124,9 @@ class BusinessDocumentService:
             "customer_name": d.customer_name or (d.customer.name if d.customer else None),
             "project_name": d.project_name,
             "status": d.status,
+            "status_view": (
+                make_quote_status_view(d.status) if d.doc_type == "quote" else make_order_status_view(d.status)
+            ).model_dump(mode="json"),
             "total_amount": float(d.total_amount),
             "department": d.department,
             "contact_person": d.contact_person,
@@ -4154,6 +4161,9 @@ class BusinessDocumentService:
             "project_name": d.project_name,
             "sales_user_id": str(d.sales_user_id) if d.sales_user_id else None,
             "status": d.status,
+            "status_view": (
+                make_quote_status_view(d.status) if d.doc_type == "quote" else make_order_status_view(d.status)
+            ).model_dump(mode="json"),
             "total_amount": float(d.total_amount),
             "remark": d.remark,
             "department": d.department,

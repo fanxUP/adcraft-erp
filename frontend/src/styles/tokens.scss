@@ -1,0 +1,115 @@
+/*
+ * AdCraft UI tokens
+ *
+ * 业务页面优先使用 --ui-* 语义变量。--ad-* 是迁移期兼容别名，供尚未
+ * 迁移的历史页面继续工作；新的公共组件不得再直接写具体颜色值。
+ */
+:root {
+  /* Brand */
+  --ui-brand: #2563eb;
+  --ui-brand-hover: #1d4ed8;
+  --ui-brand-active: #1e40af;
+  --ui-brand-soft: #eff6ff;
+  --ui-on-brand: #ffffff;
+
+  /* Content and surfaces */
+  --ui-text: #1f2937;
+  --ui-text-secondary: #6b7280;
+  --ui-text-muted: #9ca3af;
+  --ui-bg: #f5f7fa;
+  --ui-surface: #ffffff;
+  --ui-surface-subtle: #f8fafc;
+  --ui-border: #e5e7eb;
+  --ui-border-strong: #cbd5e1;
+
+  /* Semantic colors */
+  --ui-success: #16a34a;
+  --ui-success-soft: #f0fdf4;
+  --ui-success-border: #bbf7d0;
+  --ui-warning: #d97706;
+  --ui-warning-soft: #fffbeb;
+  --ui-warning-border: #fde68a;
+  --ui-danger: #dc2626;
+  --ui-danger-soft: #fef2f2;
+  --ui-danger-border: #fecaca;
+  --ui-info: #2563eb;
+  --ui-info-soft: #eff6ff;
+  --ui-info-border: #bfdbfe;
+  --ui-neutral: #64748b;
+  --ui-neutral-soft: #f1f5f9;
+  --ui-neutral-border: #cbd5e1;
+
+  /* Spacing */
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 20px;
+  --ui-space-6: 24px;
+  --ui-space-7: 32px;
+  --ui-space-8: 40px;
+
+  /* Shape and elevation */
+  --ui-radius-sm: 6px;
+  --ui-radius-md: 10px;
+  --ui-radius-lg: 14px;
+  --ui-shadow-sm: 0 1px 3px rgb(15 23 42 / 6%);
+  --ui-shadow-md: 0 8px 24px rgb(15 23 42 / 10%);
+
+  /* Typography and motion */
+  --ui-font-size-base: 14px;
+  --ui-font-size-caption: 12px;
+  --ui-font-size-title: 20px;
+  --ui-font-weight-regular: 400;
+  --ui-font-weight-medium: 500;
+  --ui-font-weight-semibold: 600;
+  --ui-font-weight-bold: 700;
+  --ui-duration-fast: 120ms;
+  --ui-duration-normal: 180ms;
+  --ui-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Layout */
+  --ui-page-max-width: 1600px;
+  --ui-control-height: 32px;
+  --ui-focus-ring: 0 0 0 3px rgb(37 99 235 / 22%);
+
+  /* Migration aliases for existing screens. */
+  --ad-red: var(--ui-brand);
+  --ad-dark: var(--ui-bg);
+  --ad-darker: var(--ui-surface-subtle);
+  --ad-card: var(--ui-surface);
+  --ad-text: var(--ui-text);
+  --ad-text-secondary: var(--ui-text-secondary);
+  --ad-border: var(--ui-border);
+  --ad-accent-glow: var(--ui-brand-soft);
+  --ad-font-size-base: var(--ui-font-size-base);
+  --ad-font-weight-base: var(--ui-font-weight-regular);
+
+  /* 报价分项色块追踪调色板（RGB 通道值，配合 rgba(var(--ad-group-N), alpha) 使用） */
+  --ad-group-1: 90, 123, 157;
+  --ad-group-2: 157, 122, 88;
+  --ad-group-3: 91, 139, 115;
+  --ad-group-4: 132, 111, 151;
+  --ad-group-5: 157, 104, 116;
+  --ad-group-6: 76, 137, 142;
+  --ad-group-7: 153, 137, 78;
+  --ad-group-8: 111, 120, 161;
+  --ad-group-9: 166, 112, 89;
+  --ad-group-10: 96, 132, 126;
+}
+
+:where(button, [role='button'], a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--ui-brand);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

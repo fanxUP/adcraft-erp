@@ -22,6 +22,7 @@
           <OrderProjectOverview
             :order-id="order.id"
             :status="order.status"
+            :status-view="order.status_view"
             :total-amount="order.total_amount || 0"
             :paid-amount="order.paid_amount || 0"
             :cost-amount="order.cost_amount || 0"
@@ -66,34 +67,33 @@
               </el-table-column>
               <el-table-column label="明细总进度" width="165">
                 <template #default="{ row }">
-                  <el-progress :percentage="row.overallProgress" :stroke-width="8" />
-                  <div class="progress-value">{{ row.overallProgress }}%</div>
+                  <ProgressBar :percentage="row.overallProgress" size="sm" aria-label="明细总进度" />
                 </template>
               </el-table-column>
               <el-table-column label="设计" min-width="155">
                 <template #default="{ row }">
-                  <el-progress :percentage="row.designProgress" :stroke-width="8" />
+                  <ProgressBar :percentage="row.designProgress" size="sm" aria-label="设计进度" />
                   <div class="stage-line">
                     <span>{{ row.designTask ? row.item.item_name : stageLabel(row.designTask, 'design') }}</span>
-                    <el-tag v-if="row.designTask" size="small" :type="taskStatusType(itemTaskStatus(row.designTask, row.item.id))">{{ designStatusLabel(itemTaskStatus(row.designTask, row.item.id)) }}</el-tag>
+                    <StatusTag v-if="row.designTask" :status="itemTaskStatusView(row.designTask, row.item.id) || itemTaskStatus(row.designTask, row.item.id)" size="sm" />
                   </div>
                 </template>
               </el-table-column>
               <el-table-column label="制作" min-width="155">
                 <template #default="{ row }">
-                  <el-progress :percentage="row.productionProgress" :stroke-width="8" />
+                  <ProgressBar :percentage="row.productionProgress" size="sm" aria-label="制作进度" />
                   <div class="stage-line">
                     <span>{{ row.productionTask ? row.item.item_name : stageLabel(row.productionTask, 'production') }}</span>
-                    <el-tag v-if="row.productionTask" size="small" :type="taskStatusType(itemTaskStatus(row.productionTask, row.item.id))">{{ prodStatusLabel(itemTaskStatus(row.productionTask, row.item.id)) }}</el-tag>
+                    <StatusTag v-if="row.productionTask" :status="itemTaskStatusView(row.productionTask, row.item.id) || itemTaskStatus(row.productionTask, row.item.id)" size="sm" />
                   </div>
                 </template>
               </el-table-column>
               <el-table-column label="安装" min-width="155">
                 <template #default="{ row }">
-                  <el-progress :percentage="row.installationProgress" :stroke-width="8" />
+                  <ProgressBar :percentage="row.installationProgress" size="sm" aria-label="安装进度" />
                   <div class="stage-line">
                     <span>{{ row.installationTask ? row.item.item_name : stageLabel(row.installationTask, 'installation') }}</span>
-                    <el-tag v-if="row.installationTask" size="small" :type="taskStatusType(itemTaskStatus(row.installationTask, row.item.id))">{{ instStatusLabel(itemTaskStatus(row.installationTask, row.item.id)) }}</el-tag>
+                    <StatusTag v-if="row.installationTask" :status="itemTaskStatusView(row.installationTask, row.item.id) || itemTaskStatus(row.installationTask, row.item.id)" size="sm" />
                   </div>
                 </template>
               </el-table-column>
@@ -104,7 +104,7 @@
               <el-descriptions-item label="订单编号">{{ order.order_no }}</el-descriptions-item>
               <el-descriptions-item label="项目名称">{{ order.project_name }}</el-descriptions-item>
              <el-descriptions-item label="状态">
-                <el-tag :type="statusColor(order.status)">{{ statusLabel(order.status) }}</el-tag>
+                <StatusTag :status="order.status_view || order.status" size="sm" />
               </el-descriptions-item>
               <el-descriptions-item label="联系人">
                 <el-input v-if="contactEditing" v-model="contactDraft.person" size="small" style="width: 140px" placeholder="联系人" />
@@ -316,10 +316,10 @@
                 placement="top"
               >
                 <div>
-                  <el-tag v-if="log.from_status" size="small">{{ statusLabel(log.from_status) }}</el-tag>
+                  <StatusTag v-if="log.from_status" :status="log.from_status" size="sm" />
                   <span v-else style="color: var(--ad-text-secondary)">-</span>
                   <span style="margin: 0 8px">→</span>
-                  <el-tag :type="statusColor(log.to_status)" size="small">{{ statusLabel(log.to_status) }}</el-tag>
+                  <StatusTag :status="log.to_status" size="sm" />
                   <span v-if="log.reason" style="margin-left: 8px; color: var(--ad-text-secondary)">{{ log.reason }}</span>
                 </div>
               </el-timeline-item>
@@ -343,12 +343,12 @@
               <el-table-column prop="taskNo" label="任务编号" min-width="180" />
               <el-table-column label="状态" width="140">
                 <template #default="{ row }">
-                  <el-tag :type="row.statusType" size="small">{{ row.statusLabel }}</el-tag>
+                  <StatusTag :status="row.status_view || row.status" size="sm" />
                 </template>
               </el-table-column>
               <el-table-column label="进度" width="150">
                 <template #default="{ row }">
-                  <el-progress :percentage="row.progress" :stroke-width="8" />
+                  <ProgressBar :percentage="row.progress" size="sm" aria-label="任务进度" />
                 </template>
               </el-table-column>
               <el-table-column label="操作" width="110">
@@ -373,14 +373,14 @@
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
                   <div class="task-status-cell">
-                    <el-tag :type="designStatusColor(row.status)" size="small">{{ designStatusLabel(row.status) }}</el-tag>
+                    <StatusTag :status="row.status_view || row.status" size="sm" />
                     <el-tag v-if="row.is_overdue" type="danger" size="small">逾期</el-tag>
                   </div>
                 </template>
               </el-table-column>
               <el-table-column label="进度" width="150">
                 <template #default="{ row }">
-                  <el-progress :percentage="progressPct(row.progress_pct)" :stroke-width="8" />
+                  <ProgressBar :percentage="row.progress_pct" size="sm" aria-label="设计任务进度" />
                 </template>
               </el-table-column>
               <el-table-column label="操作" width="100">
@@ -405,14 +405,14 @@
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
                   <div class="task-status-cell">
-                    <el-tag :type="prodStatusColor(row.status)" size="small">{{ prodStatusLabel(row.status) }}</el-tag>
+                    <StatusTag :status="row.status_view || row.status" size="sm" />
                     <el-tag v-if="row.is_overdue" type="danger" size="small">逾期</el-tag>
                   </div>
                 </template>
               </el-table-column>
               <el-table-column label="进度" width="150">
                 <template #default="{ row }">
-                  <el-progress :percentage="progressPct(row.progress_pct)" :stroke-width="8" />
+                  <ProgressBar :percentage="row.progress_pct" size="sm" aria-label="制作任务进度" />
                 </template>
               </el-table-column>
               <el-table-column label="操作" width="100">
@@ -437,14 +437,14 @@
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
                   <div class="task-status-cell">
-                    <el-tag :type="instStatusColor(row.status)" size="small">{{ instStatusLabel(row.status) }}</el-tag>
+                    <StatusTag :status="row.status_view || row.status" size="sm" />
                     <el-tag v-if="row.is_overdue" type="danger" size="small">逾期</el-tag>
                   </div>
                 </template>
               </el-table-column>
               <el-table-column label="进度" width="150">
                 <template #default="{ row }">
-                  <el-progress :percentage="progressPct(row.progress_pct)" :stroke-width="8" />
+                  <ProgressBar :percentage="row.progress_pct" size="sm" aria-label="安装任务进度" />
                 </template>
               </el-table-column>
               <el-table-column label="操作" width="100">
@@ -479,6 +479,7 @@ import {
 } from '@/api/orders'
 import { getSystemSettings } from '@/api/admin'
 import { getDesignTasks, getProductionTasks, getInstallationTasks } from '@/api/tasks'
+import { ProgressBar, StatusTag } from '@/components/ui'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type {
   DesignTaskResponse,
@@ -487,6 +488,7 @@ import type {
   OrderItemEditabilityResponse,
   OrderItemResponse,
   ProductionTaskResponse,
+  StatusView,
 } from '@/types/api'
 
 const route = useRoute()
@@ -513,8 +515,8 @@ type OrderProgressTask = DesignTaskResponse | ProductionTaskResponse | Installat
 type LegacyUnlinkedTaskRow = {
   stageLabel: string
   taskNo: string
-  statusLabel: string
-  statusType: 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+  status: string
+  status_view?: StatusView | null
   progress: number
   route: string
 }
@@ -609,8 +611,8 @@ const legacyUnlinkedTasks = computed<LegacyUnlinkedTaskRow[]>(() => [
     .map(task => ({
       stageLabel: '设计',
       taskNo: task.design_no,
-      statusLabel: designStatusLabel(task.status),
-      statusType: designStatusColor(task.status),
+      status: task.status,
+      status_view: task.status_view,
       progress: progressPct(task.progress_pct),
       route: `/design-tasks/${task.id}`,
     })),
@@ -619,8 +621,8 @@ const legacyUnlinkedTasks = computed<LegacyUnlinkedTaskRow[]>(() => [
     .map(task => ({
       stageLabel: '制作',
       taskNo: task.production_no,
-      statusLabel: prodStatusLabel(task.status),
-      statusType: prodStatusColor(task.status),
+      status: task.status,
+      status_view: task.status_view,
       progress: progressPct(task.progress_pct),
       route: `/production-tasks/${task.id}`,
     })),
@@ -629,8 +631,8 @@ const legacyUnlinkedTasks = computed<LegacyUnlinkedTaskRow[]>(() => [
     .map(task => ({
       stageLabel: '安装',
       taskNo: task.installation_no,
-      statusLabel: instStatusLabel(task.status),
-      statusType: instStatusColor(task.status),
+      status: task.status,
+      status_view: task.status_view,
       progress: progressPct(task.progress_pct),
       route: `/installation-tasks/${task.id}`,
     })),
@@ -655,6 +657,10 @@ function itemTaskStatus(task: OrderProgressTask | null, itemId: string) {
   return task.order_item_states?.[itemId]?.status || task.status
 }
 
+function itemTaskStatusView(task: OrderProgressTask | null, itemId: string) {
+  return task?.order_item_states?.[itemId]?.status_view || task?.status_view || null
+}
+
 function itemTaskProgress(task: OrderProgressTask | null, itemId: string) {
   if (!task) return 0
   return progressPct(task.order_item_states?.[itemId]?.progress_pct ?? task.progress_pct)
@@ -674,18 +680,6 @@ function openItemCost(itemId: string) {
 function stageLabel(task: OrderProgressTask | null, stage: 'design' | 'production' | 'installation') {
   if (task) return '已关联任务'
   return stage === 'design' ? '未生成设计任务' : '未进入此阶段'
-}
-
-function taskStatusType(status: string) {
-  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
-    confirmed: 'success',
-    completed: 'success',
-    pending_review: 'warning',
-    pending_acceptance: 'warning',
-    rework: 'danger',
-    cancelled: 'info',
-  }
-  return map[status] || 'primary'
 }
 
 function toChineseAmount(n: number): string {
@@ -783,26 +777,6 @@ function itemIndex(row: DisplayRow, displayIdx: number): number {
   }
   return count
 }
-
-function statusLabel(s: string) {
-  const map: Record<string, string> = {
-    pending_confirm: '待确认', confirmed: '已确认', designing: '设计中',
-    in_production: '生产中', in_installation: '安装中',
-    completed: '已完成', cancelled: '已取消',
-  }
-  return map[s] || s
-}
-function statusColor(s: string) {
-  const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', designing: '', in_production: '', in_installation: '', completed: 'success', cancelled: 'danger' }
-  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
-}
-
-function designStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待处理', revision: '需调整', confirmed: '已完成', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
-function designStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
-function prodStatusLabel(s: string) { const m: Record<string, string> = { pending: '待制作', queued: '排队中', in_progress: '制作中', qc_check: '待质检', rework: '返工', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
-function prodStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', queued: 'warning', in_progress: '', qc_check: 'warning', rework: 'danger', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
-function instStatusLabel(s: string) { const m: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '历史待验收', completed: '已完成', cancelled: '已取消' }; return m[s] || s }
-function instStatusColor(s: string) { const m: Record<string, string> = { pending: 'info', assigned: '', in_progress: 'warning', pending_acceptance: 'warning', completed: 'success', cancelled: 'info' }; return (m[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
 
 async function fetchOrder() {
   loading.value = true
@@ -969,7 +943,6 @@ onMounted(() => { fetchOrder(); fetchTasks() })
 .legacy-unlinked-card .legacy-task-note { margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 12px; line-height: 1.6; }
 .item-name { color: var(--ad-text); font-weight: 600; }
 .item-subtitle { margin-top: 3px; color: var(--ad-text-secondary); font-size: 12px; }
-.progress-value { margin-top: 3px; color: var(--ad-text-secondary); font-size: 12px; text-align: right; }
 .stage-line { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 3px; color: var(--ad-text-secondary); font-size: 12px; }
 .stage-line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-status-cell { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }

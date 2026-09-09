@@ -13,10 +13,12 @@
           <el-descriptions-item label="项目名称">{{ task.project_name }}</el-descriptions-item>
           <el-descriptions-item label="订单明细">{{ task.item_names?.join('、') || task.item_name || (task.order_item_id ? '明细未命名' : '未关联订单明细') }}</el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag data-ai-targets="task-status-pending_review task-status-designing task-status-confirmed task-status-revision" :type="statusColor(task.status)">{{ statusLabel(task.status) }}</el-tag>
+            <span data-ai-targets="task-status-pending_review task-status-designing task-status-confirmed task-status-revision">
+              <StatusTag :status="task.status_view || task.status" size="sm" />
+            </span>
           </el-descriptions-item>
           <el-descriptions-item label="任务进度">
-            <el-progress :percentage="progressPct(task.progress_pct)" :stroke-width="8" style="width: 220px" />
+            <ProgressBar :percentage="task.progress_pct" :tone="task.status_view?.tone" style="width: 220px" aria-label="任务进度" />
           </el-descriptions-item>
           <el-descriptions-item label="计划时间">
             <span v-if="task.planned_start_at || task.planned_end_at">
@@ -36,6 +38,7 @@
         :current-item-name="task.item_name"
         :current-item-ids="task.order_item_ids"
         :current-item-names="task.item_names"
+        :task-capabilities="task.capabilities"
         :steps="designSteps"
         :current-status="task.status"
         :workflow="DESIGN_WORKFLOW"
@@ -112,6 +115,7 @@ import type { UploadRequestOptions } from 'element-plus'
 import type { DesignTaskResponse } from '@/types/api'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
+import { ProgressBar, StatusTag } from '@/components/ui'
 import { getEmployees } from '@/api/employees'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { useAuthStore } from '@/stores/auth'
@@ -171,19 +175,6 @@ async function doChangeStatus(to_status: string, reason: string, orderItemIds: s
     await fetchTask()
     await aiStore.notifyBusinessMutation()
   } catch { /* handled */ } finally { changing.value = false }
-}
-
-function statusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待处理', revision: '需调整', confirmed: '已完成', cancelled: '已取消' }
-  return map[s] || s
-}
-function statusColor(s: string) {
-  const map: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success', cancelled: 'info' }
-  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
-}
-
-function progressPct(value: number | undefined) {
-  return Math.min(100, Math.max(0, Number(value ?? 0)))
 }
 
 async function fetchTask() {

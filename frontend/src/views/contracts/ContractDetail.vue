@@ -1,14 +1,25 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <div class="header-left">
-        <el-button @click="$router.push('/contracts')">
+  <AppPage class="page">
+    <PageHeader
+      :title="contract ? `合同详情 · ${contract.contract_no}` : '合同详情'"
+      :description="contract?.customer_name ? `客户：${contract.customer_name}` : '查看合同金额、项目与收款关联'"
+    >
+      <template #actions>
+        <el-button text @click="$router.push('/contracts')">
           <el-icon><ArrowLeft /></el-icon> 返回
         </el-button>
-        <h2>合同详情</h2>
-      </div>
-      <el-button @click="openEditContract">编辑合同</el-button>
-    </div>
+        <el-button v-if="contract" type="primary" plain @click="openEditContract">编辑合同</el-button>
+      </template>
+    </PageHeader>
+
+    <StatePanel
+      v-if="loadError && !contract"
+      state="error"
+      action-label="重试"
+      @action="reload"
+    />
+
+    <div v-else-if="contract">
 
     <!-- 合同信息 -->
     <el-card class="info-card">
@@ -18,12 +29,12 @@
         <el-descriptions-item label="客户名称">{{ contract?.customer_name || '-' }}</el-descriptions-item>
         <el-descriptions-item label="合同类型">{{ contract?.contract_type || "框架合同" }}</el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag v-if="contract" :type="statusColor(contract.status)">{{ statusLabel(contract.status) }}</el-tag>
+          <StatusTag v-if="contract" :status="contract.status_view || contract.status" size="sm" />
         </el-descriptions-item>
-        <el-descriptions-item label="合同金额">¥ {{ (contract?.total_amount || 0).toFixed(2) }}</el-descriptions-item>
-        <el-descriptions-item label="已收金额">¥ {{ (contract?.paid_amount || 0).toFixed(2) }}</el-descriptions-item>
+        <el-descriptions-item label="合同金额">{{ formatMoney(contract?.total_amount) }}</el-descriptions-item>
+        <el-descriptions-item label="已收金额">{{ formatMoney(contract?.paid_amount) }}</el-descriptions-item>
         <el-descriptions-item label="未收金额">
-          <span :class="{ 'text-danger': (contract?.unpaid_amount || 0) > 0 }">¥ {{ (contract?.unpaid_amount || 0).toFixed(2) }}</span>
+          <span :class="{ 'text-danger': (contract?.unpaid_amount || 0) > 0 }">{{ formatMoney(contract?.unpaid_amount) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="签约日期">{{ formatDate(contract?.sign_date) || '-' }}</el-descriptions-item>
         <el-descriptions-item label="生效日期">{{ formatDate(contract?.start_date) || '-' }}</el-descriptions-item>
@@ -71,11 +82,11 @@
         </el-table-column>
         <el-table-column prop="project_name" label="项目名称" min-width="160" />
         <el-table-column label="已收金额" width="120" align="right">
-          <template #default="{ row }">¥ {{ (row.paid_amount || 0).toFixed(2) }}</template>
+          <template #default="{ row }">{{ formatMoney(row.paid_amount) }}</template>
         </el-table-column>
         <el-table-column label="未收金额" width="120" align="right">
           <template #default="{ row }">
-            <span :class="{ 'text-danger': (row.unpaid_amount || 0) > 0 }">¥ {{ (row.unpaid_amount || 0).toFixed(2) }}</span>
+            <span :class="{ 'text-danger': (row.unpaid_amount || 0) > 0 }">{{ formatMoney(row.unpaid_amount) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
@@ -111,6 +122,8 @@
         @change="fetchProjects"
       />
     </el-card>
+
+    </div>
 
     <!-- 编辑合同对话框 -->
     <el-dialog v-model="editVisible" title="编辑框架合同" width="960px" :close-on-click-modal="false" @closed="resetEditForm">
@@ -170,8 +183,8 @@
         </el-form-item>
         <el-form-item label="关联订单" >
           <el-select v-model="projectForm.resource_id" filterable clearable style="width:100%" popper-style="width: auto;" @change="onResourceSelect">
-            <el-option v-for="r in allResources" :key="r.id" :label="`${r.doc_no} — ${r.department || '-'} — ${r.project_name} — ¥${(r.total_amount || 0).toFixed(2)}`" :value="r.id">
-              <span style="white-space: nowrap;">【订单】 {{ r.doc_no }} — {{ r.department || '-' }} — {{ r.project_name }} — ¥{{ (r.total_amount || 0).toFixed(2) }}</span>
+            <el-option v-for="r in allResources" :key="r.id" :label="`${r.doc_no} — ${r.department || '-'} — ${r.project_name} — ${formatMoney(r.total_amount)}`" :value="r.id">
+              <span style="white-space: nowrap;">【订单】 {{ r.doc_no }} — {{ r.department || '-' }} — {{ r.project_name }} — {{ formatMoney(r.total_amount) }}</span>
             </el-option>
           </el-select>
         </el-form-item>
@@ -196,11 +209,12 @@
         <el-button :loading="projectSaving" @click="saveProject" type="primary">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDate, addYears } from '@/utils/datetime'
+import { formatMoney } from '@/utils/format'
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -218,26 +232,28 @@ import type {
   FrameworkContractProjectDetailResponse,
   ContractResourceItem,
 } from '@/types/api'
+import { AppPage, PageHeader, StatePanel, StatusTag } from '@/components/ui'
 
 const route = useRoute()
 const contractId = route.params.id as string
 
-const STATUS_MAP: Record<string, string> = { draft: '草稿', active: '已生效', completed: '已完成', terminated: '已终止' }
-const STATUS_COLOR: Record<string, '' | 'success' | 'warning' | 'info' | 'danger'> = {
-  draft: 'info', active: 'success', completed: '', terminated: 'danger',
-}
-function statusLabel(s: string) { return STATUS_MAP[s] || s }
-function statusColor(s: string): '' | 'success' | 'warning' | 'info' | 'danger' { return STATUS_COLOR[s] || '' }
-
 // ── 合同信息 ──
 const loadingContract = ref(false)
 const contract = ref<ContractDetailResponse | null>(null)
+const loadError = ref(false)
 
 async function loadContract() {
   loadingContract.value = true
+  loadError.value = false
   try {
     contract.value = await getContract(contractId)
+  } catch {
+    loadError.value = true
   } finally { loadingContract.value = false }
+}
+
+function reload() {
+  void Promise.all([loadContract(), fetchProjects()])
 }
 
 async function handleDownloadContract() {
@@ -500,10 +516,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page { padding: 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0 0 0 12px; color: var(--ad-text); }
-.header-left { display: flex; align-items: center; }
 .info-card { margin-bottom: 16px; }
 .project-card { margin-bottom: 16px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }

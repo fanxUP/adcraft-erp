@@ -1,4 +1,4 @@
-from app.schemas.common import CoercedModel
+from app.schemas.common import ActionCapability, CoercedModel, StatusView
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from uuid import UUID
@@ -32,6 +32,7 @@ class PaymentResponse(CoercedModel):
     paid_at: str | None = None
     remark: str | None = None
     is_voided: bool
+    status_view: StatusView | None = None
     void_reason: str | None = None
     voided_at: str | None = None
     receipt_url: str | None = None
@@ -69,6 +70,8 @@ class StatementResponse(CoercedModel):
     total_paid_amount: float
     total_unpaid_amount: float
     status: str
+    status_view: StatusView | None = None
+    capabilities: dict[str, ActionCapability] = {}
     confirmed_at: str | None = None
     confirmed_by: str | None = None
     created_at: str | None = None
@@ -86,6 +89,7 @@ class StatementOrderItem(CoercedModel):
     order_no: str
     project_name: str
     status: str
+    status_view: StatusView | None = None
     total_amount: float
     paid_amount: float
     unpaid_amount: float
@@ -305,6 +309,8 @@ class DebtResponse(CoercedModel):
     payee_company_name: str | None = None
     debt_amount: float
     is_settled: bool = False
+    status_view: StatusView | None = None
+    capabilities: dict[str, ActionCapability] = {}
     settled_at: str | None = None
     cost_date: str | None = None
     description: str | None = None

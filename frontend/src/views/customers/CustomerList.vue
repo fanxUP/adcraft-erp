@@ -1,16 +1,16 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>客户管理</h2>
-      <div>
-        <el-button @click="importDialogVisible = true">导入</el-button>
-      </div>
-    </div>
-    <div class="page-create">
-      <el-button @click="handleCreate" type="danger">新建客户</el-button>
-    </div>
+  <AppPage>
+    <template #header>
+      <PageHeader title="客户管理" description="维护客户资料、联系人和导入数据。">
+        <template #actions>
+          <el-button @click="importDialogVisible = true">导入</el-button>
+          <el-button @click="handleCreate" type="danger">新建客户</el-button>
+        </template>
+      </PageHeader>
+    </template>
 
-    <div class="search-bar">
+    <template #toolbar>
+      <PageToolbar aria-label="客户筛选">
       <el-input v-model="keyword" placeholder="搜索客户名称或电话" clearable style="width: 300px" @keyup.enter="fetchData" />
       <el-select v-model="customerType" placeholder="客户类型" clearable style="width: 160px; margin-left: 12px">
         <el-option label="直客" value="直客" />
@@ -18,9 +18,14 @@
         <el-option label="同行" value="同行" />
       </el-select>
       <el-button @click="fetchData" style="margin-left: 12px" type="primary">搜索</el-button>
-    </div>
+      </PageToolbar>
+    </template>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <DataTableShell :state="tableState" aria-label="客户列表">
+      <template #error>
+        <StatePanel state="error" action-label="重试" @action="fetchData" />
+      </template>
+      <el-table :data="list" stripe>
       <el-table-column prop="customer_no" label="客户编号" width="180" />
       <el-table-column prop="name" label="客户名称" min-width="160" />
       <el-table-column label="联系人" width="120">
@@ -37,17 +42,18 @@
           <el-button text type="danger" @click="handleDelete(row as CustomerResponse)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
-
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :page-sizes="[10, 20, 50, 100]"
-      :total="total"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 16px; justify-content: flex-end"
-      @change="fetchData"
-    />
+      </el-table>
+      <template #footer>
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next"
+          @change="fetchData"
+        />
+      </template>
+    </DataTableShell>
 
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑客户' : '新建客户'" width="600px" :close-on-click-modal="false">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
@@ -179,16 +185,17 @@
         <el-button :loading="importing" :disabled="!importFile" @click="handleImport">开始导入</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getCustomers, createCustomer, updateCustomer, deleteCustomer, importCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import type { CustomerResponse, ImportResponse } from '@/types/api'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -198,6 +205,7 @@ const page = ref(1)
 const pageSize = ref(20)
 const keyword = ref('')
 const customerType = ref('')
+const loadError = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
 const form = reactive({ name: '', customer_type: '', level: '', phone: '', address: '', remark: '', contacts: [] as { name: string; phone: string | null; wechat: string | null; position: string | null; is_primary: boolean }[] })
@@ -228,12 +236,21 @@ const sampleData = [
 
 const rules = { name: [{ required: true, message: '请输入客户名称', trigger: 'blur' }] }
 
+const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
+  if (loadError.value) return 'error'
+  if (loading.value) return 'loading'
+  return list.value.length ? 'ready' : 'empty'
+})
+
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try {
     const data = await getCustomers({ page: page.value, page_size: pageSize.value, keyword: keyword.value, customer_type: customerType.value || undefined })
     list.value = data.items
     total.value = data.total
+  } catch {
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -326,9 +343,5 @@ onMounted(fetchData)
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
-.search-bar { display: flex; align-items: center; }
 :deep(.el-upload__tip) { margin-top: 4px; font-size: 12px; color: var(--ad-text-secondary, #999); }
 </style>

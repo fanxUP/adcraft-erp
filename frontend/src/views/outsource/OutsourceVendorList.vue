@@ -1,13 +1,10 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>外协商管理</h2>
-    </div>
-    <div class="page-create">
-      <el-button @click="handleCreate" type="danger">新建外协商</el-button>
-    </div>
+  <AppPage>
+    <template #header><PageHeader title="外协商管理" description="维护外协商联系人、服务类型和合作评级。">
+      <template #actions><el-button @click="handleCreate" type="primary">新建外协商</el-button></template>
+    </PageHeader></template>
 
-    <div class="search-bar">
+    <PageToolbar aria-label="外协商筛选">
       <el-input v-model="keyword" placeholder="搜索外协商名称" clearable style="width: 240px" @keyup.enter="fetchData" />
       <el-select v-model="serviceType" placeholder="服务类型" clearable style="width: 160px; margin-left: 12px">
         <el-option label="制作" value="production" />
@@ -16,9 +13,10 @@
         <el-option label="运输" value="transport" />
       </el-select>
       <el-button @click="fetchData" style="margin-left: 12px" type="primary">搜索</el-button>
-    </div>
+    </PageToolbar>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无外协商">
+    <DataTableShell :state="tableState" aria-label="外协商列表">
+      <el-table :data="list" stripe>
       <el-table-column prop="vendor_no" label="编号" width="180" />
       <el-table-column prop="name" label="名称" min-width="120" />
       <el-table-column prop="contact_person" label="联系人" width="120" />
@@ -48,9 +46,11 @@
           <el-button text type="danger" @click="handleDelete(row as VendorResponse)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+      <template #error><StatePanel state="error" action-label="重新加载" @action="fetchData" /></template>
+    </DataTableShell>
 
-    <el-pagination
+    <el-pagination v-if="tableState === 'ready'"
       v-model:current-page="page"
       v-model:page-size="pageSize"
       :page-sizes="[10, 20, 50, 100]"
@@ -98,16 +98,17 @@
         <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import {
   getOutsourceVendors, createOutsourceVendor, updateOutsourceVendor, deleteOutsourceVendor,
 } from '@/api/outsource'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { VendorResponse } from '@/types/api'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -124,6 +125,8 @@ const form = reactive({
   service_type: '', coop_rating: '', remark: '',
 })
 const rules = { name: [{ required: true, message: '请输入外协商名称', trigger: 'blur' }] }
+const loadError = ref('')
+const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : list.value.length ? 'ready' : 'empty')
 
 function serviceTypeLabel(val: string | null) {
   const map: Record<string, string> = { production: '制作', installation: '安装', design: '设计', transport: '运输' }
@@ -132,6 +135,7 @@ function serviceTypeLabel(val: string | null) {
 
 async function fetchData() {
   loading.value = true
+  loadError.value = ''
   try {
     const data = await getOutsourceVendors({
       page: page.value, page_size: pageSize.value,
@@ -140,6 +144,9 @@ async function fetchData() {
     })
     list.value = data.items
     total.value = data.total
+  } catch (error: unknown) {
+    loadError.value = error instanceof Error ? error.message : '加载外协商失败'
+    ElMessage.error(loadError.value)
   } finally {
     loading.value = false
   }
@@ -190,10 +197,3 @@ async function handleDelete(row: VendorResponse) {
 
 onMounted(fetchData)
 </script>
-
-<style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
-.search-bar { display: flex; align-items: center; }
-</style>

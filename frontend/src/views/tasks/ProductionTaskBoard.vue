@@ -41,7 +41,7 @@
               <span class="card-no">{{ card.task_no }}</span>
               <div class="card-statuses">
                 <el-tag v-if="card.is_overdue" size="small" type="danger">逾期</el-tag>
-                <el-tag size="small" :type="statusColor(card.status)">{{ statusLabel(card) }}</el-tag>
+                <StatusTag :status="card.status_view || card.status" size="sm" />
               </div>
             </div>
             <div class="card-name">{{ card.project_name }}</div>
@@ -50,10 +50,13 @@
               <span>{{ card.order_no || '-' }}</span>
               <span>{{ card.customer_name || '-' }}</span>
             </div>
-            <div class="progress-row">
-              <el-progress :percentage="taskProgress(card)" :stroke-width="8" />
-              <span>{{ taskProgress(card) }}%</span>
-            </div>
+            <ProgressBar
+              :percentage="taskProgress(card)"
+              :tone="card.status_view?.tone"
+              label="任务进度"
+              size="sm"
+              aria-label="任务进度"
+            />
             <div v-if="card.planned_end_at" class="planned-end">计划结束：{{ formatDateTimeFull(card.planned_end_at) }}</div>
             <div v-if="card.assigned_to_name" class="assignee">负责人：{{ card.assigned_to_name }}</div>
           </el-card>
@@ -67,6 +70,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getTaskQueue } from '@/api/tasks'
 import type { TaskQueueItem } from '@/types/api'
+import { ProgressBar, StatusTag } from '@/components/ui'
 import { formatDateTimeFull } from '@/utils/datetime'
 import { isTaskVisible, TASK_BOARD_COLUMNS, taskProgress } from '@/utils/task-board'
 
@@ -93,38 +97,6 @@ const averageProgress = computed(() => {
   if (!activeTasks.length) return 0
   return Math.round(activeTasks.reduce((sum, task) => sum + taskProgress(task), 0) / activeTasks.length)
 })
-
-function statusLabel(task: TaskQueueItem) {
-  const labels: Record<string, string> = {
-    pending: task.stage === 'design' ? '待分配' : task.stage === 'production' ? '待制作' : '待分配',
-    designing: '设计中',
-    pending_review: '待处理',
-    revision: '需调整',
-    confirmed: '已完成',
-    queued: '排队中',
-    in_progress: task.stage === 'installation' ? '安装中' : '制作中',
-    qc_check: '待质检',
-    rework: '返工',
-    assigned: '已分配',
-    pending_acceptance: '待验收',
-    completed: '已完成',
-    cancelled: '已取消',
-  }
-  return labels[task.status] || task.status
-}
-
-function statusColor(status: string) {
-  const colors: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
-    confirmed: 'success',
-    completed: 'success',
-    pending_review: 'warning',
-    qc_check: 'warning',
-    pending_acceptance: 'warning',
-    rework: 'danger',
-    cancelled: 'info',
-  }
-  return colors[status] || 'primary'
-}
 
 async function fetchData() {
   loading.value = true
@@ -177,9 +149,6 @@ onBeforeUnmount(() => {
 .card-name { font-weight: bold; font-size: 16px; color: var(--ad-text); margin: 8px 0 4px; }
 .card-item { margin-bottom: 6px; color: var(--ad-primary, #409eff); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #888; }
-.progress-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
-.progress-row :deep(.el-progress) { flex: 1; }
-.progress-row > span { width: 38px; text-align: right; font-size: 12px; color: var(--ad-text-secondary); }
 .assignee { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); }
 .planned-end { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); }
 </style>

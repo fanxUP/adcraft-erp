@@ -1,14 +1,15 @@
 <template>
-  <div class="page">
-    <div class="page-header"><h2>高空车人员</h2></div>
-    <div class="page-create">
-      <el-button @click="handleCreate" type="danger">+ 新增人员</el-button>
-    </div>
-    <div class="search-bar">
+  <AppPage>
+    <PageHeader title="高空车人员" description="统一维护作业人员资质、身份照片和附件。">
+      <template #actions><el-button @click="handleCreate" type="primary">新增人员</el-button></template>
+    </PageHeader>
+    <PageToolbar aria-label="高空车人员筛选">
       <el-input v-model="keyword" placeholder="姓名/手机号搜索" clearable style="width: 200px" @keyup.enter="fetchData" />
       <el-button @click="fetchData" type="primary">搜索</el-button>
-    </div>
-    <el-table :data="list" stripe v-loading="loading">
+    </PageToolbar>
+    <DataTableShell :state="tableState" aria-label="高空车人员列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
+      <el-table :data="list" stripe v-loading="loading">
       <el-table-column prop="name" label="姓名" width="240" />
       <el-table-column prop="phone" label="手机号" width="130" />
       <el-table-column label="性别" width="70"><template #default="{ row }">{{ GENDER_LABELS[row.gender as string] || row.gender || '-' }}</template></el-table-column>
@@ -35,8 +36,11 @@
           </el-popconfirm>
         </template>
       </el-table-column>
-    </el-table>
-    <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px" @current-change="fetchData" />
+      </el-table>
+      <template #footer>
+        <el-pagination v-if="total > 0" v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" @current-change="fetchData" />
+      </template>
+    </DataTableShell>
 
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑人员' : '新增人员'" width="560px" destroy-on-close @closed="attachments = []" :close-on-click-modal="false">
       <el-form :model="form" label-width="90px">
@@ -105,11 +109,11 @@
       </el-form>
       <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import {
@@ -125,11 +129,18 @@ import {
   type AerialPersonnelAttachment,
 } from '@/api/aerial'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 import { GENDER_OPTIONS, ETHNICITY_OPTIONS } from '@/config/ethnicity'
 import { ATTACHMENT_TYPE_LABELS, ATTACHMENT_TYPE_TAGS } from '@/config/attachment'
 
-const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false)
+const loading = ref(false); const loadError = ref(false); const saving = ref(false); const dialogVisible = ref(false)
 const list = ref<AerialPersonnel[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
+
+const tableState = computed(() => {
+  if (loadError.value) return 'error' as const
+  if (loading.value) return 'loading' as const
+  return list.value.length ? 'ready' as const : 'empty' as const
+})
 const keyword = ref(''); const editingId = ref<string | null>(null)
 const GENDER_LABELS: Record<string, string> = Object.fromEntries(GENDER_OPTIONS.map((g) => [g.value, g.label]))
 
@@ -148,8 +159,9 @@ const ATT_TYPE_TAGS = ATTACHMENT_TYPE_TAGS
 
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try { const res = await getAerialPersonnel({ keyword: keyword.value, page: page.value, page_size: pageSize.value }); list.value = res.items || []; total.value = res.total || 0 }
-  catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
+  catch (error: unknown) { loadError.value = true; ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
 }
 
 function handleCreate() {
@@ -235,8 +247,6 @@ onMounted(fetchData)
 </script>
 
 <style scoped>
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
 .idcard-slot { display: flex; align-items: center; gap: 10px; width: 100%; }
 .idcard-preview { width: 70px; height: 46px; border-radius: 4px; border: 1px solid var(--ad-border); }
 .idcard-tip { color: var(--ad-text-secondary); font-size: 13px; }

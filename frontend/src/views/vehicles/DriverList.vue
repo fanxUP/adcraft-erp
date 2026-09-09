@@ -1,20 +1,21 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>司机管理</h2>
-      <el-button @click="handleCreate" type="danger">新增司机</el-button>
-    </div>
+  <AppPage>
+    <PageHeader title="司机管理" description="统一维护司机档案、驾驶证有效期和启停状态。">
+      <template #actions><el-button @click="handleCreate" type="primary">新增司机</el-button></template>
+    </PageHeader>
 
-    <div class="search-bar">
+    <PageToolbar aria-label="司机筛选">
       <el-input v-model="keyword" placeholder="搜索司机姓名/手机号" clearable style="width: 260px" @keyup.enter="fetchData" />
-      <el-select v-model="statusFilter" placeholder="状态" clearable style="width: 120px; margin-left: 12px">
+      <el-select v-model="statusFilter" placeholder="状态" clearable style="width: 120px">
         <el-option label="启用" value="active" />
         <el-option label="停用" value="disabled" />
       </el-select>
-      <el-button style="margin-left: 12px" @click="fetchData" type="primary">搜索</el-button>
-    </div>
+      <el-button @click="fetchData" type="primary">搜索</el-button>
+    </PageToolbar>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <DataTableShell :state="tableState" aria-label="司机列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
+      <el-table :data="list" v-loading="loading" stripe>
       <el-table-column prop="driver_name" label="司机姓名" width="120" />
       <el-table-column label="是否员工" width="100">
         <template #default="{ row }">
@@ -47,17 +48,20 @@
           </el-popconfirm>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
 
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :page-sizes="[10, 20, 50, 100]"
-      :total="total"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 16px; justify-content: flex-end"
-      @change="fetchData"
-    />
+      <template #footer>
+        <el-pagination
+          v-if="total > 0"
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next"
+          @change="fetchData"
+        />
+      </template>
+    </DataTableShell>
 
     <!-- 新增/编辑对话框 -->
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑司机' : '新增司机'" width="500px" :close-on-click-modal="false">
@@ -99,23 +103,31 @@
         <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getDrivers, createDriver, updateDriver, disableDriver, enableDriver, deleteDriver } from '@/api/vehicles'
 import type { VehicleDriverResponse } from '@/api/vehicles'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const loading = ref(false)
+const loadError = ref(false)
 const saving = ref(false)
 const list = ref<VehicleDriverResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+
+const tableState = computed(() => {
+  if (loadError.value) return 'error' as const
+  if (loading.value) return 'loading' as const
+  return list.value.length ? 'ready' as const : 'empty' as const
+})
 const keyword = ref('')
 const statusFilter = ref('')
 const dialogVisible = ref(false)
@@ -142,6 +154,7 @@ function isExpiredSoon(dateStr?: string) {
 
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try {
     const data = await getDrivers({
       page: page.value, page_size: pageSize.value,
@@ -150,6 +163,9 @@ async function fetchData() {
     })
     list.value = data.items
     total.value = data.total
+  } catch (e: unknown) {
+    loadError.value = true
+    ElMessage.error(getErrorMessage(e, '司机列表加载失败'))
   } finally { loading.value = false }
 }
 
@@ -218,9 +234,5 @@ onMounted(fetchData)
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
-.search-bar { display: flex; align-items: center; }
 .text-danger { color: var(--el-color-danger); font-weight: bold; }
 </style>

@@ -6,6 +6,39 @@
 
 // ---- Common ----
 
+export type UiTone = 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral'
+
+export interface ApiMeta {
+  request_id?: string
+  timestamp?: string
+}
+
+export interface ApiFieldError {
+  loc: Array<string | number>
+  msg: string
+  type?: string
+}
+
+export interface ApiEnvelope<T> {
+  code: number
+  message: string
+  data: T | null
+  meta?: ApiMeta
+}
+
+export interface StatusView {
+  code: string
+  label: string
+  tone: UiTone
+  terminal: boolean
+}
+
+export interface ActionCapability {
+  allowed: boolean
+  disabled_reason?: string | null
+  requires_confirmation: boolean
+}
+
 export interface PaginatedData<T> {
   items: T[]
   total: number
@@ -85,6 +118,7 @@ export interface OrderListResponse {
   customer_name?: string
   project_name: string
   status: string
+  status_view?: StatusView | null
   total_amount: number
   paid_amount: number
   unpaid_amount: number
@@ -137,12 +171,15 @@ export type OrderItemStage =
 export interface TaskOrderItemOption extends OrderItemResponse {
   stage: OrderItemStage
   stage_label: string
+  stage_view: StatusView
   can_select: boolean
   disabled_reason?: string | null
   is_linked: boolean
   task_status?: string | null
   task_status_label?: string | null
+  task_status_view?: StatusView | null
   task_progress_pct?: number | null
+  capabilities?: Record<string, ActionCapability>
   outsource_blocked: boolean
   outsource_status?: 'pending' | 'in_progress' | null
   outsource_status_label?: string | null
@@ -410,6 +447,7 @@ export interface OrderDetailResponse {
   project_name: string
   sales_user_id?: string
   status: string
+  status_view?: StatusView | null
   total_amount: number
   paid_amount: number
   unpaid_amount: number
@@ -459,6 +497,8 @@ export interface TaskOrderItemState {
   status: string
   status_label?: string | null
   progress_pct: number
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
 }
 
 export interface DesignTaskResponse {
@@ -479,6 +519,8 @@ export interface DesignTaskResponse {
   item_names?: string[]
   status: string
   progress_pct: number
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
   planned_start_at?: string | null
   planned_end_at?: string | null
   is_overdue?: boolean
@@ -513,6 +555,8 @@ export interface ProductionTaskResponse {
   item_names?: string[]
   status: string
   progress_pct: number
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
   planned_start_at?: string | null
   planned_end_at?: string | null
   is_overdue?: boolean
@@ -551,6 +595,8 @@ export interface InstallationTaskResponse {
   item_names?: string[]
   status: string
   progress_pct: number
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
   planned_start_at?: string | null
   planned_end_at?: string | null
   is_overdue?: boolean
@@ -584,6 +630,8 @@ export interface TaskQueueItem {
   item_names?: string[]
   status: string
   progress_pct: number
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
   planned_start_at?: string | null
   planned_end_at?: string | null
   is_overdue?: boolean
@@ -659,6 +707,7 @@ export interface PaymentResponse {
   paid_at?: string
   remark?: string
   is_voided: boolean
+  status_view?: StatusView | null
   void_reason?: string
   voided_at?: string
   receipt_url?: string
@@ -676,6 +725,8 @@ export interface StatementResponse {
   total_paid_amount: number
   total_unpaid_amount: number
   status: string
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
   confirmed_at?: string
   confirmed_by?: string
   created_at?: string
@@ -686,6 +737,7 @@ export interface StatementOrderItem {
   order_no: string
   project_name: string
   status: string
+  status_view?: StatusView | null
   total_amount: number
   paid_amount: number
   unpaid_amount: number
@@ -739,6 +791,8 @@ export interface ProjectCostResponse {
   project_name?: string
   category: string
   amount: number
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
   quantity?: number
   unit?: string
   unit_price?: number
@@ -787,6 +841,8 @@ export interface DebtResponse {
   payee_company_name?: string
   debt_amount: number
   is_settled: boolean
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
   settled_at?: string
   cost_date?: string
   description?: string
@@ -801,6 +857,7 @@ export interface QuoteCostResponse {
   project_name: string
   customer_name?: string
   status: string
+  status_view?: StatusView | null
   total_amount: number
   cost_amount: number
   created_at?: string
@@ -895,6 +952,8 @@ export interface OutsourceTaskResponse {
   paid_amount: number
   unpaid_amount: number
   status: string
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
   expected_at?: string
   completed_at?: string
   remark?: string
@@ -1033,6 +1092,7 @@ export interface QuoteListResponse {
   customer_name?: string
   project_name: string
   status: string
+  status_view?: StatusView | null
   total_amount: number
   valid_until?: string
   quote_date?: string
@@ -1065,6 +1125,7 @@ export interface QuoteDetailResponse {
   project_name: string
   sales_user_id?: string
   status: string
+  status_view?: StatusView | null
   subtotal_amount: number
   discount_amount: number
   tax_rate: number
@@ -1093,6 +1154,7 @@ export interface ContractListResponse {
   unpaid_amount: number
   contract_type?: string
   status: string
+  status_view?: StatusView | null
   sign_date?: string
   start_date?: string
   end_date?: string
@@ -1149,6 +1211,7 @@ export interface OrderWithoutContractItem {
   project_name: string
   department?: string
   status?: string
+  status_view?: StatusView | null
   total_amount?: number
   created_at?: string
 }
@@ -1213,6 +1276,7 @@ export interface CustomerDebtContract {
   paid_amount: number
   unpaid_amount: number
   status: string
+  status_view?: StatusView | null
   contract_type?: string
   department?: string
   orders?: CustomerDebtOrder[]
@@ -1228,6 +1292,7 @@ export interface CustomerDebtOrder {
   paid_amount: number
   unpaid_amount: number
   status: string
+  status_view?: StatusView | null
 }
 
 export interface CustomerDebtQuote {
@@ -1237,6 +1302,7 @@ export interface CustomerDebtQuote {
   department?: string
   total_amount: number
   status: string
+  status_view?: StatusView | null
 }
 
 export interface CustomerDebtItem {

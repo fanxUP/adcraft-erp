@@ -11,7 +11,11 @@ from app.schemas.task import (
     ProductionTaskResponse,
     TaskQueueItem,
 )
-from app.services.task_service import _attach_outsource_flags, _enrich_task_order
+from app.services.task_service import (
+    _attach_outsource_flags,
+    _enrich_task_order,
+    add_task_contract_fields,
+)
 from app.services.task_schedule_service import enrich_task_dict_with_schedule_state
 
 
@@ -67,6 +71,7 @@ async def list_task_queue(
             item["_task_type"] = task_type
             item = await _enrich_task_order(db, item)
             item = enrich_task_dict_with_schedule_state(item)
+            item = add_task_contract_fields(item, task_type)
             items.append(item)
         normalized.extend(await _attach_outsource_flags(db, task_type, items))
 

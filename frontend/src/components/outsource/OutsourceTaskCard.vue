@@ -120,7 +120,7 @@
       </el-table-column>
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+          <StatusTag :status="row.status_view || row.status" size="sm" />
         </template>
       </el-table-column>
       <el-table-column label="操作" width="70">
@@ -204,6 +204,7 @@ import type {
   OutsourceTaskResponse,
   VendorResponse,
 } from '@/types/api'
+import { StatusTag } from '@/components/ui'
 
 const props = defineProps<{
   taskType: 'design' | 'production' | 'installation'
@@ -266,28 +267,6 @@ function quantityText(value: number | null | undefined) {
 
 function moneyText(value: number | null | undefined) {
   return Number(value || 0).toFixed(2)
-}
-
-function statusLabel(status: string) {
-  const map: Record<string, string> = {
-    pending: '待处理',
-    in_progress: '进行中',
-    completed: '已完成',
-    settled: '已结算',
-    cancelled: '已取消',
-  }
-  return map[status] || status
-}
-
-function statusType(status: string) {
-  const map: Record<string, string> = {
-    pending: 'info',
-    in_progress: 'warning',
-    completed: 'success',
-    settled: '',
-    cancelled: 'danger',
-  }
-  return (map[status] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 }
 
 function itemStatusType(status: string) {

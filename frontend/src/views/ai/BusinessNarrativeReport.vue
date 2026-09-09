@@ -1,9 +1,8 @@
 <template>
-  <div class="business-narrative-report">
-    <div class="page-header">
-      <h2>智能经营报告</h2>
-      <el-tag :type="modeTagType">{{ modeLabel }}</el-tag>
-    </div>
+  <AppPage class="business-narrative-report">
+    <PageHeader title="智能经营报告" description="按周或月生成经营数据摘要、风险提示和改进建议。">
+      <template #actions><el-tag :type="modeTagType">{{ modeLabel }}</el-tag></template>
+    </PageHeader>
 
     <!-- Period selector -->
     <el-card class="filter-card">
@@ -96,7 +95,7 @@
       <el-icon :size="64"><TrendCharts /></el-icon>
       <p>选择报告周期，点击"生成报告"</p>
     </div>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -105,6 +104,7 @@ import { ElMessage } from 'element-plus'
 import { Refresh, TrendCharts } from '@element-plus/icons-vue'
 import { getBusinessNarrative } from '@/api/ai'
 import type { BusinessNarrativeResponse } from '@/types/api'
+import { AppPage, PageHeader } from '@/components/ui'
 
 const loading = ref(false)
 const period = ref('monthly')
@@ -155,9 +155,6 @@ async function fetchReport() {
 </script>
 
 <style scoped>
-.business-narrative-report { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
 .filter-card { margin-bottom: 16px; }
 .stats-row { margin-bottom: 16px; }
 .stat-card { text-align: center; }

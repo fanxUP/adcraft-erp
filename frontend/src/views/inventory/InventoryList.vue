@@ -1,30 +1,27 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>库存管理</h2>
-      <div>
-        <el-button @click="showStockRecords = !showStockRecords">
-          {{ showStockRecords ? '查看库存' : '查看记录' }}
-        </el-button>
-      </div>
-    </div>
-    <div class="page-create">
-      <el-button @click="handleCreate" type="danger">新建物料</el-button>
-    </div>
+  <AppPage>
+    <PageHeader title="库存管理" description="统一管理库存物料、出入库记录和库存预警。">
+      <template #actions>
+        <el-button @click="toggleStockRecords">{{ showStockRecords ? '查看库存' : '查看记录' }}</el-button>
+        <el-button @click="handleCreate" type="primary">新建物料</el-button>
+      </template>
+    </PageHeader>
 
     <!-- Inventory Items -->
     <template v-if="!showStockRecords">
-      <div class="search-bar">
+      <PageToolbar aria-label="库存物料筛选">
         <el-input v-model="keyword" placeholder="搜索物料名称" clearable style="width: 240px" @keyup.enter="fetchItems" />
-        <el-select v-model="category" placeholder="分类" clearable style="width: 160px; margin-left: 12px">
+        <el-select v-model="category" placeholder="分类" clearable style="width: 160px">
           <el-option label="原材料" value="raw_material" />
           <el-option label="半成品" value="semi_finished" />
           <el-option label="耗材" value="consumable" />
         </el-select>
-        <el-button @click="fetchItems" style="margin-left: 12px" type="primary">搜索</el-button>
-      </div>
+        <el-button @click="fetchItems" type="primary">搜索</el-button>
+      </PageToolbar>
 
-      <el-table :data="items" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无库存物料">
+      <DataTableShell :state="itemTableState" aria-label="库存物料列表">
+        <template #error><StatePanel state="error" action-label="重试" @action="fetchItems" /></template>
+        <el-table :data="items" v-loading="loading" stripe empty-text="暂无库存物料">
         <el-table-column prop="material_name" label="物料名称" min-width="160" />
         <el-table-column label="分类" width="100">
           <template #default="{ row }">{{ categoryLabel(row.category) }}</template>
@@ -41,7 +38,7 @@
           <template #default="{ row }">{{ row.min_quantity }} {{ row.material_unit || '' }}</template>
         </el-table-column>
         <el-table-column prop="unit_cost" label="单价" width="100" align="right">
-          <template #default="{ row }">¥{{ row.unit_cost?.toFixed(2) }}</template>
+          <template #default="{ row }">{{ formatMoney(row.unit_cost) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
@@ -50,21 +47,19 @@
             <el-button text type="primary" @click="handleEdit(row as InventoryItemResponse)">编辑</el-button>
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
 
-      <el-pagination
-        v-model:current-page="itemPage"
-        v-model:page-size="itemPageSize"
-        :total="itemTotal"
-        layout="total, prev, pager, next"
-        style="margin-top: 16px; justify-content: flex-end"
-        @change="fetchItems"
-      />
+        <template #footer>
+          <el-pagination v-if="itemTotal > 0" v-model:current-page="itemPage" v-model:page-size="itemPageSize" :total="itemTotal" layout="total, prev, pager, next" @change="fetchItems" />
+        </template>
+      </DataTableShell>
     </template>
 
     <!-- Stock Records -->
     <template v-else>
-      <el-table :data="records" v-loading="loading" stripe style="margin-top: 16px" empty-text="暂无出入库记录">
+      <DataTableShell :state="recordTableState" aria-label="出入库记录">
+        <template #error><StatePanel state="error" action-label="重试" @action="fetchRecords" /></template>
+        <el-table :data="records" v-loading="loading" stripe empty-text="暂无出入库记录">
         <el-table-column prop="item_name" label="物料" min-width="160" />
         <el-table-column label="类型" width="100">
           <template #default="{ row }">
@@ -75,23 +70,19 @@
         </el-table-column>
         <el-table-column prop="quantity" label="数量" width="100" align="right" />
         <el-table-column prop="unit_cost" label="单价" width="100" align="right">
-          <template #default="{ row }">¥{{ row.unit_cost?.toFixed(2) }}</template>
+          <template #default="{ row }">{{ formatMoney(row.unit_cost) }}</template>
         </el-table-column>
         <el-table-column prop="total_cost" label="总金额" width="120" align="right">
-          <template #default="{ row }">¥{{ row.total_cost?.toFixed(2) }}</template>
+          <template #default="{ row }">{{ formatMoney(row.total_cost) }}</template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
         <el-table-column prop="operated_at" label="操作时间" width="160" />
-      </el-table>
+        </el-table>
 
-      <el-pagination
-        v-model:current-page="recordPage"
-        v-model:page-size="recordPageSize"
-        :total="recordTotal"
-        layout="total, prev, pager, next"
-        style="margin-top: 16px; justify-content: flex-end"
-        @change="fetchRecords"
-      />
+        <template #footer>
+          <el-pagination v-if="recordTotal > 0" v-model:current-page="recordPage" v-model:page-size="recordPageSize" :total="recordTotal" layout="total, prev, pager, next" @change="fetchRecords" />
+        </template>
+      </DataTableShell>
     </template>
 
     <!-- Create / Edit Item Dialog -->
@@ -158,19 +149,22 @@
         </el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import {
   getInventoryItems, createInventoryItem, updateInventoryItem,
   getStockRecords, stockIn, stockOut,
 } from '@/api/inventory'
 import type { InventoryItemResponse, StockRecordResponse } from '@/types/api'
 import { ElMessage } from 'element-plus'
+import { formatMoney } from '@/utils/format'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const loading = ref(false)
+const loadError = ref(false)
 const saving = ref(false)
 const showStockRecords = ref(false)
 
@@ -195,6 +189,18 @@ const recordTotal = ref(0)
 const recordPage = ref(1)
 const recordPageSize = ref(20)
 
+const itemTableState = computed(() => {
+  if (loadError.value && !showStockRecords.value) return 'error' as const
+  if (loading.value && !showStockRecords.value) return 'loading' as const
+  return items.value.length ? 'ready' as const : 'empty' as const
+})
+
+const recordTableState = computed(() => {
+  if (loadError.value && showStockRecords.value) return 'error' as const
+  if (loading.value && showStockRecords.value) return 'loading' as const
+  return records.value.length ? 'ready' as const : 'empty' as const
+})
+
 // Stock in/out
 const stockDialogVisible = ref(false)
 const stockType = ref<'in' | 'out'>('in')
@@ -211,6 +217,7 @@ function categoryLabel(val: string | null) {
 
 async function fetchItems() {
   loading.value = true
+  loadError.value = false
   try {
     const data = await getInventoryItems({
       page: itemPage.value, page_size: itemPageSize.value,
@@ -219,6 +226,9 @@ async function fetchItems() {
     })
     items.value = data.items
     itemTotal.value = data.total
+  } catch (e: unknown) {
+    loadError.value = true
+    ElMessage.error((e as { message?: string })?.message || '库存加载失败')
   } finally {
     loading.value = false
   }
@@ -226,13 +236,22 @@ async function fetchItems() {
 
 async function fetchRecords() {
   loading.value = true
+  loadError.value = false
   try {
     const data = await getStockRecords({ page: recordPage.value, page_size: recordPageSize.value })
     records.value = data.items
     recordTotal.value = data.total
+  } catch (e: unknown) {
+    loadError.value = true
+    ElMessage.error((e as { message?: string })?.message || '出入库记录加载失败')
   } finally {
     loading.value = false
   }
+}
+
+function toggleStockRecords() {
+  showStockRecords.value = !showStockRecords.value
+  if (showStockRecords.value) void fetchRecords()
 }
 
 function handleCreate() {
@@ -310,8 +329,4 @@ onMounted(fetchItems)
 </script>
 
 <style scoped>
-.page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.page-header h2 { margin: 0; color: var(--ad-text); }
-.search-bar { display: flex; align-items: center; }
 </style>

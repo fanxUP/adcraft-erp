@@ -1,13 +1,15 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>合同管理</h2>
-    </div>
-    <div class="page-create">
-      <el-button @click="handleCreate" type="danger">新建合同</el-button>
-    </div>
+  <AppPage>
+    <template #header>
+      <PageHeader title="合同管理" description="统一查看合同生命周期、收款进度和关联订单。">
+        <template #actions>
+          <el-button @click="handleCreate" type="danger">新建合同</el-button>
+        </template>
+      </PageHeader>
+    </template>
 
-    <el-card shadow="never" class="filter-card">
+    <template #toolbar>
+      <PageToolbar aria-label="合同筛选">
       <el-form :model="filters" inline>
         <el-form-item label="关键词">
           <el-input v-model="filters.keyword" placeholder="合同编号/合同名称/客户" clearable style="width: 200px" @keyup.enter="handleSearch" />
@@ -24,29 +26,33 @@
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
-    </el-card>
+      </PageToolbar>
+    </template>
 
-    <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
+    <DataTableShell :state="tableState" aria-label="合同列表">
+      <template #error>
+        <StatePanel state="error" action-label="重试" @action="fetchData" />
+      </template>
+      <el-table :data="list" stripe>
       <el-table-column prop="contract_no" label="合同编号" width="180" />
       <el-table-column prop="contract_type" label="合同类型" width="100" />
       <el-table-column prop="customer_name" label="客户名称" width="160" />
       <el-table-column prop="department" label="部门/科室" width="120" />
       <el-table-column prop="project_name" label="合同名称" min-width="200" />
       <el-table-column label="合同金额" width="140">
-        <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
+        <template #default="{ row }">{{ formatMoney(row.total_amount) }}</template>
       </el-table-column>
       <el-table-column label="已收金额" width="120">
-        <template #default="{ row }">¥ {{ row.paid_amount?.toFixed(2) }}</template>
+        <template #default="{ row }">{{ formatMoney(row.paid_amount) }}</template>
       </el-table-column>
       <el-table-column label="未收金额" width="120">
         <template #default="{ row }">
-          <span v-if="row.unpaid_amount > 0" style="color: var(--el-color-danger)">¥ {{ row.unpaid_amount?.toFixed(2) }}</span>
-          <span v-else>¥ {{ row.unpaid_amount?.toFixed(2) }}</span>
+          <span :class="{ 'text-danger': row.unpaid_amount > 0 }">{{ formatMoney(row.unpaid_amount) }}</span>
         </template>
       </el-table-column>
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
-          <el-tag :type="statusColor(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+          <StatusTag :status="row.status_view || row.status" size="sm" />
         </template>
       </el-table-column>
       <el-table-column label="签约日期" width="120">
@@ -61,17 +67,18 @@
           <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
-
-    <el-pagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :page-sizes="[10, 20, 50, 100]"
-      :total="total"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 16px; justify-content: flex-end"
-      @change="fetchData"
-    />
+      </el-table>
+      <template #footer>
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next"
+          @change="fetchData"
+        />
+      </template>
+    </DataTableShell>
 
     <!-- 未建立合同订单 -->
     <el-card shadow="never" style="margin-top: 16px">
@@ -87,11 +94,11 @@
         <el-table-column prop="project_name" label="项目名称" min-width="180" show-overflow-tooltip />
         <el-table-column prop="department" label="部门" width="110" show-overflow-tooltip />
         <el-table-column label="金额" width="110" align="right">
-          <template #default="{ row }">¥ {{ (row.total_amount || 0).toFixed(2) }}</template>
+          <template #default="{ row }">{{ formatMoney(row.total_amount) }}</template>
         </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
-            <el-tag :type="orderStatusColor(row.status)" size="small">{{ orderStatusLabel(row.status) }}</el-tag>
+            <StatusTag :status="row.status_view || row.status" size="sm" />
           </template>
         </el-table-column>
         <el-table-column label="创建日期" width="110">
@@ -197,8 +204,8 @@
         <el-descriptions-item label="订单编号">{{ linkOrder.order_no }}</el-descriptions-item>
         <el-descriptions-item label="客户">{{ linkOrder.customer_name || '-' }}</el-descriptions-item>
         <el-descriptions-item label="项目名称" :span="2">{{ linkOrder.project_name }}</el-descriptions-item>
-        <el-descriptions-item label="金额">¥ {{ (linkOrder.total_amount || 0).toFixed(2) }}</el-descriptions-item>
-        <el-descriptions-item label="状态">{{ orderStatusLabel(linkOrder.status) }}</el-descriptions-item>
+        <el-descriptions-item label="金额">{{ formatMoney(linkOrder.total_amount) }}</el-descriptions-item>
+        <el-descriptions-item label="状态"><StatusTag :status="linkOrder.status_view || linkOrder.status" size="sm" /></el-descriptions-item>
       </el-descriptions>
       <el-form :model="linkForm" label-width="80px">
         <el-form-item label="目标合同" required>
@@ -211,7 +218,7 @@
             placeholder="搜索选择目标框架合同（同客户）"
             style="width: 100%"
           >
-            <el-option v-for="c in linkContractOptions" :key="c.id" :label="`${c.contract_no} — ${c.project_name} — ¥${c.total_amount.toFixed(2)}`" :value="c.id" />
+            <el-option v-for="c in linkContractOptions" :key="c.id" :label="`${c.contract_no} — ${c.project_name} — ${formatMoney(c.total_amount)}`" :value="c.id" />
           </el-select>
         </el-form-item>
         <el-alert v-if="linkForm.contract_id" type="info" :closable="false" show-icon style="margin-top: 8px"
@@ -230,11 +237,11 @@
         <el-descriptions-item label="客户名称">{{ currentDetail.customer_name }}</el-descriptions-item>
         <el-descriptions-item label="合同名称">{{ currentDetail.project_name }}</el-descriptions-item>
         <el-descriptions-item label="合同类型">{{ currentDetail.contract_type || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="合同金额">¥ {{ currentDetail.total_amount?.toFixed(2) }}</el-descriptions-item>
-        <el-descriptions-item label="已收金额">¥ {{ currentDetail.paid_amount?.toFixed(2) }}</el-descriptions-item>
-        <el-descriptions-item label="未收金额">¥ {{ currentDetail.unpaid_amount?.toFixed(2) }}</el-descriptions-item>
+        <el-descriptions-item label="合同金额">{{ formatMoney(currentDetail.total_amount) }}</el-descriptions-item>
+        <el-descriptions-item label="已收金额">{{ formatMoney(currentDetail.paid_amount) }}</el-descriptions-item>
+        <el-descriptions-item label="未收金额">{{ formatMoney(currentDetail.unpaid_amount) }}</el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag :type="statusColor(currentDetail.status)" size="small">{{ statusLabel(currentDetail.status) }}</el-tag>
+          <StatusTag :status="currentDetail.status_view || currentDetail.status" size="sm" />
         </el-descriptions-item>
         <el-descriptions-item label="我方签约人">{{ currentDetail.our_signatory || '-' }}</el-descriptions-item>
         <el-descriptions-item label="客户签约人">{{ currentDetail.customer_signatory || '-' }}</el-descriptions-item>
@@ -261,38 +268,26 @@
         </el-table-column>
         <el-table-column prop="project_name" label="项目名称" min-width="150" />
         <el-table-column label="金额" width="120">
-          <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
+          <template #default="{ row }">{{ formatMoney(row.total_amount) }}</template>
         </el-table-column>
       </el-table>
       <el-empty v-else description="暂无关联订单" />
     </el-dialog>
 
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { formatDate, addYears } from '@/utils/datetime'
-import { ref, reactive, onMounted } from 'vue'
+import { formatMoney } from '@/utils/format'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getContracts, createContract, updateContract, deleteContract, uploadContractAttachment, deleteContractAttachment, getOrdersWithoutContract, linkOrdersToContract } from '@/api/contracts'
 import { getCustomers } from '@/api/customers'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ContractListResponse, ContractDetailResponse, OrderWithoutContractItem } from '@/types/api'
 import type { FormInstance } from 'element-plus'
-
-// ── Status helpers ──
-const statusMap: Record<string, string> = {
-  draft: '草稿',
-  active: '已生效',
-  completed: '已完成',
-}
-const statusColorMap: Record<string, string> = {
-  draft: 'info',
-  active: 'success',
-  completed: '',
-}
-function statusLabel(s: string) { return statusMap[s] || s }
-function statusColor(s: string) { return statusColorMap[s] || 'info' }
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel, StatusTag } from '@/components/ui'
 
 const router = useRouter()
 function goDetail(id: string) { router.push(`/contracts/${id}`) }
@@ -303,10 +298,18 @@ const list = ref<ContractListResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const loadError = ref(false)
 const filters = reactive({ keyword: '', status: '' })
+
+const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
+  if (loadError.value) return 'error'
+  if (loading.value) return 'loading'
+  return list.value.length ? 'ready' : 'empty'
+})
 
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try {
     const params: Record<string, unknown> = { page: page.value, page_size: pageSize.value }
     if (filters.keyword) params.keyword = filters.keyword
@@ -314,6 +317,8 @@ async function fetchData() {
     const data = await getContracts(params)
     list.value = data.items
     total.value = data.total
+  } catch {
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -331,18 +336,6 @@ const unlinkedLoading = ref(false)
 const unlinkedKeyword = ref('')
 // 从「未建立合同订单」发起的创建：当前要关联的订单 id
 let pendingOrderId = ''
-
-const orderStatusLabelMap: Record<string, string> = {
-  pending_confirm: '待确认', confirmed: '已确认', designing: '设计中',
-  in_production: '生产中', in_installation: '安装中',
-  completed: '已完成', cancelled: '已取消',
-}
-const orderStatusColorMap: Record<string, string> = {
-  pending_confirm: 'warning', confirmed: 'info', designing: '', in_production: '',
-  in_installation: '', completed: 'success', cancelled: 'danger',
-}
-function orderStatusLabel(s: string) { return orderStatusLabelMap[s] || s }
-function orderStatusColor(s: string) { return orderStatusColorMap[s] || 'info' }
 
 async function fetchUnlinkedOrders() {
   unlinkedLoading.value = true

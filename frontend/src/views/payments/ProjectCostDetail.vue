@@ -21,7 +21,7 @@
           </div>
           <div class="order-info-item">
             <span class="label">状态</span>
-            <el-tag :type="statusColor(order.status)" size="small">{{ statusLabel(order.status) }}</el-tag>
+            <StatusTag :status="order.status_view || order.status" size="sm" />
           </div>
           <div class="order-info-item">
             <span class="label">项目成本合计</span>
@@ -133,7 +133,8 @@
       </el-table-column>
       <el-table-column label="欠款" width="90" align="center">
         <template #default="{ row }">
-          <el-tag v-if="row.is_debt && !row.is_settled" type="danger" size="small">欠款</el-tag>
+          <StatusTag v-if="row.status_view" :status="row.status_view" size="sm" />
+          <el-tag v-else-if="row.is_debt && !row.is_settled" type="danger" size="small">欠款</el-tag>
           <el-tag v-else-if="row.is_debt && row.is_settled" type="success" size="small">已结清</el-tag>
           <span v-else></span>
         </template>
@@ -441,6 +442,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { ArrowLeft, Plus, Delete, Download } from '@element-plus/icons-vue'
 import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, QuoteDetailResponse, AttachmentResponse, ProjectCostItemSummaryResponse } from '@/types/api'
+import { StatusTag } from '@/components/ui'
 import { buildProjectCostScopeOptions, getProjectCostScopeIds, type ProjectCostScopeOption } from '@/utils/projectCostScope'
 
 const route = useRoute()
@@ -557,19 +559,6 @@ const scopeMode = computed<'document' | 'items'>({
     if (value === 'document') form.order_item_ids = []
   },
 })
-
-function statusLabel(s: string) {
-  const map: Record<string, string> = {
-    pending_confirm: '待确认', confirmed: '已确认', in_progress: '进行中',
-    in_production: '生产中', in_installation: '安装中',
-    completed: '已完成', cancelled: '已取消',
-  }
-  return map[s] || s
-}
-function statusColor(s: string) {
-  const map: Record<string, string> = { pending_confirm: 'warning', confirmed: 'info', in_progress: '', in_production: '', in_installation: '', completed: 'success', cancelled: 'danger' }
-  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
-}
 
 const selectedIds = ref<string[]>([])
 

@@ -2,6 +2,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.common import ActionCapability, StatusView
+
 
 # ── Vendor ──
 
@@ -97,6 +99,8 @@ class OutsourceTaskResponse(BaseModel):
     paid_amount: float = 0
     unpaid_amount: float = 0
     status: str = "pending"
+    status_view: StatusView | None = None
+    capabilities: dict[str, ActionCapability] = Field(default_factory=dict)
     expected_at: str | None = None
     completed_at: str | None = None
     remark: str | None = None

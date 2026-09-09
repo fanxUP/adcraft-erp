@@ -1,21 +1,21 @@
 <template>
-  <div class="page">
-    <div class="page-header"><h2>车辆费用</h2></div>
-    <div class="page-create">
-      <el-button @click="handleCreate" type="danger">+ 新增费用</el-button>
-    </div>
-    <div class="search-bar">
+  <AppPage>
+    <template #header><PageHeader title="车辆费用" description="记录高空车运行、维修和保险等费用，金额展示保持统一。">
+      <template #actions><el-button @click="handleCreate" type="primary">新增费用</el-button></template>
+    </PageHeader></template>
+    <PageToolbar aria-label="车辆费用筛选">
       <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="width: 260px" />
       <el-select v-model="filters.cost_type" placeholder="费用类型" clearable style="width: 120px">
         <el-option v-for="t in costTypes" :key="t.value" :label="t.label" :value="t.value" />
       </el-select>
       <el-button @click="fetchData" type="primary">搜索</el-button>
-    </div>
-    <el-table :data="list" stripe v-loading="loading">
+    </PageToolbar>
+    <DataTableShell :state="tableState" aria-label="车辆费用列表">
+      <el-table :data="list" stripe>
       <el-table-column prop="cost_date" label="日期" width="115" />
       <el-table-column prop="plate_number" label="车辆" min-width="120" show-overflow-tooltip />
       <el-table-column prop="summary" label="费用摘要" min-width="140" show-overflow-tooltip><template #default="{ row }">{{ row.summary || '—' }}</template></el-table-column>
-      <el-table-column prop="amount" label="金额" width="130" align="right"><template #default="{ row }">¥{{ Number(row.amount).toFixed(2) }}</template></el-table-column>
+      <el-table-column prop="amount" label="金额" width="130" align="right"><template #default="{ row }">{{ formatMoney(row.amount) }}</template></el-table-column>
       <el-table-column prop="cost_type" label="费用类型" width="105"><template #default="{ row }">{{ costTypeLabel(row.cost_type) }}</template></el-table-column>
       <el-table-column prop="allocation_type" label="分摊方式" width="105"><template #default="{ row }">{{ allocLabel(row.allocation_type) }}</template></el-table-column>
       <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
@@ -25,8 +25,10 @@
           <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
-    <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px" @current-change="fetchData" />
+      </el-table>
+      <template #error><StatePanel state="error" action-label="重新加载" @action="fetchData" /></template>
+      <template #footer><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" @current-change="fetchData" /></template>
+    </DataTableShell>
 
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑车辆费用' : '新增车辆费用'" width="600px" destroy-on-close :close-on-click-modal="false">
       <el-form :model="form" label-width="100px">
@@ -59,11 +61,11 @@
       </el-form>
       <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getAerialVehicleCosts,
@@ -78,6 +80,8 @@ import {
   type AerialVehicleCost,
 } from '@/api/aerial'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
+import { formatMoney } from '@/utils/format'
 
 const loading = ref(false); const saving = ref(false); const dialogVisible = ref(false); const editingId = ref('')
 const list = ref<AerialVehicleCost[]>([]); const total = ref(0); const page = ref(1); const pageSize = ref(20)
@@ -85,6 +89,8 @@ const vehicleOptions = ref<AerialVehicle[]>([])
 const personnelOptions = ref<AerialPersonnel[]>([])
 const filters = reactive({ dateRange: [] as string[], cost_type: '' })
 const form = reactive({ aerial_vehicle_id: '', cost_date: '', cost_type: '', amount: 0, allocation_type: 'none', payer_id: '', summary: '', remark: '' })
+const loadError = ref('')
+const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : list.value.length ? 'ready' : 'empty')
 
 const costTypes = [
   { value: 'fuel', label: '油费' }, { value: 'maintenance', label: '维修费' }, { value: 'insurance', label: '保险费' },
@@ -96,13 +102,13 @@ const costTypes = [
 ]
 
 async function fetchData() {
-  loading.value = true
+  loading.value = true; loadError.value = ''
   try {
     const params: AerialQueryParams = { page: page.value, page_size: pageSize.value }
     if (filters.dateRange?.length === 2) { params.date_from = filters.dateRange[0]; params.date_to = filters.dateRange[1] }
     if (filters.cost_type) params.cost_type = filters.cost_type
     const res = await getAerialVehicleCosts(params); list.value = res.items || []; total.value = res.total || 0
-  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
+  } catch (error: unknown) { loadError.value = getErrorMessage(error); ElMessage.error(loadError.value) } finally { loading.value = false }
 }
 
 function handleCreate() {
@@ -127,7 +133,7 @@ function handleEdit(row: AerialVehicleCost) {
 }
 
 async function handleDelete(row: AerialVehicleCost) {
-  try { await ElMessageBox.confirm(`确认删除该笔费用（${costTypeLabel(row.cost_type)} ¥${Number(row.amount).toFixed(2)}）？`, '删除确认', { type: 'warning' }) } catch { return }
+  try { await ElMessageBox.confirm(`确认删除该笔费用（${costTypeLabel(row.cost_type)} ${formatMoney(row.amount)}）？`, '删除确认', { type: 'warning' }) } catch { return }
   try {
     await deleteAerialVehicleCost(row.id)
     ElMessage.success('已删除')
@@ -164,8 +170,3 @@ onMounted(async () => {
   try { const d = await getAerialPersonnel({ page_size: 100 }); personnelOptions.value = d.items || [] } catch {}
 })
 </script>
-
-<style scoped>
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.search-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-</style>

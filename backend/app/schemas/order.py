@@ -2,6 +2,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from datetime import datetime
+from app.schemas.common import StatusView
 
 
 class OrderListResponse(BaseModel):
@@ -10,6 +11,7 @@ class OrderListResponse(BaseModel):
     customer_id: str
     project_name: str
     status: str
+    status_view: StatusView | None = None
     total_amount: float
     paid_amount: float
     unpaid_amount: float
@@ -83,6 +85,7 @@ class OrderDetailResponse(BaseModel):
     project_name: str
     sales_user_id: str | None = None
     status: str
+    status_view: StatusView | None = None
     total_amount: float
     paid_amount: float
     unpaid_amount: float

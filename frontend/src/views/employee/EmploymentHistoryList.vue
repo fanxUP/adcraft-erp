@@ -1,17 +1,18 @@
 <template>
-  <div class="page">
-    <div class="page-header"><h2>员工履历</h2>
-      <div style="display:flex;gap:8px;align-items:center">
+  <AppPage>
+    <template #header><PageHeader title="员工履历" description="集中查看员工入职、晋升、调岗和离职记录。">
+      <template #actions><el-button @click="openCreate" type="primary">新增记录</el-button></template>
+    </PageHeader></template>
+    <PageToolbar aria-label="员工履历筛选">
         <el-select v-model="fEmp" placeholder="员工" clearable filterable style="width:200px" @change="fetchData">
           <el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" />
         </el-select>
         <el-select v-model="fType" placeholder="变动类型" clearable style="width:130px" @change="fetchData">
           <el-option label="入职" value="hire" /><el-option label="晋升" value="promotion" /><el-option label="调岗" value="transfer" /><el-option label="离职" value="resignation" />
         </el-select>
-        <el-button @click="openCreate" type="danger">新增记录</el-button>
-      </div>
-    </div>
-    <el-table :data="list" v-loading="loading" stripe style="width:100%">
+    </PageToolbar>
+    <DataTableShell :state="tableState" aria-label="员工履历列表">
+      <el-table :data="list" stripe style="width:100%">
       <el-table-column label="员工" width="140"><template #default="{row}">{{row.employee_name||row.employee_id}}</template></el-table-column>
       <el-table-column prop="change_date" label="变动日期" width="120" />
       <el-table-column label="变动类型" width="100"><template #default="{row}"><el-tag :type="typeColor(row.change_type)" size="small">{{typeLabel(row.change_type)}}</el-tag></template></el-table-column>
@@ -23,8 +24,10 @@
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
-    </el-table>
-    <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10,20,50]" :total="total" layout="total,sizes,prev,pager,next" style="margin-top:16px" @change="fetchData" />
+      </el-table>
+      <template #error><StatePanel state="error" action-label="重新加载" @action="fetchData" /></template>
+      <template #footer><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10,20,50]" :total="total" layout="total,sizes,prev,pager,next" @change="fetchData" /></template>
+    </DataTableShell>
     <el-dialog v-model="showDialog" :title="isEditing?'编辑记录':'新增记录'" width="600px" :close-on-click-modal="false">
       <el-form :model="form" label-width="100px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
         <el-form-item label="员工" v-if="!isEditing" required><el-select v-model="form.employee_id" filterable style="width:100%"><el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" /></el-select></el-form-item>
@@ -39,16 +42,20 @@
       </el-form>
       <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 <script setup lang="ts">
-import { ref, onMounted } from "vue"
+import { computed, ref, onMounted } from "vue"
 import { getEmploymentHistories, createEmploymentHistory, updateEmploymentHistory, deleteEmploymentHistory, type EmploymentHistoryItem } from "@/api/employmentHistories"
 import { getAttendanceEmployees, type EmployeeOption } from "@/api/attendance"
 import { ElMessage, ElMessageBox } from "element-plus"
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from "@/components/ui"
+import { getErrorMessage } from "@/utils/error"
 
 const list=ref<EmploymentHistoryItem[]>([]); const employees=ref<EmployeeOption[]>([]); const loading=ref(false)
 const page=ref(1); const pageSize=ref(20); const total=ref(0); const fEmp=ref(""); const fType=ref("")
+const loadError=ref("")
+const tableState=computed(() => loading.value ? "loading" : loadError.value ? "error" : list.value.length ? "ready" : "empty")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const initForm={employee_id:"",change_date:"",change_type:"hire",previous_department:"",new_department:"",previous_position:"",new_position:"",reason:"",remark:""}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,7 +64,7 @@ const typeLabel=(s:string)=>({hire:"入职",promotion:"晋升",transfer:"调岗"
 const typeColor=(s:string)=>({hire:"success",promotion:"warning",transfer:"primary",resignation:"danger"})[s]||"info"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchData(){loading.value=true;try{const p:any={page:page.value,page_size:pageSize.value};if(fEmp.value)p.employee_id=fEmp.value;if(fType.value)p.change_type=fType.value;const r=await getEmploymentHistories(p);list.value=r?.items||[];total.value=r?.total||0}finally{loading.value=false}}
+async function fetchData(){loading.value=true;loadError.value="";try{const p:any={page:page.value,page_size:pageSize.value};if(fEmp.value)p.employee_id=fEmp.value;if(fType.value)p.change_type=fType.value;const r=await getEmploymentHistories(p);list.value=r?.items||[];total.value=r?.total||0}catch(error:unknown){loadError.value=getErrorMessage(error);ElMessage.error(loadError.value)}finally{loading.value=false}}
 async function loadEmps(){employees.value=(await getAttendanceEmployees())||[]}
 function openCreate(){isEditing.value=false;editId.value="";form.value={...initForm};showDialog.value=true}
 function openEdit(r:EmploymentHistoryItem){isEditing.value=true;editId.value=r.id;form.value={...r};showDialog.value=true}

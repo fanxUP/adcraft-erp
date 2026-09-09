@@ -1,4 +1,4 @@
-import type { TaskQueueItem } from '@/types/api'
+import type { StatusView, TaskQueueItem } from '@/types/api'
 
 export const TASK_BOARD_COLUMNS = [
   { key: 'design', label: '设计' },
@@ -10,8 +10,10 @@ export function taskProgress(task: Pick<TaskQueueItem, 'progress_pct'>) {
   return Math.min(100, Math.max(0, Number(task.progress_pct ?? 0)))
 }
 
-export function isTaskVisible(task: Pick<TaskQueueItem, 'status' | 'progress_pct'>) {
-  return !['completed', 'confirmed', 'cancelled'].includes(task.status)
+export function isTaskVisible(task: Pick<TaskQueueItem, 'status' | 'progress_pct'> & { status_view?: StatusView | null }) {
+  const terminal = task.status_view?.terminal
+    ?? ['completed', 'confirmed', 'cancelled'].includes(task.status)
+  return !terminal
     && taskProgress(task) < 100
 }
 

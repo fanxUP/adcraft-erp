@@ -53,6 +53,13 @@
         :closable="false"
         show-icon
       />
+      <el-alert
+        v-if="!canChangeTaskStatus && !isHistoricalReadOnly"
+        type="warning"
+        :title="changeStatusDisabledReason"
+        :closable="false"
+        show-icon
+      />
 
       <div v-loading="loadingItems" class="link-panel">
         <div v-if="items.length" class="item-list" role="group" aria-label="订单明细（可多选）">
@@ -62,27 +69,26 @@
             class="item-option"
             :class="{
               'is-selected': selectedItemIds.includes(item.id),
-              'is-disabled': !item.can_select,
+              'is-disabled': !canSelect(item),
             }"
-            :aria-disabled="!item.can_select"
+            :aria-disabled="!canSelect(item)"
           >
             <input
               v-model="selectedItemIds"
               class="item-option-checkbox"
               type="checkbox"
               :value="item.id"
-              :disabled="saving || changing || !item.can_select"
+              :disabled="saving || changing || !canSelect(item)"
               :aria-label="`选择订单明细 ${item.item_name}`"
             />
             <span class="item-option-body">
               <span class="item-option-title-row">
                 <span class="item-option-title">{{ item.item_name }}</span>
-                <el-tag :type="stageTagType(item.stage)" effect="plain" size="small">
-                  {{ item.stage_label }}
-                </el-tag>
-                <el-tag v-if="item.is_linked && item.task_status_label" :type="taskStatusTagType(item.task_status)" effect="light" size="small">
-                  本任务：{{ item.task_status_label }}
-                </el-tag>
+                <StatusTag :status="item.stage_view || item.stage" :label="item.stage_label" size="sm" />
+                <span v-if="item.is_linked && (item.task_status_view || item.task_status_label)" class="item-status-label">
+                  本任务：
+                  <StatusTag :status="item.task_status_view || item.task_status" :label="item.task_status_label" size="sm" />
+                </span>
                 <el-tag v-if="item.outsource_blocked" type="warning" effect="light" size="small">
                   {{ item.outsource_status_label || '外协任务进行中' }}
                 </el-tag>
@@ -96,10 +102,10 @@
                 数量 {{ item.quantity }}{{ item.unit ? ` ${item.unit}` : '' }}
                 <span v-if="item.is_linked && item.task_progress_pct != null"> · 本任务进度 {{ item.task_progress_pct }}%</span>
               </span>
-              <span v-if="!item.can_select && item.disabled_reason" class="item-option-disabled-reason">
-                {{ item.disabled_reason }}
+              <span v-if="!canSelect(item) && disabledReason(item)" class="item-option-disabled-reason">
+                {{ disabledReason(item) }}
               </span>
-              <span v-if="item.outsource_blocked && item.can_select" class="item-option-outsourcing-reason">
+              <span v-if="item.outsource_blocked && canSelect(item)" class="item-option-outsourcing-reason">
                 外协完成后才能推进该明细到下一阶段
               </span>
             </span>
@@ -138,7 +144,7 @@
         :steps="steps"
         :current-status="currentStatus"
         :workflow="workflow"
-        :changing="changing || saving || isHistoricalReadOnly"
+        :changing="changing || saving || isHistoricalReadOnly || !canChangeTaskStatus"
         @change="handleWorkflowChange"
       />
     </section>
@@ -154,7 +160,8 @@ import {
   updateProductionTask,
   updateInstallationTask,
 } from '@/api/tasks'
-import type { OrderItemStage, TaskType, TaskOrderItemOption } from '@/types/api'
+import type { ActionCapability, TaskType, TaskOrderItemOption } from '@/types/api'
+import { StatusTag } from '@/components/ui'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 
 const props = withDefaults(defineProps<{
@@ -165,6 +172,7 @@ const props = withDefaults(defineProps<{
   currentItemName?: string | null
   currentItemIds?: string[] | null
   currentItemNames?: string[] | null
+  taskCapabilities?: Record<string, ActionCapability> | null
   steps: { key: string; label: string }[]
   currentStatus: string
   workflow: Record<string, string[]>
@@ -174,6 +182,7 @@ const props = withDefaults(defineProps<{
   currentItemName: null,
   currentItemIds: () => [],
   currentItemNames: () => [],
+  taskCapabilities: null,
 })
 
 const emit = defineEmits<{
@@ -209,6 +218,14 @@ const isHistoricalReadOnly = computed(() => {
   return terminalStatuses[props.taskType]?.includes(props.currentStatus) ?? false
 })
 
+const changeStatusCapability = computed(() => props.taskCapabilities?.change_status)
+const canChangeTaskStatus = computed(() => (
+  changeStatusCapability.value?.allowed ?? !isHistoricalReadOnly.value
+))
+const changeStatusDisabledReason = computed(() => (
+  changeStatusCapability.value?.disabled_reason || '该任务当前状态不允许继续变更'
+))
+
 function itemLabel(item: TaskOrderItemOption) {
   return item.material_process
     ? `${item.item_name} · ${item.material_process}`
@@ -225,19 +242,12 @@ function itemSpec(item: TaskOrderItemOption) {
   ].filter(Boolean).join(' × ')
 }
 
-function stageTagType(stage: OrderItemStage): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
-  if (stage === 'designing') return 'primary'
-  if (stage === 'in_production') return 'warning'
-  if (stage === 'in_installation') return 'success'
-  if (stage === 'completed') return 'info'
-  return 'danger'
+function canSelect(item: TaskOrderItemOption) {
+  return item.capabilities?.select?.allowed ?? item.can_select
 }
 
-function taskStatusTagType(status?: string | null): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
-  if (status === 'completed' || status === 'confirmed') return 'success'
-  if (status === 'rework' || status === 'revision' || status === 'cancelled') return 'danger'
-  if (status === 'in_progress' || status === 'designing' || status === 'pending_acceptance') return 'warning'
-  return 'info'
+function disabledReason(item: TaskOrderItemOption) {
+  return item.capabilities?.select?.disabled_reason || item.disabled_reason || ''
 }
 
 async function loadItems() {
@@ -298,8 +308,8 @@ async function handleLink() {
 }
 
 function handleWorkflowChange(status: string) {
-  if (isHistoricalReadOnly.value) {
-    ElMessage.info('该历史任务已结束，不能再次变更任务状态')
+  if (!canChangeTaskStatus.value) {
+    ElMessage.info(changeStatusDisabledReason.value)
     return
   }
   if (!selectedItemIds.value.length) {
@@ -450,6 +460,12 @@ onMounted(loadItems)
 .item-option-title {
   color: var(--ad-text);
   font-weight: 600;
+}
+
+.item-status-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .item-option-subtitle,

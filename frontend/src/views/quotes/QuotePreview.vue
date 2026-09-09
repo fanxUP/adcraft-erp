@@ -29,7 +29,7 @@
           </div>
           <div class="print-info-row">
             <span><strong>有效期至:</strong> {{ quote.valid_until || '-' }}</span>
-            <span><strong>状　　态:</strong> {{ statusLabel(quote.status) }}</span>
+            <span><strong>状　　态:</strong> <StatusTag :status="quote.status_view || quote.status" size="sm" /></span>
           </div>
         </div>
 
@@ -85,7 +85,7 @@
               </tr>
               <tr v-else-if="row.type === 'group-total'" class="print-group-total pg-block" :style="{ '--ad-g': `var(--ad-group-${row.colorIndex || 1})` }">
                 <td colspan="7" style="text-align: right;">分项合计</td>
-                <td class="numeric">{{ row.total.toFixed(2) }}</td>
+                <td class="numeric">{{ formatMoney(row.total, false) }}</td>
                 <td></td>
               </tr>
               <tr v-else :class="row.gi !== undefined ? 'pg-block' : ''" :style="{ '--ad-g': `var(--ad-group-${row.colorIndex || 1})` }">
@@ -95,8 +95,8 @@
                 <td>{{ formatSpec(row.item) }}</td>
                 <td class="numeric">{{ row.item.quantity }}</td>
                 <td class="center">{{ row.item.use_area ? '㎡' : (row.item.unit || '-') }}</td>
-                <td class="numeric">{{ row.item.unit_price?.toFixed(2) }}</td>
-                <td class="numeric">{{ row.item.subtotal_amount?.toFixed(2) }}</td>
+                <td class="numeric">{{ formatMoney(row.item.unit_price, false) }}</td>
+                <td class="numeric">{{ formatMoney(row.item.subtotal_amount, false) }}</td>
                 <td>{{ row.item.remark || '' }}</td>
               </tr>
             </template>
@@ -106,13 +106,13 @@
         <!-- 汇总 -->
         <div class="print-summary">
           <div class="print-summary-row">
-            <span>小　　计: ¥{{ quote.subtotal_amount?.toFixed(2) }}</span>
-            <span>优　　惠: ¥{{ quote.discount_amount?.toFixed(2) }}</span>
+            <span>小　　计: {{ formatMoney(quote.subtotal_amount) }}</span>
+            <span>优　　惠: {{ formatMoney(quote.discount_amount) }}</span>
             <span>税　　率: {{ quote.tax_rate }}%</span>
           </div>
           <div class="print-summary-row">
-            <span>税　　额: ¥{{ quote.tax_amount?.toFixed(2) }}</span>
-            <span class="print-summary-total">合　　计: ¥{{ quote.total_amount?.toFixed(2) }}</span>
+            <span>税　　额: {{ formatMoney(quote.tax_amount) }}</span>
+            <span class="print-summary-total">合　　计: {{ formatMoney(quote.total_amount) }}</span>
           </div>
         </div>
 
@@ -143,6 +143,7 @@
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
+import { formatMoney } from '@/utils/format'
 import { ref, computed, watch } from 'vue'
 import { getQuote } from '@/api/quotes'
 import { getCustomer } from '@/api/customers'
@@ -150,6 +151,7 @@ import { getSystemSettings } from '@/api/admin'
 import { usePrint } from '@/composables/usePrint'
 import { QuoteDetailResponse, QuoteItemResponse } from '@/types/api'
 import { buildQuoteDisplayRows } from '@/utils/quoteItemOrdering'
+import { StatusTag } from '@/components/ui'
 
 const props = defineProps<{
   visible: boolean
@@ -239,11 +241,6 @@ watch(() => props.visible, async (val) => {
     loading.value = false
   }
 })
-
-function statusLabel(s: string) {
-  const map: Record<string, string> = { draft: '草稿', confirmed: '已确认', converted: '已转订单', cancelled: '已作废' }
-  return map[s] || s
-}
 
 function formatSpec(item: QuoteItemResponse) {
   const parts: string[] = []

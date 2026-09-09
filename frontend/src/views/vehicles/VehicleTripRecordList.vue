@@ -1,11 +1,9 @@
 <template>
-  <div class="page-container">
-    <div class="page-header">
-      <h2>出车/收车台账</h2>
-    </div>
+  <AppPage>
+    <template #header><PageHeader title="出车 / 收车台账" description="跟踪派车、到达、完工和收车的完整过程。" /></template>
 
     <!-- 搜索栏 -->
-    <div class="search-bar">
+    <PageToolbar aria-label="出车台账筛选">
       <el-input
         v-model="searchKeyword"
         placeholder="搜索派车单号/目的地"
@@ -22,10 +20,11 @@
         <el-option label="已收车" value="returned" />
       </el-select>
       <el-button @click="handleSearch" type="primary">查询</el-button>
-    </div>
+    </PageToolbar>
 
     <!-- 派车单列表 -->
-    <el-table :data="dispatchList" stripe border style="width: 100%">
+    <DataTableShell :state="tableState" aria-label="出车收车台账列表">
+      <el-table :data="dispatchList" stripe border style="width: 100%">
       <el-table-column prop="dispatch_no" label="派车单号" width="180" />
       <el-table-column prop="vehicle_name" label="车辆" width="120" />
       <el-table-column prop="plate_number" label="车牌号" width="110" />
@@ -75,10 +74,12 @@
           <el-button v-if="['completed', 'arrived', 'started'].includes(row.status)" size="small" @click="handleReturnTrip(row)">收车</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+      <template #error><StatePanel state="error" action-label="重新加载" @action="loadDispatches" /></template>
+    </DataTableShell>
 
     <!-- 分页 -->
-    <div class="pagination">
+    <div class="pagination" v-if="tableState === 'ready'">
       <el-pagination
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
@@ -189,14 +190,15 @@
         <el-button @click="detailDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, post } from '@/api'
 import type { PaginatedData } from '@/types/api'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 // Types
 interface DispatchItem {
@@ -246,6 +248,9 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const submitting = ref(false)
+const loading = ref(false)
+const loadError = ref('')
+const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : dispatchList.value.length ? 'ready' : 'empty')
 
 // Dialog states
 const startDialogVisible = ref(false)
@@ -276,6 +281,8 @@ const returnForm = ref({
 
 // Load dispatches
 async function loadDispatches() {
+  loading.value = true
+  loadError.value = ''
   try {
     const params = new URLSearchParams({
       page: String(currentPage.value),
@@ -288,7 +295,10 @@ async function loadDispatches() {
     dispatchList.value = res.items
     total.value = res.total
   } catch {
-    ElMessage.error('加载数据失败')
+    loadError.value = '加载数据失败'
+    ElMessage.error(loadError.value)
+  } finally {
+    loading.value = false
   }
 }
 
@@ -432,25 +442,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page-container {
-  padding: 20px;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.search-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
 .pagination {
   margin-top: 16px;
   display: flex;

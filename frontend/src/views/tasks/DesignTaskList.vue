@@ -30,12 +30,12 @@
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="designStatusColor(row.status)" size="small">{{ designStatusLabel(row.status) }}</el-tag>
+            <StatusTag :status="row.status_view || row.status" size="sm" />
           </template>
         </el-table-column>
         <el-table-column label="进度" width="150">
           <template #default="{ row }">
-            <el-progress :percentage="progressPct(row.progress_pct)" :stroke-width="8" />
+            <ProgressBar :percentage="row.progress_pct" :tone="row.status_view?.tone" size="sm" aria-label="设计任务进度" />
           </template>
         </el-table-column>
         <el-table-column label="派发" width="90">
@@ -75,6 +75,7 @@ import { formatDate } from '@/utils/datetime'
 import { ref, onMounted } from 'vue'
 import { getDesignTasks } from '@/api/tasks'
 import { DesignTaskResponse } from '@/types/api'
+import { ProgressBar, StatusTag } from '@/components/ui'
 
 const loading = ref(false)
 const list = ref<DesignTaskResponse[]>([])
@@ -83,18 +84,6 @@ const page = ref(1)
 const pageSize = ref(20)
 const filterStatus = ref('')
 const filterOutsourced = ref('')
-
-function designStatusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待处理', revision: '需调整', confirmed: '已完成', cancelled: '已取消' }
-  return map[s] || s
-}
-function designStatusColor(s: string) {
-  const map: Record<string, string> = { pending: 'info', designing: '', pending_review: 'warning', revision: 'danger', confirmed: 'success', cancelled: 'info' }
-  return (map[s] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
-}
-function progressPct(value: number | undefined) {
-  return Math.min(100, Math.max(0, Number(value ?? 0)))
-}
 
 async function fetchData() {
   loading.value = true

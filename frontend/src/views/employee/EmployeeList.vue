@@ -1,7 +1,9 @@
 <template>
-  <div class="page">
-    <div class="page-header"><h2>员工管理</h2>
-      <div style="display:flex;gap:8px;align-items:center">
+  <AppPage>
+    <PageHeader title="员工管理" description="统一维护员工档案、任职状态、证件和附件。">
+      <template #actions><el-button @click="openCreate" type="primary">新建员工</el-button></template>
+    </PageHeader>
+    <PageToolbar aria-label="员工筛选">
         <el-select v-model="filterDept" placeholder="部门筛选" clearable style="width:130px" @change="fetchData">
           <el-option v-for="d in DEPTS" :key="d.value" :label="d.label" :value="d.value" />
         </el-select>
@@ -9,12 +11,10 @@
           <el-option label="在职" value="active" /><el-option label="离职" value="resigned" /><el-option label="停职" value="suspended" />
         </el-select>
         <el-input v-model="keyword" placeholder="搜索姓名/工号/手机号" clearable style="width:240px" @clear="fetchData" @keyup.enter="fetchData" />
-      </div>
-    </div>
-    <div class="page-create">
-      <el-button @click="openCreate" type="danger">新建员工</el-button>
-    </div>
-    <el-table :data="list" v-loading="loading" stripe style="width:100%">
+    </PageToolbar>
+    <DataTableShell :state="tableState" aria-label="员工列表">
+      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
+      <el-table :data="list" v-loading="loading" stripe style="width:100%">
       <el-table-column prop="employee_no" label="工号" width="120" />
       <el-table-column prop="name" label="姓名" width="240" />
       <el-table-column prop="phone" label="手机号" width="130" />
@@ -29,8 +29,9 @@
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
-    </el-table>
-    <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10,20,50]" :total="total" layout="total,sizes,prev,pager,next" style="margin-top:16px" @change="fetchData" />
+      </el-table>
+      <template #footer><el-pagination v-if="total > 0" v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10,20,50]" :total="total" layout="total,sizes,prev,pager,next" @change="fetchData" /></template>
+    </DataTableShell>
     <el-dialog v-model="showDialog" :title="isEditing?'编辑员工':'新建员工'" width="820px" top="5vh" :close-on-click-modal="false">
       <el-form :model="form" label-width="90px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">
         <el-divider content-position="left" style="grid-column:1/3;margin:0 0 4px">基本信息</el-divider>
@@ -108,19 +109,20 @@
       </template>
       <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 <script setup lang="ts">
-import { ref, onMounted } from "vue"
+import { ref, computed, onMounted } from "vue"
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttachments, uploadEmployeeAttachment, deleteEmployeeAttachment, uploadEmployeeImage, type EmployeeResponse } from "@/api/employees"
 import type { AttachmentResponse } from "@/types/api"
 import { ElMessage, ElMessageBox } from "element-plus"
 import type { UploadRequestOptions } from "element-plus"
 import { GENDER_OPTIONS, ETHNICITY_OPTIONS } from "@/config/ethnicity"
 import { ATTACHMENT_TYPE_OPTIONS, ATTACHMENT_TYPE_LABELS, ATTACHMENT_TYPE_TAGS } from "@/config/attachment"
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const DEPTS = [{value:"design",label:"设计部"},{value:"production",label:"生产部"},{value:"installation",label:"安装部"},{value:"sales",label:"销售部"},{value:"finance",label:"财务部"},{value:"admin",label:"行政部"}]
-const list=ref<EmployeeResponse[]>([]); const loading=ref(false); const page=ref(1); const pageSize=ref(20); const total=ref(0); const keyword=ref(""); const filterDept=ref(""); const filterStatus=ref("")
+const list=ref<EmployeeResponse[]>([]); const loading=ref(false); const loadError=ref(false); const page=ref(1); const pageSize=ref(20); const total=ref(0); const keyword=ref(""); const filterDept=ref(""); const filterStatus=ref("")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const attachments=ref<AttachmentResponse[]>([]); const attCategory=ref("other")
 const initForm={name:"",phone:"",gender:"",ethnicity:"",birth_date:"",department:"",position:"",employment_type:"",education:"",id_card:"",license_no:"",license_type:"",license_expire_date:"",id_card_front_url:"",id_card_back_url:"",hire_date:"",resignation_date:"",employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],bank_name:"",bank_account:"",address:"",remark:""}
@@ -130,8 +132,9 @@ const deptLabel=(v:string)=>DEPTS.find(d=>d.value===v)?.label||v
 const typeLabel=(v:string)=>({full_time:"全职",part_time:"兼职",contract:"合同",intern:"实习"})[v]||v||"-"
 const statusLabel=(s:string)=>({active:"在职",resigned:"离职",suspended:"停职"})[s]||s
 const statusColor=(s:string)=>({active:"success",resigned:"info",suspended:"warning"})[s]||"info"
+const tableState = computed(() => loadError.value ? 'error' as const : loading.value ? 'loading' as const : list.value.length ? 'ready' as const : 'empty' as const)
 
-async function fetchData(){loading.value=true;try{const r=await getEmployees({page:page.value,page_size:pageSize.value,keyword:keyword.value||undefined,department:filterDept.value||undefined,employment_status:filterStatus.value||undefined});list.value=r?.items||[];total.value=r?.total||0}finally{loading.value=false}}
+async function fetchData(){loading.value=true;loadError.value=false;try{const r=await getEmployees({page:page.value,page_size:pageSize.value,keyword:keyword.value||undefined,department:filterDept.value||undefined,employment_status:filterStatus.value||undefined});list.value=r?.items||[];total.value=r?.total||0}catch(e:unknown){loadError.value=true;ElMessage.error((e as {message?:string})?.message||'员工列表加载失败')}finally{loading.value=false}}
 async function loadAttachments(){attachments.value=(await getEmployeeAttachments(editId.value))||[]}
 function openCreate(){isEditing.value=false;editId.value="";attachments.value=[];form.value={...initForm};showDialog.value=true}
 function openEdit(r:EmployeeResponse){isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[]};showDialog.value=true;loadAttachments()}

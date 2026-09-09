@@ -1,10 +1,9 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <h2>人员工资</h2>
-      <el-button @click="handleExport" :disabled="!month">导出 Excel</el-button>
-    </div>
-    <div class="search-bar">
+  <AppPage>
+    <template #header><PageHeader title="人员工资" description="按月份查看人员工资核算、补贴扣款和发放状态。">
+      <template #actions><el-button @click="handleExport" :disabled="!month">导出 Excel</el-button></template>
+    </PageHeader></template>
+    <PageToolbar aria-label="人员工资筛选">
       <el-date-picker v-model="month" type="month" value-format="YYYY-MM" placeholder="月份" style="width: 160px" />
       <el-select v-model="filters.personnel_id" placeholder="人员" clearable style="width: 120px">
         <el-option v-for="d in personnelOptions" :key="d.id" :label="d.name" :value="d.id" />
@@ -14,18 +13,19 @@
         <el-option label="待发放" value="pending_payment" /><el-option label="已发放" value="paid" />
       </el-select>
       <el-button @click="fetchData" type="primary">搜索</el-button>
-    </div>
-    <el-table :data="list" stripe v-loading="loading">
+    </PageToolbar>
+    <DataTableShell :state="tableState" aria-label="人员工资列表">
+      <el-table :data="list" stripe>
       <el-table-column prop="wage_month" label="月份" width="100" />
       <el-table-column prop="name" label="人员" width="100" />
       <el-table-column prop="wage_type" label="工资类型" width="100">
         <template #default="{ row }">{{ wageTypeLabel(row.wage_type) }}</template>
       </el-table-column>
-      <el-table-column prop="base_wage" label="基础工资" width="120" align="right"><template #default="{ row }">¥{{ row.base_wage }}</template></el-table-column>
-      <el-table-column prop="trip_wage" label="趟次工资" width="120" align="right"><template #default="{ row }">¥{{ row.trip_wage }}</template></el-table-column>
-      <el-table-column prop="allowance_amount" label="补贴" width="100" align="right"><template #default="{ row }">¥{{ row.allowance_amount }}</template></el-table-column>
-      <el-table-column prop="deduction_amount" label="扣款" width="100" align="right"><template #default="{ row }">¥{{ row.deduction_amount }}</template></el-table-column>
-      <el-table-column prop="final_wage_amount" label="最终工资" width="120" align="right"><template #default="{ row }"><b>¥{{ row.final_wage_amount }}</b></template></el-table-column>
+      <el-table-column prop="base_wage" label="基础工资" width="120" align="right"><template #default="{ row }">{{ formatMoney(row.base_wage) }}</template></el-table-column>
+      <el-table-column prop="trip_wage" label="趟次工资" width="120" align="right"><template #default="{ row }">{{ formatMoney(row.trip_wage) }}</template></el-table-column>
+      <el-table-column prop="allowance_amount" label="补贴" width="100" align="right"><template #default="{ row }">{{ formatMoney(row.allowance_amount) }}</template></el-table-column>
+      <el-table-column prop="deduction_amount" label="扣款" width="100" align="right"><template #default="{ row }">{{ formatMoney(row.deduction_amount) }}</template></el-table-column>
+      <el-table-column prop="final_wage_amount" label="最终工资" width="120" align="right"><template #default="{ row }"><b>{{ formatMoney(row.final_wage_amount) }}</b></template></el-table-column>
       <el-table-column prop="payment_status" label="支付状态" width="100">
         <template #default="{ row }">
           <el-tag :type="row.payment_status === 'paid' ? 'success' : row.payment_status === 'pending_payment' ? 'warning' : 'info'" size="small">{{ payLabel(row.payment_status) }}</el-tag>
@@ -36,13 +36,15 @@
           <el-button link type="success" size="small" @click="handlePay(row)" v-if="row.payment_status !== 'paid'">标记已发</el-button>
         </template>
       </el-table-column>
-    </el-table>
-    <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px" @current-change="fetchData" />
-  </div>
+      </el-table>
+      <template #error><StatePanel state="error" action-label="重新加载" @action="fetchData" /></template>
+      <template #footer><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" @current-change="fetchData" /></template>
+    </DataTableShell>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getAerialPersonnelWages,
@@ -54,6 +56,8 @@ import {
   type AerialQueryParams,
 } from '@/api/aerial'
 import { getErrorMessage } from '@/utils/error'
+import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
+import { formatMoney } from '@/utils/format'
 
 const loading = ref(false)
 const list = ref<AerialPersonnelWage[]>([])
@@ -63,9 +67,11 @@ const pageSize = ref(20)
 const month = ref('')
 const personnelOptions = ref<AerialPersonnel[]>([])
 const filters = reactive({ personnel_id: '', payment_status: '' })
+const loadError = ref('')
+const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : list.value.length ? 'ready' : 'empty')
 
 async function fetchData() {
-  loading.value = true
+  loading.value = true; loadError.value = ''
   try {
     const params: AerialQueryParams = { page: page.value, page_size: pageSize.value }
     if (month.value) params.wage_month = month.value
@@ -73,7 +79,7 @@ async function fetchData() {
     if (filters.payment_status) params.payment_status = filters.payment_status
     const res = await getAerialPersonnelWages(params)
     list.value = res.items || []; total.value = res.total || 0
-  } catch (error: unknown) { ElMessage.error(getErrorMessage(error)) } finally { loading.value = false }
+  } catch (error: unknown) { loadError.value = getErrorMessage(error); ElMessage.error(loadError.value) } finally { loading.value = false }
 }
 
 async function handlePay(row: AerialPersonnelWage) {
@@ -102,8 +108,3 @@ onMounted(async () => {
   try { const d = await getAerialPersonnel({ page_size: 100 }); personnelOptions.value = d.items || [] } catch {}
 })
 </script>
-
-<style scoped>
-.page-header { margin-bottom: 16px; }
-.search-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-</style>

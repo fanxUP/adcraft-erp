@@ -18,6 +18,7 @@ from app.services.number_generator import (
     generate_payment_no,
     generate_statement_no,
 )
+from app.domain.presentation import make_action_capability, make_payment_status_view, make_statement_status_view
 
 
 def _utc_now() -> datetime:
@@ -143,6 +144,7 @@ class PaymentService:
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
             "remark": p.remark,
             "is_voided": p.is_voided,
+            "status_view": make_payment_status_view(p.is_voided).model_dump(mode="json"),
             "void_reason": p.void_reason,
             "voided_at": p.voided_at.isoformat() if p.voided_at else None,
             "receipt_url": p.receipt_url,
@@ -216,6 +218,13 @@ class StatementService:
             "total_paid_amount": float(s.total_paid_amount),
             "total_unpaid_amount": float(s.total_unpaid_amount),
             "status": s.status,
+            "status_view": make_statement_status_view(s.status).model_dump(mode="json"),
+            "capabilities": {
+                "confirm": make_action_capability(
+                    s.status == "draft",
+                    "对账单已确认，不能重复确认" if s.status != "draft" else None,
+                ).model_dump(mode="json"),
+            },
             "confirmed_at": s.confirmed_at.isoformat() if s.confirmed_at else None,
             "confirmed_by": str(s.confirmed_by) if s.confirmed_by else None,
             "created_at": s.created_at.isoformat() if s.created_at else None,

@@ -1,11 +1,18 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { canAccessRoute } from '@/config/access'
 
 const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     component: () => import('@/layouts/BlankLayout.vue'),
     children: [{ path: '', name: 'Login', component: () => import('@/views/login/LoginView.vue') }],
+  },
+  {
+    path: '/forbidden',
+    component: () => import('@/layouts/BlankLayout.vue'),
+    meta: { requiresAuth: true },
+    children: [{ path: '', name: 'Forbidden', component: () => import('@/views/ForbiddenView.vue') }],
   },
   {
     path: '/',
@@ -159,15 +166,14 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  // Role-based guard
-  if (to.meta.roles && authStore.user) {
-    const userRoles: string[] = authStore.user.roles || []
-    const required: string[] = to.meta.roles as string[]
-    const hasAccess = required.some(r => userRoles.includes(r))
-    if (!hasAccess) {
-      next('/')
-      return
-    }
+  // Page visibility guard. The backend remains the final authorization layer;
+  // this only prevents a known-inaccessible page from rendering after a direct URL visit.
+  const legacyRoles = Array.isArray(to.meta.roles)
+    ? to.meta.roles.filter((role): role is string => typeof role === 'string')
+    : []
+  if (!canAccessRoute(to.name, authStore.roles, legacyRoles)) {
+    next({ name: 'Forbidden', query: { from: to.fullPath } })
+    return
   }
 
   // Mobile auto-detect on first visit to desktop home
