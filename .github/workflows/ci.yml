@@ -57,6 +57,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 生成 Compose 校验环境
-        run: cp .env.example .env
+        run: |
+          cp .env.example .env
+          printf 'POSTGRES_PASSWORD=ci-postgres-password\nMINIO_ROOT_PASSWORD=ci-minio-password\n' >> .env
       - name: 校验 Compose 配置
         run: docker compose config --quiet
