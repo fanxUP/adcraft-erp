@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.outsource_repo import OutsourceVendorRepository, OutsourceTaskRepository, OutsourcePaymentRepository
 from app.services.number_generator import generate_vendor_no, generate_outsource_task_no, generate_outsource_payment_no
 from app.models.outsource import OutsourceVendor, OutsourcePayment, OutsourceTask
+from app.models.user import User
+from app.core.permissions import PERM_FINANCE_VIEW_COST, user_has_permission
 from app.domain.presentation import make_action_capability, make_outsource_status_view
 from app.domain.workflows import OUTSOURCE_TASK_WORKFLOW, ensure_transition
 
@@ -36,11 +38,43 @@ class OutsourceService:
         ("task", re.compile(r"^task:([0-9a-fA-F-]{36})$")),
     )
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, viewer: User | None = None):
         self.db = db
+        self.viewer = viewer
         self.vendor_repo = OutsourceVendorRepository(db)
         self.task_repo = OutsourceTaskRepository(db)
         self.payment_repo = OutsourcePaymentRepository(db)
+
+    @property
+    def can_view_finance_cost(self) -> bool:
+        """Whether financial values may be included in an API response.
+
+        ``viewer=None`` keeps service-level/internal callers backward
+        compatible. HTTP routes always pass the authenticated user.
+        """
+        return self.viewer is None or user_has_permission(self.viewer, PERM_FINANCE_VIEW_COST)
+
+    def _without_financial_fields(self, data: dict | list) -> dict | list:
+        if self.can_view_finance_cost:
+            return data
+        if isinstance(data, list):
+            return [self._without_financial_fields(item) if isinstance(item, (dict, list)) else item for item in data]
+        return {
+            key: self._without_financial_fields(value) if isinstance(value, (dict, list)) else value
+            for key, value in data.items()
+            if key not in {
+                "unit_price",
+                "total_amount",
+                "paid_amount",
+                "unpaid_amount",
+                "planned_amount",
+                "recognized_cost",
+                "related_project_amount",
+                "order_level_planned_amount",
+                "order_level_recognized_cost",
+                "amount",
+            }
+        }
 
     @staticmethod
     def _to_decimal(value, default: str = "0") -> Decimal:
@@ -347,7 +381,7 @@ class OutsourceService:
         if source_task_id:
             order_level = [task for task in order_level if task.source_task_id == source_task_id]
 
-        return {
+        result = {
             "order_id": str(order.id),
             "order_no": order.doc_no,
             "project_name": order.project_name,
@@ -370,6 +404,8 @@ class OutsourceService:
                 )
             ),
         }
+        result["items"] = [self._without_financial_fields(item) for item in result["items"]]
+        return self._without_financial_fields(result)
 
     async def _list_item_tasks(
         self,
@@ -694,7 +730,7 @@ class OutsourceService:
             else None
         )
         warning = "；".join(dict.fromkeys(warnings)) or None
-        return {
+        result = {
             "group_key": self._row_value(row, "group_key"),
             "group_kind": group_kind,
             "group_label": group_label,
@@ -719,6 +755,7 @@ class OutsourceService:
             "paid_amount": float(self._to_money(self._row_value(row, "paid_amount", 0))),
             "unpaid_amount": float(self._to_money(self._row_value(row, "unpaid_amount", 0))),
         }
+        return self._without_financial_fields(result)
 
     async def list_task_groups(self, page: int, page_size: int, status: str | None = None,
                                vendor_id: UUID | None = None, related_doc_id: UUID | None = None,
@@ -1026,7 +1063,7 @@ class OutsourceService:
         payments = result.scalars().all()
         vname = await self._vendor_name(task.vendor_id)
         pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
-        return {
+        result = {
             "task_id": str(task.id),
             "task_no": task.task_no,
             "vendor_id": str(task.vendor_id),
@@ -1049,6 +1086,7 @@ class OutsourceService:
                 for p in payments
             ],
         }
+        return self._without_financial_fields(result)
 
     async def _vendor_name(self, vendor_id: UUID) -> str | None:
         result = await self.db.execute(select(OutsourceVendor.name).where(OutsourceVendor.id == vendor_id))
@@ -1121,7 +1159,7 @@ class OutsourceService:
             cancel_reason = "已完成、已结算或已取消的外协任务不能取消"
         elif paid_amount > 0:
             cancel_reason = "已有付款的外协任务不能取消"
-        return {
+        result = {
             "id": str(t.id), "task_no": t.task_no,
             "vendor_id": str(t.vendor_id),
             "vendor_name": vendor_name,
@@ -1158,9 +1196,10 @@ class OutsourceService:
             "created_at": t.created_at.isoformat() if t.created_at else None,
             "deleted_at": t.deleted_at.isoformat() if t.deleted_at else None,
         }
+        return self._without_financial_fields(result)
 
     def _payment_to_dict(self, p, vendor_name: str | None = None) -> dict:
-        return {
+        result = {
             "id": str(p.id), "payment_no": p.payment_no,
             "vendor_id": str(p.vendor_id),
             "vendor_name": vendor_name,
@@ -1173,6 +1212,7 @@ class OutsourceService:
             "created_by": str(p.created_by) if p.created_by else None,
             "created_at": p.created_at.isoformat() if p.created_at else None,
         }
+        return self._without_financial_fields(result)
 
     # ── Cancel Task (admin only) ──
 

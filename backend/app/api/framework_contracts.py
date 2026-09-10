@@ -13,8 +13,13 @@ from app.core.file_security import confined_path, safe_upload_name, save_upload
 logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
-from app.core.permissions import require_any_role
+from app.core.permissions import (
+    PERM_CONTRACT_CREATE,
+    PERM_CONTRACT_DELETE,
+    PERM_CONTRACT_READ,
+    PERM_CONTRACT_UPDATE,
+    require_permission,
+)
 from app.models.user import User
 from app.schemas.framework_contract import (
     FrameworkContractProjectCreate,
@@ -44,9 +49,9 @@ async def list_framework_contracts(
     keyword: str | None = None,
     customer_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
-    service = ContractService(db)
+    service = ContractService(db, viewer=current_user)
     contracts, total = await service.list_contracts(
         page, page_size, status, keyword, customer_id,
         contract_type="框架合同",
@@ -62,7 +67,7 @@ async def get_available_projects(
     contract_id: str | None = None,
     project_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
     """返回该客户下未被任何框架合同项目关联的订单和报价。
     如果指定了 project_id（编辑项目），则该项目的已关联资源也会包含。
@@ -115,7 +120,7 @@ async def get_available_projects(
 
     orders_list = []
     for d in docs:
-        item = BusinessDocumentService._to_ref(d)
+        item = BusinessDocumentService._to_ref(d, viewer=current_user)
         item["customer_id"] = str(d.customer_id) if d.customer_id else None
         orders_list.append(item)
 
@@ -146,9 +151,9 @@ async def list_projects(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
-    service = FrameworkContractService(db)
+    service = FrameworkContractService(db, viewer=current_user)
     projects, total = await service.list_projects(UUID(contract_id), page, page_size)
     return success_paginated(projects, total, page, page_size)
 
@@ -159,9 +164,9 @@ async def create_project(
     data: FrameworkContractProjectCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_CREATE)),
 ):
-    service = FrameworkContractService(db)
+    service = FrameworkContractService(db, viewer=current_user)
     payload = data.model_dump()
     payload["contract_id"] = contract_id
     project = await service.create_project(payload)
@@ -176,9 +181,9 @@ async def create_project(
 async def get_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
-    service = FrameworkContractService(db)
+    service = FrameworkContractService(db, viewer=current_user)
     project = await service.get_project(UUID(project_id))
     if not project:
         return {"code": 40401, "message": "项目不存在", "data": None}
@@ -191,9 +196,9 @@ async def update_project(
     data: FrameworkContractProjectUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_UPDATE)),
 ):
-    service = FrameworkContractService(db)
+    service = FrameworkContractService(db, viewer=current_user)
     pid = UUID(project_id)
     before = await service.get_project(pid)
     project = await service.update_project(pid, data.model_dump(exclude_none=True))
@@ -209,9 +214,9 @@ async def delete_project(
     project_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_role("admin", "sales")),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_DELETE)),
 ):
-    service = FrameworkContractService(db)
+    service = FrameworkContractService(db, viewer=current_user)
     pid = UUID(project_id)
     before = await service.get_project(pid)
     ok = await service.delete_project(pid)
@@ -232,9 +237,9 @@ async def upload_project_attachment(
     project_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_UPDATE)),
 ):
-    service = FrameworkContractService(db)
+    service = FrameworkContractService(db, viewer=current_user)
     pid = UUID(project_id)
     project = await service.get_project(pid)
     if not project:
@@ -261,9 +266,9 @@ async def upload_project_attachment(
 async def download_project_attachment(
     project_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
-    service = FrameworkContractService(db)
+    service = FrameworkContractService(db, viewer=current_user)
     project = await service.get_project(UUID(project_id))
     if not project or not project.get("attachment_path"):
         return {"code": 40401, "message": "附件不存在", "data": None}
@@ -279,9 +284,9 @@ async def download_project_attachment(
 async def delete_project_attachment(
     project_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CONTRACT_UPDATE)),
 ):
-    service = FrameworkContractService(db)
+    service = FrameworkContractService(db, viewer=current_user)
     pid = UUID(project_id)
     project = await service.get_project(pid)
     if not project:

@@ -109,6 +109,29 @@ async def test_get_profile_found(service):
 
 
 @pytest.mark.asyncio
+async def test_get_profile_returns_permission_codes_and_capabilities(service):
+    user = make_mock_user(role_names=["designer"])
+    permission = MagicMock()
+    permission.code = "order:read"
+    role = user.roles[0]
+    role.permissions = [permission]
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = user
+    service.db.execute = AsyncMock(return_value=result)
+
+    profile = await service.get_profile(SAMPLE_USER_ID)
+
+    assert profile["permissions"] == ["order:read"]
+    assert profile["capabilities"] == {
+        "view_order_price": False,
+        "view_order_item_price": False,
+        "view_catalog_price": False,
+        "view_cost": False,
+        "view_financial_report": False,
+    }
+
+
+@pytest.mark.asyncio
 async def test_get_profile_not_found(service):
     result = MagicMock()
     result.scalar_one_or_none.return_value = None

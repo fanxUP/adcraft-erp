@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from uuid import UUID
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,6 +10,11 @@ import pytest
 
 SAMPLE_ORDER_UUID = UUID("33333333-3333-3333-3333-333333333333")
 SAMPLE_CUSTOMER_UUID = UUID("44444444-4444-4444-4444-444444444444")
+
+
+def make_viewer(*permission_codes: str):
+    permissions = [SimpleNamespace(code=code) for code in permission_codes]
+    return SimpleNamespace(roles=[SimpleNamespace(permissions=permissions)])
 
 
 def make_mock_order(**kwargs):
@@ -28,6 +34,34 @@ def make_mock_order(**kwargs):
     doc.customer_id = kwargs.get("customer_id", SAMPLE_CUSTOMER_UUID)
     doc.created_at = kwargs.get("created_at", datetime(2026, 8, 4, tzinfo=timezone.utc))
     return doc
+
+
+def test_contract_response_redacts_financial_fields_without_explicit_price_permission():
+    from app.services.contract_service import ContractService
+
+    service = ContractService(MagicMock(), viewer=make_viewer())
+    result = service._redact_financial_fields({
+        "id": "contract-1",
+        "project_name": "测试项目",
+        "total_amount": 1000,
+        "paid_amount": 200,
+        "unpaid_amount": 800,
+        "project_amount": 1000,
+    })
+
+    assert result == {"id": "contract-1", "project_name": "测试项目"}
+
+
+def test_contract_response_keeps_financial_fields_with_explicit_price_permission():
+    from app.services.contract_service import ContractService
+
+    service = ContractService(
+        MagicMock(),
+        viewer=make_viewer("order:view_price"),
+    )
+    result = service._redact_financial_fields({"total_amount": 1000})
+
+    assert result["total_amount"] == 1000
 
 
 @pytest.fixture

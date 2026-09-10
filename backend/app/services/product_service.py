@@ -1,11 +1,14 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.permissions import PERM_CATALOG_VIEW_PRICE, user_has_permission
+from app.models.user import User
 from app.repositories.product_repo import ProductRepository
 
 
 class ProductService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, viewer: User | None = None):
         self.db = db
+        self.viewer = viewer
         self.repo = ProductRepository(db)
 
     # Categories
@@ -50,14 +53,19 @@ class ProductService:
         return True
 
     def _product_to_dict(self, p) -> dict:
-        return {
+        result = {
             "id": str(p.id), "category_id": str(p.category_id) if p.category_id else None,
             "name": p.name, "material_name": p.material_name, "process_name": p.process_name,
             "unit": p.unit, "pricing_method": p.pricing_method,
-            "default_price": float(p.default_price), "min_charge": float(p.min_charge),
             "remark": p.remark, "is_active": p.is_active,
             "created_at": p.created_at.isoformat() if p.created_at else None,
         }
+        if self.can_view_catalog_price:
+            result.update({
+                "default_price": float(p.default_price),
+                "min_charge": float(p.min_charge),
+            })
+        return result
 
     # Materials
     async def list_materials(self, page: int, page_size: int, keyword: str | None = None) -> tuple[list, int]:
@@ -89,13 +97,18 @@ class ProductService:
         return True
 
     def _material_to_dict(self, m) -> dict:
-        return {
+        result = {
             "id": str(m.id), "name": m.name, "spec": m.spec, "unit": m.unit,
-            "purchase_price": float(m.purchase_price), "sale_price": float(m.sale_price),
             "loss_rate": float(m.loss_rate), "safe_stock": float(m.safe_stock),
             "remark": m.remark, "is_active": m.is_active,
             "created_at": m.created_at.isoformat() if m.created_at else None,
         }
+        if self.can_view_catalog_price:
+            result.update({
+                "purchase_price": float(m.purchase_price),
+                "sale_price": float(m.sale_price),
+            })
+        return result
 
     # Processes
     async def list_processes(self, page: int, page_size: int, keyword: str | None = None) -> tuple[list, int]:
@@ -127,11 +140,27 @@ class ProductService:
         return True
 
     def _process_to_dict(self, pr) -> dict:
-        return {
+        result = {
             "id": str(pr.id), "name": pr.name, "charge_method": pr.charge_method,
-            "billing_basis": pr.billing_basis, "default_price": float(pr.default_price),
-            "startup_fee": float(pr.startup_fee) if pr.startup_fee else 0,
-            "min_charge": float(pr.min_charge) if pr.min_charge else 0,
+            "billing_basis": pr.billing_basis,
             "remark": pr.remark, "is_active": pr.is_active,
             "created_at": pr.created_at.isoformat() if pr.created_at else None,
         }
+        if self.can_view_catalog_price:
+            result.update({
+                "default_price": float(pr.default_price),
+                "startup_fee": float(pr.startup_fee) if pr.startup_fee else 0,
+                "min_charge": float(pr.min_charge) if pr.min_charge else 0,
+            })
+        return result
+
+    @property
+    def can_view_catalog_price(self) -> bool:
+        """Only an explicit catalog-price permission exposes directory prices.
+
+        ``viewer=None`` is retained for internal calculation services and the
+        existing service unit tests.  Every HTTP catalog route passes the
+        authenticated viewer explicitly, so an API caller fails closed.
+        """
+
+        return self.viewer is None or user_has_permission(self.viewer, PERM_CATALOG_VIEW_PRICE)

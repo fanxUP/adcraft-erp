@@ -2,17 +2,18 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { login as loginApi, getProfile } from '@/api/auth'
-import type { UserResponse } from '@/types/api'
+import type { UserProfile } from '@/types/api'
 import router from '@/router'
 import { useNotificationStore } from '@/stores/notification'
 import { useChatStore } from '@/stores/chat'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
-  const user = ref<UserResponse | null>(null)
+  const user = ref<UserProfile | null>(null)
 
   const isLoggedIn = computed(() => !!token.value)
   const roles = computed<string[]>(() => user.value?.roles || [])
+  const permissions = computed<string[]>(() => user.value?.permissions || [])
 
   function hasRole(roleName: string): boolean {
     return roles.value.includes(roleName)
@@ -20,6 +21,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   function hasAnyRole(roleNames: string[]): boolean {
     return roleNames.some(r => roles.value.includes(r))
+  }
+
+  function hasPermission(permissionCode: string): boolean {
+    return permissions.value.includes(permissionCode)
   }
 
   /** Whether the user is the admin (has the admin role). */
@@ -83,8 +88,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   return {
-    token, user, isLoggedIn, roles, isAdmin,
-    hasRole, hasAnyRole,
+    token, user, isLoggedIn, roles, permissions, isAdmin,
+    hasRole, hasAnyRole, hasPermission,
     login, fetchProfile, logout, clearMustChangePassword,
   }
 })

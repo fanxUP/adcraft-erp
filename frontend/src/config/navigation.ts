@@ -140,11 +140,12 @@ export const navigationItems: NavigationItem[] = [
 export function filterNavigation(
   items: NavigationItem[],
   roles: string[],
+  permissions: string[] = [],
 ): NavigationItem[] {
   return items.flatMap(item => {
-    if (!canAccess(item.accessKey || 'authenticated', roles)) return []
+    if (!canAccess(item.accessKey || 'authenticated', roles, permissions)) return []
     const children = item.children
-      ? filterNavigation(item.children, roles)
+      ? filterNavigation(item.children, roles, permissions)
       : undefined
     if (item.children && !children?.length) return []
     return [{ ...item, children }]

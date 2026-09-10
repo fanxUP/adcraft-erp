@@ -27,7 +27,7 @@
         <el-table-column prop="customer_name" label="客户" min-width="160" />
         <el-table-column prop="department" label="部门/科室" width="120" />
         <el-table-column prop="project_name" label="项目名称" min-width="200" />
-        <el-table-column label="金额" width="120">
+        <el-table-column v-if="authStore.hasPermission('order:view_price')" label="金额" width="120">
           <template #default="{ row }">{{ row.total_amount ? '¥' + row.total_amount.toFixed(2) : '-' }}</template>
         </el-table-column>
         <el-table-column label="状态" width="100">
@@ -78,6 +78,9 @@ import { ref, onMounted } from 'vue'
 import { getInstallationTasks } from '@/api/tasks'
 import { InstallationTaskResponse } from '@/types/api'
 import { ProgressBar, StatusTag } from '@/components/ui'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const list = ref<InstallationTaskResponse[]>([])

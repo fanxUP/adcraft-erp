@@ -11,7 +11,9 @@ from app.core.permissions import (
     PERM_OUTSOURCE_PAYMENT_READ,
     PERM_OUTSOURCE_READ,
     PERM_OUTSOURCE_UPDATE,
+    PERM_ORDER_VIEW_PRICE,
     require_permission,
+    user_has_permission,
 )
 from app.models.user import User
 from app.schemas.common import success, success_paginated, error
@@ -41,7 +43,7 @@ async def list_vendors(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     vendors, total = await service.list_vendors(page, page_size, keyword, service_type)
     return success_paginated(vendors, total, page, page_size)
 
@@ -52,7 +54,7 @@ async def get_vendor(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     vendor = await service.get_vendor(UUID(vendor_id))
     if not vendor:
         return error(40401, "外协商不存在")
@@ -66,7 +68,7 @@ async def create_vendor(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_CREATE)),
 ):
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     vendor = await service.create_vendor(data.model_dump())
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_OUTSOURCE_VENDOR, UUID(vendor["id"]), ACTION_CREATE,
@@ -83,7 +85,7 @@ async def update_vendor(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_UPDATE)),
 ):
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     vid = UUID(vendor_id)
     try:
         vendor = await service.update_vendor(vid, data.model_dump(exclude_none=True))
@@ -102,7 +104,7 @@ async def delete_vendor(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_DELETE)),
 ):
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     vid = UUID(vendor_id)
     ok = await service.delete_vendor(vid)
     if not ok:
@@ -130,7 +132,7 @@ async def list_task_groups(
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
     """按来源内部任务业务编号返回外协任务折叠组。"""
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     groups, total = await service.list_task_groups(
         page,
         page_size,
@@ -161,7 +163,7 @@ async def list_task_group_tasks(
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
     """按折叠组分页返回外协任务明细，写操作仍复用现有任务接口。"""
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     try:
         tasks, total = await service.list_task_group_tasks(
             group_key,
@@ -193,7 +195,7 @@ async def list_tasks(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     vid = UUID(vendor_id) if vendor_id else None
     oid = UUID(order_id) if order_id else None
     stid = UUID(source_task_id) if source_task_id else None
@@ -222,7 +224,7 @@ async def get_order_item_summary(
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
     """返回当前订单明细的外协分配与成本摘要。"""
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     try:
         return success(
             await service.get_order_item_summary(
@@ -246,7 +248,7 @@ async def send_order_item(
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_CREATE)),
 ):
     """从当前内部任务把一个订单明细发送为外协任务。"""
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     order_uuid = UUID(order_id)
     item_uuid = UUID(item_id)
     try:
@@ -283,7 +285,7 @@ async def get_task_payment_summary(
 ):
     """获取外协任务付款摘要：总金额、已付、未付、付款明细"""
     from uuid import UUID
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     summary = await service.get_task_payment_summary(UUID(task_id))
     if not summary:
         return error(40401, "外协任务不存在")
@@ -296,7 +298,7 @@ async def get_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     task = await service.get_task(UUID(task_id))
     if not task:
         return error(40401, "外协任务不存在")
@@ -310,7 +312,7 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_CREATE)),
 ):
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     task = await service.create_task(data.model_dump())
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_OUTSOURCE_TASK, UUID(task["id"]), ACTION_CREATE,
@@ -327,7 +329,7 @@ async def update_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_UPDATE)),
 ):
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     tid = UUID(task_id)
     try:
         task = await service.update_task(tid, data.model_dump(exclude_unset=True))
@@ -351,7 +353,7 @@ async def list_payments(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_PAYMENT_READ)),
 ):
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     vid = UUID(vendor_id) if vendor_id else None
     tid = UUID(task_id) if task_id else None
     payments, total = await service.list_payments(page, page_size, vid, tid)
@@ -365,7 +367,7 @@ async def create_payment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_PAYMENT_CREATE)),
 ):
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     payment = await service.create_payment(
         data.model_dump(),
         created_by=current_user.id,
@@ -386,7 +388,7 @@ async def cancel_task(
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_DELETE)),
 ):
     """取消外协任务。仅限管理员操作。"""
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     tid = UUID(task_id)
     try:
         task = await service.cancel_task(tid)
@@ -409,7 +411,7 @@ async def revert_task(
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_DELETE)),
 ):
     """退回已完成的外协任务为进行中。仅限管理员操作。"""
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     tid = UUID(task_id)
     try:
         task = await service.revert_task(tid)
@@ -432,7 +434,7 @@ async def delete_task(
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_DELETE)),
 ):
     """删除外协任务，关联付款一并删除。仅限管理员操作。"""
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     tid = UUID(task_id)
     try:
         result = await service.delete_task(tid)
@@ -455,7 +457,7 @@ async def list_deleted_tasks(
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_DELETE)),
 ):
     """列出已删除的外协任务（回收站）"""
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     tasks, total = await service.list_deleted(page, page_size)
     return success_paginated(tasks, total, page, page_size)
 
@@ -468,7 +470,7 @@ async def restore_task(
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_DELETE)),
 ):
     """从回收站恢复外协任务"""
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     tid = UUID(task_id)
     try:
         task = await service.restore_task(tid)
@@ -499,8 +501,10 @@ async def list_quotes_for_dropdown(
         .order_by(BusinessDocument.created_at.desc())
     )
     rows = result.all()
+    can_view_order_price = user_has_permission(current_user, PERM_ORDER_VIEW_PRICE)
     return success([
-        {"id": str(r.id), "label": f"{r.doc_no} — {(r.department or '-')} — {r.project_name} — ¥{(float(r.total_amount) if r.total_amount else 0):.2f}",
+        {"id": str(r.id), "label": f"{r.doc_no} — {(r.department or '-')} — {r.project_name}"
+         + (f" — ¥{(float(r.total_amount) if r.total_amount else 0):.2f}" if can_view_order_price else ""),
          "quote_no": r.doc_no, "project_name": r.project_name, "customer_name": r.customer_name}
         for r in rows
     ])
@@ -521,8 +525,10 @@ async def list_orders_for_dropdown(
         .order_by(BusinessDocument.created_at.desc())
     )
     rows = result.all()
+    can_view_order_price = user_has_permission(current_user, PERM_ORDER_VIEW_PRICE)
     return success([
-        {"id": str(r.id), "label": f"{r.doc_no} — {(r.department or '-')} — {r.project_name} — ¥{(float(r.total_amount) if r.total_amount else 0):.2f}",
+        {"id": str(r.id), "label": f"{r.doc_no} — {(r.department or '-')} — {r.project_name}"
+         + (f" — ¥{(float(r.total_amount) if r.total_amount else 0):.2f}" if can_view_order_price else ""),
          "order_no": r.doc_no, "project_name": r.project_name}
         for r in rows
     ])
@@ -535,7 +541,7 @@ async def list_order_items_for_dropdown(
     current_user: User = Depends(require_permission(PERM_OUTSOURCE_READ)),
 ):
     """返回一个有效订单的有效明细供手工外协表单选择。"""
-    service = OutsourceService(db)
+    service = OutsourceService(db, viewer=current_user)
     try:
         return success(await service.list_order_items_for_dropdown(UUID(order_id)))
     except ValueError as e:

@@ -36,11 +36,11 @@
         <div class="page-header">
           <h2>产品/材质/工艺定价</h2>
           <div>
-            <el-button @click="importDialogVisible = true">导入</el-button>
+            <el-button v-if="canCreateProduct" @click="importDialogVisible = true">导入</el-button>
           </div>
         </div>
         <div class="page-create">
-          <el-button @click="handleCreate" type="danger">新建定价</el-button>
+          <el-button v-if="canCreateProduct" @click="handleCreate" type="danger">新建产品</el-button>
         </div>
         <div class="search-bar">
           <el-input v-model="keyword" placeholder="搜索产品、材质或工艺" clearable style="width: 300px" @keyup.enter="fetchProducts" />
@@ -56,7 +56,7 @@
               <el-table-column label="计价方式" width="100">
                 <template #default="{ row }">{{ pricingLabel(row.pricing_method) }}</template>
               </el-table-column>
-              <el-table-column label="默认单价" width="120">
+              <el-table-column v-if="canViewCatalogPrice" label="默认单价" width="120">
                 <template #default="{ row }">¥ {{ row.default_price?.toFixed(2) }}</template>
               </el-table-column>
               <el-table-column label="状态" width="100">
@@ -64,10 +64,10 @@
                   <el-tag :type="row.is_active ? 'success' : 'info'" size="small">{{ row.is_active ? '启用' : '禁用' }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="200">
+              <el-table-column v-if="canUpdateProduct || canDeleteProduct" label="操作" width="200">
                 <template #default="{ row }">
-                  <el-button text type="primary" @click="handleEdit(row as ProductResponse)">编辑</el-button>
-                  <el-button text type="danger" @click="handleDelete(row as ProductResponse)">删除</el-button>
+                  <el-button v-if="canUpdateProduct" text type="primary" @click="handleEdit(row as ProductResponse)">编辑</el-button>
+                  <el-button v-if="canDeleteProduct" text type="danger" @click="handleDelete(row as ProductResponse)">删除</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -83,7 +83,7 @@
             /></div>
 
       <!-- View 2: Batch Pricing (customer type/level selected) -->
-      <div v-else-if="viewMode === 'batch'" class="view-batch">
+      <div v-else-if="viewMode === 'batch' && canManagePricing" class="view-batch">
         <div class="page-header">
           <h2>批量调价 — {{ selectedNode?.label }}</h2>
         </div>
@@ -126,7 +126,7 @@
       </div>
 
       <!-- View 3: Customer Pricing Table -->
-      <div v-else-if="viewMode === 'customer'" class="view-customer">
+      <div v-else-if="viewMode === 'customer' && canManagePricing" class="view-customer">
         <div class="page-header">
           <h2>{{ selectedCustomer?.name }} — 产品定价</h2>
           <div>
@@ -205,10 +205,10 @@
             <el-option label="按字数" value="word_count" />
           </el-select>
         </el-form-item>
-        <el-form-item label="默认单价">
+        <el-form-item v-if="canViewCatalogPrice" label="默认单价">
           <el-input-number v-model="form.default_price" :precision="2" :min="0" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="最低收费">
+        <el-form-item v-if="canViewCatalogPrice" label="最低收费">
           <el-input-number v-model="form.min_charge" :precision="2" :min="0" style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
@@ -311,7 +311,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { Folder, FolderOpened, Collection, User } from '@element-plus/icons-vue'
@@ -327,6 +327,14 @@ import {
 } from '@/api/cdrQuote'
 import type { ProductResponse, ImportResponse, CustomerTreeNode } from '@/types/api'
 import { getErrorMessage } from '@/utils/error'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+const canViewCatalogPrice = computed(() => authStore.hasPermission('catalog:view_price'))
+const canCreateProduct = computed(() => authStore.hasPermission('product:create'))
+const canUpdateProduct = computed(() => authStore.hasPermission('product:update'))
+const canDeleteProduct = computed(() => authStore.hasPermission('product:delete'))
+const canManagePricing = computed(() => authStore.hasPermission('cdr_customer_agreement:manage'))
 
 // ── Tree Data ────────────────────────────────────────────────
 interface TreeNode {
@@ -406,6 +414,11 @@ function onNodeClick(data: TreeNode) {
     viewMode.value = 'global'
     selectedCustomer.value = null
   } else if (data.type === 'type' || data.type === 'level') {
+    if (!canManagePricing.value) {
+      viewMode.value = 'global'
+      selectedCustomer.value = null
+      return
+    }
     viewMode.value = 'batch'
     selectedCustomer.value = null
     loadBatchCustomers()
@@ -416,6 +429,11 @@ function onNodeClick(data: TreeNode) {
       })
     }
   } else if (data.type === 'customer') {
+    if (!canManagePricing.value) {
+      viewMode.value = 'global'
+      selectedCustomer.value = null
+      return
+    }
     viewMode.value = 'customer'
     selectedCustomer.value = {
       id: data.customer_id!,

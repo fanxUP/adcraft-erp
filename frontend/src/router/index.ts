@@ -171,7 +171,7 @@ router.beforeEach(async (to, _from, next) => {
   const legacyRoles = Array.isArray(to.meta.roles)
     ? to.meta.roles.filter((role): role is string => typeof role === 'string')
     : []
-  if (!canAccessRoute(to.name, authStore.roles, legacyRoles)) {
+  if (!canAccessRoute(to.name, authStore.roles, legacyRoles, authStore.permissions)) {
     next({ name: 'Forbidden', query: { from: to.fullPath } })
     return
   }

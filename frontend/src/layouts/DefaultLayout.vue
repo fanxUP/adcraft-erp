@@ -11,6 +11,7 @@
             :active-path="route.path"
             :collapsed="navigationCollapsed"
             :roles="authStore.roles"
+            :permissions="authStore.permissions"
           />
         </div>
       </el-aside>
@@ -101,7 +102,7 @@ const navigationCollapsed = computed(() =>
   sidebarCollapsed.value || narrowViewport.value,
 )
 const currentPageTitle = computed(() => getRouteTitle(route.name))
-const smartTools = computed(() => filterSmartTools(authStore.roles))
+const smartTools = computed(() => filterSmartTools(authStore.roles, authStore.permissions))
 
 function updateViewportState() {
   narrowViewport.value = window.innerWidth <= 600

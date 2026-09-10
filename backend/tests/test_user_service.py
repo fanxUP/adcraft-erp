@@ -154,6 +154,30 @@ async def test_update_user_not_found(service, mock_repo):
         await service.update_user(SAMPLE_USER_ID, {"real_name": "新名称"})
 
 
+@pytest.mark.asyncio
+async def test_update_user_validates_role_combination_before_mutating_user(service, mock_repo):
+    existing_user = make_mock_user(real_name="旧名称")
+    mock_repo.get_by_id.return_value = existing_user
+
+    designer = MagicMock(id=SAMPLE_USER_ID, name="designer")
+    designer.permissions = [MagicMock(code="design_task:read")]
+    finance = MagicMock(id=SAMPLE_USER_ID, name="finance")
+    finance.permissions = [MagicMock(code="payment:read")]
+    mock_repo.get_roles.return_value = [designer, finance]
+
+    with pytest.raises(ValueError, match="执行角色不能与带价格或财务权限的角色同时分配"):
+        await service.update_user(
+            SAMPLE_USER_ID,
+            {
+                "real_name": "不应写入",
+                "role_ids": [str(SAMPLE_USER_ID), str(SAMPLE_USER_ID)],
+            },
+        )
+
+    mock_repo.update.assert_not_awaited()
+    mock_repo.set_roles.assert_not_awaited()
+
+
 # --- Delete Tests ---
 
 @pytest.mark.asyncio

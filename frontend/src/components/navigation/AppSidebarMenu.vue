@@ -23,9 +23,10 @@ const props = defineProps<{
   activePath: string
   collapsed: boolean
   roles: string[]
+  permissions: string[]
 }>()
 
 const visibleItems = computed(() =>
-  filterNavigation(navigationItems, props.roles),
+  filterNavigation(navigationItems, props.roles, props.permissions),
 )
 </script>

@@ -3,25 +3,25 @@
     <h1 style="margin: 0 0 24px; color: var(--ad-text)">经营驾驶舱</h1>
 
     <el-row :gutter="16" style="margin-bottom: 16px">
-      <el-col :span="6">
+      <el-col v-if="canViewFinancial" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">今日订单金额</div>
           <div class="stat-value">¥ {{ data.today_order_amount?.toFixed(2) }}</div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col v-if="canViewFinancial" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">今日收款金额</div>
           <div class="stat-value is-success">¥ {{ data.today_payment_amount?.toFixed(2) }}</div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col v-if="canViewFinancial" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">本月订单金额</div>
           <div class="stat-value">¥ {{ data.month_order_amount?.toFixed(2) }}</div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col v-if="canViewFinancial" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">本月收款金额</div>
           <div class="stat-value is-success">¥ {{ data.month_payment_amount?.toFixed(2) }}</div>
@@ -30,7 +30,7 @@
     </el-row>
 
     <el-row :gutter="16" style="margin-bottom: 16px">
-      <el-col :span="6">
+      <el-col v-if="canViewFinancial" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">本月未收金额</div>
           <div class="stat-value is-danger">¥ {{ data.month_unpaid_amount?.toFixed(2) }}</div>
@@ -57,7 +57,7 @@
     </el-row>
 
     <el-row :gutter="16">
-      <el-col :span="12">
+      <el-col v-if="canViewPricedOrders" :span="12">
         <el-card shadow="never" class="info-card">
           <template #header><span>报价单</span></template>
           <div v-if="!quoteList.length" style="text-align: center; padding: 20px; color: var(--ad-text-secondary)">暂无报价单</div>
@@ -72,7 +72,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="12">
+      <el-col v-if="canViewFinancial" :span="12">
         <el-card shadow="never" class="info-card">
           <template #header><span>客户欠款排行</span></template>
           <div v-if="!data.customer_debt_ranking?.length" style="text-align: center; padding: 20px; color: var(--ad-text-secondary)">暂无欠款</div>
@@ -90,7 +90,7 @@
   <div class="page" style="margin-top: 24px">
     <h2 style="margin: 0 0 16px; color: var(--ad-text)">项目看板</h2>
     <div class="board" v-loading="boardLoading">
-      <div v-for="col in columns" :key="col.key" class="board-column">
+      <div v-for="col in visibleColumns" :key="col.key" class="board-column">
         <div class="column-header">
           <span>{{ col.label }}</span>
           <el-tag size="small" type="danger">{{ columnCount(col.key) }}</el-tag>
@@ -109,7 +109,7 @@
               <div class="card-name">{{ card.project_name }}</div>
               <div class="card-meta">
                 <span>{{ card.customer_name || '-' }}</span>
-                <span>¥{{ card.total_amount?.toFixed(2) }}</span>
+                <span v-if="canViewPricedOrders">¥{{ card.total_amount?.toFixed(2) }}</span>
               </div>
             </el-card>
           </template>
@@ -130,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { getDashboard } from '@/api/payments'
 import { getOrders } from '@/api/orders'
 import { getTaskQueue } from '@/api/tasks'
@@ -138,6 +138,13 @@ import { getQuotes } from '@/api/quotes'
 import type { CustomerDebtItem, OrderListResponse, QuoteListResponse, TaskQueueItem } from '@/types/api'
 import TaskBoardCard from '@/components/ui/TaskBoardCard.vue'
 import { isTaskVisible, TASK_BOARD_COLUMNS } from '@/utils/task-board'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+const canViewFinancial = computed(() => authStore.hasPermission('report:view_financial'))
+const canViewPricedOrders = computed(() => (
+  authStore.hasPermission('order:read') && authStore.hasPermission('order:view_price')
+))
 
 const loading = ref(false)
 const data = reactive({
@@ -159,6 +166,10 @@ const columns = [
   ...TASK_BOARD_COLUMNS,
 ] as const
 
+const visibleColumns = computed(() => columns.filter(col => (
+  col.key !== 'queue' || canViewPricedOrders.value
+)))
+
 type BoardColumnKey = (typeof columns)[number]['key']
 
 function queueCards() {
@@ -177,7 +188,9 @@ async function fetchBoardData() {
   boardLoading.value = true
   try {
     const [orders, tasks] = await Promise.all([
-      getOrders({ page_size: 100 }),
+      canViewPricedOrders.value
+        ? getOrders({ page_size: 100 })
+        : Promise.resolve({ items: [] as OrderListResponse[] }),
       getTaskQueue({ page: 1, page_size: 200 }).catch(() => ({ items: [] as TaskQueueItem[] })),
     ])
     allProjects.value = orders.items
@@ -194,6 +207,10 @@ async function fetchData() {
 }
 
 async function fetchQuotes() {
+  if (!canViewPricedOrders.value) {
+    quoteList.value = []
+    return
+  }
   try {
     const r = await getQuotes({ page_size: 5 })
     quoteList.value = r.items || []

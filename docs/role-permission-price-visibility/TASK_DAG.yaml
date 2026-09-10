@@ -1,0 +1,48 @@
+version: 1
+mode: STRICT
+status: complete_local_verification_pending_release
+objective: >-
+  重新梳理系统角色权限，并让设计、制作、安装角色在页面、接口、工作台、
+  聊天、导出和附件下载等所有入口都不能获得订单及订单明细的价格参数，
+  同时保留其处理任务所需的非财务字段。
+nodes:
+  - id: P01
+    name: 建立现状清单与字段分类
+    acceptance: A01
+    depends_on: []
+    status: complete
+  - id: P02
+    name: 落地敏感权限和访问策略
+    acceptance: A02
+    depends_on: [P01]
+    status: complete
+  - id: P03
+    name: 收敛预置角色和角色管理
+    acceptance: A03
+    depends_on: [P02]
+    status: complete
+  - id: P04
+    name: 后端接入安全响应和模块动作权限
+    acceptance: A04
+    depends_on: [P02, P03]
+    status: complete
+  - id: P05
+    name: 覆盖替代数据通道
+    acceptance: A05
+    depends_on: [P04]
+    status: complete
+  - id: P06
+    name: 前端权限能力和 UI 收敛
+    acceptance: A06
+    depends_on: [P04, P05]
+    status: complete
+  - id: P07
+    name: 跨角色安全回归和代码纯净度检查
+    acceptance: A07
+    depends_on: [P05, P06]
+    status: complete
+  - id: P08
+    name: 备份发布线上烟囱与回滚准备
+    acceptance: A08
+    depends_on: [P07]
+    status: planned

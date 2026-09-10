@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import PERM_REPORT_VIEW_FINANCIAL, require_permission
 from app.models.user import User
 from app.schemas.common import success
 from app.services.report_service import ReportService
@@ -15,7 +16,7 @@ async def get_dashboard(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = ReportService(db)
+    service = ReportService(db, viewer=current_user)
     data = await service.get_dashboard()
     return success(data)
 
@@ -24,9 +25,9 @@ async def get_dashboard(
 async def get_daily_report(
     date: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_REPORT_VIEW_FINANCIAL)),
 ):
-    service = ReportService(db)
+    service = ReportService(db, viewer=current_user)
     data = await service.get_daily_report(date)
     return success(data)
 
@@ -36,9 +37,9 @@ async def get_monthly_report(
     year: int | None = None,
     month: int | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_REPORT_VIEW_FINANCIAL)),
 ):
-    service = ReportService(db)
+    service = ReportService(db, viewer=current_user)
     data = await service.get_monthly_report(year, month)
     return success(data)
 
@@ -46,8 +47,8 @@ async def get_monthly_report(
 @router.get("/customer-debt")
 async def get_customer_debt(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_REPORT_VIEW_FINANCIAL)),
 ):
-    service = ReportService(db)
+    service = ReportService(db, viewer=current_user)
     data = await service.get_customer_debt()
     return success(data)

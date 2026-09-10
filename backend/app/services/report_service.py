@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.permissions import PERM_REPORT_VIEW_FINANCIAL, user_has_permission
 from app.models.business_document import BusinessDocument
 from app.models.contract import Contract, ContractDocument
 from app.models.customer import Customer
@@ -22,8 +23,17 @@ def _business_now_naive() -> datetime:
 
 
 class ReportService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, viewer=None):
         self.db = db
+        self.viewer = viewer
+
+    @property
+    def can_view_financial(self) -> bool:
+        """Financial reports require an explicit permission, not just login."""
+        return self.viewer is not None and user_has_permission(
+            self.viewer,
+            PERM_REPORT_VIEW_FINANCIAL,
+        )
 
     async def get_dashboard(self) -> dict:
         now = _business_now_naive()
@@ -34,13 +44,22 @@ class ReportService:
         today_end = datetime(today.year, today.month, today.day, 23, 59, 59)
         month_start_dt = datetime(month_start.year, month_start.month, 1)
 
-        today_orders = await self._sum_orders(today_start, today_end)
-        month_orders = await self._sum_orders(month_start_dt, now)
+        financial_data = {}
+        if self.can_view_financial:
+            today_orders = await self._sum_orders(today_start, today_end)
+            month_orders = await self._sum_orders(month_start_dt, now)
 
-        today_payments = await self._sum_payments(today_start, today_end)
-        month_payments = await self._sum_payments(month_start_dt, now)
+            today_payments = await self._sum_payments(today_start, today_end)
+            month_payments = await self._sum_payments(month_start_dt, now)
 
-        month_unpaid = await self._calc_month_unpaid(month_start_dt, now)
+            month_unpaid = await self._calc_month_unpaid(month_start_dt, now)
+            financial_data = {
+                "today_order_amount": float(today_orders or 0),
+                "today_payment_amount": float(today_payments or 0),
+                "month_order_amount": float(month_orders or 0),
+                "month_payment_amount": float(month_payments or 0),
+                "month_unpaid_amount": float(month_unpaid or 0),
+            }
 
         pending_design = await self._count_tasks(DesignTask, ["pending", "designing", "pending_review", "revision"])
         pending_production = await self._count_tasks(ProductionTask, ["pending", "queued", "in_progress", "qc_check", "rework"])
@@ -48,22 +67,23 @@ class ReportService:
 
         overdue_orders = await self._count_overdue_orders()
 
-        customer_debt_ranking = await self._customer_debt_ranking()
-
-        return {
-            "today_order_amount": float(today_orders or 0),
-            "today_payment_amount": float(today_payments or 0),
-            "month_order_amount": float(month_orders or 0),
-            "month_payment_amount": float(month_payments or 0),
-            "month_unpaid_amount": float(month_unpaid or 0),
+        result = {
             "pending_design_count": pending_design,
             "pending_production_count": pending_production,
             "pending_installation_count": pending_installation,
             "overdue_order_count": overdue_orders,
-            "customer_debt_ranking": customer_debt_ranking,
         }
+        result.update(financial_data)
+        if self.can_view_financial:
+            result["customer_debt_ranking"] = await self._customer_debt_ranking()
+        return result
+
+    def _ensure_financial_access(self) -> None:
+        if not self.can_view_financial:
+            raise PermissionError("没有查看财务报表的权限")
 
     async def get_daily_report(self, report_date: str | None = None) -> dict:
+        self._ensure_financial_access()
         if report_date:
             d = datetime.fromisoformat(report_date)
         else:
@@ -86,7 +106,10 @@ class ReportService:
             "payment_count": len(payments),
             "payment_amount": float(sum(p.amount for p in payments)),
             "new_customer_count": new_customers,
-            "orders": [BusinessDocumentService._to_ref(o) for o in orders],
+            "orders": [
+                BusinessDocumentService._to_ref(o, viewer=self.viewer)
+                for o in orders
+            ],
             "payments": [
                 {"id": str(p.id), "payment_no": p.payment_no, "amount": float(p.amount),
                  "payment_method": p.payment_method, "is_voided": p.is_voided}
@@ -96,6 +119,7 @@ class ReportService:
         }
 
     async def get_monthly_report(self, year: int | None = None, month: int | None = None) -> dict:
+        self._ensure_financial_access()
         now = _business_now_naive()
         y = year or now.year
         m = month or now.month
@@ -125,7 +149,10 @@ class ReportService:
             "payment_amount": payment_amount,
             "unpaid_amount": order_amount - payment_amount,
             "status_breakdown": status_breakdown,
-            "orders": [BusinessDocumentService._to_ref(o) for o in orders],
+            "orders": [
+                BusinessDocumentService._to_ref(o, viewer=self.viewer)
+                for o in orders
+            ],
         }
 
     async def get_customer_debt(self) -> list:
@@ -133,6 +160,7 @@ class ReportService:
 
         应收管理只反映合同应收/已收/欠款：只有报价单、或只有未关联合同的独立订单的客户不再列入。
         """
+        self._ensure_financial_access()
         # Fetch all active customers
         c_result = await self.db.execute(
             select(Customer).where(Customer.deleted_at.is_(None)).order_by(Customer.name)
@@ -323,8 +351,20 @@ class ReportService:
                         "unpaid_amount": max(0, _ct_amount(ct) - paid_map.get(ct.id, 0.0)),
                         "status": ct.status,
                         "contract_type": ct.contract_type,
-                        "orders": [BusinessDocumentService._to_ref(d) for d in _get_ct_docs(ct, "order")],
-                        "quotes": [BusinessDocumentService._to_ref(d) for d in _get_ct_docs(ct, "quote")],
+                        "orders": [
+                            BusinessDocumentService._to_ref(
+                                d,
+                                viewer=self.viewer,
+                            )
+                            for d in _get_ct_docs(ct, "order")
+                        ],
+                        "quotes": [
+                            BusinessDocumentService._to_ref(
+                                d,
+                                viewer=self.viewer,
+                            )
+                            for d in _get_ct_docs(ct, "quote")
+                        ],
                     }
                     for ct in customer_contracts
                 ],

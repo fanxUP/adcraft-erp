@@ -69,6 +69,11 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "order:update", "name": "编辑订单", "description": "编辑订单信息"},
     {"code": "order:delete", "name": "删除订单", "description": "删除订单"},
     {"code": "order:change_status", "name": "变更订单状态", "description": "变更订单状态"},
+    {"code": "order:view_price", "name": "查看订单价格", "description": "查看订单总额、折扣、税额等订单价格参数"},
+    {"code": "order_item:view_price", "name": "查看明细价格", "description": "查看订单明细单价、费用和小计"},
+    {"code": "catalog:view_price", "name": "查看目录价格", "description": "查看产品、材质和工艺的价格参数"},
+    {"code": "finance:view_cost", "name": "查看成本财务", "description": "查看成本、付款、利润和财务金额"},
+    {"code": "report:view_financial", "name": "查看财务报表", "description": "查看收款、欠款和经营财务统计"},
     # Design task
     {"code": "design_task:read", "name": "查看设计任务", "description": "查看设计任务列表和详情"},
     {"code": "design_task:delete", "name": "删除设计任务", "group": "设计任务"},
@@ -181,11 +186,12 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "quote:read", "quote:create", "quote:update", "quote:delete", "quote:confirm", "quote:convert",
         "contract:read", "contract:create", "contract:update", "contract:delete", "contract:change_status",
         "order:read", "order:create", "order:update", "order:change_status",
+        "order:view_price", "order_item:view_price", "catalog:view_price",
         "acceptance:read", "acceptance:create", "acceptance:update", "acceptance:delete", "acceptance:change_status",
         "design_task:read", "production_task:read", "installation_task:read",
         "payment:read", "payment:create",
         "expense:read",
-        "report:read",
+        "report:read", "report:view_financial",
         "ai_quote:read", "ai_anomaly:read", "ai_knowledge:read", "ai_report:read",
         "vehicle:read",
         "aerial:read",
@@ -194,18 +200,18 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
     ],
     "designer": [
         "customer:read",
-        "product:read", "product:create", "product:update", "product:delete",
-        "material:read", "material:create", "material:update", "material:delete",
-        "process:read", "process:create", "process:update", "process:delete",
+        "product:read",
+        "material:read",
+        "process:read",
         "design_task:read", "design_task:create", "design_task:update", "design_task:change_status",
         "production_task:read",
         "installation_task:read",
     ],
     "production": [
         "customer:read",
-        "product:read", "product:create", "product:update", "product:delete",
-        "material:read", "material:create", "material:update", "material:delete",
-        "process:read", "process:create", "process:update", "process:delete",
+        "product:read",
+        "material:read",
+        "process:read",
         "production_task:read", "production_task:create", "production_task:update", "production_task:change_status",
         "inventory:read", "inventory:create", "inventory:update", "inventory:stock_in", "inventory:stock_out",
         "outsource:read", "outsource:create", "outsource:update",
@@ -221,6 +227,8 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
     "finance": [
         "customer:read",
         "order:read",
+        "order:view_price", "order_item:view_price",
+        "finance:view_cost", "report:view_financial",
         "payment:read", "payment:create", "payment:void",
         "statement:read", "statement:create", "statement:confirm",
         "expense:read", "expense:create", "expense:update", "expense:delete",
@@ -234,6 +242,13 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
 
 # ── Roles referenced by the init-db.sh script ──────────────────────────────
 ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance"]
+
+
+def builtin_role_permission_codes(role_name: str) -> list[str] | None:
+    """Return defaults only for built-in roles; preserve custom roles."""
+    if role_name not in ROLE_NAMES:
+        return None
+    return ROLE_PERMISSION_MAP[role_name]
 
 
 def replace_role_permissions(role: Role, permissions: list[Permission]) -> None:
@@ -280,7 +295,7 @@ async def seed_permissions():
 
         # 3. Map permissions to roles (clear and re-apply)
         for role_name, role in existing_roles.items():
-            codes = ROLE_PERMISSION_MAP.get(role_name, [])
+            codes = builtin_role_permission_codes(role_name) or []
             target_perms = [existing_perms[c] for c in codes if c in existing_perms]
 
             replace_role_permissions(role, target_perms)

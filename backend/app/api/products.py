@@ -7,8 +7,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
-from app.core.permissions import require_role
+from app.core.permissions import (
+    PERM_MATERIAL_CREATE,
+    PERM_MATERIAL_DELETE,
+    PERM_MATERIAL_READ,
+    PERM_MATERIAL_UPDATE,
+    PERM_PROCESS_CREATE,
+    PERM_PROCESS_DELETE,
+    PERM_PROCESS_READ,
+    PERM_PROCESS_UPDATE,
+    PERM_PRODUCT_CREATE,
+    PERM_PRODUCT_DELETE,
+    PERM_PRODUCT_READ,
+    PERM_PRODUCT_UPDATE,
+    require_permission,
+)
 from app.models.user import User
 from app.schemas.product import (
     ProductCategoryCreate, ProductCreate, ProductUpdate,
@@ -29,9 +42,9 @@ proc_router = APIRouter(prefix="/processes", tags=["Processes"])
 @cat_router.get("/")
 async def list_categories(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PRODUCT_READ)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     cats = await service.list_categories()
     return success(cats)
 
@@ -40,9 +53,9 @@ async def list_categories(
 async def create_category(
     data: ProductCategoryCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PRODUCT_CREATE)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     cat = await service.create_category(data.model_dump(exclude_none=True))
     return success(cat)
 
@@ -51,9 +64,9 @@ async def create_category(
 async def delete_category(
     cat_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_PRODUCT_DELETE)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     ok = await service.delete_category(UUID(cat_id))
     if not ok:
         return {"code": 40401, "message": "分类不存在", "data": None}
@@ -68,9 +81,9 @@ async def list_products(
     keyword: str | None = None,
     category_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PRODUCT_READ)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     cid = UUID(category_id) if category_id else None
     products, total = await service.list_products(page, page_size, keyword, cid)
     return success_paginated(products, total, page, page_size)
@@ -80,9 +93,9 @@ async def list_products(
 async def create_product(
     data: ProductCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PRODUCT_CREATE)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     product = await service.create_product(data.model_dump())
     return success(product)
 
@@ -106,7 +119,7 @@ PRODUCT_REQUIRED = ["产品"]
 async def import_products(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PRODUCT_CREATE)),
 ):
     """Batch import products from Excel file."""
     if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
@@ -123,7 +136,7 @@ async def import_products(
 
     result = ExcelImportResult()
     result.total_rows = len(rows)
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
 
     for row in rows:
         try:
@@ -164,9 +177,9 @@ async def import_products(
 async def get_product(
     product_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PRODUCT_READ)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     product = await service.get_product(UUID(product_id))
     if not product:
         return {"code": 40401, "message": "产品不存在", "data": None}
@@ -178,9 +191,9 @@ async def update_product(
     product_id: str,
     data: ProductUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PRODUCT_UPDATE)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     product = await service.update_product(UUID(product_id), data.model_dump(exclude_none=True))
     return success(product)
 
@@ -189,9 +202,9 @@ async def update_product(
 async def delete_product(
     product_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_PRODUCT_DELETE)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     ok = await service.delete_product(UUID(product_id))
     if not ok:
         return {"code": 40401, "message": "产品不存在", "data": None}
@@ -205,9 +218,9 @@ async def list_materials(
     page_size: int = Query(20, ge=1, le=100),
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_MATERIAL_READ)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     materials, total = await service.list_materials(page, page_size, keyword)
     return success_paginated(materials, total, page, page_size)
 
@@ -216,9 +229,9 @@ async def list_materials(
 async def create_material(
     data: MaterialCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_MATERIAL_CREATE)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     material = await service.create_material(data.model_dump())
     return success(material)
 
@@ -240,7 +253,7 @@ MATERIAL_REQUIRED = ["材质名称"]
 async def import_materials(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_MATERIAL_CREATE)),
 ):
     """Batch import materials from Excel file."""
     if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
@@ -253,7 +266,7 @@ async def import_materials(
 
     result = ExcelImportResult()
     result.total_rows = len(rows)
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
 
     for row in rows:
         try:
@@ -287,9 +300,9 @@ async def import_materials(
 async def get_material(
     material_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_MATERIAL_READ)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     material = await service.get_material(UUID(material_id))
     if not material:
         return {"code": 40401, "message": "材质不存在", "data": None}
@@ -301,9 +314,9 @@ async def update_material(
     material_id: str,
     data: MaterialUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_MATERIAL_UPDATE)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     material = await service.update_material(UUID(material_id), data.model_dump(exclude_none=True))
     return success(material)
 
@@ -312,9 +325,9 @@ async def update_material(
 async def delete_material(
     material_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_MATERIAL_DELETE)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     ok = await service.delete_material(UUID(material_id))
     if not ok:
         return {"code": 40401, "message": "材质不存在", "data": None}
@@ -328,9 +341,9 @@ async def list_processes(
     page_size: int = Query(20, ge=1, le=100),
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PROCESS_READ)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     processes, total = await service.list_processes(page, page_size, keyword)
     return success_paginated(processes, total, page, page_size)
 
@@ -339,9 +352,9 @@ async def list_processes(
 async def create_process(
     data: ProcessCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PROCESS_CREATE)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     process = await service.create_process(data.model_dump())
     return success(process)
 
@@ -350,9 +363,9 @@ async def create_process(
 async def get_process(
     process_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PROCESS_READ)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     process = await service.get_process(UUID(process_id))
     if not process:
         return {"code": 40401, "message": "工艺不存在", "data": None}
@@ -364,9 +377,9 @@ async def update_process(
     process_id: str,
     data: ProcessUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_PROCESS_UPDATE)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     process = await service.update_process(UUID(process_id), data.model_dump(exclude_none=True))
     return success(process)
 
@@ -375,9 +388,9 @@ async def update_process(
 async def delete_process(
     process_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_PROCESS_DELETE)),
 ):
-    service = ProductService(db)
+    service = ProductService(db, viewer=current_user)
     ok = await service.delete_process(UUID(process_id))
     if not ok:
         return {"code": 40401, "message": "工艺不存在", "data": None}

@@ -52,7 +52,7 @@ async def list_orders(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_READ)),
 ):
-    service = BusinessDocumentService(db, doc_type='order')
+    service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     cid = UUID(customer_id) if customer_id else None
     orders, total = await service.list_all(page, page_size, status, cid, keyword=keyword)
     return success_paginated(orders, total, page, page_size)
@@ -66,7 +66,7 @@ async def list_deleted_orders(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    service = BusinessDocumentService(db, doc_type='order')
+    service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     orders, total = await service.list_deleted(page, page_size, keyword=keyword)
     return success_paginated(orders, total, page, page_size)
 
@@ -77,7 +77,7 @@ async def get_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_READ)),
 ):
-    service = BusinessDocumentService(db, doc_type='order')
+    service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     order = await service.get_by_id(UUID(order_id))
     if not order:
         return {"code": 40401, "message": "订单不存在", "data": None}
@@ -90,7 +90,7 @@ async def get_order_item_editability(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_READ)),
 ):
-    service = BusinessDocumentService(db, doc_type="order")
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
     try:
         return success(await service.get_order_item_editability(UUID(order_id)))
     except ValueError as e:
@@ -103,7 +103,7 @@ async def preview_order_item_mutation(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
 ):
-    service = BusinessDocumentService(db, doc_type="order")
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
     try:
         item_id = UUID(data.item_id) if data.item_id else None
         result = await service.preview_order_item_mutation(
@@ -132,7 +132,7 @@ async def preview_order_edit(
     current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
 ):
     """预检报价式订单编辑器提交的整批头部/明细变更。"""
-    service = BusinessDocumentService(db, doc_type="order")
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
     try:
         return success(
             await service.preview_order_edit(
@@ -163,7 +163,7 @@ async def apply_order_edit(
     current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
 ):
     """原子应用订单编辑器的整批变更，并返回变更批次结果。"""
-    service = BusinessDocumentService(db, doc_type="order")
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
     try:
         return success(
             await service.apply_order_edit(
@@ -199,7 +199,7 @@ async def list_order_item_change_batches(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_READ)),
 ):
-    service = BusinessDocumentService(db, doc_type="order")
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
     try:
         return success(
             await service.list_order_item_change_batches(
@@ -219,7 +219,7 @@ async def get_order_item_change_batch(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_READ)),
 ):
-    service = BusinessDocumentService(db, doc_type="order")
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
     try:
         return success(
             await service.get_order_item_change_batch(
@@ -238,7 +238,7 @@ async def reconcile_order_item_change(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_READ)),
 ):
-    service = BusinessDocumentService(db, doc_type="order")
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
     try:
         return success(
             await service.reconcile_order_item_change(
@@ -258,7 +258,7 @@ async def add_order_item(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
 ):
-    service = BusinessDocumentService(db, doc_type="order")
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
     try:
         return success(
             await service.mutate_order_item(
@@ -296,7 +296,7 @@ async def update_order_item(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
 ):
-    service = BusinessDocumentService(db, doc_type="order")
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
     try:
         return success(
             await service.mutate_order_item(
@@ -338,7 +338,7 @@ async def delete_order_item(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
 ):
-    service = BusinessDocumentService(db, doc_type="order")
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
     try:
         return success(
             await service.mutate_order_item(
@@ -372,7 +372,7 @@ async def reopen_completed_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    service = BusinessDocumentService(db, doc_type="order")
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
     oid = UUID(order_id)
     try:
         order = await service.reopen_completed_order(oid, data.reason or "", current_user.id)
@@ -392,7 +392,7 @@ async def set_order_cost(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
 ):
-    service = BusinessDocumentService(db, doc_type='order')
+    service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     try:
         order = await service.set_cost(UUID(order_id), data.cost_amount)
         return success(order)
@@ -406,7 +406,7 @@ async def auto_calculate_cost(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
 ):
-    service = BusinessDocumentService(db, doc_type='order')
+    service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     try:
         order = await service.auto_calculate_cost(UUID(order_id))
         return success(order)
@@ -422,7 +422,7 @@ async def change_order_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_CHANGE_STATUS)),
 ):
-    service = BusinessDocumentService(db, doc_type='order')
+    service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     oid = UUID(order_id)
     try:
         order = await service.change_status(oid, data.to_status, data.reason, current_user.id)
@@ -442,7 +442,7 @@ async def delete_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_DELETE)),
 ):
-    service = BusinessDocumentService(db, doc_type='order')
+    service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     oid = UUID(order_id)
     try:
         await service.delete(oid)
@@ -461,7 +461,7 @@ async def restore_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_DELETE)),
 ):
-    service = BusinessDocumentService(db, doc_type='order')
+    service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     oid = UUID(order_id)
     try:
         order = await service.restore(oid)
@@ -481,7 +481,7 @@ async def update_order_contact(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
 ):
-    service = BusinessDocumentService(db, doc_type='order')
+    service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     try:
         order = await service.update_order_contact(
             UUID(order_id), data.contact_person, data.contact_phone

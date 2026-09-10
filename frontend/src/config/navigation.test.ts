@@ -45,4 +45,14 @@ describe('filterNavigation', () => {
 
     expect(labels).not.toContain('项目看板')
   })
+
+  it('shows only the delivery entry granted to a custom permission role', () => {
+    const delivery = filterNavigation(
+      navigationItems,
+      ['custom-installer'],
+      ['installation_task:read'],
+    ).find(item => item.label === '项目交付')
+
+    expect(delivery?.children?.map(item => item.label)).toEqual(['安装任务'])
+  })
 })

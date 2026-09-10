@@ -1,6 +1,13 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.permissions import (
+    EXECUTION_PERMISSION_CODES,
+    EXECUTION_ROLE_NAMES,
+    SENSITIVE_ROLE_NAMES,
+    SENSITIVE_PERMISSION_CODES,
+    validate_execution_role_combination,
+)
 from app.repositories.user_repo import UserRepository
 from app.utils.security import hash_password
 
@@ -9,6 +16,44 @@ class UserService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = UserRepository(db)
+
+    @staticmethod
+    def _validate_roles(role_ids: list[str], roles: list) -> None:
+        """Validate role references and prevent privilege-conflicting mixes."""
+        try:
+            requested_ids = {str(UUID(role_id)) for role_id in role_ids}
+        except (AttributeError, TypeError, ValueError):
+            raise ValueError("角色编号格式不正确")
+        loaded_ids = {str(role.id) for role in roles}
+        if requested_ids != loaded_ids:
+            raise ValueError("存在无效角色编号，未保存本次角色变更")
+
+        role_names = [role.name for role in roles]
+        validate_execution_role_combination(role_names)
+        if "admin" in role_names:
+            return
+        role_codes = {
+            role.name: {
+                permission.code
+                for permission in getattr(role, "permissions", ())
+            }
+            for role in roles
+        }
+        execution_capable = any(
+            role.name in EXECUTION_ROLE_NAMES
+            or (
+                role.name not in SENSITIVE_ROLE_NAMES
+                and bool(EXECUTION_PERMISSION_CODES.intersection(role_codes[role.name]))
+            )
+            for role in roles
+        )
+        sensitive_capable = any(
+            role.name in SENSITIVE_ROLE_NAMES
+            or bool(SENSITIVE_PERMISSION_CODES.intersection(role_codes[role.name]))
+            for role in roles
+        )
+        if execution_capable and sensitive_capable:
+            raise ValueError("执行角色不能与带价格或财务权限的角色同时分配")
 
     async def list_users(self, page: int, page_size: int, keyword: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
@@ -53,6 +98,7 @@ class UserService:
             roles = await self.repo.get_roles(role_ids_uuid)
         else:
             roles = []
+        self._validate_roles(role_ids, roles)
 
         data["password_hash"] = hash_password(data.pop("password"))
         user = await self.repo.create(data)
@@ -67,10 +113,20 @@ class UserService:
             raise ValueError("用户不存在")
 
         role_ids = data.pop("role_ids", None)
-        await self.repo.update(user, data)
-
+        roles = None
         if role_ids is not None:
-            roles = await self.repo.get_roles([UUID(rid) for rid in role_ids])
+            try:
+                role_ids_uuid = [UUID(rid) for rid in role_ids]
+            except (AttributeError, TypeError, ValueError):
+                raise ValueError("角色编号格式不正确")
+            roles = await self.repo.get_roles(role_ids_uuid)
+            self._validate_roles(role_ids, roles)
+
+        # Validate the complete role set before changing any user fields.  A
+        # rejected combination must not leave a partially mutated user in a
+        # service call that is not wrapped by the HTTP transaction boundary.
+        await self.repo.update(user, data)
+        if roles is not None:
             await self.repo.set_roles(user, roles)
 
         return await self.get_user(user.id)

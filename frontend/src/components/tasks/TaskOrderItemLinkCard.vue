@@ -94,8 +94,10 @@
               </span>
               <span class="item-option-meta">
                 <span class="item-option-metric">数量 {{ item.quantity }}{{ item.unit ? ` ${item.unit}` : '' }}</span>
-                <span class="item-option-metric">金额 {{ formatMoney(item.unit_price) }}</span>
-                <span class="item-option-metric">小计 {{ formatMoney(item.subtotal_amount) }}</span>
+                <template v-if="authStore.hasPermission('order_item:view_price')">
+                  <span class="item-option-metric">金额 {{ formatMoney(item.unit_price) }}</span>
+                  <span class="item-option-metric">小计 {{ formatMoney(item.subtotal_amount) }}</span>
+                </template>
                 <span v-if="item.is_linked && item.task_progress_pct != null" class="item-option-metric">
                   本任务进度 {{ item.task_progress_pct }}%
                 </span>
@@ -190,6 +192,7 @@ import type { ActionCapability, TaskType, TaskOrderItemOption } from '@/types/ap
 import { StatusTag } from '@/components/ui'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import { getTaskWorkflowControl } from '@/utils/taskItemWorkflow'
+import { useAuthStore } from '@/stores/auth'
 import {
   getTaskStageSelectionGroups,
   getTaskStageSelectionItemIds,
@@ -200,6 +203,8 @@ import {
   type TaskStageSelectionKey,
 } from '@/utils/taskStageSelection'
 import { formatMoney } from '@/utils/format'
+
+const authStore = useAuthStore()
 
 type TaskEmployeeOption = {
   id: string

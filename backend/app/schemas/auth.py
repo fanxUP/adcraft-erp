@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
@@ -26,6 +26,8 @@ class UserProfile(BaseModel):
     email: str | None
     is_active: bool
     must_change_password: bool = False
-    roles: list[str] = []
+    roles: list[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
+    capabilities: dict[str, bool] = Field(default_factory=dict)
 
     model_config = {"from_attributes": True}

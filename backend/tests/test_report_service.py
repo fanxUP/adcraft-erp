@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from uuid import UUID
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -117,7 +118,39 @@ def make_mock_contract(**kwargs):
 @pytest.fixture
 def service():
     db = AsyncMock()
-    return ReportService(db), db
+    viewer = SimpleNamespace(
+        roles=[
+            SimpleNamespace(
+                name="finance",
+                permissions=[
+                    SimpleNamespace(code="report:view_financial"),
+                    SimpleNamespace(code="order:view_price"),
+                ],
+            )
+        ]
+    )
+    return ReportService(db, viewer=viewer), db
+
+
+@pytest.mark.asyncio
+async def test_dashboard_does_not_query_or_return_financial_data_without_permission():
+    db = AsyncMock()
+    viewer = SimpleNamespace(
+        roles=[SimpleNamespace(name="designer", permissions=[])],
+    )
+    svc = ReportService(db, viewer=viewer)
+    svc._count_tasks = AsyncMock(side_effect=[3, 5, 2])
+    svc._count_overdue_orders = AsyncMock(return_value=1)
+
+    dashboard = await svc.get_dashboard()
+
+    assert dashboard == {
+        "pending_design_count": 3,
+        "pending_production_count": 5,
+        "pending_installation_count": 2,
+        "overdue_order_count": 1,
+    }
+    db.execute.assert_not_awaited()
 
 
 @pytest.mark.asyncio

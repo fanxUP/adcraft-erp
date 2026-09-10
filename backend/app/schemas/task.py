@@ -244,6 +244,17 @@ class TaskStatusChange(BaseModel):
 class TaskOrderItemOption(OrderItemResponse):
     """任务处理页使用的订单明细阶段与可选性。"""
 
+    # Price fields are optional because the operational task response omits
+    # them entirely for users without order-item price permission.  Sales,
+    # finance and admin viewers still receive the original values.
+    unit_price: float | None = None
+    process_fee: float | None = None
+    installation_fee: float | None = None
+    design_fee: float | None = None
+    transport_fee: float | None = None
+    other_fee: float | None = None
+    subtotal_amount: float | None = None
+
     stage: Literal[
         "designing",
         "in_production",

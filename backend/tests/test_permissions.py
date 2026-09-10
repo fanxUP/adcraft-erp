@@ -5,7 +5,21 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
-from app.core.permissions import require_any_permission, require_permission, require_role
+from app.core.permissions import (
+    PERM_CATALOG_VIEW_PRICE,
+    PERM_FINANCE_VIEW_COST,
+    PERM_ORDER_ITEM_VIEW_PRICE,
+    PERM_ORDER_VIEW_PRICE,
+    PERM_REPORT_VIEW_FINANCIAL,
+    SENSITIVE_PERMISSION_CODES,
+    get_user_capabilities,
+    get_user_permission_codes,
+    validate_execution_role_combination,
+    validate_role_sensitive_permissions,
+    require_any_permission,
+    require_permission,
+    require_role,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -156,6 +170,79 @@ async def test_role_permission_refresh_replaces_the_complete_collection():
         "order:read",
         "payment:read",
     ]
+
+
+async def test_sensitive_price_permissions_are_seeded_and_mapped_only_to_privileged_roles():
+    from scripts.seed_permissions import ALL_PERMISSIONS, ROLE_PERMISSION_MAP
+
+    seeded = {permission["code"] for permission in ALL_PERMISSIONS}
+    assert SENSITIVE_PERMISSION_CODES <= seeded
+    assert SENSITIVE_PERMISSION_CODES <= set(ROLE_PERMISSION_MAP["admin"])
+    assert SENSITIVE_PERMISSION_CODES.isdisjoint(set(ROLE_PERMISSION_MAP["designer"]))
+    assert SENSITIVE_PERMISSION_CODES.isdisjoint(set(ROLE_PERMISSION_MAP["production"]))
+    assert SENSITIVE_PERMISSION_CODES.isdisjoint(set(ROLE_PERMISSION_MAP["installer"]))
+
+
+async def test_execution_roles_only_read_catalog_metadata():
+    from scripts.seed_permissions import ROLE_PERMISSION_MAP
+
+    for role_name in ("designer", "production"):
+        role_permissions = set(ROLE_PERMISSION_MAP[role_name])
+        assert "product:create" not in role_permissions
+        assert "product:update" not in role_permissions
+        assert "product:delete" not in role_permissions
+        assert "material:create" not in role_permissions
+        assert "material:update" not in role_permissions
+        assert "material:delete" not in role_permissions
+        assert "process:create" not in role_permissions
+        assert "process:update" not in role_permissions
+        assert "process:delete" not in role_permissions
+
+
+async def test_permission_context_exposes_price_capabilities_without_role_name_checks():
+    user = _make_user([
+        _make_role("custom-business", [PERM_ORDER_VIEW_PRICE, PERM_REPORT_VIEW_FINANCIAL]),
+    ])
+
+    assert get_user_permission_codes(user) == frozenset({
+        PERM_ORDER_VIEW_PRICE,
+        PERM_REPORT_VIEW_FINANCIAL,
+    })
+    assert get_user_capabilities(user) == {
+        "view_order_price": True,
+        "view_order_item_price": False,
+        "view_catalog_price": False,
+        "view_cost": False,
+        "view_financial_report": True,
+    }
+
+
+async def test_execution_roles_cannot_receive_sensitive_permissions():
+    with pytest.raises(ValueError, match="设计、制作、安装角色不能拥有价格或财务权限"):
+        validate_role_sensitive_permissions(
+            "designer",
+            ["design_task:read", PERM_ORDER_VIEW_PRICE],
+        )
+
+
+async def test_custom_execution_role_cannot_hide_sensitive_permissions_behind_a_new_name():
+    with pytest.raises(ValueError, match="设计、制作、安装角色不能拥有价格或财务权限"):
+        validate_role_sensitive_permissions(
+            "custom-production-team",
+            ["production_task:read", "quote:read"],
+        )
+
+
+async def test_execution_role_cannot_be_combined_with_sales_or_finance():
+    with pytest.raises(ValueError, match="执行角色不能与销售或财务角色同时分配"):
+        validate_execution_role_combination(["designer", "sales"])
+
+    with pytest.raises(ValueError, match="执行角色不能与销售或财务角色同时分配"):
+        validate_execution_role_combination(["installer", "finance"])
+
+
+async def test_admin_can_be_combined_without_triggering_execution_role_conflict():
+    validate_execution_role_combination(["admin", "designer", "finance"])
 
 
 class TestRequireRole:

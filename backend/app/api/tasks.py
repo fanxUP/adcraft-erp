@@ -277,6 +277,7 @@ async def list_project_task_queue(
         order_id=order_id,
         order_item_id=order_item_id,
         overdue=overdue,
+        viewer=current_user,
     )
     return success_paginated(tasks, total, page, page_size)
 
@@ -298,6 +299,7 @@ async def list_task_order_item_options(
             db,
             task_type,
             _ensure_uuid(task_id),
+            viewer=current_user,
         )
         return success(options)
     except ValueError as exc:
@@ -321,7 +323,7 @@ async def list_design_tasks(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_READ)),
 ):
-    service = DesignTaskService(db)
+    service = DesignTaskService(db, current_user)
     tasks, total = await service.list_tasks(
         page, page_size, status, order_id, assigned_to, outsourced, order_item_id
     )
@@ -334,7 +336,7 @@ async def create_design_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_CREATE)),
 ):
-    service = DesignTaskService(db)
+    service = DesignTaskService(db, current_user)
     task = await service.create_task(data.model_dump(exclude_none=True), current_user.id)
     return success(task)
 
@@ -345,7 +347,7 @@ async def get_design_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_READ)),
 ):
-    service = DesignTaskService(db)
+    service = DesignTaskService(db, current_user)
     task = await service.get_task(_ensure_uuid(task_id))
     if not task:
         return {"code": 40401, "message": "设计任务不存在", "data": None}
@@ -359,7 +361,7 @@ async def update_design_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_UPDATE)),
 ):
-    service = DesignTaskService(db)
+    service = DesignTaskService(db, current_user)
     task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
     return success(task)
 
@@ -370,7 +372,7 @@ async def delete_design_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    service = DesignTaskService(db)
+    service = DesignTaskService(db, current_user)
     try:
         await service.delete_task(_ensure_uuid(task_id))
         return success(None)
@@ -385,7 +387,7 @@ async def change_design_task_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_CHANGE_STATUS)),
 ):
-    service = DesignTaskService(db)
+    service = DesignTaskService(db, current_user)
     task = await service.change_status(
         _ensure_uuid(task_id),
         data.to_status,
@@ -414,7 +416,7 @@ async def list_production_tasks(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_READ)),
 ):
-    service = ProductionTaskService(db)
+    service = ProductionTaskService(db, current_user)
     tasks, total = await service.list_tasks(
         page, page_size, status, order_id, assigned_to, outsourced, order_item_id
     )
@@ -427,7 +429,7 @@ async def create_production_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_CREATE)),
 ):
-    service = ProductionTaskService(db)
+    service = ProductionTaskService(db, current_user)
     task = await service.create_task(data.model_dump(exclude_none=True), current_user.id)
     return success(task)
 
@@ -438,7 +440,7 @@ async def get_production_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_READ)),
 ):
-    service = ProductionTaskService(db)
+    service = ProductionTaskService(db, current_user)
     task = await service.get_task(_ensure_uuid(task_id))
     if not task:
         return {"code": 40401, "message": "制作任务不存在", "data": None}
@@ -452,7 +454,7 @@ async def update_production_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_UPDATE)),
 ):
-    service = ProductionTaskService(db)
+    service = ProductionTaskService(db, current_user)
     task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
     return success(task)
 
@@ -463,7 +465,7 @@ async def delete_production_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    service = ProductionTaskService(db)
+    service = ProductionTaskService(db, current_user)
     try:
         await service.delete_task(_ensure_uuid(task_id))
         return success(None)
@@ -478,7 +480,7 @@ async def change_production_task_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_CHANGE_STATUS)),
 ):
-    service = ProductionTaskService(db)
+    service = ProductionTaskService(db, current_user)
     task = await service.change_status(
         _ensure_uuid(task_id),
         data.to_status,
@@ -507,7 +509,7 @@ async def list_installation_tasks(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_READ)),
 ):
-    service = InstallationTaskService(db)
+    service = InstallationTaskService(db, current_user)
     tasks, total = await service.list_tasks(
         page, page_size, status, order_id, assigned_to, outsourced, order_item_id
     )
@@ -520,7 +522,7 @@ async def create_installation_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_CREATE)),
 ):
-    service = InstallationTaskService(db)
+    service = InstallationTaskService(db, current_user)
     task = await service.create_task(data.model_dump(exclude_none=True), current_user.id)
     return success(task)
 
@@ -531,7 +533,7 @@ async def get_installation_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_READ)),
 ):
-    service = InstallationTaskService(db)
+    service = InstallationTaskService(db, current_user)
     task = await service.get_task(_ensure_uuid(task_id))
     if not task:
         return {"code": 40401, "message": "安装任务不存在", "data": None}
@@ -545,7 +547,7 @@ async def update_installation_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_UPDATE)),
 ):
-    service = InstallationTaskService(db)
+    service = InstallationTaskService(db, current_user)
     task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
     return success(task)
 
@@ -556,7 +558,7 @@ async def delete_installation_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    service = InstallationTaskService(db)
+    service = InstallationTaskService(db, current_user)
     try:
         await service.delete_task(_ensure_uuid(task_id))
         return success(None)
@@ -571,7 +573,7 @@ async def change_installation_task_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_CHANGE_STATUS)),
 ):
-    service = InstallationTaskService(db)
+    service = InstallationTaskService(db, current_user)
     task = await service.change_status(
         _ensure_uuid(task_id),
         data.to_status,

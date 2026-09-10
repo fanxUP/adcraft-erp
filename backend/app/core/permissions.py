@@ -79,6 +79,15 @@ PERM_ORDER_CREATE = "order:create"
 PERM_ORDER_UPDATE = "order:update"
 PERM_ORDER_DELETE = "order:delete"
 PERM_ORDER_CHANGE_STATUS = "order:change_status"
+PERM_ORDER_VIEW_PRICE = "order:view_price"
+PERM_ORDER_ITEM_VIEW_PRICE = "order_item:view_price"
+
+# Price and financial visibility.  These are deliberately separate from
+# module read permissions: being able to process a task does not imply being
+# able to see the commercial value of the order or its line items.
+PERM_CATALOG_VIEW_PRICE = "catalog:view_price"
+PERM_FINANCE_VIEW_COST = "finance:view_cost"
+PERM_REPORT_VIEW_FINANCIAL = "report:view_financial"
 
 # Design Task
 PERM_DESIGN_TASK_READ = "design_task:read"
@@ -207,6 +216,178 @@ ROLE_PRODUCTION = "production"
 ROLE_INSTALLER = "installer"
 ROLE_FINANCE = "finance"
 
+EXECUTION_ROLE_NAMES = frozenset({
+    ROLE_DESIGNER,
+    ROLE_PRODUCTION,
+    ROLE_INSTALLER,
+})
+SENSITIVE_ROLE_NAMES = frozenset({ROLE_SALES, ROLE_FINANCE})
+
+# A role is execution-capable when it can read or operate one of the three
+# delivery task modules.  Keep this permission-based companion to
+# ``EXECUTION_ROLE_NAMES`` so a custom role cannot bypass the safety rule by
+# choosing a different display name.
+EXECUTION_PERMISSION_CODES = frozenset({
+    PERM_DESIGN_TASK_READ,
+    PERM_DESIGN_TASK_CREATE,
+    PERM_DESIGN_TASK_UPDATE,
+    PERM_DESIGN_TASK_CHANGE_STATUS,
+    PERM_DESIGN_TASK_DELETE,
+    PERM_PRODUCTION_TASK_READ,
+    PERM_PRODUCTION_TASK_CREATE,
+    PERM_PRODUCTION_TASK_UPDATE,
+    PERM_PRODUCTION_TASK_CHANGE_STATUS,
+    PERM_PRODUCTION_TASK_DELETE,
+    PERM_INSTALLATION_TASK_READ,
+    PERM_INSTALLATION_TASK_CREATE,
+    PERM_INSTALLATION_TASK_UPDATE,
+    PERM_INSTALLATION_TASK_CHANGE_STATUS,
+    PERM_INSTALLATION_TASK_DELETE,
+})
+
+
+# Sensitive permissions are kept in one immutable set so role-management and
+# response serializers can share the same security boundary.  The set is
+# intentionally permission-code based rather than role-name based: custom
+# business roles can still be evaluated consistently.
+SENSITIVE_PERMISSION_CODES = frozenset({
+    # Complete quote/contract capabilities are sensitive because their
+    # normal read responses contain commercial amounts, even when a route is
+    # not named ``view_price``.
+    PERM_QUOTE_READ,
+    PERM_QUOTE_CREATE,
+    PERM_QUOTE_UPDATE,
+    PERM_QUOTE_DELETE,
+    PERM_QUOTE_CONFIRM,
+    PERM_QUOTE_CONVERT,
+    PERM_CONTRACT_READ,
+    PERM_CONTRACT_CREATE,
+    PERM_CONTRACT_UPDATE,
+    PERM_CONTRACT_DELETE,
+    PERM_CONTRACT_CHANGE_STATUS,
+    # CDR quoting includes pricing rules, calculated totals and customer
+    # agreements, so it must not be attached to an execution role either.
+    PERM_CDR_QUOTE_READ,
+    PERM_CDR_QUOTE_CREATE,
+    PERM_CDR_QUOTE_UPDATE,
+    PERM_CDR_QUOTE_DELETE,
+    PERM_CDR_QUOTE_VIEW_COST,
+    PERM_CDR_QUOTE_VIEW_PROFIT,
+    PERM_CDR_QUOTE_ADJUST_PRICE,
+    PERM_CDR_QUOTE_APPROVE,
+    PERM_CDR_QUOTE_CONVERT,
+    PERM_CDR_RULE_SET_PUBLISH,
+    PERM_CDR_CUSTOMER_AGREEMENT_MANAGE,
+    PERM_ORDER_VIEW_PRICE,
+    PERM_ORDER_ITEM_VIEW_PRICE,
+    PERM_CATALOG_VIEW_PRICE,
+    PERM_FINANCE_VIEW_COST,
+    PERM_REPORT_VIEW_FINANCIAL,
+    PERM_REPORT_READ,
+    PERM_PAYMENT_READ,
+    PERM_PAYMENT_CREATE,
+    PERM_PAYMENT_VOID,
+    PERM_STATEMENT_READ,
+    PERM_STATEMENT_CREATE,
+    PERM_STATEMENT_CONFIRM,
+    PERM_EXPENSE_READ,
+    PERM_EXPENSE_CREATE,
+    PERM_EXPENSE_UPDATE,
+    PERM_EXPENSE_DELETE,
+    PERM_OUTSOURCE_PAYMENT_READ,
+    PERM_OUTSOURCE_PAYMENT_CREATE,
+})
+
+ORDER_PRICE_FIELDS = frozenset({
+    "total_amount",
+    "paid_amount",
+    "unpaid_amount",
+    "discount_amount",
+    "tax_rate",
+    "tax_amount",
+    "cost_amount",
+    "gross_profit",
+    "profit_amount",
+})
+
+ORDER_ITEM_PRICE_FIELDS = frozenset({
+    "unit_price",
+    "process_fee",
+    "installation_fee",
+    "design_fee",
+    "transport_fee",
+    "other_fee",
+    "subtotal_amount",
+    "cost_amount",
+    "gross_profit",
+    "profit_amount",
+})
+
+
+def get_user_permission_codes(user: User) -> frozenset[str]:
+    """Return the effective permission codes for a loaded user.
+
+    This helper is intentionally pure and does not trust any client-provided
+    role or permission value.  Route dependencies receive ``User`` from the
+    database, so later field-level serializers can use the same calculation.
+    """
+
+    return frozenset(
+        permission.code
+        for role in getattr(user, "roles", ())
+        for permission in getattr(role, "permissions", ())
+    )
+
+
+def get_user_capabilities(user: User) -> dict[str, bool]:
+    """Expose non-sensitive capability flags for the authenticated client.
+
+    These flags are for UI decisions only.  They never replace backend route
+    authorization or field-level response filtering.
+    """
+
+    granted = get_user_permission_codes(user)
+    return {
+        "view_order_price": PERM_ORDER_VIEW_PRICE in granted,
+        "view_order_item_price": PERM_ORDER_ITEM_VIEW_PRICE in granted,
+        "view_catalog_price": PERM_CATALOG_VIEW_PRICE in granted,
+        "view_cost": PERM_FINANCE_VIEW_COST in granted,
+        "view_financial_report": PERM_REPORT_VIEW_FINANCIAL in granted,
+    }
+
+
+def user_has_permission(user: User, permission_code: str) -> bool:
+    """Return whether a database-loaded user has one explicit permission."""
+
+    return permission_code in get_user_permission_codes(user)
+
+
+def validate_role_sensitive_permissions(
+    role_name: str,
+    permission_codes: set[str] | list[str] | tuple[str, ...],
+) -> None:
+    """Prevent execution roles from being granted commercial permissions."""
+
+    if role_name in {ROLE_ADMIN, *SENSITIVE_ROLE_NAMES}:
+        return
+    codes = set(permission_codes)
+    execution_capable = (
+        role_name in EXECUTION_ROLE_NAMES
+        or bool(EXECUTION_PERMISSION_CODES.intersection(codes))
+    )
+    if execution_capable and SENSITIVE_PERMISSION_CODES.intersection(codes):
+        raise ValueError("设计、制作、安装角色不能拥有价格或财务权限")
+
+
+def validate_execution_role_combination(role_names: list[str] | tuple[str, ...]) -> None:
+    """Prevent ordinary users from combining execution and sensitive roles."""
+
+    names = set(role_names)
+    if ROLE_ADMIN in names:
+        return
+    if EXECUTION_ROLE_NAMES.intersection(names) and SENSITIVE_ROLE_NAMES.intersection(names):
+        raise ValueError("执行角色不能与销售或财务角色同时分配")
+
 
 # ── Dependency factories ──────────────────────────────────────────────────
 
@@ -218,10 +399,8 @@ def require_permission(permission_code: str):
     """
 
     async def dependency(current_user: User = Depends(get_current_user)) -> User:
-        for role in current_user.roles:
-            for perm in role.permissions:
-                if perm.code == permission_code:
-                    return current_user
+        if user_has_permission(current_user, permission_code):
+            return current_user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"权限不足: 需要「{permission_code}」权限",

@@ -4,7 +4,8 @@ export interface ProductMaterialProcessSelection {
   material_name?: string
   process_name?: string
   unit: string
-  default_price: number
+  /** Omitted when the current viewer cannot see catalog prices. */
+  default_price?: number
 }
 
 export function formatProductMaterialProcess(
@@ -36,6 +37,6 @@ export function applyProductMaterialProcess(
     process_id: undefined,
     material_process: formatProductMaterialProcess(selected),
     unit: selected.unit || current.unit,
-    unit_price: selected.default_price > 0 ? selected.default_price : current.unit_price,
+    unit_price: (selected.default_price ?? 0) > 0 ? selected.default_price! : current.unit_price,
   }
 }

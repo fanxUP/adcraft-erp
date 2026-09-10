@@ -15,6 +15,12 @@ from app.domain.presentation import make_action_capability, make_status_view
 from app.models.business_document import BusinessDocument, BusinessDocumentItem
 from app.models.task_order_item_link import TaskOrderItemLink
 from app.models.user import User
+from app.core.permissions import (
+    ORDER_ITEM_PRICE_FIELDS,
+    PERM_ORDER_ITEM_VIEW_PRICE,
+    PERM_ORDER_VIEW_PRICE,
+    user_has_permission,
+)
 from app.repositories.task_repo import (
     AttachmentRepository,
     DesignTaskRepository,
@@ -861,6 +867,7 @@ async def _task_order_item_option_map(
     task_type: str,
     *,
     task_id: UUID | None = None,
+    viewer: User | None = None,
 ) -> dict[UUID, dict]:
     """Build the authoritative order-item option catalog for one task type."""
     if task_type not in TASK_TYPE_STAGES:
@@ -954,41 +961,50 @@ async def _task_order_item_option_map(
                     f"{TASK_TYPE_LABELS[task_type]}任务"
                 )
 
+        can_view_item_price = viewer is not None and user_has_permission(
+            viewer,
+            PERM_ORDER_ITEM_VIEW_PRICE,
+        )
         item_payload = {}
         for field_name in OrderItemResponse.model_fields:
             value = getattr(item, field_name, None)
+            if field_name in ORDER_ITEM_PRICE_FIELDS and not can_view_item_price:
+                value = None
             item_payload[field_name] = str(value) if isinstance(value, UUID) else value
         payload = {
-            **OrderItemResponse.model_validate(item_payload).model_dump(mode="json"),
-            "stage": stage,
-            "stage_label": ORDER_ITEM_STAGE_LABELS[stage],
-            "stage_view": make_status_view(
-                stage,
-                ORDER_ITEM_STAGE_LABELS[stage],
-                terminal=stage == "completed",
-            ).model_dump(mode="json"),
-            "can_select": can_select,
-            "disabled_reason": disabled_reason,
-            "is_linked": is_linked,
-            "task_status": task_status,
-            "task_status_label": _item_status_label(task_type, task_status),
-            "task_status_view": (
-                _task_status_view(task_type, task_status).model_dump(mode="json")
-                if task_status
-                else None
-            ),
-            "task_progress_pct": task_progress_pct,
-            "capabilities": {
-                "select": make_action_capability(
-                    can_select,
-                    disabled_reason,
+            **TaskOrderItemOption.model_validate({
+                **item_payload,
+                "stage": stage,
+                "stage_label": ORDER_ITEM_STAGE_LABELS[stage],
+                "stage_view": make_status_view(
+                    stage,
+                    ORDER_ITEM_STAGE_LABELS[stage],
+                    terminal=stage == "completed",
                 ).model_dump(mode="json"),
-            },
-            **outsource,
+                "can_select": can_select,
+                "disabled_reason": disabled_reason,
+                "is_linked": is_linked,
+                "task_status": task_status,
+                "task_status_label": _item_status_label(task_type, task_status),
+                "task_status_view": (
+                    _task_status_view(task_type, task_status).model_dump(mode="json")
+                    if task_status
+                    else None
+                ),
+                "task_progress_pct": task_progress_pct,
+                "capabilities": {
+                    "select": make_action_capability(
+                        can_select,
+                        disabled_reason,
+                    ).model_dump(mode="json"),
+                },
+                **outsource,
+            }).model_dump(
+                mode="json",
+                exclude_none=not can_view_item_price,
+            ),
         }
-        options[item_id] = TaskOrderItemOption.model_validate(payload).model_dump(
-            mode="json"
-        )
+        options[item_id] = payload
 
     return options
 
@@ -997,6 +1013,7 @@ async def get_task_order_item_options(
     db: AsyncSession,
     task_type: str,
     task_id: UUID,
+    viewer: User | None = None,
 ) -> list[dict]:
     """Return active order items with current stage and link eligibility."""
     from app.models.task import DesignTask, InstallationTask, ProductionTask
@@ -1017,6 +1034,7 @@ async def get_task_order_item_options(
         task.document_id,
         task_type,
         task_id=task_id,
+        viewer=viewer,
     )
     return list(options.values())
 
@@ -1120,20 +1138,35 @@ def _attachment_to_dict(att) -> dict:
     return AttachmentResponse.model_validate(att).model_dump(mode="json")
 
 
-async def _enrich_task_order(db, task_dict: dict) -> dict:
-    """Query order by document_id and add order_no, customer_name, department, total_amount."""
+async def _enrich_task_order(
+    db,
+    task_dict: dict,
+    *,
+    viewer: User | None = None,
+) -> dict:
+    """Add operational order context and only expose total with explicit permission."""
     doc_id = task_dict.get("document_id") or task_dict.get("order_id")
     if not doc_id:
         return task_dict
+    can_view_order_price = viewer is not None and user_has_permission(
+        viewer,
+        PERM_ORDER_VIEW_PRICE,
+    )
+    if not can_view_order_price:
+        task_dict.pop("total_amount", None)
+    order_columns = "doc_no, customer_name, department"
+    if can_view_order_price:
+        order_columns += ", total_amount"
     row = (await db.execute(
-        text("SELECT doc_no, customer_name, department, total_amount FROM business_documents WHERE id = :id"),
+        text(f"SELECT {order_columns} FROM business_documents WHERE id = :id"),
         {"id": doc_id},
     )).fetchone()
     if row:
         task_dict["order_no"] = row[0]
         task_dict["customer_name"] = row[1]
         task_dict["department"] = row[2]
-        task_dict["total_amount"] = float(row[3]) if row[3] is not None else None
+        if can_view_order_price:
+            task_dict["total_amount"] = float(row[3]) if row[3] is not None else None
         task_dict["source"] = "订单"
     # Resolve assigned_to user name
     assigned_to = task_dict.get("assigned_to")
@@ -1860,15 +1893,16 @@ async def _notify_task_assignee(
 
 
 class DesignTaskService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, viewer: User | None = None):
         self.db = db
         self.repo = DesignTaskRepository(db)
+        self.viewer = viewer
 
     async def _to_dict(self, task) -> dict:
         d = DesignTaskResponse.model_validate(task).model_dump(mode="json")
         d["order_id"] = d["document_id"]  # backward-compat alias
         d["_task_type"] = "design"
-        d = await _enrich_task_order(self.db, d)
+        d = await _enrich_task_order(self.db, d, viewer=self.viewer) if self.viewer else await _enrich_task_order(self.db, d)
         d = enrich_task_dict_with_schedule_state(d)
         return add_task_contract_fields(d, "design")
 
@@ -2146,15 +2180,16 @@ class DesignTaskService:
         await self.db.flush()
 
 class ProductionTaskService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, viewer: User | None = None):
         self.db = db
         self.repo = ProductionTaskRepository(db)
+        self.viewer = viewer
 
     async def _to_dict(self, task) -> dict:
         d = ProductionTaskResponse.model_validate(task).model_dump(mode="json")
         d["order_id"] = d["document_id"]  # backward-compat alias
         d["_task_type"] = "production"
-        d = await _enrich_task_order(self.db, d)
+        d = await _enrich_task_order(self.db, d, viewer=self.viewer) if self.viewer else await _enrich_task_order(self.db, d)
         d = enrich_task_dict_with_schedule_state(d)
         return add_task_contract_fields(d, "production")
 
@@ -2425,15 +2460,16 @@ class ProductionTaskService:
         await self.db.flush()
 
 class InstallationTaskService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, viewer: User | None = None):
         self.db = db
         self.repo = InstallationTaskRepository(db)
+        self.viewer = viewer
 
     async def _to_dict(self, task) -> dict:
         d = InstallationTaskResponse.model_validate(task).model_dump(mode="json")
         d["order_id"] = d["document_id"]  # backward-compat alias
         d["_task_type"] = "installation"
-        d = await _enrich_task_order(self.db, d)
+        d = await _enrich_task_order(self.db, d, viewer=self.viewer) if self.viewer else await _enrich_task_order(self.db, d)
         d = enrich_task_dict_with_schedule_state(d)
         return add_task_contract_fields(d, "installation")
 

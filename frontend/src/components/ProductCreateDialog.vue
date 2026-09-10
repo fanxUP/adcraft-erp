@@ -34,10 +34,10 @@
           <el-option label="按字数" value="word_count" />
         </el-select>
       </el-form-item>
-      <el-form-item label="默认单价">
+      <el-form-item v-if="canViewCatalogPrice" label="默认单价">
         <el-input-number v-model="form.default_price" :precision="2" :min="0" style="width: 100%" />
       </el-form-item>
-      <el-form-item label="最低收费">
+      <el-form-item v-if="canViewCatalogPrice" label="最低收费">
         <el-input-number v-model="form.min_charge" :precision="2" :min="0" style="width: 100%" />
       </el-form-item>
       <el-form-item label="备注">
@@ -52,10 +52,14 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createProduct } from '@/api/products'
 import type { ProductResponse } from '@/types/api'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+const canViewCatalogPrice = computed(() => authStore.hasPermission('catalog:view_price'))
 
 defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{
@@ -140,4 +144,3 @@ async function handleSave() {
   }
 }
 </style>
-

@@ -75,6 +75,37 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   aiReports: ['admin', 'sales', 'finance'],
 }
 
+/**
+ * Permission fallbacks for custom roles.  Built-in roles keep the existing
+ * navigation matrix during the compatibility period; a custom role can use
+ * the server-provided module permission without having to reuse a built-in
+ * role name.  These are page-entry permissions only, never data-field or
+ * write authorization.
+ */
+export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, readonly string[]>> = {
+  product: ['product:read'],
+  design: ['design_task:read'],
+  designRead: ['design_task:read'],
+  production: ['production_task:read'],
+  productionRead: ['production_task:read'],
+  installation: ['installation_task:read'],
+  installationRead: ['installation_task:read'],
+  boardRead: ['design_task:read', 'production_task:read', 'installation_task:read'],
+  outsource: ['outsource:read'],
+  inventory: ['inventory:read'],
+  finance: ['payment:read', 'expense:read', 'statement:read'],
+  reports: ['report:read'],
+}
+
+const BUILTIN_ROLE_NAMES = new Set([
+  'admin',
+  'sales',
+  'designer',
+  'production',
+  'installer',
+  'finance',
+])
+
 /** Route-level visibility uses the exact same keys as navigation items. */
 export const ROUTE_ACCESS: Record<string, AccessKey> = {
   Login: 'public',
@@ -283,23 +314,36 @@ export const SMART_TOOL_ITEMS: SmartToolItem[] = [
   { label: '收款截图识别', path: '/ai/payment-ocr', accessKey: 'aiSales' },
 ]
 
-export function canAccess(accessKey: AccessKey, roles: readonly string[]): boolean {
+export function canAccess(
+  accessKey: AccessKey,
+  roles: readonly string[],
+  permissions: readonly string[] = [],
+): boolean {
   const allowedRoles = ACCESS_ROLES[accessKey]
   if (allowedRoles === null || allowedRoles.length === 0) return true
-  return allowedRoles.some(role => roles.includes(role))
+  if (allowedRoles.some(role => roles.includes(role))) return true
+
+  // Do not let the new permission fallback change the established behavior
+  // for built-in accounts until all routes are permission-first.  Custom
+  // roles, however, have no role-name entry in ACCESS_ROLES and can be
+  // admitted by the server-issued module permission.
+  if (roles.some(role => BUILTIN_ROLE_NAMES.has(role))) return false
+  const requiredPermissions = ACCESS_PERMISSIONS[accessKey] || []
+  return requiredPermissions.some(permission => permissions.includes(permission))
 }
 
 export function canAccessRoute(
   routeName: unknown,
   roles: readonly string[],
   legacyRoles: readonly string[] = [],
+  permissions: readonly string[] = [],
 ): boolean {
   if (legacyRoles.length > 0 && !legacyRoles.some(role => roles.includes(role))) {
     return false
   }
   if (typeof routeName !== 'string') return true
   const accessKey = ROUTE_ACCESS[routeName]
-  return accessKey ? canAccess(accessKey, roles) : true
+  return accessKey ? canAccess(accessKey, roles, permissions) : true
 }
 
 export function getRouteTitle(routeName: unknown): string {
@@ -307,6 +351,9 @@ export function getRouteTitle(routeName: unknown): string {
   return ROUTE_TITLES[routeName] || 'AdCraft ERP'
 }
 
-export function filterSmartTools(roles: readonly string[]): SmartToolItem[] {
-  return SMART_TOOL_ITEMS.filter(item => canAccess(item.accessKey, roles))
+export function filterSmartTools(
+  roles: readonly string[],
+  permissions: readonly string[] = [],
+): SmartToolItem[] {
+  return SMART_TOOL_ITEMS.filter(item => canAccess(item.accessKey, roles, permissions))
 }

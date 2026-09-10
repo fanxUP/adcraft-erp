@@ -61,4 +61,15 @@ describe('page access matrix', () => {
     expect(filterSmartTools(['admin'])).toHaveLength(4)
     expect(filterSmartTools(['production'])).toHaveLength(0)
   })
+
+  it('uses server permissions for custom roles without changing built-in role behavior', () => {
+    expect(canAccess('design', ['custom-operator'], ['design_task:read'])).toBe(true)
+    expect(canAccessRoute(
+      'InstallationTaskList',
+      ['custom-operator'],
+      [],
+      ['installation_task:read'],
+    )).toBe(true)
+    expect(canAccess('production', ['sales'], ['production_task:read'])).toBe(false)
+  })
 })

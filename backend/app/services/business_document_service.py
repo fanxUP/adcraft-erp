@@ -11,6 +11,12 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.core.permissions import (
+    PERM_FINANCE_VIEW_COST,
+    PERM_ORDER_ITEM_VIEW_PRICE,
+    PERM_ORDER_VIEW_PRICE,
+    user_has_permission,
+)
 from app.domain.workflows import ORDER_WORKFLOW, QUOTE_WORKFLOW, allowed_targets
 from app.domain.presentation import make_order_status_view, make_quote_status_view
 from app.repositories.business_document_repo import BusinessDocumentRepository
@@ -19,6 +25,7 @@ from app.models.business_document import BusinessDocument
 from app.models.task import DesignTask, ProductionTask, InstallationTask
 from app.models.task_order_item_link import TaskOrderItemLink
 from app.models.outsource import OutsourceTask
+from app.models.user import User
 from app.models.project_cost import ProjectCost, ProjectCostItemLink
 from app.services.quote_calculation import (
     calculate_quote_item_values,
@@ -127,10 +134,12 @@ class BusinessDocumentService:
         db: AsyncSession,
         doc_type: str | None = None,
         quote_mode: str | None = None,
+        viewer: User | None = None,
     ):
         self.db = db
         self.doc_type = doc_type  # 'order', 'quote', or None
         self.quote_mode = quote_mode or ("regular" if doc_type == "quote" else None)
+        self.viewer = viewer
         self.repo = BusinessDocumentRepository(db, doc_type, self.quote_mode)
 
     # ═══════════════════════════════════════════
@@ -4098,13 +4107,32 @@ class BusinessDocumentService:
     # 序列化
     # ═══════════════════════════════════════════
 
+    @property
+    def can_view_order_price(self) -> bool:
+        """Whether the current response viewer has the explicit order-price capability."""
+
+        return self.viewer is None or user_has_permission(self.viewer, PERM_ORDER_VIEW_PRICE)
+
+    @property
+    def can_view_order_item_price(self) -> bool:
+        """Whether the current response viewer has the explicit line-price capability."""
+
+        return self.viewer is None or user_has_permission(self.viewer, PERM_ORDER_ITEM_VIEW_PRICE)
+
+    @property
+    def can_view_finance_cost(self) -> bool:
+        """Whether the current response viewer has the explicit cost capability."""
+
+        return self.viewer is None or user_has_permission(self.viewer, PERM_FINANCE_VIEW_COST)
+
     @staticmethod
-    def _to_ref(d) -> dict:
+    def _to_ref(d, viewer: User | None = None) -> dict:
         """标准单据引用 — 项目中所有嵌套/列表场景统一使用此方法。
         返回字段：id, doc_type, doc_no, project_name, customer_name,
         department, status, total_amount (+ order 专有 paid/unpaid)。
         调用方如需额外字段，在返回 dict 上叠加即可。
         """
+        can_view_order_price = viewer is None or user_has_permission(viewer, PERM_ORDER_VIEW_PRICE)
         base = {
             "id": str(d.id),
             "doc_type": d.doc_type,
@@ -4116,14 +4144,16 @@ class BusinessDocumentService:
             "status_view": (
                 make_quote_status_view(d.status) if d.doc_type == "quote" else make_order_status_view(d.status)
             ).model_dump(mode="json"),
-            "total_amount": float(d.total_amount) if d.total_amount else 0,
         }
+        if can_view_order_price:
+            base["total_amount"] = float(d.total_amount) if d.total_amount else 0
         if d.doc_type == "quote":
             base["quote_mode"] = d.quote_mode
         if d.doc_type == "order":
             base["order_no"] = d.doc_no
-            base["paid_amount"] = float(d.paid_amount) if d.paid_amount else 0
-            base["unpaid_amount"] = float(d.unpaid_amount) if d.unpaid_amount else 0
+            if can_view_order_price:
+                base["paid_amount"] = float(d.paid_amount) if d.paid_amount else 0
+                base["unpaid_amount"] = float(d.unpaid_amount) if d.unpaid_amount else 0
         else:
             base["quote_no"] = d.doc_no
         return base
@@ -4140,21 +4170,28 @@ class BusinessDocumentService:
             "status_view": (
                 make_quote_status_view(d.status) if d.doc_type == "quote" else make_order_status_view(d.status)
             ).model_dump(mode="json"),
-            "total_amount": float(d.total_amount),
             "department": d.department,
             "contact_person": d.contact_person,
             "contact_phone": d.contact_phone,
             "created_at": d.created_at.isoformat() if d.created_at else None,
             "deleted_at": d.deleted_at.isoformat() if d.deleted_at else None,
         }
+        if self.can_view_order_price:
+            base["total_amount"] = float(d.total_amount)
         if d.doc_type == "order":
             base.update({
                 "order_no": d.doc_no,
-                "paid_amount": float(d.paid_amount),
-                "unpaid_amount": float(d.unpaid_amount),
-                "cost_amount": float(d.cost_amount),
-                "gross_profit": float(d.gross_profit),
             })
+            if self.can_view_order_price:
+                base.update({
+                    "paid_amount": float(d.paid_amount),
+                    "unpaid_amount": float(d.unpaid_amount),
+                })
+            if self.can_view_finance_cost:
+                base.update({
+                    "cost_amount": float(d.cost_amount),
+                    "gross_profit": float(d.gross_profit),
+                })
         else:
             base.update({
                 "quote_no": d.doc_no,
@@ -4163,6 +4200,46 @@ class BusinessDocumentService:
                 "quote_date": d.quote_date.isoformat() if d.quote_date else None,
             })
         return base
+
+    def _to_item_detail(self, it) -> dict:
+        result = {
+            "id": str(it.id),
+            "item_name": it.item_name,
+            "product_id": str(it.product_id) if it.product_id else None,
+            "material_id": str(it.material_id) if it.material_id else None,
+            "process_id": str(it.process_id) if it.process_id else None,
+            "length": float(it.length) if it.length else None,
+            "length_unit": it.length_unit,
+            "width": float(it.width) if it.width else None,
+            "width_unit": it.width_unit,
+            "height": float(it.height) if it.height else None,
+            "height_unit": it.height_unit,
+            "quantity": float(it.quantity),
+            "unit": it.unit,
+            "use_area": it.use_area,
+            "quantity_mode": it.quantity_mode,
+            "pieces": float(it.pieces) if it.pieces else None,
+            "specification": _build_spec(it),
+            "area": float(it.area) if it.area else None,
+            "remark": it.remark,
+            "image_url": it.image_url,
+            "sort_order": it.sort_order,
+            "group_id": it.group_id,
+            "group_name": it.group_name,
+            "material_process": it.material_process,
+            "lifecycle_status": getattr(it, "lifecycle_status", "active"),
+        }
+        if self.can_view_order_item_price:
+            result.update({
+                "unit_price": float(it.unit_price),
+                "process_fee": float(it.process_fee),
+                "installation_fee": float(it.installation_fee),
+                "design_fee": float(it.design_fee),
+                "transport_fee": float(it.transport_fee),
+                "other_fee": float(it.other_fee),
+                "subtotal_amount": float(it.subtotal_amount),
+            })
+        return result
 
     def _to_detail(self, d) -> dict:
         base = {
@@ -4177,7 +4254,6 @@ class BusinessDocumentService:
             "status_view": (
                 make_quote_status_view(d.status) if d.doc_type == "quote" else make_order_status_view(d.status)
             ).model_dump(mode="json"),
-            "total_amount": float(d.total_amount),
             "remark": d.remark,
             "department": d.department,
             "contact_person": d.contact_person,
@@ -4198,40 +4274,7 @@ class BusinessDocumentService:
                 )
             ],
             "items": [
-                {
-                    "id": str(it.id),
-                    "item_name": it.item_name,
-                    "product_id": str(it.product_id) if it.product_id else None,
-                    "material_id": str(it.material_id) if it.material_id else None,
-                    "process_id": str(it.process_id) if it.process_id else None,
-                    "length": float(it.length) if it.length else None,
-                    "length_unit": it.length_unit,
-                    "width": float(it.width) if it.width else None,
-                    "width_unit": it.width_unit,
-                    "height": float(it.height) if it.height else None,
-                    "height_unit": it.height_unit,
-                    "quantity": float(it.quantity),
-                    "unit": it.unit,
-                    "use_area": it.use_area,
-                    "quantity_mode": it.quantity_mode,
-                    "pieces": float(it.pieces) if it.pieces else None,
-                    "specification": _build_spec(it),
-                    "area": float(it.area) if it.area else None,
-                    "unit_price": float(it.unit_price),
-                    "process_fee": float(it.process_fee),
-                    "installation_fee": float(it.installation_fee),
-                    "design_fee": float(it.design_fee),
-                    "transport_fee": float(it.transport_fee),
-                    "other_fee": float(it.other_fee),
-                    "subtotal_amount": float(it.subtotal_amount),
-                    "remark": it.remark,
-                    "image_url": it.image_url,
-                    "sort_order": it.sort_order,
-                    "group_id": it.group_id,
-                    "group_name": it.group_name,
-                    "material_process": it.material_process,
-                    "lifecycle_status": getattr(it, "lifecycle_status", "active"),
-                }
+                self._to_item_detail(it)
                 for it in (d.items or [])
                 if getattr(it, "lifecycle_status", "active") == "active"
             ],
@@ -4248,14 +4291,13 @@ class BusinessDocumentService:
             ],
         }
 
+        if self.can_view_order_price:
+            base["total_amount"] = float(d.total_amount)
+
         if d.doc_type == "order":
             base.update({
                 "order_no": d.doc_no,
                 "source_quote_id": str(d.source_quote_id) if d.source_quote_id else None,
-                "paid_amount": float(d.paid_amount),
-                "unpaid_amount": float(d.unpaid_amount),
-                "cost_amount": float(d.cost_amount),
-                "gross_profit": float(d.gross_profit),
                 "delivery_deadline": d.delivery_deadline.isoformat() if d.delivery_deadline else None,
                 "installation_address": d.installation_address,
                 "design_tasks": [
@@ -4271,16 +4313,29 @@ class BusinessDocumentService:
                     for t in (d.installation_tasks or [])
                 ],
             })
+            if self.can_view_order_price:
+                base.update({
+                    "paid_amount": float(d.paid_amount),
+                    "unpaid_amount": float(d.unpaid_amount),
+                })
+            if self.can_view_finance_cost:
+                base.update({
+                    "cost_amount": float(d.cost_amount),
+                    "gross_profit": float(d.gross_profit),
+                })
         else:
             base.update({
                 "quote_no": d.doc_no,
                 "quote_mode": d.quote_mode,
-                "subtotal_amount": float(d.subtotal_amount),
-                "discount_amount": float(d.discount_amount),
-                "tax_rate": float(d.tax_rate),
-                "tax_amount": float(d.tax_amount),
                 "valid_until": d.valid_until.isoformat() if d.valid_until else None,
                 "quote_date": d.quote_date.isoformat() if d.quote_date else None,
             })
+            if self.can_view_order_price:
+                base.update({
+                    "subtotal_amount": float(d.subtotal_amount),
+                    "discount_amount": float(d.discount_amount),
+                    "tax_rate": float(d.tax_rate),
+                    "tax_amount": float(d.tax_amount),
+                })
 
         return base

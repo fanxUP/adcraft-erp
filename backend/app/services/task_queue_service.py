@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.task import DesignTask, InstallationTask, ProductionTask
 from app.models.task_order_item_link import TaskOrderItemLink
+from app.models.user import User
 from app.schemas.task import (
     DesignTaskResponse,
     InstallationTaskResponse,
@@ -36,6 +37,7 @@ async def list_task_queue(
     order_id: str | None = None,
     order_item_id: str | None = None,
     overdue: bool | None = None,
+    viewer: User | None = None,
 ) -> tuple[list[dict], int]:
     """Return a normalized, paginated view over all delivery task tables."""
     normalized: list[dict] = []
@@ -69,7 +71,7 @@ async def list_task_queue(
             item["stage"] = task_type
             item["task_no"] = item[no_field]
             item["_task_type"] = task_type
-            item = await _enrich_task_order(db, item)
+            item = await _enrich_task_order(db, item, viewer=viewer) if viewer else await _enrich_task_order(db, item)
             item = enrich_task_dict_with_schedule_state(item)
             item = add_task_contract_fields(item, task_type)
             items.append(item)

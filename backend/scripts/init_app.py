@@ -110,7 +110,8 @@ async def init_app():
         # 4. Seed permissions (import the logic from seed_permissions.py)
         from scripts.seed_permissions import (
             ALL_PERMISSIONS,
-            ROLE_PERMISSION_MAP,
+            ROLE_NAMES,
+            builtin_role_permission_codes,
             replace_role_permissions,
         )
 
@@ -133,7 +134,10 @@ async def init_app():
 
         # Map permissions to roles
         for role_name, role in roles_by_name.items():
-            codes = ROLE_PERMISSION_MAP.get(role_name, [])
+            if role_name not in ROLE_NAMES:
+                print(f"  ↷ Custom role preserved: {role_name}")
+                continue
+            codes = builtin_role_permission_codes(role_name)
             target_perms = [existing_perms[c] for c in codes if c in existing_perms]
             replace_role_permissions(role, target_perms)
 

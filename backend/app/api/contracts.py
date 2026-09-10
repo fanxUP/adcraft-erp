@@ -43,7 +43,7 @@ async def list_contracts(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
-    service = ContractService(db)
+    service = ContractService(db, viewer=current_user)
     contracts, total = await service.list_contracts(page, page_size, status, keyword, customer_id, contract_type, exclude_contract_type)
     return success_paginated(contracts, total, page, page_size)
 
@@ -55,7 +55,7 @@ async def create_contract(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_CONTRACT_CREATE)),
 ):
-    service = ContractService(db)
+    service = ContractService(db, viewer=current_user)
     contract = await service.create_contract(data.model_dump())
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_CONTRACT, UUID(contract["id"]), ACTION_CREATE,
@@ -111,7 +111,7 @@ async def get_available_resources(
 
     orders_list = []
     for d in docs:
-        item = BusinessDocumentService._to_ref(d)
+        item = BusinessDocumentService._to_ref(d, viewer=current_user)
         item["customer_id"] = str(d.customer_id) if d.customer_id else None
         orders_list.append(item)
 
@@ -144,7 +144,7 @@ async def list_orders_without_contract(
     current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
     """未建立合同的订单列表（未关联任何合同/框架合同项目，排除已取消）。"""
-    service = ContractService(db)
+    service = ContractService(db, viewer=current_user)
     items, total = await service.list_orders_without_contract(page, page_size, keyword)
     return success_paginated(items, total, page, page_size)
 
@@ -155,7 +155,7 @@ async def get_contract(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
-    service = ContractService(db)
+    service = ContractService(db, viewer=current_user)
     contract = await service.get_contract(UUID(contract_id))
     if not contract:
         return {"code": 40401, "message": "合同不存在", "data": None}
@@ -170,7 +170,7 @@ async def update_contract(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_CONTRACT_UPDATE)),
 ):
-    service = ContractService(db)
+    service = ContractService(db, viewer=current_user)
     cid = UUID(contract_id)
     before = await service.get_contract(cid)
     contract = await service.update_contract(cid, data.model_dump(exclude_none=True))
@@ -188,7 +188,7 @@ async def delete_contract(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_CONTRACT_DELETE)),
 ):
-    service = ContractService(db)
+    service = ContractService(db, viewer=current_user)
     cid = UUID(contract_id)
     before = await service.get_contract(cid)
     ok = await service.delete_contract(cid)
@@ -210,7 +210,7 @@ async def link_orders(
     current_user: User = Depends(require_permission(PERM_CONTRACT_UPDATE)),
 ):
     """把订单追加关联到已有合同（不改合同金额，纯追加 contract_documents）。"""
-    service = ContractService(db)
+    service = ContractService(db, viewer=current_user)
     cid = UUID(contract_id)
     before = await service.get_contract(cid)
     contract = await service.link_orders_to_contract(cid, data.order_ids)
@@ -228,7 +228,7 @@ async def upload_contract_attachment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_CONTRACT_UPDATE)),
 ):
-    service = ContractService(db)
+    service = ContractService(db, viewer=current_user)
     cid = UUID(contract_id)
     contract = await service.get_contract(cid)
     if not contract:
@@ -258,7 +258,7 @@ async def download_contract_attachment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_CONTRACT_READ)),
 ):
-    service = ContractService(db)
+    service = ContractService(db, viewer=current_user)
     contract = await service.get_contract(UUID(contract_id))
     if not contract or not contract.get("attachment_path"):
         return {"code": 40401, "message": "附件不存在", "data": None}
@@ -276,7 +276,7 @@ async def delete_contract_attachment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_CONTRACT_UPDATE)),
 ):
-    service = ContractService(db)
+    service = ContractService(db, viewer=current_user)
     cid = UUID(contract_id)
     contract = await service.get_contract(cid)
     if not contract:

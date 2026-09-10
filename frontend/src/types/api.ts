@@ -63,6 +63,14 @@ export interface UserProfile {
   is_active: boolean
   must_change_password?: boolean
   roles: string[]
+  permissions: string[]
+  capabilities: {
+    view_order_price: boolean
+    view_order_item_price: boolean
+    view_catalog_price: boolean
+    view_cost: boolean
+    view_financial_report: boolean
+  }
 }
 
 // ---- User ----
@@ -168,7 +176,24 @@ export type OrderItemStage =
   | 'completed'
   | 'not_ready'
 
-export interface TaskOrderItemOption extends OrderItemResponse {
+export interface TaskOrderItemOption extends Omit<OrderItemResponse,
+  | 'unit_price'
+  | 'process_fee'
+  | 'installation_fee'
+  | 'design_fee'
+  | 'transport_fee'
+  | 'other_fee'
+  | 'subtotal_amount'
+> {
+  // Task-facing APIs omit line price fields unless the caller has the
+  // explicit order_item:view_price permission.
+  unit_price?: number
+  process_fee?: number
+  installation_fee?: number
+  design_fee?: number
+  transport_fee?: number
+  other_fee?: number
+  subtotal_amount?: number
   stage: OrderItemStage
   stage_label: string
   stage_view: StatusView
@@ -665,8 +690,8 @@ export interface ProductResponse {
   process_name?: string
   unit: string
   pricing_method: string
-  default_price: number
-  min_charge: number
+  default_price?: number
+  min_charge?: number
   remark?: string
   is_active: boolean
   created_at?: string
@@ -677,8 +702,8 @@ export interface MaterialResponse {
   name: string
   spec?: string
   unit: string
-  purchase_price: number
-  sale_price: number
+  purchase_price?: number
+  sale_price?: number
   loss_rate: number
   safe_stock: number
   remark?: string
@@ -690,7 +715,7 @@ export interface ProcessResponse {
   id: string
   name: string
   charge_method: string
-  default_price: number
+  default_price?: number
   remark?: string
   is_active: boolean
   created_at?: string

@@ -6,8 +6,17 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
-from app.core.permissions import require_permission, PERM_CDR_QUOTE_READ, PERM_CDR_QUOTE_CREATE, PERM_CDR_QUOTE_APPROVE, PERM_CDR_QUOTE_CONVERT, PERM_CDR_QUOTE_DELETE
+from app.core.permissions import (
+    PERM_CDR_CUSTOMER_AGREEMENT_MANAGE,
+    PERM_CDR_QUOTE_APPROVE,
+    PERM_CDR_QUOTE_CONVERT,
+    PERM_CDR_QUOTE_CREATE,
+    PERM_CDR_QUOTE_DELETE,
+    PERM_CDR_QUOTE_READ,
+    PERM_CDR_QUOTE_UPDATE,
+    PERM_CDR_RULE_SET_PUBLISH,
+    require_permission,
+)
 from app.models.user import User
 from app.schemas.common import success, success_paginated
 from app.services.cdr_quote_service import CdrQuoteService
@@ -87,7 +96,7 @@ async def create_cdr_quote(
 async def calculate_price(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_QUOTE_CREATE)),
 ):
     """报价试算（不保存，返回规则执行明细）。"""
     service = CdrQuoteService(db)
@@ -153,7 +162,7 @@ async def request_approval(
     quote_id: UUID,
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_QUOTE_UPDATE)),
 ):
     """请求报价审批。"""
     service = CdrQuoteService(db)
@@ -192,7 +201,7 @@ async def reject_quote(
 @router.get("/rule-sets")
 async def list_rule_sets(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_QUOTE_READ)),
 ):
     """获取定价规则集列表。"""
     service = CdrQuoteService(db)
@@ -204,7 +213,7 @@ async def list_rule_sets(
 async def create_rule_set(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_RULE_SET_PUBLISH)),
 ):
     """创建定价规则集（含规则）。"""
     service = CdrQuoteService(db)
@@ -220,7 +229,7 @@ async def update_customer_agreement(
     agreement_id: UUID,
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_CUSTOMER_AGREEMENT_MANAGE)),
 ):
     """Update a customer pricing agreement."""
     service = CdrQuoteService(db)
@@ -235,7 +244,7 @@ async def update_customer_agreement(
 async def delete_customer_agreement(
     agreement_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_CUSTOMER_AGREEMENT_MANAGE)),
 ):
     """Delete a customer pricing agreement."""
     service = CdrQuoteService(db)
@@ -249,7 +258,7 @@ async def delete_customer_agreement(
 async def batch_customer_agreements(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_CUSTOMER_AGREEMENT_MANAGE)),
 ):
     """Batch create/update customer agreements by customer type/level or customer IDs."""
     service = CdrQuoteService(db)
@@ -260,7 +269,7 @@ async def batch_customer_agreements(
 async def list_customer_agreements(
     customer_id: UUID | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_CUSTOMER_AGREEMENT_MANAGE)),
 ):
     """获取客户协议价列表。"""
     service = CdrQuoteService(db)
@@ -272,7 +281,7 @@ async def list_customer_agreements(
 async def create_customer_agreement(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_CUSTOMER_AGREEMENT_MANAGE)),
 ):
     """创建客户协议价。"""
     service = CdrQuoteService(db)
@@ -286,7 +295,7 @@ async def create_customer_agreement(
 async def list_audit_logs(
     quote_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_QUOTE_READ)),
 ):
     """获取报价审计日志。"""
     service = CdrQuoteService(db)
@@ -314,7 +323,7 @@ async def convert_to_order(
 async def analyze_geometry(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_QUOTE_CREATE)),
 ):
     """分析几何数据（孔洞/面积/重叠），不保存。"""
     from app.services.geometry_service import geometry_service
@@ -340,7 +349,7 @@ async def analyze_geometry(
 async def calculate_nesting(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_QUOTE_CREATE)),
 ):
     """板材排版试算。"""
     from app.services.nesting_service import NestingService, SimpleGridNesting
@@ -471,7 +480,7 @@ async def check_price_anomaly(
 async def check_calculation_anomaly(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_QUOTE_CREATE)),
 ):
     """试算价格异常检查（不保存）。"""
     from app.ai.rule_based.cdr_anomaly_detector import CdrPriceAnomalyDetector
@@ -591,7 +600,7 @@ async def revoke_device(
 async def create_capture(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_QUOTE_CREATE)),
 ):
     """CDR 插件提交图稿采集数据。"""
     service = CdrQuoteService(db)
@@ -603,7 +612,7 @@ async def create_capture(
 async def get_capture(
     capture_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_QUOTE_READ)),
 ):
     """获取图稿采集详情。"""
     service = CdrQuoteService(db)
@@ -654,7 +663,7 @@ async def upload_design_file(
 async def list_attachments(
     quote_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_QUOTE_READ)),
 ):
     """列出报价关联的设计文件。"""
     service = CdrDesignService(db)
@@ -696,7 +705,7 @@ async def ai_assist_from_description(
     quote_id: str,
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CDR_QUOTE_CREATE)),
 ):
     """AI 根据文字描述 + 已上传文件，生成报价明细建议。"""
     service = CdrDesignService(db)

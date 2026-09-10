@@ -14,7 +14,7 @@
         clearable
         style="flex: 1;"
       />
-      <el-button type="danger" @click="openCreate">+ 添加</el-button>
+      <el-button v-if="canCreateProduct" type="danger" @click="openCreate">+ 添加</el-button>
     </div>
 
     <el-table
@@ -30,13 +30,13 @@
         </template>
       </el-table-column>
       <el-table-column prop="unit" label="单位" width="80" />
-      <el-table-column label="全局价" width="100" align="right">
+      <el-table-column v-if="canViewCatalogPrice" label="全局价" width="100" align="right">
         <template #default="{ row }">
           <template v-if="row.default_price">¥{{ Number(row.default_price).toFixed(2) }}</template>
           <template v-else>-</template>
         </template>
       </el-table-column>
-      <el-table-column label="协议价" width="120" align="right">
+      <el-table-column v-if="canManagePricing" label="协议价" width="120" align="right">
         <template #default="{ row }">
           <template v-if="agreementMap.has(row.id)">
             ¥{{ Number(agreementMap.get(row.id)!.price_value).toFixed(2) }}
@@ -46,7 +46,7 @@
           </template>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="80" align="center">
+      <el-table-column v-if="canUpdateProduct" label="操作" width="80" align="center">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click.stop="openEdit(row)">
             编辑
@@ -102,10 +102,10 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="默认单价">
+        <el-form-item v-if="canViewCatalogPrice" label="默认单价">
           <el-input-number v-model="editForm.default_price" :min="0" :precision="2" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="最低收费">
+        <el-form-item v-if="canViewCatalogPrice" label="最低收费">
           <el-input-number v-model="editForm.min_charge" :min="0" :precision="2" style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
@@ -121,15 +121,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getProducts, updateProduct } from '@/api/products'
 import { formatProductMaterialProcess } from '@/utils/productMaterialProcess'
 import { listCustomerAgreements, type CustomerAgreement } from '@/api/cdrQuote'
 import ProductCreateDialog from './ProductCreateDialog.vue'
 import type { ProductResponse } from '@/types/api'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{ modelValue: boolean; customerId?: string }>()
+const authStore = useAuthStore()
+const canViewCatalogPrice = computed(() => authStore.hasPermission('catalog:view_price'))
+const canCreateProduct = computed(() => authStore.hasPermission('product:create'))
+const canUpdateProduct = computed(() => authStore.hasPermission('product:update'))
+const canManagePricing = computed(() => authStore.hasPermission('cdr_customer_agreement:manage'))
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   selected: [product: ProductResponse]
@@ -224,7 +230,7 @@ async function loadAgreements() {
 
 function onRowClick(row: ProductResponse) {
   const agreement = agreementMap.value.get(row.id)
-  const merged = agreement
+  const merged = agreement && canManagePricing.value && canViewCatalogPrice.value
     ? { ...row, default_price: Number(agreement.price_value) || row.default_price, min_charge: Number(agreement.minimum_charge) || row.min_charge, pricing_method: agreement.pricing_method || row.pricing_method }
     : row
   emit('selected', merged)
@@ -320,4 +326,3 @@ async function saveEdit() {
   }
 }
 </style>
-

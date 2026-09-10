@@ -12,6 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import get_current_user
+from app.core.permissions import (
+    ORDER_ITEM_PRICE_FIELDS,
+    ORDER_PRICE_FIELDS,
+    PERM_FINANCE_VIEW_COST,
+    PERM_ORDER_ITEM_VIEW_PRICE,
+    PERM_ORDER_VIEW_PRICE,
+    user_has_permission,
+)
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.common import success, success_paginated
@@ -41,6 +49,89 @@ from app.repositories.conversation_repo import MessageRepo
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
+
+
+# Chat messages are intentionally stored as user-facing JSON and may contain
+# business-card metadata added by older clients.  Do not use a global response
+# middleware to remove keys: quantity, dimensions and workflow fields are safe
+# operational data and must remain available.  Instead, recursively redact
+# only known commercial/financial keys at every chat output boundary.
+_CHAT_GENERIC_PRICE_FIELDS = frozenset({
+    "amount",
+    "price",
+    "price_value",
+    "unit_price",
+    "subtotal",
+    "subtotal_amount",
+})
+_CHAT_FINANCE_FIELDS = frozenset({
+    "cost",
+    "cost_amount",
+    "total_cost",
+    "recognized_cost",
+    "planned_amount",
+    "paid_amount",
+    "unpaid_amount",
+    "debt_amount",
+    "gross_profit",
+    "profit_amount",
+    "profit",
+})
+
+
+def _redact_chat_payload(payload: Any, viewer: User | None) -> Any:
+    """Return a copy of chat JSON with commercial fields removed as needed.
+
+    ``viewer=None`` is reserved for internal service/test callers and keeps
+    backward-compatible full serialization.  HTTP and WebSocket callers
+    always pass the database-loaded user, so execution roles must have an
+    explicit price permission before structured amounts leave the server.
+    """
+    if viewer is None:
+        if isinstance(payload, dict):
+            return {key: _redact_chat_payload(value, None) for key, value in payload.items()}
+        if isinstance(payload, list):
+            return [_redact_chat_payload(value, None) for value in payload]
+        return payload
+
+    can_view_order_price = user_has_permission(viewer, PERM_ORDER_VIEW_PRICE)
+    can_view_item_price = user_has_permission(viewer, PERM_ORDER_ITEM_VIEW_PRICE)
+    can_view_finance = user_has_permission(viewer, PERM_FINANCE_VIEW_COST)
+
+    def walk(value: Any) -> Any:
+        if isinstance(value, list):
+            return [walk(item) for item in value]
+        if isinstance(value, tuple):
+            return [walk(item) for item in value]
+        if not isinstance(value, dict):
+            return value
+
+        result: dict[str, Any] = {}
+        for key, item in value.items():
+            field = str(key).lower()
+            if field in ORDER_ITEM_PRICE_FIELDS and not can_view_item_price:
+                continue
+            if field in ORDER_PRICE_FIELDS and not can_view_order_price and not (
+                field in {"cost_amount", "gross_profit", "profit_amount"} and can_view_finance
+            ):
+                continue
+            if field in _CHAT_FINANCE_FIELDS and not can_view_finance:
+                continue
+            if field in _CHAT_GENERIC_PRICE_FIELDS and not (
+                can_view_order_price or can_view_item_price
+            ):
+                continue
+            result[key] = walk(item)
+        return result
+
+    return walk(payload)
+
+
+def _serialize_chat_message(message: MessageResponse, viewer: User | None) -> dict:
+    """Serialize one message through the same HTTP/WebSocket redaction path."""
+    data = message.model_dump(mode="json")
+    data["extra_data"] = _redact_chat_payload(data.get("extra_data"), viewer)
+    return data
 
 
 @router.get("/private/{user_id}")
@@ -121,7 +212,8 @@ async def search_business_objects(
                 "title": f"订单 #{o.doc_no}",
                 "subtitle": f"客户: {o.customer.name if o.customer else '-'}",
                 "status": o.status,
-                "amount": float(o.total_amount) if o.total_amount else None,
+                **({"amount": float(o.total_amount) if o.total_amount else None}
+                   if user_has_permission(current_user, PERM_ORDER_VIEW_PRICE) else {}),
             }
             for o in rows
         ]
@@ -146,7 +238,8 @@ async def search_business_objects(
                 "title": f"报价单 #{q.doc_no}",
                 "subtitle": f"客户: {q.customer_name or '-'}",
                 "status": q.status,
-                "amount": float(q.total_amount) if q.total_amount else None,
+                **({"amount": float(q.total_amount) if q.total_amount else None}
+                   if user_has_permission(current_user, PERM_ORDER_VIEW_PRICE) else {}),
             }
             for q in rows
         ]
@@ -224,7 +317,7 @@ async def search_messages(
         current_user.id, keyword, conversation_id, page, page_size
     )
     return success({
-        "items": [m.model_dump(mode="json") for m in messages],
+        "items": [_serialize_chat_message(m, current_user) for m in messages],
         "total": total,
         "has_more": len(messages) == page_size,
     })
@@ -240,7 +333,7 @@ async def get_recent_shared_cards(
     """获取用户最近分享的业务卡片"""
     message_repo = MessageRepo(db)
     cards = await message_repo.get_recent_shared_cards(current_user.id, card_type=type, limit=limit)
-    return success(cards)
+    return success([_redact_chat_payload(card, current_user) for card in cards])
 
 
 @router.get("/my-recent-objects")
@@ -482,7 +575,12 @@ async def get_messages(
         result = await service.get_messages(
             conversation_id, current_user.id, before_id, limit
         )
-        return success(result.model_dump(mode="json"))
+        result_data = result.model_dump(mode="json")
+        result_data["items"] = [
+            _serialize_chat_message(message, current_user)
+            for message in result.items
+        ]
+        return success(result_data)
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
 
@@ -504,7 +602,7 @@ async def send_message(
         # 通过 WebSocket 推送新消息给其他成员
         await broadcast_new_message(conversation_id, message, current_user.id)
 
-        return success(message.model_dump(mode="json"))
+        return success(_serialize_chat_message(message, current_user))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
 
@@ -650,7 +748,8 @@ async def get_recommendations(
                         "title": f"订单 #{o.doc_no}",
                         "subtitle": f"客户: {o.customer.name if o.customer else '-'}",
                         "status": o.status,
-                        "amount": float(o.total_amount) if o.total_amount else None,
+                        **({"amount": float(o.total_amount) if o.total_amount else None}
+                           if user_has_permission(current_user, PERM_ORDER_VIEW_PRICE) else {}),
                     })
     except Exception:
         pass
@@ -683,7 +782,8 @@ async def get_recommendations(
                         "title": f"报价单 #{q.doc_no}",
                         "subtitle": f"客户: {q.customer_name or '-'}",
                         "status": q.status,
-                        "amount": float(q.total_amount) if q.total_amount else None,
+                        **({"amount": float(q.total_amount) if q.total_amount else None}
+                           if user_has_permission(current_user, PERM_ORDER_VIEW_PRICE) else {}),
                     })
     except Exception:
         pass
@@ -801,7 +901,7 @@ async def share_business_card(
         raise HTTPException(status_code=403, detail="不是会话成员")
 
     # 获取业务对象信息
-    card_data = await _get_card_data(db, card_type, card_uuid)
+    card_data = await _get_card_data(db, card_type, card_uuid, viewer=current_user)
     if not card_data:
         raise HTTPException(status_code=404, detail="业务对象不存在")
 
@@ -821,10 +921,15 @@ async def share_business_card(
     # 广播消息
     await broadcast_new_message(conv_uuid, message, current_user.id)
 
-    return success(message.model_dump(mode="json"))
+    return success(_serialize_chat_message(message, current_user))
 
 
-async def _get_card_data(db: AsyncSession, card_type: str, card_id: uuid.UUID) -> Optional[dict]:
+async def _get_card_data(
+    db: AsyncSession,
+    card_type: str,
+    card_id: uuid.UUID,
+    viewer: User | None = None,
+) -> Optional[dict]:
     """获取业务卡片数据"""
     from app.models.business_document import BusinessDocument
     from app.models.task import DesignTask, ProductionTask, InstallationTask
@@ -836,22 +941,24 @@ async def _get_card_data(db: AsyncSession, card_type: str, card_id: uuid.UUID) -
             # 加载关联客户
             await db.refresh(obj, ["customer"])
             customer_name = obj.customer.name if obj.customer else "-"
-            return {
+            card = {
                 "title": f"订单 #{obj.doc_no}",
                 "subtitle": f"客户: {customer_name}",
                 "status": obj.status,
                 "amount": float(obj.total_amount) if obj.total_amount else None,
                 "customer_id": str(obj.customer_id) if obj.customer_id else None,
             }
+            return _redact_chat_payload(card, viewer)
     elif card_type == "quote":
         obj = await db.get(BusinessDocument, card_id)
         if obj:
-            return {
+            card = {
                 "title": f"报价单 #{obj.doc_no}",
                 "subtitle": f"客户: {obj.customer_name or '-'}",
                 "status": obj.status,
                 "amount": float(obj.total_amount) if obj.total_amount else None,
             }
+            return _redact_chat_payload(card, viewer)
     elif card_type == "task":
         # 尝试不同任务类型
         task_configs = [
@@ -986,7 +1093,7 @@ async def batch_share_cards(
             card_uuid = uuid.UUID(card_id) if isinstance(card_id, str) else card_id
         except ValueError:
             continue
-        card_data = await _get_card_data(db, card_type, card_uuid)
+        card_data = await _get_card_data(db, card_type, card_uuid, viewer=current_user)
         if card_data:
             card_data["card_type"] = card_type
             card_data["card_id"] = str(card_uuid)
@@ -1013,7 +1120,7 @@ async def batch_share_cards(
     )
     message = await service.send_message(conversation_id, current_user.id, data)
     await broadcast_new_message(conversation_id, message, current_user.id)
-    return success(message.model_dump(mode="json"))
+    return success(_serialize_chat_message(message, current_user))
 
 
 # ============ WebSocket ============
@@ -1123,10 +1230,11 @@ async def broadcast_new_message(
         members = await service.member_repo.get_members(conversation_id)
         for member in members:
             if member.user_id != sender_id:
+                recipient = await db.get(User, member.user_id)
                 await broadcast_to_user(member.user_id, {
                     "type": "new_message",
                     "data": {
-                        "message": message.model_dump(mode="json"),
+                        "message": _serialize_chat_message(message, recipient),
                         "conversation_id": str(conversation_id),
                     }
                 })

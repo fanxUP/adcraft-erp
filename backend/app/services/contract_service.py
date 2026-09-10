@@ -3,6 +3,8 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.permissions import PERM_ORDER_VIEW_PRICE, user_has_permission
+from app.models.user import User
 from app.repositories.contract_repo import ContractRepository
 from app.schemas.contract import ContractListResponse, ContractDetailResponse
 from app.services.number_generator import generate_contract_no
@@ -19,9 +21,24 @@ def _business_today() -> date:
 
 
 class ContractService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, viewer: User | None = None):
         self.db = db
+        self.viewer = viewer
         self.repo = ContractRepository(db)
+
+    @property
+    def can_view_order_price(self) -> bool:
+        """Contract amounts are visible only with the explicit price grant."""
+        return self.viewer is None or user_has_permission(self.viewer, PERM_ORDER_VIEW_PRICE)
+
+    def _redact_financial_fields(self, data: dict) -> dict:
+        if self.can_view_order_price:
+            return data
+        return {
+            key: value
+            for key, value in data.items()
+            if key not in {"total_amount", "paid_amount", "unpaid_amount", "project_amount"}
+        }
 
     async def _calc_paid_amount(self, contract_id: UUID) -> float:
         """计算合同已收金额 = 关联单据的收款总和（不含已作废）"""
@@ -163,8 +180,12 @@ class ContractService:
         d["department"] = "、".join(departments) if departments else ""
         d["source"] = "订单" if docs else ""
         d["status_view"] = make_contract_status_view(contract.status).model_dump(mode="json")
-        d["documents"] = [BusinessDocumentService._to_ref(d) for d in docs]
-        d["orders"] = [BusinessDocumentService._to_ref(d) for d in docs if d.doc_type == "order"]
+        d["documents"] = [BusinessDocumentService._to_ref(doc, viewer=self.viewer) for doc in docs]
+        d["orders"] = [
+            BusinessDocumentService._to_ref(doc, viewer=self.viewer)
+            for doc in docs
+            if doc.doc_type == "order"
+        ]
         return d
 
     async def list_contracts(
@@ -197,7 +218,7 @@ class ContractService:
                 resp["total_amount"] = proj_total
             resp["paid_amount"] = paid
             resp["unpaid_amount"] = max(0, resp["total_amount"] - paid)
-            result.append(resp)
+            result.append(self._redact_financial_fields(resp))
         return result, total
 
     async def list_orders_without_contract(
@@ -210,7 +231,7 @@ class ContractService:
         )
         result = []
         for d in docs:
-            item = BusinessDocumentService._to_ref(d)
+            item = BusinessDocumentService._to_ref(d, viewer=self.viewer)
             item["customer_id"] = str(d.customer_id) if d.customer_id else None
             item["created_at"] = d.created_at.isoformat() if d.created_at else None
             result.append(item)
@@ -309,7 +330,7 @@ class ContractService:
         result["total_amount"] = await self._calc_framework_total(contract.id)
         result["paid_amount"] = await self._calc_paid_amount(contract.id)
         result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
-        return result
+        return self._redact_financial_fields(result)
 
     async def _add_order_as_project(self, contract, order_id: UUID) -> None:
         """把订单作为子项目加入框架合同（复用框架项目服务：建子项目 + 关联订单 + 同步合同金额）。"""
@@ -348,7 +369,7 @@ class ContractService:
         # Override paid_amount with actual payments on linked documents
         result["paid_amount"] = await self._calc_paid_amount(contract_id)
         result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
-        return result
+        return self._redact_financial_fields(result)
 
     def _combine_document_ids(self, data: dict) -> list[UUID]:
         """Extract order_ids from the payload. Supports both order_ids and document_ids keys."""
@@ -381,7 +402,7 @@ class ContractService:
         result = self._to_detail(contract)
         result["paid_amount"] = await self._calc_paid_amount(contract.id)
         result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
-        return result
+        return self._redact_financial_fields(result)
 
     async def update_contract(self, contract_id: UUID, data: dict) -> dict:
         contract = await self.repo.get_by_id(contract_id)
@@ -412,7 +433,7 @@ class ContractService:
         result = self._to_detail(contract)
         result["paid_amount"] = await self._calc_paid_amount(contract_id)
         result["unpaid_amount"] = max(0, result["total_amount"] - result["paid_amount"])
-        return result
+        return self._redact_financial_fields(result)
 
     async def update_attachment(self, contract_id: UUID, path: str | None, name: str | None) -> dict:
         contract = await self.repo.get_by_id(contract_id)
@@ -421,7 +442,7 @@ class ContractService:
         contract.attachment_path = path
         contract.attachment_name = name
         await self.db.flush()
-        return self._to_detail(contract)
+        return self._redact_financial_fields(self._to_detail(contract))
 
     async def delete_contract(self, contract_id: UUID) -> bool:
         contract = await self.repo.get_by_id(contract_id)

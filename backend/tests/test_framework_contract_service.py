@@ -7,6 +7,7 @@
 """
 
 from uuid import UUID
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,6 +15,11 @@ import pytest
 
 CONTRACT_UUID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 CUSTOMER_UUID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
+
+def make_viewer(*permission_codes: str):
+    permissions = [SimpleNamespace(code=code) for code in permission_codes]
+    return SimpleNamespace(roles=[SimpleNamespace(permissions=permissions)])
 
 
 def make_contract(contract_type="框架合同"):
@@ -38,6 +44,33 @@ def make_project():
     p.attachment_name = None
     p.created_at = None
     return p
+
+
+def test_framework_project_response_redacts_financial_fields_without_price_permission():
+    from app.services.framework_contract_service import FrameworkContractService
+
+    service = FrameworkContractService(MagicMock(), viewer=make_viewer())
+    result = service._redact_financial_fields({
+        "id": "project-1",
+        "project_name": "测试项目",
+        "project_amount": 1000,
+        "paid_amount": 200,
+        "unpaid_amount": 800,
+    })
+
+    assert result == {"id": "project-1", "project_name": "测试项目"}
+
+
+def test_framework_project_response_keeps_financial_fields_with_price_permission():
+    from app.services.framework_contract_service import FrameworkContractService
+
+    service = FrameworkContractService(
+        MagicMock(),
+        viewer=make_viewer("order:view_price"),
+    )
+    result = service._redact_financial_fields({"project_amount": 1000})
+
+    assert result["project_amount"] == 1000
 
 
 @pytest.fixture

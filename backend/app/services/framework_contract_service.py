@@ -1,14 +1,31 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.permissions import PERM_ORDER_VIEW_PRICE, user_has_permission
+from app.models.user import User
 from app.repositories.framework_contract_repo import FrameworkContractProjectRepository
 from app.services.business_document_service import BusinessDocumentService
 
 
 class FrameworkContractService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, viewer: User | None = None):
         self.db = db
+        self.viewer = viewer
         self.repo = FrameworkContractProjectRepository(db)
+
+    @property
+    def can_view_order_price(self) -> bool:
+        """Project amount and linked order amounts need explicit visibility."""
+        return self.viewer is None or user_has_permission(self.viewer, PERM_ORDER_VIEW_PRICE)
+
+    def _redact_financial_fields(self, data: dict) -> dict:
+        if self.can_view_order_price:
+            return data
+        return {
+            key: value
+            for key, value in data.items()
+            if key not in {"project_amount", "paid_amount", "unpaid_amount"}
+        }
 
     def _to_response(self, project) -> dict:
         return {
@@ -30,8 +47,12 @@ class FrameworkContractService:
         all_docs = project.documents or []
         base.update({
             "source": "订单" if all_docs else "",
-            "documents": [BusinessDocumentService._to_ref(d) for d in all_docs],
-            "orders": [BusinessDocumentService._to_ref(d) for d in all_docs if d.doc_type == "order"],
+            "documents": [BusinessDocumentService._to_ref(d, viewer=self.viewer) for d in all_docs],
+            "orders": [
+                BusinessDocumentService._to_ref(d, viewer=self.viewer)
+                for d in all_docs
+                if d.doc_type == "order"
+            ],
         })
         return base
 
@@ -76,7 +97,7 @@ class FrameworkContractService:
             item["paid_amount"] = paid
             item["unpaid_amount"] = max(0, item["project_amount"] - paid)
 
-        return result, total
+        return [self._redact_financial_fields(item) for item in result], total
 
     async def _batch_project_paid_amounts(self, project_ids: list[UUID]) -> dict[UUID, float]:
         """批量计算框架合同项目的已收金额（来自关联单据的收款）"""
@@ -111,7 +132,7 @@ class FrameworkContractService:
         paid = paid_map.get(result["id"], 0.0)
         result["paid_amount"] = paid
         result["unpaid_amount"] = max(0, result["project_amount"] - paid)
-        return result
+        return self._redact_financial_fields(result)
 
     async def _validate_contract_is_framework(self, contract_id: UUID) -> None:
         """框架合同项目只能挂在框架合同下；普通合同（制作/采购等）订单应走 contract_documents 直连。"""
@@ -135,7 +156,7 @@ class FrameworkContractService:
         result = self._to_detail(project)
         result["paid_amount"] = 0.0
         result["unpaid_amount"] = result["project_amount"]
-        return result
+        return self._redact_financial_fields(result)
 
     async def update_project(self, project_id: UUID, data: dict) -> dict:
         project = await self.repo.get_by_id(project_id)
@@ -155,7 +176,7 @@ class FrameworkContractService:
         paid = paid_map.get(result["id"], 0.0)
         result["paid_amount"] = paid
         result["unpaid_amount"] = max(0, result["project_amount"] - paid)
-        return result
+        return self._redact_financial_fields(result)
 
     async def delete_project(self, project_id: UUID) -> bool:
         project = await self.repo.get_by_id(project_id)
@@ -194,4 +215,4 @@ class FrameworkContractService:
         project.attachment_path = path
         project.attachment_name = name
         await self.db.flush()
-        return self._to_detail(project)
+        return self._redact_financial_fields(self._to_detail(project))

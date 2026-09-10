@@ -29,7 +29,7 @@
       </div>
     </div>
 
-    <div class="card-amount">
+    <div v-if="authStore.hasPermission('order:view_price')" class="card-amount">
       <span class="card-field-label">订单金额</span>
       <strong>{{ formatMoney(task.total_amount) }}</strong>
     </div>
@@ -57,6 +57,9 @@ import StatusTag from './StatusTag.vue'
 import { formatDateTimeFull } from '@/utils/datetime'
 import { formatMoney } from '@/utils/format'
 import { taskProgress } from '@/utils/task-board'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
 
 defineProps<{
   task: TaskQueueItem

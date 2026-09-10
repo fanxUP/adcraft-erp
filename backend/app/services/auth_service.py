@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from app.models.user import User
+from app.core.permissions import get_user_capabilities, get_user_permission_codes
 from app.schemas.auth import LoginRequest
 from app.utils.security import hash_password, verify_password, create_access_token
 
@@ -35,6 +36,8 @@ class AuthService:
             "is_active": user.is_active,
             "must_change_password": user.must_change_password,
             "roles": [r.name for r in user.roles],
+            "permissions": sorted(get_user_permission_codes(user)),
+            "capabilities": get_user_capabilities(user),
         }
 
     async def change_password(self, user_id: UUID, old_password: str, new_password: str) -> bool:

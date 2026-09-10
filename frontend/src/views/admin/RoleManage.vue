@@ -40,15 +40,33 @@
             ← 请先在左侧选择一个角色
           </div>
           <div v-else>
-            <el-checkbox v-model="checkAll" :indeterminate="isIndeterminate" @change="handleCheckAll" style="margin-bottom: 12px">
+            <el-alert
+              v-if="selectedRoleIsExecution"
+              title="设计、制作、安装角色不能配置报价、合同、财务或价格权限"
+              type="info"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 12px"
+            />
+            <el-checkbox :model-value="checkAll" :indeterminate="isIndeterminate" @change="handleCheckAll" style="margin-bottom: 12px">
               全选
             </el-checkbox>
             <el-divider style="margin: 8px 0" />
             <div v-for="(perms, group) in groupedPerms" :key="group" style="margin-bottom: 16px">
               <div style="font-weight: bold; margin-bottom: 8px; color: var(--ad-text)">{{ groupLabels[group as string] || group }}</div>
               <el-checkbox-group v-model="checkedPermIds">
-                <el-checkbox v-for="p in perms" :key="p.id" :value="p.id" style="margin-bottom: 4px">
-                  {{ p.name }} <span style="color: var(--ad-text-secondary); font-size: 12px">({{ p.code }})</span>
+                <el-checkbox
+                  v-for="p in perms"
+                  :key="p.id"
+                  :value="p.id"
+                  :disabled="permissionDisabled(p)"
+                  style="margin-bottom: 4px"
+                >
+                  {{ p.name }}
+                  <span style="color: var(--ad-text-secondary); font-size: 12px">({{ p.code }})</span>
+                  <el-tag v-if="isSensitivePermission(p.code)" size="small" type="warning" effect="plain" style="margin-left: 6px">
+                    {{ selectedRoleIsExecution ? '执行角色禁用' : '敏感数据' }}
+                  </el-tag>
                 </el-checkbox>
               </el-checkbox-group>
             </div>
@@ -93,11 +111,39 @@ const groupLabels: Record<string, string> = {
   product: '产品/材质/工艺', material: '产品/材质/工艺（兼容权限）', process: '产品/材质/工艺（兼容权限）',
   quote: '报价管理', order: '订单管理', design_task: '设计任务',
   production_task: '生产任务', installation_task: '安装任务',
+  contract: '合同管理', cdr_quote: '智能报价', cdr_rule_set: '智能报价规则',
+  cdr_customer_agreement: '客户协议价',
   payment: '收款管理', statement: '对账单', expense: '支出管理',
   inventory: '库存管理', outsource: '外协管理', report: '报表',
   backup: '备份管理', ai_quote: 'AI报价', ai_anomaly: 'AI异常',
   ai_knowledge: 'AI知识库', ai_report: 'AI报告',
 }
+
+const EXECUTION_ROLE_NAMES = new Set(['designer', 'production', 'installer'])
+const EXECUTION_PERMISSION_CODES = new Set([
+  'design_task:read', 'design_task:create', 'design_task:update',
+  'design_task:change_status', 'design_task:delete',
+  'production_task:read', 'production_task:create', 'production_task:update',
+  'production_task:change_status', 'production_task:delete',
+  'installation_task:read', 'installation_task:create', 'installation_task:update',
+  'installation_task:change_status', 'installation_task:delete',
+])
+const SENSITIVE_PERMISSION_CODES = new Set([
+  'quote:read', 'quote:create', 'quote:update', 'quote:delete',
+  'quote:confirm', 'quote:convert',
+  'contract:read', 'contract:create', 'contract:update', 'contract:delete',
+  'contract:change_status',
+  'cdr_quote:read', 'cdr_quote:create', 'cdr_quote:update', 'cdr_quote:delete',
+  'cdr_quote:view_cost', 'cdr_quote:view_profit', 'cdr_quote:adjust_price',
+  'cdr_quote:approve', 'cdr_quote:convert', 'cdr_rule_set:publish',
+  'cdr_customer_agreement:manage',
+  'order:view_price', 'order_item:view_price', 'catalog:view_price',
+  'finance:view_cost', 'report:view_financial', 'report:read',
+  'payment:read', 'payment:create', 'payment:void',
+  'statement:read', 'statement:create', 'statement:confirm',
+  'expense:read', 'expense:create', 'expense:update', 'expense:delete',
+  'outsource_payment:read', 'outsource_payment:create',
+])
 
 const loading = ref(false)
 const saving = ref(false)
@@ -123,11 +169,43 @@ const groupedPerms = computed(() => {
   return groups
 })
 
-const checkAll = computed(() => checkedPermIds.value.length === allPerms.value.length && allPerms.value.length > 0)
-const isIndeterminate = computed(() => checkedPermIds.value.length > 0 && checkedPermIds.value.length < allPerms.value.length)
+const selectedRoleIsExecution = computed(() => {
+  const role = selectedRole.value
+  if (!role || role.name === 'admin') return false
+  if (EXECUTION_ROLE_NAMES.has(role.name)) return true
+
+  // 新建或编辑自定义角色时，勾选执行权限后立即收紧敏感权限，
+  // 不等到保存接口返回错误才提示管理员。
+  const executionPermissionIds = new Set(
+    allPerms.value
+      .filter(permission => EXECUTION_PERMISSION_CODES.has(permission.code))
+      .map(permission => permission.id),
+  )
+  return checkedPermIds.value.some(id => executionPermissionIds.has(id))
+})
+
+const assignablePerms = computed(() => allPerms.value.filter(permission => !permissionDisabled(permission)))
+const assignablePermIds = computed(() => new Set(assignablePerms.value.map(permission => permission.id)))
+const checkedAssignableCount = computed(() => checkedPermIds.value.filter(id => assignablePermIds.value.has(id)).length)
+const checkAll = computed(() => assignablePerms.value.length > 0 && checkedAssignableCount.value === assignablePerms.value.length)
+const isIndeterminate = computed(() => checkedAssignableCount.value > 0 && !checkAll.value)
+
+function isSensitivePermission(code: string): boolean {
+  return SENSITIVE_PERMISSION_CODES.has(code)
+}
+
+function permissionDisabled(permission: PermissionItem): boolean {
+  if (!selectedRoleIsExecution.value || !isSensitivePermission(permission.code)) return false
+
+  // 历史上已经误配的敏感权限必须保持可取消，否则管理员无法修复角色。
+  return !selectedRole.value?.permissions.some(existing => existing.id === permission.id)
+}
 
 function handleCheckAll(val: boolean) {
-  checkedPermIds.value = val ? allPerms.value.map(p => p.id) : []
+  const assignableIds = assignablePerms.value.map(permission => permission.id)
+  const assignableIdSet = new Set(assignableIds)
+  const preservedIds = checkedPermIds.value.filter(id => !assignableIdSet.has(id))
+  checkedPermIds.value = val ? [...preservedIds, ...assignableIds] : preservedIds
 }
 
 async function fetchRoles() {
