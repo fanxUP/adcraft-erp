@@ -1,6 +1,9 @@
 export const INSTALLATION_PHOTO_MAX_BYTES = 10 * 1024 * 1024
 export const INSTALLATION_PHOTO_ACCEPT = 'image/jpeg,image/png,image/webp'
 export const INSTALLATION_PHOTO_MAX_BATCH = 20
+// Element Plus defaults to 1.2 (20% per wheel step), which is too aggressive
+// for detailed site-photo inspection. Keep the step small and easy to tune.
+export const INSTALLATION_PHOTO_PREVIEW_ZOOM_RATE = 1.05
 
 type PhotoFileLike = {
   name?: string

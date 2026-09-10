@@ -129,6 +129,7 @@
               lazy
               :preview-src-list="photoUrls"
               :initial-index="index"
+              :zoom-rate="INSTALLATION_PHOTO_PREVIEW_ZOOM_RATE"
               preview-teleported
             />
             <div class="photo-actions">
@@ -160,6 +161,7 @@ import { deleteInstallationTask } from '@/api/tasks'
 import {
   INSTALLATION_PHOTO_ACCEPT,
   INSTALLATION_PHOTO_MAX_BATCH,
+  INSTALLATION_PHOTO_PREVIEW_ZOOM_RATE,
   getAttachmentUrl,
   isInstallationPhotoAttachment,
   validateInstallationPhoto,

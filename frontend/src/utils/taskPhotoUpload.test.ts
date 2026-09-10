@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   INSTALLATION_PHOTO_MAX_BYTES,
+  INSTALLATION_PHOTO_PREVIEW_ZOOM_RATE,
   getAttachmentUrl,
   isInstallationPhotoAttachment,
   validateInstallationPhoto,
 } from './taskPhotoUpload'
 
 describe('task photo upload helpers', () => {
+  it('uses a gentle wheel zoom step for site photo previews', () => {
+    expect(INSTALLATION_PHOTO_PREVIEW_ZOOM_RATE).toBe(1.05)
+    expect(INSTALLATION_PHOTO_PREVIEW_ZOOM_RATE).toBeLessThan(1.2)
+  })
+
   it('accepts supported image files below the size limit', () => {
     expect(validateInstallationPhoto({ name: '现场.jpg', type: 'image/jpeg', size: 1024 })).toBeNull()
     expect(validateInstallationPhoto({ name: '现场.png', type: 'image/png', size: INSTALLATION_PHOTO_MAX_BYTES })).toBeNull()
