@@ -1,6 +1,7 @@
 import os
 import uuid as _uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.file_security import confined_path, safe_upload_name
 from app.core.permissions import (
     PERM_DESIGN_TASK_CHANGE_STATUS,
     PERM_DESIGN_TASK_CREATE,
@@ -26,7 +28,7 @@ from app.core.permissions import (
     require_role,
 )
 from app.models.user import User
-from app.models.task import InstallationTask
+from app.models.task import Attachment, DesignTask, InstallationTask, ProductionTask
 from app.schemas.common import success, success_paginated
 from app.schemas.task import (
     DesignTaskCreate,
@@ -54,6 +56,8 @@ def _ensure_uuid(s: str):
 
 INSTALLATION_PHOTO_MAX_BYTES = 10 * 1024 * 1024
 INSTALLATION_VIDEO_MAX_BYTES = 45 * 1024 * 1024
+TASK_ATTACHMENT_IMAGE_MAX_BYTES = 10 * 1024 * 1024
+TASK_ATTACHMENT_FILE_MAX_BYTES = 45 * 1024 * 1024
 UPLOAD_DIRECTORY_MODE = 0o750
 UPLOAD_FILE_MODE = 0o640
 _INSTALLATION_PHOTO_TYPES = {
@@ -65,6 +69,78 @@ _INSTALLATION_VIDEO_TYPES = {
     "video/mp4": (".mp4", "ftyp"),
     "video/quicktime": (".mov", "ftyp"),
     "video/webm": (".webm", "ebml"),
+}
+
+_TASK_ATTACHMENT_RULES = {
+    ".jpg": {"extension": ".jpg", "category": "image", "mime_types": {"image/jpeg"}},
+    ".jpeg": {"extension": ".jpg", "category": "image", "mime_types": {"image/jpeg"}},
+    ".png": {"extension": ".png", "category": "image", "mime_types": {"image/png"}},
+    ".webp": {"extension": ".webp", "category": "image", "mime_types": {"image/webp"}},
+    ".mp4": {"extension": ".mp4", "category": "video", "mime_types": {"video/mp4"}},
+    ".webm": {"extension": ".webm", "category": "video", "mime_types": {"video/webm"}},
+    ".mov": {"extension": ".mov", "category": "video", "mime_types": {"video/quicktime"}},
+    ".pdf": {"extension": ".pdf", "category": "pdf", "mime_types": {"application/pdf"}},
+    ".doc": {"extension": ".doc", "category": "document", "mime_types": {"application/msword"}, "signature": "ole"},
+    ".docx": {
+        "extension": ".docx",
+        "category": "document",
+        "mime_types": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+        "signature": "zip",
+    },
+    ".xls": {"extension": ".xls", "category": "document", "mime_types": {"application/vnd.ms-excel"}, "signature": "ole"},
+    ".xlsx": {
+        "extension": ".xlsx",
+        "category": "document",
+        "mime_types": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+        "signature": "zip",
+    },
+    ".dwg": {
+        "extension": ".dwg",
+        "category": "cad",
+        "mime_types": {"application/acad", "application/x-acad", "image/vnd.dwg", "application/octet-stream"},
+        "signature": "dwg",
+    },
+    ".dxf": {
+        "extension": ".dxf",
+        "category": "cad",
+        "mime_types": {"application/dxf", "image/vnd.dxf", "text/plain", "application/octet-stream"},
+        "signature": "dxf",
+    },
+    ".zip": {
+        "extension": ".zip",
+        "category": "archive",
+        "mime_types": {"application/zip", "application/x-zip-compressed", "application/octet-stream"},
+        "signature": "zip",
+    },
+    ".rar": {
+        "extension": ".rar",
+        "category": "archive",
+        "mime_types": {"application/vnd.rar", "application/x-rar-compressed", "application/octet-stream"},
+        "signature": "rar",
+    },
+    ".7z": {
+        "extension": ".7z",
+        "category": "archive",
+        "mime_types": {"application/x-7z-compressed", "application/octet-stream"},
+        "signature": "7z",
+    },
+}
+_TASK_ATTACHMENT_IMAGE_SIGNATURES = {
+    ".jpg": b"\xff\xd8\xff",
+    ".jpeg": b"\xff\xd8\xff",
+    ".png": b"\x89PNG\r\n\x1a\n",
+}
+_TASK_ATTACHMENT_WEBP_SIGNATURE = b"RIFF"
+_TASK_ATTACHMENT_OLE_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+_TASK_ATTACHMENT_TASK_MODELS = {
+    "design_task": DesignTask,
+    "production_task": ProductionTask,
+    "installation_task": InstallationTask,
+}
+_TASK_ATTACHMENT_PERMISSIONS = {
+    "design_task": PERM_DESIGN_TASK_UPDATE,
+    "production_task": PERM_PRODUCTION_TASK_UPDATE,
+    "installation_task": PERM_INSTALLATION_TASK_UPDATE,
 }
 
 
@@ -108,6 +184,59 @@ def validate_installation_media(
     if not is_valid_signature:
         return "上传的文件不是有效视频，请重新选择", None, None
     return None, extension, "video"
+
+
+def validate_task_attachment(
+    filename: str | None, content_type: str | None, contents: bytes
+) -> tuple[str | None, str | None, str | None]:
+    """Validate a design/production task attachment and return safe metadata."""
+    extension = Path(filename or "").suffix.lower()
+    rule = _TASK_ATTACHMENT_RULES.get(extension)
+    if rule is None:
+        return "任务附件仅支持 JPG、PNG、WEBP、视频、PDF、Word、Excel、CAD 或压缩包", None, None
+
+    category = rule["category"]
+    max_bytes = TASK_ATTACHMENT_IMAGE_MAX_BYTES if category == "image" else TASK_ATTACHMENT_FILE_MAX_BYTES
+    if len(contents) > max_bytes:
+        limit_label = "10MB" if category == "image" else "45MB"
+        return f"{('图片' if category == 'image' else '附件')}不能超过 {limit_label}", None, None
+
+    normalized_type = (content_type or "").split(";", 1)[0].strip().lower()
+    allowed_types = rule["mime_types"]
+    if normalized_type and normalized_type not in allowed_types and normalized_type != "application/octet-stream":
+        return "文件类型与扩展名不匹配，请重新选择", None, None
+
+    signature = rule.get("signature")
+    is_valid_signature = True
+    if category == "image":
+        if extension == ".webp":
+            is_valid_signature = len(contents) >= 12 and contents.startswith(_TASK_ATTACHMENT_WEBP_SIGNATURE) and contents[8:12] == b"WEBP"
+        else:
+            is_valid_signature = contents.startswith(_TASK_ATTACHMENT_IMAGE_SIGNATURES[extension])
+    elif category == "video":
+        if extension == ".webm":
+            is_valid_signature = contents.startswith(b"\x1a\x45\xdf\xa3")
+        else:
+            is_valid_signature = len(contents) >= 12 and contents[4:8] == b"ftyp"
+    elif extension == ".pdf":
+        is_valid_signature = contents.startswith(b"%PDF-")
+    elif signature == "ole":
+        is_valid_signature = contents.startswith(_TASK_ATTACHMENT_OLE_SIGNATURE)
+    elif signature == "zip":
+        is_valid_signature = contents.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"))
+    elif signature == "rar":
+        is_valid_signature = contents.startswith((b"Rar!\x1a\x07\x00", b"Rar!\x1a\x07\x01\x00"))
+    elif signature == "7z":
+        is_valid_signature = contents.startswith(b"7z\xbc\xaf\x27\x1c")
+    elif signature == "dwg":
+        is_valid_signature = contents.startswith(b"AC10")
+    elif signature == "dxf":
+        is_valid_signature = bool(contents.strip())
+
+    if not is_valid_signature:
+        label = "图片" if category == "image" else "视频" if category == "video" else "文件"
+        return f"上传的文件不是有效{label}，请重新选择", None, None
+    return None, rule["extension"], category
 
 
 def _user_has_permission(user: User, permission_code: str) -> bool:
@@ -453,44 +582,38 @@ async def upload_attachment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    exact_permission = {
-        "design_task": PERM_DESIGN_TASK_UPDATE,
-        "production_task": PERM_PRODUCTION_TASK_UPDATE,
-        "installation_task": PERM_INSTALLATION_TASK_UPDATE,
-    }.get(related_type)
-    has_permission = (
-        _user_has_permission(current_user, exact_permission)
-        if exact_permission
-        else any(
-            _user_has_permission(current_user, permission)
-            for permission in (
-                PERM_DESIGN_TASK_UPDATE,
-                PERM_PRODUCTION_TASK_UPDATE,
-                PERM_INSTALLATION_TASK_UPDATE,
-            )
-        )
-    )
-    if not has_permission:
+    exact_permission = _TASK_ATTACHMENT_PERMISSIONS.get(related_type)
+    task_model = _TASK_ATTACHMENT_TASK_MODELS.get(related_type)
+    if exact_permission is None or task_model is None:
+        return {"code": 40001, "message": "附件关联任务类型无效", "data": None}
+    if not _user_has_permission(current_user, exact_permission):
         raise HTTPException(status_code=403, detail="没有该附件关联对象的上传权限")
+
+    try:
+        related_uuid = _ensure_uuid(related_id)
+    except ValueError:
+        return {"code": 40001, "message": "任务编号无效", "data": None}
+    task = await db.get(task_model, related_uuid)
+    if task is None:
+        return {"code": 40401, "message": "关联任务不存在", "data": None}
 
     upload_dir = settings.LOCAL_UPLOAD_DIR
     date_dir = datetime.now(timezone.utc).strftime("%Y%m")
     dest_dir = os.path.join(upload_dir, date_dir)
 
-    safe_extension: str | None = None
-    installation_media_category: str | None = None
-    if related_type == "installation_task":
-        try:
-            installation_task_id = _ensure_uuid(related_id)
-        except ValueError:
-            return {"code": 40001, "message": "安装任务编号无效", "data": None}
-        installation_task = await db.get(InstallationTask, installation_task_id)
-        if installation_task is None:
-            return {"code": 40401, "message": "安装任务不存在", "data": None}
     contents = await file.read()
+    safe_extension: str | None = None
+    attachment_category: str | None = None
     if related_type == "installation_task":
         message, safe_extension, installation_media_category = validate_installation_media(
             file.content_type, contents
+        )
+        if message:
+            return {"code": 40001, "message": message, "data": None}
+        attachment_category = installation_media_category
+    else:
+        message, safe_extension, attachment_category = validate_task_attachment(
+            file.filename, file.content_type, contents
         )
         if message:
             return {"code": 40001, "message": message, "data": None}
@@ -502,11 +625,7 @@ async def upload_attachment(
     os.makedirs(dest_dir, mode=UPLOAD_DIRECTORY_MODE, exist_ok=True)
     os.chmod(dest_dir, UPLOAD_DIRECTORY_MODE)
     ext = safe_extension or ""
-    if safe_extension is None and file.filename and "." in file.filename:
-        candidate = file.filename.rsplit(".", 1)[1].lower()
-        if candidate.isalnum() and len(candidate) <= 10:
-            ext = candidate
-    unique_name = f"{_uuid.uuid4().hex}.{ext}"
+    unique_name = f"{_uuid.uuid4().hex}{ext}"
     file_path = os.path.join(dest_dir, unique_name)
 
     with open(file_path, "wb") as f:
@@ -514,15 +633,16 @@ async def upload_attachment(
     os.chmod(file_path, UPLOAD_FILE_MODE)
 
     service = AttachmentService(db)
+    _, display_name = safe_upload_name(file.filename, "attachment")
     att = await service.add_attachment(
         related_type=related_type,
-        related_id=_ensure_uuid(related_id),
+        related_id=related_uuid,
         data={
-            "filename": file.filename or unique_name,
+            "filename": display_name or unique_name,
             "file_path": f"{date_dir}/{unique_name}",
             "file_size": len(contents),
             "file_type": file.content_type,
-            "category": installation_media_category if related_type == "installation_task" else category,
+            "category": attachment_category,
         },
         uploaded_by=current_user.id,
     )
@@ -533,14 +653,28 @@ async def upload_attachment(
 async def delete_attachment(
     attachment_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_permission(
-        PERM_DESIGN_TASK_UPDATE,
-        PERM_PRODUCTION_TASK_UPDATE,
-        PERM_INSTALLATION_TASK_UPDATE,
-    )),
+    current_user: User = Depends(get_current_user),
 ):
+    try:
+        attachment_uuid = _ensure_uuid(attachment_id)
+    except ValueError:
+        return {"code": 40001, "message": "附件编号无效", "data": None}
+    attachment = await db.get(Attachment, attachment_uuid)
+    if attachment is None:
+        return {"code": 40401, "message": "附件不存在", "data": None}
+    permission = _TASK_ATTACHMENT_PERMISSIONS.get(attachment.related_type)
+    if permission is None or not _user_has_permission(current_user, permission):
+        raise HTTPException(status_code=403, detail="没有该附件关联对象的删除权限")
+
     service = AttachmentService(db)
-    ok = await service.delete_attachment(_ensure_uuid(attachment_id))
+    ok = await service.delete_attachment(attachment_uuid)
     if not ok:
         return {"code": 40401, "message": "附件不存在", "data": None}
+    try:
+        stored_path = confined_path(settings.LOCAL_UPLOAD_DIR, attachment.file_path)
+        if os.path.isfile(stored_path):
+            os.remove(stored_path)
+    except HTTPException:
+        # The database record is already removed; do not expose a server path.
+        pass
     return success(None)

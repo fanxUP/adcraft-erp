@@ -4,10 +4,17 @@ import {
   INSTALLATION_PHOTO_MAX_BYTES,
   INSTALLATION_PHOTO_PREVIEW_ZOOM_RATE,
   INSTALLATION_VIDEO_MAX_BYTES,
+  TASK_ATTACHMENT_ACCEPT,
+  TASK_ATTACHMENT_FILE_MAX_BYTES,
+  TASK_ATTACHMENT_IMAGE_MAX_BYTES,
+  TASK_ATTACHMENT_PREVIEW_ZOOM_RATE,
+  formatAttachmentSize,
   getAttachmentUrl,
+  getTaskAttachmentKind,
   isInstallationMediaAttachment,
   isInstallationVideoAttachment,
   isInstallationPhotoAttachment,
+  validateTaskAttachment,
   validateInstallationMedia,
   validateInstallationPhoto,
 } from './taskPhotoUpload'
@@ -55,5 +62,28 @@ describe('task photo upload helpers', () => {
   it('normalizes relative attachment paths for the uploads mount', () => {
     expect(getAttachmentUrl('202609/photo.jpg')).toBe('/uploads/202609/photo.jpg')
     expect(getAttachmentUrl('/uploads/202609/photo.jpg')).toBe('/uploads/202609/photo.jpg')
+  })
+
+  it('validates common task attachment formats and exposes conservative limits', () => {
+    expect(validateTaskAttachment({ name: '设计.jpg', type: 'image/jpeg', size: 1024 })).toBeNull()
+    expect(validateTaskAttachment({ name: '说明.pdf', type: 'application/pdf', size: 1024 })).toBeNull()
+    expect(validateTaskAttachment({ name: '清单.xlsx', type: '', size: 1024 })).toBeNull()
+    expect(validateTaskAttachment({ name: '图纸.dwg', type: 'application/octet-stream', size: 1024 })).toBeNull()
+    expect(validateTaskAttachment({ name: '现场.mp4', type: 'video/mp4', size: 1024 })).toBeNull()
+    expect(validateTaskAttachment({ name: '脚本.html', type: 'text/html', size: 1024 })).toContain('支持')
+    expect(validateTaskAttachment({ name: '大图.png', type: 'image/png', size: TASK_ATTACHMENT_IMAGE_MAX_BYTES + 1 })).toContain('10MB')
+    expect(validateTaskAttachment({ name: '大文件.zip', type: 'application/zip', size: TASK_ATTACHMENT_FILE_MAX_BYTES + 1 })).toContain('45MB')
+    expect(TASK_ATTACHMENT_ACCEPT).toContain('.dwg')
+    expect(TASK_ATTACHMENT_PREVIEW_ZOOM_RATE).toBe(1.05)
+  })
+
+  it('classifies non-image attachments without requiring thumbnails', () => {
+    expect(getTaskAttachmentKind({ filename: '方案.pdf', file_type: 'application/pdf' })).toBe('pdf')
+    expect(getTaskAttachmentKind({ filename: '现场.mp4', file_type: 'video/mp4' })).toBe('video')
+    expect(getTaskAttachmentKind({ filename: '图纸.dwg', file_type: 'application/octet-stream' })).toBe('cad')
+    expect(getTaskAttachmentKind({ filename: '资料.zip', file_type: 'application/zip' })).toBe('archive')
+    expect(getTaskAttachmentKind({ filename: '旧文件.bin', file_type: 'application/octet-stream' })).toBe('file')
+    expect(formatAttachmentSize(1024)).toBe('1.0 KB')
+    expect(formatAttachmentSize(1024 * 1024)).toBe('1.0 MB')
   })
 })
