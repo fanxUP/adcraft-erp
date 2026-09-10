@@ -4,7 +4,7 @@
       <div class="card-header">
         <span>任务处理</span>
         <el-tag v-if="isHistoricalReadOnly" type="info" size="small">
-          历史任务（只读）
+          历史任务（状态只读）
         </el-tag>
         <el-tag v-else-if="linkedItemIds.length" type="success" size="small">
           已关联 {{ linkedItemIds.length }} 条明细
@@ -23,7 +23,7 @@
           text
           size="small"
           :loading="loadingItems"
-          :disabled="saving || changing"
+          :disabled="changing"
           @click="loadItems"
         >
           刷新状态
@@ -47,8 +47,8 @@
 
       <el-alert
         :title="isHistoricalReadOnly
-          ? '该历史任务未关联订单明细且已结束，不能再次变更任务状态；如需补录历史明细，可使用上方关联操作。'
-          : '状态变更只作用于下方勾选的订单明细；新勾选明细会在提交状态时自动纳入本任务。'"
+          ? '该历史任务未关联订单明细且已结束，不能再次变更任务状态；如需补录明细，请勾选后使用“添加到本任务”。'
+          : '状态变更只作用于下方勾选的订单明细；新勾选明细会在提交状态时自动纳入本任务，无需单独保存关联。'"
         :type="isHistoricalReadOnly ? 'warning' : 'info'"
         :closable="false"
         show-icon
@@ -78,7 +78,7 @@
               class="item-option-checkbox"
               type="checkbox"
               :value="item.id"
-              :disabled="saving || changing || !canSelect(item)"
+              :disabled="changing || !canSelect(item)"
               :aria-label="`选择订单明细 ${item.item_name}`"
             />
             <span class="item-option-body">
@@ -121,16 +121,17 @@
           当前订单没有可关联的有效明细。
         </div>
 
-        <div class="link-actions">
+        <div v-if="isHistoricalReadOnly" class="link-actions">
           <el-button
             type="primary"
             plain
-            :loading="saving"
+            :loading="linking"
             :disabled="!selectedItemIds.length || !items.length || changing"
-            @click="handleLink"
+            @click="handleAddHistoricalItems"
           >
-            {{ selectedItemIds.length ? `保存关联 ${selectedItemIds.length} 条明细` : '保存关联' }}
+            {{ selectedItemIds.length ? `添加 ${selectedItemIds.length} 条到本任务` : '添加到本任务' }}
           </el-button>
+          <span class="link-context-note">仅用于补录历史明细，不会改变任务状态。</span>
         </div>
       </div>
     </section>
@@ -142,7 +143,7 @@
         <span>变更状态</span>
         <span class="section-note">
           {{ isHistoricalReadOnly
-            ? '历史终态仅支持查看'
+            ? '历史终态不可变更状态，可补录明细'
             : workflowControl.hasMixedStatuses
               ? '已选明细状态不同，请选择状态相同的明细后再批量推进'
               : '点击可执行的下一步或回退' }}
@@ -152,7 +153,7 @@
         :steps="steps"
         :current-status="workflowControl.currentStatus"
         :workflow="workflowControl.workflow"
-        :changing="changing || saving || isHistoricalReadOnly || !canChangeTaskStatus"
+        :changing="changing || isHistoricalReadOnly || !canChangeTaskStatus"
         @change="handleWorkflowChange"
       />
     </section>
@@ -203,7 +204,7 @@ const emit = defineEmits<{
 const items = ref<TaskOrderItemOption[]>([])
 const selectedItemIds = ref<string[]>([])
 const loadingItems = ref(false)
-const saving = ref(false)
+const linking = ref(false)
 const loadError = ref(false)
 
 const linkedItemIds = computed(() => {
@@ -295,32 +296,32 @@ async function updateTaskItems(itemIds: string[]) {
   return updateInstallationTask(props.taskId, { order_item_ids: itemIds })
 }
 
-async function handleLink() {
+async function handleAddHistoricalItems() {
   const selected = items.value.filter(item => selectedItemIds.value.includes(item.id))
   if (!selected.length) return
   const selectedLabel = selected.map(itemLabel).join('、')
 
   try {
     await ElMessageBox.confirm(
-      `确认将此任务关联到以下 ${selected.length} 条明细：${selectedLabel}？关联后会纳入这些明细的进度统计。`,
-      '确认关联订单明细',
-      { confirmButtonText: '确认关联', cancelButtonText: '取消', type: 'warning' },
+      `确认将以下 ${selected.length} 条明细添加到本历史任务：${selectedLabel}？添加后会纳入这些明细的进度统计，但不会改变任务状态。`,
+      '补录任务明细',
+      { confirmButtonText: '添加到本任务', cancelButtonText: '取消', type: 'warning' },
     )
   } catch {
     return
   }
 
-  saving.value = true
+  linking.value = true
   try {
     const allLinkedIds = items.value.filter(item => item.is_linked).map(item => item.id)
     const itemIds = Array.from(new Set([...allLinkedIds, ...selected.map(item => item.id)]))
     await updateTaskItems(itemIds)
-    ElMessage.success(`已关联 ${selected.length} 条订单明细`)
+    ElMessage.success(`已添加 ${selected.length} 条明细到本任务`)
     emit('linked')
   } catch {
     // API error message is handled by the shared request interceptor.
   } finally {
-    saving.value = false
+    linking.value = false
   }
 }
 
@@ -523,8 +524,16 @@ onMounted(loadItems)
 
 .link-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-top: 12px;
+}
+
+.link-context-note {
+  color: var(--ad-text-secondary);
+  font-size: 12px;
 }
 
 .link-tip {

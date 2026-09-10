@@ -65,6 +65,17 @@ describe('任务详情页界面收敛', () => {
     expect(metaSource.indexOf('小计')).toBeLessThan(metaSource.indexOf('本任务进度'))
   })
 
+  it('普通任务不显示独立关联保存按钮，历史任务保留补录入口', () => {
+    const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
+
+    expect(source).not.toContain('保存关联 ${selectedItemIds.length}')
+    expect(source).not.toContain(": '保存关联'")
+    expect(source).toContain('无需单独保存关联')
+    expect(source).toContain('v-if="isHistoricalReadOnly"')
+    expect(source).toContain('添加到本任务')
+    expect(source).toContain('handleAddHistoricalItems')
+  })
+
   it('工作台项目看板与独立项目看板复用任务进度', () => {
     const source = readSource('views/home/DashboardView.vue')
     const cardSource = readSource('components/ui/TaskBoardCard.vue')
