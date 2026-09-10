@@ -53,12 +53,18 @@ def _ensure_uuid(s: str):
 
 
 INSTALLATION_PHOTO_MAX_BYTES = 10 * 1024 * 1024
+INSTALLATION_VIDEO_MAX_BYTES = 45 * 1024 * 1024
 UPLOAD_DIRECTORY_MODE = 0o750
 UPLOAD_FILE_MODE = 0o640
 _INSTALLATION_PHOTO_TYPES = {
     "image/jpeg": (b"\xff\xd8\xff", ".jpg"),
     "image/png": (b"\x89PNG\r\n\x1a\n", ".png"),
     "image/webp": (b"RIFF", ".webp"),
+}
+_INSTALLATION_VIDEO_TYPES = {
+    "video/mp4": (".mp4", "ftyp"),
+    "video/quicktime": (".mov", "ftyp"),
+    "video/webm": (".webm", "ebml"),
 }
 
 
@@ -78,6 +84,30 @@ def validate_installation_photo(content_type: str | None, contents: bytes) -> tu
     if not is_valid_signature:
         return "上传的文件不是有效图片，请重新选择", None
     return None, extension
+
+
+def validate_installation_media(
+    content_type: str | None, contents: bytes
+) -> tuple[str | None, str | None, str | None]:
+    """Validate an installation image or video and return its safe category/extension."""
+    if content_type in _INSTALLATION_PHOTO_TYPES:
+        message, extension = validate_installation_photo(content_type, contents)
+        return message, extension, None if message else "photo"
+
+    video_type = _INSTALLATION_VIDEO_TYPES.get(content_type or "")
+    if video_type is None:
+        return "现场媒体仅支持 JPG、PNG、WEBP、MP4、WEBM 或 MOV 文件", None, None
+    if len(contents) > INSTALLATION_VIDEO_MAX_BYTES:
+        return "单个现场视频不能超过 45MB", None, None
+
+    extension, signature = video_type
+    if signature == "ftyp":
+        is_valid_signature = len(contents) >= 12 and contents[4:8] == b"ftyp"
+    else:
+        is_valid_signature = contents.startswith(b"\x1a\x45\xdf\xa3")
+    if not is_valid_signature:
+        return "上传的文件不是有效视频，请重新选择", None, None
+    return None, extension, "video"
 
 
 def _user_has_permission(user: User, permission_code: str) -> bool:
@@ -448,6 +478,7 @@ async def upload_attachment(
     dest_dir = os.path.join(upload_dir, date_dir)
 
     safe_extension: str | None = None
+    installation_media_category: str | None = None
     if related_type == "installation_task":
         try:
             installation_task_id = _ensure_uuid(related_id)
@@ -458,7 +489,9 @@ async def upload_attachment(
             return {"code": 40401, "message": "安装任务不存在", "data": None}
     contents = await file.read()
     if related_type == "installation_task":
-        message, safe_extension = validate_installation_photo(file.content_type, contents)
+        message, safe_extension, installation_media_category = validate_installation_media(
+            file.content_type, contents
+        )
         if message:
             return {"code": 40001, "message": message, "data": None}
 
@@ -489,7 +522,7 @@ async def upload_attachment(
             "file_path": f"{date_dir}/{unique_name}",
             "file_size": len(contents),
             "file_type": file.content_type,
-            "category": "photo" if related_type == "installation_task" else category,
+            "category": installation_media_category if related_type == "installation_task" else category,
         },
         uploaded_by=current_user.id,
     )

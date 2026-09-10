@@ -10,6 +10,8 @@ from fastapi import HTTPException, UploadFile
 from app.api import tasks as task_api
 from app.api.tasks import (
     INSTALLATION_PHOTO_MAX_BYTES,
+    INSTALLATION_VIDEO_MAX_BYTES,
+    validate_installation_media,
     validate_installation_photo,
 )
 
@@ -42,6 +44,34 @@ def test_validate_installation_photo_rejects_oversized_content():
     )
     assert "10MB" in message
     assert extension is None
+
+
+def test_validate_installation_media_accepts_supported_video_signatures():
+    assert validate_installation_media(
+        "video/mp4", b"0000ftypisom" + b"mp4-data"
+    ) == (None, ".mp4", "video")
+    assert validate_installation_media(
+        "video/webm", b"\x1a\x45\xdf\xa3" + b"webm-data"
+    ) == (None, ".webm", "video")
+    assert validate_installation_media(
+        "video/quicktime", b"0000ftypqt  " + b"mov-data"
+    ) == (None, ".mov", "video")
+
+
+def test_validate_installation_media_rejects_invalid_video_or_oversized_content():
+    message, extension, category = validate_installation_media(
+        "video/mp4", b"not-a-video"
+    )
+    assert "有效视频" in message
+    assert extension is None
+    assert category is None
+
+    message, extension, category = validate_installation_media(
+        "video/mp4", b"0000ftypisom" + b"0" * INSTALLATION_VIDEO_MAX_BYTES
+    )
+    assert "45MB" in message
+    assert extension is None
+    assert category is None
 
 
 def _installation_uploader():
@@ -86,6 +116,36 @@ async def test_installation_upload_forces_photo_category_and_safe_extension(tmp_
     assert uploaded_files
     assert stat.S_IMODE(uploaded_files[0].stat().st_mode) == 0o640
     assert stat.S_IMODE(uploaded_files[0].parent.stat().st_mode) == 0o750
+
+
+@pytest.mark.asyncio
+async def test_installation_video_upload_forces_video_category_and_safe_extension(tmp_path, monkeypatch):
+    monkeypatch.setattr(task_api.settings, "LOCAL_UPLOAD_DIR", str(tmp_path))
+    db = MagicMock()
+    db.get = AsyncMock(return_value=SimpleNamespace(id=uuid4()))
+    attachment = {"id": str(uuid4()), "category": "video"}
+
+    with patch.object(task_api, "AttachmentService") as service_cls:
+        service_cls.return_value.add_attachment = AsyncMock(return_value=attachment)
+        result = await task_api.upload_attachment(
+            related_type="installation_task",
+            related_id=str(uuid4()),
+            category="photo",
+            file=UploadFile(
+                filename="../../unsafe.name.exe",
+                file=BytesIO(b"0000ftypisom" + b"mp4-data"),
+                headers={"content-type": "video/mp4"},
+            ),
+            db=db,
+            current_user=_installation_uploader(),
+        )
+
+    assert result["code"] == 0
+    assert result["data"] == attachment
+    payload = service_cls.return_value.add_attachment.await_args.kwargs
+    assert payload["data"]["category"] == "video"
+    assert payload["data"]["file_path"].endswith(".mp4")
+    assert list(tmp_path.rglob("*.mp4"))
 
 
 @pytest.mark.asyncio

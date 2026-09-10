@@ -75,7 +75,7 @@
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header>
           <div class="card-header">
-            <span>现场照片 <el-tag size="small" type="info">{{ photoAttachments.length }} 张</el-tag></span>
+            <span>现场照片与视频 <el-tag size="small" type="info">{{ mediaAttachments.length }} 个</el-tag></span>
             <span class="photo-header-hint">拖拽或点击上传</span>
           </div>
         </template>
@@ -97,49 +97,86 @@
             class="photo-input"
             type="file"
             multiple
-            :accept="INSTALLATION_PHOTO_ACCEPT"
+            :accept="INSTALLATION_MEDIA_ACCEPT"
             :disabled="photoUploadDisabled"
             @click.stop
             @change="handlePhotoInputChange"
           />
           <el-icon class="photo-drop-icon"><UploadFilled /></el-icon>
-          <div class="photo-drop-title">将现场照片拖到这里上传</div>
-          <div class="photo-drop-subtitle">或点击选择图片，支持批量上传</div>
-          <div class="photo-drop-hint">支持 JPG、PNG、WEBP；单张不超过 10MB</div>
+          <div class="photo-drop-title">将现场照片或视频拖到这里上传</div>
+          <div class="photo-drop-subtitle">或点击选择文件，支持批量上传</div>
+          <div class="photo-drop-hint">图片支持 JPG、PNG、WEBP（≤10MB）；视频支持 MP4、WEBM、MOV（≤45MB）</div>
         </div>
 
-        <div v-if="photoUploadQueue.length" class="photo-upload-queue">
-          <div v-for="item in photoUploadQueue" :key="item.id" class="photo-upload-row">
+        <div v-if="mediaUploadQueue.length" class="photo-upload-queue">
+          <div v-for="item in mediaUploadQueue" :key="item.id" class="photo-upload-row">
             <span class="photo-upload-name" :title="item.name">{{ item.name }}</span>
             <el-tag v-if="item.status === 'uploading'" size="small" type="warning">上传中</el-tag>
             <template v-else-if="item.status === 'error'">
               <el-tag size="small" type="danger">{{ item.error || '上传失败' }}</el-tag>
-              <el-button text type="primary" size="small" @click="retryPhoto(item)">重试</el-button>
+              <el-button text type="primary" size="small" @click="retryMedia(item)">重试</el-button>
             </template>
           </div>
         </div>
 
-        <div class="photo-grid" v-if="photoAttachments.length">
-          <div v-for="(att, index) in photoAttachments" :key="att.id" class="photo-item">
+        <div class="photo-grid" v-if="mediaAttachments.length">
+          <div v-for="att in mediaAttachments" :key="att.id" class="photo-item">
+            <button
+              v-if="isInstallationVideoAttachment(att)"
+              type="button"
+              class="video-thumb"
+              :aria-label="`播放视频 ${att.filename}`"
+              @click="openVideoPreview(att)"
+            >
+              <video
+                class="photo-img"
+                :src="getAttachmentUrl(att.file_path)"
+                :aria-label="att.filename"
+                preload="metadata"
+                muted
+                playsinline
+              />
+              <span class="video-play-badge" aria-hidden="true">▶</span>
+            </button>
             <el-image
+              v-else
               class="photo-img"
               :src="getAttachmentUrl(att.file_path)"
               :alt="att.filename"
               fit="cover"
               lazy
-              :preview-src-list="photoUrls"
-              :initial-index="index"
+              :preview-src-list="imageUrls"
+              :initial-index="imagePreviewIndex(att.id)"
               :zoom-rate="INSTALLATION_PHOTO_PREVIEW_ZOOM_RATE"
               preview-teleported
             />
             <div class="photo-actions">
-              <span class="photo-label">{{ att.category || att.filename }}</span>
+              <span class="photo-label" :title="att.filename">{{ isInstallationVideoAttachment(att) ? '视频' : '照片' }} · {{ att.filename }}</span>
               <el-button text type="danger" size="small" @click="handleDeleteAttachment(att.id)">删除</el-button>
             </div>
           </div>
         </div>
-        <div v-else class="photo-empty">暂无现场照片，拖入或点击上方区域上传</div>
+        <div v-else class="photo-empty">暂无现场照片或视频，拖入或点击上方区域上传</div>
       </el-card>
+
+      <el-dialog
+        v-model="videoPreviewVisible"
+        title="视频预览"
+        width="min(900px, 92vw)"
+        destroy-on-close
+        @closed="videoPreviewAttachment = null"
+      >
+        <video
+          v-if="videoPreviewAttachment"
+          class="video-player"
+          :src="getAttachmentUrl(videoPreviewAttachment.file_path)"
+          controls
+          autoplay
+          playsinline
+        >
+          您的浏览器不支持视频播放
+        </video>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -153,18 +190,19 @@ import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { ProgressBar, StatusTag } from '@/components/ui'
 import { getInstallationTask, updateInstallationTask, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { InstallationTaskResponse } from '@/types/api'
+import type { AttachmentResponse, InstallationTaskResponse } from '@/types/api'
 import { getEmployees } from '@/api/employees'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { useAuthStore } from '@/stores/auth'
 import { deleteInstallationTask } from '@/api/tasks'
 import {
-  INSTALLATION_PHOTO_ACCEPT,
-  INSTALLATION_PHOTO_MAX_BATCH,
+  INSTALLATION_MEDIA_ACCEPT,
+  INSTALLATION_MEDIA_MAX_BATCH,
   INSTALLATION_PHOTO_PREVIEW_ZOOM_RATE,
   getAttachmentUrl,
-  isInstallationPhotoAttachment,
-  validateInstallationPhoto,
+  isInstallationMediaAttachment,
+  isInstallationVideoAttachment,
+  validateInstallationMedia,
 } from '@/utils/taskPhotoUpload'
 
 const route = useRoute()
@@ -180,11 +218,13 @@ const assignTarget = ref('')
 const assigning = ref(false)
 const photoInput = ref<HTMLInputElement | null>(null)
 const dragActive = ref(false)
-const photoUploadQueue = ref<PhotoUploadItem[]>([])
+const mediaUploadQueue = ref<MediaUploadItem[]>([])
+const videoPreviewVisible = ref(false)
+const videoPreviewAttachment = ref<AttachmentResponse | null>(null)
 let dragDepth = 0
-let activePhotoUploads = 0
+let activeMediaUploads = 0
 
-interface PhotoUploadItem {
+interface MediaUploadItem {
   id: string
   file: File
   name: string
@@ -192,10 +232,11 @@ interface PhotoUploadItem {
   error?: string
 }
 
-const photoAttachments = computed(() =>
-  (task.value?.attachments || []).filter(isInstallationPhotoAttachment),
+const mediaAttachments = computed(() =>
+  (task.value?.attachments || []).filter(isInstallationMediaAttachment),
 )
-const photoUrls = computed(() => photoAttachments.value.map(att => getAttachmentUrl(att.file_path)))
+const imageAttachments = computed(() => mediaAttachments.value.filter(att => !isInstallationVideoAttachment(att)))
+const imageUrls = computed(() => imageAttachments.value.map(att => getAttachmentUrl(att.file_path)))
 const photoUploadDisabled = computed(() => !task.value || deleting.value)
 const INST_WORKFLOW: Record<string, string[]> = {
   pending: ['assigned', 'in_progress', 'cancelled'],
@@ -313,65 +354,65 @@ function handlePhotoDrop(event: DragEvent) {
   dragActive.value = false
   if (photoUploadDisabled.value) return
   const files = Array.from(event.dataTransfer?.files || [])
-  enqueuePhotoFiles(files)
+  enqueueMediaFiles(files)
 }
 
 function handlePhotoInputChange(event: Event) {
   const input = event.target as HTMLInputElement
   const files = Array.from(input.files || [])
   input.value = ''
-  enqueuePhotoFiles(files)
+  enqueueMediaFiles(files)
 }
 
-function enqueuePhotoFiles(files: File[]) {
+function enqueueMediaFiles(files: File[]) {
   if (!files.length) return
-  const selectedFiles = files.slice(0, INSTALLATION_PHOTO_MAX_BATCH)
-  if (files.length > INSTALLATION_PHOTO_MAX_BATCH) {
-    ElMessage.warning(`一次最多上传 ${INSTALLATION_PHOTO_MAX_BATCH} 张照片，超出部分未加入队列`)
+  const selectedFiles = files.slice(0, INSTALLATION_MEDIA_MAX_BATCH)
+  if (files.length > INSTALLATION_MEDIA_MAX_BATCH) {
+    ElMessage.warning(`一次最多上传 ${INSTALLATION_MEDIA_MAX_BATCH} 个文件，超出部分未加入队列`)
   }
 
   const rejected: File[] = []
   const accepted: File[] = []
   for (const file of selectedFiles) {
-    if (validateInstallationPhoto(file)) rejected.push(file)
+    if (validateInstallationMedia(file)) rejected.push(file)
     else accepted.push(file)
   }
   if (rejected.length) {
-    ElMessage.warning(`${rejected.length} 张文件不符合现场照片格式或大小要求，未加入队列`)
+    ElMessage.warning(`${rejected.length} 个文件不符合现场照片或视频格式、大小要求，未加入队列`)
   }
   if (!accepted.length) return
 
-  photoUploadQueue.value.push(...accepted.map(file => ({
+  mediaUploadQueue.value.push(...accepted.map(file => ({
     id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
     file,
     name: file.name,
     status: 'queued' as const,
   })))
-  startPhotoUploadQueue()
+  startMediaUploadQueue()
 }
 
-function startPhotoUploadQueue() {
-  while (activePhotoUploads < 3) {
-    const next = photoUploadQueue.value.find(item => item.status === 'queued')
+function startMediaUploadQueue() {
+  while (activeMediaUploads < 3) {
+    const next = mediaUploadQueue.value.find(item => item.status === 'queued')
     if (!next) return
     next.status = 'uploading'
-    activePhotoUploads += 1
-    void uploadPhotoItem(next).finally(() => {
-      activePhotoUploads -= 1
-      startPhotoUploadQueue()
+    activeMediaUploads += 1
+    void uploadMediaItem(next).finally(() => {
+      activeMediaUploads -= 1
+      startMediaUploadQueue()
     })
   }
 }
 
-async function uploadPhotoItem(item: PhotoUploadItem) {
+async function uploadMediaItem(item: MediaUploadItem) {
   try {
-    const uploaded = await uploadAttachment('installation_task', route.params.id as string, item.file, 'photo')
+    const uploaded = await uploadAttachment('installation_task', route.params.id as string, item.file, 'site_media')
     if (task.value && uploaded) {
       const existing = task.value.attachments || []
       task.value.attachments = [...existing, uploaded]
     }
-    photoUploadQueue.value = photoUploadQueue.value.filter(queueItem => queueItem.id !== item.id)
-    ElMessage.success('现场照片上传成功')
+    mediaUploadQueue.value = mediaUploadQueue.value.filter(queueItem => queueItem.id !== item.id)
+    ElMessage.success('现场照片或视频上传成功')
     await aiStore.notifyBusinessMutation()
   } catch {
     item.status = 'error'
@@ -379,14 +420,23 @@ async function uploadPhotoItem(item: PhotoUploadItem) {
   }
 }
 
-function retryPhoto(item: PhotoUploadItem) {
+function retryMedia(item: MediaUploadItem) {
   item.status = 'queued'
   item.error = undefined
-  startPhotoUploadQueue()
+  startMediaUploadQueue()
+}
+
+function imagePreviewIndex(attachmentId: string) {
+  return imageAttachments.value.findIndex(att => att.id === attachmentId)
+}
+
+function openVideoPreview(attachment: AttachmentResponse) {
+  videoPreviewAttachment.value = attachment
+  videoPreviewVisible.value = true
 }
 
 async function handleDeleteAttachment(id: string) {
-  await ElMessageBox.confirm('确定删除此照片？删除后无法恢复。', '删除照片', {
+  await ElMessageBox.confirm('确定删除此照片或视频？删除后无法恢复。', '删除现场媒体', {
     confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
   })
   await deleteAttachment(id)
@@ -451,9 +501,14 @@ onMounted(() => {
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
 .photo-item { background: #252540; border-radius: 6px; overflow: hidden; border: 1px solid var(--ad-border); }
 .photo-img { display: block; width: 100%; height: 160px; cursor: zoom-in; }
+.video-thumb { position: relative; display: block; width: 100%; padding: 0; border: 0; background: #111; cursor: pointer; }
+.video-thumb .photo-img { cursor: pointer; object-fit: cover; }
+.video-play-badge { position: absolute; top: 50%; left: 50%; display: grid; width: 44px; height: 44px; place-items: center; border-radius: 50%; color: #fff; background: rgb(0 0 0 / 62%); font-size: 20px; transform: translate(-50%, -50%); transition: background-color 0.2s ease, transform 0.2s ease; }
+.video-thumb:hover .video-play-badge { background: var(--el-color-primary); transform: translate(-50%, -50%) scale(1.06); }
 .photo-actions { padding: 6px 10px; display: flex; justify-content: space-between; align-items: center; }
-.photo-label { font-size: 12px; color: #888; }
+.photo-label { overflow: hidden; max-width: calc(100% - 40px); font-size: 12px; color: #888; text-overflow: ellipsis; white-space: nowrap; }
 .photo-empty { padding: 18px 8px 4px; color: var(--ad-text-secondary); text-align: center; font-size: 13px; }
+.video-player { display: block; width: 100%; max-height: 70vh; background: #000; }
 
 @media (max-width: 600px) {
   .card-header { align-items: flex-start; gap: 8px; }
