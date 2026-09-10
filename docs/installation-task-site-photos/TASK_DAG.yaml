@@ -1,0 +1,44 @@
+version: 1
+name: installation-task-site-photos
+objective: >-
+  为安装任务现场照片增加安全的拖拽/批量上传、缩略图和放大预览能力，
+  复用现有附件表，不改变任务状态、进度、验收和订单明细规则。
+mode: STRICT
+nodes:
+  - id: ISP-P01
+    title: 登记范围与上传安全契约
+    acceptance: A-ISP-01
+    depends_on: []
+  - id: ISP-P02
+    title: 实现拖拽上传区域和上传队列
+    acceptance: A-ISP-02
+    depends_on: [ISP-P01]
+  - id: ISP-P03
+    title: 实现缩略图和放大预览
+    acceptance: A-ISP-03
+    depends_on: [ISP-P02]
+  - id: ISP-P04
+    title: 测试、质量验证与交付准备
+    acceptance: A-ISP-04
+    depends_on: [ISP-P01, ISP-P02, ISP-P03]
+edges:
+  - from: ISP-P01
+    to: ISP-P02
+  - from: ISP-P02
+    to: ISP-P03
+  - from: ISP-P01
+    to: ISP-P04
+  - from: ISP-P02
+    to: ISP-P04
+  - from: ISP-P03
+    to: ISP-P04
+backlog:
+  - id: ISP-B01
+    title: 现场照片阶段标签
+    priority: P2
+  - id: ISP-B02
+    title: 服务端缩略图和对象存储
+    priority: P2
+  - id: ISP-B03
+    title: 照片备注、定位和安装明细关联
+    priority: P2

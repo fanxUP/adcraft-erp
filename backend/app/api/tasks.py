@@ -2,11 +2,12 @@ import os
 import uuid as _uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.core.permissions import (
     PERM_DESIGN_TASK_CHANGE_STATUS,
     PERM_DESIGN_TASK_CREATE,
@@ -25,6 +26,7 @@ from app.core.permissions import (
     require_role,
 )
 from app.models.user import User
+from app.models.task import InstallationTask
 from app.schemas.common import success, success_paginated
 from app.schemas.task import (
     DesignTaskCreate,
@@ -48,6 +50,40 @@ from app.services.task_service import (
 
 def _ensure_uuid(s: str):
     return _uuid.UUID(s)
+
+
+INSTALLATION_PHOTO_MAX_BYTES = 10 * 1024 * 1024
+_INSTALLATION_PHOTO_TYPES = {
+    "image/jpeg": (b"\xff\xd8\xff", ".jpg"),
+    "image/png": (b"\x89PNG\r\n\x1a\n", ".png"),
+    "image/webp": (b"RIFF", ".webp"),
+}
+
+
+def validate_installation_photo(content_type: str | None, contents: bytes) -> tuple[str | None, str | None]:
+    """Validate an installation photo and return a safe extension for storage."""
+    photo_type = _INSTALLATION_PHOTO_TYPES.get(content_type or "")
+    if photo_type is None:
+        return "现场照片仅支持 JPG、PNG 或 WEBP 图片", None
+    if len(contents) > INSTALLATION_PHOTO_MAX_BYTES:
+        return "单张现场照片不能超过 10MB", None
+
+    signature, extension = photo_type
+    if content_type == "image/webp":
+        is_valid_signature = len(contents) >= 12 and contents.startswith(signature) and contents[8:12] == b"WEBP"
+    else:
+        is_valid_signature = contents.startswith(signature)
+    if not is_valid_signature:
+        return "上传的文件不是有效图片，请重新选择", None
+    return None, extension
+
+
+def _user_has_permission(user: User, permission_code: str) -> bool:
+    return any(
+        permission.code == permission_code
+        for role in user.roles
+        for permission in role.permissions
+    )
 
 
 # -- Unified project task queue --
@@ -383,24 +419,56 @@ async def upload_attachment(
     category: str | None = None,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_permission(
-        PERM_DESIGN_TASK_UPDATE,
-        PERM_PRODUCTION_TASK_UPDATE,
-        PERM_INSTALLATION_TASK_UPDATE,
-    )),
+    current_user: User = Depends(get_current_user),
 ):
+    exact_permission = {
+        "design_task": PERM_DESIGN_TASK_UPDATE,
+        "production_task": PERM_PRODUCTION_TASK_UPDATE,
+        "installation_task": PERM_INSTALLATION_TASK_UPDATE,
+    }.get(related_type)
+    has_permission = (
+        _user_has_permission(current_user, exact_permission)
+        if exact_permission
+        else any(
+            _user_has_permission(current_user, permission)
+            for permission in (
+                PERM_DESIGN_TASK_UPDATE,
+                PERM_PRODUCTION_TASK_UPDATE,
+                PERM_INSTALLATION_TASK_UPDATE,
+            )
+        )
+    )
+    if not has_permission:
+        raise HTTPException(status_code=403, detail="没有该附件关联对象的上传权限")
+
     upload_dir = settings.LOCAL_UPLOAD_DIR
     date_dir = datetime.now(timezone.utc).strftime("%Y%m")
     dest_dir = os.path.join(upload_dir, date_dir)
-    os.makedirs(dest_dir, exist_ok=True)
 
-    ext = ""
-    if file.filename and "." in file.filename:
-        ext = file.filename.rsplit(".", 1)[1]
+    safe_extension: str | None = None
+    if related_type == "installation_task":
+        try:
+            installation_task_id = _ensure_uuid(related_id)
+        except ValueError:
+            return {"code": 40001, "message": "安装任务编号无效", "data": None}
+        installation_task = await db.get(InstallationTask, installation_task_id)
+        if installation_task is None:
+            return {"code": 40401, "message": "安装任务不存在", "data": None}
+    contents = await file.read()
+    if related_type == "installation_task":
+        message, safe_extension = validate_installation_photo(file.content_type, contents)
+        if message:
+            return {"code": 40001, "message": message, "data": None}
+
+    os.makedirs(dest_dir, exist_ok=True)
+    ext = safe_extension or ""
+    if safe_extension is None and file.filename and "." in file.filename:
+        candidate = file.filename.rsplit(".", 1)[1].lower()
+        if candidate.isalnum() and len(candidate) <= 10:
+            ext = candidate
     unique_name = f"{_uuid.uuid4().hex}.{ext}"
     file_path = os.path.join(dest_dir, unique_name)
 
-    contents = await file.read()
     with open(file_path, "wb") as f:
         f.write(contents)
 
@@ -413,7 +481,7 @@ async def upload_attachment(
             "file_path": f"{date_dir}/{unique_name}",
             "file_size": len(contents),
             "file_type": file.content_type,
-            "category": category,
+            "category": "photo" if related_type == "installation_task" else category,
         },
         uploaded_by=current_user.id,
     )

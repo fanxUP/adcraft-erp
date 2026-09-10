@@ -75,27 +75,69 @@
       <el-card shadow="never" class="info-card" style="margin-top: 16px">
         <template #header>
           <div class="card-header">
-            <span>现场照片</span>
-            <el-upload
-              :http-request="handleUpload"
-              :show-file-list="false"
-              accept="image/*"
-              multiple
-            >
-              <el-button size="small">上传照片</el-button>
-            </el-upload>
+            <span>现场照片 <el-tag size="small" type="info">{{ photoAttachments.length }} 张</el-tag></span>
+            <span class="photo-header-hint">拖拽或点击上传</span>
           </div>
         </template>
-        <div class="photo-grid" v-if="task.attachments?.length">
-          <div v-for="att in task.attachments" :key="att.id" class="photo-item">
-            <img :src="`/uploads/${att.file_path}`" :alt="att.filename" class="photo-img" />
+        <div
+          class="photo-dropzone"
+          :class="{ 'is-dragover': dragActive, 'is-disabled': photoUploadDisabled }"
+          role="button"
+          tabindex="0"
+          @click="openPhotoPicker"
+          @keydown.enter.prevent="openPhotoPicker"
+          @keydown.space.prevent="openPhotoPicker"
+          @dragenter.prevent="handleDragEnter"
+          @dragover.prevent="handleDragOver"
+          @dragleave.prevent="handleDragLeave"
+          @drop.prevent="handlePhotoDrop"
+        >
+          <input
+            ref="photoInput"
+            class="photo-input"
+            type="file"
+            multiple
+            :accept="INSTALLATION_PHOTO_ACCEPT"
+            :disabled="photoUploadDisabled"
+            @click.stop
+            @change="handlePhotoInputChange"
+          />
+          <el-icon class="photo-drop-icon"><UploadFilled /></el-icon>
+          <div class="photo-drop-title">将现场照片拖到这里上传</div>
+          <div class="photo-drop-subtitle">或点击选择图片，支持批量上传</div>
+          <div class="photo-drop-hint">支持 JPG、PNG、WEBP；单张不超过 10MB</div>
+        </div>
+
+        <div v-if="photoUploadQueue.length" class="photo-upload-queue">
+          <div v-for="item in photoUploadQueue" :key="item.id" class="photo-upload-row">
+            <span class="photo-upload-name" :title="item.name">{{ item.name }}</span>
+            <el-tag v-if="item.status === 'uploading'" size="small" type="warning">上传中</el-tag>
+            <template v-else-if="item.status === 'error'">
+              <el-tag size="small" type="danger">{{ item.error || '上传失败' }}</el-tag>
+              <el-button text type="primary" size="small" @click="retryPhoto(item)">重试</el-button>
+            </template>
+          </div>
+        </div>
+
+        <div class="photo-grid" v-if="photoAttachments.length">
+          <div v-for="(att, index) in photoAttachments" :key="att.id" class="photo-item">
+            <el-image
+              class="photo-img"
+              :src="getAttachmentUrl(att.file_path)"
+              :alt="att.filename"
+              fit="cover"
+              lazy
+              :preview-src-list="photoUrls"
+              :initial-index="index"
+              preview-teleported
+            />
             <div class="photo-actions">
               <span class="photo-label">{{ att.category || att.filename }}</span>
               <el-button text type="danger" size="small" @click="handleDeleteAttachment(att.id)">删除</el-button>
             </div>
           </div>
         </div>
-        <div v-else style="color: var(--ad-text-secondary); padding: 20px; text-align: center">暂无照片</div>
+        <div v-else class="photo-empty">暂无现场照片，拖入或点击上方区域上传</div>
       </el-card>
     </div>
   </div>
@@ -110,12 +152,18 @@ import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { ProgressBar, StatusTag } from '@/components/ui'
 import { getInstallationTask, updateInstallationTask, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { UploadRequestOptions } from 'element-plus'
 import type { InstallationTaskResponse } from '@/types/api'
 import { getEmployees } from '@/api/employees'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { useAuthStore } from '@/stores/auth'
 import { deleteInstallationTask } from '@/api/tasks'
+import {
+  INSTALLATION_PHOTO_ACCEPT,
+  INSTALLATION_PHOTO_MAX_BATCH,
+  getAttachmentUrl,
+  isInstallationPhotoAttachment,
+  validateInstallationPhoto,
+} from '@/utils/taskPhotoUpload'
 
 const route = useRoute()
 const router = useRouter()
@@ -128,6 +176,25 @@ const task = ref<InstallationTaskResponse | null>(null)
 const employeeOptions = ref<{ id: string; name: string; employee_no?: string; user_id?: string | null }[]>([])
 const assignTarget = ref('')
 const assigning = ref(false)
+const photoInput = ref<HTMLInputElement | null>(null)
+const dragActive = ref(false)
+const photoUploadQueue = ref<PhotoUploadItem[]>([])
+let dragDepth = 0
+let activePhotoUploads = 0
+
+interface PhotoUploadItem {
+  id: string
+  file: File
+  name: string
+  status: 'queued' | 'uploading' | 'error'
+  error?: string
+}
+
+const photoAttachments = computed(() =>
+  (task.value?.attachments || []).filter(isInstallationPhotoAttachment),
+)
+const photoUrls = computed(() => photoAttachments.value.map(att => getAttachmentUrl(att.file_path)))
+const photoUploadDisabled = computed(() => !task.value || deleting.value)
 const INST_WORKFLOW: Record<string, string[]> = {
   pending: ['assigned', 'in_progress', 'cancelled'],
   assigned: ['in_progress', 'pending', 'cancelled'],
@@ -219,14 +286,101 @@ async function handleAssign() {
   } catch { /* handled */ } finally { assigning.value = false }
 }
 
-async function handleUpload(req: UploadRequestOptions) {
+function openPhotoPicker() {
+  if (photoUploadDisabled.value) return
+  photoInput.value?.click()
+}
+
+function handleDragEnter() {
+  if (photoUploadDisabled.value) return
+  dragDepth += 1
+  dragActive.value = true
+}
+
+function handleDragOver() {
+  if (!photoUploadDisabled.value) dragActive.value = true
+}
+
+function handleDragLeave() {
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) dragActive.value = false
+}
+
+function handlePhotoDrop(event: DragEvent) {
+  dragDepth = 0
+  dragActive.value = false
+  if (photoUploadDisabled.value) return
+  const files = Array.from(event.dataTransfer?.files || [])
+  enqueuePhotoFiles(files)
+}
+
+function handlePhotoInputChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  input.value = ''
+  enqueuePhotoFiles(files)
+}
+
+function enqueuePhotoFiles(files: File[]) {
+  if (!files.length) return
+  const selectedFiles = files.slice(0, INSTALLATION_PHOTO_MAX_BATCH)
+  if (files.length > INSTALLATION_PHOTO_MAX_BATCH) {
+    ElMessage.warning(`一次最多上传 ${INSTALLATION_PHOTO_MAX_BATCH} 张照片，超出部分未加入队列`)
+  }
+
+  const rejected: File[] = []
+  const accepted: File[] = []
+  for (const file of selectedFiles) {
+    if (validateInstallationPhoto(file)) rejected.push(file)
+    else accepted.push(file)
+  }
+  if (rejected.length) {
+    ElMessage.warning(`${rejected.length} 张文件不符合现场照片格式或大小要求，未加入队列`)
+  }
+  if (!accepted.length) return
+
+  photoUploadQueue.value.push(...accepted.map(file => ({
+    id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+    file,
+    name: file.name,
+    status: 'queued' as const,
+  })))
+  startPhotoUploadQueue()
+}
+
+function startPhotoUploadQueue() {
+  while (activePhotoUploads < 3) {
+    const next = photoUploadQueue.value.find(item => item.status === 'queued')
+    if (!next) return
+    next.status = 'uploading'
+    activePhotoUploads += 1
+    void uploadPhotoItem(next).finally(() => {
+      activePhotoUploads -= 1
+      startPhotoUploadQueue()
+    })
+  }
+}
+
+async function uploadPhotoItem(item: PhotoUploadItem) {
   try {
-    const cat = req.file.type.startsWith('image/') ? 'photo' : 'file'
-    await uploadAttachment('installation_task', route.params.id as string, req.file, cat)
-    ElMessage.success('上传成功')
-    await fetchTask()
+    const uploaded = await uploadAttachment('installation_task', route.params.id as string, item.file, 'photo')
+    if (task.value && uploaded) {
+      const existing = task.value.attachments || []
+      task.value.attachments = [...existing, uploaded]
+    }
+    photoUploadQueue.value = photoUploadQueue.value.filter(queueItem => queueItem.id !== item.id)
+    ElMessage.success('现场照片上传成功')
     await aiStore.notifyBusinessMutation()
-  } catch { /* handled */ }
+  } catch {
+    item.status = 'error'
+    item.error = '上传失败，请重试'
+  }
+}
+
+function retryPhoto(item: PhotoUploadItem) {
+  item.status = 'queued'
+  item.error = undefined
+  startPhotoUploadQueue()
 }
 
 async function handleDeleteAttachment(id: string) {
@@ -261,10 +415,49 @@ onMounted(() => {
 .page { padding: 0; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.photo-header-hint { color: var(--ad-text-secondary); font-size: 12px; font-weight: normal; }
 .progress-suffix { margin-left: 8px; color: var(--ad-text-secondary); }
-.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.photo-dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 150px;
+  padding: 24px;
+  border: 1px dashed var(--ad-border);
+  border-radius: 8px;
+  color: var(--ad-text-secondary);
+  background: color-mix(in srgb, var(--ad-card) 92%, var(--el-color-primary) 8%);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+.photo-dropzone:hover,
+.photo-dropzone.is-dragover {
+  border-color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--ad-card) 84%, var(--el-color-primary) 16%);
+}
+.photo-dropzone.is-disabled { cursor: not-allowed; opacity: 0.65; }
+.photo-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.photo-drop-icon { font-size: 30px; color: var(--el-color-primary); margin-bottom: 8px; }
+.photo-drop-title { color: var(--ad-text); font-size: 15px; font-weight: 600; }
+.photo-drop-subtitle { margin-top: 6px; font-size: 13px; }
+.photo-drop-hint { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); }
+.photo-upload-queue { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.photo-upload-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 10px; border-radius: 6px; background: var(--ad-bg-secondary, rgba(255, 255, 255, 0.04)); }
+.photo-upload-name { overflow: hidden; flex: 1; color: var(--ad-text-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
 .photo-item { background: #252540; border-radius: 6px; overflow: hidden; border: 1px solid var(--ad-border); }
-.photo-img { width: 100%; height: 160px; object-fit: cover; }
+.photo-img { display: block; width: 100%; height: 160px; cursor: zoom-in; }
 .photo-actions { padding: 6px 10px; display: flex; justify-content: space-between; align-items: center; }
 .photo-label { font-size: 12px; color: #888; }
+.photo-empty { padding: 18px 8px 4px; color: var(--ad-text-secondary); text-align: center; font-size: 13px; }
+
+@media (max-width: 600px) {
+  .card-header { align-items: flex-start; gap: 8px; }
+  .photo-header-hint { text-align: right; }
+  .photo-dropzone { min-height: 130px; padding: 18px 12px; }
+  .photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .photo-img { height: 120px; }
+}
 </style>
