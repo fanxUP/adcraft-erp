@@ -30,22 +30,6 @@
         </el-button>
       </div>
 
-      <el-alert
-        :title="isHistoricalReadOnly
-          ? '该历史任务未关联订单明细且已结束，不能再次变更任务状态；如需补录明细，请勾选后使用“添加到本任务”。'
-          : '状态变更只作用于下方勾选的订单明细；新勾选明细会在提交状态时自动纳入本任务，无需单独保存关联。'"
-        :type="isHistoricalReadOnly ? 'warning' : 'info'"
-        :closable="false"
-        show-icon
-      />
-      <el-alert
-        v-if="!canChangeTaskStatus && !isHistoricalReadOnly"
-        type="warning"
-        :title="changeStatusDisabledReason"
-        :closable="false"
-        show-icon
-      />
-
       <div v-loading="loadingItems" class="link-panel">
         <div v-if="items.length" class="item-list" role="group" aria-label="订单明细（可多选）">
           <label

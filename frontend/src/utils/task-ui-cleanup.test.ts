@@ -70,7 +70,7 @@ describe('任务详情页界面收敛', () => {
 
     expect(source).not.toContain('保存关联 ${selectedItemIds.length}')
     expect(source).not.toContain(": '保存关联'")
-    expect(source).toContain('无需单独保存关联')
+    expect(source).not.toContain('无需单独保存关联')
     expect(source).toContain('v-if="isHistoricalReadOnly"')
     expect(source).toContain('添加到本任务')
     expect(source).toContain('handleAddHistoricalItems')
@@ -82,6 +82,15 @@ describe('任务详情页界面收敛', () => {
     expect(source).not.toContain('class="linked-item-summary"')
     expect(source).not.toContain('linkedItemNames')
     expect(source).toContain('已关联 {{ linkedItemIds.length }} 条明细')
+  })
+
+  it('任务处理不显示重复的状态说明提示，但保留状态操作禁用逻辑', () => {
+    const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
+
+    expect(source).not.toContain(':title="isHistoricalReadOnly')
+    expect(source).not.toContain('v-if="!canChangeTaskStatus && !isHistoricalReadOnly"')
+    expect(source).toContain('changeStatusDisabledReason.value')
+    expect(source).toContain(':changing="changing || isHistoricalReadOnly || !canChangeTaskStatus"')
   })
 
   it('工作台项目看板与独立项目看板复用任务进度', () => {
