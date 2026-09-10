@@ -1,6 +1,6 @@
 version: 1
 mode: STRICT
-status: complete_local_verification_pending_release
+status: deployed_pending_role_smoke
 objective: >-
   重新梳理系统角色权限，并让设计、制作、安装角色在页面、接口、工作台、
   聊天、导出和附件下载等所有入口都不能获得订单及订单明细的价格参数，
@@ -45,4 +45,4 @@ nodes:
     name: 备份发布线上烟囱与回滚准备
     acceptance: A08
     depends_on: [P07]
-    status: planned
+    status: deployed_pending_role_smoke
