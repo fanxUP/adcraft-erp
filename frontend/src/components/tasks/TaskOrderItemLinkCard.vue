@@ -99,8 +99,12 @@
                 <span v-if="itemSpec(item)">{{ itemSpec(item) }}</span>
               </span>
               <span class="item-option-meta">
-                数量 {{ item.quantity }}{{ item.unit ? ` ${item.unit}` : '' }}
-                <span v-if="item.is_linked && item.task_progress_pct != null"> · 本任务进度 {{ item.task_progress_pct }}%</span>
+                <span class="item-option-metric">数量 {{ item.quantity }}{{ item.unit ? ` ${item.unit}` : '' }}</span>
+                <span class="item-option-metric">金额 {{ formatMoney(item.unit_price) }}</span>
+                <span class="item-option-metric">小计 {{ formatMoney(item.subtotal_amount) }}</span>
+                <span v-if="item.is_linked && item.task_progress_pct != null" class="item-option-metric">
+                  本任务进度 {{ item.task_progress_pct }}%
+                </span>
               </span>
               <span v-if="!canSelect(item) && disabledReason(item)" class="item-option-disabled-reason">
                 {{ disabledReason(item) }}
@@ -168,6 +172,7 @@ import type { ActionCapability, TaskType, TaskOrderItemOption } from '@/types/ap
 import { StatusTag } from '@/components/ui'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import { getTaskWorkflowControl } from '@/utils/taskItemWorkflow'
+import { formatMoney } from '@/utils/format'
 
 const props = withDefaults(defineProps<{
   taskType: TaskType
@@ -487,8 +492,21 @@ onMounted(loadItems)
 }
 
 .item-option-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
   margin-left: auto;
+  line-height: 1.5;
+}
+
+.item-option-metric {
   white-space: nowrap;
+}
+
+.item-option-metric + .item-option-metric::before {
+  content: '·';
+  margin: 0 10px;
+  color: var(--el-text-color-placeholder);
 }
 
 .item-option-disabled-reason {

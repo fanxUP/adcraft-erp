@@ -48,6 +48,23 @@ describe('任务详情页界面收敛', () => {
     expect(source).not.toContain('getOrder(props.orderId)')
   })
 
+  it('任务处理明细按数量、金额、小计、任务进度顺序展示金额信息', () => {
+    const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
+    const metaStart = source.indexOf('<span class="item-option-meta">')
+    const metaEnd = source.indexOf('\n            </span>', metaStart)
+    const metaSource = source.slice(metaStart, metaEnd)
+
+    expect(metaStart).toBeGreaterThanOrEqual(0)
+    expect(metaEnd).toBeGreaterThan(metaStart)
+    expect(metaSource).toContain('数量 {{ item.quantity }}')
+    expect(metaSource).toContain('金额 {{ formatMoney(item.unit_price) }}')
+    expect(metaSource).toContain('小计 {{ formatMoney(item.subtotal_amount) }}')
+    expect(metaSource).toContain('本任务进度 {{ item.task_progress_pct }}%')
+    expect(metaSource.indexOf('数量')).toBeLessThan(metaSource.indexOf('金额'))
+    expect(metaSource.indexOf('金额')).toBeLessThan(metaSource.indexOf('小计'))
+    expect(metaSource.indexOf('小计')).toBeLessThan(metaSource.indexOf('本任务进度'))
+  })
+
   it('工作台项目看板与独立项目看板复用任务进度', () => {
     const source = readSource('views/home/DashboardView.vue')
     const cardSource = readSource('components/ui/TaskBoardCard.vue')
