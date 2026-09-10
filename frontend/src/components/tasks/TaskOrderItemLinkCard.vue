@@ -30,6 +30,35 @@
         </el-button>
       </div>
 
+      <div
+        v-if="isProductionTask && !isHistoricalReadOnly"
+        class="stage-selection-toolbar"
+        role="group"
+        aria-label="按制作状态选择订单明细"
+      >
+        <div class="stage-selection-controls">
+          <el-checkbox
+            :model-value="productionStageSelectionState.pending.checked"
+            :indeterminate="productionStageSelectionState.pending.indeterminate"
+            :disabled="changing || !productionStageItemIds.pending.length"
+            :aria-label="`选择待制作明细，共 ${productionStageItemIds.pending.length} 条可选`"
+            @change="handleStageSelection('pending', $event)"
+          >
+            待制作（{{ productionStageItemIds.pending.length }} 条可选）
+          </el-checkbox>
+          <el-checkbox
+            :model-value="productionStageSelectionState.in_progress.checked"
+            :indeterminate="productionStageSelectionState.in_progress.indeterminate"
+            :disabled="changing || !productionStageItemIds.in_progress.length"
+            :aria-label="`选择制作中明细，共 ${productionStageItemIds.in_progress.length} 条可选`"
+            @change="handleStageSelection('in_progress', $event)"
+          >
+            制作中（{{ productionStageItemIds.in_progress.length }} 条可选）
+          </el-checkbox>
+        </div>
+        <span class="stage-selection-summary">已选 {{ selectedItemIds.length }} 条</span>
+      </div>
+
       <div v-loading="loadingItems" class="link-panel">
         <div v-if="items.length" class="item-list" role="group" aria-label="订单明细（可多选）">
           <label
@@ -142,6 +171,13 @@ import type { ActionCapability, TaskType, TaskOrderItemOption } from '@/types/ap
 import { StatusTag } from '@/components/ui'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import { getTaskWorkflowControl } from '@/utils/taskItemWorkflow'
+import {
+  getProductionSelectionItemIds,
+  getStageSelectionState,
+  isTaskOrderItemSelectable,
+  toggleStageSelection,
+  type ProductionSelectionStage,
+} from '@/utils/taskStageSelection'
 import { formatMoney } from '@/utils/format'
 
 const props = withDefaults(defineProps<{
@@ -171,6 +207,8 @@ const selectedItemIds = ref<string[]>([])
 const loadingItems = ref(false)
 const linking = ref(false)
 const loadError = ref(false)
+
+const isProductionTask = computed(() => props.taskType === 'production')
 
 const linkedItemIds = computed(() => {
   if (props.currentItemIds?.length) return props.currentItemIds
@@ -203,6 +241,16 @@ const workflowControl = computed(() => getTaskWorkflowControl(
   props.workflow,
 ))
 
+const productionStageItemIds = computed<Record<ProductionSelectionStage, string[]>>(() => ({
+  pending: getProductionSelectionItemIds(items.value, 'pending'),
+  in_progress: getProductionSelectionItemIds(items.value, 'in_progress'),
+}))
+
+const productionStageSelectionState = computed<Record<ProductionSelectionStage, ReturnType<typeof getStageSelectionState>>>(() => ({
+  pending: getStageSelectionState(selectedItemIds.value, productionStageItemIds.value.pending),
+  in_progress: getStageSelectionState(selectedItemIds.value, productionStageItemIds.value.in_progress),
+}))
+
 function itemLabel(item: TaskOrderItemOption) {
   return item.material_process
     ? `${item.item_name} · ${item.material_process}`
@@ -220,11 +268,19 @@ function itemSpec(item: TaskOrderItemOption) {
 }
 
 function canSelect(item: TaskOrderItemOption) {
-  return item.capabilities?.select?.allowed ?? item.can_select
+  return isTaskOrderItemSelectable(item)
 }
 
 function disabledReason(item: TaskOrderItemOption) {
   return item.capabilities?.select?.disabled_reason || item.disabled_reason || ''
+}
+
+function handleStageSelection(stage: ProductionSelectionStage, checked: boolean) {
+  selectedItemIds.value = toggleStageSelection(
+    selectedItemIds.value,
+    productionStageItemIds.value[stage],
+    checked,
+  )
 }
 
 async function loadItems() {
@@ -343,6 +399,32 @@ onMounted(loadItems)
   color: var(--ad-text-secondary);
   font-size: 12px;
   font-weight: 400;
+}
+
+.stage-selection-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+}
+
+.stage-selection-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.stage-selection-summary {
+  flex: 0 0 auto;
+  color: var(--ad-text-secondary);
+  font-size: 12px;
 }
 
 .link-panel {
@@ -521,6 +603,11 @@ onMounted(loadItems)
     align-items: flex-start;
     flex-direction: column;
     gap: 4px;
+  }
+
+  .stage-selection-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
 }

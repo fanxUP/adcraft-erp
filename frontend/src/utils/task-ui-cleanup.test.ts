@@ -34,10 +34,12 @@ describe('任务详情页界面收敛', () => {
 
   it('任务处理明细按后端阶段展示标签并禁用不可关联明细', () => {
     const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
+    const selectionSource = readSource('utils/taskStageSelection.ts')
 
     expect(source).toContain('getTaskOrderItemOptions')
     expect(source).toContain('item.stage_label')
-    expect(source).toContain('item.capabilities?.select?.allowed')
+    expect(source).toContain('isTaskOrderItemSelectable')
+    expect(selectionSource).toContain('item.capabilities?.select')
     expect(source).toContain('function canSelect')
     expect(source).toContain('function disabledReason')
     expect(source).toContain('<StatusTag')
@@ -91,6 +93,20 @@ describe('任务详情页界面收敛', () => {
     expect(source).not.toContain('v-if="!canChangeTaskStatus && !isHistoricalReadOnly"')
     expect(source).toContain('changeStatusDisabledReason.value')
     expect(source).toContain(':changing="changing || isHistoricalReadOnly || !canChangeTaskStatus"')
+  })
+
+  it('制作任务提供待制作和制作中的三态分类全选', () => {
+    const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
+
+    expect(source).toContain('v-if="isProductionTask && !isHistoricalReadOnly"')
+    expect(source).toContain('待制作（{{ productionStageItemIds.pending.length }} 条可选）')
+    expect(source).toContain('制作中（{{ productionStageItemIds.in_progress.length }} 条可选）')
+    expect(source).toContain(':indeterminate="productionStageSelectionState.pending.indeterminate"')
+    expect(source).toContain(':indeterminate="productionStageSelectionState.in_progress.indeterminate"')
+    expect(source).toContain("handleStageSelection('pending', $event)")
+    expect(source).toContain("handleStageSelection('in_progress', $event)")
+    expect(source).toContain('toggleStageSelection')
+    expect(source).toContain('selectedItemIds.value')
   })
 
   it('工作台项目看板与独立项目看板复用任务进度', () => {

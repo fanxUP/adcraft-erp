@@ -1,0 +1,50 @@
+version: 1
+name: production-task-stage-select-all
+objective: >-
+  在制作任务订单明细列表中增加待制作和制作中两个三态分类全选框，
+  保持平铺多选、逐条不可选规则、状态工作流和只处理已勾选明细的安全边界。
+mode: STANDARD
+nodes:
+  - id: STAGE-SEL-P01
+    title: 冻结状态分组契约
+    acceptance: A-STAGE-SEL-01
+    depends_on: []
+  - id: STAGE-SEL-P02
+    title: 增加分类全选栏
+    acceptance: A-STAGE-SEL-02
+    depends_on: [STAGE-SEL-P01]
+  - id: STAGE-SEL-P03
+    title: 实现选择集合运算
+    acceptance: A-STAGE-SEL-03
+    depends_on: [STAGE-SEL-P01, STAGE-SEL-P02]
+  - id: STAGE-SEL-P04
+    title: 回归测试与边界覆盖
+    acceptance: A-STAGE-SEL-04
+    depends_on: [STAGE-SEL-P02, STAGE-SEL-P03]
+  - id: STAGE-SEL-P05
+    title: 质量验证与交付准备
+    acceptance: A-STAGE-SEL-05
+    depends_on: [STAGE-SEL-P04]
+edges:
+  - from: STAGE-SEL-P01
+    to: STAGE-SEL-P02
+  - from: STAGE-SEL-P01
+    to: STAGE-SEL-P03
+  - from: STAGE-SEL-P02
+    to: STAGE-SEL-P03
+  - from: STAGE-SEL-P02
+    to: STAGE-SEL-P04
+  - from: STAGE-SEL-P03
+    to: STAGE-SEL-P04
+  - from: STAGE-SEL-P04
+    to: STAGE-SEL-P05
+backlog:
+  - id: B-STAGE-SEL-01
+    title: 评估是否将返工纳入制作中快速选择
+    priority: P2
+  - id: B-STAGE-SEL-02
+    title: 跨分页全选语义
+    priority: P2
+  - id: B-STAGE-SEL-03
+    title: 浏览器端到端三态 checkbox 回归
+    priority: P2
