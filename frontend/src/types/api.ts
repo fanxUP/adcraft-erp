@@ -563,6 +563,7 @@ export interface ProductionTaskResponse {
   overdue_days?: number
   is_outsourced?: boolean
   assigned_to?: string
+  assigned_to_name?: string
   material_id?: string
   process_id?: string
   length?: number
@@ -603,6 +604,7 @@ export interface InstallationTaskResponse {
   overdue_days?: number
   is_outsourced?: boolean
   assigned_to?: string
+  assigned_to_name?: string
   address?: string
   contact_name?: string
   contact_phone?: string

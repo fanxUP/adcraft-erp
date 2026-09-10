@@ -37,23 +37,18 @@
         :current-item-id="task.order_item_id"
         :current-item-ids="task.order_item_ids"
         :task-capabilities="task.capabilities"
+        :assigned-to="task.assigned_to"
+        :assigned-to-name="task.assigned_to_name"
+        :employee-options="employeeOptions"
+        :assigning="assigning"
         :steps="designSteps"
         :current-status="task.status"
         :workflow="DESIGN_WORKFLOW"
         :changing="changing"
         @linked="fetchTask"
+        @assign="handleSaveAssignment"
         @change="handleWorkflowChange"
       />
-      <el-card shadow="never" class="info-card" style="margin-top: 16px">
-        <template #header><span>任务分配</span></template>
-        <div data-ai-targets="task-assignee" style="display: flex; align-items: center; gap: 12px;">
-          <el-select v-model="assignTarget" placeholder="选择员工" clearable filterable style="width: 300px">
-            <el-option v-for="emp in employeeOptions" :key="emp.id" :label="emp.name + (emp.employee_no ? '(' + emp.employee_no + ')' : '')" :value="emp.user_id || emp.id" :disabled="!emp.user_id" />
-          </el-select>
-          <el-button :loading="assigning" @click="handleAssign">派发</el-button>
-          <span v-if="task?.assigned_to_name" style="color: var(--ad-text-secondary); font-size: 13px;">当前：{{ task.assigned_to_name }}</span>
-        </div>
-      </el-card>
 
       <OutsourceTaskCard
         :task-type="'design'"
@@ -219,7 +214,6 @@ const changing = ref(false)
 const deleting = ref(false)
 const task = ref<DesignTaskResponse | null>(null)
 const employeeOptions = ref<{ id: string; name: string; employee_no?: string; user_id?: string | null }[]>([])
-const assignTarget = ref('')
 const assigning = ref(false)
 const attachmentInput = ref<HTMLInputElement | null>(null)
 const attachmentDragActive = ref(false)
@@ -260,7 +254,7 @@ const designSteps = computed(() => {
   ]
 })
 
-async function handleWorkflowChange(to_status: string, orderItemIds: string[]) {
+async function handleWorkflowChange(to_status: string, orderItemIds: string[], assignedTo: string) {
   const labelMap: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待处理', revision: '需调整', confirmed: '已完成', cancelled: '已取消' }
   if (to_status === 'cancelled') {
     const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
@@ -268,19 +262,24 @@ async function handleWorkflowChange(to_status: string, orderItemIds: string[]) {
       inputPlaceholder: '取消原因',
     })
     if (!reason) return
-      await doChangeStatus(to_status, reason, orderItemIds)
+    await doChangeStatus(to_status, reason, orderItemIds, assignedTo)
   } else {
     await ElMessageBox.confirm(`确定将任务状态变更为「${labelMap[to_status]}」？`, '变更状态', {
       confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
     })
-    await doChangeStatus(to_status, '', orderItemIds)
+    await doChangeStatus(to_status, '', orderItemIds, assignedTo)
   }
 }
 
-async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[]) {
+async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[], assignedTo: string) {
   changing.value = true
   try {
-    await changeDesignTaskStatus(route.params.id as string, { to_status, reason, order_item_ids: orderItemIds })
+    await changeDesignTaskStatus(route.params.id as string, {
+      to_status,
+      reason,
+      order_item_ids: orderItemIds,
+      assigned_to: assignedTo,
+    })
     ElMessage.success('状态已变更')
     await fetchTask()
     await aiStore.notifyBusinessMutation()
@@ -302,13 +301,13 @@ async function loadEmployees() {
   } catch { /* employees module may not be ready */ }
 }
 
-async function handleAssign() {
-  if (!assignTarget.value) return
+async function handleSaveAssignment(assignedTo: string | null) {
   assigning.value = true
   try {
-    await updateDesignTask(route.params.id as string, { assigned_to: assignTarget.value || null })
-    ElMessage.success('已派发')
-    assignTarget.value = ''
+    await updateDesignTask(route.params.id as string, { assigned_to: assignedTo })
+    ElMessage.success(assignedTo ? '已保存分配' : '已取消分配')
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
   } catch { /* handled */ } finally { assigning.value = false }
 }
 function openAttachmentPicker() {

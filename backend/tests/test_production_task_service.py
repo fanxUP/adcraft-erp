@@ -78,7 +78,7 @@ TRANSITION_TABLE = [
 @pytest.mark.parametrize("from_status,to_status,should_succeed", TRANSITION_TABLE)
 async def test_status_transitions(service, mock_repo, from_status, to_status, should_succeed):
     """Verify all allowed and forbidden status transitions."""
-    task = make_mock_production_task(status=from_status)
+    task = make_mock_production_task(status=from_status, assigned_to=SAMPLE_USER_ID)
     mock_repo.get_by_id.return_value = task
 
     if should_succeed:
@@ -104,7 +104,7 @@ async def test_status_transitions(service, mock_repo, from_status, to_status, sh
 @pytest.mark.asyncio
 async def test_completed_sets_timestamp(service, mock_repo):
     """Transitioning to 'completed' sets the completed_at timestamp."""
-    task = make_mock_production_task(status="in_progress")
+    task = make_mock_production_task(status="in_progress", assigned_to=SAMPLE_USER_ID)
     mock_repo.get_by_id.return_value = task
 
     result = await service.change_status(

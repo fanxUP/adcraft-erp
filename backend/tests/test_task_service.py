@@ -73,7 +73,7 @@ TRANSITION_TABLE = [
 @pytest.mark.parametrize("from_status,to_status,should_succeed", TRANSITION_TABLE)
 async def test_status_transitions(service, mock_repo, from_status, to_status, should_succeed):
     """Verify all allowed and forbidden status transitions."""
-    task = make_mock_installation_task(status=from_status)
+    task = make_mock_installation_task(status=from_status, assigned_to=SAMPLE_USER_ID)
     mock_repo.get_by_id.return_value = task
 
     if should_succeed:
@@ -97,7 +97,7 @@ async def test_status_transitions(service, mock_repo, from_status, to_status, sh
 @pytest.mark.asyncio
 async def test_completed_sets_timestamp(service, mock_repo):
     """Transitioning to 'completed' sets the completed_at timestamp."""
-    task = make_mock_installation_task(status="pending_acceptance")
+    task = make_mock_installation_task(status="pending_acceptance", assigned_to=SAMPLE_USER_ID)
     mock_repo.get_by_id.return_value = task
 
     result = await service.change_status(
@@ -118,6 +118,21 @@ async def test_change_status_nonexistent_task(service, mock_repo):
     mock_repo.get_by_id.return_value = None
     with pytest.raises(ValueError, match="安装任务不存在"):
         await service.change_status(SAMPLE_TASK_ID, "in_progress", SAMPLE_USER_ID)
+
+
+@pytest.mark.asyncio
+async def test_unassigned_task_cannot_change_status(service, mock_repo):
+    """任务没有负责人时，任何订单明细状态变更都必须被拦截。"""
+    task = make_mock_installation_task(status="pending", assigned_to=None)
+    mock_repo.get_by_id.return_value = task
+
+    with pytest.raises(ValueError, match="请先选择分配人，再变更任务状态"):
+        await service.change_status(
+            SAMPLE_TASK_ID,
+            "assigned",
+            SAMPLE_USER_ID,
+            order_item_ids=[str(task.order_item_id)],
+        )
 
 
 # --- Get Task Tests ---

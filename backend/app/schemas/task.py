@@ -82,6 +82,7 @@ class DesignTaskResponse(CoercedModel):
     is_overdue: bool = False
     overdue_days: int = 0
     assigned_to: str | None = None
+    assigned_to_name: str | None = None
     description: str | None = None
     design_file_url: str | None = None
     client_comments: str | None = None
@@ -150,6 +151,7 @@ class ProductionTaskResponse(CoercedModel):
     is_overdue: bool = False
     overdue_days: int = 0
     assigned_to: str | None = None
+    assigned_to_name: str | None = None
     material_id: str | None = None
     process_id: str | None = None
     length: float | None = None
@@ -218,6 +220,7 @@ class InstallationTaskResponse(CoercedModel):
     is_overdue: bool = False
     overdue_days: int = 0
     assigned_to: str | None = None
+    assigned_to_name: str | None = None
     address: str | None = None
     contact_name: str | None = None
     contact_phone: str | None = None
@@ -235,6 +238,7 @@ class TaskStatusChange(BaseModel):
     to_status: str
     reason: str | None = None
     order_item_ids: list[str] = Field(min_length=1, max_length=100)
+    assigned_to: str | None = None
 
 
 class TaskOrderItemOption(OrderItemResponse):

@@ -92,7 +92,26 @@ describe('任务详情页界面收敛', () => {
     expect(source).not.toContain(':title="isHistoricalReadOnly')
     expect(source).not.toContain('v-if="!canChangeTaskStatus && !isHistoricalReadOnly"')
     expect(source).toContain('changeStatusDisabledReason.value')
-    expect(source).toContain(':changing="changing || isHistoricalReadOnly || !canChangeTaskStatus"')
+    expect(source).toContain(':changing="changing || isHistoricalReadOnly || !canChangeTaskStatus || !assignedToId"')
+  })
+
+  it('任务分配与变更状态合并到共享卡片，并要求负责人', () => {
+    const cardSource = readSource('components/tasks/TaskOrderItemLinkCard.vue')
+
+    expect(cardSource).toContain('employeeOptions')
+    expect(cardSource).toContain('assignedTo')
+    expect(cardSource).toContain('请先选择分配人，再变更任务状态')
+    expect(cardSource).toContain("emit('assign', assignmentTarget.value || null)")
+    expect(cardSource).toContain('assignedToId')
+    expect(cardSource).toContain('分配人：')
+
+    for (const relativePath of [
+      'views/tasks/DesignTaskDetail.vue',
+      'views/tasks/ProductionTaskDetail.vue',
+      'views/tasks/InstallationTaskDetail.vue',
+    ]) {
+      expect(readSource(relativePath)).not.toContain('<template #header><span>任务分配</span></template>')
+    }
   })
 
   it('设计、制作、安装任务提供按状态的三态分类全选', () => {

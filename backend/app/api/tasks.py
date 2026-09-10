@@ -387,7 +387,12 @@ async def change_design_task_status(
 ):
     service = DesignTaskService(db)
     task = await service.change_status(
-        _ensure_uuid(task_id), data.to_status, current_user.id, data.reason, data.order_item_ids
+        _ensure_uuid(task_id),
+        data.to_status,
+        current_user.id,
+        data.reason,
+        data.order_item_ids,
+        assigned_to=data.assigned_to,
     )
     return success(task)
 
@@ -475,7 +480,12 @@ async def change_production_task_status(
 ):
     service = ProductionTaskService(db)
     task = await service.change_status(
-        _ensure_uuid(task_id), data.to_status, current_user.id, data.reason, data.order_item_ids
+        _ensure_uuid(task_id),
+        data.to_status,
+        current_user.id,
+        data.reason,
+        data.order_item_ids,
+        assigned_to=data.assigned_to,
     )
     return success(task)
 
@@ -563,7 +573,12 @@ async def change_installation_task_status(
 ):
     service = InstallationTaskService(db)
     task = await service.change_status(
-        _ensure_uuid(task_id), data.to_status, current_user.id, data.reason, data.order_item_ids
+        _ensure_uuid(task_id),
+        data.to_status,
+        current_user.id,
+        data.reason,
+        data.order_item_ids,
+        assigned_to=data.assigned_to,
     )
     return success(task)
 

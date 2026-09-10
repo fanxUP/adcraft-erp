@@ -14,6 +14,7 @@ from app.domain.workflows import (
 from app.domain.presentation import make_action_capability, make_status_view
 from app.models.business_document import BusinessDocument, BusinessDocumentItem
 from app.models.task_order_item_link import TaskOrderItemLink
+from app.models.user import User
 from app.repositories.task_repo import (
     AttachmentRepository,
     DesignTaskRepository,
@@ -1790,6 +1791,74 @@ async def _apply_task_item_status_change(
     return selected_ids, states
 
 
+async def _resolve_task_assignee(
+    db: AsyncSession,
+    task,
+    requested_assigned_to,
+) -> UUID:
+    """Resolve and validate the task-level assignee before a status change.
+
+    A missing request value means "keep the saved assignee" so existing API
+    callers remain compatible. A supplied value must point to an active user;
+    an empty task assignment is never allowed to pass the status precondition.
+    """
+    current_assignee = _coerce_uuid(getattr(task, "assigned_to", None))
+    has_requested_assignee = requested_assigned_to not in (None, "")
+    requested_uuid = (
+        _coerce_uuid(requested_assigned_to)
+        if has_requested_assignee
+        else None
+    )
+    if has_requested_assignee and requested_uuid is None:
+        raise ValueError("分配人无效，请重新选择")
+
+    effective_assignee = requested_uuid or current_assignee
+    if effective_assignee is None:
+        raise ValueError("请先选择分配人，再变更任务状态")
+
+    if has_requested_assignee:
+        result = await db.execute(
+            select(User).where(
+                User.id == effective_assignee,
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            )
+        )
+        user_row = result.scalar_one_or_none()
+        if inspect.isawaitable(user_row):
+            user_row = await user_row
+        if user_row is None:
+            raise ValueError("所选分配人不存在或已停用，请重新选择")
+
+    return effective_assignee
+
+
+async def _notify_task_assignee(
+    db: AsyncSession,
+    task_type: str,
+    task,
+    assigned_to: UUID,
+) -> None:
+    """Reuse the existing in-app task assignment notification semantics."""
+    from app.services.notification_service import NotificationService
+
+    number_field = {
+        "design": "design_no",
+        "production": "production_no",
+        "installation": "installation_no",
+    }[task_type]
+    task_label = TASK_TYPE_LABELS[task_type]
+    task_no = getattr(task, number_field)
+    notif_svc = NotificationService(db)
+    await notif_svc.create_system_notification(
+        user_id=assigned_to,
+        type_="task_assigned",
+        title=f"{task_label}任务分配: {task_no}",
+        content=f"您被分配了{task_label}任务 {getattr(task, 'project_name', '')}",
+        link=f"/{task_type}-tasks/{task.id}",
+    )
+
+
 class DesignTaskService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -1932,59 +2001,86 @@ class DesignTaskService:
         operated_by: UUID | None = None,
         reason: str | None = None,
         order_item_ids: list[str] | None = None,
+        assigned_to: str | None = None,
     ) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("设计任务不存在")
 
         await _ensure_terminal_unlinked_task_is_read_only(self.db, "design", task)
+        if not order_item_ids and _task_order_item_id(task) is None:
+            raise ValueError("请先勾选要处理的订单明细")
+        old_assigned = getattr(task, "assigned_to", None)
+        effective_assignee = await _resolve_task_assignee(
+            self.db,
+            task,
+            assigned_to,
+        )
         before = task_history_snapshot(task)
-        selected_item_ids, states = await _apply_task_item_status_change(
-            self.db,
-            "design",
-            task,
-            to_status,
-            order_item_ids,
-        )
-        await record_task_event(
-            self.db,
-            "design",
-            task,
-            ACTION_STATUS_CHANGE,
-            operated_by,
-            before=before,
-            reason=reason,
-            changed_fields=["order_item_ids", "item_status", "status", "progress_pct"],
-        )
-        if task.document_id:
-            from app.models.task import DesignTask
-
-            for item_id in selected_item_ids:
-                item_status = states[item_id][0]
-                if (
-                    _is_completed_item_status("design", item_status)
-                    and await _item_stage_tasks_completed(
-                        self.db,
-                        task.document_id,
-                        item_id,
-                        DesignTask,
-                        {"confirmed", "completed", "cancelled"},
-                    )
-                ):
-                    await _create_production_task_for_item(self.db, task, item_id)
-            await _maybe_advance_order_stage(
+        try:
+            selected_item_ids, states = await _apply_task_item_status_change(
                 self.db,
-                task.document_id,
-                "designing",
-                "in_production",
-                DesignTask,
-                {"confirmed", "completed", "cancelled"},
-                "所有订单明细的设计任务已完成，系统自动推进",
-                operated_by,
+                "design",
+                task,
+                to_status,
+                order_item_ids,
             )
-            await _maybe_complete_order(self.db, task.document_id, operated_by)
-        await _refresh_task_for_response(self.db, task)
-        return await self._to_dict(task)
+            task.assigned_to = effective_assignee
+            await record_task_event(
+                self.db,
+                "design",
+                task,
+                ACTION_STATUS_CHANGE,
+                operated_by,
+                before=before,
+                reason=reason,
+                changed_fields=[
+                    "assigned_to",
+                    "order_item_ids",
+                    "item_status",
+                    "status",
+                    "progress_pct",
+                ],
+            )
+            if task.document_id:
+                from app.models.task import DesignTask
+
+                for item_id in selected_item_ids:
+                    item_status = states[item_id][0]
+                    if (
+                        _is_completed_item_status("design", item_status)
+                        and await _item_stage_tasks_completed(
+                            self.db,
+                            task.document_id,
+                            item_id,
+                            DesignTask,
+                            {"confirmed", "completed", "cancelled"},
+                        )
+                    ):
+                        await _create_production_task_for_item(self.db, task, item_id)
+                await _maybe_advance_order_stage(
+                    self.db,
+                    task.document_id,
+                    "designing",
+                    "in_production",
+                    DesignTask,
+                    {"confirmed", "completed", "cancelled"},
+                    "所有订单明细的设计任务已完成，系统自动推进",
+                    operated_by,
+                )
+                await _maybe_complete_order(self.db, task.document_id, operated_by)
+            if effective_assignee != _coerce_uuid(old_assigned):
+                await _notify_task_assignee(
+                    self.db,
+                    "design",
+                    task,
+                    effective_assignee,
+                )
+            await _refresh_task_for_response(self.db, task)
+            return await self._to_dict(task)
+        except Exception:
+            task.assigned_to = old_assigned
+            raise
 
     async def delete_task(self, task_id: UUID) -> None:
         """管理员删除设计任务，回退订单到确认状态。"""
@@ -2191,59 +2287,86 @@ class ProductionTaskService:
         operated_by: UUID | None = None,
         reason: str | None = None,
         order_item_ids: list[str] | None = None,
+        assigned_to: str | None = None,
     ) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("制作任务不存在")
 
         await _ensure_terminal_unlinked_task_is_read_only(self.db, "production", task)
+        if not order_item_ids and _task_order_item_id(task) is None:
+            raise ValueError("请先勾选要处理的订单明细")
+        old_assigned = getattr(task, "assigned_to", None)
+        effective_assignee = await _resolve_task_assignee(
+            self.db,
+            task,
+            assigned_to,
+        )
         before = task_history_snapshot(task)
-        selected_item_ids, states = await _apply_task_item_status_change(
-            self.db,
-            "production",
-            task,
-            to_status,
-            order_item_ids,
-        )
-        await record_task_event(
-            self.db,
-            "production",
-            task,
-            ACTION_STATUS_CHANGE,
-            operated_by,
-            before=before,
-            reason=reason,
-            changed_fields=["order_item_ids", "item_status", "status", "progress_pct"],
-        )
-        if task.document_id:
-            from app.models.task import ProductionTask
-
-            for item_id in selected_item_ids:
-                item_status = states[item_id][0]
-                if (
-                    _is_completed_item_status("production", item_status)
-                    and await _item_stage_tasks_completed(
-                        self.db,
-                        task.document_id,
-                        item_id,
-                        ProductionTask,
-                        {"completed", "cancelled"},
-                    )
-                ):
-                    await _create_installation_task_for_item(self.db, task, item_id)
-            await _maybe_advance_order_stage(
+        try:
+            selected_item_ids, states = await _apply_task_item_status_change(
                 self.db,
-                task.document_id,
-                "in_production",
-                "in_installation",
-                ProductionTask,
-                {"completed", "cancelled"},
-                "所有订单明细的制作任务已完成，系统自动推进",
-                operated_by,
+                "production",
+                task,
+                to_status,
+                order_item_ids,
             )
-            await _maybe_complete_order(self.db, task.document_id, operated_by)
-        await _refresh_task_for_response(self.db, task)
-        return await self._to_dict(task)
+            task.assigned_to = effective_assignee
+            await record_task_event(
+                self.db,
+                "production",
+                task,
+                ACTION_STATUS_CHANGE,
+                operated_by,
+                before=before,
+                reason=reason,
+                changed_fields=[
+                    "assigned_to",
+                    "order_item_ids",
+                    "item_status",
+                    "status",
+                    "progress_pct",
+                ],
+            )
+            if task.document_id:
+                from app.models.task import ProductionTask
+
+                for item_id in selected_item_ids:
+                    item_status = states[item_id][0]
+                    if (
+                        _is_completed_item_status("production", item_status)
+                        and await _item_stage_tasks_completed(
+                            self.db,
+                            task.document_id,
+                            item_id,
+                            ProductionTask,
+                            {"completed", "cancelled"},
+                        )
+                    ):
+                        await _create_installation_task_for_item(self.db, task, item_id)
+                await _maybe_advance_order_stage(
+                    self.db,
+                    task.document_id,
+                    "in_production",
+                    "in_installation",
+                    ProductionTask,
+                    {"completed", "cancelled"},
+                    "所有订单明细的制作任务已完成，系统自动推进",
+                    operated_by,
+                )
+                await _maybe_complete_order(self.db, task.document_id, operated_by)
+            if effective_assignee != _coerce_uuid(old_assigned):
+                await _notify_task_assignee(
+                    self.db,
+                    "production",
+                    task,
+                    effective_assignee,
+                )
+            await _refresh_task_for_response(self.db, task)
+            return await self._to_dict(task)
+        except Exception:
+            task.assigned_to = old_assigned
+            raise
 
     async def delete_task(self, task_id: UUID) -> None:
         """管理员删除制作任务，回退订单到设计中状态。"""
@@ -2443,34 +2566,61 @@ class InstallationTaskService:
         operated_by: UUID | None = None,
         reason: str | None = None,
         order_item_ids: list[str] | None = None,
+        assigned_to: str | None = None,
     ) -> dict:
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise ValueError("安装任务不存在")
 
         await _ensure_terminal_unlinked_task_is_read_only(self.db, "installation", task)
+        if not order_item_ids and _task_order_item_id(task) is None:
+            raise ValueError("请先勾选要处理的订单明细")
+        old_assigned = getattr(task, "assigned_to", None)
+        effective_assignee = await _resolve_task_assignee(
+            self.db,
+            task,
+            assigned_to,
+        )
         before = task_history_snapshot(task)
-        selected_item_ids, _states = await _apply_task_item_status_change(
-            self.db,
-            "installation",
-            task,
-            to_status,
-            order_item_ids,
-        )
-        await record_task_event(
-            self.db,
-            "installation",
-            task,
-            ACTION_STATUS_CHANGE,
-            operated_by,
-            before=before,
-            reason=reason,
-            changed_fields=["order_item_ids", "item_status", "status", "progress_pct"],
-        )
-        if task.document_id and selected_item_ids:
-            await _maybe_complete_order(self.db, task.document_id, operated_by)
-        await _refresh_task_for_response(self.db, task)
-        return await self._to_dict(task)
+        try:
+            selected_item_ids, _states = await _apply_task_item_status_change(
+                self.db,
+                "installation",
+                task,
+                to_status,
+                order_item_ids,
+            )
+            task.assigned_to = effective_assignee
+            await record_task_event(
+                self.db,
+                "installation",
+                task,
+                ACTION_STATUS_CHANGE,
+                operated_by,
+                before=before,
+                reason=reason,
+                changed_fields=[
+                    "assigned_to",
+                    "order_item_ids",
+                    "item_status",
+                    "status",
+                    "progress_pct",
+                ],
+            )
+            if task.document_id and selected_item_ids:
+                await _maybe_complete_order(self.db, task.document_id, operated_by)
+            if effective_assignee != _coerce_uuid(old_assigned):
+                await _notify_task_assignee(
+                    self.db,
+                    "installation",
+                    task,
+                    effective_assignee,
+                )
+            await _refresh_task_for_response(self.db, task)
+            return await self._to_dict(task)
+        except Exception:
+            task.assigned_to = old_assigned
+            raise
 
     async def delete_task(self, task_id: UUID) -> None:
         """管理员删除安装任务，回退订单到生产中状态。"""

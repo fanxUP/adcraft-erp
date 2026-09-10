@@ -80,6 +80,9 @@
                   本任务：
                   <StatusTag :status="item.task_status_view || item.task_status" :label="item.task_status_label" size="sm" />
                 </span>
+                <span v-if="item.is_linked" class="item-assignee-label">
+                  分配人：{{ itemAssigneeLabel }}
+                </span>
                 <el-tag v-if="item.outsource_blocked" type="warning" effect="light" size="small">
                   {{ item.outsource_status_label || '外协任务进行中' }}
                 </el-tag>
@@ -130,21 +133,44 @@
     <el-divider />
 
     <section class="task-section status-section" aria-labelledby="task-status-section-title">
-      <div id="task-status-section-title" class="section-heading">
-        <span>变更状态</span>
-        <span class="section-note">
-          {{ isHistoricalReadOnly
-            ? '历史终态不可变更状态，可补录明细'
-            : workflowControl.hasMixedStatuses
-              ? '已选明细状态不同，请选择状态相同的明细后再批量推进'
-              : '点击可执行的下一步或回退' }}
-        </span>
+      <div id="task-status-section-title" class="section-heading status-heading">
+        <div class="section-heading-main">
+          <span>变更状态</span>
+          <span class="section-note">{{ statusSectionNote }}</span>
+        </div>
+        <div class="assignment-controls" data-ai-targets="task-assignee">
+          <span class="assignment-label">任务分配</span>
+          <el-select
+            v-model="assignmentTarget"
+            placeholder="选择员工"
+            clearable
+            filterable
+            :disabled="changing || assigning"
+            class="assignment-select"
+          >
+            <el-option
+              v-for="employee in employeeOptions"
+              :key="employee.id"
+              :label="employee.name + (employee.employee_no ? `（${employee.employee_no}）` : '')"
+              :value="employee.user_id || employee.id"
+              :disabled="!employee.user_id"
+            />
+          </el-select>
+          <el-button
+            :loading="assigning"
+            :disabled="!canSaveAssignment"
+            @click="handleSaveAssignment"
+          >
+            保存分配
+          </el-button>
+          <span class="assignment-summary">{{ assignmentSummary }}</span>
+        </div>
       </div>
       <TaskWorkflow
         :steps="steps"
         :current-status="workflowControl.currentStatus"
         :workflow="workflowControl.workflow"
-        :changing="changing || isHistoricalReadOnly || !canChangeTaskStatus"
+        :changing="changing || isHistoricalReadOnly || !canChangeTaskStatus || !assignedToId"
         @change="handleWorkflowChange"
       />
     </section>
@@ -175,6 +201,13 @@ import {
 } from '@/utils/taskStageSelection'
 import { formatMoney } from '@/utils/format'
 
+type TaskEmployeeOption = {
+  id: string
+  name: string
+  employee_no?: string
+  user_id?: string | null
+}
+
 const props = withDefaults(defineProps<{
   taskType: TaskType
   taskId: string
@@ -186,15 +219,24 @@ const props = withDefaults(defineProps<{
   currentStatus: string
   workflow: Record<string, string[]>
   changing: boolean
+  assignedTo?: string | null
+  assignedToName?: string | null
+  employeeOptions?: TaskEmployeeOption[]
+  assigning?: boolean
 }>(), {
   currentItemId: null,
   currentItemIds: () => [],
   taskCapabilities: null,
+  assignedTo: null,
+  assignedToName: null,
+  employeeOptions: () => [],
+  assigning: false,
 })
 
 const emit = defineEmits<{
   linked: []
-  change: [status: string, orderItemIds: string[]]
+  assign: [assignedTo: string | null]
+  change: [status: string, orderItemIds: string[], assignedTo: string]
 }>()
 
 const items = ref<TaskOrderItemOption[]>([])
@@ -202,6 +244,7 @@ const selectedItemIds = ref<string[]>([])
 const loadingItems = ref(false)
 const linking = ref(false)
 const loadError = ref(false)
+const assignmentTarget = ref(props.assignedTo || '')
 
 const taskTypeLabels: Record<TaskType, string> = {
   design: '设计',
@@ -226,11 +269,49 @@ const isHistoricalReadOnly = computed(() => {
 })
 
 const changeStatusCapability = computed(() => props.taskCapabilities?.change_status)
+const assignedToId = computed(() => assignmentTarget.value || '')
 const canChangeTaskStatus = computed(() => (
-  changeStatusCapability.value?.allowed ?? !isHistoricalReadOnly.value
+  Boolean(assignedToId.value)
+  && (changeStatusCapability.value?.allowed ?? !isHistoricalReadOnly.value)
 ))
 const changeStatusDisabledReason = computed(() => (
-  changeStatusCapability.value?.disabled_reason || '该任务当前状态不允许继续变更'
+  !assignedToId.value
+    ? '请先选择分配人，再变更任务状态'
+    : changeStatusCapability.value?.disabled_reason || '该任务当前状态不允许继续变更'
+))
+const assignmentChanged = computed(() => assignmentTarget.value !== (props.assignedTo || ''))
+const canSaveAssignment = computed(() => (
+  assignmentChanged.value && !props.changing && !props.assigning
+))
+const savedAssigneeLabel = computed(() => (
+  props.assignedTo
+    ? (props.assignedToName || '已分配')
+    : '未分配'
+))
+const selectedAssigneeLabel = computed(() => {
+  if (!assignmentTarget.value) return '未分配'
+  const employee = props.employeeOptions.find(
+    item => (item.user_id || item.id) === assignmentTarget.value,
+  )
+  return employee?.name || '已选择负责人'
+})
+const assignmentSummary = computed(() => (
+  assignmentChanged.value
+    ? `待保存：${selectedAssigneeLabel.value}`
+    : `当前负责人：${savedAssigneeLabel.value}`
+))
+const statusSectionNote = computed(() => {
+  if (isHistoricalReadOnly.value) return '历史终态不可变更状态，可补录明细'
+  if (!assignedToId.value) return '请先选择分配人，再变更任务状态'
+  if (workflowControl.value.hasMixedStatuses) {
+    return '已选明细状态不同，请选择状态相同的明细后再批量推进'
+  }
+  return '点击可执行的下一步或回退'
+})
+const itemAssigneeLabel = computed(() => (
+  props.assignedTo
+    ? (props.assignedToName || '已分配')
+    : '未分配'
 ))
 
 const workflowControl = computed(() => getTaskWorkflowControl(
@@ -305,6 +386,11 @@ function handleStageSelection(stage: TaskStageSelectionKey, checked: boolean) {
   )
 }
 
+function handleSaveAssignment() {
+  if (!canSaveAssignment.value) return
+  emit('assign', assignmentTarget.value || null)
+}
+
 async function loadItems() {
   if (!props.orderId) {
     selectedItemIds.value = []
@@ -363,12 +449,16 @@ async function handleAddHistoricalItems() {
 }
 
 function handleWorkflowChange(status: string) {
-  if (!canChangeTaskStatus.value) {
+  if (!selectedItemIds.value.length) {
+    ElMessage.warning('请先勾选要变更状态的订单明细')
+    return
+  }
+  if (!assignedToId.value) {
     ElMessage.info(changeStatusDisabledReason.value)
     return
   }
-  if (!selectedItemIds.value.length) {
-    ElMessage.warning('请先勾选要变更状态的订单明细')
+  if (!canChangeTaskStatus.value) {
+    ElMessage.info(changeStatusDisabledReason.value)
     return
   }
   if (
@@ -384,10 +474,13 @@ function handleWorkflowChange(status: string) {
       return
     }
   }
-  emit('change', status, [...selectedItemIds.value])
+  emit('change', status, [...selectedItemIds.value], assignedToId.value)
 }
 
 watch([() => props.orderId, () => props.taskId, () => props.taskType, linkedItemIds], loadItems)
+watch(() => props.assignedTo, value => {
+  if (!assignmentChanged.value) assignmentTarget.value = value || ''
+})
 onMounted(loadItems)
 </script>
 
@@ -527,6 +620,14 @@ onMounted(loadItems)
   gap: 4px;
 }
 
+.item-assignee-label {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ad-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .item-option-subtitle,
 .item-option-meta {
   color: var(--ad-text-secondary);
@@ -600,6 +701,36 @@ onMounted(loadItems)
   padding: 4px 4px 8px;
 }
 
+.status-heading {
+  align-items: flex-start;
+}
+
+.assignment-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.assignment-label {
+  color: var(--ad-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.assignment-select {
+  width: 220px;
+}
+
+.assignment-summary {
+  color: var(--ad-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 @media (max-width: 640px) {
   .item-option {
     padding: 12px;
@@ -625,6 +756,20 @@ onMounted(loadItems)
     align-items: flex-start;
     flex-direction: column;
     gap: 4px;
+  }
+
+  .status-heading {
+    gap: 10px;
+  }
+
+  .assignment-controls {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .assignment-select {
+    flex: 1;
+    min-width: 160px;
   }
 
   .stage-selection-toolbar {

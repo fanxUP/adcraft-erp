@@ -124,6 +124,16 @@ def test_status_change_contract_requires_checked_order_items():
     assert change.order_item_ids == [ITEM_ID]
 
 
+def test_status_change_contract_can_carry_the_selected_assignee():
+    change = TaskStatusChange(
+        to_status="in_progress",
+        order_item_ids=[ITEM_ID],
+        assigned_to="66666666-6666-6666-6666-666666666666",
+    )
+
+    assert change.assigned_to == "66666666-6666-6666-6666-666666666666"
+
+
 def test_mixed_item_status_uses_unfinished_state_for_task_summary():
     assert _aggregate_task_status("design", ["confirmed", "designing"]) == "designing"
     assert _aggregate_task_status("production", ["completed", "in_progress"]) == "in_progress"
@@ -481,7 +491,7 @@ async def test_item_scoped_design_can_finish_without_review_step():
         document_id=UUID(ORDER_ID),
         lifecycle_status="active",
     ))
-    task = make_mock_design_task(status="designing")
+    task = make_mock_design_task(status="designing", assigned_to=UUID("11111111-1111-1111-1111-111111111111"))
     task.order_item_id = ITEM_UUID
     service = DesignTaskService(db)
     service.repo = MagicMock()
@@ -506,7 +516,7 @@ async def test_item_scoped_installation_can_finish_without_acceptance_step():
         document_id=UUID(ORDER_ID),
         lifecycle_status="active",
     ))
-    task = make_mock_installation_task(status="in_progress")
+    task = make_mock_installation_task(status="in_progress", assigned_to=UUID("11111111-1111-1111-1111-111111111111"))
     task.order_item_id = ITEM_UUID
     service = InstallationTaskService(db)
     service.repo = MagicMock()
@@ -520,6 +530,62 @@ async def test_item_scoped_installation_can_finish_without_acceptance_step():
         result = await service.change_status(task.id, "completed", order_item_ids=[ITEM_ID])
 
     assert result["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_status_change_does_not_keep_new_assignee_when_transition_fails():
+    db = AsyncMock()
+    old_assignee = UUID("11111111-1111-1111-1111-111111111111")
+    new_assignee = UUID("66666666-6666-6666-6666-666666666666")
+    task = make_mock_design_task(status="pending", assigned_to=old_assignee)
+    service = DesignTaskService(db)
+    service.repo = MagicMock()
+    service.repo.get_by_id = AsyncMock(return_value=task)
+
+    with patch(
+        "app.services.task_service._apply_task_item_status_change",
+        new=AsyncMock(side_effect=ValueError("状态不允许")),
+    ):
+        with pytest.raises(ValueError, match="状态不允许"):
+            await service.change_status(
+                task.id,
+                "confirmed",
+                order_item_ids=[ITEM_ID],
+                assigned_to=str(new_assignee),
+            )
+
+    assert task.assigned_to == old_assignee
+
+
+@pytest.mark.asyncio
+async def test_status_change_restores_new_assignee_when_side_effect_fails():
+    db = AsyncMock()
+    old_assignee = UUID("11111111-1111-1111-1111-111111111111")
+    new_assignee = UUID("66666666-6666-6666-6666-666666666666")
+    task = make_mock_design_task(status="designing", assigned_to=old_assignee)
+    service = DesignTaskService(db)
+    service.repo = MagicMock()
+    service.repo.get_by_id = AsyncMock(return_value=task)
+
+    with (
+        patch(
+            "app.services.task_service._apply_task_item_status_change",
+            new=AsyncMock(return_value=([ITEM_UUID], {ITEM_UUID: ("confirmed", 100)})),
+        ),
+        patch(
+            "app.services.task_service.record_task_event",
+            new=AsyncMock(side_effect=RuntimeError("写入任务历史失败")),
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="写入任务历史失败"):
+            await service.change_status(
+                task.id,
+                "confirmed",
+                order_item_ids=[ITEM_ID],
+                assigned_to=str(new_assignee),
+            )
+
+    assert task.assigned_to == old_assignee
 
 
 @pytest.mark.asyncio

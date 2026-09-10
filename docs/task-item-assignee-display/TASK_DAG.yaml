@@ -1,0 +1,55 @@
+version: 1
+name: task-assignee-status-card
+objective: >-
+  将设计、制作、安装任务的任务分配放入变更状态操作区和同一个任务处理卡片，
+  强制要求负责人后才能变更状态，并让已关联订单明细逐条显示当前任务负责人，
+  同时保持勾选明细范围、状态机和进度规则不变。
+mode: STANDARD
+nodes:
+  - id: TASK-ASSIGNEE-P01
+    title: 冻结合并卡片与前置规则
+    acceptance: A-TASK-ASSIGNEE-01
+    depends_on: []
+  - id: TASK-ASSIGNEE-P02
+    title: 扩展负责人和状态变更接口契约
+    acceptance: A-TASK-ASSIGNEE-02
+    depends_on: [TASK-ASSIGNEE-P01]
+  - id: TASK-ASSIGNEE-P03
+    title: 合并前端卡片和负责人逐行显示
+    acceptance: A-TASK-ASSIGNEE-03
+    depends_on: [TASK-ASSIGNEE-P02]
+  - id: TASK-ASSIGNEE-P04
+    title: 事务一致性和状态回归测试
+    acceptance: A-TASK-ASSIGNEE-04
+    depends_on: [TASK-ASSIGNEE-P01, TASK-ASSIGNEE-P02, TASK-ASSIGNEE-P03]
+  - id: TASK-ASSIGNEE-P05
+    title: 质量验证与交付准备
+    acceptance: A-TASK-ASSIGNEE-05
+    depends_on: [TASK-ASSIGNEE-P04]
+edges:
+  - from: TASK-ASSIGNEE-P01
+    to: TASK-ASSIGNEE-P02
+  - from: TASK-ASSIGNEE-P02
+    to: TASK-ASSIGNEE-P03
+  - from: TASK-ASSIGNEE-P01
+    to: TASK-ASSIGNEE-P04
+  - from: TASK-ASSIGNEE-P02
+    to: TASK-ASSIGNEE-P04
+  - from: TASK-ASSIGNEE-P03
+    to: TASK-ASSIGNEE-P04
+  - from: TASK-ASSIGNEE-P04
+    to: TASK-ASSIGNEE-P05
+backlog:
+  - id: B-TASK-ASSIGNEE-01
+    title: 同一任务内按订单明细分别派工
+    priority: P1
+  - id: B-TASK-ASSIGNEE-02
+    title: 明细负责人变更历史
+    priority: P2
+  - id: B-TASK-ASSIGNEE-03
+    title: 按负责人筛选任务处理明细
+    priority: P2
+  - id: B-TASK-ASSIGNEE-04
+    title: 接入短信邮件或飞书通知
+    priority: P2
+

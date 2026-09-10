@@ -123,6 +123,7 @@ def make_mock_installation_task(
     task.acceptance_result = acceptance_result
     task.completed_at = completed_at
     task.assigned_to = assigned_to
+    task.assigned_to_name = None
     task.attachments = attachments or []
     task.created_at = now
     task.updated_at = now
@@ -169,6 +170,7 @@ def make_mock_design_task(
     task.client_comments = client_comments
     task.completed_at = completed_at
     task.assigned_to = assigned_to
+    task.assigned_to_name = None
     task.attachments = attachments or []
     task.order_no = order_no
     task.customer_name = customer_name
@@ -229,6 +231,7 @@ def make_mock_production_task(
     task.rework_reason = rework_reason
     task.completed_at = completed_at
     task.assigned_to = assigned_to
+    task.assigned_to_name = None
     task.attachments = attachments or []
     task.created_at = now
     task.order_no = order_no
