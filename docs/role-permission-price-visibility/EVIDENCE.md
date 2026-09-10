@@ -65,4 +65,13 @@
 | 后端语法检查 | `backend/.venv/bin/python -m py_compile backend/app/api/inventory.py backend/app/api/vehicles.py backend/tests/test_resource_center_permissions.py` | 通过 |
 | 补丁空白和敏感信息检查 | `git diff --check`；变更内容未新增密码、服务器地址或依赖 | 通过 |
 
-本次仅完成代码和本地验证，尚未部署到服务器；未新增数据库迁移，未修改业务数据。
+P09 的本地实现和回归已完成；线上发布信息见下节。未新增数据库迁移，未修改业务数据。
+
+### P09 线上发布记录
+
+- 发布提交：`20856ae361e8599be2e5719e005b7ca72752a0f3`；发布前线上提交：`35d2b762d11dbae84ddf64abc2dc1363d8e43b30`。
+- 发布方式：服务器使用精确 Git bundle 和已验证前端构建包部署；未修改服务器 Git 远端配置。
+- 数据库备份：`backup_20260910_150820.tar.gz`，部署脚本报告数据库 dump 约 3.3 MB、备份文件约 456 KB；权限 seed 幂等执行，未新增迁移。
+- 线上服务：`adcraft-backend` 为 active/running；健康接口返回 `status=ok`、`database=ok`；公网前端入口 HTTP 200。
+- 访问控制冒烟：未登录访问库存和车辆接口均返回 HTTP 401，未出现匿名放行。
+- 部署标记与 Git 提交一致；bundle 和前端构建包已从服务器临时目录清理。
