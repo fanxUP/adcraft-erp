@@ -31,29 +31,22 @@
       </div>
 
       <div
-        v-if="isProductionTask && !isHistoricalReadOnly"
+        v-if="stageSelectionGroups.length && !isHistoricalReadOnly"
         class="stage-selection-toolbar"
         role="group"
-        aria-label="按制作状态选择订单明细"
+        :aria-label="stageSelectionAriaLabel"
       >
         <div class="stage-selection-controls">
           <el-checkbox
-            :model-value="productionStageSelectionState.pending.checked"
-            :indeterminate="productionStageSelectionState.pending.indeterminate"
-            :disabled="changing || !productionStageItemIds.pending.length"
-            :aria-label="`选择待制作明细，共 ${productionStageItemIds.pending.length} 条可选`"
-            @change="handleStageSelection('pending', $event)"
+            v-for="group in stageSelectionGroups"
+            :key="group.key"
+            :model-value="stageSelectionState[group.key].checked"
+            :indeterminate="stageSelectionState[group.key].indeterminate"
+            :disabled="changing || !stageSelectionItemIds[group.key].length"
+            :aria-label="`选择${group.label}明细，共 ${stageSelectionItemIds[group.key].length} 条可选`"
+            @change="handleStageSelection(group.key, $event)"
           >
-            待制作（{{ productionStageItemIds.pending.length }} 条可选）
-          </el-checkbox>
-          <el-checkbox
-            :model-value="productionStageSelectionState.in_progress.checked"
-            :indeterminate="productionStageSelectionState.in_progress.indeterminate"
-            :disabled="changing || !productionStageItemIds.in_progress.length"
-            :aria-label="`选择制作中明细，共 ${productionStageItemIds.in_progress.length} 条可选`"
-            @change="handleStageSelection('in_progress', $event)"
-          >
-            制作中（{{ productionStageItemIds.in_progress.length }} 条可选）
+            {{ group.label }}（{{ stageSelectionItemIds[group.key].length }} 条可选）
           </el-checkbox>
         </div>
         <span class="stage-selection-summary">已选 {{ selectedItemIds.length }} 条</span>
@@ -172,11 +165,13 @@ import { StatusTag } from '@/components/ui'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import { getTaskWorkflowControl } from '@/utils/taskItemWorkflow'
 import {
-  getProductionSelectionItemIds,
+  getTaskStageSelectionGroups,
+  getTaskStageSelectionItemIds,
   getStageSelectionState,
   isTaskOrderItemSelectable,
   toggleStageSelection,
-  type ProductionSelectionStage,
+  type StageSelectionState,
+  type TaskStageSelectionKey,
 } from '@/utils/taskStageSelection'
 import { formatMoney } from '@/utils/format'
 
@@ -208,7 +203,11 @@ const loadingItems = ref(false)
 const linking = ref(false)
 const loadError = ref(false)
 
-const isProductionTask = computed(() => props.taskType === 'production')
+const taskTypeLabels: Record<TaskType, string> = {
+  design: '设计',
+  production: '制作',
+  installation: '安装',
+}
 
 const linkedItemIds = computed(() => {
   if (props.currentItemIds?.length) return props.currentItemIds
@@ -241,15 +240,38 @@ const workflowControl = computed(() => getTaskWorkflowControl(
   props.workflow,
 ))
 
-const productionStageItemIds = computed<Record<ProductionSelectionStage, string[]>>(() => ({
-  pending: getProductionSelectionItemIds(items.value, 'pending'),
-  in_progress: getProductionSelectionItemIds(items.value, 'in_progress'),
-}))
+const stageSelectionGroups = computed(() => getTaskStageSelectionGroups(props.taskType))
 
-const productionStageSelectionState = computed<Record<ProductionSelectionStage, ReturnType<typeof getStageSelectionState>>>(() => ({
-  pending: getStageSelectionState(selectedItemIds.value, productionStageItemIds.value.pending),
-  in_progress: getStageSelectionState(selectedItemIds.value, productionStageItemIds.value.in_progress),
-}))
+const stageSelectionAriaLabel = computed(() => `按${taskTypeLabels[props.taskType]}状态选择订单明细`)
+
+const stageSelectionItemIds = computed<Record<TaskStageSelectionKey, string[]>>(() => {
+  const result: Record<TaskStageSelectionKey, string[]> = {
+    pending: [],
+    designing: [],
+    assigned: [],
+    in_progress: [],
+  }
+  for (const group of stageSelectionGroups.value) {
+    result[group.key] = getTaskStageSelectionItemIds(items.value, props.taskType, group.key)
+  }
+  return result
+})
+
+const stageSelectionState = computed<Record<TaskStageSelectionKey, StageSelectionState>>(() => {
+  const result: Record<TaskStageSelectionKey, StageSelectionState> = {
+    pending: getStageSelectionState(selectedItemIds.value, []),
+    designing: getStageSelectionState(selectedItemIds.value, []),
+    assigned: getStageSelectionState(selectedItemIds.value, []),
+    in_progress: getStageSelectionState(selectedItemIds.value, []),
+  }
+  for (const group of stageSelectionGroups.value) {
+    result[group.key] = getStageSelectionState(
+      selectedItemIds.value,
+      stageSelectionItemIds.value[group.key],
+    )
+  }
+  return result
+})
 
 function itemLabel(item: TaskOrderItemOption) {
   return item.material_process
@@ -275,10 +297,10 @@ function disabledReason(item: TaskOrderItemOption) {
   return item.capabilities?.select?.disabled_reason || item.disabled_reason || ''
 }
 
-function handleStageSelection(stage: ProductionSelectionStage, checked: boolean) {
+function handleStageSelection(stage: TaskStageSelectionKey, checked: boolean) {
   selectedItemIds.value = toggleStageSelection(
     selectedItemIds.value,
-    productionStageItemIds.value[stage],
+    stageSelectionItemIds.value[stage],
     checked,
   )
 }

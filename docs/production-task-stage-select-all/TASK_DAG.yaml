@@ -1,7 +1,7 @@
 version: 1
-name: production-task-stage-select-all
+name: task-stage-select-all
 objective: >-
-  在制作任务订单明细列表中增加待制作和制作中两个三态分类全选框，
+  在设计、制作、安装任务订单明细列表中增加按本任务状态的三态分类全选框，
   保持平铺多选、逐条不可选规则、状态工作流和只处理已勾选明细的安全边界。
 mode: STANDARD
 nodes:

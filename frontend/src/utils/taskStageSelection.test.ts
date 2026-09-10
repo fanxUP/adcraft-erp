@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { TaskOrderItemOption } from '@/types/api'
 import {
+  getTaskStageSelectionBucket,
+  getTaskStageSelectionGroups,
+  getTaskStageSelectionItemIds,
   getProductionSelectionBucket,
   getProductionSelectionItemIds,
   getStageSelectionState,
@@ -114,5 +117,129 @@ describe('制作任务按状态快速选择', () => {
       indeterminate: false,
       selectedCount: 0,
     })
+  })
+})
+
+describe('设计和安装任务按状态快速选择', () => {
+  it('设计任务按待分配和设计中分组，并将未关联明细放入待分配', () => {
+    expect(getTaskStageSelectionGroups('design').map(group => group.key)).toEqual([
+      'pending',
+      'designing',
+    ])
+    expect(getTaskStageSelectionBucket(
+      makeItem({ id: 'new-design-item', stage: 'designing' }),
+      'design',
+    )).toBe('pending')
+    expect(getTaskStageSelectionBucket(
+      makeItem({
+        id: 'designing-item',
+        stage: 'designing',
+        is_linked: true,
+        task_status: 'designing',
+      }),
+      'design',
+    )).toBe('designing')
+  })
+
+  it('安装任务按待分配、已分配和安装中分组', () => {
+    expect(getTaskStageSelectionGroups('installation').map(group => group.key)).toEqual([
+      'pending',
+      'assigned',
+      'in_progress',
+    ])
+    expect(getTaskStageSelectionBucket(
+      makeItem({ id: 'new-install-item', stage: 'in_installation' }),
+      'installation',
+    )).toBe('pending')
+    expect(getTaskStageSelectionBucket(
+      makeItem({
+        id: 'assigned-item',
+        stage: 'in_installation',
+        is_linked: true,
+        task_status: 'assigned',
+      }),
+      'installation',
+    )).toBe('assigned')
+    expect(getTaskStageSelectionBucket(
+      makeItem({
+        id: 'installing-item',
+        stage: 'in_installation',
+        is_linked: true,
+        task_status: 'in_progress',
+      }),
+      'installation',
+    )).toBe('in_progress')
+  })
+
+  it('不同任务类型只返回对应状态分类中的可选明细', () => {
+    const items = [
+      makeItem({ id: 'design-pending', stage: 'designing' }),
+      makeItem({
+        id: 'designing-item',
+        stage: 'designing',
+        is_linked: true,
+        task_status: 'designing',
+      }),
+      makeItem({ id: 'install-pending', stage: 'in_installation' }),
+      makeItem({
+        id: 'assigned-item',
+        stage: 'in_installation',
+        is_linked: true,
+        task_status: 'assigned',
+      }),
+      makeItem({
+        id: 'review-item',
+        stage: 'designing',
+        is_linked: true,
+        task_status: 'pending_review',
+      }),
+    ]
+
+    expect(getTaskStageSelectionItemIds(items, 'design', 'pending')).toEqual([
+      'design-pending',
+    ])
+    expect(getTaskStageSelectionItemIds(items, 'design', 'designing')).toEqual([
+      'designing-item',
+    ])
+    expect(getTaskStageSelectionItemIds(items, 'installation', 'pending')).toEqual([
+      'install-pending',
+    ])
+    expect(getTaskStageSelectionItemIds(items, 'installation', 'assigned')).toEqual([
+      'assigned-item',
+    ])
+  })
+
+  it('不把设计需调整、安装待处理或终态明细混入快捷选择', () => {
+    const excluded = [
+      makeItem({
+        id: 'design-revision',
+        stage: 'designing',
+        is_linked: true,
+        task_status: 'revision',
+      }),
+      makeItem({
+        id: 'installation-acceptance',
+        stage: 'in_installation',
+        is_linked: true,
+        task_status: 'pending_acceptance',
+      }),
+      makeItem({
+        id: 'completed',
+        stage: 'completed',
+        is_linked: true,
+        task_status: 'completed',
+      }),
+    ]
+
+    expect(excluded.map(item => getTaskStageSelectionBucket(item, 'design'))).toEqual([
+      null,
+      null,
+      null,
+    ])
+    expect(excluded.map(item => getTaskStageSelectionBucket(item, 'installation'))).toEqual([
+      null,
+      null,
+      null,
+    ])
   })
 })
