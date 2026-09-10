@@ -5,7 +5,7 @@ Usage:
 
 This script reads the DATABASE_URL from the project config,
 creates all permission records (idempotent), and maps them
-to the six built-in roles: admin, sales, designer, production, installer, finance.
+to the seven built-in roles, including the separate resource_manager role.
 """
 
 import asyncio
@@ -123,7 +123,8 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "chat:delete", "name": "删除消息", "description": "删除本人消息"},
     {"code": "chat:group:create", "name": "创建群聊", "description": "创建群聊"},
     {"code": "chat:group:manage", "name": "管理群聊", "description": "管理群聊成员和设置"},
-    # Inventory
+    # Resource center / Inventory
+    {"code": "resource_center:read", "name": "进入资源中心", "description": "进入公司车辆和高空作业车资源中心"},
     {"code": "inventory:read", "name": "查看库存", "description": "查看库存物料"},
     {"code": "inventory:create", "name": "创建物料", "description": "创建新物料"},
     {"code": "inventory:update", "name": "编辑物料", "description": "编辑物料信息"},
@@ -192,6 +193,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "payment:read", "payment:create",
         "expense:read",
         "report:read", "report:view_financial",
+        "resource_center:read",
         "ai_quote:read", "ai_anomaly:read", "ai_knowledge:read", "ai_report:read",
         "vehicle:read",
         "aerial:read",
@@ -215,14 +217,10 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "production_task:read", "production_task:create", "production_task:update", "production_task:change_status",
         "inventory:read", "inventory:create", "inventory:update", "inventory:stock_in", "inventory:stock_out",
         "outsource:read", "outsource:create", "outsource:update",
-        "vehicle:read", "vehicle:create", "vehicle:update", "vehicle:delete",
-        "aerial:read", "aerial:create", "aerial:update", "aerial:wage",
     ],
     "installer": [
         "customer:read",
         "installation_task:read", "installation_task:create", "installation_task:update", "installation_task:change_status",
-        "vehicle:read", "vehicle:update",
-        "aerial:read", "aerial:create", "aerial:update",
     ],
     "finance": [
         "customer:read",
@@ -234,14 +232,21 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "expense:read", "expense:create", "expense:update", "expense:delete",
         "outsource:read", "outsource_payment:read", "outsource_payment:create",
         "report:read",
+        "resource_center:read",
         "ai_quote:read", "ai_anomaly:read", "ai_knowledge:read", "ai_report:read",
         "vehicle:read", "finance:review",
         "aerial:read", "aerial:finance",
     ],
+    "resource_manager": [
+        "resource_center:read",
+        "vehicle:read", "vehicle:create", "vehicle:update", "vehicle:delete",
+        "aerial:read", "aerial:create", "aerial:update", "aerial:delete",
+        "aerial:finance", "aerial:wage", "finance:review",
+    ],
 }
 
 # ── Roles referenced by the init-db.sh script ──────────────────────────────
-ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance"]
+ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance", "resource_manager"]
 
 
 def builtin_role_permission_codes(role_name: str) -> list[str] | None:

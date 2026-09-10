@@ -7,6 +7,7 @@ import pytest
 
 from app.services.role_service import RoleService
 from app.services.user_service import UserService
+from app.core.permissions import validate_role_resource_permissions
 
 
 def _role(name: str, role_id: str = "11111111-1111-1111-1111-111111111111", permissions=None):
@@ -45,6 +46,28 @@ async def test_role_service_rejects_sensitive_permissions_for_execution_role():
             UUID("11111111-1111-1111-1111-111111111111"),
             [str(permission.id)],
         )
+
+
+@pytest.mark.asyncio
+async def test_role_service_rejects_resource_permissions_for_execution_role():
+    service = RoleService(AsyncMock())
+    service.repo.get_by_id = AsyncMock(return_value=_role("production"))
+    permission = MagicMock()
+    permission.id = UUID("22222222-2222-2222-2222-222222222222")
+    permission.code = "resource_center:read"
+    permission.name = "进入资源中心"
+    service.repo.get_permissions_by_ids = AsyncMock(return_value=[permission])
+
+    with pytest.raises(ValueError, match="设计、制作、安装角色不能拥有资源中心权限"):
+        await service.set_role_permissions(
+            UUID("11111111-1111-1111-1111-111111111111"),
+            [str(permission.id)],
+        )
+
+
+def test_execution_role_resource_permission_guard_is_explicit():
+    with pytest.raises(ValueError, match="设计、制作、安装角色不能拥有资源中心权限"):
+        validate_role_resource_permissions("installer", ["aerial:read"])
 
 
 @pytest.mark.asyncio

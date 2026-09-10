@@ -60,7 +60,7 @@ describe('filterNavigation', () => {
     const vehicleResource = filterNavigation(
       navigationItems,
       ['custom-vehicle-reader'],
-      ['vehicle:read'],
+      ['resource_center:read', 'vehicle:read'],
     ).find(item => item.label === '资源中心')
     expect(vehicleResource?.children?.map(item => item.label)).toEqual(['公司车辆'])
     expect(vehicleResource?.children?.[0].children?.map(item => item.label)).toContain('车辆看板')

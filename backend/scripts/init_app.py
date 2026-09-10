@@ -30,6 +30,7 @@ ROLES = [
     {"name": "production", "description": "制作人员，处理制作任务"},
     {"name": "installer", "description": "安装人员，处理安装任务"},
     {"name": "finance", "description": "财务人员，管理收款和对账"},
+    {"name": "resource_manager", "description": "资源管理员，管理车辆和高空作业车资源"},
 ]
 
 # A new administrator may only be created when an operator explicitly

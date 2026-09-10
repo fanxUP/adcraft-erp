@@ -6,6 +6,7 @@ dependencies and keep the API layer as the authoritative authorization gate.
 """
 
 from app.api import inventory, vehicles
+from app.main import app
 from app.core.permissions import (
     PERM_FINANCE_REVIEW,
     PERM_INVENTORY_CREATE,
@@ -13,11 +14,27 @@ from app.core.permissions import (
     PERM_INVENTORY_STOCK_IN,
     PERM_INVENTORY_STOCK_OUT,
     PERM_INVENTORY_UPDATE,
+    PERM_RESOURCE_CENTER_READ,
     PERM_VEHICLE_CREATE,
     PERM_VEHICLE_DELETE,
     PERM_VEHICLE_READ,
     PERM_VEHICLE_UPDATE,
 )
+
+
+def _dependency_permission_codes(dependant) -> set[str]:
+    codes: set[str] = set()
+    for dependency in dependant.dependencies:
+        call = dependency.call
+        closure = getattr(call, "__closure__", None)
+        if getattr(call, "__name__", None) == "dependency" and closure:
+            codes.update(
+                cell.cell_contents
+                for cell in closure
+                if isinstance(cell.cell_contents, str)
+            )
+        codes.update(_dependency_permission_codes(dependency))
+    return codes
 
 
 def _route_permission(router, method: str, path: str) -> str | None:
@@ -93,3 +110,18 @@ def test_vehicle_read_and_mutation_routes_keep_expected_boundaries():
     assert _route_permission(vehicles.router, "DELETE", "/vehicles/{vehicle_id}") == PERM_VEHICLE_DELETE
     assert _route_permission(vehicles.fuel_router, "POST", "/vehicle-fuel-records/") == PERM_VEHICLE_CREATE
     assert _route_permission(vehicles.fuel_router, "POST", "/vehicle-fuel-records/{record_id}/review") == PERM_FINANCE_REVIEW
+
+
+def test_all_resource_center_app_routes_require_the_parent_permission():
+    resource_routes = []
+    for route in app.routes:
+        contexts = route.effective_route_contexts() if hasattr(route, "effective_route_contexts") else ()
+        resource_routes.extend(
+            context
+            for context in contexts
+            if context.path.startswith(("/api/v1/vehicle", "/api/v1/aerial"))
+        )
+    assert resource_routes
+
+    for route in resource_routes:
+        assert PERM_RESOURCE_CENTER_READ in _dependency_permission_codes(route.dependant), route.path

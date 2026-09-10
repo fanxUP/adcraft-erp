@@ -11,10 +11,13 @@ from app.core.permissions import (
     PERM_ORDER_ITEM_VIEW_PRICE,
     PERM_ORDER_VIEW_PRICE,
     PERM_REPORT_VIEW_FINANCIAL,
+    PERM_RESOURCE_CENTER_READ,
+    RESOURCE_CENTER_PERMISSION_CODES,
     SENSITIVE_PERMISSION_CODES,
     get_user_capabilities,
     get_user_permission_codes,
     validate_execution_role_combination,
+    validate_role_resource_permissions,
     validate_role_sensitive_permissions,
     require_any_permission,
     require_permission,
@@ -157,6 +160,19 @@ async def test_role_mappings_only_reference_seeded_permissions():
     assert mapped <= seeded
 
 
+async def test_resource_center_parent_permission_is_explicit_and_execution_roles_are_isolated():
+    from scripts.seed_permissions import ALL_PERMISSIONS, ROLE_PERMISSION_MAP
+
+    seeded = {permission["code"] for permission in ALL_PERMISSIONS}
+    assert PERM_RESOURCE_CENTER_READ in seeded
+
+    for role_name in ("admin", "sales", "finance"):
+        assert PERM_RESOURCE_CENTER_READ in ROLE_PERMISSION_MAP[role_name]
+
+    for role_name in ("designer", "production", "installer"):
+        assert not RESOURCE_CENTER_PERMISSION_CODES.intersection(ROLE_PERMISSION_MAP[role_name])
+
+
 async def test_role_permission_refresh_replaces_the_complete_collection():
     from scripts.seed_permissions import replace_role_permissions
 
@@ -222,6 +238,14 @@ async def test_execution_roles_cannot_receive_sensitive_permissions():
         validate_role_sensitive_permissions(
             "designer",
             ["design_task:read", PERM_ORDER_VIEW_PRICE],
+        )
+
+
+async def test_execution_roles_cannot_receive_resource_center_permissions():
+    with pytest.raises(ValueError, match="设计、制作、安装角色不能拥有资源中心权限"):
+        validate_role_resource_permissions(
+            "production",
+            ["production_task:read", PERM_RESOURCE_CENTER_READ, "vehicle:read"],
         )
 
 

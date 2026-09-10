@@ -23,6 +23,7 @@ export type AccessKey =
   | 'reports'
   | 'outsource'
   | 'inventory'
+  | 'resourceCenter'
   | 'system'
   | 'vehicleRead'
   | 'vehicleFleet'
@@ -60,17 +61,18 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   reports: ['admin', 'sales', 'finance'],
   outsource: ['admin', 'production'],
   inventory: ['admin', 'production'],
+  resourceCenter: ['admin', 'sales', 'finance', 'resource_manager'],
   system: ['admin'],
-  vehicleRead: ['admin', 'sales', 'production', 'installer', 'finance'],
-  vehicleFleet: ['admin', 'production', 'installer', 'finance'],
-  vehicleDrivers: ['admin', 'production', 'installer'],
-  vehicleOperations: ['admin', 'production', 'installer'],
-  vehicleExpenses: ['admin', 'production', 'installer', 'finance'],
-  vehicleReports: ['admin', 'finance', 'production'],
-  aerialRead: ['admin', 'sales', 'production', 'installer', 'finance'],
-  aerialOperations: ['admin', 'production'],
-  aerialFinance: ['admin', 'finance'],
-  aerialFinanceOperations: ['admin', 'finance', 'production'],
+  vehicleRead: ['admin', 'sales', 'finance', 'resource_manager'],
+  vehicleFleet: ['admin', 'finance', 'resource_manager'],
+  vehicleDrivers: ['admin', 'resource_manager'],
+  vehicleOperations: ['admin', 'resource_manager'],
+  vehicleExpenses: ['admin', 'finance', 'resource_manager'],
+  vehicleReports: ['admin', 'finance', 'resource_manager'],
+  aerialRead: ['admin', 'sales', 'finance', 'resource_manager'],
+  aerialOperations: ['admin', 'resource_manager'],
+  aerialFinance: ['admin', 'finance', 'resource_manager'],
+  aerialFinanceOperations: ['admin', 'finance', 'resource_manager'],
   aiSales: ['admin', 'sales', 'finance'],
   aiReports: ['admin', 'sales', 'finance'],
 }
@@ -93,16 +95,17 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, readonly string[]>> =
   boardRead: ['design_task:read', 'production_task:read', 'installation_task:read'],
   outsource: ['outsource:read'],
   inventory: ['inventory:read'],
-  vehicleRead: ['vehicle:read'],
-  vehicleFleet: ['vehicle:read'],
-  vehicleDrivers: ['vehicle:read'],
-  vehicleOperations: ['vehicle:read'],
-  vehicleExpenses: ['vehicle:read'],
-  vehicleReports: ['vehicle:read'],
-  aerialRead: ['aerial:read'],
-  aerialOperations: ['aerial:read'],
-  aerialFinance: ['aerial:read'],
-  aerialFinanceOperations: ['aerial:read'],
+  resourceCenter: ['resource_center:read'],
+  vehicleRead: ['resource_center:read', 'vehicle:read'],
+  vehicleFleet: ['resource_center:read', 'vehicle:read'],
+  vehicleDrivers: ['resource_center:read', 'vehicle:read'],
+  vehicleOperations: ['resource_center:read', 'vehicle:read'],
+  vehicleExpenses: ['resource_center:read', 'vehicle:read'],
+  vehicleReports: ['resource_center:read', 'vehicle:read'],
+  aerialRead: ['resource_center:read', 'aerial:read'],
+  aerialOperations: ['resource_center:read', 'aerial:read'],
+  aerialFinance: ['resource_center:read', 'aerial:read'],
+  aerialFinanceOperations: ['resource_center:read', 'aerial:read'],
   finance: ['payment:read', 'expense:read', 'statement:read'],
   reports: ['report:read'],
 }
@@ -114,9 +117,11 @@ const BUILTIN_ROLE_NAMES = new Set([
   'production',
   'installer',
   'finance',
+  'resource_manager',
 ])
 
 const RESOURCE_CENTER_PERMISSION_FIRST_KEYS = new Set<AccessKey>([
+  'resourceCenter',
   'vehicleRead', 'vehicleFleet', 'vehicleDrivers', 'vehicleOperations',
   'vehicleExpenses', 'vehicleReports', 'aerialRead', 'aerialOperations',
   'aerialFinance', 'aerialFinanceOperations',
@@ -342,7 +347,7 @@ export function canAccess(
   // argument preserves pure route-matrix callers and the loading state before
   // /auth/me has completed.
   if (RESOURCE_CENTER_PERMISSION_FIRST_KEYS.has(accessKey) && permissions !== undefined) {
-    return requiredPermissions.some(permission => permissions.includes(permission))
+    return requiredPermissions.length > 0 && requiredPermissions.every(permission => permissions.includes(permission))
   }
 
   const allowedRoles = ACCESS_ROLES[accessKey]

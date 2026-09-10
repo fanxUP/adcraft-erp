@@ -130,7 +130,8 @@ PERM_EXPENSE_CREATE = "expense:create"
 PERM_EXPENSE_UPDATE = "expense:update"
 PERM_EXPENSE_DELETE = "expense:delete"
 
-# Inventory
+# Resource center / Inventory
+PERM_RESOURCE_CENTER_READ = "resource_center:read"
 PERM_INVENTORY_READ = "inventory:read"
 PERM_INVENTORY_CREATE = "inventory:create"
 PERM_INVENTORY_UPDATE = "inventory:update"
@@ -192,6 +193,24 @@ PERM_AERIAL_DELETE = "aerial:delete"
 PERM_AERIAL_FINANCE = "aerial:finance"
 PERM_AERIAL_WAGE = "aerial:wage"
 
+# The parent gate is intentionally separate from the vehicle/aerial action
+# permissions. A user must have both the module entry permission and the
+# relevant child permission before a resource-center route is usable.
+RESOURCE_CENTER_PERMISSION_CODES = frozenset({
+    PERM_RESOURCE_CENTER_READ,
+    PERM_VEHICLE_READ,
+    PERM_VEHICLE_CREATE,
+    PERM_VEHICLE_UPDATE,
+    PERM_VEHICLE_DELETE,
+    PERM_FINANCE_REVIEW,
+    PERM_AERIAL_READ,
+    PERM_AERIAL_CREATE,
+    PERM_AERIAL_UPDATE,
+    PERM_AERIAL_DELETE,
+    PERM_AERIAL_FINANCE,
+    PERM_AERIAL_WAGE,
+})
+
 # CDR 智能报价
 PERM_CDR_QUOTE_READ = "cdr_quote:read"
 PERM_CDR_QUOTE_CREATE = "cdr_quote:create"
@@ -215,6 +234,7 @@ ROLE_DESIGNER = "designer"
 ROLE_PRODUCTION = "production"
 ROLE_INSTALLER = "installer"
 ROLE_FINANCE = "finance"
+ROLE_RESOURCE_MANAGER = "resource_manager"
 
 EXECUTION_ROLE_NAMES = frozenset({
     ROLE_DESIGNER,
@@ -377,6 +397,28 @@ def validate_role_sensitive_permissions(
     )
     if execution_capable and SENSITIVE_PERMISSION_CODES.intersection(codes):
         raise ValueError("设计、制作、安装角色不能拥有价格或财务权限")
+
+
+def validate_role_resource_permissions(
+    role_name: str,
+    permission_codes: set[str] | list[str] | tuple[str, ...],
+) -> None:
+    """Keep resource-center access in a separate role boundary.
+
+    Built-in delivery roles must not be used as a shortcut to grant vehicle or
+    aerial access. A separate resource role can still be assigned alongside a
+    delivery role when that is an intentional business decision.
+    """
+
+    if role_name in {ROLE_ADMIN, *SENSITIVE_ROLE_NAMES}:
+        return
+    codes = set(permission_codes)
+    execution_capable = (
+        role_name in EXECUTION_ROLE_NAMES
+        or bool(EXECUTION_PERMISSION_CODES.intersection(codes))
+    )
+    if execution_capable and RESOURCE_CENTER_PERMISSION_CODES.intersection(codes):
+        raise ValueError("设计、制作、安装角色不能拥有资源中心权限")
 
 
 def validate_execution_role_combination(role_names: list[str] | tuple[str, ...]) -> None:

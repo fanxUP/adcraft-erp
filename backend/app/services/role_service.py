@@ -7,7 +7,9 @@ from app.core.permissions import (
     ROLE_FINANCE,
     ROLE_INSTALLER,
     ROLE_PRODUCTION,
+    ROLE_RESOURCE_MANAGER,
     ROLE_SALES,
+    validate_role_resource_permissions,
     validate_role_sensitive_permissions,
 )
 from app.repositories.role_repo import RoleRepository
@@ -20,6 +22,7 @@ BUILTIN_ROLE_NAMES = frozenset({
     ROLE_PRODUCTION,
     ROLE_INSTALLER,
     ROLE_FINANCE,
+    ROLE_RESOURCE_MANAGER,
 })
 
 
@@ -91,6 +94,7 @@ class RoleService:
         if len(perms) != len(perm_uuids):
             raise ValueError("存在无效权限编号，未保存本次变更")
         validate_role_sensitive_permissions(role.name, {permission.code for permission in perms})
+        validate_role_resource_permissions(role.name, {permission.code for permission in perms})
         await self.repo.set_permissions(role, perms)
         return {
             "id": str(role.id),

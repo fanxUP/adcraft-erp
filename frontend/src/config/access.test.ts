@@ -74,10 +74,15 @@ describe('page access matrix', () => {
   })
 
   it('connects resource-center page access to explicit server permissions', () => {
-    expect(canAccess('vehicleRead', ['resource-reader'], ['vehicle:read'])).toBe(true)
-    expect(canAccess('aerialRead', ['resource-reader'], ['aerial:read'])).toBe(true)
-    expect(canAccessRoute('VehicleDashboard', ['resource-reader'], [], ['vehicle:read'])).toBe(true)
-    expect(canAccessRoute('AerialDashboard', ['resource-reader'], [], ['aerial:read'])).toBe(true)
+    const vehiclePermissions = ['resource_center:read', 'vehicle:read']
+    const aerialPermissions = ['resource_center:read', 'aerial:read']
+    expect(canAccess('resourceCenter', ['resource-reader'], ['resource_center:read'])).toBe(true)
+    expect(canAccess('vehicleRead', ['resource-reader'], vehiclePermissions)).toBe(true)
+    expect(canAccess('aerialRead', ['resource-reader'], aerialPermissions)).toBe(true)
+    expect(canAccessRoute('VehicleDashboard', ['resource-reader'], [], vehiclePermissions)).toBe(true)
+    expect(canAccessRoute('AerialDashboard', ['resource-reader'], [], aerialPermissions)).toBe(true)
+    expect(canAccess('vehicleRead', ['resource-reader'], ['vehicle:read'])).toBe(false)
+    expect(canAccess('aerialRead', ['resource-reader'], ['aerial:read'])).toBe(false)
     expect(canAccess('vehicleRead', ['designer'], [])).toBe(false)
     expect(canAccess('aerialRead', ['designer'], [])).toBe(false)
     expect(canAccess('vehicleRead', ['production'], [])).toBe(false)

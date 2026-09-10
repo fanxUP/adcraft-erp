@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -65,6 +65,7 @@ from app.api import (
     vehicles,
 )
 from app.core.config import settings
+from app.core.permissions import PERM_RESOURCE_CENTER_READ, require_permission
 from app.core.performance import (
     SLOW_API_MS,
     SLOW_QUERY_MS,
@@ -174,6 +175,12 @@ app = FastAPI(
     openapi_url="/api/openapi.json" if settings.APP_ENV.lower() != "production" else None,
     lifespan=lifespan,
 )
+
+# Resource-center routers already enforce vehicle/aerial action permissions at
+# route level. This include-time dependency adds the independent module gate
+# to every current and future endpoint without relying on each route author to
+# remember it.
+RESOURCE_CENTER_DEPENDENCIES = [Depends(require_permission(PERM_RESOURCE_CENTER_READ))]
 
 
 @app.exception_handler(ValueError)
@@ -336,33 +343,33 @@ app.include_router(admin.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(conversations.router, prefix="/api/v1")
 app.include_router(acceptances.router, prefix="/api/v1")
-app.include_router(vehicles.router, prefix="/api/v1")
-app.include_router(vehicles.driver_router, prefix="/api/v1")
-app.include_router(vehicles.request_router, prefix="/api/v1")
-app.include_router(vehicles.dispatch_router, prefix="/api/v1")
-app.include_router(vehicles.trip_router, prefix="/api/v1")
-app.include_router(vehicles.fuel_router, prefix="/api/v1")
-app.include_router(vehicles.maintenance_router, prefix="/api/v1")
-app.include_router(vehicles.cost_router, prefix="/api/v1")
-app.include_router(vehicles.certificate_router, prefix="/api/v1")
-app.include_router(vehicles.incident_router, prefix="/api/v1")
-app.include_router(vehicles.report_router, prefix="/api/v1")
-app.include_router(vehicle_agent.router, prefix="/api/v1")
-app.include_router(vehicle_dashboard.router, prefix="/api/v1")
+app.include_router(vehicles.router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(vehicles.driver_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(vehicles.request_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(vehicles.dispatch_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(vehicles.trip_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(vehicles.fuel_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(vehicles.maintenance_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(vehicles.cost_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(vehicles.certificate_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(vehicles.incident_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(vehicles.report_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(vehicle_agent.router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(vehicle_dashboard.router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
 
 # Aerial work platform
-app.include_router(aerial.router, prefix="/api/v1")
-app.include_router(aerial.personnel_router, prefix="/api/v1")
-app.include_router(aerial.ledger_router, prefix="/api/v1")
-app.include_router(aerial.expense_router, prefix="/api/v1")
-app.include_router(aerial.wage_router, prefix="/api/v1")
-app.include_router(aerial.cost_router, prefix="/api/v1")
-app.include_router(aerial.safety_router, prefix="/api/v1")
-app.include_router(aerial.attachment_router, prefix="/api/v1")
-app.include_router(aerial.dashboard_router, prefix="/api/v1")
-app.include_router(aerial.report_router, prefix="/api/v1")
-app.include_router(aerial.agent_router, prefix="/api/v1")
-app.include_router(aerial.attendance_router, prefix="/api/v1")
+app.include_router(aerial.router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(aerial.personnel_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(aerial.ledger_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(aerial.expense_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(aerial.wage_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(aerial.cost_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(aerial.safety_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(aerial.attachment_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(aerial.dashboard_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(aerial.report_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(aerial.agent_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
+app.include_router(aerial.attendance_router, prefix="/api/v1", dependencies=RESOURCE_CENTER_DEPENDENCIES)
 
 # WebSocket endpoints
 app.add_api_websocket_route("/ws/notifications", notifications.websocket_notifications)

@@ -42,7 +42,7 @@
           <div v-else>
             <el-alert
               v-if="selectedRoleIsExecution"
-              title="设计、制作、安装角色不能配置报价、合同、财务或价格权限"
+              title="设计、制作、安装角色不能配置资源中心、报价、合同、财务或价格权限"
               type="info"
               :closable="false"
               show-icon
@@ -64,7 +64,7 @@
                 >
                   {{ p.name }}
                   <span style="color: var(--ad-text-secondary); font-size: 12px">({{ p.code }})</span>
-                  <el-tag v-if="isSensitivePermission(p.code)" size="small" type="warning" effect="plain" style="margin-left: 6px">
+                  <el-tag v-if="isSensitivePermission(p.code) || (selectedRoleIsExecution && isResourceCenterPermission(p.code))" size="small" type="warning" effect="plain" style="margin-left: 6px">
                     {{ selectedRoleIsExecution ? '执行角色禁用' : '敏感数据' }}
                   </el-tag>
                 </el-checkbox>
@@ -102,7 +102,7 @@ import { getErrorMessage } from '@/utils/error'
 
 const ROLE_MAP: Record<string, string> = {
   admin: '管理员', sales: '销售', designer: '设计师',
-  production: '生产', installer: '安装', finance: '财务',
+  production: '生产', installer: '安装', finance: '财务', resource_manager: '资源管理员',
 }
 function roleLabel(name: string) { return ROLE_MAP[name] || name }
 
@@ -115,6 +115,7 @@ const groupLabels: Record<string, string> = {
   cdr_customer_agreement: '客户协议价',
   payment: '收款管理', statement: '对账单', expense: '支出管理',
   inventory: '库存管理', outsource: '外协管理', report: '报表',
+  resource_center: '资源中心',
   vehicle: '资源中心 / 公司车辆', aerial: '资源中心 / 高空作业车',
   backup: '备份管理', ai_quote: 'AI报价', ai_anomaly: 'AI异常',
   ai_knowledge: 'AI知识库', ai_report: 'AI报告',
@@ -144,6 +145,13 @@ const SENSITIVE_PERMISSION_CODES = new Set([
   'statement:read', 'statement:create', 'statement:confirm',
   'expense:read', 'expense:create', 'expense:update', 'expense:delete',
   'outsource_payment:read', 'outsource_payment:create',
+])
+const RESOURCE_CENTER_PERMISSION_CODES = new Set([
+  'resource_center:read',
+  'vehicle:read', 'vehicle:create', 'vehicle:update', 'vehicle:delete',
+  'finance:review',
+  'aerial:read', 'aerial:create', 'aerial:update', 'aerial:delete',
+  'aerial:finance', 'aerial:wage',
 ])
 
 const loading = ref(false)
@@ -195,10 +203,15 @@ function isSensitivePermission(code: string): boolean {
   return SENSITIVE_PERMISSION_CODES.has(code)
 }
 
-function permissionDisabled(permission: PermissionItem): boolean {
-  if (!selectedRoleIsExecution.value || !isSensitivePermission(permission.code)) return false
+function isResourceCenterPermission(code: string): boolean {
+  return RESOURCE_CENTER_PERMISSION_CODES.has(code)
+}
 
-  // 历史上已经误配的敏感权限必须保持可取消，否则管理员无法修复角色。
+function permissionDisabled(permission: PermissionItem): boolean {
+  const restricted = isSensitivePermission(permission.code) || isResourceCenterPermission(permission.code)
+  if (!selectedRoleIsExecution.value || !restricted) return false
+
+  // 历史上已经误配的受限权限必须保持可取消，否则管理员无法修复角色。
   return !selectedRole.value?.permissions.some(existing => existing.id === permission.id)
 }
 

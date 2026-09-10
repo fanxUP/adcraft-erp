@@ -71,12 +71,12 @@ export const navigationItems: NavigationItem[] = [
   {
     label: '资源中心',
     icon: 'Van',
-    accessKey: 'authenticated',
+    accessKey: 'resourceCenter',
     children: [
       {
         label: '公司车辆',
         icon: 'Van',
-        accessKey: 'authenticated',
+        accessKey: 'resourceCenter',
         children: [
           { label: '车辆看板', path: '/vehicle-dashboard', accessKey: 'vehicleRead' },
           { label: '用车申请', path: '/vehicle-use-requests', accessKey: 'vehicleRead' },
@@ -93,7 +93,7 @@ export const navigationItems: NavigationItem[] = [
       {
         label: '高空作业车',
         icon: 'Platform',
-        accessKey: 'authenticated',
+        accessKey: 'resourceCenter',
         children: [
           { label: '经营看板', path: '/aerial-dashboard', accessKey: 'aerialRead' },
           { label: '出车台账', path: '/aerial-ledgers', accessKey: 'aerialRead' },
