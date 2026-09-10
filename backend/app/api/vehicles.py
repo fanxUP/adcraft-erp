@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
 from app.core.permissions import (
     require_permission,
     PERM_VEHICLE_READ, PERM_VEHICLE_CREATE, PERM_VEHICLE_UPDATE, PERM_VEHICLE_DELETE,
@@ -47,7 +46,7 @@ def _get_service(db: AsyncSession, current_user: User, request: Request) -> Vehi
 async def list_available_vehicles(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     vehicles, _ = await service.list_vehicles(1, 100, status="available")
@@ -64,7 +63,7 @@ async def list_vehicles(
     status: str | None = None,
     driver_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     did = UUID(driver_id) if driver_id else None
@@ -102,7 +101,7 @@ async def get_vehicle(
     vehicle_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     vehicle = await service.get_vehicle(UUID(vehicle_id))
@@ -227,7 +226,7 @@ async def delete_vehicle_attachment(
 async def list_available_drivers(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     drivers, _ = await service.list_drivers(1, 100, status="active")
@@ -242,7 +241,7 @@ async def list_drivers(
     keyword: str | None = None,
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     drivers, total = await service.list_drivers(page, page_size, keyword, status)
@@ -266,7 +265,7 @@ async def get_driver(
     driver_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     driver = await service.get_driver(UUID(driver_id))
@@ -338,7 +337,7 @@ async def list_requests(
     status: str | None = None,
     requester_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     rid = UUID(requester_id) if requester_id else None
@@ -351,7 +350,7 @@ async def create_request(
     data: VehicleUseRequestCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_CREATE)),
 ):
     service = _get_service(db, current_user, request)
     req = await service.create_request(data.model_dump(exclude_none=True))
@@ -363,7 +362,7 @@ async def get_request(
     request_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     req = await service.get_request(UUID(request_id))
@@ -378,7 +377,7 @@ async def update_request(
     data: VehicleUseRequestUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_UPDATE)),
 ):
     service = _get_service(db, current_user, request)
     req = await service.update_request(UUID(request_id), data.model_dump(exclude_none=True))
@@ -390,7 +389,7 @@ async def submit_request(
     request_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_UPDATE)),
 ):
     service = _get_service(db, current_user, request)
     req = await service.submit_request(UUID(request_id))
@@ -427,7 +426,7 @@ async def cancel_request(
     request_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_UPDATE)),
 ):
     service = _get_service(db, current_user, request)
     req = await service.cancel_request(UUID(request_id))
@@ -446,7 +445,7 @@ async def list_dispatches(
     vehicle_id: str | None = None,
     driver_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     vid = UUID(vehicle_id) if vehicle_id else None
@@ -472,7 +471,7 @@ async def get_dispatch(
     dispatch_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     d = await service.get_dispatch(UUID(dispatch_id))
@@ -512,7 +511,7 @@ async def start_dispatch(
     data: DispatchStart,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_UPDATE)),
 ):
     service = _get_service(db, current_user, request)
     d = await service.start_dispatch(UUID(dispatch_id), data.model_dump(exclude_none=True))
@@ -525,7 +524,7 @@ async def arrive_dispatch(
     data: DispatchArrive,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_UPDATE)),
 ):
     service = _get_service(db, current_user, request)
     d = await service.arrive_dispatch(UUID(dispatch_id), data.model_dump(exclude_none=True))
@@ -537,7 +536,7 @@ async def finish_dispatch(
     dispatch_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_UPDATE)),
 ):
     service = _get_service(db, current_user, request)
     d = await service.finish_dispatch(UUID(dispatch_id), {})
@@ -550,7 +549,7 @@ async def return_dispatch(
     data: DispatchReturn,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_UPDATE)),
 ):
     service = _get_service(db, current_user, request)
     d = await service.return_dispatch(UUID(dispatch_id), data.model_dump(exclude_none=True))
@@ -567,7 +566,7 @@ async def list_trip_records(
     vehicle_id: str | None = None,
     driver_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     vid = UUID(vehicle_id) if vehicle_id else None
@@ -581,7 +580,7 @@ async def get_trip_record(
     trip_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     r = await service.get_trip_record(UUID(trip_id))
@@ -604,7 +603,7 @@ async def list_fuel_records(
     driver_id: str | None = None,
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     vid = UUID(vehicle_id) if vehicle_id else None
@@ -618,7 +617,7 @@ async def create_fuel_record(
     data: FuelRecordCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_CREATE)),
 ):
     service = _get_service(db, current_user, request)
     r = await service.create_fuel_record(data.model_dump(exclude_none=True))
@@ -630,7 +629,7 @@ async def get_fuel_record(
     record_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     r = await service.get_fuel_record(UUID(record_id))
@@ -645,7 +644,7 @@ async def update_fuel_record(
     data: FuelRecordUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_UPDATE)),
 ):
     service = _get_service(db, current_user, request)
     r = await service.update_fuel_record(UUID(record_id), data.model_dump(exclude_none=True))
@@ -679,7 +678,7 @@ async def list_maintenance_records(
     maintenance_type: str | None = None,
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     vid = UUID(vehicle_id) if vehicle_id else None
@@ -692,7 +691,7 @@ async def create_maintenance_record(
     data: MaintenanceRecordCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_CREATE)),
 ):
     service = _get_service(db, current_user, request)
     r = await service.create_maintenance_record(data.model_dump(exclude_none=True))
@@ -704,7 +703,7 @@ async def get_maintenance_record(
     record_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     r = await service.get_maintenance_record(UUID(record_id))
@@ -719,7 +718,7 @@ async def update_maintenance_record(
     data: MaintenanceRecordUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_UPDATE)),
 ):
     service = _get_service(db, current_user, request)
     r = await service.update_maintenance_record(UUID(record_id), data.model_dump(exclude_none=True))
@@ -753,7 +752,7 @@ async def list_cost_allocations(
     cost_type: str | None = None,
     source_type: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     vid = UUID(vehicle_id) if vehicle_id else None
@@ -766,7 +765,7 @@ async def create_cost_allocation(
     data: CostAllocationCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_CREATE)),
 ):
     service = _get_service(db, current_user, request)
     r = await service.create_cost_allocation(data.model_dump(exclude_none=True))
@@ -778,7 +777,7 @@ async def get_cost_allocation(
     cost_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     r = await service.get_cost_allocation(UUID(cost_id))
@@ -801,7 +800,7 @@ async def list_certificates(
     certificate_type: str | None = None,
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     vid = UUID(vehicle_id) if vehicle_id else None
@@ -815,7 +814,7 @@ async def list_expiring_certificates(
     days: int = Query(30, ge=1, le=365),
     vehicle_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     vid = UUID(vehicle_id) if vehicle_id else None
@@ -840,7 +839,7 @@ async def get_certificate(
     cert_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     r = await service.get_certificate(UUID(cert_id))
@@ -889,7 +888,7 @@ async def list_incidents(
     status: str | None = None,
     driver_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     vid = UUID(vehicle_id) if vehicle_id else None
@@ -903,7 +902,7 @@ async def create_incident(
     data: IncidentCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_CREATE)),
 ):
     service = _get_service(db, current_user, request)
     r = await service.create_incident(data.model_dump(exclude_none=True))
@@ -915,7 +914,7 @@ async def get_incident(
     incident_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_VEHICLE_READ)),
 ):
     service = _get_service(db, current_user, request)
     r = await service.get_incident(UUID(incident_id))

@@ -61,13 +61,13 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   outsource: ['admin', 'production'],
   inventory: ['admin', 'production'],
   system: ['admin'],
-  vehicleRead: ['admin', 'sales', 'designer', 'production', 'installer', 'finance'],
+  vehicleRead: ['admin', 'sales', 'production', 'installer', 'finance'],
   vehicleFleet: ['admin', 'production', 'installer', 'finance'],
   vehicleDrivers: ['admin', 'production', 'installer'],
   vehicleOperations: ['admin', 'production', 'installer'],
   vehicleExpenses: ['admin', 'production', 'installer', 'finance'],
   vehicleReports: ['admin', 'finance', 'production'],
-  aerialRead: ['admin', 'sales', 'designer', 'production', 'installer', 'finance'],
+  aerialRead: ['admin', 'sales', 'production', 'installer', 'finance'],
   aerialOperations: ['admin', 'production'],
   aerialFinance: ['admin', 'finance'],
   aerialFinanceOperations: ['admin', 'finance', 'production'],
@@ -76,11 +76,11 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
 }
 
 /**
- * Permission fallbacks for custom roles.  Built-in roles keep the existing
- * navigation matrix during the compatibility period; a custom role can use
- * the server-provided module permission without having to reuse a built-in
- * role name.  These are page-entry permissions only, never data-field or
- * write authorization.
+ * Permission fallbacks for custom roles. A resource-center key also becomes
+ * permission-first whenever the authenticated profile has supplied the
+ * server permission list, so an admin can revoke a built-in role's resource
+ * access without leaving a stale navigation entry. These are page-entry
+ * permissions only, never data-field or write authorization.
  */
 export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, readonly string[]>> = {
   product: ['product:read'],
@@ -93,6 +93,16 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, readonly string[]>> =
   boardRead: ['design_task:read', 'production_task:read', 'installation_task:read'],
   outsource: ['outsource:read'],
   inventory: ['inventory:read'],
+  vehicleRead: ['vehicle:read'],
+  vehicleFleet: ['vehicle:read'],
+  vehicleDrivers: ['vehicle:read'],
+  vehicleOperations: ['vehicle:read'],
+  vehicleExpenses: ['vehicle:read'],
+  vehicleReports: ['vehicle:read'],
+  aerialRead: ['aerial:read'],
+  aerialOperations: ['aerial:read'],
+  aerialFinance: ['aerial:read'],
+  aerialFinanceOperations: ['aerial:read'],
   finance: ['payment:read', 'expense:read', 'statement:read'],
   reports: ['report:read'],
 }
@@ -104,6 +114,12 @@ const BUILTIN_ROLE_NAMES = new Set([
   'production',
   'installer',
   'finance',
+])
+
+const RESOURCE_CENTER_PERMISSION_FIRST_KEYS = new Set<AccessKey>([
+  'vehicleRead', 'vehicleFleet', 'vehicleDrivers', 'vehicleOperations',
+  'vehicleExpenses', 'vehicleReports', 'aerialRead', 'aerialOperations',
+  'aerialFinance', 'aerialFinanceOperations',
 ])
 
 /** Route-level visibility uses the exact same keys as navigation items. */
@@ -317,26 +333,34 @@ export const SMART_TOOL_ITEMS: SmartToolItem[] = [
 export function canAccess(
   accessKey: AccessKey,
   roles: readonly string[],
-  permissions: readonly string[] = [],
+  permissions?: readonly string[],
 ): boolean {
+  const requiredPermissions = ACCESS_PERMISSIONS[accessKey] || []
+
+  // The profile's permission array is the source of truth for resource-center
+  // entries once it has been loaded. Keeping the role fallback for an omitted
+  // argument preserves pure route-matrix callers and the loading state before
+  // /auth/me has completed.
+  if (RESOURCE_CENTER_PERMISSION_FIRST_KEYS.has(accessKey) && permissions !== undefined) {
+    return requiredPermissions.some(permission => permissions.includes(permission))
+  }
+
   const allowedRoles = ACCESS_ROLES[accessKey]
   if (allowedRoles === null || allowedRoles.length === 0) return true
   if (allowedRoles.some(role => roles.includes(role))) return true
 
-  // Do not let the new permission fallback change the established behavior
-  // for built-in accounts until all routes are permission-first.  Custom
-  // roles, however, have no role-name entry in ACCESS_ROLES and can be
+  // Non-resource legacy keys keep their established built-in role matrix.
+  // Custom roles, however, have no role-name entry in ACCESS_ROLES and can be
   // admitted by the server-issued module permission.
   if (roles.some(role => BUILTIN_ROLE_NAMES.has(role))) return false
-  const requiredPermissions = ACCESS_PERMISSIONS[accessKey] || []
-  return requiredPermissions.some(permission => permissions.includes(permission))
+  return requiredPermissions.some(permission => (permissions || []).includes(permission))
 }
 
 export function canAccessRoute(
   routeName: unknown,
   roles: readonly string[],
   legacyRoles: readonly string[] = [],
-  permissions: readonly string[] = [],
+  permissions?: readonly string[],
 ): boolean {
   if (legacyRoles.length > 0 && !legacyRoles.some(role => roles.includes(role))) {
     return false
@@ -353,7 +377,7 @@ export function getRouteTitle(routeName: unknown): string {
 
 export function filterSmartTools(
   roles: readonly string[],
-  permissions: readonly string[] = [],
+  permissions?: readonly string[],
 ): SmartToolItem[] {
   return SMART_TOOL_ITEMS.filter(item => canAccess(item.accessKey, roles, permissions))
 }

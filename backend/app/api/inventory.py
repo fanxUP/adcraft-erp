@@ -4,7 +4,14 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.permissions import (
+    require_permission,
+    PERM_INVENTORY_READ,
+    PERM_INVENTORY_CREATE,
+    PERM_INVENTORY_UPDATE,
+    PERM_INVENTORY_STOCK_IN,
+    PERM_INVENTORY_STOCK_OUT,
+)
 from app.models.user import User
 from app.schemas.common import success, success_paginated, error
 from app.schemas.inventory import InventoryItemCreate, InventoryItemUpdate, StockRecordCreate
@@ -21,7 +28,7 @@ async def list_items(
     keyword: str | None = None,
     category: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_INVENTORY_READ)),
 ):
     service = InventoryService(db)
     items, total = await service.list_items(page, page_size, keyword, category)
@@ -32,7 +39,7 @@ async def list_items(
 async def get_item(
     item_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_INVENTORY_READ)),
 ):
     service = InventoryService(db)
     item = await service.get_item(UUID(item_id))
@@ -45,7 +52,7 @@ async def get_item(
 async def create_item(
     data: InventoryItemCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_INVENTORY_CREATE)),
 ):
     service = InventoryService(db)
     item = await service.create_item(data.model_dump())
@@ -57,7 +64,7 @@ async def update_item(
     item_id: str,
     data: InventoryItemUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_INVENTORY_UPDATE)),
 ):
     service = InventoryService(db)
     try:
@@ -74,7 +81,7 @@ async def list_records(
     item_id: str | None = None,
     record_type: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_INVENTORY_READ)),
 ):
     service = InventoryService(db)
     iid = UUID(item_id) if item_id else None
@@ -87,7 +94,7 @@ async def stock_in(
     data: StockRecordCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_INVENTORY_STOCK_IN)),
 ):
     service = InventoryService(db)
     record = await service.stock_in(data.model_dump())
@@ -103,7 +110,7 @@ async def stock_out(
     data: StockRecordCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_INVENTORY_STOCK_OUT)),
 ):
     service = InventoryService(db)
     try:

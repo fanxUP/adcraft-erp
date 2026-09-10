@@ -115,6 +115,7 @@ const groupLabels: Record<string, string> = {
   cdr_customer_agreement: '客户协议价',
   payment: '收款管理', statement: '对账单', expense: '支出管理',
   inventory: '库存管理', outsource: '外协管理', report: '报表',
+  vehicle: '资源中心 / 公司车辆', aerial: '资源中心 / 高空作业车',
   backup: '备份管理', ai_quote: 'AI报价', ai_anomaly: 'AI异常',
   ai_knowledge: 'AI知识库', ai_report: 'AI报告',
 }

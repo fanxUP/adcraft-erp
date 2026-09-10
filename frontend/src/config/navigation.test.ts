@@ -55,4 +55,20 @@ describe('filterNavigation', () => {
 
     expect(delivery?.children?.map(item => item.label)).toEqual(['安装任务'])
   })
+
+  it('shows resource-center groups only when their server permission exists', () => {
+    const vehicleResource = filterNavigation(
+      navigationItems,
+      ['custom-vehicle-reader'],
+      ['vehicle:read'],
+    ).find(item => item.label === '资源中心')
+    expect(vehicleResource?.children?.map(item => item.label)).toEqual(['公司车辆'])
+    expect(vehicleResource?.children?.[0].children?.map(item => item.label)).toContain('车辆看板')
+
+    const designerLabels = filterNavigation(navigationItems, ['designer']).map(item => item.label)
+    expect(designerLabels).not.toContain('资源中心')
+
+    const revokedProductionLabels = filterNavigation(navigationItems, ['production'], []).map(item => item.label)
+    expect(revokedProductionLabels).not.toContain('资源中心')
+  })
 })

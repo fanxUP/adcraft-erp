@@ -45,3 +45,24 @@
 ## 发布后跟进
 
 补充六类隔离账号的登录态验证：设计/制作/安装账号响应不得出现订单或明细价格字段；销售/财务/管理员按显式权限验证应有字段。完成后再将 A08 的账号验收项标记为完成。
+
+## P09 资源中心权限链路修复证据
+
+验证日期：2026-09-10（Asia/Shanghai）
+
+- 前端资源中心页面访问键已关联 `vehicle:read`、`aerial:read` 等服务端权限；带权限的自定义角色可以显示对应入口，管理员撤销内置角色的资源权限后菜单和直访路由同步拒绝；设计角色默认不再显示资源中心。
+- 角色权限管理页面已将 `vehicle:*`、`aerial:*` 分别显示为“资源中心 / 公司车辆”和“资源中心 / 高空作业车”。
+- 库存 7 个接口已分别接入库存查看、创建、编辑、入库、出库权限；车辆及司机、用车、派车、台账、费用、证件、事故、报表路由已全部移除仅登录依赖，改为显式资源权限。
+
+| 验证项 | 命令 | 结果 |
+|---|---|---|
+| 资源中心路由权限契约 | `backend/.venv/bin/pytest backend/tests/test_resource_center_permissions.py -q` | 3 passed |
+| 前端资源权限/导航回归 | `npm test -- --run src/config/access.test.ts src/config/navigation.test.ts` | 2 个文件、14 项通过 |
+| 后端全量回归 | `backend/.venv/bin/pytest backend/tests -q` | 1058 passed, 2 warnings |
+| 前端全量单元测试 | `npm test -- --run` | 25 个文件、155 项通过 |
+| 前端 Lint | `npm run lint` | 通过 |
+| 前端类型检查和生产构建 | `npm run typecheck`、`npm run build` | 均通过；首屏 152.32 KiB gzip / 200 KiB |
+| 后端语法检查 | `backend/.venv/bin/python -m py_compile backend/app/api/inventory.py backend/app/api/vehicles.py backend/tests/test_resource_center_permissions.py` | 通过 |
+| 补丁空白和敏感信息检查 | `git diff --check`；变更内容未新增密码、服务器地址或依赖 | 通过 |
+
+本次仅完成代码和本地验证，尚未部署到服务器；未新增数据库迁移，未修改业务数据。

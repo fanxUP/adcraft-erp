@@ -140,7 +140,7 @@ export const navigationItems: NavigationItem[] = [
 export function filterNavigation(
   items: NavigationItem[],
   roles: string[],
-  permissions: string[] = [],
+  permissions?: string[],
 ): NavigationItem[] {
   return items.flatMap(item => {
     if (!canAccess(item.accessKey || 'authenticated', roles, permissions)) return []

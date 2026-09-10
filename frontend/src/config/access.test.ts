@@ -72,4 +72,15 @@ describe('page access matrix', () => {
     )).toBe(true)
     expect(canAccess('production', ['sales'], ['production_task:read'])).toBe(false)
   })
+
+  it('connects resource-center page access to explicit server permissions', () => {
+    expect(canAccess('vehicleRead', ['resource-reader'], ['vehicle:read'])).toBe(true)
+    expect(canAccess('aerialRead', ['resource-reader'], ['aerial:read'])).toBe(true)
+    expect(canAccessRoute('VehicleDashboard', ['resource-reader'], [], ['vehicle:read'])).toBe(true)
+    expect(canAccessRoute('AerialDashboard', ['resource-reader'], [], ['aerial:read'])).toBe(true)
+    expect(canAccess('vehicleRead', ['designer'], [])).toBe(false)
+    expect(canAccess('aerialRead', ['designer'], [])).toBe(false)
+    expect(canAccess('vehicleRead', ['production'], [])).toBe(false)
+    expect(canAccessRoute('AerialDashboard', ['production'], [], [])).toBe(false)
+  })
 })
