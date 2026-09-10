@@ -76,6 +76,14 @@ describe('任务详情页界面收敛', () => {
     expect(source).toContain('handleAddHistoricalItems')
   })
 
+  it('任务处理不重复显示已关联明细汇总框', () => {
+    const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
+
+    expect(source).not.toContain('class="linked-item-summary"')
+    expect(source).not.toContain('linkedItemNames')
+    expect(source).toContain('已关联 {{ linkedItemIds.length }} 条明细')
+  })
+
   it('工作台项目看板与独立项目看板复用任务进度', () => {
     const source = readSource('views/home/DashboardView.vue')
     const cardSource = readSource('components/ui/TaskBoardCard.vue')

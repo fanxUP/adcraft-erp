@@ -30,21 +30,6 @@
         </el-button>
       </div>
 
-      <div v-if="linkedItemIds.length" class="linked-item-summary">
-        <div class="linked-item-tags">
-          <el-tag
-            v-for="(itemName, index) in linkedItemNames"
-            :key="linkedItemIds[index] || index"
-            type="success"
-            effect="plain"
-            size="small"
-          >
-            {{ itemName || `明细 ${index + 1}` }}
-          </el-tag>
-        </div>
-        <span class="linked-item-note">已纳入 {{ linkedItemIds.length }} 条明细；可继续勾选其中未完成的明细推进状态</span>
-      </div>
-
       <el-alert
         :title="isHistoricalReadOnly
           ? '该历史任务未关联订单明细且已结束，不能再次变更任务状态；如需补录明细，请勾选后使用“添加到本任务”。'
@@ -180,9 +165,7 @@ const props = withDefaults(defineProps<{
   taskId: string
   orderId: string
   currentItemId?: string | null
-  currentItemName?: string | null
   currentItemIds?: string[] | null
-  currentItemNames?: string[] | null
   taskCapabilities?: Record<string, ActionCapability> | null
   steps: { key: string; label: string }[]
   currentStatus: string
@@ -190,9 +173,7 @@ const props = withDefaults(defineProps<{
   changing: boolean
 }>(), {
   currentItemId: null,
-  currentItemName: null,
   currentItemIds: () => [],
-  currentItemNames: () => [],
   taskCapabilities: null,
 })
 
@@ -210,12 +191,6 @@ const loadError = ref(false)
 const linkedItemIds = computed(() => {
   if (props.currentItemIds?.length) return props.currentItemIds
   return props.currentItemId ? [props.currentItemId] : []
-})
-
-const linkedItemNames = computed(() => {
-  if (props.currentItemNames?.length) return props.currentItemNames
-  if (props.currentItemName) return [props.currentItemName]
-  return linkedItemIds.value.map(() => '明细未命名')
 })
 
 const terminalStatuses: Record<TaskType, string[]> = {
@@ -384,28 +359,6 @@ onMounted(loadItems)
   color: var(--ad-text-secondary);
   font-size: 12px;
   font-weight: 400;
-}
-
-.linked-item-summary {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  padding: 14px 16px;
-  border: 1px solid var(--el-color-success-light-5);
-  border-radius: 6px;
-  background: var(--el-color-success-light-9);
-}
-
-.linked-item-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.linked-item-note {
-  color: var(--ad-text-secondary);
-  font-size: 12px;
 }
 
 .link-panel {
@@ -586,9 +539,5 @@ onMounted(loadItems)
     gap: 4px;
   }
 
-  .linked-item-summary {
-    flex-direction: column;
-    gap: 4px;
-  }
 }
 </style>
