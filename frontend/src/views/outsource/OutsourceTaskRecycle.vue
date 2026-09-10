@@ -15,7 +15,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="total_amount" label="总金额" width="120" align="right">
+      <el-table-column v-if="canViewOutsourceCost" prop="total_amount" label="总金额" width="120" align="right">
         <template #default="{ row }">{{ formatMoney(row.total_amount) }}</template>
       </el-table-column>
       <el-table-column label="原状态" width="100">
@@ -55,6 +55,7 @@ import type { OutsourceTaskResponse } from '@/types/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
 import { formatMoney } from '@/utils/format'
+import { useAuthStore } from '@/stores/auth'
 
 const loading = ref(false)
 const list = ref<OutsourceTaskResponse[]>([])
@@ -63,6 +64,8 @@ const page = ref(1)
 const pageSize = ref(20)
 const loadError = ref('')
 const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : list.value.length ? 'ready' : 'empty')
+const authStore = useAuthStore()
+const canViewOutsourceCost = computed(() => authStore.hasPermission('finance:view_cost'))
 
 function statusLabel(val: string) {
   const map: Record<string, string> = { pending: '待处理', in_progress: '进行中', completed: '已完成', settled: '已结算', cancelled: '已取消' }

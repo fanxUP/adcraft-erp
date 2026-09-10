@@ -26,6 +26,7 @@ from app.services.task_service import (
     _ensure_task_order_item_links,
     _materialize_legacy_task_scope,
     _resolve_order_item_stage,
+    _task_order_item_option_map,
     _validate_order_item_id,
     _validate_order_item_ids,
 )
@@ -362,8 +363,6 @@ async def test_production_option_disables_unlinked_item_with_active_outsource_ta
             new=AsyncMock(return_value=[]),
         ),
     ):
-        from app.services.task_service import _task_order_item_option_map
-
         options = await _task_order_item_option_map(
             db,
             UUID(ORDER_ID),
@@ -376,6 +375,54 @@ async def test_production_option_disables_unlinked_item_with_active_outsource_ta
     assert option["outsource_status_label"] == "外协任务进行中"
     assert option["can_select"] is False
     assert "外协" in option["disabled_reason"]
+
+
+@pytest.mark.asyncio
+async def test_execution_viewer_gets_generic_block_reason_without_outsource_details():
+    db = AsyncMock()
+    db.get = AsyncMock(
+        return_value=SimpleNamespace(
+            doc_type="order",
+            deleted_at=None,
+            status="in_production",
+        )
+    )
+    db.execute = AsyncMock(
+        side_effect=[
+            _mock_result([_mock_order_item()]),
+            _mock_result([_mock_outsource_task(task_type="production")]),
+        ]
+    )
+    viewer = SimpleNamespace(
+        roles=[SimpleNamespace(permissions=[SimpleNamespace(code="production_task:read")])]
+    )
+
+    with (
+        patch(
+            "app.services.task_service._task_stage_states_by_item",
+            new=AsyncMock(return_value=({}, {})),
+        ),
+        patch(
+            "app.services.task_service._task_order_item_link_rows",
+            new=AsyncMock(return_value=[]),
+        ),
+    ):
+        options = await _task_order_item_option_map(
+            db,
+            UUID(ORDER_ID),
+            "production",
+            task_id=UUID("99999999-9999-9999-9999-999999999999"),
+            viewer=viewer,
+        )
+
+    option = options[ITEM_UUID]
+    assert option["can_select"] is False
+    assert option["outsource_blocked"] is False
+    assert option.get("outsource_status_label") is None
+    assert option["outsource_task_count"] == 0
+    assert option.get("outsource_task_nos") == []
+    assert "外协" not in option["disabled_reason"]
+    assert "前置事项" in option["disabled_reason"]
 
 
 @pytest.mark.asyncio
@@ -409,6 +456,51 @@ async def test_installation_completion_is_blocked_before_link_status_update():
 
     assert task.status == "pending_acceptance"
     db.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_execution_status_error_hides_outsource_task_reference():
+    db = AsyncMock()
+    task = SimpleNamespace(
+        id=UUID("99999999-9999-9999-9999-999999999999"),
+        document_id=UUID(ORDER_ID),
+        order_item_id=ITEM_UUID,
+        status="in_progress",
+        progress_pct=50,
+        completed_at=None,
+    )
+    db.execute = AsyncMock(
+        side_effect=[
+            _mock_result([_mock_outsource_task(task_type="installation", task_no="OT-PRIVATE")]),
+        ]
+    )
+    viewer = SimpleNamespace(
+        roles=[SimpleNamespace(permissions=[SimpleNamespace(code="installation_task:change_status")])]
+    )
+
+    with (
+        patch(
+            "app.services.task_service._prepare_status_item_ids",
+            new=AsyncMock(return_value=[ITEM_UUID]),
+        ),
+        patch(
+            "app.services.task_service._task_item_state_map",
+            new=AsyncMock(return_value={ITEM_UUID: ("pending_acceptance", 75)}),
+        ),
+    ):
+        with pytest.raises(ValueError) as exc_info:
+            await _apply_task_item_status_change(
+                db,
+                "installation",
+                task,
+                "completed",
+                [ITEM_ID],
+                viewer=viewer,
+            )
+
+    assert "外协" not in str(exc_info.value)
+    assert "OT-PRIVATE" not in str(exc_info.value)
+    assert "前置事项" in str(exc_info.value)
 
 
 @pytest.mark.asyncio

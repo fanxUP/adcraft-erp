@@ -27,23 +27,33 @@ describe('page access matrix', () => {
   })
 
   it('shares role groups while allowing read-only routes to be broader than navigation', () => {
-    expect(ROUTE_ACCESS.ProductionTaskList).toBe('productionRead')
-    expect(canAccessRoute('ProductionTaskList', ['production'])).toBe(true)
+    expect(ROUTE_ACCESS.ProductionTaskList).toBe('productionListRead')
+    expect(canAccessRoute('ProductionTaskList', ['production'])).toBe(false)
     expect(canAccessRoute('ProductionTaskList', ['sales'])).toBe(true)
+    expect(canAccessRoute('ProductionTaskDetail', ['production'])).toBe(true)
     expect(canAccessRoute('OrderList', ['finance'])).toBe(true)
     expect(canAccessRoute('OrderEdit', ['finance'])).toBe(false)
 
     for (const [path, routeName, navigationRole] of [
       ['/orders', 'OrderList', 'sales'],
-      ['/design-tasks', 'DesignTaskList', 'designer'],
-      ['/production-tasks', 'ProductionTaskList', 'production'],
-      ['/installation-tasks', 'InstallationTaskList', 'installer'],
       ['/project-costs', 'ProjectCostList', 'finance'],
     ] as const) {
       const item = findNavigationItem(path)
       expect(item?.accessKey).toBeDefined()
       expect(canAccess(item!.accessKey!, [navigationRole])).toBe(true)
       expect(canAccessRoute(routeName, [navigationRole])).toBe(true)
+    }
+  })
+
+  it('hides task-list routes from execution roles while preserving direct task details', () => {
+    for (const [listRoute, detailRoute, listKey, role] of [
+      ['DesignTaskList', 'DesignTaskDetail', 'designListRead', 'designer'],
+      ['ProductionTaskList', 'ProductionTaskDetail', 'productionListRead', 'production'],
+      ['InstallationTaskList', 'InstallationTaskDetail', 'installationListRead', 'installer'],
+    ] as const) {
+      expect(ROUTE_ACCESS[listRoute]).toBe(listKey)
+      expect(canAccessRoute(listRoute, [role])).toBe(false)
+      expect(canAccessRoute(detailRoute, [role])).toBe(true)
     }
   })
 
@@ -68,7 +78,7 @@ describe('page access matrix', () => {
       'InstallationTaskList',
       ['custom-operator'],
       [],
-      ['installation_task:read'],
+      ['installation_task:list'],
     )).toBe(true)
     expect(canAccess('production', ['sales'], ['production_task:read'])).toBe(false)
   })
@@ -87,5 +97,20 @@ describe('page access matrix', () => {
     expect(canAccess('aerialRead', ['designer'], [])).toBe(false)
     expect(canAccess('vehicleRead', ['production'], [])).toBe(false)
     expect(canAccessRoute('AerialDashboard', ['production'], [], [])).toBe(false)
+  })
+
+  it('keeps external vendor and task entries independently permissioned', () => {
+    expect(ROUTE_ACCESS.OutsourceVendorList).toBe('outsourceVendor')
+    expect(ROUTE_ACCESS.OutsourceTaskList).toBe('outsourceTask')
+    expect(ROUTE_ACCESS.OutsourceTaskRecycle).toBe('outsourceTaskRecycle')
+
+    const taskRead = ['outsource_center:read', 'outsource_task:read']
+    const vendorRead = ['outsource_center:read', 'outsource_vendor:read']
+    expect(canAccess('outsourceTask', ['custom-outsourcing'], taskRead)).toBe(true)
+    expect(canAccess('outsourceVendor', ['custom-outsourcing'], taskRead)).toBe(false)
+    expect(canAccess('outsourceVendor', ['custom-outsourcing'], vendorRead)).toBe(true)
+    expect(canAccess('outsourceTask', ['custom-outsourcing'], vendorRead)).toBe(false)
+    expect(canAccess('outsourceTask', ['custom-outsourcing'], ['outsource_task:read'])).toBe(false)
+    expect(canAccess('outsourceTask', ['designer'], [])).toBe(false)
   })
 })

@@ -1,10 +1,9 @@
 version: 1
 mode: STRICT
-status: deployed_pending_role_smoke
+status: implemented_pending_deploy
 objective: >-
-  重新梳理系统角色权限，并让设计、制作、安装角色在页面、接口、工作台、
-  聊天、导出和附件下载等所有入口都不能获得订单及订单明细的价格参数，
-  同时保留其处理任务所需的非财务字段。
+  拆分外协商、外协任务和外协付款的权限边界，并让设计、制作、安装人员默认
+  看不到任务详情中的外协情况，同时保留其正常任务处理能力。
 nodes:
   - id: P01
     name: 建立现状清单与字段分类
@@ -46,3 +45,13 @@ nodes:
     acceptance: A08
     depends_on: [P07]
     status: deployed_pending_role_smoke
+  - id: P09
+    name: 资源中心权限链路修复（RPV-P10）
+    acceptance: A09
+    depends_on: [P08]
+    status: complete
+  - id: P10
+    name: 外协商与外协任务权限拆分及任务详情脱敏（RPV-P11）
+    acceptance: A10
+    depends_on: [P09]
+    status: implemented_pending_deploy

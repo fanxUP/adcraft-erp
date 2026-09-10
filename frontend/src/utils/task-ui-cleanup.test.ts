@@ -92,7 +92,7 @@ describe('任务详情页界面收敛', () => {
     expect(source).not.toContain(':title="isHistoricalReadOnly')
     expect(source).not.toContain('v-if="!canChangeTaskStatus && !isHistoricalReadOnly"')
     expect(source).toContain('changeStatusDisabledReason.value')
-    expect(source).toContain(':changing="changing || isHistoricalReadOnly || !canChangeTaskStatus || !assignedToId"')
+    expect(source).toContain(':changing="changing || isHistoricalReadOnly || !canChangeTaskStatus"')
   })
 
   it('任务分配与变更状态合并到共享卡片，并要求负责人', () => {
@@ -177,6 +177,47 @@ describe('任务详情页界面收敛', () => {
     expect(cardSource).not.toContain('明细：')
     expect(cardSource).not.toContain('class="card-item"')
     expect(cardSource).not.toContain('itemSummary')
+  })
+
+  it('任务人员没有外协查看权限时不加载外协卡片或外协筛选', () => {
+    const cardSource = readSource('components/outsource/OutsourceTaskCard.vue')
+    expect(cardSource).toContain('v-if="canViewOutsourceTask"')
+    expect(cardSource).toContain("authStore.hasPermission('outsource_task:read')")
+    expect(cardSource).toContain("authStore.hasPermission('outsource_task:create')")
+
+    for (const relativePath of [
+      'views/tasks/DesignTaskDetail.vue',
+      'views/tasks/ProductionTaskDetail.vue',
+      'views/tasks/InstallationTaskDetail.vue',
+    ]) {
+      expect(readSource(relativePath)).toContain("v-if=\"authStore.hasPermission('outsource_task:read')\"")
+    }
+
+    for (const relativePath of [
+      'views/tasks/DesignTaskList.vue',
+      'views/tasks/ProductionTaskList.vue',
+      'views/tasks/InstallationTaskList.vue',
+    ]) {
+      const source = readSource(relativePath)
+      expect(source).toContain('v-if="canViewOutsourceTask"')
+      expect(source).toContain("authStore.hasPermission('outsource_task:read')")
+    }
+  })
+
+  it('外协成本字段只在拥有成本权限时渲染，避免缺失字段显示为零', () => {
+    const cardSource = readSource('components/outsource/OutsourceTaskCard.vue')
+    const taskListSource = readSource('views/outsource/OutsourceTaskList.vue')
+    const recycleSource = readSource('views/outsource/OutsourceTaskRecycle.vue')
+    const paymentSource = readSource('views/outsource/OutsourcePaymentList.vue')
+
+    for (const source of [cardSource, taskListSource, recycleSource, paymentSource]) {
+      expect(source).toContain("authStore.hasPermission('finance:view_cost')")
+    }
+    expect(cardSource).toContain('v-if="canViewOutsourceCost"')
+    expect(taskListSource).toContain('delete (payload as { unit_price?: number }).unit_price')
+    expect(taskListSource).toContain('v-if="canViewOutsourceCost"')
+    expect(recycleSource).toContain('v-if="canViewOutsourceCost"')
+    expect(paymentSource).toContain('v-if="canViewOutsourceCost"')
   })
 })
 

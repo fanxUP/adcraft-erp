@@ -104,6 +104,28 @@ class OrderDetailResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class OrderTaskAssigneeOption(BaseModel):
+    """Employee option that has a usable login binding for task visibility."""
+
+    id: str
+    name: str
+    employee_no: str
+    user_id: str
+
+
+class OrderTaskAssigneesUpdate(BaseModel):
+    """An empty list deliberately means that all task employees can see it."""
+
+    employee_ids: list[str] = Field(default_factory=list, max_length=100)
+
+
+class OrderTaskAssigneesResponse(BaseModel):
+    order_id: str
+    employee_ids: list[str] = Field(default_factory=list)
+    employees: list[OrderTaskAssigneeOption] = Field(default_factory=list)
+    is_restricted: bool = False
+
+
 class OrderStatusChange(BaseModel):
     to_status: str
     reason: str | None = None

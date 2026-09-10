@@ -1,5 +1,5 @@
 <template>
-  <el-card shadow="never" class="info-card" style="margin-top: 16px">
+  <el-card v-if="canViewOutsourceTask" shadow="never" class="info-card" style="margin-top: 16px">
     <template #header>
       <div class="card-header">
         <div>
@@ -18,7 +18,7 @@
       class="order-level-alert"
     >
       <template #title>
-        当前订单仍有 {{ summary.order_level_task_count }} 条整单外协任务，计划成本 ¥{{ moneyText(summary.order_level_planned_amount) }}。
+        当前订单仍有 {{ summary.order_level_task_count }} 条整单外协任务<span v-if="canViewOutsourceCost">，计划成本 ¥{{ moneyText(summary.order_level_planned_amount) }}</span>。
       </template>
       <div>
         整单外协不会自动拆分到下方明细；新发送的外协会绑定到明确的订单项目明细，便于数量、成本和付款核对。
@@ -61,7 +61,7 @@
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="计划成本" width="115" align="right">
+      <el-table-column v-if="canViewOutsourceCost" label="计划成本" width="115" align="right">
         <template #default="{ row }">¥{{ moneyText(row.planned_amount) }}</template>
       </el-table-column>
       <el-table-column label="外协状态" width="105">
@@ -71,12 +71,12 @@
       </el-table-column>
       <el-table-column label="操作" width="175" fixed="right">
         <template #default="{ row }">
-          <el-tooltip v-if="!row.can_send" :content="row.block_reason || '当前明细不可发送外协'" placement="top">
+          <el-tooltip v-if="canCreateOutsourceTask && !row.can_send" :content="row.block_reason || '当前明细不可发送外协'" placement="top">
             <span>
               <el-button text type="info" size="small" disabled>不可发送</el-button>
             </span>
           </el-tooltip>
-          <el-button v-else text type="danger" size="small" @click="openItemDialog(row)">
+          <el-button v-else-if="canCreateOutsourceTask" text type="danger" size="small" @click="openItemDialog(row)">
             {{ row.active_task_count > 0 ? '追加外协' : '发送外协' }}
           </el-button>
           <el-button text type="primary" size="small" @click="goToOutsourceList(row)">查看</el-button>
@@ -84,7 +84,7 @@
       </el-table-column>
     </el-table>
 
-    <div class="cost-note">
+    <div v-if="canViewOutsourceCost" class="cost-note">
       明细外协计划成本 ¥{{ moneyText(itemPlannedAmount) }}，已确认成本 ¥{{ moneyText(itemRecognizedCost) }}。
       订单销售金额与外协成本分别核算，不会相互覆盖。
     </div>
@@ -109,10 +109,10 @@
       <el-table-column label="数量" width="90" align="right">
         <template #default="{ row }">{{ quantityText(row.quantity) }}</template>
       </el-table-column>
-      <el-table-column label="外协成本" width="110" align="right">
+      <el-table-column v-if="canViewOutsourceCost" label="外协成本" width="110" align="right">
         <template #default="{ row }">¥{{ moneyText(row.total_amount) }}</template>
       </el-table-column>
-      <el-table-column label="未付" width="105" align="right">
+      <el-table-column v-if="canViewOutsourceCost" label="未付" width="105" align="right">
         <template #default="{ row }">
           <span v-if="Number(row.unpaid_amount) > 0" class="unpaid-text">¥{{ moneyText(row.unpaid_amount) }}</span>
           <span v-else class="paid-text">已结清</span>
@@ -168,7 +168,7 @@
           <el-input-number v-model="form.quantity" :min="0.001" :precision="3" :step="1" controls-position="right" style="width: 100%" />
           <div class="form-tip">默认发送当前明细剩余数量；超过剩余数量时按追加外协处理。</div>
         </el-form-item>
-        <el-form-item label="外协成本单价" prop="unit_price">
+        <el-form-item v-if="canViewOutsourceCost" label="外协成本单价" prop="unit_price">
           <el-input-number v-model="form.unit_price" :min="0" :precision="2" :step="0.01" controls-position="right" style="width: 100%" />
           <div class="form-tip">此处为供应商成本单价，不是订单销售单价。</div>
         </el-form-item>
@@ -181,7 +181,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="saving" @click="handleSubmit">确认发送</el-button>
+        <el-button v-if="canCreateOutsourceTask" type="danger" :loading="saving" @click="handleSubmit">确认发送</el-button>
       </template>
     </el-dialog>
   </el-card>
@@ -191,6 +191,7 @@
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { useAuthStore } from '@/stores/auth'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
   getOutsourceOrderItemsSummary,
@@ -214,6 +215,11 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
+const authStore = useAuthStore()
+const canViewOutsourceTask = computed(() => authStore.hasPermission('outsource_task:read'))
+const canCreateOutsourceTask = computed(() => authStore.hasPermission('outsource_task:create'))
+const canViewOutsourceVendor = computed(() => authStore.hasPermission('outsource_vendor:read'))
+const canViewOutsourceCost = computed(() => authStore.hasPermission('finance:view_cost'))
 const loading = ref(false)
 const saving = ref(false)
 const summary = ref<OutsourceOrderItemSummaryResponse | null>(null)
@@ -238,8 +244,8 @@ const taskTypeLabel = computed(() => ({
 }[props.taskType]))
 const isAppend = computed(() => Boolean(selectedItem.value?.active_task_count))
 const hasOutsource = computed(() => outsourceTasks.value.length > 0 || Boolean(summary.value?.items.some(item => item.active_task_count > 0)))
-const itemPlannedAmount = computed(() => summary.value?.items.reduce((total, item) => total + item.planned_amount, 0) || 0)
-const itemRecognizedCost = computed(() => summary.value?.items.reduce((total, item) => total + item.recognized_cost, 0) || 0)
+const itemPlannedAmount = computed(() => summary.value?.items.reduce((total, item) => total + Number(item.planned_amount || 0), 0) || 0)
+const itemRecognizedCost = computed(() => summary.value?.items.reduce((total, item) => total + Number(item.recognized_cost || 0), 0) || 0)
 
 const rules: FormRules = {
   vendor_id: [{ required: true, message: '请选择外协商', trigger: 'change' }],
@@ -297,6 +303,7 @@ function goToOutsourceList(item?: OutsourceOrderItemSummary) {
 }
 
 async function fetchOutsource() {
+  if (!canViewOutsourceTask.value) return
   loading.value = true
   try {
     const [summaryResult, taskResult] = await Promise.allSettled([
@@ -322,6 +329,7 @@ async function fetchOutsource() {
 }
 
 async function loadVendors() {
+  if (!canViewOutsourceTask.value || !canViewOutsourceVendor.value) return
   try {
     const data = await getOutsourceVendors({ page: 1, page_size: 100 })
     vendors.value = data.items
@@ -356,7 +364,7 @@ async function handleSubmit() {
       source_task_type: props.taskType,
       source_task_id: props.taskId,
       quantity: form.quantity,
-      unit_price: form.unit_price,
+      unit_price: canViewOutsourceCost.value ? form.unit_price : 0,
       description: form.description || undefined,
       expected_at: form.expected_at || undefined,
       remark: form.remark || undefined,

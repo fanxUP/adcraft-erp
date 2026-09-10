@@ -1,7 +1,7 @@
 <template>
   <AppPage>
     <template #header><PageHeader title="外协商管理" description="维护外协商联系人、服务类型和合作评级。">
-      <template #actions><el-button @click="handleCreate" type="primary">新建外协商</el-button></template>
+      <template #actions><el-button v-if="canCreateVendor" @click="handleCreate" type="primary">新建外协商</el-button></template>
     </PageHeader></template>
 
     <PageToolbar aria-label="外协商筛选">
@@ -42,8 +42,8 @@
       </el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button text type="primary" @click="handleEdit(row as VendorResponse)">编辑</el-button>
-          <el-button text type="danger" @click="handleDelete(row as VendorResponse)">删除</el-button>
+          <el-button v-if="canUpdateVendor" text type="primary" @click="handleEdit(row as VendorResponse)">编辑</el-button>
+          <el-button v-if="canDeleteVendor" text type="danger" @click="handleDelete(row as VendorResponse)">删除</el-button>
         </template>
       </el-table-column>
       </el-table>
@@ -109,6 +109,12 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { VendorResponse } from '@/types/api'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+const canCreateVendor = computed(() => authStore.hasPermission('outsource_vendor:create'))
+const canUpdateVendor = computed(() => authStore.hasPermission('outsource_vendor:update'))
+const canDeleteVendor = computed(() => authStore.hasPermission('outsource_vendor:delete'))
 
 const loading = ref(false)
 const saving = ref(false)

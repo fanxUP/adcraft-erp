@@ -11,6 +11,8 @@ import {
   OrderItemReconciliationResponse,
   OrderListResponse,
   OrderDetailResponse,
+  OrderTaskAssigneesResponse,
+  TaskAssigneeOption,
 } from '@/types/api'
 
 export function getOrders(params: { page?: number; page_size?: number; status?: string; customer_id?: string; keyword?: string }) {
@@ -19,6 +21,20 @@ export function getOrders(params: { page?: number; page_size?: number; status?: 
 
 export function getOrder(id: string) {
   return get<OrderDetailResponse>(`/orders/${id}`)
+}
+
+export function getOrderTaskAssigneeOptions() {
+  return get<TaskAssigneeOption[]>('/orders/task-assignee-options')
+}
+
+export function getOrderTaskAssignees(id: string) {
+  return get<OrderTaskAssigneesResponse>(`/orders/${id}/task-assignees`)
+}
+
+export function updateOrderTaskAssignees(id: string, employeeIds: string[]) {
+  return put<OrderTaskAssigneesResponse>(`/orders/${id}/task-assignees`, {
+    employee_ids: employeeIds,
+  })
 }
 
 export function getOrderItemEditability(id: string) {

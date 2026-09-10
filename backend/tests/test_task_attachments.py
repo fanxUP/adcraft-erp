@@ -150,11 +150,20 @@ def _task_uploader(permission: str):
     )
 
 
+def _visible_task_db(task):
+    db = MagicMock()
+    db.execute = AsyncMock(
+        return_value=SimpleNamespace(
+            scalar_one_or_none=lambda: task,
+        )
+    )
+    return db
+
+
 @pytest.mark.asyncio
 async def test_design_upload_accepts_document_and_sanitizes_display_name(tmp_path, monkeypatch):
     monkeypatch.setattr(task_api.settings, "LOCAL_UPLOAD_DIR", str(tmp_path))
-    db = MagicMock()
-    db.get = AsyncMock(return_value=SimpleNamespace(id=uuid4()))
+    db = _visible_task_db(SimpleNamespace(id=uuid4()))
     attachment = {"id": str(uuid4()), "category": "document"}
 
     with patch.object(task_api, "AttachmentService") as service_cls:
@@ -185,7 +194,7 @@ async def test_design_upload_accepts_document_and_sanitizes_display_name(tmp_pat
 @pytest.mark.asyncio
 async def test_design_upload_requires_design_permission_and_existing_task():
     db = MagicMock()
-    db.get = AsyncMock()
+    db.execute = AsyncMock()
     with pytest.raises(HTTPException) as permission_error:
         await task_api.upload_attachment(
             related_type="design_task",
@@ -195,10 +204,10 @@ async def test_design_upload_requires_design_permission_and_existing_task():
             current_user=_task_uploader(task_api.PERM_PRODUCTION_TASK_UPDATE),
         )
     assert permission_error.value.status_code == 403
-    db.get.assert_not_awaited()
+    db.execute.assert_not_awaited()
 
-    db.get.reset_mock()
-    db.get.return_value = None
+    db.execute.reset_mock()
+    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: None)
     result = await task_api.upload_attachment(
         related_type="design_task",
         related_id=str(uuid4()),
@@ -227,8 +236,7 @@ async def test_delete_attachment_requires_permission_for_attachment_task_type():
 @pytest.mark.asyncio
 async def test_installation_upload_forces_photo_category_and_safe_extension(tmp_path, monkeypatch):
     monkeypatch.setattr(task_api.settings, "LOCAL_UPLOAD_DIR", str(tmp_path))
-    db = MagicMock()
-    db.get = AsyncMock(return_value=SimpleNamespace(id=uuid4()))
+    db = _visible_task_db(SimpleNamespace(id=uuid4()))
     attachment = {"id": str(uuid4()), "category": "photo"}
 
     with patch.object(task_api, "AttachmentService") as service_cls:
@@ -260,8 +268,7 @@ async def test_installation_upload_forces_photo_category_and_safe_extension(tmp_
 @pytest.mark.asyncio
 async def test_installation_video_upload_forces_video_category_and_safe_extension(tmp_path, monkeypatch):
     monkeypatch.setattr(task_api.settings, "LOCAL_UPLOAD_DIR", str(tmp_path))
-    db = MagicMock()
-    db.get = AsyncMock(return_value=SimpleNamespace(id=uuid4()))
+    db = _visible_task_db(SimpleNamespace(id=uuid4()))
     attachment = {"id": str(uuid4()), "category": "video"}
 
     with patch.object(task_api, "AttachmentService") as service_cls:
@@ -290,8 +297,7 @@ async def test_installation_video_upload_forces_video_category_and_safe_extensio
 @pytest.mark.asyncio
 async def test_installation_upload_rejects_invalid_image_before_creating_attachment(tmp_path, monkeypatch):
     monkeypatch.setattr(task_api.settings, "LOCAL_UPLOAD_DIR", str(tmp_path))
-    db = MagicMock()
-    db.get = AsyncMock(return_value=SimpleNamespace(id=uuid4()))
+    db = _visible_task_db(SimpleNamespace(id=uuid4()))
 
     with patch.object(task_api, "AttachmentService") as service_cls:
         service_cls.return_value.add_attachment = AsyncMock()
@@ -316,7 +322,7 @@ async def test_installation_upload_rejects_invalid_image_before_creating_attachm
 @pytest.mark.asyncio
 async def test_installation_upload_requires_installation_update_permission():
     db = MagicMock()
-    db.get = AsyncMock()
+    db.execute = AsyncMock()
     production_user = SimpleNamespace(
         id=uuid4(),
         roles=[
@@ -337,4 +343,4 @@ async def test_installation_upload_requires_installation_update_permission():
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "没有该附件关联对象的上传权限"
-    db.get.assert_not_awaited()
+    db.execute.assert_not_awaited()

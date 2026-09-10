@@ -11,7 +11,7 @@
         <el-option label="已确认" value="confirmed" />
         <el-option label="已取消" value="cancelled" />
       </el-select>
-      <el-select v-model="filterOutsourced" placeholder="外协筛选" clearable style="width: 120px; margin-left: 8px" @change="fetchData">
+      <el-select v-if="canViewOutsourceTask" v-model="filterOutsourced" placeholder="外协筛选" clearable style="width: 120px; margin-left: 8px" @change="fetchData">
         <el-option label="已外协" value="true" />
         <el-option label="未外协" value="false" />
       </el-select>
@@ -41,7 +41,7 @@
         <el-table-column label="派发" width="90">
           <template #default="{ row }">{{ row.assigned_to_name || row.assigned_to || '-' }}</template>
         </el-table-column>
-        <el-table-column label="外协" width="80">
+        <el-table-column v-if="canViewOutsourceTask" label="外协" width="80">
           <template #default="{ row }">
             <el-tag v-if="row.is_outsourced" type="warning" size="small">已外协</el-tag>
             <span v-else>-</span>
@@ -72,13 +72,14 @@
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { getDesignTasks } from '@/api/tasks'
 import { DesignTaskResponse } from '@/types/api'
 import { ProgressBar, StatusTag } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
+const canViewOutsourceTask = computed(() => authStore.hasPermission('outsource_task:read'))
 
 const loading = ref(false)
 const list = ref<DesignTaskResponse[]>([])
@@ -91,7 +92,7 @@ const filterOutsourced = ref('')
 async function fetchData() {
   loading.value = true
   try {
-    const data = await getDesignTasks({ page: page.value, page_size: pageSize.value, status: filterStatus.value || undefined, outsourced: filterOutsourced.value === '' ? undefined : filterOutsourced.value === 'true' })
+    const data = await getDesignTasks({ page: page.value, page_size: pageSize.value, status: filterStatus.value || undefined, outsourced: canViewOutsourceTask.value && filterOutsourced.value !== '' ? filterOutsourced.value === 'true' : undefined })
     list.value = data.items
     total.value = data.total
   } finally { loading.value = false }

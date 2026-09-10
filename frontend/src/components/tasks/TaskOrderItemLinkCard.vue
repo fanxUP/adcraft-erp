@@ -83,7 +83,7 @@
                 <span v-if="item.is_linked" class="item-assignee-label">
                   分配人：{{ itemAssigneeLabel }}
                 </span>
-                <el-tag v-if="item.outsource_blocked" type="warning" effect="light" size="small">
+                <el-tag v-if="canViewOutsourceTask && item.outsource_blocked" type="warning" effect="light" size="small">
                   {{ item.outsource_status_label || '外协任务进行中' }}
                 </el-tag>
               </span>
@@ -105,7 +105,7 @@
               <span v-if="!canSelect(item) && disabledReason(item)" class="item-option-disabled-reason">
                 {{ disabledReason(item) }}
               </span>
-              <span v-if="item.outsource_blocked && canSelect(item)" class="item-option-outsourcing-reason">
+              <span v-if="canViewOutsourceTask && item.outsource_blocked && canSelect(item)" class="item-option-outsourcing-reason">
                 外协完成后才能推进该明细到下一阶段
               </span>
             </span>
@@ -140,7 +140,7 @@
           <span>变更状态</span>
           <span class="section-note">{{ statusSectionNote }}</span>
         </div>
-        <div class="assignment-controls" data-ai-targets="task-assignee">
+        <div v-if="canAssignTask" class="assignment-controls" data-ai-targets="task-assignee">
           <span class="assignment-label">任务分配</span>
           <el-select
             v-model="assignmentTarget"
@@ -167,12 +167,16 @@
           </el-button>
           <span class="assignment-summary">{{ assignmentSummary }}</span>
         </div>
+        <div v-else class="assignment-readonly" data-ai-targets="task-assignee">
+          <span>负责人：{{ savedAssigneeLabel }}</span>
+          <span class="assignment-readonly-hint">状态变更后自动记录当前登录员工</span>
+        </div>
       </div>
       <TaskWorkflow
         :steps="steps"
         :current-status="workflowControl.currentStatus"
         :workflow="workflowControl.workflow"
-        :changing="changing || isHistoricalReadOnly || !canChangeTaskStatus || !assignedToId"
+        :changing="changing || isHistoricalReadOnly || !canChangeTaskStatus"
         @change="handleWorkflowChange"
       />
     </section>
@@ -241,7 +245,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   linked: []
   assign: [assignedTo: string | null]
-  change: [status: string, orderItemIds: string[], assignedTo: string]
+  change: [status: string, orderItemIds: string[], assignedTo: string | null]
 }>()
 
 const items = ref<TaskOrderItemOption[]>([])
@@ -256,6 +260,14 @@ const taskTypeLabels: Record<TaskType, string> = {
   production: '制作',
   installation: '安装',
 }
+
+const canViewOutsourceTask = computed(() => authStore.hasPermission('outsource_task:read'))
+const taskAssignPermissions: Record<TaskType, string> = {
+  design: 'design_task:assign',
+  production: 'production_task:assign',
+  installation: 'installation_task:assign',
+}
+const canAssignTask = computed(() => authStore.hasPermission(taskAssignPermissions[props.taskType]))
 
 const linkedItemIds = computed(() => {
   if (props.currentItemIds?.length) return props.currentItemIds
@@ -276,17 +288,17 @@ const isHistoricalReadOnly = computed(() => {
 const changeStatusCapability = computed(() => props.taskCapabilities?.change_status)
 const assignedToId = computed(() => assignmentTarget.value || '')
 const canChangeTaskStatus = computed(() => (
-  Boolean(assignedToId.value)
+  (!canAssignTask.value || Boolean(assignedToId.value))
   && (changeStatusCapability.value?.allowed ?? !isHistoricalReadOnly.value)
 ))
 const changeStatusDisabledReason = computed(() => (
-  !assignedToId.value
+  canAssignTask.value && !assignedToId.value
     ? '请先选择分配人，再变更任务状态'
     : changeStatusCapability.value?.disabled_reason || '该任务当前状态不允许继续变更'
 ))
 const assignmentChanged = computed(() => assignmentTarget.value !== (props.assignedTo || ''))
 const canSaveAssignment = computed(() => (
-  assignmentChanged.value && !props.changing && !props.assigning
+  canAssignTask.value && assignmentChanged.value && !props.changing && !props.assigning
 ))
 const savedAssigneeLabel = computed(() => (
   props.assignedTo
@@ -307,7 +319,8 @@ const assignmentSummary = computed(() => (
 ))
 const statusSectionNote = computed(() => {
   if (isHistoricalReadOnly.value) return '历史终态不可变更状态，可补录明细'
-  if (!assignedToId.value) return '请先选择分配人，再变更任务状态'
+  if (canAssignTask.value && !assignedToId.value) return '请先选择分配人，再变更任务状态'
+  if (!canAssignTask.value) return '状态变更后自动记录当前登录员工'
   if (workflowControl.value.hasMixedStatuses) {
     return '已选明细状态不同，请选择状态相同的明细后再批量推进'
   }
@@ -458,7 +471,7 @@ function handleWorkflowChange(status: string) {
     ElMessage.warning('请先勾选要变更状态的订单明细')
     return
   }
-  if (!assignedToId.value) {
+  if (canAssignTask.value && !assignedToId.value) {
     ElMessage.info(changeStatusDisabledReason.value)
     return
   }
@@ -469,6 +482,7 @@ function handleWorkflowChange(status: string) {
   if (
     status === 'completed'
     && (props.taskType === 'production' || props.taskType === 'installation')
+    && canViewOutsourceTask.value
   ) {
     const blockedItems = items.value.filter(
       item => selectedItemIds.value.includes(item.id) && item.outsource_blocked,
@@ -479,7 +493,7 @@ function handleWorkflowChange(status: string) {
       return
     }
   }
-  emit('change', status, [...selectedItemIds.value], assignedToId.value)
+  emit('change', status, [...selectedItemIds.value], canAssignTask.value ? assignedToId.value : null)
 }
 
 watch([() => props.orderId, () => props.taskId, () => props.taskType, linkedItemIds], loadItems)
@@ -719,6 +733,20 @@ onMounted(loadItems)
   min-width: 0;
 }
 
+.assignment-readonly {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  color: var(--ad-text-secondary);
+  font-size: 12px;
+}
+
+.assignment-readonly-hint {
+  color: var(--ad-text-tertiary, var(--ad-text-secondary));
+}
+
 .assignment-label {
   color: var(--ad-text-secondary);
   font-size: 12px;
@@ -768,6 +796,11 @@ onMounted(loadItems)
   }
 
   .assignment-controls {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .assignment-readonly {
     justify-content: flex-start;
     width: 100%;
   }

@@ -3,11 +3,11 @@
     <div class="page-header">
       <h2>外协任务</h2>
       <div style="display: flex; gap: 8px;">
-        <el-button v-if="isAdmin" @click="$router.push('/outsource/tasks/recycle')" type="warning">回收站</el-button>
+        <el-button v-if="canDeleteTask" @click="$router.push('/outsource/tasks/recycle')" type="warning">回收站</el-button>
       </div>
     </div>
     <div class="page-create">
-      <el-button @click="handleCreate" type="danger">新建外协任务</el-button>
+      <el-button v-if="canCreateTask" @click="handleCreate" type="danger">新建外协任务</el-button>
     </div>
 
     <div class="task-tabs">
@@ -47,7 +47,7 @@
               </el-button>
               <span v-else class="group-label">{{ group.group_label }}</span>
               <div
-                v-if="group.related_project_name || group.related_project_amount !== null && group.related_project_amount !== undefined"
+                v-if="group.related_project_name || (canViewOutsourceCost && group.related_project_amount !== null && group.related_project_amount !== undefined)"
                 class="group-project"
               >
                 <span
@@ -57,7 +57,7 @@
                 >
                   项目：{{ group.related_project_name }}
                 </span>
-                <span v-if="group.related_project_amount !== null && group.related_project_amount !== undefined" class="group-project-amount">
+                <span v-if="canViewOutsourceCost && group.related_project_amount !== null && group.related_project_amount !== undefined" class="group-project-amount">
                   项目金额：¥{{ formatMoney(group.related_project_amount) }}
                 </span>
               </div>
@@ -65,9 +65,11 @@
             </div>
             <div class="group-summary">
               <span>外协 {{ group.task_count }} 条</span>
-              <span>计划 ¥{{ formatMoney(group.planned_amount) }}</span>
-              <span class="paid">已付 ¥{{ formatMoney(group.paid_amount) }}</span>
-              <span class="unpaid">未付 ¥{{ formatMoney(group.unpaid_amount) }}</span>
+              <template v-if="canViewOutsourceCost">
+                <span>计划 ¥{{ formatMoney(group.planned_amount) }}</span>
+                <span class="paid">已付 ¥{{ formatMoney(group.paid_amount) }}</span>
+                <span class="unpaid">未付 ¥{{ formatMoney(group.unpaid_amount) }}</span>
+              </template>
             </div>
           </div>
         </template>
@@ -76,7 +78,7 @@
           <span v-if="group.related_doc_no">单据：{{ group.related_doc_no }}</span>
           <span v-if="group.source_task_status">来源状态：{{ internalStatusLabel(group.source_task_status) }}</span>
           <span>状态分布：{{ groupStatusSummary(group) }}</span>
-          <span>已识别成本：¥{{ formatMoney(group.recognized_cost) }}</span>
+          <span v-if="canViewOutsourceCost">已识别成本：¥{{ formatMoney(group.recognized_cost) }}</span>
           <span v-if="group.status_counts.cancelled">已取消 {{ group.status_counts.cancelled }} 条不计成本</span>
         </div>
         <el-alert
@@ -116,18 +118,18 @@
           <el-table-column label="数量" width="90" align="right">
             <template #default="{ row }">{{ row.quantity }}</template>
           </el-table-column>
-          <el-table-column label="单价" width="100" align="right">
+          <el-table-column v-if="canViewOutsourceCost" label="单价" width="100" align="right">
             <template #default="{ row }">¥{{ formatMoney(row.unit_price) }}</template>
           </el-table-column>
-          <el-table-column prop="total_amount" label="总金额" width="120" align="right">
+          <el-table-column v-if="canViewOutsourceCost" prop="total_amount" label="总金额" width="120" align="right">
             <template #default="{ row }">¥{{ formatMoney(row.total_amount) }}</template>
           </el-table-column>
-          <el-table-column label="已付" width="100" align="right">
+          <el-table-column v-if="canViewOutsourceCost" label="已付" width="100" align="right">
             <template #default="{ row }">
               <span style="color: var(--el-color-success)">¥{{ formatMoney(row.paid_amount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="未付" width="100" align="right">
+          <el-table-column v-if="canViewOutsourceCost" label="未付" width="100" align="right">
             <template #default="{ row }">
               <span v-if="row.unpaid_amount > 0" style="color: var(--el-color-danger)">¥{{ formatMoney(row.unpaid_amount) }}</span>
               <span v-else style="color: var(--el-color-success)">已结清</span>
@@ -140,13 +142,13 @@
           </el-table-column>
           <el-table-column label="操作" min-width="200" fixed="right">
             <template #default="{ row }">
-              <el-button text type="primary" @click="handleEdit(row as OutsourceTaskResponse)">编辑</el-button>
-              <el-button v-if="row.status === 'pending'" text type="primary" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'in_progress')">开始</el-button>
-              <el-button v-if="row.status === 'in_progress'" text type="success" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'completed')">完成</el-button>
-              <el-button v-if="isAdmin && row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" text type="warning" @click="handlePay(row as OutsourceTaskResponse)">付款</el-button>
-              <el-button v-if="isAdmin && row.status === 'completed'" text type="warning" @click="handleRevert(row as OutsourceTaskResponse)">退回</el-button>
-              <el-button v-if="isAdmin && !['completed', 'settled', 'cancelled'].includes(row.status)" text type="danger" @click="handleCancel(row as OutsourceTaskResponse)">取消</el-button>
-              <el-button v-if="isAdmin" text type="danger" @click="handleDelete(row as OutsourceTaskResponse)">删除</el-button>
+              <el-button v-if="canUpdateTask" text type="primary" @click="handleEdit(row as OutsourceTaskResponse)">编辑</el-button>
+              <el-button v-if="canChangeTaskStatus && row.status === 'pending'" text type="primary" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'in_progress')">开始</el-button>
+              <el-button v-if="canChangeTaskStatus && row.status === 'in_progress'" text type="success" @click="handleUpdateStatus(row as OutsourceTaskResponse, 'completed')">完成</el-button>
+              <el-button v-if="canCreatePayment && row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" text type="warning" @click="handlePay(row as OutsourceTaskResponse)">付款</el-button>
+              <el-button v-if="canChangeTaskStatus && row.status === 'completed'" text type="warning" @click="handleRevert(row as OutsourceTaskResponse)">退回</el-button>
+              <el-button v-if="canChangeTaskStatus && !['completed', 'settled', 'cancelled'].includes(row.status)" text type="danger" @click="handleCancel(row as OutsourceTaskResponse)">取消</el-button>
+              <el-button v-if="canDeleteTask" text type="danger" @click="handleDelete(row as OutsourceTaskResponse)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -213,7 +215,7 @@
         <el-form-item label="数量" prop="quantity">
           <el-input-number v-model="form.quantity" :min="1" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="单价" prop="unit_price">
+        <el-form-item v-if="canViewOutsourceCost" label="单价" prop="unit_price">
           <el-input-number v-model="form.unit_price" :min="0" :precision="2" style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
@@ -348,9 +350,17 @@ const payRules = {
   amount: [{ required: true, message: '请输入付款金额', trigger: 'blur' }],
 }
 
-// 是否管理员（从 localStorage 取角色）
+// 页面操作按显式权限控制，后端仍是最终授权边界。
 const authStore = useAuthStore()
-const isAdmin = computed(() => authStore.isAdmin)
+const canCreateTask = computed(() => authStore.hasPermission('outsource_task:create'))
+const canUpdateTask = computed(() => authStore.hasPermission('outsource_task:update'))
+const canChangeTaskStatus = computed(() => (
+  authStore.hasPermission('outsource_task:update')
+  && authStore.hasPermission('outsource_task:change_status')
+))
+const canDeleteTask = computed(() => authStore.hasPermission('outsource_task:delete'))
+const canCreatePayment = computed(() => authStore.hasPermission('outsource_payment:create'))
+const canViewOutsourceCost = computed(() => authStore.hasPermission('finance:view_cost'))
 const route = useRoute()
 const router = useRouter()
 
@@ -643,11 +653,13 @@ function handleEdit(row: OutsourceTaskResponse) {
 async function handleSave() {
   saving.value = true
   try {
+    const payload = { ...form }
+    if (!canViewOutsourceCost.value) delete (payload as { unit_price?: number }).unit_price
     if (editingId.value) {
-      await updateOutsourceTask(editingId.value, form)
+      await updateOutsourceTask(editingId.value, payload)
       ElMessage.success('更新成功')
     } else {
-      await createOutsourceTask(form)
+      await createOutsourceTask(payload)
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false

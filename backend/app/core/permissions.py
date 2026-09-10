@@ -81,6 +81,8 @@ PERM_ORDER_DELETE = "order:delete"
 PERM_ORDER_CHANGE_STATUS = "order:change_status"
 PERM_ORDER_VIEW_PRICE = "order:view_price"
 PERM_ORDER_ITEM_VIEW_PRICE = "order_item:view_price"
+# 订单任务分配只管理“哪些员工能看到订单任务”，不授予订单价格或订单编辑权限。
+PERM_ORDER_TASK_ASSIGN = "order:task_assign"
 
 # Price and financial visibility.  These are deliberately separate from
 # module read permissions: being able to process a task does not imply being
@@ -89,20 +91,29 @@ PERM_CATALOG_VIEW_PRICE = "catalog:view_price"
 PERM_FINANCE_VIEW_COST = "finance:view_cost"
 PERM_REPORT_VIEW_FINANCIAL = "report:view_financial"
 
+# Task queue / task list / task assignment
+PERM_TASK_QUEUE_READ = "task_queue:read"
+
 # Design Task
 PERM_DESIGN_TASK_READ = "design_task:read"
+PERM_DESIGN_TASK_LIST = "design_task:list"
+PERM_DESIGN_TASK_ASSIGN = "design_task:assign"
 PERM_DESIGN_TASK_CREATE = "design_task:create"
 PERM_DESIGN_TASK_UPDATE = "design_task:update"
 PERM_DESIGN_TASK_CHANGE_STATUS = "design_task:change_status"
 
 # Production Task
 PERM_PRODUCTION_TASK_READ = "production_task:read"
+PERM_PRODUCTION_TASK_LIST = "production_task:list"
+PERM_PRODUCTION_TASK_ASSIGN = "production_task:assign"
 PERM_PRODUCTION_TASK_CREATE = "production_task:create"
 PERM_PRODUCTION_TASK_UPDATE = "production_task:update"
 PERM_PRODUCTION_TASK_CHANGE_STATUS = "production_task:change_status"
 
 # Installation Task
 PERM_INSTALLATION_TASK_READ = "installation_task:read"
+PERM_INSTALLATION_TASK_LIST = "installation_task:list"
+PERM_INSTALLATION_TASK_ASSIGN = "installation_task:assign"
 PERM_INSTALLATION_TASK_CREATE = "installation_task:create"
 PERM_INSTALLATION_TASK_UPDATE = "installation_task:update"
 PERM_INSTALLATION_TASK_CHANGE_STATUS = "installation_task:change_status"
@@ -138,11 +149,19 @@ PERM_INVENTORY_UPDATE = "inventory:update"
 PERM_INVENTORY_STOCK_IN = "inventory:stock_in"
 PERM_INVENTORY_STOCK_OUT = "inventory:stock_out"
 
-# Outsource
-PERM_OUTSOURCE_READ = "outsource:read"
-PERM_OUTSOURCE_CREATE = "outsource:create"
-PERM_OUTSOURCE_UPDATE = "outsource:update"
-PERM_OUTSOURCE_DELETE = "outsource:delete"
+# Outsource center.  The parent gate and the two business areas are kept
+# separate so a user can manage vendors without seeing tasks, or handle
+# payment reconciliation without receiving task write permissions.
+PERM_OUTSOURCE_CENTER_READ = "outsource_center:read"
+PERM_OUTSOURCE_VENDOR_READ = "outsource_vendor:read"
+PERM_OUTSOURCE_VENDOR_CREATE = "outsource_vendor:create"
+PERM_OUTSOURCE_VENDOR_UPDATE = "outsource_vendor:update"
+PERM_OUTSOURCE_VENDOR_DELETE = "outsource_vendor:delete"
+PERM_OUTSOURCE_TASK_READ = "outsource_task:read"
+PERM_OUTSOURCE_TASK_CREATE = "outsource_task:create"
+PERM_OUTSOURCE_TASK_UPDATE = "outsource_task:update"
+PERM_OUTSOURCE_TASK_CHANGE_STATUS = "outsource_task:change_status"
+PERM_OUTSOURCE_TASK_DELETE = "outsource_task:delete"
 PERM_OUTSOURCE_PAYMENT_READ = "outsource_payment:read"
 PERM_OUTSOURCE_PAYMENT_CREATE = "outsource_payment:create"
 
@@ -235,6 +254,7 @@ ROLE_PRODUCTION = "production"
 ROLE_INSTALLER = "installer"
 ROLE_FINANCE = "finance"
 ROLE_RESOURCE_MANAGER = "resource_manager"
+ROLE_OUTSOURCE_MANAGER = "outsource_manager"
 
 EXECUTION_ROLE_NAMES = frozenset({
     ROLE_DESIGNER,
@@ -248,17 +268,24 @@ SENSITIVE_ROLE_NAMES = frozenset({ROLE_SALES, ROLE_FINANCE})
 # ``EXECUTION_ROLE_NAMES`` so a custom role cannot bypass the safety rule by
 # choosing a different display name.
 EXECUTION_PERMISSION_CODES = frozenset({
+    PERM_TASK_QUEUE_READ,
     PERM_DESIGN_TASK_READ,
+    PERM_DESIGN_TASK_LIST,
+    PERM_DESIGN_TASK_ASSIGN,
     PERM_DESIGN_TASK_CREATE,
     PERM_DESIGN_TASK_UPDATE,
     PERM_DESIGN_TASK_CHANGE_STATUS,
     PERM_DESIGN_TASK_DELETE,
     PERM_PRODUCTION_TASK_READ,
+    PERM_PRODUCTION_TASK_LIST,
+    PERM_PRODUCTION_TASK_ASSIGN,
     PERM_PRODUCTION_TASK_CREATE,
     PERM_PRODUCTION_TASK_UPDATE,
     PERM_PRODUCTION_TASK_CHANGE_STATUS,
     PERM_PRODUCTION_TASK_DELETE,
     PERM_INSTALLATION_TASK_READ,
+    PERM_INSTALLATION_TASK_LIST,
+    PERM_INSTALLATION_TASK_ASSIGN,
     PERM_INSTALLATION_TASK_CREATE,
     PERM_INSTALLATION_TASK_UPDATE,
     PERM_INSTALLATION_TASK_CHANGE_STATUS,
@@ -465,6 +492,31 @@ def require_any_permission(*permission_codes: str):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"权限不足: 需要以下任一权限「{'/'.join(permission_codes)}」",
+        )
+
+    return dependency
+
+
+def require_all_permissions(*permission_codes: str):
+    """要求当前用户同时拥有所有指定权限。
+
+    This is used for a module parent gate plus a concrete business action.
+    Keeping the check as a dependency prevents a route from accidentally
+    falling back to the old broad ``outsource:*`` permission.
+    """
+
+    required = tuple(dict.fromkeys(permission_codes))
+    if not required:
+        raise ValueError("至少需要一个权限码")
+
+    async def dependency(current_user: User = Depends(get_current_user)) -> User:
+        granted = get_user_permission_codes(current_user)
+        missing = tuple(code for code in required if code not in granted)
+        if not missing:
+            return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"权限不足：请联系管理员开通「{'、'.join(missing)}」权限",
         )
 
     return dependency

@@ -35,6 +35,7 @@
       </el-card>
 
       <TaskOrderItemLinkCard
+        data-ai-targets="task-assignee"
         :task-type="'installation'"
         :task-id="task.id"
         :order-id="task.order_id"
@@ -54,6 +55,7 @@
         @change="handleWorkflowChange"
       />
       <OutsourceTaskCard
+        v-if="authStore.hasPermission('outsource_task:read')"
         :task-type="'installation'"
         :task-id="task.id"
         :order-id="task.order_id"
@@ -183,10 +185,9 @@ import { useRoute, useRouter } from 'vue-router'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { ProgressBar, StatusTag } from '@/components/ui'
-import { getInstallationTask, updateInstallationTask, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
+import { assignInstallationTask, getInstallationTask, getTaskAssigneeOptions, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { AttachmentResponse, InstallationTaskResponse } from '@/types/api'
-import { getEmployees } from '@/api/employees'
+import type { AttachmentResponse, InstallationTaskResponse, TaskAssigneeOption } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { useAuthStore } from '@/stores/auth'
 import { deleteInstallationTask } from '@/api/tasks'
@@ -208,7 +209,7 @@ const loading = ref(false)
 const changing = ref(false)
 const deleting = ref(false)
 const task = ref<InstallationTaskResponse | null>(null)
-const employeeOptions = ref<{ id: string; name: string; employee_no?: string; user_id?: string | null }[]>([])
+const employeeOptions = ref<TaskAssigneeOption[]>([])
 const assigning = ref(false)
 const photoInput = ref<HTMLInputElement | null>(null)
 const dragActive = ref(false)
@@ -269,7 +270,7 @@ const instWorkflow = computed(() => {
   }
 })
 
-async function handleWorkflowChange(to_status: string, orderItemIds: string[], assignedTo: string) {
+async function handleWorkflowChange(to_status: string, orderItemIds: string[], assignedTo: string | null) {
   const labelMap: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成', cancelled: '已取消' }
   if (to_status === 'cancelled') {
     const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
@@ -286,7 +287,7 @@ async function handleWorkflowChange(to_status: string, orderItemIds: string[], a
   }
 }
 
-async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[], assignedTo: string) {
+async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[], assignedTo: string | null) {
   changing.value = true
   try {
     await changeInstallationTaskStatus(route.params.id as string, {
@@ -311,15 +312,15 @@ async function fetchTask() {
 
 async function loadEmployees() {
   try {
-    const data = await getEmployees({ page_size: 100, employment_status: 'active' })
-    employeeOptions.value = data.items
+    if (!authStore.hasPermission('installation_task:assign')) return
+    employeeOptions.value = await getTaskAssigneeOptions('installation')
   } catch { /* employees module may not be ready */ }
 }
 
 async function handleSaveAssignment(assignedTo: string | null) {
   assigning.value = true
   try {
-    await updateInstallationTask(route.params.id as string, { assigned_to: assignedTo })
+    await assignInstallationTask(route.params.id as string, assignedTo)
     ElMessage.success(assignedTo ? '已保存分配' : '已取消分配')
     await fetchTask()
     await aiStore.notifyBusinessMutation()

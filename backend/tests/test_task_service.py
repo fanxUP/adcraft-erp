@@ -6,12 +6,24 @@ from uuid import UUID
 
 import pytest
 
-from app.services.task_service import InstallationTaskService
+from app.services.task_service import (
+    InstallationTaskService,
+    can_view_outsource_tasks,
+    visible_outsource_fields,
+)
 from tests.conftest import (
     SAMPLE_TASK_ID,
     SAMPLE_USER_ID,
     make_mock_installation_task,
 )
+
+
+def _viewer_with_permissions(*permission_codes: str):
+    role = MagicMock()
+    role.permissions = [MagicMock(code=code) for code in permission_codes]
+    viewer = MagicMock()
+    viewer.roles = [role]
+    return viewer
 
 
 @pytest.fixture
@@ -229,9 +241,47 @@ async def test_list_tasks_with_results(service, mock_repo):
     )
     mock_repo.list_tasks.return_value = ([task1, task2], 2)
 
-    with patch("app.services.task_service._enrich_task_order", side_effect=lambda db, d: d):
+    with patch("app.services.task_service._enrich_task_order", side_effect=lambda *args, **kwargs: args[1]):
         tasks, total = await service.list_tasks(page=1, page_size=20)
     assert total == 2
     assert len(tasks) == 2
     assert tasks[0]["project_name"] == "任务A"
     assert tasks[1]["project_name"] == "任务B"
+
+
+def test_outsource_fields_are_redacted_without_explicit_task_permission():
+    outsider = _viewer_with_permissions("installation_task:read")
+    source = {
+        "outsource_blocked": True,
+        "outsource_status": "in_progress",
+        "outsource_status_label": "外协任务进行中",
+        "outsource_task_count": 2,
+        "outsource_task_nos": ["OT20260911-0001"],
+    }
+
+    assert can_view_outsource_tasks(outsider) is False
+    assert visible_outsource_fields(outsider, source) == {
+        "outsource_blocked": False,
+        "outsource_status": None,
+        "outsource_status_label": None,
+        "outsource_task_count": 0,
+        "outsource_task_nos": [],
+    }
+
+    authorized = _viewer_with_permissions("outsource_task:read")
+    assert can_view_outsource_tasks(authorized) is True
+    assert visible_outsource_fields(authorized, source) is source
+
+
+@pytest.mark.asyncio
+async def test_unauthorized_list_ignores_outsourced_filter_and_flag(service, mock_repo):
+    service.viewer = _viewer_with_permissions("installation_task:read")
+    task = make_mock_installation_task(task_id=SAMPLE_TASK_ID)
+    mock_repo.list_tasks.return_value = ([task], 1)
+
+    with patch("app.services.task_service._enrich_task_order", side_effect=lambda *args, **kwargs: args[1]):
+        tasks, total = await service.list_tasks(page=1, page_size=20, outsourced=True)
+
+    assert total == 1
+    assert tasks[0]["is_outsourced"] is False
+    assert mock_repo.list_tasks.call_args.kwargs["outsourced"] is None

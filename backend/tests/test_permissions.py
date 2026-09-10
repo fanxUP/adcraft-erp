@@ -12,6 +12,17 @@ from app.core.permissions import (
     PERM_ORDER_VIEW_PRICE,
     PERM_REPORT_VIEW_FINANCIAL,
     PERM_RESOURCE_CENTER_READ,
+    PERM_OUTSOURCE_CENTER_READ,
+    PERM_OUTSOURCE_PAYMENT_READ,
+    PERM_OUTSOURCE_TASK_CHANGE_STATUS,
+    PERM_OUTSOURCE_TASK_CREATE,
+    PERM_OUTSOURCE_TASK_DELETE,
+    PERM_OUTSOURCE_TASK_READ,
+    PERM_OUTSOURCE_TASK_UPDATE,
+    PERM_OUTSOURCE_VENDOR_CREATE,
+    PERM_OUTSOURCE_VENDOR_DELETE,
+    PERM_OUTSOURCE_VENDOR_READ,
+    PERM_OUTSOURCE_VENDOR_UPDATE,
     RESOURCE_CENTER_PERMISSION_CODES,
     SENSITIVE_PERMISSION_CODES,
     get_user_capabilities,
@@ -20,6 +31,7 @@ from app.core.permissions import (
     validate_role_resource_permissions,
     validate_role_sensitive_permissions,
     require_any_permission,
+    require_all_permissions,
     require_permission,
     require_role,
 )
@@ -124,6 +136,24 @@ class TestRequireAnyPermission:
         assert exc_info.value.status_code == 403
 
 
+class TestRequireAllPermissions:
+    async def test_all_permissions_are_required(self):
+        user = _make_user([_make_role("operator", ["module:read", "task:update"])])
+        dependency = require_all_permissions("module:read", "task:update")
+
+        assert await dependency(user) is user
+
+    async def test_missing_one_permission_is_rejected_with_plain_language(self):
+        user = _make_user([_make_role("operator", ["module:read"])])
+        dependency = require_all_permissions("module:read", "task:update")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await dependency(user)
+
+        assert exc_info.value.status_code == 403
+        assert "task:update" in exc_info.value.detail
+
+
 async def test_sales_role_can_read_project_delivery_tasks():
     from scripts.seed_permissions import ROLE_PERMISSION_MAP
 
@@ -171,6 +201,38 @@ async def test_resource_center_parent_permission_is_explicit_and_execution_roles
 
     for role_name in ("designer", "production", "installer"):
         assert not RESOURCE_CENTER_PERMISSION_CODES.intersection(ROLE_PERMISSION_MAP[role_name])
+
+
+async def test_outsource_permissions_are_split_and_execution_roles_do_not_get_external_visibility():
+    from scripts.seed_permissions import ALL_PERMISSIONS, ROLE_PERMISSION_MAP, ROLE_NAMES
+
+    seeded = {permission["code"] for permission in ALL_PERMISSIONS}
+    expected = {
+        PERM_OUTSOURCE_CENTER_READ,
+        PERM_OUTSOURCE_VENDOR_READ,
+        PERM_OUTSOURCE_VENDOR_CREATE,
+        PERM_OUTSOURCE_VENDOR_UPDATE,
+        PERM_OUTSOURCE_VENDOR_DELETE,
+        PERM_OUTSOURCE_TASK_READ,
+        PERM_OUTSOURCE_TASK_CREATE,
+        PERM_OUTSOURCE_TASK_UPDATE,
+        PERM_OUTSOURCE_TASK_CHANGE_STATUS,
+        PERM_OUTSOURCE_TASK_DELETE,
+    }
+    assert expected <= seeded
+    assert "outsource_manager" in ROLE_NAMES
+    assert expected <= set(ROLE_PERMISSION_MAP["outsource_manager"])
+    assert PERM_OUTSOURCE_PAYMENT_READ not in ROLE_PERMISSION_MAP["outsource_manager"]
+
+    for role_name in ("designer", "production", "installer"):
+        assert not expected.intersection(ROLE_PERMISSION_MAP[role_name])
+
+    finance_permissions = set(ROLE_PERMISSION_MAP["finance"])
+    assert {PERM_OUTSOURCE_CENTER_READ, PERM_OUTSOURCE_VENDOR_READ, PERM_OUTSOURCE_TASK_READ} <= finance_permissions
+    assert PERM_OUTSOURCE_TASK_CREATE not in finance_permissions
+    assert PERM_OUTSOURCE_TASK_UPDATE not in finance_permissions
+    assert PERM_OUTSOURCE_TASK_CHANGE_STATUS not in finance_permissions
+    assert PERM_OUTSOURCE_TASK_DELETE not in finance_permissions
 
 
 async def test_role_permission_refresh_replaces_the_complete_collection():

@@ -37,6 +37,42 @@
             :project-progress="projectProgress"
             @select-tab="activeTab = $event"
           />
+          <el-card v-if="canManageTaskScope" shadow="never" class="info-card task-scope-card">
+            <template #header>
+              <div class="card-header">
+                <span>任务可见员工</span>
+                <el-tag size="small" :type="orderTaskAssigneeIds.length ? 'warning' : 'success'">
+                  {{ orderTaskAssigneeIds.length ? `已指定 ${orderTaskAssigneeIds.length} 人` : '未限制，全部可见' }}
+                </el-tag>
+              </div>
+            </template>
+            <div class="task-scope-row">
+              <el-select
+                v-model="orderTaskAssigneeIds"
+                multiple
+                filterable
+                clearable
+                collapse-tags
+                collapse-tags-tooltip
+                placeholder="不选择则全部员工可见"
+                class="task-scope-select"
+                :disabled="taskAssigneeSaving"
+              >
+                <el-option
+                  v-for="employee in taskAssigneeOptions"
+                  :key="employee.id"
+                  :label="`${employee.name}（${employee.employee_no}）`"
+                  :value="employee.id"
+                />
+              </el-select>
+              <el-button type="primary" :loading="taskAssigneeSaving" @click="saveOrderTaskAssignees">
+                保存可见范围
+              </el-button>
+            </div>
+            <div class="task-scope-hint">
+              {{ orderTaskAssigneeIds.length ? '只有选中的员工能在工作台和任务详情中看到本订单任务。' : '当前未指定员工，拥有对应任务权限的员工都能看到本订单任务。' }}
+            </div>
+          </el-card>
           <el-card v-if="itemProgressRows.length" shadow="never" class="info-card item-progress-card">
             <template #header>
               <div class="card-header">
@@ -476,11 +512,15 @@ import {
   reopenCompletedOrder,
   autoCalculateCost,
   updateOrderContact,
+  getOrderTaskAssigneeOptions,
+  getOrderTaskAssignees,
+  updateOrderTaskAssignees,
 } from '@/api/orders'
 import { getSystemSettings } from '@/api/admin'
 import { getDesignTasks, getProductionTasks, getInstallationTasks } from '@/api/tasks'
 import { ProgressBar, StatusTag } from '@/components/ui'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useAuthStore } from '@/stores/auth'
 import type {
   DesignTaskResponse,
   InstallationTaskResponse,
@@ -489,11 +529,13 @@ import type {
   OrderItemResponse,
   ProductionTaskResponse,
   StatusView,
+  TaskAssigneeOption,
 } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
 const aiStore = useAiAssistantStore()
+const authStore = useAuthStore()
 const loading = ref(false)
 const changing = ref(false)
 const tasksLoading = ref(false)
@@ -510,6 +552,10 @@ const contactSaving = ref(false)
 const contactDraft = reactive({ person: '', phone: '' })
 const itemEditability = ref<OrderItemEditabilityResponse | null>(null)
 const canEditItems = computed(() => itemEditability.value?.can_edit_items === true)
+const canManageTaskScope = computed(() => authStore.hasPermission('order:task_assign'))
+const taskAssigneeOptions = ref<TaskAssigneeOption[]>([])
+const orderTaskAssigneeIds = ref<string[]>([])
+const taskAssigneeSaving = ref(false)
 
 type OrderProgressTask = DesignTaskResponse | ProductionTaskResponse | InstallationTaskResponse
 type LegacyUnlinkedTaskRow = {
@@ -796,15 +842,59 @@ async function fetchOrder() {
   } finally { loading.value = false }
 }
 
+async function loadOrderTaskAssignees() {
+  if (!canManageTaskScope.value) return
+  try {
+    const [options, current] = await Promise.all([
+      getOrderTaskAssigneeOptions(),
+      getOrderTaskAssignees(route.params.id as string),
+    ])
+    taskAssigneeOptions.value = options
+    orderTaskAssigneeIds.value = current.employee_ids
+  } catch {
+    taskAssigneeOptions.value = []
+    orderTaskAssigneeIds.value = []
+  }
+}
+
+async function saveOrderTaskAssignees() {
+  if (!order.value || !canManageTaskScope.value) return
+  taskAssigneeSaving.value = true
+  try {
+    const result = await updateOrderTaskAssignees(order.value.id, orderTaskAssigneeIds.value)
+    orderTaskAssigneeIds.value = result.employee_ids
+    ElMessage.success(result.is_restricted ? '任务可见员工已保存' : '已清除限制，全部员工可见')
+  } finally {
+    taskAssigneeSaving.value = false
+  }
+}
+
 async function fetchTasks() {
+  if (!authStore.hasPermission('design_task:list')
+    && !authStore.hasPermission('production_task:list')
+    && !authStore.hasPermission('installation_task:list')) {
+    designTasks.value = []
+    productionTasks.value = []
+    installationTasks.value = []
+    return
+  }
   tasksLoading.value = true
   try {
+    const orderId = route.params.id as string
     const [d, p, i] = await Promise.all([
-      getDesignTasks({ order_id: route.params.id as string, page_size: 100 }),
-      getProductionTasks({ order_id: route.params.id as string, page_size: 100 }),
-      getInstallationTasks({ order_id: route.params.id as string, page_size: 100 }),
+      authStore.hasPermission('design_task:list')
+        ? getDesignTasks({ order_id: orderId, page_size: 100 })
+        : Promise.resolve(null),
+      authStore.hasPermission('production_task:list')
+        ? getProductionTasks({ order_id: orderId, page_size: 100 })
+        : Promise.resolve(null),
+      authStore.hasPermission('installation_task:list')
+        ? getInstallationTasks({ order_id: orderId, page_size: 100 })
+        : Promise.resolve(null),
     ])
-    designTasks.value = d.items; productionTasks.value = p.items; installationTasks.value = i.items
+    designTasks.value = d?.items || []
+    productionTasks.value = p?.items || []
+    installationTasks.value = i?.items || []
   } finally { tasksLoading.value = false }
 }
 
@@ -930,13 +1020,17 @@ async function handlePrintOrder() {
   setTimeout(() => { const el = document.getElementById('__print_a4_wrapper__'); if (el) el.remove() }, 300)
 }
 
-onMounted(() => { fetchOrder(); fetchTasks() })
+onMounted(() => { fetchOrder(); fetchTasks(); loadOrderTaskAssignees() })
 </script>
 
 <style scoped>
 .page { padding: 0; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.task-scope-card { margin-top: 16px; }
+.task-scope-row { display: flex; align-items: center; gap: 12px; }
+.task-scope-select { flex: 1; min-width: 260px; }
+.task-scope-hint { margin-top: 8px; color: var(--ad-text-secondary); font-size: 12px; line-height: 1.6; }
 .item-progress-card { margin-top: 16px; }
 .item-progress-card .progress-note { color: var(--ad-text-secondary); font-size: 12px; font-weight: normal; }
 .legacy-alert-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

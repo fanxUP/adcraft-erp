@@ -19,6 +19,7 @@ from app.core.permissions import (
     ORDER_ITEM_PRICE_FIELDS,
     PERM_ORDER_ITEM_VIEW_PRICE,
     PERM_ORDER_VIEW_PRICE,
+    PERM_OUTSOURCE_TASK_READ,
     user_has_permission,
 )
 from app.repositories.task_repo import (
@@ -49,6 +50,12 @@ from app.services.task_history_service import record_task_event, task_history_sn
 from app.services.task_schedule_service import (
     enrich_task_dict_with_schedule_state,
     normalize_task_schedule_data,
+)
+from app.services.order_task_assignment_service import (
+    can_assign_task,
+    get_visible_task,
+    resolve_current_employee_user_id,
+    validate_task_assignee,
 )
 
 ACTIVE_ORDER_STATUSES = ("designing", "in_production", "in_installation")
@@ -165,6 +172,31 @@ OUTSOURCE_BLOCKING_STATUS_LABELS = {
     "pending": "外协待处理",
     "in_progress": "外协任务进行中",
 }
+
+
+def can_view_outsource_tasks(viewer: User | None) -> bool:
+    """Return whether a task response may disclose external-work metadata.
+
+    Internal callers without a viewer retain the existing full-data behavior.
+    Authenticated callers must hold the explicit external-task read permission;
+    task-module permissions alone never imply visibility of outsourcing.
+    """
+
+    return viewer is None or user_has_permission(viewer, PERM_OUTSOURCE_TASK_READ)
+
+
+def visible_outsource_fields(viewer: User | None, outsource: dict) -> dict:
+    """Return only external-task fields the current viewer may receive."""
+
+    if can_view_outsource_tasks(viewer):
+        return outsource
+    return {
+        "outsource_blocked": False,
+        "outsource_status": None,
+        "outsource_status_label": None,
+        "outsource_task_count": 0,
+        "outsource_task_nos": [],
+    }
 
 
 def _item_status_progress(task_type: str, status: str, fallback: int = 0) -> int:
@@ -934,6 +966,7 @@ async def _task_order_item_option_map(
             "outsource_task_count": 0,
             "outsource_task_nos": [],
         })
+        can_view_outsource = can_view_outsource_tasks(viewer)
         if is_linked:
             can_select = not _is_terminal_item_status(task_type, task_status or "")
             if can_select:
@@ -944,9 +977,14 @@ async def _task_order_item_option_map(
                 disabled_reason = "该明细在本任务中已取消"
         else:
             can_select = stage == expected_stage and not outsource["outsource_blocked"]
-            if outsource["outsource_blocked"]:
+            if outsource["outsource_blocked"] and can_view_outsource:
                 disabled_reason = (
                     f"{outsource['outsource_status_label']}，完成后才能关联"
+                    f"{TASK_TYPE_LABELS[task_type]}任务"
+                )
+            elif outsource["outsource_blocked"]:
+                disabled_reason = (
+                    f"当前明细有未完成的前置事项，完成后才能关联"
                     f"{TASK_TYPE_LABELS[task_type]}任务"
                 )
             elif can_select:
@@ -998,7 +1036,7 @@ async def _task_order_item_option_map(
                         disabled_reason,
                     ).model_dump(mode="json"),
                 },
-                **outsource,
+                **visible_outsource_fields(viewer, outsource),
             }).model_dump(
                 mode="json",
                 exclude_none=not can_view_item_price,
@@ -1026,9 +1064,9 @@ async def get_task_order_item_options(
     model = task_models.get(task_type)
     if model is None:
         raise ValueError("不支持的任务类型")
-    task = await db.get(model, task_id)
+    task = await get_visible_task(db, model, task_id, viewer)
     if not task:
-        raise ValueError("任务不存在")
+        raise ValueError("任务不存在或当前账号无权查看")
     options = await _task_order_item_option_map(
         db,
         task.document_id,
@@ -1336,8 +1374,18 @@ async def _prepare_task_create_data(
     return normalize_task_schedule_data(normalized), item_ids
 
 
-async def _attach_outsource_flags(db: AsyncSession, task_type: str, task_dicts: list[dict]) -> list[dict]:
+async def _attach_outsource_flags(
+    db: AsyncSession,
+    task_type: str,
+    task_dicts: list[dict],
+    viewer: User | None = None,
+) -> list[dict]:
     """为任务列表批量补 is_outsourced：存在未删除的关联外协任务即 True。"""
+    if not can_view_outsource_tasks(viewer):
+        for task_dict in task_dicts:
+            task_dict["is_outsourced"] = False
+        return task_dicts
+
     from app.models.outsource import OutsourceTask
     ids = [d.get("id") for d in task_dicts if d.get("id")]
     linked: set[str] = set()
@@ -1727,6 +1775,7 @@ async def _apply_task_item_status_change(
     task,
     to_status: str,
     raw_item_ids: list[str] | None,
+    viewer: User | None = None,
 ) -> tuple[list[UUID], dict[UUID, tuple[str, int]]]:
     """Apply one status transition only to the checked item work units."""
     workflows = {
@@ -1775,10 +1824,15 @@ async def _apply_task_item_status_change(
                 for summary in blocked_outsource.values()
                 for task_no in summary["outsource_task_nos"]
             ]
-            task_ref = f"（外协任务：{'、'.join(task_nos)}）" if task_nos else ""
+            if can_view_outsource_tasks(viewer):
+                task_ref = f"（外协任务：{'、'.join(task_nos)}）" if task_nos else ""
+                raise ValueError(
+                    f"所选订单明细存在未完成的外协任务{task_ref}，"
+                    f"外协完成后才能完成{TASK_TYPE_LABELS[task_type]}任务"
+                )
             raise ValueError(
-                f"所选订单明细存在未完成的外协任务{task_ref}，"
-                f"外协完成后才能完成{TASK_TYPE_LABELS[task_type]}任务"
+                f"所选订单明细存在未完成的前置事项，完成后才能完成"
+                f"{TASK_TYPE_LABELS[task_type]}任务"
             )
 
     progress = _item_status_progress(
@@ -1850,20 +1904,32 @@ async def _resolve_task_assignee(
         raise ValueError("请先选择分配人，再变更任务状态")
 
     if has_requested_assignee:
-        result = await db.execute(
-            select(User).where(
-                User.id == effective_assignee,
-                User.is_active.is_(True),
-                User.deleted_at.is_(None),
-            )
-        )
-        user_row = result.scalar_one_or_none()
-        if inspect.isawaitable(user_row):
-            user_row = await user_row
-        if user_row is None:
-            raise ValueError("所选分配人不存在或已停用，请重新选择")
+        await validate_task_assignee(db, effective_assignee)
 
     return effective_assignee
+
+
+async def _resolve_status_assignee(
+    db: AsyncSession,
+    task,
+    requested_assigned_to,
+    *,
+    task_type: str,
+    viewer: User | None,
+) -> UUID:
+    """Resolve the owner used for a status operation.
+
+    Assignment-capable users may choose a valid employee/user explicitly.
+    Ordinary delivery workers cannot impersonate another owner: every status
+    operation is recorded against the employee bound to their login.
+    """
+    if viewer is not None and not can_assign_task(task_type, viewer):
+        if requested_assigned_to not in (None, ""):
+            raise ValueError(
+                "当前账号没有任务分配权限，状态变更会自动记录当前登录员工，不能指定其他员工"
+            )
+        return await resolve_current_employee_user_id(db, viewer)
+    return await _resolve_task_assignee(db, task, requested_assigned_to)
 
 
 async def _notify_task_assignee(
@@ -1911,19 +1977,29 @@ class DesignTaskService:
                          outsourced: bool | None = None,
                          order_item_id: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
+        if not can_view_outsource_tasks(self.viewer):
+            outsourced = None
         tasks, total = await self.repo.list_tasks(
             skip=skip, limit=page_size, status=status, order_id=order_id,
             assigned_to=assigned_to, outsourced=outsourced,
             order_item_id=order_item_id,
+            viewer=self.viewer,
         )
         result = [await self._to_dict(t) for t in tasks]
-        return await _attach_outsource_flags(self.db, "design", result), total
+        return await _attach_outsource_flags(self.db, "design", result, viewer=self.viewer), total
 
     async def get_task(self, task_id: UUID) -> dict | None:
-        task = await self.repo.get_by_id(task_id)
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         return await self._to_dict(task) if task else None
 
     async def create_task(self, data: dict, operated_by: UUID | None = None) -> dict:
+        if "assigned_to" in data:
+            if not can_assign_task("design", self.viewer):
+                raise ValueError("当前账号没有任务分配权限，不能指定任务负责人")
+            if self.viewer is not None:
+                data["assigned_to"] = await validate_task_assignee(
+                    self.db, data.get("assigned_to")
+                )
         data, item_ids = await _prepare_task_create_data(
             self.db,
             data,
@@ -1959,9 +2035,16 @@ class DesignTaskService:
         return await self._to_dict(task)
 
     async def update_task(self, task_id: UUID, data: dict, operated_by: UUID | None = None) -> dict:
-        task = await self.repo.get_by_id(task_id)
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         if not task:
             raise ValueError("设计任务不存在")
+        if "assigned_to" in data:
+            if not can_assign_task("design", self.viewer):
+                raise ValueError("当前账号没有任务分配权限，不能修改任务负责人")
+            if self.viewer is not None:
+                data["assigned_to"] = await validate_task_assignee(
+                    self.db, data.get("assigned_to")
+                )
         old_assigned = task.assigned_to
         previous_legacy_item_id = _task_order_item_id(task)
         before = task_history_snapshot(task)
@@ -2037,7 +2120,7 @@ class DesignTaskService:
         order_item_ids: list[str] | None = None,
         assigned_to: str | None = None,
     ) -> dict:
-        task = await self.repo.get_by_id(task_id)
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         if not task:
             raise ValueError("设计任务不存在")
 
@@ -2045,10 +2128,12 @@ class DesignTaskService:
         if not order_item_ids and _task_order_item_id(task) is None:
             raise ValueError("请先勾选要处理的订单明细")
         old_assigned = getattr(task, "assigned_to", None)
-        effective_assignee = await _resolve_task_assignee(
+        effective_assignee = await _resolve_status_assignee(
             self.db,
             task,
             assigned_to,
+            task_type="design",
+            viewer=self.viewer,
         )
         before = task_history_snapshot(task)
         try:
@@ -2058,6 +2143,7 @@ class DesignTaskService:
                 task,
                 to_status,
                 order_item_ids,
+                viewer=self.viewer,
             )
             task.assigned_to = effective_assignee
             await record_task_event(
@@ -2118,7 +2204,7 @@ class DesignTaskService:
 
     async def delete_task(self, task_id: UUID) -> None:
         """管理员删除设计任务，回退订单到确认状态。"""
-        task = await self.repo.get_by_id(task_id)
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         if not task:
             raise ValueError("设计任务不存在")
 
@@ -2198,19 +2284,29 @@ class ProductionTaskService:
                          outsourced: bool | None = None,
                          order_item_id: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
+        if not can_view_outsource_tasks(self.viewer):
+            outsourced = None
         tasks, total = await self.repo.list_tasks(
             skip=skip, limit=page_size, status=status, order_id=order_id,
             assigned_to=assigned_to, outsourced=outsourced,
             order_item_id=order_item_id,
+            viewer=self.viewer,
         )
         result = [await self._to_dict(t) for t in tasks]
-        return await _attach_outsource_flags(self.db, "production", result), total
+        return await _attach_outsource_flags(self.db, "production", result, viewer=self.viewer), total
 
     async def get_task(self, task_id: UUID) -> dict | None:
-        task = await self.repo.get_by_id(task_id)
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         return await self._to_dict(task) if task else None
 
     async def create_task(self, data: dict, operated_by: UUID | None = None) -> dict:
+        if "assigned_to" in data:
+            if not can_assign_task("production", self.viewer):
+                raise ValueError("当前账号没有任务分配权限，不能指定任务负责人")
+            if self.viewer is not None:
+                data["assigned_to"] = await validate_task_assignee(
+                    self.db, data.get("assigned_to")
+                )
         data, item_ids = await _prepare_task_create_data(
             self.db,
             data,
@@ -2246,9 +2342,16 @@ class ProductionTaskService:
         return await self._to_dict(task)
 
     async def update_task(self, task_id: UUID, data: dict, operated_by: UUID | None = None) -> dict:
-        task = await self.repo.get_by_id(task_id)
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         if not task:
             raise ValueError("制作任务不存在")
+        if "assigned_to" in data:
+            if not can_assign_task("production", self.viewer):
+                raise ValueError("当前账号没有任务分配权限，不能修改任务负责人")
+            if self.viewer is not None:
+                data["assigned_to"] = await validate_task_assignee(
+                    self.db, data.get("assigned_to")
+                )
         old_assigned = task.assigned_to
         previous_legacy_item_id = _task_order_item_id(task)
         before = task_history_snapshot(task)
@@ -2324,7 +2427,7 @@ class ProductionTaskService:
         order_item_ids: list[str] | None = None,
         assigned_to: str | None = None,
     ) -> dict:
-        task = await self.repo.get_by_id(task_id)
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         if not task:
             raise ValueError("制作任务不存在")
 
@@ -2332,10 +2435,12 @@ class ProductionTaskService:
         if not order_item_ids and _task_order_item_id(task) is None:
             raise ValueError("请先勾选要处理的订单明细")
         old_assigned = getattr(task, "assigned_to", None)
-        effective_assignee = await _resolve_task_assignee(
+        effective_assignee = await _resolve_status_assignee(
             self.db,
             task,
             assigned_to,
+            task_type="production",
+            viewer=self.viewer,
         )
         before = task_history_snapshot(task)
         try:
@@ -2345,6 +2450,7 @@ class ProductionTaskService:
                 task,
                 to_status,
                 order_item_ids,
+                viewer=self.viewer,
             )
             task.assigned_to = effective_assignee
             await record_task_event(
@@ -2405,7 +2511,7 @@ class ProductionTaskService:
 
     async def delete_task(self, task_id: UUID) -> None:
         """管理员删除制作任务，回退订单到设计中状态。"""
-        task = await self.repo.get_by_id(task_id)
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         if not task:
             raise ValueError("制作任务不存在")
 
@@ -2478,19 +2584,29 @@ class InstallationTaskService:
                          outsourced: bool | None = None,
                          order_item_id: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
+        if not can_view_outsource_tasks(self.viewer):
+            outsourced = None
         tasks, total = await self.repo.list_tasks(
             skip=skip, limit=page_size, status=status, order_id=order_id,
             assigned_to=assigned_to, outsourced=outsourced,
             order_item_id=order_item_id,
+            viewer=self.viewer,
         )
         result = [await self._to_dict(t) for t in tasks]
-        return await _attach_outsource_flags(self.db, "installation", result), total
+        return await _attach_outsource_flags(self.db, "installation", result, viewer=self.viewer), total
 
     async def get_task(self, task_id: UUID) -> dict | None:
-        task = await self.repo.get_by_id(task_id)
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         return await self._to_dict(task) if task else None
 
     async def create_task(self, data: dict, operated_by: UUID | None = None) -> dict:
+        if "assigned_to" in data:
+            if not can_assign_task("installation", self.viewer):
+                raise ValueError("当前账号没有任务分配权限，不能指定任务负责人")
+            if self.viewer is not None:
+                data["assigned_to"] = await validate_task_assignee(
+                    self.db, data.get("assigned_to")
+                )
         data, item_ids = await _prepare_task_create_data(
             self.db,
             data,
@@ -2526,9 +2642,16 @@ class InstallationTaskService:
         return await self._to_dict(task)
 
     async def update_task(self, task_id: UUID, data: dict, operated_by: UUID | None = None) -> dict:
-        task = await self.repo.get_by_id(task_id)
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         if not task:
             raise ValueError("安装任务不存在")
+        if "assigned_to" in data:
+            if not can_assign_task("installation", self.viewer):
+                raise ValueError("当前账号没有任务分配权限，不能修改任务负责人")
+            if self.viewer is not None:
+                data["assigned_to"] = await validate_task_assignee(
+                    self.db, data.get("assigned_to")
+                )
         old_assigned = task.assigned_to
         previous_legacy_item_id = _task_order_item_id(task)
         before = task_history_snapshot(task)
@@ -2604,7 +2727,7 @@ class InstallationTaskService:
         order_item_ids: list[str] | None = None,
         assigned_to: str | None = None,
     ) -> dict:
-        task = await self.repo.get_by_id(task_id)
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         if not task:
             raise ValueError("安装任务不存在")
 
@@ -2612,10 +2735,12 @@ class InstallationTaskService:
         if not order_item_ids and _task_order_item_id(task) is None:
             raise ValueError("请先勾选要处理的订单明细")
         old_assigned = getattr(task, "assigned_to", None)
-        effective_assignee = await _resolve_task_assignee(
+        effective_assignee = await _resolve_status_assignee(
             self.db,
             task,
             assigned_to,
+            task_type="installation",
+            viewer=self.viewer,
         )
         before = task_history_snapshot(task)
         try:
@@ -2625,6 +2750,7 @@ class InstallationTaskService:
                 task,
                 to_status,
                 order_item_ids,
+                viewer=self.viewer,
             )
             task.assigned_to = effective_assignee
             await record_task_event(
@@ -2660,7 +2786,7 @@ class InstallationTaskService:
 
     async def delete_task(self, task_id: UUID) -> None:
         """管理员删除安装任务，回退订单到生产中状态。"""
-        task = await self.repo.get_by_id(task_id)
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         if not task:
             raise ValueError("安装任务不存在")
 

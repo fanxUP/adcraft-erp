@@ -234,6 +234,12 @@ class InstallationTaskResponse(CoercedModel):
 
 # -- Status change --
 
+class TaskAssigneeUpdate(BaseModel):
+    """Change only the task owner through the dedicated assignment endpoint."""
+
+    assigned_to: str | None = None
+
+
 class TaskStatusChange(BaseModel):
     to_status: str
     reason: str | None = None
@@ -277,6 +283,15 @@ class TaskOrderItemOption(OrderItemResponse):
     outsource_status_label: str | None = None
     outsource_task_count: int = Field(default=0, ge=0)
     outsource_task_nos: list[str] = Field(default_factory=list)
+
+
+class TaskAssigneeOption(BaseModel):
+    """Active employee option with the user id stored on task rows."""
+
+    id: str
+    name: str
+    employee_no: str
+    user_id: str
 
 
 class TaskQueueItem(CoercedModel):

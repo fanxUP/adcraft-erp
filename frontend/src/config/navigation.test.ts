@@ -14,7 +14,7 @@ describe('filterNavigation', () => {
     const delivery = filterNavigation(navigationItems, ['installer'])
       .find(item => item.label === '项目交付')
 
-    expect(delivery?.children?.map(item => item.label)).toEqual(['安装任务'])
+    expect(delivery).toBeUndefined()
   })
 
   it('gives administrators access to AI business knowledge health', () => {
@@ -50,7 +50,7 @@ describe('filterNavigation', () => {
     const delivery = filterNavigation(
       navigationItems,
       ['custom-installer'],
-      ['installation_task:read'],
+      ['installation_task:list'],
     ).find(item => item.label === '项目交付')
 
     expect(delivery?.children?.map(item => item.label)).toEqual(['安装任务'])
@@ -70,5 +70,23 @@ describe('filterNavigation', () => {
 
     const revokedProductionLabels = filterNavigation(navigationItems, ['production'], []).map(item => item.label)
     expect(revokedProductionLabels).not.toContain('资源中心')
+  })
+
+  it('does not merge external vendor and task navigation permissions', () => {
+    const taskOnly = filterNavigation(
+      navigationItems,
+      ['custom-outsourcing'],
+      ['outsource_center:read', 'outsource_task:read'],
+    ).find(item => item.label === '项目交付')
+    expect(taskOnly?.children?.map(item => item.label)).toContain('外协任务')
+    expect(taskOnly?.children?.map(item => item.label)).not.toContain('外协商')
+
+    const vendorOnly = filterNavigation(
+      navigationItems,
+      ['custom-outsourcing'],
+      ['outsource_center:read', 'outsource_vendor:read'],
+    ).find(item => item.label === '项目交付')
+    expect(vendorOnly?.children?.map(item => item.label)).toContain('外协商')
+    expect(vendorOnly?.children?.map(item => item.label)).not.toContain('外协任务')
   })
 })

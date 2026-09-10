@@ -500,6 +500,20 @@ export interface OrderDetailResponse {
   gross_profit?: number
 }
 
+export interface TaskAssigneeOption {
+  id: string
+  name: string
+  employee_no: string
+  user_id: string
+}
+
+export interface OrderTaskAssigneesResponse {
+  order_id: string
+  employee_ids: string[]
+  employees: TaskAssigneeOption[]
+  is_restricted: boolean
+}
+
 // ---- Task ----
 
 export interface AttachmentResponse {

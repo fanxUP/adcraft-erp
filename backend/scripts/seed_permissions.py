@@ -5,7 +5,8 @@ Usage:
 
 This script reads the DATABASE_URL from the project config,
 creates all permission records (idempotent), and maps them
-to the seven built-in roles, including the separate resource_manager role.
+to the eight built-in roles, including separate resource_manager and
+outsource_manager roles.
 """
 
 import asyncio
@@ -71,23 +72,32 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "order:change_status", "name": "变更订单状态", "description": "变更订单状态"},
     {"code": "order:view_price", "name": "查看订单价格", "description": "查看订单总额、折扣、税额等订单价格参数"},
     {"code": "order_item:view_price", "name": "查看明细价格", "description": "查看订单明细单价、费用和小计"},
+    {"code": "order:task_assign", "name": "分配订单任务可见员工", "description": "为订单指定可见的任务处理员工；不指定时所有任务员工可见"},
     {"code": "catalog:view_price", "name": "查看目录价格", "description": "查看产品、材质和工艺的价格参数"},
     {"code": "finance:view_cost", "name": "查看成本财务", "description": "查看成本、付款、利润和财务金额"},
     {"code": "report:view_financial", "name": "查看财务报表", "description": "查看收款、欠款和经营财务统计"},
+    # Task queue and task assignment
+    {"code": "task_queue:read", "name": "查看工作台任务", "description": "在工作台查看本人可见的设计、制作、安装任务"},
     # Design task
     {"code": "design_task:read", "name": "查看设计任务", "description": "查看设计任务列表和详情"},
+    {"code": "design_task:list", "name": "查看设计任务列表", "description": "进入设计任务列表页并查询设计任务"},
+    {"code": "design_task:assign", "name": "分配设计任务", "description": "维护设计任务负责人"},
     {"code": "design_task:delete", "name": "删除设计任务", "group": "设计任务"},
     {"code": "design_task:create", "name": "创建设计任务", "description": "创建新设计任务"},
     {"code": "design_task:update", "name": "编辑设计任务", "description": "编辑设计任务信息"},
     {"code": "design_task:change_status", "name": "变更设计状态", "description": "变更设计任务状态"},
     # Production task
     {"code": "production_task:read", "name": "查看制作任务", "description": "查看制作任务列表和详情"},
+    {"code": "production_task:list", "name": "查看制作任务列表", "description": "进入制作任务列表页并查询制作任务"},
+    {"code": "production_task:assign", "name": "分配制作任务", "description": "维护制作任务负责人"},
     {"code": "production_task:delete", "name": "删除制作任务", "group": "制作任务"},
     {"code": "production_task:create", "name": "创建制作任务", "description": "创建新制作任务"},
     {"code": "production_task:update", "name": "编辑制作任务", "description": "编辑制作任务信息"},
     {"code": "production_task:change_status", "name": "变更制作状态", "description": "变更制作任务状态"},
     # Installation task
     {"code": "installation_task:read", "name": "查看安装任务", "description": "查看安装任务列表和详情"},
+    {"code": "installation_task:list", "name": "查看安装任务列表", "description": "进入安装任务列表页并查询安装任务"},
+    {"code": "installation_task:assign", "name": "分配安装任务", "description": "维护安装任务负责人"},
     {"code": "installation_task:delete", "name": "删除安装任务", "group": "安装任务"},
     {"code": "installation_task:create", "name": "创建安装任务", "description": "创建新安装任务"},
     {"code": "installation_task:update", "name": "编辑安装任务", "description": "编辑安装任务信息"},
@@ -130,11 +140,17 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "inventory:update", "name": "编辑物料", "description": "编辑物料信息"},
     {"code": "inventory:stock_in", "name": "入库", "description": "物料入库操作"},
     {"code": "inventory:stock_out", "name": "出库", "description": "物料出库操作"},
-    # Outsource
-    {"code": "outsource:read", "name": "查看外协", "description": "查看外协信息"},
-    {"code": "outsource:create", "name": "创建外协", "description": "创建外协商/任务/付款"},
-    {"code": "outsource:update", "name": "编辑外协", "description": "编辑外协信息"},
-    {"code": "outsource:delete", "name": "删除外协", "description": "删除外协记录"},
+    # Outsource center
+    {"code": "outsource_center:read", "name": "进入外协中心", "description": "进入外协商和外协任务模块"},
+    {"code": "outsource_vendor:read", "name": "查看外协商", "description": "查看外协商目录和详情"},
+    {"code": "outsource_vendor:create", "name": "创建外协商", "description": "新增外协商"},
+    {"code": "outsource_vendor:update", "name": "编辑外协商", "description": "编辑外协商资料"},
+    {"code": "outsource_vendor:delete", "name": "删除外协商", "description": "删除外协商资料"},
+    {"code": "outsource_task:read", "name": "查看外协任务", "description": "查看外协任务、状态和任务关联明细"},
+    {"code": "outsource_task:create", "name": "创建外协任务", "description": "新建外协任务或发送订单明细外协"},
+    {"code": "outsource_task:update", "name": "编辑外协任务", "description": "编辑外协任务信息"},
+    {"code": "outsource_task:change_status", "name": "变更外协任务状态", "description": "取消、退回等外协任务状态操作"},
+    {"code": "outsource_task:delete", "name": "删除外协任务", "description": "删除外协任务并管理回收站"},
     {"code": "outsource_payment:read", "name": "查看外协付款", "description": "查看外协付款记录和任务付款摘要"},
     {"code": "outsource_payment:create", "name": "登记外协付款", "description": "登记外协任务付款"},
     # Report
@@ -189,7 +205,11 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "order:read", "order:create", "order:update", "order:change_status",
         "order:view_price", "order_item:view_price", "catalog:view_price",
         "acceptance:read", "acceptance:create", "acceptance:update", "acceptance:delete", "acceptance:change_status",
-        "design_task:read", "production_task:read", "installation_task:read",
+        "task_queue:read",
+        "design_task:read", "design_task:list", "design_task:assign",
+        "production_task:read", "production_task:list", "production_task:assign",
+        "installation_task:read", "installation_task:list", "installation_task:assign",
+        "order:task_assign",
         "payment:read", "payment:create",
         "expense:read",
         "report:read", "report:view_financial",
@@ -205,6 +225,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "product:read",
         "material:read",
         "process:read",
+        "task_queue:read",
         "design_task:read", "design_task:create", "design_task:update", "design_task:change_status",
         "production_task:read",
         "installation_task:read",
@@ -214,12 +235,13 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "product:read",
         "material:read",
         "process:read",
+        "task_queue:read",
         "production_task:read", "production_task:create", "production_task:update", "production_task:change_status",
         "inventory:read", "inventory:create", "inventory:update", "inventory:stock_in", "inventory:stock_out",
-        "outsource:read", "outsource:create", "outsource:update",
     ],
     "installer": [
         "customer:read",
+        "task_queue:read",
         "installation_task:read", "installation_task:create", "installation_task:update", "installation_task:change_status",
     ],
     "finance": [
@@ -230,7 +252,8 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "payment:read", "payment:create", "payment:void",
         "statement:read", "statement:create", "statement:confirm",
         "expense:read", "expense:create", "expense:update", "expense:delete",
-        "outsource:read", "outsource_payment:read", "outsource_payment:create",
+        "outsource_center:read", "outsource_vendor:read", "outsource_task:read",
+        "outsource_payment:read", "outsource_payment:create",
         "report:read",
         "resource_center:read",
         "ai_quote:read", "ai_anomaly:read", "ai_knowledge:read", "ai_report:read",
@@ -243,10 +266,16 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "aerial:read", "aerial:create", "aerial:update", "aerial:delete",
         "aerial:finance", "aerial:wage", "finance:review",
     ],
+    "outsource_manager": [
+        "outsource_center:read",
+        "outsource_vendor:read", "outsource_vendor:create", "outsource_vendor:update", "outsource_vendor:delete",
+        "outsource_task:read", "outsource_task:create", "outsource_task:update",
+        "outsource_task:change_status", "outsource_task:delete",
+    ],
 }
 
 # ── Roles referenced by the init-db.sh script ──────────────────────────────
-ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance", "resource_manager"]
+ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance", "resource_manager", "outsource_manager"]
 
 
 def builtin_role_permission_codes(role_name: str) -> list[str] | None:

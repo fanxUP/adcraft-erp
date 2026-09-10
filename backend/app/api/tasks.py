@@ -13,17 +13,23 @@ from app.core.file_security import confined_path, safe_upload_name
 from app.core.permissions import (
     PERM_DESIGN_TASK_CHANGE_STATUS,
     PERM_DESIGN_TASK_CREATE,
+    PERM_DESIGN_TASK_ASSIGN,
+    PERM_DESIGN_TASK_LIST,
     PERM_DESIGN_TASK_READ,
     PERM_DESIGN_TASK_UPDATE,
     PERM_INSTALLATION_TASK_CHANGE_STATUS,
     PERM_INSTALLATION_TASK_CREATE,
+    PERM_INSTALLATION_TASK_ASSIGN,
+    PERM_INSTALLATION_TASK_LIST,
     PERM_INSTALLATION_TASK_READ,
     PERM_INSTALLATION_TASK_UPDATE,
     PERM_PRODUCTION_TASK_CHANGE_STATUS,
     PERM_PRODUCTION_TASK_CREATE,
+    PERM_PRODUCTION_TASK_ASSIGN,
+    PERM_PRODUCTION_TASK_LIST,
     PERM_PRODUCTION_TASK_READ,
     PERM_PRODUCTION_TASK_UPDATE,
-    require_any_permission,
+    PERM_TASK_QUEUE_READ,
     require_permission,
     require_role,
 )
@@ -37,6 +43,7 @@ from app.schemas.task import (
     InstallationTaskUpdate,
     ProductionTaskCreate,
     ProductionTaskUpdate,
+    TaskAssigneeUpdate,
     TaskStatusChange,
     TaskType,
 )
@@ -48,6 +55,7 @@ from app.services.task_service import (
     ProductionTaskService,
     get_task_order_item_options,
 )
+from app.services.order_task_assignment_service import list_task_assignee_options, get_visible_task
 
 
 def _ensure_uuid(s: str):
@@ -262,11 +270,7 @@ async def list_project_task_queue(
     order_item_id: str | None = None,
     overdue: bool | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_permission(
-        PERM_DESIGN_TASK_READ,
-        PERM_PRODUCTION_TASK_READ,
-        PERM_INSTALLATION_TASK_READ,
-    )),
+    current_user: User = Depends(require_permission(PERM_TASK_QUEUE_READ)),
 ):
     tasks, total = await list_task_queue(
         db,
@@ -287,13 +291,14 @@ async def list_task_order_item_options(
     task_type: TaskType = Query(...),
     task_id: str = Query(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_any_permission(
-        PERM_DESIGN_TASK_READ,
-        PERM_PRODUCTION_TASK_READ,
-        PERM_INSTALLATION_TASK_READ,
-    )),
+    current_user: User = Depends(require_permission(PERM_TASK_QUEUE_READ)),
 ):
     """返回任务处理页的订单明细阶段与可选性。"""
+    if not _user_has_permission(current_user, _TASK_READ_PERMISSIONS[task_type]):
+        raise HTTPException(
+            status_code=403,
+            detail=f"当前账号没有{_TASK_LABELS[task_type]}任务详情查看权限",
+        )
     try:
         options = await get_task_order_item_options(
             db,
@@ -304,6 +309,38 @@ async def list_task_order_item_options(
         return success(options)
     except ValueError as exc:
         return {"code": 40001, "message": str(exc), "data": None}
+
+
+_TASK_ASSIGN_PERMISSIONS = {
+    "design": PERM_DESIGN_TASK_ASSIGN,
+    "production": PERM_PRODUCTION_TASK_ASSIGN,
+    "installation": PERM_INSTALLATION_TASK_ASSIGN,
+}
+
+_TASK_READ_PERMISSIONS = {
+    "design": PERM_DESIGN_TASK_READ,
+    "production": PERM_PRODUCTION_TASK_READ,
+    "installation": PERM_INSTALLATION_TASK_READ,
+}
+
+_TASK_LABELS = {
+    "design": "设计",
+    "production": "制作",
+    "installation": "安装",
+}
+
+
+@queue_router.get("/assignee-options")
+async def list_task_assignee_options_route(
+    task_type: TaskType = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return assignable employees only to users who can assign this stage."""
+    permission = _TASK_ASSIGN_PERMISSIONS[task_type]
+    if not _user_has_permission(current_user, permission):
+        raise HTTPException(status_code=403, detail="没有该阶段的任务分配权限")
+    return success(await list_task_assignee_options(db))
 
 
 # -- Design Tasks --
@@ -321,7 +358,7 @@ async def list_design_tasks(
     assigned_to: str | None = None,
     outsourced: bool | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_DESIGN_TASK_READ)),
+    current_user: User = Depends(require_permission(PERM_DESIGN_TASK_LIST)),
 ):
     service = DesignTaskService(db, current_user)
     tasks, total = await service.list_tasks(
@@ -360,6 +397,18 @@ async def update_design_task(
     data: DesignTaskUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_UPDATE)),
+):
+    service = DesignTaskService(db, current_user)
+    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
+    return success(task)
+
+
+@design_router.put("/{task_id}/assignee")
+async def assign_design_task(
+    task_id: str,
+    data: TaskAssigneeUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_DESIGN_TASK_ASSIGN)),
 ):
     service = DesignTaskService(db, current_user)
     task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
@@ -414,7 +463,7 @@ async def list_production_tasks(
     assigned_to: str | None = None,
     outsourced: bool | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_READ)),
+    current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_LIST)),
 ):
     service = ProductionTaskService(db, current_user)
     tasks, total = await service.list_tasks(
@@ -453,6 +502,18 @@ async def update_production_task(
     data: ProductionTaskUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_UPDATE)),
+):
+    service = ProductionTaskService(db, current_user)
+    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
+    return success(task)
+
+
+@prod_router.put("/{task_id}/assignee")
+async def assign_production_task(
+    task_id: str,
+    data: TaskAssigneeUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_ASSIGN)),
 ):
     service = ProductionTaskService(db, current_user)
     task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
@@ -507,7 +568,7 @@ async def list_installation_tasks(
     assigned_to: str | None = None,
     outsourced: bool | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_READ)),
+    current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_LIST)),
 ):
     service = InstallationTaskService(db, current_user)
     tasks, total = await service.list_tasks(
@@ -546,6 +607,18 @@ async def update_installation_task(
     data: InstallationTaskUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_UPDATE)),
+):
+    service = InstallationTaskService(db, current_user)
+    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
+    return success(task)
+
+
+@inst_router.put("/{task_id}/assignee")
+async def assign_installation_task(
+    task_id: str,
+    data: TaskAssigneeUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_ASSIGN)),
 ):
     service = InstallationTaskService(db, current_user)
     task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
@@ -610,9 +683,9 @@ async def upload_attachment(
         related_uuid = _ensure_uuid(related_id)
     except ValueError:
         return {"code": 40001, "message": "任务编号无效", "data": None}
-    task = await db.get(task_model, related_uuid)
+    task = await get_visible_task(db, task_model, related_uuid, current_user)
     if task is None:
-        return {"code": 40401, "message": "关联任务不存在", "data": None}
+        return {"code": 40401, "message": "关联任务不存在或当前账号无权查看", "data": None}
 
     upload_dir = settings.LOCAL_UPLOAD_DIR
     date_dir = datetime.now(timezone.utc).strftime("%Y%m")
@@ -682,6 +755,14 @@ async def delete_attachment(
     permission = _TASK_ATTACHMENT_PERMISSIONS.get(attachment.related_type)
     if permission is None or not _user_has_permission(current_user, permission):
         raise HTTPException(status_code=403, detail="没有该附件关联对象的删除权限")
+
+    task_model = _TASK_ATTACHMENT_TASK_MODELS.get(attachment.related_type)
+    if task_model is not None:
+        visible_task = await get_visible_task(
+            db, task_model, attachment.related_id, current_user
+        )
+        if visible_task is None:
+            return {"code": 40401, "message": "附件关联任务不存在或当前账号无权查看", "data": None}
 
     service = AttachmentService(db)
     ok = await service.delete_attachment(attachment_uuid)

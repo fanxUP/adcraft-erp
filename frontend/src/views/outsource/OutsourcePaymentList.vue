@@ -37,15 +37,15 @@
           <StatusTag :status="row.status_view || row.status" size="sm" />
         </template>
       </el-table-column>
-      <el-table-column prop="total_amount" label="总金额" width="120" align="right">
+      <el-table-column v-if="canViewOutsourceCost" prop="total_amount" label="总金额" width="120" align="right">
         <template #default="{ row }">{{ formatMoney(row.total_amount) }}</template>
       </el-table-column>
-      <el-table-column label="已付金额" width="120" align="right">
+      <el-table-column v-if="canViewOutsourceCost" label="已付金额" width="120" align="right">
         <template #default="{ row }">
           <span class="text-success">{{ formatMoney(row.paid_amount) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="未付金额" width="120" align="right">
+      <el-table-column v-if="canViewOutsourceCost" label="未付金额" width="120" align="right">
         <template #default="{ row }">
           <span v-if="row.unpaid_amount > 0" class="text-danger">{{ formatMoney(row.unpaid_amount) }}</span>
           <span v-else class="text-success">已结清</span>
@@ -53,7 +53,7 @@
       </el-table-column>
       <el-table-column label="操作" width="200">
         <template #default="{ row }">
-          <el-button v-if="row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" size="small" @click="handlePay(row)">付款</el-button>
+          <el-button v-if="canCreatePayment && row.unpaid_amount > 0 && row.status !== 'cancelled' && row.status !== 'settled'" size="small" @click="handlePay(row)">付款</el-button>
           <el-button text type="primary" @click="handleViewPayments(row)">付款记录</el-button>
         </template>
       </el-table-column>
@@ -86,15 +86,15 @@
           <span class="value">{{ payTask.related_project_name || '-' }}</span>
         </div>
         <div class="pay-divider"></div>
-        <div class="pay-summary-row">
+        <div v-if="canViewOutsourceCost" class="pay-summary-row">
           <span class="label">总金额：</span>
           <span class="value total">{{ formatMoney(payTask.total_amount) }}</span>
         </div>
-        <div class="pay-summary-row">
+        <div v-if="canViewOutsourceCost" class="pay-summary-row">
           <span class="label">已付金额：</span>
           <span class="value paid">{{ formatMoney(payTask.paid_amount) }}</span>
         </div>
-        <div class="pay-summary-row">
+        <div v-if="canViewOutsourceCost" class="pay-summary-row">
           <span class="label">待付金额：</span>
           <span class="value unpaid">{{ formatMoney(payTask.unpaid_amount) }}</span>
         </div>
@@ -124,7 +124,7 @@
       </el-form>
       <template #footer>
         <el-button @click="payDialogVisible = false">取消</el-button>
-        <el-button :loading="paySaving" @click="handlePaySubmit" type="primary">确认付款</el-button>
+        <el-button v-if="canCreatePayment" :loading="paySaving" @click="handlePaySubmit" type="primary">确认付款</el-button>
       </template>
     </el-dialog>
 
@@ -132,7 +132,7 @@
     <el-dialog v-model="recordDialogVisible" :title="'付款记录 - ' + (recordTask?.task_no || '')" width="700px" :close-on-click-modal="false">
       <el-table :data="paymentRecords" stripe empty-text="暂无付款记录">
         <el-table-column prop="payment_no" label="付款编号" width="180" />
-        <el-table-column prop="amount" label="金额" width="120" align="right">
+        <el-table-column v-if="canViewOutsourceCost" prop="amount" label="金额" width="120" align="right">
           <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
         </el-table-column>
         <el-table-column label="付款方式" width="120">
@@ -161,6 +161,7 @@ import type { OutsourcePaymentSummaryItem, OutsourceTaskPaymentSummary } from '@
 import { ElMessage } from 'element-plus'
 import { OutsourceTaskResponse } from '@/types/api'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel, StatusTag } from '@/components/ui'
+import { useAuthStore } from '@/stores/auth'
 
 const loading = ref(false)
 const taskList = ref<OutsourceTaskResponse[]>([])
@@ -171,6 +172,9 @@ const statusFilter = ref('')
 const vendorFilter = ref('')
 const vendors = ref<{id: string; name: string}[]>([])
 const loadError = ref(false)
+const authStore = useAuthStore()
+const canViewOutsourceCost = computed(() => authStore.hasPermission('finance:view_cost'))
+const canCreatePayment = computed(() => authStore.hasPermission('outsource_payment:create'))
 
 const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
   if (loadError.value) return 'error'

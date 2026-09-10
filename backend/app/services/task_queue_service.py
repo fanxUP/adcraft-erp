@@ -18,6 +18,7 @@ from app.services.task_service import (
     add_task_contract_fields,
 )
 from app.services.task_schedule_service import enrich_task_dict_with_schedule_state
+from app.services.order_task_assignment_service import task_visibility_clause
 
 
 _TASK_SOURCES = (
@@ -49,7 +50,7 @@ async def list_task_queue(
         if stage and stage != task_type:
             continue
 
-        query = select(model)
+        query = select(model).where(task_visibility_clause(model, viewer))
         if order_uuid:
             query = query.where(model.document_id == order_uuid)
         if order_item_uuid:
@@ -75,7 +76,7 @@ async def list_task_queue(
             item = enrich_task_dict_with_schedule_state(item)
             item = add_task_contract_fields(item, task_type)
             items.append(item)
-        normalized.extend(await _attach_outsource_flags(db, task_type, items))
+        normalized.extend(await _attach_outsource_flags(db, task_type, items, viewer=viewer))
 
     # The project board is an active-work view. Completed, cancelled, and
     # fully-progressed aggregate tasks remain available through the stage task

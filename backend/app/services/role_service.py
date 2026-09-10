@@ -8,6 +8,7 @@ from app.core.permissions import (
     ROLE_INSTALLER,
     ROLE_PRODUCTION,
     ROLE_RESOURCE_MANAGER,
+    ROLE_OUTSOURCE_MANAGER,
     ROLE_SALES,
     validate_role_resource_permissions,
     validate_role_sensitive_permissions,
@@ -23,6 +24,7 @@ BUILTIN_ROLE_NAMES = frozenset({
     ROLE_INSTALLER,
     ROLE_FINANCE,
     ROLE_RESOURCE_MANAGER,
+    ROLE_OUTSOURCE_MANAGER,
 })
 
 

@@ -31,6 +31,7 @@
       </el-card>
 
       <TaskOrderItemLinkCard
+        data-ai-targets="task-assignee"
         :task-type="'design'"
         :task-id="task.id"
         :order-id="task.order_id"
@@ -51,6 +52,7 @@
       />
 
       <OutsourceTaskCard
+        v-if="authStore.hasPermission('outsource_task:read')"
         :task-type="'design'"
         :task-id="task.id"
         :order-id="task.order_id"
@@ -183,13 +185,12 @@
 import { formatDateTimeFull } from '@/utils/datetime'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getDesignTask, updateDesignTask, changeDesignTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
+import { assignDesignTask, getDesignTask, getTaskAssigneeOptions, changeDesignTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { AttachmentResponse, DesignTaskResponse } from '@/types/api'
+import type { AttachmentResponse, DesignTaskResponse, TaskAssigneeOption } from '@/types/api'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { ProgressBar, StatusTag } from '@/components/ui'
-import { getEmployees } from '@/api/employees'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { useAuthStore } from '@/stores/auth'
 import { deleteDesignTask } from '@/api/tasks'
@@ -213,7 +214,7 @@ const loading = ref(false)
 const changing = ref(false)
 const deleting = ref(false)
 const task = ref<DesignTaskResponse | null>(null)
-const employeeOptions = ref<{ id: string; name: string; employee_no?: string; user_id?: string | null }[]>([])
+const employeeOptions = ref<TaskAssigneeOption[]>([])
 const assigning = ref(false)
 const attachmentInput = ref<HTMLInputElement | null>(null)
 const attachmentDragActive = ref(false)
@@ -254,7 +255,7 @@ const designSteps = computed(() => {
   ]
 })
 
-async function handleWorkflowChange(to_status: string, orderItemIds: string[], assignedTo: string) {
+async function handleWorkflowChange(to_status: string, orderItemIds: string[], assignedTo: string | null) {
   const labelMap: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待处理', revision: '需调整', confirmed: '已完成', cancelled: '已取消' }
   if (to_status === 'cancelled') {
     const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
@@ -271,7 +272,7 @@ async function handleWorkflowChange(to_status: string, orderItemIds: string[], a
   }
 }
 
-async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[], assignedTo: string) {
+async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[], assignedTo: string | null) {
   changing.value = true
   try {
     await changeDesignTaskStatus(route.params.id as string, {
@@ -296,15 +297,15 @@ async function fetchTask() {
 
 async function loadEmployees() {
   try {
-    const data = await getEmployees({ page_size: 100, employment_status: 'active' })
-    employeeOptions.value = data.items
+    if (!authStore.hasPermission('design_task:assign')) return
+    employeeOptions.value = await getTaskAssigneeOptions('design')
   } catch { /* employees module may not be ready */ }
 }
 
 async function handleSaveAssignment(assignedTo: string | null) {
   assigning.value = true
   try {
-    await updateDesignTask(route.params.id as string, { assigned_to: assignedTo })
+    await assignDesignTask(route.params.id as string, assignedTo)
     ElMessage.success(assignedTo ? '已保存分配' : '已取消分配')
     await fetchTask()
     await aiStore.notifyBusinessMutation()

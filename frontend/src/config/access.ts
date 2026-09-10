@@ -14,14 +14,19 @@ export type AccessKey =
   | 'product'
   | 'design'
   | 'designRead'
+  | 'designListRead'
   | 'production'
   | 'productionRead'
+  | 'productionListRead'
   | 'installation'
   | 'installationRead'
+  | 'installationListRead'
   | 'boardRead'
   | 'finance'
   | 'reports'
-  | 'outsource'
+  | 'outsourceVendor'
+  | 'outsourceTask'
+  | 'outsourceTaskRecycle'
   | 'inventory'
   | 'resourceCenter'
   | 'system'
@@ -52,14 +57,19 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   product: ['admin', 'designer', 'production'],
   design: ['admin', 'designer'],
   designRead: ['admin', 'sales', 'designer'],
+  designListRead: ['admin', 'sales'],
   production: ['admin', 'production'],
   productionRead: ['admin', 'sales', 'designer', 'production'],
+  productionListRead: ['admin', 'sales'],
   installation: ['admin', 'installer'],
   installationRead: ['admin', 'sales', 'designer', 'installer'],
+  installationListRead: ['admin', 'sales'],
   boardRead: ['admin', 'sales', 'designer', 'production', 'installer'],
   finance: ['admin', 'finance'],
   reports: ['admin', 'sales', 'finance'],
-  outsource: ['admin', 'production'],
+  outsourceVendor: ['admin', 'finance', 'outsource_manager'],
+  outsourceTask: ['admin', 'finance', 'outsource_manager'],
+  outsourceTaskRecycle: ['admin', 'outsource_manager'],
   inventory: ['admin', 'production'],
   resourceCenter: ['admin', 'sales', 'finance', 'resource_manager'],
   system: ['admin'],
@@ -78,22 +88,27 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
 }
 
 /**
- * Permission fallbacks for custom roles. A resource-center key also becomes
- * permission-first whenever the authenticated profile has supplied the
- * server permission list, so an admin can revoke a built-in role's resource
- * access without leaving a stale navigation entry. These are page-entry
- * permissions only, never data-field or write authorization.
+ * Permission fallbacks for custom roles. Resource-center and outsourcing keys
+ * become permission-first whenever the authenticated profile has supplied the
+ * server permission list, so an admin can revoke a built-in role's access
+ * without leaving a stale navigation entry. These are page-entry permissions
+ * only, never data-field or write authorization.
  */
 export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, readonly string[]>> = {
   product: ['product:read'],
   design: ['design_task:read'],
   designRead: ['design_task:read'],
+  designListRead: ['design_task:list'],
   production: ['production_task:read'],
   productionRead: ['production_task:read'],
+  productionListRead: ['production_task:list'],
   installation: ['installation_task:read'],
   installationRead: ['installation_task:read'],
+  installationListRead: ['installation_task:list'],
   boardRead: ['design_task:read', 'production_task:read', 'installation_task:read'],
-  outsource: ['outsource:read'],
+  outsourceVendor: ['outsource_center:read', 'outsource_vendor:read'],
+  outsourceTask: ['outsource_center:read', 'outsource_task:read'],
+  outsourceTaskRecycle: ['outsource_center:read', 'outsource_task:delete'],
   inventory: ['inventory:read'],
   resourceCenter: ['resource_center:read'],
   vehicleRead: ['resource_center:read', 'vehicle:read'],
@@ -118,6 +133,7 @@ const BUILTIN_ROLE_NAMES = new Set([
   'installer',
   'finance',
   'resource_manager',
+  'outsource_manager',
 ])
 
 const RESOURCE_CENTER_PERMISSION_FIRST_KEYS = new Set<AccessKey>([
@@ -125,6 +141,11 @@ const RESOURCE_CENTER_PERMISSION_FIRST_KEYS = new Set<AccessKey>([
   'vehicleRead', 'vehicleFleet', 'vehicleDrivers', 'vehicleOperations',
   'vehicleExpenses', 'vehicleReports', 'aerialRead', 'aerialOperations',
   'aerialFinance', 'aerialFinanceOperations',
+])
+
+const PERMISSION_FIRST_KEYS = new Set<AccessKey>([
+  ...RESOURCE_CENTER_PERMISSION_FIRST_KEYS,
+  'outsourceVendor', 'outsourceTask', 'outsourceTaskRecycle',
 ])
 
 /** Route-level visibility uses the exact same keys as navigation items. */
@@ -148,12 +169,12 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   AcceptanceList: 'sales',
   AcceptanceDetail: 'sales',
 
-  DesignTaskList: 'designRead',
+  DesignTaskList: 'designListRead',
   DesignTaskDetail: 'designRead',
-  ProductionTaskList: 'productionRead',
+  ProductionTaskList: 'productionListRead',
   ProjectKanbanBoard: 'boardRead',
   ProductionTaskDetail: 'productionRead',
-  InstallationTaskList: 'installationRead',
+  InstallationTaskList: 'installationListRead',
   InstallationTaskDetail: 'installationRead',
 
   ReceivablesView: 'finance',
@@ -170,9 +191,9 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   AnomalyDashboard: 'aiReports',
   BusinessNarrativeReport: 'aiReports',
 
-  OutsourceVendorList: 'outsource',
-  OutsourceTaskList: 'outsource',
-  OutsourceTaskRecycle: 'system',
+  OutsourceVendorList: 'outsourceVendor',
+  OutsourceTaskList: 'outsourceTask',
+  OutsourceTaskRecycle: 'outsourceTaskRecycle',
   OutsourcePaymentList: 'finance',
   InventoryList: 'inventory',
 
@@ -343,10 +364,10 @@ export function canAccess(
   const requiredPermissions = ACCESS_PERMISSIONS[accessKey] || []
 
   // The profile's permission array is the source of truth for resource-center
-  // entries once it has been loaded. Keeping the role fallback for an omitted
-  // argument preserves pure route-matrix callers and the loading state before
-  // /auth/me has completed.
-  if (RESOURCE_CENTER_PERMISSION_FIRST_KEYS.has(accessKey) && permissions !== undefined) {
+  // and outsourcing entries once it has been loaded. Keeping the role
+  // fallback for an omitted argument preserves pure route-matrix callers and
+  // the loading state before /auth/me has completed.
+  if (PERMISSION_FIRST_KEYS.has(accessKey) && permissions !== undefined) {
     return requiredPermissions.length > 0 && requiredPermissions.every(permission => permissions.includes(permission))
   }
 
@@ -354,7 +375,7 @@ export function canAccess(
   if (allowedRoles === null || allowedRoles.length === 0) return true
   if (allowedRoles.some(role => roles.includes(role))) return true
 
-  // Non-resource legacy keys keep their established built-in role matrix.
+  // Other legacy keys keep their established built-in role matrix.
   // Custom roles, however, have no role-name entry in ACCESS_ROLES and can be
   // admitted by the server-issued module permission.
   if (roles.some(role => BUILTIN_ROLE_NAMES.has(role))) return false

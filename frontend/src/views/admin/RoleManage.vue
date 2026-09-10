@@ -103,6 +103,7 @@ import { getErrorMessage } from '@/utils/error'
 const ROLE_MAP: Record<string, string> = {
   admin: '管理员', sales: '销售', designer: '设计师',
   production: '生产', installer: '安装', finance: '财务', resource_manager: '资源管理员',
+  outsource_manager: '外协管理员',
 }
 function roleLabel(name: string) { return ROLE_MAP[name] || name }
 
@@ -114,7 +115,8 @@ const groupLabels: Record<string, string> = {
   contract: '合同管理', cdr_quote: '智能报价', cdr_rule_set: '智能报价规则',
   cdr_customer_agreement: '客户协议价',
   payment: '收款管理', statement: '对账单', expense: '支出管理',
-  inventory: '库存管理', outsource: '外协管理', report: '报表',
+  inventory: '库存管理', outsource: '外协管理', outsource_center: '外协中心',
+  outsource_vendor: '外协商管理', outsource_task: '外协任务管理', report: '报表',
   resource_center: '资源中心',
   vehicle: '资源中心 / 公司车辆', aerial: '资源中心 / 高空作业车',
   backup: '备份管理', ai_quote: 'AI报价', ai_anomaly: 'AI异常',

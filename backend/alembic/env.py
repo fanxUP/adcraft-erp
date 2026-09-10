@@ -57,6 +57,7 @@ from app.models.ai_provider import AIProvider
 from app.models.attendance import AttendanceRule, AttendanceRecord
 from app.models.department import Department
 from app.models.employee import Employee
+from app.models.order_task_assignee import OrderTaskAssignee
 from app.models.employment_history import EmploymentHistory
 from app.models.leave import LeaveRequest
 from app.models.salary import SalaryRecord

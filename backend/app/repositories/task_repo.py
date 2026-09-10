@@ -7,21 +7,29 @@ from sqlalchemy import select, func, exists, or_
 from app.models.task import DesignTask, ProductionTask, InstallationTask, Attachment
 from app.models.task_order_item_link import TaskOrderItemLink
 from app.models.outsource import OutsourceTask
+from app.models.user import User
+from app.services.order_task_assignment_service import task_visibility_clause
 
 
 class DesignTaskRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_by_id(self, task_id: UUID) -> DesignTask | None:
-        result = await self.db.execute(select(DesignTask).where(DesignTask.id == task_id))
+    async def get_by_id(self, task_id: UUID, viewer: User | None = None) -> DesignTask | None:
+        result = await self.db.execute(
+            select(DesignTask).where(
+                DesignTask.id == task_id,
+                task_visibility_clause(DesignTask, viewer),
+            )
+        )
         return result.scalar_one_or_none()
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
                          outsourced: bool | None = None,
-                         order_item_id: str | None = None) -> tuple[list[DesignTask], int]:
-        q = select(DesignTask)
+                         order_item_id: str | None = None,
+                         viewer: User | None = None) -> tuple[list[DesignTask], int]:
+        q = select(DesignTask).where(task_visibility_clause(DesignTask, viewer))
         if status:
             status_list = [s.strip() for s in status.split(",") if s.strip()]
             if len(status_list) == 1:
@@ -73,15 +81,21 @@ class ProductionTaskRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_by_id(self, task_id: UUID) -> ProductionTask | None:
-        result = await self.db.execute(select(ProductionTask).where(ProductionTask.id == task_id))
+    async def get_by_id(self, task_id: UUID, viewer: User | None = None) -> ProductionTask | None:
+        result = await self.db.execute(
+            select(ProductionTask).where(
+                ProductionTask.id == task_id,
+                task_visibility_clause(ProductionTask, viewer),
+            )
+        )
         return result.scalar_one_or_none()
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
                          outsourced: bool | None = None,
-                         order_item_id: str | None = None) -> tuple[list[ProductionTask], int]:
-        q = select(ProductionTask)
+                         order_item_id: str | None = None,
+                         viewer: User | None = None) -> tuple[list[ProductionTask], int]:
+        q = select(ProductionTask).where(task_visibility_clause(ProductionTask, viewer))
         if status:
             q = q.where(ProductionTask.status == status)
         if order_id:
@@ -129,15 +143,21 @@ class InstallationTaskRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_by_id(self, task_id: UUID) -> InstallationTask | None:
-        result = await self.db.execute(select(InstallationTask).where(InstallationTask.id == task_id))
+    async def get_by_id(self, task_id: UUID, viewer: User | None = None) -> InstallationTask | None:
+        result = await self.db.execute(
+            select(InstallationTask).where(
+                InstallationTask.id == task_id,
+                task_visibility_clause(InstallationTask, viewer),
+            )
+        )
         return result.scalar_one_or_none()
 
     async def list_tasks(self, skip: int = 0, limit: int = 20, status: str | None = None,
                          order_id: str | None = None, assigned_to: str | None = None,
                          outsourced: bool | None = None,
-                         order_item_id: str | None = None) -> tuple[list[InstallationTask], int]:
-        q = select(InstallationTask)
+                         order_item_id: str | None = None,
+                         viewer: User | None = None) -> tuple[list[InstallationTask], int]:
+        q = select(InstallationTask).where(task_visibility_clause(InstallationTask, viewer))
         if status:
             status_list = [s.strip() for s in status.split(",") if s.strip()]
             if len(status_list) == 1:

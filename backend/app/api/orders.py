@@ -10,6 +10,7 @@ from app.core.permissions import (
     PERM_ORDER_CHANGE_STATUS,
     PERM_ORDER_DELETE,
     PERM_ORDER_READ,
+    PERM_ORDER_TASK_ASSIGN,
     PERM_ORDER_UPDATE,
     require_permission,
     require_role,
@@ -22,6 +23,7 @@ from app.schemas.order import (
     OrderItemMutationPreview,
     OrderItemUpdate,
     OrderStatusChange,
+    OrderTaskAssigneesUpdate,
 )
 from app.schemas.common import success, success_paginated, error
 from app.services.business_document_service import (
@@ -29,6 +31,11 @@ from app.services.business_document_service import (
     OrderItemMutationConflict,
 )
 from app.services.operation_log_service import log_operation, OBJ_ORDER, ACTION_STATUS_CHANGE, ACTION_DELETE
+from app.services.order_task_assignment_service import (
+    get_order_task_assignees,
+    list_task_assignee_options,
+    replace_order_task_assignees,
+)
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -69,6 +76,47 @@ async def list_deleted_orders(
     service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     orders, total = await service.list_deleted(page, page_size, keyword=keyword)
     return success_paginated(orders, total, page, page_size)
+
+
+@router.get("/task-assignee-options")
+async def list_order_task_assignee_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_TASK_ASSIGN)),
+):
+    """Return employees that can be used in an order task visibility scope."""
+    return success(await list_task_assignee_options(db))
+
+
+@router.get("/{order_id}/task-assignees")
+async def get_order_task_assignee_scope(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_TASK_ASSIGN)),
+):
+    try:
+        return success(await get_order_task_assignees(db, UUID(order_id)))
+    except ValueError as exc:
+        return error(40401, str(exc))
+
+
+@router.put("/{order_id}/task-assignees")
+async def update_order_task_assignee_scope(
+    order_id: str,
+    data: OrderTaskAssigneesUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_TASK_ASSIGN)),
+):
+    try:
+        result = await replace_order_task_assignees(
+            db,
+            UUID(order_id),
+            data.employee_ids,
+            current_user.id,
+        )
+        return success(result)
+    except ValueError as exc:
+        await db.rollback()
+        return error(40001, str(exc))
 
 
 @router.get("/{order_id}")
