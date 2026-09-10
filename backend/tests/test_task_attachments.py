@@ -1,4 +1,5 @@
 from io import BytesIO
+import stat
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -81,7 +82,10 @@ async def test_installation_upload_forces_photo_category_and_safe_extension(tmp_
     payload = service_cls.return_value.add_attachment.await_args.kwargs
     assert payload["data"]["category"] == "photo"
     assert payload["data"]["file_path"].endswith(".jpg")
-    assert list(tmp_path.rglob("*.jpg"))
+    uploaded_files = list(tmp_path.rglob("*.jpg"))
+    assert uploaded_files
+    assert stat.S_IMODE(uploaded_files[0].stat().st_mode) == 0o640
+    assert stat.S_IMODE(uploaded_files[0].parent.stat().st_mode) == 0o750
 
 
 @pytest.mark.asyncio

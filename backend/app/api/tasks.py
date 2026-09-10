@@ -53,6 +53,8 @@ def _ensure_uuid(s: str):
 
 
 INSTALLATION_PHOTO_MAX_BYTES = 10 * 1024 * 1024
+UPLOAD_DIRECTORY_MODE = 0o750
+UPLOAD_FILE_MODE = 0o640
 _INSTALLATION_PHOTO_TYPES = {
     "image/jpeg": (b"\xff\xd8\xff", ".jpg"),
     "image/png": (b"\x89PNG\r\n\x1a\n", ".png"),
@@ -460,7 +462,12 @@ async def upload_attachment(
         if message:
             return {"code": 40001, "message": message, "data": None}
 
-    os.makedirs(dest_dir, exist_ok=True)
+    # Nginx serves /uploads/ from the same filesystem as the backend.  The
+    # production service uses a restrictive umask, so relying on the default
+    # modes would create 700 directories and 600 files that Nginx cannot read.
+    # Set the modes explicitly and keep the upload owner as the backend user.
+    os.makedirs(dest_dir, mode=UPLOAD_DIRECTORY_MODE, exist_ok=True)
+    os.chmod(dest_dir, UPLOAD_DIRECTORY_MODE)
     ext = safe_extension or ""
     if safe_extension is None and file.filename and "." in file.filename:
         candidate = file.filename.rsplit(".", 1)[1].lower()
@@ -471,6 +478,7 @@ async def upload_attachment(
 
     with open(file_path, "wb") as f:
         f.write(contents)
+    os.chmod(file_path, UPLOAD_FILE_MODE)
 
     service = AttachmentService(db)
     att = await service.add_attachment(
