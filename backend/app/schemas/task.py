@@ -367,8 +367,21 @@ class CompletedProjectCard(CoercedModel):
     total_amount: float | None = None
 
 
+class CompletedProjectStage(CoercedModel):
+    """One authorized completion snapshot for a stage and order item."""
+
+    status: Literal["completed"] = "completed"
+    status_label: str = "已完成"
+    employee_id: str | None = None
+    employee_name: str = "未分配"
+    completed_at: str | None = None
+    task_id: str
+    task_no: str | None = None
+    source: str = "live"
+
+
 class CompletedProjectDetailItem(CoercedModel):
-    """One authorized stage work unit in a completed project."""
+    """One active order item with independent design/production/installation cells."""
 
     kind: Literal["detail"] = "detail"
     project_id: str
@@ -376,18 +389,33 @@ class CompletedProjectDetailItem(CoercedModel):
     project_name: str
     order_item_id: str
     item_name: str
-    task_type: TaskType
-    task_label: str
+    material_process: str | None = None
+    specification: str | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    stages: dict[TaskType, CompletedProjectStage | None] = Field(default_factory=dict)
+
+
+class CompletedProjectResourceTask(CoercedModel):
+    """One visible task and its read-only attachment list."""
+
     task_id: str
     task_no: str | None = None
-    employee_id: str | None = None
-    employee_name: str = "未分配"
-    completed_at: str | None = None
-    status: Literal["已完成"] = "已完成"
-    source: str = "live"
+    attachments: list[AttachmentResponse] = Field(default_factory=list)
+
+
+class CompletedProjectResourceSection(CoercedModel):
+    """Resources grouped by one delivery stage."""
+
+    task_type: TaskType
+    task_label: str
+    task_count: int = Field(0, ge=0)
+    attachment_count: int = Field(0, ge=0)
+    tasks: list[CompletedProjectResourceTask] = Field(default_factory=list)
 
 
 class CompletedProjectDetail(CompletedProjectCard):
-    """Read-only detail drawer payload for one completed project."""
+    """Read-only completed project detail page payload."""
 
     items: list[CompletedProjectDetailItem] = Field(default_factory=list)
+    resources: dict[TaskType, CompletedProjectResourceSection] = Field(default_factory=dict)

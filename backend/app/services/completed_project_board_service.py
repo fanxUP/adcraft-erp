@@ -15,6 +15,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, exists, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import noload
 
 from app.core.permissions import (
     PERM_DESIGN_TASK_READ,
@@ -31,9 +32,10 @@ from app.models.business_document import (
     BusinessDocumentStatusLog,
 )
 from app.models.employee import Employee
-from app.models.task import DesignTask, InstallationTask, ProductionTask
+from app.models.task import Attachment, DesignTask, InstallationTask, ProductionTask
 from app.models.task_item_status_log import TaskItemStatusLog
 from app.models.user import User
+from app.schemas.attachment import AttachmentResponse
 from app.schemas.task import (
     CompletedProjectCard,
     CompletedProjectDetail,
@@ -45,7 +47,6 @@ from app.services.task_completion_metrics_service import (
     TASK_COMPLETED_STATUSES,
     TASK_NUMBER_FIELDS,
     TASK_TYPES,
-    serialize_completion_detail,
 )
 
 
@@ -74,6 +75,111 @@ def _number(value: Decimal | int | float | str | None) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+def _value(source: object, name: str, default=None):
+    if isinstance(source, dict):
+        return source.get(name, default)
+    return getattr(source, name, default)
+
+
+def _format_numeric(value: Decimal | int | float | str) -> str:
+    try:
+        number = Decimal(str(value))
+        if number == number.to_integral_value():
+            return str(int(number))
+        return format(number.normalize(), "f")
+    except (ArithmeticError, TypeError, ValueError):
+        return str(value)
+
+
+def _format_item_specification(item: object) -> str | None:
+    """Format dimensions for the completed-detail table without price data."""
+    stored_specification = _value(item, "specification")
+    if stored_specification:
+        return str(stored_specification)
+
+    parts: list[str] = []
+    for field_name, unit_name in (
+        ("length", "length_unit"),
+        ("width", "width_unit"),
+        ("height", "height_unit"),
+    ):
+        raw_value = _value(item, field_name)
+        if raw_value in (None, ""):
+            continue
+        try:
+            if Decimal(str(raw_value)) <= 0:
+                continue
+        except (ArithmeticError, TypeError, ValueError):
+            continue
+        parts.append(f"{_format_numeric(raw_value)}{_value(item, unit_name) or 'm'}")
+    return " × ".join(parts) or None
+
+
+def _is_installation_media_attachment(attachment: object) -> bool:
+    file_type = str(_value(attachment, "file_type", "") or "").lower()
+    category = str(_value(attachment, "category", "") or "").lower()
+    return file_type.startswith(("image/", "video/")) or category in {
+        "photo",
+        "video",
+        "site_media",
+    }
+
+
+def _serialize_attachment(attachment: object) -> dict:
+    return AttachmentResponse.model_validate(attachment).model_dump(
+        mode="json",
+        exclude_none=True,
+    )
+
+
+def serialize_completed_project_resources(
+    task_type: str,
+    tasks: Iterable[object],
+    attachments: Iterable[object],
+) -> dict:
+    """Group already-authorized task resources without exposing other stages."""
+    task_list = list(tasks)
+    task_ids = {
+        str(task_id)
+        for task in task_list
+        if (task_id := _value(task, "id")) is not None
+    }
+    attachments_by_task: dict[str, list[dict]] = defaultdict(list)
+    related_type = f"{task_type}_task"
+    for attachment in attachments:
+        if _value(attachment, "related_type") != related_type:
+            continue
+        related_id = _value(attachment, "related_id")
+        related_key = str(related_id) if related_id is not None else ""
+        if related_key not in task_ids:
+            continue
+        if task_type == "installation" and not _is_installation_media_attachment(attachment):
+            continue
+        attachments_by_task[related_key].append(_serialize_attachment(attachment))
+
+    number_field = TASK_NUMBER_FIELDS[task_type]
+    task_rows = []
+    for task in task_list:
+        task_id = _value(task, "id")
+        if task_id is None:
+            continue
+        task_rows.append(
+            {
+                "task_id": str(task_id),
+                "task_no": _value(task, number_field),
+                "attachments": attachments_by_task.get(str(task_id), []),
+            }
+        )
+
+    return {
+        "task_type": task_type,
+        "task_label": {"design": "设计", "production": "制作", "installation": "安装"}[task_type],
+        "task_count": len(task_rows),
+        "attachment_count": sum(len(row["attachments"]) for row in task_rows),
+        "tasks": task_rows,
+    }
 
 
 def _event_project_groups(events: Iterable[CompletionEvent]) -> dict[UUID, list[CompletionEvent]]:
@@ -166,8 +272,10 @@ def build_completed_project_detail(
     scope: str,
     include_amount: bool,
     owner_user_id: UUID | None = None,
+    order_items: Iterable[object] | None = None,
+    resources: Mapping[str, dict] | None = None,
 ) -> dict:
-    """Build the read-only project drawer payload from authorized events."""
+    """Build an item-centric, read-only project detail payload."""
     project_events = [event for event in events if event.document_id == document.id]
     project_events = _scope_events(
         project_events,
@@ -182,32 +290,83 @@ def build_completed_project_detail(
         include_amount=include_amount,
     )[0]
     card["scope"] = scope
-    detail_rows = [
-        serialize_completion_detail(
-            project_id=event.document_id,
-            project_no=event.project_no or document.doc_no,
-            project_name=event.project_name or document.project_name,
-            item_id=event.order_item_id,
-            item_name=event.item_name or "未命名明细",
-            task_type=event.task_type,
-            task_id=event.task_id,
-            task_no=event.task_no,
-            assignee_user_id=event.assignee_user_id,
-            assignee_name=event.assignee_name,
-            completed_at=event.operated_at,
-            source=event.source,
+    latest_events: dict[tuple[UUID, str], CompletionEvent] = {}
+    for event in project_events:
+        key = (event.order_item_id, event.task_type)
+        previous = latest_events.get(key)
+        if previous is None or (
+            event.operated_at is not None,
+            event.operated_at or datetime.min,
+            str(event.id),
+        ) > (
+            previous.operated_at is not None,
+            previous.operated_at or datetime.min,
+            str(previous.id),
+        ):
+            latest_events[key] = event
+
+    event_item_ids = {event.order_item_id for event in project_events}
+    raw_items = list(order_items or _value(document, "items", []) or [])
+    if not raw_items:
+        raw_items = [
+            {
+                "id": item_id,
+                "item_name": next(
+                    (
+                        event.item_name
+                        for event in project_events
+                        if event.order_item_id == item_id and event.item_name
+                    ),
+                    "未命名明细",
+                ),
+                "sort_order": position,
+            }
+            for position, item_id in enumerate(sorted(event_item_ids, key=str))
+        ]
+
+    if scope == "own":
+        raw_items = [item for item in raw_items if _value(item, "id") in event_item_ids]
+    raw_items.sort(key=lambda item: (_value(item, "sort_order", 0), str(_value(item, "id", ""))))
+
+    detail_rows = []
+    for item in raw_items:
+        item_id = _value(item, "id")
+        if item_id is None:
+            continue
+        stage_rows: dict[str, dict | None] = {}
+        for task_type in TASK_TYPES:
+            event = latest_events.get((item_id, task_type))
+            stage_rows[task_type] = (
+                {
+                    "status": "completed",
+                    "status_label": "已完成",
+                    "employee_id": str(event.assignee_user_id) if event.assignee_user_id else None,
+                    "employee_name": event.assignee_name or "未分配",
+                    "completed_at": _iso_datetime(event.operated_at),
+                    "task_id": str(event.task_id),
+                    "task_no": event.task_no,
+                    "source": event.source,
+                }
+                if event
+                else None
+            )
+        detail_rows.append(
+            {
+                "kind": "detail",
+                "project_id": str(document.id),
+                "project_no": document.doc_no,
+                "project_name": document.project_name,
+                "order_item_id": str(item_id),
+                "item_name": _value(item, "item_name") or "未命名明细",
+                "material_process": _value(item, "material_process"),
+                "specification": _format_item_specification(item),
+                "quantity": _number(_value(item, "quantity")),
+                "unit": _value(item, "unit"),
+                "stages": stage_rows,
+            }
         )
-        for event in sorted(
-            project_events,
-            key=lambda item: (
-                item.operated_at is not None,
-                item.operated_at or datetime.min,
-                item.item_name or "",
-            ),
-            reverse=True,
-        )
-    ]
     card["items"] = detail_rows
+    card["resources"] = dict(resources or {})
     return CompletedProjectDetail.model_validate(card).model_dump(
         mode="json",
         exclude_none=True,
@@ -413,6 +572,55 @@ class CompletedProjectBoardService:
         for event in events:
             event.assignee_name = names.get(event.assignee_user_id)
 
+    async def _load_active_order_items(self, project_id: UUID) -> list[BusinessDocumentItem]:
+        result = await self.db.execute(
+            select(BusinessDocumentItem)
+            .where(
+                BusinessDocumentItem.document_id == project_id,
+                BusinessDocumentItem.lifecycle_status == "active",
+            )
+            .order_by(BusinessDocumentItem.sort_order, BusinessDocumentItem.id)
+        )
+        return list(result.scalars().all())
+
+    async def _load_project_resources(
+        self,
+        project_id: UUID,
+        task_types: Iterable[str],
+    ) -> dict[str, dict]:
+        resources: dict[str, dict] = {}
+        for task_type in task_types:
+            model = TASK_MODELS[task_type]
+            result = await self.db.execute(
+                select(model)
+                .options(noload(model.attachments))
+                .where(
+                    model.document_id == project_id,
+                    model.status != "cancelled",
+                    task_visibility_clause(model, self.viewer),
+                )
+                .order_by(model.created_at.desc(), model.id.desc())
+            )
+            task_rows = list(result.scalars().all())
+            task_ids = [task.id for task in task_rows]
+            attachment_rows: list[Attachment] = []
+            if task_ids:
+                attachment_result = await self.db.execute(
+                    select(Attachment)
+                    .where(
+                        Attachment.related_type == f"{task_type}_task",
+                        Attachment.related_id.in_(task_ids),
+                    )
+                    .order_by(Attachment.created_at.desc(), Attachment.id.desc())
+                )
+                attachment_rows = list(attachment_result.scalars().all())
+            resources[task_type] = serialize_completed_project_resources(
+                task_type,
+                task_rows,
+                attachment_rows,
+            )
+        return resources
+
     async def _load_projection(
         self,
         *,
@@ -495,6 +703,9 @@ class CompletedProjectBoardService:
             raise CompletedProjectNotFound(COMPLETED_PROJECT_NOT_FOUND_MESSAGE)
         if not self.is_super_admin and not events:
             raise CompletedProjectNotFound(COMPLETED_PROJECT_NOT_FOUND_MESSAGE)
+        allowed_types = self.allowed_task_types()
+        order_items = await self._load_active_order_items(document.id)
+        resources = await self._load_project_resources(document.id, allowed_types)
         return build_completed_project_detail(
             document,
             status_log.operated_at,
@@ -502,4 +713,6 @@ class CompletedProjectBoardService:
             scope=scope,
             owner_user_id=owner_user_id,
             include_amount=user_has_permission(self.viewer, PERM_ORDER_VIEW_PRICE),
+            order_items=order_items,
+            resources=resources,
         )

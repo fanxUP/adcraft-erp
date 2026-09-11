@@ -717,19 +717,41 @@ export interface CompletedProjectDetailItem {
   project_name: string
   order_item_id: string
   item_name: string
-  task_type: TaskCompletionType
-  task_label: string
-  task_id: string
-  task_no?: string | null
+  material_process?: string | null
+  specification?: string | null
+  quantity?: number | null
+  unit?: string | null
+  stages: Partial<Record<TaskCompletionType, CompletedProjectStage | null>>
+}
+
+export interface CompletedProjectStage {
+  status: 'completed'
+  status_label: string
   employee_id?: string | null
   employee_name: string
   completed_at?: string | null
-  status: '已完成'
+  task_id: string
+  task_no?: string | null
   source: string
+}
+
+export interface CompletedProjectResourceTask {
+  task_id: string
+  task_no?: string | null
+  attachments: AttachmentResponse[]
+}
+
+export interface CompletedProjectResourceSection {
+  task_type: TaskCompletionType
+  task_label: string
+  task_count: number
+  attachment_count: number
+  tasks: CompletedProjectResourceTask[]
 }
 
 export interface CompletedProjectDetail extends CompletedProjectCard {
   items: CompletedProjectDetailItem[]
+  resources: Partial<Record<TaskCompletionType, CompletedProjectResourceSection>>
 }
 
 // ---- Product / Material / Process ----

@@ -1,9 +1,9 @@
-version: 2
+version: 3
 mode: STRICT
 status: verification_complete_local_release_pending
 objective: >-
   在项目看板和工作台增加只读完成项目列，按当前订单完成状态、明细完成事件、
-  员工归属、阶段权限和价格字段权限返回安全一致的数据，并通过独立详情页查看完成明细。
+  员工归属、阶段权限和价格字段权限返回安全一致的数据，并通过独立详情页按订单明细查看完成状态和任务资料。
 nodes:
   - id: P01
     name: 完成项目数据口径与权限测试
@@ -55,6 +55,36 @@ nodes:
     acceptance: A10
     depends_on: [P08, P09]
     status: complete
+  - id: P11
+    name: item-centric 完成详情响应与资料契约测试
+    acceptance: A11
+    depends_on: [P10]
+    status: complete
+  - id: P12
+    name: 批量加载订单明细、阶段事件与权限裁剪附件
+    acceptance: A12
+    depends_on: [P11]
+    status: complete
+  - id: P13
+    name: 完成详情主表和阶段单元格改造
+    acceptance: A13
+    depends_on: [P12]
+    status: complete
+  - id: P14
+    name: 三类任务资料只读模块
+    acceptance: A14
+    depends_on: [P12]
+    status: complete
+  - id: P15
+    name: 权限、价格脱敏和资源隔离回归
+    acceptance: A15
+    depends_on: [P13, P14]
+    status: complete
+  - id: P16
+    name: CPB-P03 本地发布门禁
+    acceptance: A16
+    depends_on: [P15]
+    status: verification_complete_local_release_pending
 acceptance:
   - id: A01
     name: 口径、权限和越权测试先行
@@ -76,3 +106,15 @@ acceptance:
     name: 详情路由受完成读取权限保护且无抽屉残留
   - id: A10
     name: CPB-P02 前端测试和构建通过
+  - id: A11
+    name: 新详情响应契约覆盖明细去重、阶段独立和资料分组
+  - id: A12
+    name: 后端批量查询并按权限裁剪项目明细与附件
+  - id: A13
+    name: 完成详情主表按订单明细一行展示
+  - id: A14
+    name: 设计制作安装资料区只读展示和预览
+  - id: A15
+    name: 员工管理员范围、价格脱敏和附件权限不回归
+  - id: A16
+    name: 测试构建范围安全质量门禁通过
