@@ -122,7 +122,7 @@
           <div class="section-heading">
             <div>
               <h3>任务资料</h3>
-              <span>按任务分组的只读附件</span>
+              <span>三类资料分行展示，现场资料按安装任务归档</span>
             </div>
           </div>
 
@@ -136,9 +136,14 @@
               <template #header>
                 <div class="resource-heading">
                   <span>{{ stage.title }}</span>
-                  <el-tag v-if="resourceFor(stage.key)" size="small" type="info">
-                    {{ resourceFor(stage.key)?.attachment_count || 0 }} 个
-                  </el-tag>
+                  <div v-if="resourceFor(stage.key)" class="resource-heading-meta">
+                    <el-tag size="small" type="info">
+                      {{ resourceFor(stage.key)?.task_count || 0 }} 个任务
+                    </el-tag>
+                    <span class="resource-attachment-count">
+                      {{ resourceFor(stage.key)?.attachment_count || 0 }} 个资料
+                    </span>
+                  </div>
                 </div>
               </template>
 
@@ -447,10 +452,12 @@ onMounted(() => {
 .stage-date { color: var(--ad-text-secondary); font-size: 12px; }
 .stage-empty { color: var(--ad-text-placeholder); }
 .resource-section { padding-bottom: 4px; }
-.resource-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.resource-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .resource-card { min-width: 0; border-color: var(--ad-border); background: var(--ad-card); }
 .resource-heading, .resource-task-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .resource-heading { color: var(--ad-text); font-weight: 600; }
+.resource-heading-meta { display: flex; align-items: center; gap: 10px; }
+.resource-attachment-count { color: var(--ad-text-secondary); font-size: 12px; font-weight: normal; }
 .resource-task + .resource-task { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--ad-border); }
 .resource-task-heading { margin-bottom: 10px; color: var(--ad-text); font-size: 13px; font-weight: 600; }
 .resource-task-count, .media-caption { color: var(--ad-text-secondary); font-size: 12px; font-weight: normal; }
@@ -464,10 +471,6 @@ onMounted(() => {
 .media-caption { margin-top: 8px; }
 .resource-empty { padding: 20px 8px; color: var(--ad-text-secondary); text-align: center; font-size: 13px; }
 .video-player { display: block; width: 100%; max-height: 70vh; background: #000; }
-
-@media (max-width: 1100px) {
-  .resource-grid { grid-template-columns: 1fr; }
-}
 
 @media (max-width: 900px) {
   .project-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }

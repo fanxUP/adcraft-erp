@@ -717,26 +717,27 @@ class BusinessDocumentService:
             generate_installation_no,
             generate_production_no,
         )
-        from app.services.task_service import _sync_task_order_item_links
+        from app.services.task_service import (
+            _is_terminal_task_status,
+            _select_reusable_stage_task,
+            _sync_task_order_item_links,
+        )
 
         task_config = {
             "design": {
                 "model": DesignTask,
                 "number_field": "design_no",
                 "generate_no": generate_design_no,
-                "terminal_statuses": {"confirmed", "completed"},
             },
             "production": {
                 "model": ProductionTask,
                 "number_field": "production_no",
                 "generate_no": generate_production_no,
-                "terminal_statuses": {"completed"},
             },
             "installation": {
                 "model": InstallationTask,
                 "number_field": "installation_no",
                 "generate_no": generate_installation_no,
-                "terminal_statuses": {"completed"},
             },
         }.get(task_type)
         if task_config is None:
@@ -752,7 +753,6 @@ class BusinessDocumentService:
             .order_by(model.created_at.asc(), model.id.asc())
         )
         existing_tasks = list(result.scalars().all())
-        terminal_statuses = set(task_config["terminal_statuses"]) | {"cancelled"}
         active_items = [
             item
             for item in (doc.items or [])
@@ -762,21 +762,22 @@ class BusinessDocumentService:
             task_type,
             existing_tasks,
         )
-        task = next(
-            (
-                candidate
-                for candidate in existing_tasks
-                if getattr(candidate, "status", None) not in terminal_statuses
-            ),
-            None,
-        )
-
-        if task is None and existing_tasks and not any(
+        has_unlinked_items = any(
             item.id not in existing_item_ids for item in active_items
-        ):
+        )
+        has_open_task = any(
+            not _is_terminal_task_status(task_type, candidate)
+            for candidate in existing_tasks
+        )
+        if existing_tasks and not has_unlinked_items and not has_open_task:
             # All active order items already belong to a terminal historical
             # task. Do not create an empty successor card.
             return
+
+        task, reused_terminal_task = _select_reusable_stage_task(
+            existing_tasks,
+            task_type,
+        )
 
         if task is None:
             first_item = active_items[0] if active_items else None
@@ -832,16 +833,21 @@ class BusinessDocumentService:
                 if item_id not in target_item_ids
             )
 
+        target_item_ids_before = set(target_item_ids)
         for item in active_items:
             if item.id not in linked_item_ids and item.id not in target_item_ids:
                 target_item_ids.append(item.id)
 
         if target_item_ids:
+            sync_kwargs = {}
+            if reused_terminal_task and len(target_item_ids) > len(target_item_ids_before):
+                sync_kwargs["new_item_state"] = ("pending", 0)
             await _sync_task_order_item_links(
                 self.db,
                 task_type,
                 task,
                 list(dict.fromkeys(target_item_ids)),
+                **sync_kwargs,
             )
 
     async def _auto_create_design_task(self, doc) -> None:

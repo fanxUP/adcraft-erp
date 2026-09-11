@@ -172,6 +172,40 @@ async def test_auto_design_task_does_not_create_a_second_card_for_an_already_lin
 
 
 @pytest.mark.asyncio
+async def test_auto_stage_reuses_completed_card_for_unlinked_item():
+    db = MagicMock()
+    existing = MagicMock(spec=InstallationTask)
+    existing.id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    existing.document_id = ORDER_ID
+    existing.order_item_id = None
+    existing.status = "completed"
+    existing.progress_pct = 100
+    existing.assigned_to = None
+    db.execute = AsyncMock(side_effect=[_ScalarResult([existing]), _ScalarResult([ITEM_ONE_ID])])
+    db.flush = AsyncMock()
+    db.add = MagicMock()
+    service = BusinessDocumentService(db, doc_type="order")
+    service._linked_task_item_ids = AsyncMock(return_value={ITEM_ONE_ID})
+    order = _order([_item(ITEM_ONE_ID), _item(ITEM_TWO_ID)])
+
+    sync_links = AsyncMock()
+    with (
+        patch("app.services.number_generator.generate_installation_no", new=AsyncMock(return_value="I20260909-0002")),
+        patch("app.services.task_service._sync_task_order_item_links", new=sync_links),
+    ):
+        await service._auto_create_installation_task(order)
+
+    db.add.assert_not_called()
+    sync_links.assert_awaited_once_with(
+        db,
+        "installation",
+        existing,
+        [ITEM_ONE_ID, ITEM_TWO_ID],
+        new_item_state=("pending", 0),
+    )
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("creator", "task_type"),
     [
@@ -211,6 +245,54 @@ async def test_later_stage_item_reuses_open_card(creator, task_type):
         task_type,
         existing,
         [ITEM_ONE_ID, ITEM_TWO_ID],
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("creator", "task_type", "generator_path"),
+    [
+        (_create_production_task_for_item, "production", "app.services.task_service.generate_production_no"),
+        (_create_installation_task_for_item, "installation", "app.services.task_service.generate_installation_no"),
+    ],
+)
+async def test_later_stage_item_reuses_completed_automatic_card(creator, task_type, generator_path):
+    db = MagicMock()
+    db.get = AsyncMock()
+    order = _order([])
+    item = _item(ITEM_TWO_ID)
+    db.get.side_effect = [order, item]
+
+    existing = MagicMock()
+    existing.id = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+    existing.order_item_id = None
+    existing.status = "completed"
+    existing.progress_pct = 100
+    existing.assigned_to = None
+    db.execute = AsyncMock(return_value=_ScalarResult([existing]))
+    db.flush = AsyncMock()
+    db.add = MagicMock()
+    source_task = MagicMock()
+    source_task.document_id = ORDER_ID
+
+    current_ids = AsyncMock(return_value=[ITEM_ONE_ID])
+    by_task = AsyncMock(return_value={existing.id: [ITEM_ONE_ID]})
+    sync_links = AsyncMock()
+    with (
+        patch(generator_path, new=AsyncMock(return_value="T20260909-0002")),
+        patch("app.services.task_service._task_order_item_ids", new=current_ids),
+        patch("app.services.task_service._task_item_ids_by_task", new=by_task),
+        patch("app.services.task_service._sync_task_order_item_links", new=sync_links),
+    ):
+        await creator(db, source_task, ITEM_TWO_ID)
+
+    db.add.assert_not_called()
+    sync_links.assert_awaited_once_with(
+        db,
+        task_type,
+        existing,
+        [ITEM_ONE_ID, ITEM_TWO_ID],
+        new_item_state=("pending", 0),
     )
 
 

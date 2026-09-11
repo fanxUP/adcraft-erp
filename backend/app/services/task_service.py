@@ -689,6 +689,42 @@ def _is_terminal_task_status(task_type: str, task) -> bool:
     return getattr(task, "status", None) in TASK_TERMINAL_STATUSES.get(task_type, set())
 
 
+def _select_reusable_stage_task(
+    tasks: list,
+    task_type: str,
+) -> tuple[object | None, bool]:
+    """Select the automatic stage card to extend and whether it is reopening.
+
+    Automatic stage progression is order-scoped: a later order item entering
+    the same stage must extend the existing card instead of creating a second
+    card just because the first batch already finished.  A task with a legacy
+    ``order_item_id`` belongs to the manually scoped compatibility path, so a
+    terminal task is reusable here only when its scope is carried by the
+    multi-item link table (``order_item_id`` is NULL).
+    """
+    open_task = next(
+        (
+            candidate
+            for candidate in tasks
+            if not _is_terminal_task_status(task_type, candidate)
+        ),
+        None,
+    )
+    if open_task is not None:
+        return open_task, False
+
+    terminal_automatic_task = next(
+        (
+            candidate
+            for candidate in tasks
+            if _task_order_item_id(candidate) is None
+            and _is_terminal_task_status(task_type, candidate)
+        ),
+        None,
+    )
+    return terminal_automatic_task, terminal_automatic_task is not None
+
+
 async def _ensure_terminal_unlinked_task_is_read_only(
     db: AsyncSession,
     task_type: str,
@@ -1338,6 +1374,7 @@ async def _sync_task_order_item_links(
     item_ids: list[UUID],
     *,
     previous_legacy_item_id: UUID | None = None,
+    new_item_state: tuple[str, int] | None = None,
 ) -> None:
     """Replace one task's links atomically inside the current transaction."""
     if previous_legacy_item_id is None:
@@ -1362,7 +1399,11 @@ async def _sync_task_order_item_links(
         )
     )
     if item_ids:
-        new_status, new_progress = _new_unstarted_item_state(task_type, task)
+        new_status, new_progress = (
+            new_item_state
+            if new_item_state is not None
+            else _new_unstarted_item_state(task_type, task)
+        )
         link_payload = []
         for position, item_id in enumerate(item_ids):
             existing = existing_by_item.get(item_id)
@@ -1867,13 +1908,9 @@ async def _create_production_task_for_item(
         ):
             continue
 
-        target = next(
-            (
-                candidate
-                for candidate in existing_tasks
-                if candidate.status not in {"completed", "cancelled"}
-            ),
-            None,
+        target, reused_terminal_task = _select_reusable_stage_task(
+            existing_tasks,
+            "production",
         )
         if target is None:
             target = ProductionTask(
@@ -1894,11 +1931,17 @@ async def _create_production_task_for_item(
             await db.flush()
 
         target_item_ids = await _task_order_item_ids(db, "production", target)
+        sync_kwargs = (
+            {"new_item_state": ("pending", 0)}
+            if reused_terminal_task
+            else {}
+        )
         await _sync_task_order_item_links(
             db,
             "production",
             target,
             list(dict.fromkeys([*target_item_ids, current_item_id])),
+            **sync_kwargs,
         )
 
 
@@ -1946,13 +1989,9 @@ async def _create_installation_task_for_item(
         ):
             continue
 
-        target = next(
-            (
-                candidate
-                for candidate in existing_tasks
-                if candidate.status not in {"completed", "cancelled"}
-            ),
-            None,
+        target, reused_terminal_task = _select_reusable_stage_task(
+            existing_tasks,
+            "installation",
         )
         if target is None:
             target = InstallationTask(
@@ -1970,11 +2009,17 @@ async def _create_installation_task_for_item(
             await db.flush()
 
         target_item_ids = await _task_order_item_ids(db, "installation", target)
+        sync_kwargs = (
+            {"new_item_state": ("pending", 0)}
+            if reused_terminal_task
+            else {}
+        )
         await _sync_task_order_item_links(
             db,
             "installation",
             target,
             list(dict.fromkeys([*target_item_ids, current_item_id])),
+            **sync_kwargs,
         )
 
 

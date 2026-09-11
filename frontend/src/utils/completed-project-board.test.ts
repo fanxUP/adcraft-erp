@@ -82,6 +82,15 @@ describe('完成项目看板', () => {
     expect(source).not.toContain('handleDeleteAttachment')
   })
 
+  it('完成详情的三类任务资料按整行排列，并标识多条安装任务的归档范围', () => {
+    const source = readSource('views/tasks/CompletedProjectDetail.vue')
+
+    expect(source).toContain('三类资料分行展示，现场资料按安装任务归档')
+    expect(source).toContain('.resource-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }')
+    expect(source).toContain('resourceFor(stage.key)?.task_count')
+    expect(source).toContain('class="resource-task"')
+  })
+
   it('前端 API 和类型包含完成项目列表与只读详情契约', () => {
     const apiSource = readSource('api/tasks.ts')
     const typeSource = readSource('types/api.ts')
