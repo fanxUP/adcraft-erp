@@ -74,3 +74,22 @@ def test_merge_plan_does_not_exist_for_a_single_task():
     )
 
     assert plan is None
+
+
+def test_merge_plan_prefers_linked_card_and_handles_unassigned_items():
+    first_time = datetime(2026, 8, 3, 10, 0)
+    second_time = datetime(2026, 9, 9, 10, 0)
+    plan = build_merge_plan(
+        "installation",
+        [
+            _task(TASK_ONE_ID, "I20260803-0001", first_time),
+            _task(TASK_TWO_ID, "I20260909-0001", second_time),
+        ],
+        [_link(TASK_TWO_ID, ITEM_TWO_ID, second_time)],
+    )
+
+    assert plan is not None
+    assert plan.canonical["id"] == TASK_TWO_ID
+    assert [row["id"] for row in plan.duplicates] == [TASK_ONE_ID]
+    assert [row["order_item_id"] for row in plan.merged_links] == [ITEM_TWO_ID]
+    assert plan.merged_links[0]["assignee_user_id"] is None

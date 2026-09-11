@@ -11,7 +11,8 @@ Safety model:
 * dry-run is the default and rolls back its read transaction;
 * ``--apply`` must be paired with a document id or the explicit ``--all``;
 * the caller must take a database backup before ``--apply``;
-* duplicate task rows are merged into the oldest automatic card, then removed
+* duplicate task rows are merged into the oldest automatic card with linked
+  work (falling back to the oldest empty card only when no work is linked), then removed
   only after attachments, audit events, item events, outsource references and
   vehicle references have been retargeted;
 * the operation is one transaction, so a failed apply rolls back completely.
@@ -181,8 +182,6 @@ def build_merge_plan(
         tasks,
         key=lambda row: (row.get("created_at") or datetime.max, str(row["id"])),
     )
-    canonical = ordered_tasks[0]
-    duplicates = tuple(ordered_tasks[1:])
     task_rank = {str(row["id"]): index for index, row in enumerate(ordered_tasks)}
     ordered_links = sorted(
         links,
@@ -191,6 +190,14 @@ def build_merge_plan(
             int(row.get("position") or 0),
             str(row["order_item_id"]),
         ),
+    )
+    task_ids_with_links = {str(row["task_id"]) for row in ordered_links}
+    canonical = next(
+        (row for row in ordered_tasks if str(row["id"]) in task_ids_with_links),
+        ordered_tasks[0],
+    )
+    duplicates = tuple(
+        row for row in ordered_tasks if str(row["id"]) != str(canonical["id"])
     )
 
     by_item: dict[str, list[dict[str, Any]]] = {}
@@ -213,6 +220,7 @@ def build_merge_plan(
                     for candidate in by_item[item_key]
                     if candidate.get("assignee_user_id") is not None
                 ),
+                None,
             )
         merged["position"] = len(merged_links)
         merged_links.append(merged)
