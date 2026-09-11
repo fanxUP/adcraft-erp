@@ -115,108 +115,37 @@
           </div>
         </div>
 
-        <div v-if="canViewCompletionAll" class="completion-workspace">
+        <div v-if="canViewCompletionAll" class="completion-summary-layout">
           <div class="completion-employees">
             <div class="completion-subtitle">员工完成统计</div>
-            <button
-              type="button"
-              class="employee-filter"
-              :class="{ 'is-active': !selectedCompletionEmployeeId }"
-              @click="selectCompletionEmployee(null)"
-            >
+            <div class="employee-stat">
               <span>全部员工</span>
               <strong>{{ completionSummary.organization?.completed_work_unit_count || 0 }}</strong>
-            </button>
-            <button
+            </div>
+            <div
               v-for="employee in completionSummary.employees"
               :key="employee.employee_id || employee.user_id || employee.name"
-              type="button"
-              class="employee-filter"
-              :class="{ 'is-active': selectedCompletionEmployeeId === employee.employee_id }"
-              @click="selectCompletionEmployee(employee.employee_id)"
+              class="employee-stat"
             >
               <span>{{ employee.name }}<small v-if="!employee.is_active">（非在职）</small></span>
               <strong>{{ employee.completed_work_unit_count }}</strong>
-            </button>
+            </div>
             <div v-if="completionSummary.unassigned.completed_work_unit_count" class="unassigned-hint">
               未分配：{{ completionSummary.unassigned.completed_work_unit_count }} 条
             </div>
           </div>
 
-          <div class="completion-details" v-loading="completionDetailsLoading">
-            <div class="completion-detail-toolbar">
-              <div class="completion-subtitle">
-                {{ selectedCompletionEmployeeName ? `${selectedCompletionEmployeeName}的完成明细` : '全员完成明细' }}
-              </div>
-              <el-select v-model="completionTaskType" size="small" clearable placeholder="全部阶段" @change="handleCompletionFilterChange">
-                <el-option v-for="stage in completionStages" :key="stage.key" :label="stage.label" :value="stage.key" />
-              </el-select>
-            </div>
-            <el-tabs v-model="completionKind" @tab-change="handleCompletionFilterChange">
-              <el-tab-pane label="按项目" name="project">
-                <el-table :data="completionProjectRows" size="small" stripe class="completion-table" empty-text="暂无完成项目">
-                  <el-table-column prop="project_no" label="订单编号" width="170" />
-                  <el-table-column prop="project_name" label="项目名称" min-width="180" show-overflow-tooltip />
-                  <el-table-column prop="completed_detail_count" label="完成明细" width="90" align="center" />
-                  <el-table-column prop="completed_work_unit_count" label="工作明细" width="90" align="center" />
-                  <el-table-column label="完成阶段" min-width="120">
-                    <template #default="{ row }">{{ row.stages.map(stageLabel).join('、') }}</template>
-                  </el-table-column>
-                  <el-table-column label="最近完成" width="165">
-                    <template #default="{ row }">{{ formatCompletionDate(row.last_completed_at) }}</template>
-                  </el-table-column>
-                </el-table>
-              </el-tab-pane>
-              <el-tab-pane label="按明细" name="detail">
-                <el-table :data="completionDetailRows" size="small" stripe class="completion-table" empty-text="暂无完成明细">
-                  <el-table-column prop="project_no" label="订单编号" width="170" />
-                  <el-table-column prop="item_name" label="订单明细" min-width="150" show-overflow-tooltip />
-                  <el-table-column prop="task_label" label="阶段" width="75" align="center" />
-                  <el-table-column prop="employee_name" label="完成员工" width="100" />
-                  <el-table-column label="完成时间" width="165">
-                    <template #default="{ row }">{{ formatCompletionDate(row.completed_at) }}</template>
-                  </el-table-column>
-                </el-table>
-              </el-tab-pane>
-            </el-tabs>
-            <el-pagination
-              v-if="completionDetails && completionDetails.total > completionDetails.page_size"
-              v-model:current-page="completionPage"
-              :page-size="completionDetails.page_size"
-              :total="completionDetails.total"
-              layout="total, prev, pager, next"
-              small
-              class="completion-pagination"
-              @current-change="fetchCompletionDetails"
-            />
+          <div class="completion-details-entry">
+            <div class="completion-subtitle">完成明细</div>
+            <p>完成明细已集中到完成看板</p>
+            <span>请在下方“完成”列点击项目卡片查看明细。</span>
           </div>
         </div>
 
-        <div v-else class="completion-details completion-details--personal" v-loading="completionDetailsLoading">
-          <div class="completion-detail-toolbar">
-            <div class="completion-subtitle">我的完成明细</div>
-            <el-select v-model="completionTaskType" size="small" clearable placeholder="全部阶段" @change="handleCompletionFilterChange">
-              <el-option v-for="stage in completionStages" :key="stage.key" :label="stage.label" :value="stage.key" />
-            </el-select>
-          </div>
-          <el-table :data="completionDetailRows" size="small" stripe class="completion-table" empty-text="暂无完成明细">
-            <el-table-column prop="project_no" label="订单编号" width="170" />
-            <el-table-column prop="item_name" label="订单明细" min-width="150" show-overflow-tooltip />
-            <el-table-column prop="task_label" label="阶段" width="75" align="center" />
-            <el-table-column label="完成时间" width="165">
-              <template #default="{ row }">{{ formatCompletionDate(row.completed_at) }}</template>
-            </el-table-column>
-          </el-table>
-          <el-pagination
-            v-if="completionDetails && completionDetails.total > completionDetails.page_size"
-            v-model:current-page="completionPage"
-            :page-size="completionDetails.page_size"
-            :total="completionDetails.total"
-            layout="total, prev, pager, next"
-            small
-            class="completion-pagination"
-            @current-change="fetchCompletionDetails"
-          />
+        <div v-else class="completion-details-entry completion-details-entry--personal">
+          <div class="completion-subtitle">我的完成明细</div>
+          <p>完成明细已集中到完成看板</p>
+          <span>请在下方“完成”列点击项目卡片查看本人可见明细。</span>
         </div>
       </template>
     </el-card>
@@ -303,40 +232,29 @@
     </div>
   </div>
 
-  <CompletedProjectDetailDrawer
-    v-model="completedDetailVisible"
-    :project="completedDetail"
-    :loading="completedDetailLoading"
-    :error="completedDetailError"
-  />
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
-import { getDashboard, getTaskCompletionDetails, getTaskCompletionSummary } from '@/api/payments'
+import { getDashboard, getTaskCompletionSummary } from '@/api/payments'
 import { getOrders } from '@/api/orders'
-import { getCompletedProject, getCompletedProjects, getTaskQueue } from '@/api/tasks'
+import { getCompletedProjects, getTaskQueue } from '@/api/tasks'
 import { getQuotes } from '@/api/quotes'
 import type {
   CustomerDebtItem,
   OrderListResponse,
   QuoteListResponse,
-  TaskCompletionDetailRow,
-  TaskCompletionKind,
   TaskCompletionPeriod,
-  TaskCompletionProjectRow,
   TaskCompletionSummary,
   TaskCompletionType,
-  TaskCompletionDetailsResponse,
   TaskQueueItem,
   CompletedProjectCard as CompletedProjectCardType,
-  CompletedProjectDetail,
 } from '@/types/api'
 import TaskBoardCard from '@/components/ui/TaskBoardCard.vue'
 import CompletedProjectCard from '@/components/ui/CompletedProjectCard.vue'
-import CompletedProjectDetailDrawer from '@/components/ui/CompletedProjectDetailDrawer.vue'
 import { isTaskVisible, TASK_BOARD_COLUMNS } from '@/utils/task-board'
 import { useAuthStore } from '@/stores/auth'
+import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
 const canViewFinancial = computed(() => authStore.hasPermission('report:view_financial'))
@@ -359,13 +277,7 @@ const quoteList = ref<QuoteListResponse[]>([])
 
 const completionPeriod = ref<TaskCompletionPeriod>('month')
 const completionSummary = ref<TaskCompletionSummary | null>(null)
-const completionDetails = ref<TaskCompletionDetailsResponse | null>(null)
-const completionKind = ref<TaskCompletionKind>('detail')
-const completionTaskType = ref<TaskCompletionType | undefined>(undefined)
-const selectedCompletionEmployeeId = ref<string | null>(null)
-const completionPage = ref(1)
 const completionLoading = ref(false)
-const completionDetailsLoading = ref(false)
 const completionError = ref('')
 const completionStages: Array<{ key: TaskCompletionType; label: string }> = [
   { key: 'design', label: '设计' },
@@ -373,27 +285,11 @@ const completionStages: Array<{ key: TaskCompletionType; label: string }> = [
   { key: 'installation', label: '安装' },
 ]
 
-const completionProjectRows = computed<TaskCompletionProjectRow[]>(() => (
-  completionDetails.value?.items.filter((item): item is TaskCompletionProjectRow => item.kind === 'project') || []
-))
-const completionDetailRows = computed<TaskCompletionDetailRow[]>(() => (
-  completionDetails.value?.items.filter((item): item is TaskCompletionDetailRow => item.kind === 'detail') || []
-))
-const selectedCompletionEmployeeName = computed(() => {
-  if (!selectedCompletionEmployeeId.value || !completionSummary.value) return ''
-  return completionSummary.value.employees.find(
-    employee => employee.employee_id === selectedCompletionEmployeeId.value,
-  )?.name || ''
-})
-
 const boardLoading = ref(false)
 const allProjects = ref<OrderListResponse[]>([])
 const taskCards = ref<TaskQueueItem[]>([])
 const completedProjects = ref<CompletedProjectCardType[]>([])
-const completedDetailVisible = ref(false)
-const completedDetailLoading = ref(false)
-const completedDetail = ref<CompletedProjectDetail | null>(null)
-const completedDetailError = ref('')
+const router = useRouter()
 
 const columns = [
   { key: 'queue', label: '项目队列' },
@@ -460,58 +356,14 @@ async function fetchCompletionSummary() {
   }
 }
 
-async function fetchCompletionDetails() {
-  if (!canViewTaskCompletion.value) return
-  completionError.value = ''
-  completionDetailsLoading.value = true
-  try {
-    const params: Parameters<typeof getTaskCompletionDetails>[0] = {
-      period: completionPeriod.value,
-      kind: completionKind.value,
-      page: completionPage.value,
-      page_size: 10,
-    }
-    if (selectedCompletionEmployeeId.value) params.employee_id = selectedCompletionEmployeeId.value
-    if (completionTaskType.value) params.task_type = completionTaskType.value
-    completionDetails.value = await getTaskCompletionDetails(params)
-  } catch {
-    completionError.value = '完成明细暂时无法加载，请稍后重试'
-  } finally {
-    completionDetailsLoading.value = false
-  }
-}
-
 async function fetchTaskCompletion() {
   if (!canViewTaskCompletion.value) return
   completionError.value = ''
-  await Promise.allSettled([fetchCompletionSummary(), fetchCompletionDetails()])
+  await fetchCompletionSummary()
 }
 
 function handleCompletionPeriodChange() {
-  completionPage.value = 1
   fetchTaskCompletion()
-}
-
-function handleCompletionFilterChange() {
-  completionPage.value = 1
-  fetchCompletionDetails()
-}
-
-function selectCompletionEmployee(employeeId: string | null) {
-  selectedCompletionEmployeeId.value = employeeId
-  completionPage.value = 1
-  fetchCompletionDetails()
-}
-
-function stageLabel(stage: TaskCompletionType) {
-  return completionStages.find(item => item.key === stage)?.label || stage
-}
-
-function formatCompletionDate(value: string | null) {
-  if (!value) return '时间未记录'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 async function fetchQuotes() {
@@ -552,18 +404,8 @@ function handleTaskCardClick(task: TaskQueueItem) {
   window.location.href = routeByType[task.task_type] + task.id
 }
 
-async function handleCompletedProjectClick(project: CompletedProjectCardType) {
-  completedDetailVisible.value = true
-  completedDetailLoading.value = true
-  completedDetailError.value = ''
-  completedDetail.value = null
-  try {
-    completedDetail.value = await getCompletedProject(project.project_id)
-  } catch {
-    completedDetailError.value = '完成项目详情暂时无法加载，请稍后重试'
-  } finally {
-    completedDetailLoading.value = false
-  }
+function handleCompletedProjectClick(project: CompletedProjectCardType) {
+  router.push({ name: 'CompletedProjectDetail', params: { projectId: project.project_id } })
 }
 
 // 从详情页返回时浏览器可能走 bfcache 恢复页面（onMounted 不再触发），
@@ -612,19 +454,17 @@ onBeforeUnmount(() => {
 .completion-kpi strong { color: var(--ad-text); font-size: 26px; line-height: 1; }
 .completion-kpi--stages { min-width: 0; }
 .stage-counts { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--ad-text); font-size: 13px; }
-.completion-workspace { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; }
+.completion-summary-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; }
 .completion-employees { border-right: 1px solid var(--ad-border); padding-right: 16px; }
 .completion-subtitle { color: var(--ad-text); font-size: 14px; font-weight: 700; }
-.employee-filter { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 10px; margin-top: 7px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ad-text); cursor: pointer; text-align: left; }
-.employee-filter:hover { background: var(--ad-border); }
-.employee-filter.is-active { border-color: var(--ad-primary); background: color-mix(in srgb, var(--ad-card) 86%, var(--ad-primary) 14%); color: var(--ad-primary); }
-.employee-filter small { color: var(--ad-text-secondary); }
+.employee-stat { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 10px; margin-top: 7px; border: 1px solid transparent; border-radius: 6px; color: var(--ad-text); }
+.employee-stat strong { color: var(--ad-primary); font-variant-numeric: tabular-nums; }
+.employee-stat small { color: var(--ad-text-secondary); }
 .unassigned-hint { margin-top: 12px; color: var(--ad-text-secondary); font-size: 12px; }
-.completion-details { min-width: 0; }
-.completion-details--personal { margin-top: 8px; }
-.completion-detail-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
-.completion-table { width: 100%; }
-.completion-pagination { justify-content: flex-end; margin-top: 12px; }
+.completion-details-entry { min-width: 0; align-self: center; padding: 20px; border: 1px dashed var(--ad-border); border-radius: 8px; background: color-mix(in srgb, var(--ad-card) 92%, var(--ad-primary) 8%); }
+.completion-details-entry p { margin: 12px 0 6px; color: var(--ad-text); font-size: 16px; font-weight: 650; }
+.completion-details-entry span { color: var(--ad-text-secondary); font-size: 13px; }
+.completion-details-entry--personal { margin-top: 8px; }
 .debt-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--ad-border); }
 .quote-row { cursor: pointer; }
 .quote-row:hover { background: var(--ad-border); }
@@ -645,9 +485,7 @@ onBeforeUnmount(() => {
 @media (max-width: 720px) {
   .completion-header { align-items: flex-start; flex-direction: column; }
   .completion-kpis { grid-template-columns: 1fr 1fr; }
-  .completion-workspace { grid-template-columns: 1fr; gap: 12px; }
+  .completion-summary-layout { grid-template-columns: 1fr; gap: 12px; }
   .completion-employees { border-right: 0; border-bottom: 1px solid var(--ad-border); padding: 0 0 12px; }
-  .completion-detail-toolbar { align-items: flex-start; flex-direction: column; }
-  .completion-detail-toolbar .el-select { width: 100%; }
-}
+ }
 </style>

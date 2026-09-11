@@ -17,8 +17,9 @@ describe('完成项目看板', () => {
     expect(source).toContain('CompletedProjectCard')
     expect(source).toContain('completedProjects')
     expect(source).toContain("label: '完成'")
-    expect(source).toContain('getCompletedProject')
-    expect(source).toContain('CompletedProjectDetailDrawer')
+    expect(source).toContain("name: 'CompletedProjectDetail'")
+    expect(source).not.toContain('getCompletedProject(')
+    expect(source).not.toContain('CompletedProjectDetailDrawer')
   })
 
   it('工作台使用同一完成项目接口而不是复制完成筛选逻辑', () => {
@@ -27,23 +28,50 @@ describe('完成项目看板', () => {
     expect(source).toContain('getCompletedProjects')
     expect(source).toContain('CompletedProjectCard')
     expect(source).toContain("label: '完成'")
-    expect(source).toContain('getCompletedProject')
-    expect(source).toContain('CompletedProjectDetailDrawer')
+    expect(source).toContain("name: 'CompletedProjectDetail'")
+    expect(source).not.toContain('getCompletedProject(')
+    expect(source).not.toContain('CompletedProjectDetailDrawer')
   })
 
-  it('完成卡片和详情抽屉是只读展示，不提供状态或恢复操作', () => {
+  it('完成卡片和独立详情页是只读展示，不提供状态或恢复操作', () => {
     const cardPath = resolve(srcRoot, 'components/ui/CompletedProjectCard.vue')
+    const detailPath = resolve(srcRoot, 'views/tasks/CompletedProjectDetail.vue')
     const drawerPath = resolve(srcRoot, 'components/ui/CompletedProjectDetailDrawer.vue')
 
     expect(existsSync(cardPath)).toBe(true)
-    expect(existsSync(drawerPath)).toBe(true)
-    const source = readFileSync(cardPath, 'utf8') + readFileSync(drawerPath, 'utf8')
+    expect(existsSync(detailPath)).toBe(true)
+    expect(existsSync(drawerPath)).toBe(false)
+    const source = readFileSync(cardPath, 'utf8') + readFileSync(detailPath, 'utf8')
 
     expect(source).toContain('完成明细')
     expect(source).toContain('完成时间')
+    expect(source).toContain('返回完成看板')
     expect(source).not.toContain('变更状态')
     expect(source).not.toContain('恢复项目')
     expect(source).not.toContain('删除项目')
+  })
+
+  it('工作台只保留完成统计摘要，不嵌入完成明细查询和表格', () => {
+    const source = readSource('views/home/DashboardView.vue')
+
+    expect(source).not.toContain('getTaskCompletionDetails')
+    expect(source).not.toContain('completionProjectRows')
+    expect(source).not.toContain('completionDetailRows')
+    expect(source).not.toContain('completionDetailsLoading')
+    expect(source).not.toContain('CompletedProjectDetailDrawer')
+    expect(source).toContain('完成明细已集中到完成看板')
+  })
+
+  it('独立完成详情页复用只读详情接口并处理加载、错误和空数据状态', () => {
+    const source = readSource('views/tasks/CompletedProjectDetail.vue')
+
+    expect(source).toContain('getCompletedProject')
+    expect(source).toContain('v-loading="loading"')
+    expect(source).toContain('完成项目详情暂时无法加载，请稍后重试')
+    expect(source).toContain('暂无可见的完成明细')
+    expect(source).toContain('el-table-column')
+    expect(source).toContain('task_label')
+    expect(source).toContain('employee_name')
   })
 
   it('前端 API 和类型包含完成项目列表与只读详情契约', () => {

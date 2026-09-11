@@ -53,33 +53,24 @@
     </div>
   </div>
 
-  <CompletedProjectDetailDrawer
-    v-model="completedDetailVisible"
-    :project="completedDetail"
-    :loading="completedDetailLoading"
-    :error="completedDetailError"
-  />
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { getCompletedProject, getCompletedProjects, getTaskQueue } from '@/api/tasks'
-import type { CompletedProjectCard as CompletedProjectCardType, CompletedProjectDetail, TaskQueueItem } from '@/types/api'
+import { getCompletedProjects, getTaskQueue } from '@/api/tasks'
+import type { CompletedProjectCard as CompletedProjectCardType, TaskQueueItem } from '@/types/api'
 import TaskBoardCard from '@/components/ui/TaskBoardCard.vue'
 import CompletedProjectCard from '@/components/ui/CompletedProjectCard.vue'
-import CompletedProjectDetailDrawer from '@/components/ui/CompletedProjectDetailDrawer.vue'
 import { isTaskVisible, TASK_BOARD_COLUMNS, taskProgress } from '@/utils/task-board'
 import { useAuthStore } from '@/stores/auth'
+import { useRouter } from 'vue-router'
 
 const loading = ref(false)
 const tasks = ref<TaskQueueItem[]>([])
 const completedProjects = ref<CompletedProjectCardType[]>([])
 const onlyOverdue = ref(false)
-const completedDetailVisible = ref(false)
-const completedDetailLoading = ref(false)
-const completedDetail = ref<CompletedProjectDetail | null>(null)
-const completedDetailError = ref('')
 const authStore = useAuthStore()
+const router = useRouter()
 const canViewCompleted = computed(() => authStore.can('task_completion:read'))
 
 const columns = [
@@ -141,18 +132,8 @@ function handleCardClick(card: TaskQueueItem) {
   window.location.href = routeByType[card.task_type] + card.id
 }
 
-async function handleCompletedProjectClick(project: CompletedProjectCardType) {
-  completedDetailVisible.value = true
-  completedDetailLoading.value = true
-  completedDetailError.value = ''
-  completedDetail.value = null
-  try {
-    completedDetail.value = await getCompletedProject(project.project_id)
-  } catch {
-    completedDetailError.value = '完成项目详情暂时无法加载，请稍后重试'
-  } finally {
-    completedDetailLoading.value = false
-  }
+function handleCompletedProjectClick(project: CompletedProjectCardType) {
+  router.push({ name: 'CompletedProjectDetail', params: { projectId: project.project_id } })
 }
 
 function handlePageShow(event: PageTransitionEvent) {

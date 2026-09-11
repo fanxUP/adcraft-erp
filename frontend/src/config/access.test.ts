@@ -64,6 +64,14 @@ describe('page access matrix', () => {
     expect(canAccess('boardRead', ['installer'], ['installation_task:read'])).toBe(true)
   })
 
+  it('protects the standalone completed-project detail route with completion read permission', () => {
+    expect(ROUTE_ACCESS.CompletedProjectDetail).toBe('taskCompletion')
+    expect(canAccess('taskCompletion', ['custom'], ['task_completion:read'])).toBe(true)
+    expect(canAccess('taskCompletion', ['custom'], ['design_task:read'])).toBe(false)
+    expect(canAccessRoute('CompletedProjectDetail', ['custom'], [], ['task_completion:read'])).toBe(true)
+    expect(canAccessRoute('CompletedProjectDetail', ['custom'], [], [])).toBe(false)
+  })
+
   it('keeps legacy route meta roles as an additional guard', () => {
     expect(canAccessRoute('Home', ['sales'], ['admin'])).toBe(false)
     expect(canAccessRoute('Home', ['admin'], ['admin'])).toBe(true)

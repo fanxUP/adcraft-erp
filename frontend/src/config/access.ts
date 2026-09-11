@@ -33,6 +33,7 @@ export type AccessKey =
   | 'installationRead'
   | 'installationListRead'
   | 'boardRead'
+  | 'taskCompletion'
   | 'finance'
   | 'payment'
   | 'expense'
@@ -104,6 +105,7 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   installationRead: ['admin', 'sales', 'designer', 'production', 'installer'],
   installationListRead: ['admin', 'sales'],
   boardRead: ['admin', 'sales', 'designer', 'production', 'installer'],
+  taskCompletion: ['admin', 'sales', 'designer', 'production', 'installer'],
   finance: ['admin', 'finance'],
   payment: ['admin', 'finance'],
   expense: ['admin', 'finance'],
@@ -168,6 +170,7 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement
   installationRead: ['installation_task:read'],
   installationListRead: ['installation_task:list'],
   boardRead: { anyOf: ['design_task:read', 'production_task:read', 'installation_task:read'] },
+  taskCompletion: ['task_completion:read'],
   outsourceVendor: { allOf: ['outsource_center:read', 'outsource_vendor:read'] },
   outsourceTask: { allOf: ['outsource_center:read', 'outsource_task:read'] },
   outsourceTaskRecycle: { allOf: ['outsource_center:read', 'outsource_task:delete'] },
@@ -239,6 +242,7 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   ProductionTaskDetail: 'productionRead',
   InstallationTaskList: 'installationListRead',
   InstallationTaskDetail: 'installationRead',
+  CompletedProjectDetail: 'taskCompletion',
 
   ReceivablesView: 'payment',
   ExpenseList: 'expense',
@@ -344,6 +348,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   ProductionTaskDetail: '制作任务详情',
   InstallationTaskList: '安装任务',
   InstallationTaskDetail: '安装任务详情',
+  CompletedProjectDetail: '完成项目详情',
   ReceivablesView: '应收管理',
   ExpenseList: '支出管理',
   StatementList: '客户对账',

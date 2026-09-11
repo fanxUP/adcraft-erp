@@ -1,9 +1,9 @@
-version: 1
+version: 2
 mode: STRICT
 status: verification_complete_local_release_pending
 objective: >-
   在项目看板和工作台增加只读完成项目列，按当前订单完成状态、明细完成事件、
-  员工归属、阶段权限和价格字段权限返回安全一致的数据。
+  员工归属、阶段权限和价格字段权限返回安全一致的数据，并通过独立详情页查看完成明细。
 nodes:
   - id: P01
     name: 完成项目数据口径与权限测试
@@ -35,6 +35,26 @@ nodes:
     acceptance: A06
     depends_on: [P05]
     status: verification_complete_local_release_pending
+  - id: P07
+    name: 独立完成详情页与统一卡片跳转
+    acceptance: A07
+    depends_on: [P06]
+    status: complete
+  - id: P08
+    name: 工作台移除完成明细嵌入区
+    acceptance: A08
+    depends_on: [P07]
+    status: complete
+  - id: P09
+    name: 完成详情路由权限与旧抽屉清理
+    acceptance: A09
+    depends_on: [P07]
+    status: complete
+  - id: P10
+    name: CPB-P02 前端回归验证
+    acceptance: A10
+    depends_on: [P08, P09]
+    status: complete
 acceptance:
   - id: A01
     name: 口径、权限和越权测试先行
@@ -48,3 +68,11 @@ acceptance:
     name: 工作台与独立看板共用完成项目 API
   - id: A06
     name: 测试、typecheck、build 和安全检查通过
+  - id: A07
+    name: 两处完成卡片进入同一独立详情页
+  - id: A08
+    name: 工作台不再显示完成明细表
+  - id: A09
+    name: 详情路由受完成读取权限保护且无抽屉残留
+  - id: A10
+    name: CPB-P02 前端测试和构建通过

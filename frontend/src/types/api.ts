@@ -1523,7 +1523,6 @@ export interface DashboardData {
 }
 
 export type TaskCompletionPeriod = 'all' | 'month'
-export type TaskCompletionKind = 'project' | 'detail'
 export type TaskCompletionType = 'design' | 'production' | 'installation'
 
 export interface TaskCompletionStats {
@@ -1560,45 +1559,6 @@ export interface TaskCompletionSummary {
   organization: TaskCompletionOrganizationStats | null
   employees: TaskCompletionEmployeeStats[]
   unassigned: TaskCompletionStats
-  message: string | null
-}
-
-export interface TaskCompletionProjectRow {
-  kind: 'project'
-  project_id: string
-  project_no: string | null
-  project_name: string | null
-  completed_detail_count: number
-  completed_work_unit_count: number
-  stages: TaskCompletionType[]
-  last_completed_at: string | null
-}
-
-export interface TaskCompletionDetailRow {
-  kind: 'detail'
-  project_id: string
-  project_no: string
-  project_name: string
-  order_item_id: string
-  item_name: string
-  task_type: TaskCompletionType
-  task_label: string
-  task_id: string
-  task_no: string | null
-  employee_id: string | null
-  employee_name: string
-  completed_at: string | null
-  status: string
-  source: string
-}
-
-export interface TaskCompletionDetailsResponse {
-  items: Array<TaskCompletionProjectRow | TaskCompletionDetailRow>
-  total: number
-  page: number
-  page_size: number
-  scope: 'own' | 'all'
-  employee?: TaskCompletionEmployee | null
   message: string | null
 }
 
