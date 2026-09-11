@@ -188,7 +188,7 @@
     />
 
     <!-- Create/Edit Dialog -->
-    <el-dialog v-model="showDialog" :title="isEditing ? '编辑成本' : '登记成本'" width="min(96vw, 1360px)" class="cost-dialog" :close-on-click-modal="false">
+    <el-dialog v-model="showDialog" :title="isEditing ? '编辑成本' : '登记成本'" width="min(96vw, 1360px)" class="cost-dialog" :close-on-click-modal="false" @closed="discardQueuedCostAttachments">
       <el-form :model="form" label-width="100px">
         <el-form-item :label="isQuote ? '报价单' : '订单'">
           <el-input :value="(isQuote ? (order?.quote_no || '') : (order?.order_no || '')) + ' ' + (order?.project_name || '')" disabled />
@@ -332,41 +332,78 @@
           <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="备注…" />
         </el-form-item>
         <el-form-item label="凭证">
-          <el-upload
-            :auto-upload="false"
-            :show-file-list="false"
-            accept="image/*,.pdf"
-            multiple
-            :on-change="onUploadChange"
+          <div
+            class="cost-attachment-dropzone"
+            :class="{ 'is-disabled': !isEditing, 'is-dragover': costAttachmentDragActive }"
+            role="button"
+            tabindex="0"
+            @click="openCostAttachmentPicker"
+            @keydown.enter.prevent="openCostAttachmentPicker"
+            @keydown.space.prevent="openCostAttachmentPicker"
+            @dragenter.prevent="handleCostAttachmentDragEnter"
+            @dragover.prevent="handleCostAttachmentDragOver"
+            @dragleave.prevent="handleCostAttachmentDragLeave"
+            @drop.prevent="handleCostAttachmentDrop"
           >
-            <el-button :loading="uploadingAtt" :disabled="!isEditing">
-              <el-icon><Plus /></el-icon> 上传凭证
-            </el-button>
-            <template #tip>
-              <div class="el-upload__tip">支持 jpg/png/pdf，编辑模式下可上传</div>
-            </template>
-          </el-upload>
-          <div v-if="dialogAttachments.length" style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px">
-            <div
-              v-for="att in dialogAttachments"
-              :key="att.id"
-              class="att-thumb"
-              @click="handlePreviewAtt(att)"
-            >
-              <img
-                v-if="att.file_type?.startsWith('image/')"
-                :src="`/uploads/${att.file_path}`"
-                class="att-img"
+            <input
+              ref="costAttachmentInput"
+              class="cost-attachment-input"
+              type="file"
+              multiple
+              :accept="PROJECT_COST_ATTACHMENT_ACCEPT"
+              :disabled="!isEditing"
+              @click.stop
+              @change="handleCostAttachmentInputChange"
+            />
+            <el-icon class="cost-attachment-drop-icon"><UploadFilled /></el-icon>
+            <div class="cost-attachment-drop-title">将凭证拖到这里上传</div>
+            <div class="cost-attachment-drop-subtitle">或点击选择文件，支持批量上传</div>
+            <div class="cost-attachment-drop-hint">支持 JPG、PNG、WEBP、PDF；请先保存成本记录后上传凭证</div>
+          </div>
+
+          <div v-if="attachmentUploadQueue.length" class="cost-attachment-upload-queue">
+            <div v-for="item in attachmentUploadQueue" :key="item.id" class="cost-attachment-upload-row">
+              <span class="cost-attachment-upload-name" :title="item.name">{{ item.name }}</span>
+              <el-tag v-if="item.status === 'queued'" size="small" type="info">等待上传</el-tag>
+              <el-tag v-else-if="item.status === 'uploading'" size="small" type="warning">上传中</el-tag>
+              <template v-else>
+                <el-tag size="small" type="danger">{{ item.error || '上传失败' }}</el-tag>
+                <el-button text type="primary" size="small" @click="retryCostAttachment(item)">重试</el-button>
+              </template>
+            </div>
+          </div>
+
+          <div v-if="dialogAttachments.length" class="cost-attachment-grid">
+            <div v-for="att in dialogAttachments" :key="att.id" class="cost-attachment-item">
+              <el-image
+                v-if="getProjectCostAttachmentKind(att) === 'image'"
+                class="cost-attachment-image"
+                :src="getProjectCostAttachmentUrl(att.file_path)"
+                :alt="att.filename"
+                fit="cover"
+                lazy
+                :preview-src-list="imageAttachmentUrls"
+                :initial-index="imagePreviewIndex(att.id)"
+                :zoom-rate="PROJECT_COST_ATTACHMENT_PREVIEW_ZOOM_RATE"
+                preview-teleported
               />
-              <div v-else class="att-file">
-                <span>{{ att.filename?.split('.').pop()?.toUpperCase() }}</span>
-              </div>
+              <button
+                v-else
+                type="button"
+                class="cost-attachment-file"
+                :title="`打开 ${att.filename || '凭证'}`"
+                @click="previewCostAttachment(att)"
+              >
+                <span class="cost-attachment-file-ext">{{ costAttachmentExtension(att.filename) }}</span>
+                <span class="cost-attachment-file-name">{{ att.filename || '凭证文件' }}</span>
+              </button>
+              <div class="cost-attachment-name" :title="att.filename">{{ att.filename || '未命名凭证' }}</div>
               <el-button
-                class="att-del"
+                class="cost-attachment-delete"
                 :icon="Delete"
                 size="small"
                 circle
-                @click.stop="handleDeleteAtt(att)"
+                @click="handleDeleteAtt(att)"
               />
             </div>
           </div>
@@ -374,7 +411,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
-        <el-button :loading="saving" @click="handleSave" type="primary">
+        <el-button :loading="saving" :disabled="uploadingAtt" @click="handleSave" type="primary">
           {{ isEditing ? '保存' : '登记' }}
         </el-button>
       </template>
@@ -425,10 +462,6 @@
       </template>
     </el-dialog>
 
-    <!-- Image Preview Dialog -->
-    <el-dialog v-model="previewVisible" title="凭证预览" width="600px" destroy-on-close :close-on-click-modal="false">
-      <img :src="previewUrl" style="width: 100%; object-fit: contain" />
-    </el-dialog>
   </div>
 </template>
 
@@ -444,10 +477,17 @@ import { getOrder } from '@/api/orders'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
-import { ArrowLeft, Plus, Delete, Download } from '@element-plus/icons-vue'
+import { ArrowLeft, Delete, Download, UploadFilled } from '@element-plus/icons-vue'
 import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, QuoteDetailResponse, AttachmentResponse, ProjectCostItemSummaryResponse } from '@/types/api'
 import { StatusTag } from '@/components/ui'
 import { buildProjectCostScopeOptions, getProjectCostScopeIds, type ProjectCostScopeOption } from '@/utils/projectCostScope'
+import {
+  PROJECT_COST_ATTACHMENT_ACCEPT,
+  PROJECT_COST_ATTACHMENT_PREVIEW_ZOOM_RATE,
+  getProjectCostAttachmentKind,
+  getProjectCostAttachmentUrl,
+  validateProjectCostAttachment,
+} from '@/utils/projectCostAttachment'
 
 const route = useRoute()
 const router = useRouter()
@@ -475,13 +515,26 @@ const selectedFile = ref<File | null>(null)
 const importResult = ref<ProjectCostImportResponse | null>(null)
 const dialogAttachments = ref<AttachmentResponse[]>([])
 const uploadingAtt = ref(false)
-const previewVisible = ref(false)
-const previewUrl = ref('')
+const costAttachmentInput = ref<HTMLInputElement | null>(null)
+const costAttachmentDragActive = ref(false)
+const attachmentUploadQueue = ref<CostAttachmentUploadItem[]>([])
+
+interface CostAttachmentUploadItem {
+  id: string
+  costId: string
+  file: File
+  name: string
+  status: 'queued' | 'uploading' | 'error'
+  error?: string
+}
 
 const REFRESH_INTERVAL_MS = 15000
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let orderRequestId = 0
 let dataRequestId = 0
+let costAttachmentDragDepth = 0
+let costAttachmentQueueRunning = false
+let costAttachmentSequence = 0
 const queryCreateOpened = ref(false)
 const editingScopeSnapshots = ref<Array<{ id: string; label: string; detail: string }>>([])
 
@@ -505,6 +558,8 @@ const orderItems = computed(() => {
   if (isQuote.value) return []
   return (order.value as OrderDetailResponse | null)?.items || []
 })
+const imageAttachments = computed(() => dialogAttachments.value.filter(att => getProjectCostAttachmentKind(att) === 'image'))
+const imageAttachmentUrls = computed(() => imageAttachments.value.map(att => getProjectCostAttachmentUrl(att.file_path)))
 const costScopeOptions = computed(() => buildProjectCostScopeOptions(orderItems.value, costSummary.value?.items || []))
 const activeOrderItemIds = computed(() => new Set(costScopeOptions.value.map(option => option.id)))
 const historicalScopes = computed(() => editingScopeSnapshots.value
@@ -594,6 +649,7 @@ function resetForm() {
   editingId.value = ''
   editingScopeSnapshots.value = []
   dialogAttachments.value = []
+  attachmentUploadQueue.value = []
 }
 
 function openCreate(orderItemId?: string) {
@@ -635,6 +691,7 @@ function openEdit(row: ProjectCostResponse) {
     detail: '该明细已失效，仅保留原成本记录归属',
   }))
   dialogAttachments.value = []
+  attachmentUploadQueue.value = []
   showDialog.value = true
   loadAttachments(row.id)
 }
@@ -927,23 +984,105 @@ async function loadAttachments(costId: string) {
   } catch { /* ignore */ }
 }
 
-async function handleUploadAtt(file: File) {
-  if (!editingId.value) return
+function openCostAttachmentPicker() {
+  if (isEditing.value) costAttachmentInput.value?.click()
+}
+
+function handleCostAttachmentDragEnter() {
+  if (!isEditing.value) return
+  costAttachmentDragDepth += 1
+  costAttachmentDragActive.value = true
+}
+
+function handleCostAttachmentDragOver() {
+  if (isEditing.value) costAttachmentDragActive.value = true
+}
+
+function handleCostAttachmentDragLeave() {
+  costAttachmentDragDepth = Math.max(0, costAttachmentDragDepth - 1)
+  if (costAttachmentDragDepth === 0) costAttachmentDragActive.value = false
+}
+
+function handleCostAttachmentDrop(event: DragEvent) {
+  costAttachmentDragDepth = 0
+  costAttachmentDragActive.value = false
+  if (!isEditing.value) return
+  enqueueCostAttachments(Array.from(event.dataTransfer?.files || []))
+}
+
+function handleCostAttachmentInputChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  input.value = ''
+  enqueueCostAttachments(files)
+}
+
+function enqueueCostAttachments(files: File[]) {
+  if (!isEditing.value || !editingId.value || !files.length) return
+
+  const accepted: File[] = []
+  let rejectedCount = 0
+  for (const file of files) {
+    if (validateProjectCostAttachment(file)) rejectedCount += 1
+    else accepted.push(file)
+  }
+  if (rejectedCount) {
+    ElMessage.warning(`${rejectedCount} 个文件格式不支持，仅可上传 JPG、PNG、WEBP 或 PDF`)
+  }
+  if (!accepted.length) return
+
+  const costId = editingId.value
+  attachmentUploadQueue.value.push(...accepted.map(file => ({
+    id: `${costId}-${Date.now()}-${costAttachmentSequence++}`,
+    costId,
+    file,
+    name: file.name,
+    status: 'queued' as const,
+  })))
+  void startCostAttachmentUploadQueue()
+}
+
+async function startCostAttachmentUploadQueue() {
+  if (costAttachmentQueueRunning) return
+  costAttachmentQueueRunning = true
   uploadingAtt.value = true
   try {
-    const att = await uploadProjectCostAttachment(editingId.value, file)
-    dialogAttachments.value.unshift(att)
-    fetchData()
-  } catch {
-    // handled by interceptor
+    while (true) {
+      const next = attachmentUploadQueue.value.find(item => item.status === 'queued')
+      if (!next) break
+      next.status = 'uploading'
+      try {
+        const att = await uploadProjectCostAttachment(next.costId, next.file)
+        if (showDialog.value && isEditing.value && editingId.value === next.costId) {
+          dialogAttachments.value.unshift(att)
+        }
+        attachmentUploadQueue.value = attachmentUploadQueue.value.filter(item => item.id !== next.id)
+        void fetchData()
+        ElMessage.success(`${next.name} 上传成功`)
+      } catch {
+        next.status = 'error'
+        next.error = '上传失败，请重试'
+      }
+    }
   } finally {
+    costAttachmentQueueRunning = false
     uploadingAtt.value = false
   }
 }
 
-function onUploadChange(uploadFile: UploadFile) {
-  if (uploadFile.raw) handleUploadAtt(uploadFile.raw)
-  return false // prevent el-upload auto upload
+function retryCostAttachment(item: CostAttachmentUploadItem) {
+  if (item.status !== 'error' || !isEditing.value || editingId.value !== item.costId) return
+  item.status = 'queued'
+  item.error = undefined
+  void startCostAttachmentUploadQueue()
+}
+
+function discardQueuedCostAttachments() {
+  costAttachmentDragDepth = 0
+  costAttachmentDragActive.value = false
+  // Keep the current request alive, but do not upload files that were still
+  // waiting after the dialog was closed.
+  attachmentUploadQueue.value = attachmentUploadQueue.value.filter(item => item.status === 'uploading')
 }
 
 async function handleDeleteAtt(att: AttachmentResponse) {
@@ -960,14 +1099,18 @@ async function handleDeleteAtt(att: AttachmentResponse) {
   } catch { /* cancelled */ }
 }
 
-function handlePreviewAtt(att: AttachmentResponse) {
-  const url = `/uploads/${att.file_path}`
-  if (att.file_type?.startsWith('image/')) {
-    previewUrl.value = url
-    previewVisible.value = true
-  } else {
-    window.open(url, '_blank')
-  }
+function imagePreviewIndex(attachmentId: string) {
+  return imageAttachments.value.findIndex(att => att.id === attachmentId)
+}
+
+function costAttachmentExtension(filename?: string | null) {
+  const extension = filename?.trim().split('.').pop()
+  return extension ? extension.toUpperCase() : '文件'
+}
+
+function previewCostAttachment(att: AttachmentResponse) {
+  const url = getProjectCostAttachmentUrl(att.file_path)
+  if (url) window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 function refreshIfVisible() {
@@ -1154,40 +1297,159 @@ onUnmounted(stopAutoRefresh)
     margin-left: 0;
   }
 }
-.att-thumb {
-  position: relative;
-  width: 80px;
-  height: 80px;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid var(--ad-border, #dcdfe6);
-  cursor: pointer;
-}
-.att-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.att-file {
-  width: 100%;
-  height: 100%;
+.cost-attachment-dropzone {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: var(--ad-darker);
-  font-size: 12px;
-  color: var(--ad-text-secondary);
-  font-weight: bold;
+  width: 100%;
+  min-height: 132px;
+  box-sizing: border-box;
+  padding: 18px 24px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+  color: var(--ad-text-secondary, #909399);
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
 }
-.att-del {
+.cost-attachment-dropzone:hover,
+.cost-attachment-dropzone.is-dragover {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+.cost-attachment-dropzone.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.cost-attachment-input {
+  display: none;
+}
+.cost-attachment-drop-icon {
+  margin-bottom: 8px;
+  color: var(--el-color-primary);
+  font-size: 30px;
+}
+.cost-attachment-drop-title {
+  color: var(--ad-text, #303133);
+  font-size: 14px;
+  font-weight: 600;
+}
+.cost-attachment-drop-subtitle {
+  margin-top: 4px;
+  color: var(--el-color-primary);
+  font-size: 13px;
+}
+.cost-attachment-drop-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+.cost-attachment-upload-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-top: 10px;
+}
+.cost-attachment-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--el-fill-color-light);
+  font-size: 12px;
+}
+.cost-attachment-upload-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ad-text, #303133);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cost-attachment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-top: 14px;
+}
+.cost-attachment-item {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--ad-border, #dcdfe6);
+  border-radius: 8px;
+  background: var(--ad-card, #fff);
+}
+.cost-attachment-image,
+.cost-attachment-file {
+  display: flex;
+  width: 100%;
+  height: 112px;
+  box-sizing: border-box;
+}
+.cost-attachment-image {
+  cursor: zoom-in;
+}
+.cost-attachment-file {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  border: 0;
+  background: var(--el-fill-color-lighter);
+  color: var(--ad-text-secondary, #606266);
+  cursor: pointer;
+  text-align: center;
+}
+.cost-attachment-file:hover {
+  background: var(--el-fill-color-light);
+}
+.cost-attachment-file-ext {
+  color: var(--el-color-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+.cost-attachment-file-name,
+.cost-attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cost-attachment-file-name {
+  width: 100%;
+  font-size: 12px;
+}
+.cost-attachment-name {
+  padding: 7px 34px 7px 8px;
+  color: var(--ad-text-secondary, #606266);
+  font-size: 12px;
+}
+.cost-attachment-delete {
   position: absolute;
   top: 2px;
   right: 2px;
   opacity: 0;
   transition: opacity 0.2s;
 }
-.att-thumb:hover .att-del {
+.cost-attachment-item:hover .cost-attachment-delete,
+.cost-attachment-delete:focus-visible {
   opacity: 1;
+}
+
+@media (max-width: 760px) {
+  .cost-attachment-dropzone {
+    padding: 16px;
+  }
+  .cost-attachment-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  }
 }
 
 </style>
