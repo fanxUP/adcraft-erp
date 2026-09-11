@@ -18,6 +18,36 @@ docker compose up -d
 
 访问 http://localhost。首次启动是否创建管理员由 `.env` 中显式设置的 `ADMIN_INIT_PASSWORD` 决定，项目不提供默认管理员密码。
 
+## Ubuntu 一键部署
+
+全新 Ubuntu 服务器建议直接使用仓库根目录的安装脚本。它会安装 Docker/Compose、从固定 GitHub 仓库拉取代码、生成必要的本机密钥并启动系统：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl
+curl --fail --silent --show-error --location \
+  https://raw.githubusercontent.com/fanxUP/adcraft-erp/master/install-ubuntu.sh \
+  --output /tmp/adcraft-install-ubuntu.sh
+sudo bash /tmp/adcraft-install-ubuntu.sh
+```
+
+也可以先克隆代码，再执行：
+
+```bash
+git clone https://github.com/fanxUP/adcraft-erp.git /opt/adcraft
+cd /opt/adcraft
+sudo ./install-ubuntu.sh
+```
+
+后续发布只需执行：
+
+```bash
+cd /opt/adcraft
+sudo ./deploy.sh
+```
+
+部署脚本只从 `https://github.com/fanxUP/adcraft-erp.git` 拉取代码，然后执行 Docker Compose 构建、启动和健康检查。它不会自动备份、同步、恢复或删除数据库、Docker 数据卷、上传文件和备份文件。历史数据请在系统内使用备份管理导入；生产 `.env` 也会保留，不会被更新代码覆盖。
+
 ## 前端开发
 
 ```bash

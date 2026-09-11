@@ -83,16 +83,33 @@ adcraft-erp/
 
 2. 在路由器/DNS 里配置本地域名。
 
-## 7. 数据备份策略
+## 7. Ubuntu 部署
 
-### 自动备份
+支持 Ubuntu 22.04/24.04 等带 Docker/Compose 的 Ubuntu LTS。全新服务器执行：
 
-每天凌晨 2 点自动备份：
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl
+curl --fail --silent --show-error --location \
+  https://raw.githubusercontent.com/fanxUP/adcraft-erp/master/install-ubuntu.sh \
+  --output /tmp/adcraft-install-ubuntu.sh
+sudo bash /tmp/adcraft-install-ubuntu.sh
+```
 
-- PostgreSQL 数据库
-- 上传文件目录
-- MinIO 数据
-- 系统配置
+安装脚本会从固定 GitHub 仓库克隆代码，创建 `.env`，安装 Docker/Compose，启动全部容器，并检查 `/health`。以后发布代码执行：
+
+```bash
+cd /opt/adcraft
+sudo ./deploy.sh
+```
+
+部署只处理代码和容器，不自动备份、同步、恢复或删除业务数据。`.env`、数据库卷、`uploads`、`backups` 和 `logs` 会保留；历史数据由系统备份管理导入。
+
+## 8. 数据备份策略
+
+数据由系统内的备份管理功能负责。部署脚本只拉取代码和启动容器，不自动备份、同步、恢复或删除业务数据；数据库、上传文件、MinIO 数据和配置的保留方式以你的备份策略为准。
+
+恢复新服务器时，先按本页完成代码和容器部署，再登录系统，通过备份管理导入历史数据。不要用部署脚本代替备份导入。
 
 ### 备份保留
 
@@ -110,14 +127,14 @@ adcraft-erp/
 - 局域网 NAS
 - 外置硬盘，定期人工复制
 
-## 8. 数据安全
+## 9. 数据安全
 
 - 系统管理员账号必须强密码。
 - 财务和删除操作必须记录日志。
 - 不建议直接暴露到公网。
 - 如果未来需要外网访问，建议使用 VPN，不要直接端口映射。
 
-## 9. 启动命令
+## 10. 启动命令
 
 开发完成后，在服务器执行：
 
@@ -137,17 +154,12 @@ docker compose ps
 docker compose logs -f backend
 ```
 
-## 10. 恢复策略
+## 11. 恢复策略
 
-必须提供恢复脚本：
+恢复通过系统内备份管理完成：
 
-```bash
-./scripts/restore.sh backups/backup_2026_06_29.tar.gz
-```
+1. 在新 Ubuntu 服务器执行安装脚本并确认 `/health` 正常。
+2. 登录系统，打开备份管理，选择需要恢复的备份并按页面提示导入。
+3. 导入完成后检查订单、任务、附件和权限数据。
 
-恢复前必须：
-
-- 停止服务。
-- 备份当前数据。
-- 管理员确认。
-- 恢复后执行数据一致性检查。
+部署脚本不会自动导入备份，也不会执行删除 Docker 数据卷的操作。
