@@ -32,6 +32,7 @@ from app.core.permissions import (
     PERM_PRODUCTION_TASK_LIST,
     PERM_PRODUCTION_TASK_READ,
     PERM_PRODUCTION_TASK_UPDATE,
+    PERM_TASK_COMPLETION_READ,
     PERM_TASK_QUEUE_READ,
     require_permission,
     user_has_permission as _user_has_permission,
@@ -52,6 +53,10 @@ from app.schemas.task import (
     TaskType,
 )
 from app.services.task_queue_service import list_task_queue
+from app.services.completed_project_board_service import (
+    CompletedProjectBoardService,
+    CompletedProjectNotFound,
+)
 from app.services.task_service import (
     AttachmentService,
     DesignTaskService,
@@ -280,6 +285,39 @@ async def list_project_task_queue(
         viewer=current_user,
     )
     return success_paginated(tasks, total, page, page_size)
+
+
+@queue_router.get("/completed-projects")
+async def list_completed_projects(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(200, ge=1, le=200),
+    stage: TaskType | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_TASK_COMPLETION_READ)),
+):
+    """Return the current viewer's authorized completed project cards."""
+    service = CompletedProjectBoardService(db, current_user)
+    projects, total = await service.get_projects(
+        page=page,
+        page_size=page_size,
+        stage=stage,
+    )
+    return success_paginated(projects, total, page, page_size)
+
+
+@queue_router.get("/completed-projects/{project_id}")
+async def get_completed_project(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_TASK_COMPLETION_READ)),
+):
+    """Return a read-only, permission-trimmed completed project detail."""
+    service = CompletedProjectBoardService(db, current_user)
+    try:
+        project = await service.get_project(_ensure_uuid(project_id))
+    except CompletedProjectNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return success(project)
 
 
 @queue_router.get("/order-item-options")

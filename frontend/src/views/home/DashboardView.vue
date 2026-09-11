@@ -258,7 +258,7 @@
       <div v-for="col in visibleColumns" :key="col.key" class="board-column">
         <div class="column-header">
           <span>{{ col.label }}</span>
-          <el-tag size="small" type="danger">{{ columnCount(col.key) }}</el-tag>
+          <el-tag size="small" :type="col.key === 'completed' ? 'success' : 'danger'">{{ columnCount(col.key) }}</el-tag>
         </div>
         <div class="column-body">
           <template v-if="col.key === 'queue'">
@@ -279,6 +279,16 @@
             </el-card>
           </template>
 
+          <template v-else-if="col.key === 'completed'">
+            <el-empty v-if="!completedProjects.length" description="暂无完成项目" :image-size="56" />
+            <CompletedProjectCard
+              v-for="project in completedProjects"
+              :key="project.project_id"
+              :project="project"
+              @open="handleCompletedProjectClick(project)"
+            />
+          </template>
+
           <template v-else>
             <el-empty v-if="!stageCards(col.key).length" description="暂无任务" :image-size="56" />
             <TaskBoardCard
@@ -292,13 +302,20 @@
       </div>
     </div>
   </div>
+
+  <CompletedProjectDetailDrawer
+    v-model="completedDetailVisible"
+    :project="completedDetail"
+    :loading="completedDetailLoading"
+    :error="completedDetailError"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { getDashboard, getTaskCompletionDetails, getTaskCompletionSummary } from '@/api/payments'
 import { getOrders } from '@/api/orders'
-import { getTaskQueue } from '@/api/tasks'
+import { getCompletedProject, getCompletedProjects, getTaskQueue } from '@/api/tasks'
 import { getQuotes } from '@/api/quotes'
 import type {
   CustomerDebtItem,
@@ -312,8 +329,12 @@ import type {
   TaskCompletionType,
   TaskCompletionDetailsResponse,
   TaskQueueItem,
+  CompletedProjectCard as CompletedProjectCardType,
+  CompletedProjectDetail,
 } from '@/types/api'
 import TaskBoardCard from '@/components/ui/TaskBoardCard.vue'
+import CompletedProjectCard from '@/components/ui/CompletedProjectCard.vue'
+import CompletedProjectDetailDrawer from '@/components/ui/CompletedProjectDetailDrawer.vue'
 import { isTaskVisible, TASK_BOARD_COLUMNS } from '@/utils/task-board'
 import { useAuthStore } from '@/stores/auth'
 
@@ -368,14 +389,21 @@ const selectedCompletionEmployeeName = computed(() => {
 const boardLoading = ref(false)
 const allProjects = ref<OrderListResponse[]>([])
 const taskCards = ref<TaskQueueItem[]>([])
+const completedProjects = ref<CompletedProjectCardType[]>([])
+const completedDetailVisible = ref(false)
+const completedDetailLoading = ref(false)
+const completedDetail = ref<CompletedProjectDetail | null>(null)
+const completedDetailError = ref('')
 
 const columns = [
   { key: 'queue', label: '项目队列' },
   ...TASK_BOARD_COLUMNS,
+  { key: 'completed', label: '完成' },
 ] as const
 
 const visibleColumns = computed(() => columns.filter(col => (
-  col.key !== 'queue' || canViewPricedOrders.value
+  (col.key !== 'queue' || canViewPricedOrders.value)
+  && (col.key !== 'completed' || canViewTaskCompletion.value)
 )))
 
 type BoardColumnKey = (typeof columns)[number]['key']
@@ -389,20 +417,27 @@ function stageCards(stage: string) {
 }
 
 function columnCount(columnKey: BoardColumnKey) {
-  return columnKey === 'queue' ? queueCards().length : stageCards(columnKey).length
+  if (columnKey === 'queue') return queueCards().length
+  if (columnKey === 'completed') return completedProjects.value.length
+  return stageCards(columnKey).length
 }
 
 async function fetchBoardData() {
   boardLoading.value = true
   try {
-    const [orders, tasks] = await Promise.all([
+    const emptyCompleted = { items: [] as CompletedProjectCardType[], total: 0, page: 1, page_size: 200 }
+    const [orders, tasks, completed] = await Promise.all([
       canViewPricedOrders.value
         ? getOrders({ page_size: 100 })
         : Promise.resolve({ items: [] as OrderListResponse[] }),
       getTaskQueue({ page: 1, page_size: 200 }).catch(() => ({ items: [] as TaskQueueItem[] })),
+      canViewTaskCompletion.value
+        ? getCompletedProjects({ page: 1, page_size: 200 }).catch(() => emptyCompleted)
+        : Promise.resolve(emptyCompleted),
     ])
     allProjects.value = orders.items
     taskCards.value = tasks.items
+    completedProjects.value = completed.items
   } finally { boardLoading.value = false }
 }
 
@@ -515,6 +550,20 @@ function handleTaskCardClick(task: TaskQueueItem) {
     installation: '/installation-tasks/',
   }
   window.location.href = routeByType[task.task_type] + task.id
+}
+
+async function handleCompletedProjectClick(project: CompletedProjectCardType) {
+  completedDetailVisible.value = true
+  completedDetailLoading.value = true
+  completedDetailError.value = ''
+  completedDetail.value = null
+  try {
+    completedDetail.value = await getCompletedProject(project.project_id)
+  } catch {
+    completedDetailError.value = '完成项目详情暂时无法加载，请稍后重试'
+  } finally {
+    completedDetailLoading.value = false
+  }
 }
 
 // 从详情页返回时浏览器可能走 bfcache 恢复页面（onMounted 不再触发），

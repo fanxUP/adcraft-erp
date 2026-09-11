@@ -1,0 +1,50 @@
+version: 1
+mode: STRICT
+status: verification_complete_local_release_pending
+objective: >-
+  在项目看板和工作台增加只读完成项目列，按当前订单完成状态、明细完成事件、
+  员工归属、阶段权限和价格字段权限返回安全一致的数据。
+nodes:
+  - id: P01
+    name: 完成项目数据口径与权限测试
+    acceptance: A01
+    depends_on: []
+    status: complete
+  - id: P02
+    name: 完成项目服务与响应模型
+    acceptance: A02
+    depends_on: [P01]
+    status: complete
+  - id: P03
+    name: 完成项目列表与详情 API
+    acceptance: A03
+    depends_on: [P02]
+    status: complete
+  - id: P04
+    name: 独立项目看板完成列与只读详情
+    acceptance: A04
+    depends_on: [P03]
+    status: complete
+  - id: P05
+    name: 工作台完成列一致性接入
+    acceptance: A05
+    depends_on: [P03, P04]
+    status: complete
+  - id: P06
+    name: 回归、安全与本地发布门禁
+    acceptance: A06
+    depends_on: [P05]
+    status: verification_complete_local_release_pending
+acceptance:
+  - id: A01
+    name: 口径、权限和越权测试先行
+  - id: A02
+    name: 服务端完成项目查询按订单去重并隔离明细
+  - id: A03
+    name: API 使用现有授权和字段脱敏契约
+  - id: A04
+    name: 独立项目看板完成列可查看只读详情
+  - id: A05
+    name: 工作台与独立看板共用完成项目 API
+  - id: A06
+    name: 测试、typecheck、build 和安全检查通过

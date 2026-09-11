@@ -1,5 +1,5 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, TaskQueueItem, AttachmentResponse, SuccessResponse, TaskType, TaskOrderItemOption, TaskAssigneeOption } from '@/types/api'
+import { PaginatedData, DesignTaskResponse, ProductionTaskResponse, InstallationTaskResponse, TaskQueueItem, AttachmentResponse, SuccessResponse, TaskType, TaskOrderItemOption, TaskAssigneeOption, CompletedProjectCard, CompletedProjectDetail, TaskCompletionType } from '@/types/api'
 
 type ReadonlyTaskFields =
   | 'id'
@@ -88,6 +88,18 @@ export function getTaskQueue(params?: {
   overdue?: boolean
 }) {
   return get<PaginatedData<TaskQueueItem>>('/task-queue/', { params })
+}
+
+export function getCompletedProjects(params?: {
+  page?: number
+  page_size?: number
+  stage?: TaskCompletionType
+}) {
+  return get<PaginatedData<CompletedProjectCard>>('/task-queue/completed-projects', { params })
+}
+
+export function getCompletedProject(projectId: string) {
+  return get<CompletedProjectDetail>(`/task-queue/completed-projects/${projectId}`)
 }
 
 export function getTaskOrderItemOptions(taskType: TaskType, taskId: string) {

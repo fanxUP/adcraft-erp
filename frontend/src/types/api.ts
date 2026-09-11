@@ -694,6 +694,44 @@ export interface TaskQueueItem {
   updated_at?: string
 }
 
+export interface CompletedProjectCard {
+  kind: 'project'
+  project_id: string
+  project_no: string
+  project_name: string
+  customer_name?: string | null
+  department?: string | null
+  status: 'completed'
+  completed_at?: string | null
+  completed_detail_count: number
+  completed_work_unit_count: number
+  stages: TaskCompletionType[]
+  scope: 'all' | 'own'
+  total_amount?: number | null
+}
+
+export interface CompletedProjectDetailItem {
+  kind: 'detail'
+  project_id: string
+  project_no: string
+  project_name: string
+  order_item_id: string
+  item_name: string
+  task_type: TaskCompletionType
+  task_label: string
+  task_id: string
+  task_no?: string | null
+  employee_id?: string | null
+  employee_name: string
+  completed_at?: string | null
+  status: '已完成'
+  source: string
+}
+
+export interface CompletedProjectDetail extends CompletedProjectCard {
+  items: CompletedProjectDetailItem[]
+}
+
 // ---- Product / Material / Process ----
 
 export interface ProductCategoryResponse {

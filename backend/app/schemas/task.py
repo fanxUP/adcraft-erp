@@ -345,3 +345,49 @@ class TaskQueueItem(CoercedModel):
     completed_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
+
+
+class CompletedProjectCard(CoercedModel):
+    """Read-only project card for the completed column."""
+
+    model_config = {"from_attributes": True}
+
+    kind: Literal["project"] = "project"
+    project_id: str
+    project_no: str
+    project_name: str
+    customer_name: str | None = None
+    department: str | None = None
+    status: Literal["completed"] = "completed"
+    completed_at: str | None = None
+    completed_detail_count: int = Field(0, ge=0)
+    completed_work_unit_count: int = Field(0, ge=0)
+    stages: list[TaskType] = Field(default_factory=list)
+    scope: Literal["all", "own"]
+    total_amount: float | None = None
+
+
+class CompletedProjectDetailItem(CoercedModel):
+    """One authorized stage work unit in a completed project."""
+
+    kind: Literal["detail"] = "detail"
+    project_id: str
+    project_no: str
+    project_name: str
+    order_item_id: str
+    item_name: str
+    task_type: TaskType
+    task_label: str
+    task_id: str
+    task_no: str | None = None
+    employee_id: str | None = None
+    employee_name: str = "未分配"
+    completed_at: str | None = None
+    status: Literal["已完成"] = "已完成"
+    source: str = "live"
+
+
+class CompletedProjectDetail(CompletedProjectCard):
+    """Read-only detail drawer payload for one completed project."""
+
+    items: list[CompletedProjectDetailItem] = Field(default_factory=list)

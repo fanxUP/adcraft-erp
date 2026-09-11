@@ -9,7 +9,8 @@
     </div>
 
     <div class="summary-bar">
-      <span>共 {{ tasks.length }} 个任务</span>
+      <span>未完成任务 {{ unfinishedTasks.length }} 个</span>
+      <span v-if="canViewCompleted">完成项目 {{ completedProjects.length }} 个</span>
       <span>逾期 {{ overdueCount }} 个</span>
       <span v-if="onlyOverdue">当前显示 {{ visibleTasks.length }} 个</span>
       <span>平均进度 {{ averageProgress }}%</span>
@@ -23,40 +24,81 @@
     </div>
 
     <div class="board" v-loading="loading">
-      <div v-for="col in columns" :key="col.key" class="board-column">
+      <div v-for="col in visibleColumns" :key="col.key" class="board-column">
         <div class="column-header">
           <span>{{ col.label }}</span>
-          <el-tag size="small" type="danger">{{ colCards(col.key).length }}</el-tag>
+          <el-tag size="small" :type="col.key === 'completed' ? 'success' : 'danger'">{{ columnCount(col.key) }}</el-tag>
         </div>
         <div class="column-body">
-          <el-empty v-if="colCards(col.key).length === 0" description="暂无任务" :image-size="56" />
-          <TaskBoardCard
-            v-for="card in colCards(col.key)"
-            :key="card.id"
-            :task="card"
-            @open="handleCardClick(card)"
-          />
+          <template v-if="col.key === 'completed'">
+            <el-empty v-if="!completedProjects.length" description="暂无完成项目" :image-size="56" />
+            <CompletedProjectCard
+              v-for="project in completedProjects"
+              :key="project.project_id"
+              :project="project"
+              @open="handleCompletedProjectClick(project)"
+            />
+          </template>
+          <template v-else>
+            <el-empty v-if="!colCards(col.key).length" description="暂无任务" :image-size="56" />
+            <TaskBoardCard
+              v-for="card in colCards(col.key)"
+              :key="card.id"
+              :task="card"
+              @open="handleCardClick(card)"
+            />
+          </template>
         </div>
       </div>
     </div>
   </div>
+
+  <CompletedProjectDetailDrawer
+    v-model="completedDetailVisible"
+    :project="completedDetail"
+    :loading="completedDetailLoading"
+    :error="completedDetailError"
+  />
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { getTaskQueue } from '@/api/tasks'
-import type { TaskQueueItem } from '@/types/api'
+import { getCompletedProject, getCompletedProjects, getTaskQueue } from '@/api/tasks'
+import type { CompletedProjectCard as CompletedProjectCardType, CompletedProjectDetail, TaskQueueItem } from '@/types/api'
 import TaskBoardCard from '@/components/ui/TaskBoardCard.vue'
+import CompletedProjectCard from '@/components/ui/CompletedProjectCard.vue'
+import CompletedProjectDetailDrawer from '@/components/ui/CompletedProjectDetailDrawer.vue'
 import { isTaskVisible, TASK_BOARD_COLUMNS, taskProgress } from '@/utils/task-board'
+import { useAuthStore } from '@/stores/auth'
 
 const loading = ref(false)
 const tasks = ref<TaskQueueItem[]>([])
+const completedProjects = ref<CompletedProjectCardType[]>([])
 const onlyOverdue = ref(false)
+const completedDetailVisible = ref(false)
+const completedDetailLoading = ref(false)
+const completedDetail = ref<CompletedProjectDetail | null>(null)
+const completedDetailError = ref('')
+const authStore = useAuthStore()
+const canViewCompleted = computed(() => authStore.can('task_completion:read'))
 
-const columns = TASK_BOARD_COLUMNS
+const columns = [
+  ...TASK_BOARD_COLUMNS,
+  { key: 'completed', label: '完成' },
+] as const
+
+const visibleColumns = computed(() => columns.filter(col => (
+  col.key !== 'completed' || canViewCompleted.value
+)))
+
+type BoardColumnKey = TaskQueueItem['stage'] | 'completed'
 
 function colCards(key: TaskQueueItem['stage']) {
   return visibleTasks.value.filter(task => task.stage === key)
+}
+
+function columnCount(key: BoardColumnKey) {
+  return key === 'completed' ? completedProjects.value.length : colCards(key).length
 }
 
 const unfinishedTasks = computed(() => tasks.value.filter(task => (
@@ -76,8 +118,15 @@ const averageProgress = computed(() => {
 async function fetchData() {
   loading.value = true
   try {
-    const data = await getTaskQueue({ page: 1, page_size: 200 })
-    tasks.value = data.items
+    const emptyCompleted = { items: [] as CompletedProjectCardType[], total: 0, page: 1, page_size: 200 }
+    const [taskData, completedData] = await Promise.all([
+      getTaskQueue({ page: 1, page_size: 200 }),
+      canViewCompleted.value
+        ? getCompletedProjects({ page: 1, page_size: 200 }).catch(() => emptyCompleted)
+        : Promise.resolve(emptyCompleted),
+    ])
+    tasks.value = taskData.items
+    completedProjects.value = completedData.items
   } finally {
     loading.value = false
   }
@@ -90,6 +139,20 @@ function handleCardClick(card: TaskQueueItem) {
     installation: '/installation-tasks/',
   }
   window.location.href = routeByType[card.task_type] + card.id
+}
+
+async function handleCompletedProjectClick(project: CompletedProjectCardType) {
+  completedDetailVisible.value = true
+  completedDetailLoading.value = true
+  completedDetailError.value = ''
+  completedDetail.value = null
+  try {
+    completedDetail.value = await getCompletedProject(project.project_id)
+  } catch {
+    completedDetailError.value = '完成项目详情暂时无法加载，请稍后重试'
+  } finally {
+    completedDetailLoading.value = false
+  }
 }
 
 function handlePageShow(event: PageTransitionEvent) {
@@ -105,6 +168,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pageshow', handlePageShow)
 })
 </script>
+
 
 <style scoped>
 .page { padding: 0; }
