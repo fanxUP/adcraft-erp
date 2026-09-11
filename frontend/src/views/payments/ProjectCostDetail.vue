@@ -20,6 +20,10 @@
             <span class="value">{{ order.customer_name || '-' }}</span>
           </div>
           <div class="order-info-item">
+            <span class="label">部门/科室</span>
+            <span class="value" :title="order.department || undefined">{{ order.department || '-' }}</span>
+          </div>
+          <div class="order-info-item">
             <span class="label">状态</span>
             <StatusTag :status="order.status_view || order.status" size="sm" />
           </div>

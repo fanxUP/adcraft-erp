@@ -49,6 +49,9 @@
       <el-table-column label="客户" min-width="160" show-overflow-tooltip>
         <template #default="{ row }">{{ row.customer_name || '-' }}</template>
       </el-table-column>
+      <el-table-column label="部门/科室" min-width="140" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.department || '-' }}</template>
+      </el-table-column>
       <el-table-column v-if="filterType !== 'quote'" label="状态" width="100">
         <template #default="{ row }">
           <StatusTag v-if="row._type === 'order'" :status="row.status_view || row.status" size="sm" />

@@ -1,0 +1,53 @@
+version: 1
+mode: STRICT
+status: planned
+objective: >-
+  让管理员在独立项目看板看到与工作台一致的项目队列，并在项目队列卡片、
+  项目成本列表和项目成本详情中统一展示订单/报价的部门/科室，同时保持现有
+  任务可见范围、价格脱敏、成本计算和状态规则不变。
+nodes:
+  - id: P01
+    title: 字段来源、队列口径与权限契约冻结
+    acceptance: A01
+    depends_on: []
+    status: planned
+  - id: P02
+    title: 独立项目看板增加项目队列并复用共享卡片
+    acceptance: A02
+    depends_on: [P01]
+    status: planned
+  - id: P03
+    title: 项目成本统一列表增加部门科室列
+    acceptance: A03
+    depends_on: [P01]
+    status: planned
+  - id: P04
+    title: 项目成本详情增加部门科室信息
+    acceptance: A04
+    depends_on: [P01, P03]
+    status: planned
+  - id: P05
+    title: 权限回归、构建检查与发布前验证
+    acceptance: A05
+    depends_on: [P02, P03, P04]
+    status: planned
+acceptance_map:
+  - id: A01
+    primary_plan: P01
+  - id: A02
+    primary_plan: P02
+  - id: A03
+    primary_plan: P03
+  - id: A04
+    primary_plan: P04
+  - id: A05
+    primary_plan: P05
+backlog:
+  - id: B01
+    title: 超过组合接口上限后增加服务端项目队列分页接口
+  - id: B02
+    title: 项目看板按部门科室、客户和交付期限筛选
+  - id: B03
+    title: 建立部门科室缺失数据审计清单
+  - id: B04
+    title: 单独审计报价成本接口的 viewer 传递与价格字段裁剪

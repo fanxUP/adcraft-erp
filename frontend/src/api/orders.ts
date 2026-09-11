@@ -14,9 +14,21 @@ import {
   OrderTaskAssigneesResponse,
   TaskAssigneeOption,
 } from '@/types/api'
+import { dedupeProjectQueueOrders, PROJECT_QUEUE_STATUSES } from '@/utils/project-queue'
 
 export function getOrders(params: { page?: number; page_size?: number; status?: string; customer_id?: string; keyword?: string }) {
   return get<PaginatedData<OrderListResponse>>('/orders/', { params })
+}
+
+/**
+ * Load the order-level project queue from the same status contract used by
+ * the workbench and the independent project board.
+ */
+export async function getProjectQueueOrders(pageSize = 200): Promise<OrderListResponse[]> {
+  const responses = await Promise.all(
+    PROJECT_QUEUE_STATUSES.map(status => getOrders({ page: 1, page_size: pageSize, status })),
+  )
+  return dedupeProjectQueueOrders(responses.flatMap(response => response.items || []))
 }
 
 export function getOrder(id: string) {

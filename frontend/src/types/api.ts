@@ -966,6 +966,7 @@ export interface QuoteCostResponse {
   quote_no: string
   project_name: string
   customer_name?: string
+  department?: string
   status: string
   status_view?: StatusView | null
   total_amount: number

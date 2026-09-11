@@ -192,20 +192,12 @@
         <div class="column-body">
           <template v-if="col.key === 'queue'">
             <el-empty v-if="!queueCards().length" description="暂无项目" :image-size="56" />
-            <el-card
-              v-for="card in queueCards()"
-              :key="card.id"
-              shadow="hover"
-              class="board-card"
-              @click="handleOrderCardClick(card)"
-            >
-              <div class="card-no">{{ card.order_no }}</div>
-              <div class="card-name">{{ card.project_name }}</div>
-              <div class="card-meta">
-                <span>{{ card.customer_name || '-' }}</span>
-                <span v-if="canViewPricedOrders">¥{{ card.total_amount?.toFixed(2) }}</span>
-              </div>
-            </el-card>
+            <ProjectQueueCard
+              v-for="order in queueCards()"
+              :key="order.id"
+              :order="order"
+              @open="handleOrderCardClick(order)"
+            />
           </template>
 
           <template v-else-if="col.key === 'completed'">
@@ -237,7 +229,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { getDashboard, getTaskCompletionSummary } from '@/api/payments'
-import { getOrders } from '@/api/orders'
+import { getProjectQueueOrders } from '@/api/orders'
 import { getCompletedProjects, getTaskQueue } from '@/api/tasks'
 import { getQuotes } from '@/api/quotes'
 import type {
@@ -252,6 +244,7 @@ import type {
 } from '@/types/api'
 import TaskBoardCard from '@/components/ui/TaskBoardCard.vue'
 import CompletedProjectCard from '@/components/ui/CompletedProjectCard.vue'
+import ProjectQueueCard from '@/components/ui/ProjectQueueCard.vue'
 import { isTaskVisible, TASK_BOARD_COLUMNS } from '@/utils/task-board'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
@@ -259,7 +252,7 @@ import { useRouter } from 'vue-router'
 const authStore = useAuthStore()
 const canViewFinancial = computed(() => authStore.hasPermission('report:view_financial'))
 const canViewPricedOrders = computed(() => (
-  authStore.hasPermission('order:read') && authStore.hasPermission('order:view_price')
+  authStore.canAll(['order:read', 'order:view_price'])
 ))
 const canViewTaskCompletion = computed(() => authStore.can('task_completion:read'))
 const canViewCompletionAll = computed(() => authStore.can('task_completion:view_all'))
@@ -286,7 +279,7 @@ const completionStages: Array<{ key: TaskCompletionType; label: string }> = [
 ]
 
 const boardLoading = ref(false)
-const allProjects = ref<OrderListResponse[]>([])
+const projectQueueOrders = ref<OrderListResponse[]>([])
 const taskCards = ref<TaskQueueItem[]>([])
 const completedProjects = ref<CompletedProjectCardType[]>([])
 const router = useRouter()
@@ -305,7 +298,7 @@ const visibleColumns = computed(() => columns.filter(col => (
 type BoardColumnKey = (typeof columns)[number]['key']
 
 function queueCards() {
-  return allProjects.value.filter(project => ['pending_confirm', 'confirmed'].includes(project.status))
+  return projectQueueOrders.value
 }
 
 function stageCards(stage: string) {
@@ -324,14 +317,14 @@ async function fetchBoardData() {
     const emptyCompleted = { items: [] as CompletedProjectCardType[], total: 0, page: 1, page_size: 200 }
     const [orders, tasks, completed] = await Promise.all([
       canViewPricedOrders.value
-        ? getOrders({ page_size: 100 })
-        : Promise.resolve({ items: [] as OrderListResponse[] }),
+        ? getProjectQueueOrders().catch(() => [] as OrderListResponse[])
+        : Promise.resolve([] as OrderListResponse[]),
       getTaskQueue({ page: 1, page_size: 200 }).catch(() => ({ items: [] as TaskQueueItem[] })),
       canViewTaskCompletion.value
         ? getCompletedProjects({ page: 1, page_size: 200 }).catch(() => emptyCompleted)
         : Promise.resolve(emptyCompleted),
     ])
-    allProjects.value = orders.items
+    projectQueueOrders.value = orders
     taskCards.value = tasks.items
     completedProjects.value = completed.items
   } finally { boardLoading.value = false }
