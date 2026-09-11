@@ -73,19 +73,33 @@ describe('任务详情页界面收敛', () => {
 
   it('任务处理明细按数量、金额、小计、任务进度顺序展示金额信息', () => {
     const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
-    const metaStart = source.indexOf('<span class="item-option-meta">')
-    const metaEnd = source.indexOf('\n            </span>', metaStart)
-    const metaSource = source.slice(metaStart, metaEnd)
+    const quantityHeader = source.indexOf('>数量</span>')
+    const amountHeader = source.indexOf('>金额</span>')
+    const subtotalHeader = source.indexOf('>小计</span>')
+    const progressHeader = source.indexOf('>本任务进度</span>')
 
-    expect(metaStart).toBeGreaterThanOrEqual(0)
-    expect(metaEnd).toBeGreaterThan(metaStart)
-    expect(metaSource).toContain('数量 {{ item.quantity }}')
-    expect(metaSource).toContain('金额 {{ formatMoney(item.unit_price) }}')
-    expect(metaSource).toContain('小计 {{ formatMoney(item.subtotal_amount) }}')
-    expect(metaSource).toContain('本任务进度 {{ item.task_progress_pct }}%')
-    expect(metaSource.indexOf('数量')).toBeLessThan(metaSource.indexOf('金额'))
-    expect(metaSource.indexOf('金额')).toBeLessThan(metaSource.indexOf('小计'))
-    expect(metaSource.indexOf('小计')).toBeLessThan(metaSource.indexOf('本任务进度'))
+    expect(quantityHeader).toBeGreaterThanOrEqual(0)
+    expect(amountHeader).toBeGreaterThan(quantityHeader)
+    expect(subtotalHeader).toBeGreaterThan(amountHeader)
+    expect(progressHeader).toBeGreaterThan(subtotalHeader)
+    expect(source).toContain('{{ item.quantity }}')
+    expect(source).toContain('{{ formatMoney(item.unit_price) }}')
+    expect(source).toContain('{{ formatMoney(item.subtotal_amount) }}')
+    expect(source).toContain('{{ item.task_progress_pct }}%')
+  })
+
+  it('任务处理明细使用列式列表，全部展示且不建立独立滚动区域', () => {
+    const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
+
+    expect(source).toContain('class="item-table"')
+    expect(source).toContain('class="item-table-header"')
+    expect(source).toContain('item-table-product')
+    expect(source).toContain('class="item-assignee-name"')
+    expect(source).toContain('has-price-columns')
+    expect(source).toContain('has-outsource-column')
+    expect(source).not.toContain('class="item-list"')
+    expect(source).not.toContain('max-height: 360px')
+    expect(source).not.toContain('overflow-y: auto')
   })
 
   it('普通任务不显示独立关联保存按钮，历史任务保留补录入口', () => {
@@ -121,7 +135,7 @@ describe('任务详情页界面收敛', () => {
 
     expect(cardSource).toContain('item.assignee_name')
     expect(cardSource).toContain('itemAssigneeLabel(item)')
-    expect(cardSource).toContain('执行人：')
+    expect(cardSource).toContain('item-assignee-name')
     expect(cardSource).not.toContain('assignmentTarget')
     expect(cardSource).not.toContain('请先选择分配人，再变更任务状态')
 

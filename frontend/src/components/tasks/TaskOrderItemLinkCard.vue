@@ -98,61 +98,110 @@
       </div>
 
       <div v-loading="loadingItems" class="link-panel">
-        <div v-if="items.length" class="item-list" role="group" aria-label="订单明细（可多选）">
+        <div
+          v-if="items.length"
+          class="item-table"
+          :class="{
+            'has-price-columns': canViewItemPrice,
+            'has-outsource-column': canViewOutsourceTask,
+          }"
+          role="table"
+          aria-label="订单明细（可多选）"
+        >
+          <div class="item-table-header" role="row">
+            <span class="item-table-cell item-table-select" role="columnheader" aria-label="选择" />
+            <span class="item-table-cell" role="columnheader">项目内容</span>
+            <span class="item-table-cell" role="columnheader">产品/材质/工艺</span>
+            <span class="item-table-cell" role="columnheader">规格</span>
+            <span class="item-table-cell item-table-number" role="columnheader">数量</span>
+            <span class="item-table-cell" role="columnheader">订单阶段</span>
+            <span class="item-table-cell" role="columnheader">本任务</span>
+            <span class="item-table-cell" role="columnheader">执行人</span>
+            <span v-if="canViewItemPrice" class="item-table-cell item-table-number" role="columnheader">金额</span>
+            <span v-if="canViewItemPrice" class="item-table-cell item-table-number" role="columnheader">小计</span>
+            <span class="item-table-cell item-table-number" role="columnheader">本任务进度</span>
+            <span v-if="canViewOutsourceTask" class="item-table-cell" role="columnheader">外协</span>
+          </div>
+
           <label
             v-for="item in items"
             :key="item.id"
-            class="item-option"
+            class="item-table-row"
             :class="{
               'is-selected': selectedItemIds.includes(item.id),
               'is-disabled': !canSelect(item),
             }"
             :aria-disabled="!canSelect(item)"
+            role="row"
           >
-            <input
-              v-model="selectedItemIds"
-              class="item-option-checkbox"
-              type="checkbox"
-              :value="item.id"
-              :disabled="changing || !canSelect(item)"
-              :aria-label="`选择订单明细 ${item.item_name}`"
-            />
-            <span class="item-option-body">
-              <span class="item-option-title-row">
-                <span class="item-option-title">{{ item.item_name }}</span>
-                <StatusTag :status="item.stage_view || item.stage" :label="item.stage_label" size="sm" />
-                <span v-if="item.is_linked && (item.task_status_view || item.task_status_label)" class="item-status-label">
-                  本任务：
-                  <StatusTag :status="item.task_status_view || item.task_status" :label="item.task_status_label" size="sm" />
-                </span>
-                <span v-if="item.is_linked" class="item-assignee-label">
-                  执行人：{{ itemAssigneeLabel(item) }}
-                </span>
-                <el-tag v-if="canViewOutsourceTask && item.outsource_blocked" type="warning" effect="light" size="small">
-                  {{ item.outsource_status_label || '外协任务进行中' }}
-                </el-tag>
+            <span class="item-table-cell item-table-select" data-label="选择" role="cell">
+              <input
+                v-model="selectedItemIds"
+                class="item-table-checkbox"
+                type="checkbox"
+                :value="item.id"
+                :disabled="changing || !canSelect(item)"
+                :aria-label="`选择订单明细 ${item.item_name}`"
+              />
+            </span>
+            <span class="item-table-cell item-table-name" data-label="项目内容" role="cell">
+              {{ item.item_name }}
+            </span>
+            <span class="item-table-cell item-table-product" data-label="产品/材质/工艺" role="cell">
+              {{ item.material_process || '—' }}
+            </span>
+            <span class="item-table-cell item-table-spec" data-label="规格" role="cell">
+              {{ itemSpec(item) || '—' }}
+            </span>
+            <span class="item-table-cell item-table-number" data-label="数量" role="cell">
+              {{ item.quantity }}{{ item.unit ? ` ${item.unit}` : '' }}
+            </span>
+            <span class="item-table-cell" data-label="订单阶段" role="cell">
+              <StatusTag :status="item.stage_view || item.stage" :label="item.stage_label" size="sm" />
+            </span>
+            <span class="item-table-cell" data-label="本任务" role="cell">
+              <StatusTag
+                v-if="item.is_linked && (item.task_status_view || item.task_status_label)"
+                :status="item.task_status_view || item.task_status"
+                :label="item.task_status_label"
+                size="sm"
+              />
+              <span v-else class="item-table-placeholder">{{ item.is_linked ? '—' : '未关联' }}</span>
+            </span>
+            <span class="item-table-cell item-table-assignee" data-label="执行人" role="cell">
+              <span v-if="item.is_linked && item.assignee_name" class="item-assignee-name">
+                {{ item.assignee_name }}
               </span>
-              <span v-if="item.material_process || itemSpec(item)" class="item-option-subtitle">
-                <span v-if="item.material_process">{{ item.material_process }}</span>
-                <span v-if="item.material_process && itemSpec(item)"> · </span>
-                <span v-if="itemSpec(item)">{{ itemSpec(item) }}</span>
+              <span v-else-if="item.is_linked" class="item-assignee-placeholder">
+                {{ itemAssigneeLabel(item) }}
               </span>
-              <span class="item-option-meta">
-                <span class="item-option-metric">数量 {{ item.quantity }}{{ item.unit ? ` ${item.unit}` : '' }}</span>
-                <template v-if="authStore.hasPermission('order_item:view_price')">
-                  <span class="item-option-metric">金额 {{ formatMoney(item.unit_price) }}</span>
-                  <span class="item-option-metric">小计 {{ formatMoney(item.subtotal_amount) }}</span>
-                </template>
-                <span v-if="item.is_linked && item.task_progress_pct != null" class="item-option-metric">
-                  本任务进度 {{ item.task_progress_pct }}%
-                </span>
+              <span v-else class="item-table-placeholder">—</span>
+            </span>
+            <template v-if="canViewItemPrice">
+              <span class="item-table-cell item-table-number" data-label="金额" role="cell">
+                {{ formatMoney(item.unit_price) }}
               </span>
-              <span v-if="!canSelect(item) && disabledReason(item)" class="item-option-disabled-reason">
-                {{ disabledReason(item) }}
+              <span class="item-table-cell item-table-number" data-label="小计" role="cell">
+                {{ formatMoney(item.subtotal_amount) }}
               </span>
-              <span v-if="canViewOutsourceTask && item.outsource_blocked && canSelect(item)" class="item-option-outsourcing-reason">
-                外协完成后才能推进该明细到下一阶段
+            </template>
+            <span class="item-table-cell item-table-number" data-label="本任务进度" role="cell">
+              <span v-if="item.is_linked && item.task_progress_pct != null">
+                {{ item.task_progress_pct }}%
               </span>
+              <span v-else class="item-table-placeholder">—</span>
+            </span>
+            <span v-if="canViewOutsourceTask" class="item-table-cell item-table-outsourcing" data-label="外协" role="cell">
+              <el-tag v-if="item.outsource_blocked" type="warning" effect="light" size="small">
+                {{ item.outsource_status_label || '外协任务进行中' }}
+              </el-tag>
+              <span v-else class="item-table-placeholder">—</span>
+            </span>
+            <span v-if="!canSelect(item) && disabledReason(item)" class="item-table-detail-reason" role="cell">
+              {{ disabledReason(item) }}
+            </span>
+            <span v-if="canViewOutsourceTask && item.outsource_blocked && canSelect(item)" class="item-table-outsourcing-reason" role="cell">
+              外协完成后才能推进该明细到下一阶段
             </span>
           </label>
         </div>
@@ -266,6 +315,7 @@ const taskTypeLabels: Record<TaskType, string> = {
   installation: '安装',
 }
 
+const canViewItemPrice = computed(() => authStore.hasPermission('order_item:view_price'))
 const canViewOutsourceTask = computed(() => authStore.hasPermission('outsource_task:read'))
 const canManageTaskItems = computed(() => authStore.hasPermission(`${props.taskType}_task:assign`))
 const linkedItemIds = computed(() => {
@@ -644,122 +694,157 @@ onMounted(loadItems)
   margin-top: 16px;
 }
 
-.item-list {
-  max-height: 360px;
-  overflow-y: auto;
+.item-table {
+  --item-table-columns: 36px minmax(76px, 1fr) minmax(100px, 1.55fr) minmax(72px, 0.9fr) minmax(52px, 0.65fr) minmax(64px, 0.75fr) minmax(64px, 0.75fr) minmax(74px, 0.85fr) minmax(62px, 0.65fr);
+  overflow: visible;
   border: 1px solid var(--el-border-color);
   border-radius: 6px;
 }
 
-.item-option {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 14px 16px;
+.item-table.has-price-columns {
+  --item-table-columns: 36px minmax(76px, 1fr) minmax(100px, 1.45fr) minmax(72px, 0.85fr) minmax(52px, 0.6fr) minmax(64px, 0.7fr) minmax(64px, 0.7fr) minmax(74px, 0.8fr) minmax(62px, 0.6fr) minmax(70px, 0.65fr) minmax(74px, 0.7fr);
+}
+
+.item-table.has-outsource-column:not(.has-price-columns) {
+  --item-table-columns: 36px minmax(76px, 1fr) minmax(100px, 1.45fr) minmax(72px, 0.85fr) minmax(52px, 0.6fr) minmax(64px, 0.7fr) minmax(64px, 0.7fr) minmax(74px, 0.8fr) minmax(62px, 0.6fr) minmax(70px, 0.7fr);
+}
+
+.item-table.has-price-columns.has-outsource-column {
+  --item-table-columns: 36px minmax(76px, 0.95fr) minmax(100px, 1.35fr) minmax(72px, 0.8fr) minmax(52px, 0.55fr) minmax(64px, 0.65fr) minmax(64px, 0.65fr) minmax(74px, 0.75fr) minmax(62px, 0.55fr) minmax(70px, 0.6fr) minmax(74px, 0.65fr) minmax(70px, 0.7fr);
+}
+
+.item-table-header,
+.item-table-row {
+  display: grid;
+  grid-template-columns: var(--item-table-columns);
+  align-items: stretch;
+}
+
+.item-table-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--el-border-color);
+  background: var(--el-fill-color-lighter);
+  color: var(--ad-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.item-table-row {
+  position: relative;
+  min-width: 0;
+  padding: 12px;
   border-bottom: 1px solid var(--el-border-color-lighter);
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
 
-.item-option:last-child {
+.item-table-row:last-child {
   border-bottom: 0;
 }
 
-.item-option:hover {
+.item-table-row:hover {
   background: var(--el-fill-color-light);
 }
 
-.item-option.is-disabled {
+.item-table-row.is-disabled {
   cursor: not-allowed;
   opacity: 0.72;
   background: var(--el-fill-color-lighter);
 }
 
-.item-option.is-disabled:hover {
+.item-table-row.is-disabled:hover {
   background: var(--el-fill-color-lighter);
 }
 
-.item-option.is-selected {
+.item-table-row.is-selected {
   background: var(--el-color-primary-light-9);
 }
 
-.item-option-checkbox {
-  flex: 0 0 auto;
+.item-table-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding: 0 6px;
+  color: var(--ad-text);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.item-table-header .item-table-cell {
+  color: var(--ad-text-secondary);
+}
+
+.item-table-select {
+  justify-content: center;
+  padding-right: 2px;
+  padding-left: 2px;
+}
+
+.item-table-checkbox {
   width: 16px;
   height: 16px;
-  margin: 3px 0 0;
+  margin: 0;
   accent-color: var(--el-color-primary);
 }
 
-.item-option-body {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  min-width: 0;
-  align-items: baseline;
+.item-table-name,
+.item-table-product,
+.item-table-spec {
+  align-items: flex-start;
+  white-space: normal;
+  word-break: break-word;
 }
 
-.item-option-title-row {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.item-option-title {
-  color: var(--ad-text);
+.item-table-name {
   font-weight: 600;
 }
 
-.item-status-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.item-table-product {
+  overflow-wrap: anywhere;
 }
 
-.item-assignee-label {
-  display: inline-flex;
-  align-items: center;
+.item-table-number {
+  justify-content: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+}
+
+.item-table-assignee {
+  align-items: flex-start;
+}
+
+.item-assignee-name {
+  color: var(--el-color-danger);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.item-assignee-placeholder,
+.item-table-placeholder {
   color: var(--ad-text-secondary);
-  font-size: 12px;
-  font-weight: 400;
 }
 
-.item-option-subtitle,
-.item-option-meta {
-  color: var(--ad-text-secondary);
-  font-size: 12px;
+.item-table-outsourcing {
+  align-items: flex-start;
 }
 
-.item-option-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-  margin-left: auto;
+.item-table-detail-reason,
+.item-table-outsourcing-reason {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 6px 6px 0;
+  font-size: 12px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
-.item-option-metric {
-  white-space: nowrap;
-}
-
-.item-option-metric + .item-option-metric::before {
-  content: '·';
-  margin: 0 10px;
+.item-table-detail-reason {
   color: var(--el-text-color-placeholder);
 }
 
-.item-option-disabled-reason {
-  flex-basis: 100%;
-  color: var(--el-text-color-placeholder);
-  font-size: 12px;
-}
-
-.item-option-outsourcing-reason {
-  flex-basis: 100%;
+.item-table-outsourcing-reason {
   color: var(--el-color-warning-dark-2);
-  font-size: 12px;
 }
 
 .link-actions {
@@ -803,14 +888,56 @@ onMounted(loadItems)
   align-items: flex-start;
 }
 
-@media (max-width: 640px) {
-  .item-option {
-    padding: 12px;
+@media (max-width: 900px) {
+  .item-table-header {
+    display: none;
   }
 
-  .item-option-meta {
-    flex-basis: 100%;
-    margin-left: 0;
+  .item-table-row {
+    grid-template-columns: 32px repeat(2, minmax(0, 1fr));
+    padding: 10px;
+  }
+
+  .item-table-row .item-table-cell:not(.item-table-select):not(.item-table-detail-reason):not(.item-table-outsourcing-reason) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 5px 6px;
+  }
+
+  .item-table-row .item-table-cell:not(.item-table-select):not(.item-table-detail-reason):not(.item-table-outsourcing-reason)::before {
+    content: attr(data-label);
+    color: var(--ad-text-secondary);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .item-table-row .item-table-number {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .item-table-detail-reason,
+  .item-table-outsourcing-reason {
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+}
+
+@media (max-width: 640px) {
+  .item-table-row {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .item-table-row .item-table-cell:not(.item-table-select):not(.item-table-detail-reason):not(.item-table-outsourcing-reason) {
+    grid-column: 2;
+  }
+
+  .item-table-row .item-table-select {
+    grid-column: 1;
+    grid-row: span 1;
+    align-self: flex-start;
+    padding-top: 8px;
   }
 
   .link-actions,
