@@ -1,7 +1,7 @@
 name: modular-permission-system
 version: 1
 mode: STRICT
-status: in_progress
+status: deployed_pending_role_smoke
 
 tasks:
   - id: P-MP-01
