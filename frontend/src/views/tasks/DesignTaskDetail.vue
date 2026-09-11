@@ -7,28 +7,22 @@
     <div v-if="task" v-loading="loading">
       <h2 style="margin: 16px 0; color: var(--ad-text)">设计任务 {{ task.design_no }}</h2>
 
-      <el-card data-ai-targets="design-file" shadow="never" class="info-card">
-        <el-descriptions :column="2">
-          <el-descriptions-item label="任务编号">{{ task.design_no }}</el-descriptions-item>
-          <el-descriptions-item label="项目名称">{{ task.project_name }}</el-descriptions-item>
-          <el-descriptions-item label="订单明细">{{ task.item_names?.join('、') || task.item_name || (task.order_item_id ? '明细未命名' : '未关联订单明细') }}</el-descriptions-item>
-          <el-descriptions-item label="状态">
-            <span data-ai-targets="task-status-pending_review task-status-designing task-status-confirmed task-status-revision">
-              <StatusTag :status="task.status_view || task.status" size="sm" />
-            </span>
-          </el-descriptions-item>
-          <el-descriptions-item label="任务进度">
-            <ProgressBar :percentage="task.progress_pct" :tone="task.status_view?.tone" style="width: 220px" aria-label="任务进度" />
-          </el-descriptions-item>
-          <el-descriptions-item label="计划时间">
-            <span v-if="task.planned_start_at || task.planned_end_at">
-              {{ formatDateTimeFull(task.planned_start_at) || '-' }} 至 {{ formatDateTimeFull(task.planned_end_at) || '-' }}
-            </span>
-            <span v-else>-</span>
-            <el-tag v-if="task.is_overdue" type="danger" size="small" style="margin-left: 8px">逾期{{ task.overdue_days ? ` ${task.overdue_days} 天` : '' }}</el-tag>
-          </el-descriptions-item>
-        </el-descriptions>
-      </el-card>
+      <TaskOverviewCard
+        data-ai-targets="design-file task-status-pending_review task-status-designing task-status-confirmed task-status-revision"
+        :task-no="task.design_no"
+        :project-name="task.project_name"
+        :status="task.status_view || task.status"
+        :progress-pct="task.progress_pct"
+        :progress-tone="task.status_view?.tone"
+        :planned-start-at="task.planned_start_at"
+        :planned-end-at="task.planned_end_at"
+        :is-overdue="task.is_overdue"
+        :overdue-days="task.overdue_days"
+        :customer-name="task.customer_name"
+        :department="task.department"
+        :contact-name="task.contact_name"
+        :contact-phone="task.contact_phone"
+      />
 
       <TaskOrderItemLinkCard
         data-ai-targets="task-assignee"
@@ -190,7 +184,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { AttachmentResponse, DesignTaskResponse, TaskAssigneeOption } from '@/types/api'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
-import { ProgressBar, StatusTag } from '@/components/ui'
+import { TaskOverviewCard } from '@/components/ui'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { useAuthStore } from '@/stores/auth'
 import { deleteDesignTask } from '@/api/tasks'

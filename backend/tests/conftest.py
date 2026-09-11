@@ -147,6 +147,8 @@ def make_mock_design_task(
     order_no: str | None = None,
     customer_name: str | None = None,
     department: str | None = None,
+    contact_name: str | None = None,
+    contact_phone: str | None = None,
     source: str | None = None,
 ):
     """Create a mock DesignTask-like object for tests."""
@@ -175,6 +177,8 @@ def make_mock_design_task(
     task.order_no = order_no
     task.customer_name = customer_name
     task.department = department
+    task.contact_name = contact_name
+    task.contact_phone = contact_phone
     task.source = source
     task.created_at = now
     task.updated_at = now
@@ -203,6 +207,8 @@ def make_mock_production_task(
     order_no: str | None = None,
     customer_name: str | None = None,
     department: str | None = None,
+    contact_name: str | None = None,
+    contact_phone: str | None = None,
     source: str | None = None,
 ):
     """Create a mock ProductionTask-like object for tests."""
@@ -237,6 +243,8 @@ def make_mock_production_task(
     task.order_no = order_no
     task.customer_name = customer_name
     task.department = department
+    task.contact_name = contact_name
+    task.contact_phone = contact_phone
     task.source = source
     task.updated_at = now
     return task

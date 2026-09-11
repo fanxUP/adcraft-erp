@@ -1192,7 +1192,7 @@ async def _enrich_task_order(
     )
     if not can_view_order_price:
         task_dict.pop("total_amount", None)
-    order_columns = "doc_no, customer_name, department"
+    order_columns = "doc_no, customer_name, department, contact_person, contact_phone"
     if can_view_order_price:
         order_columns += ", total_amount"
     row = (await db.execute(
@@ -1203,8 +1203,12 @@ async def _enrich_task_order(
         task_dict["order_no"] = row[0]
         task_dict["customer_name"] = row[1]
         task_dict["department"] = row[2]
+        # Installation tasks can have a task-specific现场联系人; design and
+        # production tasks use the order contact as their shared source.
+        task_dict["contact_name"] = task_dict.get("contact_name") or row[3]
+        task_dict["contact_phone"] = task_dict.get("contact_phone") or row[4]
         if can_view_order_price:
-            task_dict["total_amount"] = float(row[3]) if row[3] is not None else None
+            task_dict["total_amount"] = float(row[5]) if row[5] is not None else None
         task_dict["source"] = "订单"
     # Resolve assigned_to user name
     assigned_to = task_dict.get("assigned_to")

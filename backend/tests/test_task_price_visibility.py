@@ -57,7 +57,13 @@ def _order_item() -> OrderItemResponse:
 async def test_task_order_enrichment_omits_order_total_without_permission():
     db = AsyncMock()
     query_result = MagicMock()
-    query_result.fetchone.return_value = ("O20260910-0001", "示例客户", "设计部")
+    query_result.fetchone.return_value = (
+        "O20260910-0001",
+        "示例客户",
+        "设计部",
+        "王老师",
+        "13800138000",
+    )
     db.execute = AsyncMock(return_value=query_result)
     payload = {
         "document_id": str(ORDER_ID),
@@ -68,6 +74,8 @@ async def test_task_order_enrichment_omits_order_total_without_permission():
 
     assert "total_amount" not in result
     assert result["order_no"] == "O20260910-0001"
+    assert result["contact_name"] == "王老师"
+    assert result["contact_phone"] == "13800138000"
     assert "total_amount" not in str(db.execute.await_args.args[0])
 
 
@@ -75,7 +83,14 @@ async def test_task_order_enrichment_omits_order_total_without_permission():
 async def test_task_order_enrichment_keeps_order_total_for_explicit_permission():
     db = AsyncMock()
     query_result = MagicMock()
-    query_result.fetchone.return_value = ("O20260910-0001", "示例客户", "财务部", 12345.67)
+    query_result.fetchone.return_value = (
+        "O20260910-0001",
+        "示例客户",
+        "财务部",
+        "李经理",
+        "13900139000",
+        12345.67,
+    )
     db.execute = AsyncMock(return_value=query_result)
     payload = {"document_id": str(ORDER_ID)}
 
@@ -86,6 +101,8 @@ async def test_task_order_enrichment_keeps_order_total_for_explicit_permission()
     )
 
     assert result["total_amount"] == 12345.67
+    assert result["contact_name"] == "李经理"
+    assert result["contact_phone"] == "13900139000"
     assert "total_amount" in str(db.execute.await_args.args[0])
 
 

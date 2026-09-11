@@ -7,32 +7,23 @@
     <div v-if="task" v-loading="loading">
       <h2 style="margin: 16px 0; color: var(--ad-text)">安装任务 {{ task.installation_no }}</h2>
 
-      <el-card shadow="never" class="info-card">
-        <el-descriptions :column="2">
-          <el-descriptions-item label="任务编号">{{ task.installation_no }}</el-descriptions-item>
-          <el-descriptions-item label="项目名称">{{ task.project_name }}</el-descriptions-item>
-          <el-descriptions-item label="订单明细">{{ task.item_names?.join('、') || task.item_name || (task.order_item_id ? '明细未命名' : '未关联订单明细') }}</el-descriptions-item>
-          <el-descriptions-item label="状态">
-            <span data-ai-targets="task-status-assigned task-status-completed task-status-in_progress task-status-pending_acceptance">
-              <StatusTag :status="task.status_view || task.status" size="sm" />
-            </span>
-          </el-descriptions-item>
-          <el-descriptions-item label="任务进度">
-            <ProgressBar :percentage="task.progress_pct" :tone="task.status_view?.tone" style="width: 220px" aria-label="任务进度" />
-          </el-descriptions-item>
-          <el-descriptions-item label="安装地址">{{ task.address || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="联系人">{{ task.contact_name || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="联系电话">{{ task.contact_phone || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="计划时间">{{ formatDateTimeFull(task.scheduled_at) || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="任务计划">
-            <span v-if="task.planned_start_at || task.planned_end_at">
-              {{ formatDateTimeFull(task.planned_start_at) || '-' }} 至 {{ formatDateTimeFull(task.planned_end_at) || '-' }}
-            </span>
-            <span v-else>-</span>
-            <el-tag v-if="task.is_overdue" type="danger" size="small" style="margin-left: 8px">逾期{{ task.overdue_days ? ` ${task.overdue_days} 天` : '' }}</el-tag>
-          </el-descriptions-item>
-        </el-descriptions>
-      </el-card>
+      <TaskOverviewCard
+        data-ai-targets="task-status-assigned task-status-completed task-status-in_progress task-status-pending_acceptance"
+        :task-no="task.installation_no"
+        :project-name="task.project_name"
+        :status="task.status_view || task.status"
+        :progress-pct="task.progress_pct"
+        :progress-tone="task.status_view?.tone"
+        :planned-start-at="task.planned_start_at"
+        :planned-end-at="task.planned_end_at"
+        :is-overdue="task.is_overdue"
+        :overdue-days="task.overdue_days"
+        :customer-name="task.customer_name"
+        :department="task.department"
+        :contact-name="task.contact_name"
+        :contact-phone="task.contact_phone"
+        :extra-fields="installationOverviewFields"
+      />
 
       <TaskOrderItemLinkCard
         data-ai-targets="task-assignee"
@@ -184,7 +175,7 @@ import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
-import { ProgressBar, StatusTag } from '@/components/ui'
+import { TaskOverviewCard } from '@/components/ui'
 import { assignInstallationTask, getInstallationTask, getTaskAssigneeOptions, changeInstallationTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { AttachmentResponse, InstallationTaskResponse, TaskAssigneeOption } from '@/types/api'
@@ -233,6 +224,10 @@ const mediaAttachments = computed(() =>
 const imageAttachments = computed(() => mediaAttachments.value.filter(att => !isInstallationVideoAttachment(att)))
 const imageUrls = computed(() => imageAttachments.value.map(att => getAttachmentUrl(att.file_path)))
 const photoUploadDisabled = computed(() => !task.value || deleting.value)
+const installationOverviewFields = computed(() => [
+  { label: '安装地址', value: task.value?.address, wide: true },
+  { label: '计划安装时间', value: formatDateTimeFull(task.value?.scheduled_at) },
+])
 const INST_WORKFLOW: Record<string, string[]> = {
   pending: ['assigned', 'in_progress', 'cancelled'],
   assigned: ['in_progress', 'pending', 'cancelled'],

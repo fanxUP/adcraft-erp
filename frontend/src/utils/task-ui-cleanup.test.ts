@@ -11,6 +11,27 @@ function readSource(relativePath: string) {
 }
 
 describe('任务详情页界面收敛', () => {
+  it('任务概览卡统一展示客户联系信息且不重复显示订单明细', () => {
+    const overviewSource = readSource('components/ui/TaskOverviewCard.vue')
+
+    expect(overviewSource).toContain('任务概览')
+    expect(overviewSource).toContain('客户名称')
+    expect(overviewSource).toContain('部门/科室')
+    expect(overviewSource).toContain('联系人')
+    expect(overviewSource).toContain('联系电话')
+    expect(overviewSource).not.toContain('订单明细')
+
+    for (const relativePath of [
+      'views/tasks/DesignTaskDetail.vue',
+      'views/tasks/ProductionTaskDetail.vue',
+      'views/tasks/InstallationTaskDetail.vue',
+    ]) {
+      const source = readSource(relativePath)
+      expect(source).toContain('TaskOverviewCard')
+      expect(source).not.toContain('<el-descriptions-item label="订单明细">')
+    }
+  })
+
   it('不再渲染变更历史模块或历史审核状态文案', () => {
     expect(existsSync(resolve(srcRoot, 'components/tasks/TaskHistoryTimeline.vue'))).toBe(false)
 

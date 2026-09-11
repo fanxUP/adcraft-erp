@@ -551,6 +551,8 @@ export interface DesignTaskResponse {
   order_no?: string
   customer_name?: string
   department?: string
+  contact_name?: string
+  contact_phone?: string
   total_amount?: number
   source?: string
   project_name: string
@@ -587,6 +589,8 @@ export interface ProductionTaskResponse {
   order_no?: string
   customer_name?: string
   department?: string
+  contact_name?: string
+  contact_phone?: string
   total_amount?: number
   source?: string
   project_name: string

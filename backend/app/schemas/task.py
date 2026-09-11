@@ -89,6 +89,8 @@ class DesignTaskResponse(CoercedModel):
     order_no: str | None = None
     customer_name: str | None = None
     department: str | None = None
+    contact_name: str | None = None
+    contact_phone: str | None = None
     total_amount: float | None = None
     source: str | None = None
     completed_at: str | None = None
@@ -163,6 +165,8 @@ class ProductionTaskResponse(CoercedModel):
     order_no: str | None = None
     customer_name: str | None = None
     department: str | None = None
+    contact_name: str | None = None
+    contact_phone: str | None = None
     total_amount: float | None = None
     source: str | None = None
     completed_at: str | None = None
