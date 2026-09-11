@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Lightweight regression checks for the single GitHub + Docker deployment path.
+# Lightweight regression checks for the single GitHub deployment path.
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -11,6 +11,10 @@ bash -n "$ROOT_DIR/scripts/deploy.sh"
 deploy_help="$($ROOT_DIR/deploy.sh --help)"
 [[ "$deploy_help" == *"固定从以下 GitHub 仓库拉取代码"* ]]
 [[ "$deploy_help" == *"不会自动备份、同步或恢复业务数据"* ]]
+if ! [[ "$deploy_help" == *"自动识别原生服务和 Docker Compose"* ]]; then
+  echo "deploy script does not advertise automatic native/Compose detection" >&2
+  exit 1
+fi
 
 install_help="$($ROOT_DIR/install-ubuntu.sh --help)"
 [[ "$install_help" == *"全新 Ubuntu 安装"* ]]

@@ -39,14 +39,14 @@ cd /opt/adcraft
 sudo ./install-ubuntu.sh
 ```
 
-后续发布只需执行：
+后续发布只需执行（脚本会自动识别原生服务或 Docker Compose）：
 
 ```bash
 cd /opt/adcraft
 sudo ./deploy.sh
 ```
 
-部署脚本只从 `https://github.com/fanxUP/adcraft-erp.git` 拉取代码，然后执行 Docker Compose 构建、启动和健康检查。它不会自动备份、同步、恢复或删除数据库、Docker 数据卷、上传文件和备份文件。历史数据请在系统内使用备份管理导入；生产 `.env` 也会保留，不会被更新代码覆盖。
+部署脚本只从 `https://github.com/fanxUP/adcraft-erp.git` 拉取代码。已有 `adcraft-backend` 原生服务时，脚本复用 systemd/Nginx 并按变更需要构建前端；全新 Ubuntu 安装 Docker 后，脚本使用 Docker Compose 构建、启动和健康检查。它不会自动备份、同步、恢复或删除数据库、Docker 数据卷、上传文件和备份文件。历史数据请在系统内使用备份管理导入；生产 `.env` 也会保留，不会被更新代码覆盖。
 
 ## 前端开发
 

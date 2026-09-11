@@ -103,6 +103,8 @@ cd /opt/adcraft
 sudo ./deploy.sh
 ```
 
+部署入口会自动识别运行环境：已经安装并运行 `adcraft-backend.service` 的旧服务器继续使用原生 systemd/Nginx；新安装的 Docker 环境使用 Compose。脚本不会因为检测到 Docker 而切换已有原生服务，也不会抢占现有 80 端口。
+
 部署只处理代码和容器，不自动备份、同步、恢复或删除业务数据。`.env`、数据库卷、`uploads`、`backups` 和 `logs` 会保留；历史数据由系统备份管理导入。
 
 ## 8. 数据备份策略
