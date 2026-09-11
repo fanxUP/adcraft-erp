@@ -46,7 +46,6 @@
       <span class="card-order-no" :title="task.order_no || undefined">订单：{{ task.order_no || '-' }}</span>
       <span v-if="task.planned_end_at" class="card-detail">计划结束：{{ formatDateTimeFull(task.planned_end_at) }}</span>
     </div>
-    <div v-if="task.assigned_to_name" class="assignee">负责人：{{ task.assigned_to_name }}</div>
   </el-card>
 </template>
 
@@ -197,12 +196,6 @@ function handleKeydown(event: KeyboardEvent) {
 
 .card-detail {
   flex-shrink: 0;
-}
-
-.assignee {
-  margin-top: 8px;
-  color: var(--ad-text-secondary, #888);
-  font-size: 12px;
 }
 
 @media (max-width: 640px) {

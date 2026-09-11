@@ -52,6 +52,51 @@
         <span class="stage-selection-summary">已选 {{ selectedItemIds.length }} 条</span>
       </div>
 
+      <div
+        v-if="canManageTaskItems"
+        data-ai-target="task-item-assignee"
+        class="item-assignee-toolbar"
+      >
+        <div class="item-assignee-toolbar-main">
+          <span class="item-assignee-toolbar-label">明细改派</span>
+          <el-select
+            v-model="assigneeTargetUserId"
+            class="item-assignee-select"
+            clearable
+            filterable
+            :loading="assigneeOptionsLoading"
+            :disabled="changing || reassigning"
+            placeholder="选择新的执行人"
+          >
+            <el-option
+              v-for="option in assigneeOptions"
+              :key="option.user_id"
+              :label="`${option.name}（${option.employee_no}）`"
+              :value="option.user_id"
+            />
+          </el-select>
+          <span class="item-assignee-toolbar-note">只对已关联、未完成的已选明细生效</span>
+        </div>
+        <div class="item-assignee-toolbar-actions">
+          <el-button
+            type="primary"
+            plain
+            :loading="reassigning"
+            :disabled="changing || reassigning || !reassignableSelectedItemIds.length || !assigneeTargetUserId"
+            @click="reassignSelectedItems(false)"
+          >
+            改派已选明细
+          </el-button>
+          <el-button
+            :loading="reassigning"
+            :disabled="changing || reassigning || !reassignableSelectedItemIds.length"
+            @click="reassignSelectedItems(true)"
+          >
+            释放执行人
+          </el-button>
+        </div>
+      </div>
+
       <div v-loading="loadingItems" class="link-panel">
         <div v-if="items.length" class="item-list" role="group" aria-label="订单明细（可多选）">
           <label
@@ -81,7 +126,7 @@
                   <StatusTag :status="item.task_status_view || item.task_status" :label="item.task_status_label" size="sm" />
                 </span>
                 <span v-if="item.is_linked" class="item-assignee-label">
-                  分配人：{{ itemAssigneeLabel }}
+                  执行人：{{ itemAssigneeLabel(item) }}
                 </span>
                 <el-tag v-if="canViewOutsourceTask && item.outsource_blocked" type="warning" effect="light" size="small">
                   {{ item.outsource_status_label || '外协任务进行中' }}
@@ -140,37 +185,6 @@
           <span>变更状态</span>
           <span class="section-note">{{ statusSectionNote }}</span>
         </div>
-        <div v-if="canAssignTask" class="assignment-controls" data-ai-targets="task-assignee">
-          <span class="assignment-label">任务分配</span>
-          <el-select
-            v-model="assignmentTarget"
-            placeholder="选择员工"
-            clearable
-            filterable
-            :disabled="changing || assigning"
-            class="assignment-select"
-          >
-            <el-option
-              v-for="employee in employeeOptions"
-              :key="employee.id"
-              :label="employee.name + (employee.employee_no ? `（${employee.employee_no}）` : '')"
-              :value="employee.user_id || employee.id"
-              :disabled="!employee.user_id"
-            />
-          </el-select>
-          <el-button
-            :loading="assigning"
-            :disabled="!canSaveAssignment"
-            @click="handleSaveAssignment"
-          >
-            保存分配
-          </el-button>
-          <span class="assignment-summary">{{ assignmentSummary }}</span>
-        </div>
-        <div v-else class="assignment-readonly" data-ai-targets="task-assignee">
-          <span>负责人：{{ savedAssigneeLabel }}</span>
-          <span class="assignment-readonly-hint">状态变更后自动记录当前登录员工</span>
-        </div>
       </div>
       <TaskWorkflow
         :steps="steps"
@@ -187,12 +201,16 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  getTaskAssigneeOptions,
   getTaskOrderItemOptions,
+  reassignDesignTaskItems,
+  reassignInstallationTaskItems,
+  reassignProductionTaskItems,
   updateDesignTask,
   updateProductionTask,
   updateInstallationTask,
 } from '@/api/tasks'
-import type { ActionCapability, TaskType, TaskOrderItemOption } from '@/types/api'
+import type { ActionCapability, TaskAssigneeOption, TaskType, TaskOrderItemOption } from '@/types/api'
 import { StatusTag } from '@/components/ui'
 import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
 import { getTaskWorkflowControl } from '@/utils/taskItemWorkflow'
@@ -210,13 +228,6 @@ import { formatMoney } from '@/utils/format'
 
 const authStore = useAuthStore()
 
-type TaskEmployeeOption = {
-  id: string
-  name: string
-  employee_no?: string
-  user_id?: string | null
-}
-
 const props = withDefaults(defineProps<{
   taskType: TaskType
   taskId: string
@@ -228,24 +239,15 @@ const props = withDefaults(defineProps<{
   currentStatus: string
   workflow: Record<string, string[]>
   changing: boolean
-  assignedTo?: string | null
-  assignedToName?: string | null
-  employeeOptions?: TaskEmployeeOption[]
-  assigning?: boolean
 }>(), {
   currentItemId: null,
   currentItemIds: () => [],
   taskCapabilities: null,
-  assignedTo: null,
-  assignedToName: null,
-  employeeOptions: () => [],
-  assigning: false,
 })
 
 const emit = defineEmits<{
   linked: []
-  assign: [assignedTo: string | null]
-  change: [status: string, orderItemIds: string[], assignedTo: string | null]
+  change: [status: string, orderItemIds: string[]]
 }>()
 
 const items = ref<TaskOrderItemOption[]>([])
@@ -253,7 +255,10 @@ const selectedItemIds = ref<string[]>([])
 const loadingItems = ref(false)
 const linking = ref(false)
 const loadError = ref(false)
-const assignmentTarget = ref(props.assignedTo || '')
+const assigneeOptions = ref<TaskAssigneeOption[]>([])
+const assigneeOptionsLoading = ref(false)
+const assigneeTargetUserId = ref<string | null>(null)
+const reassigning = ref(false)
 
 const taskTypeLabels: Record<TaskType, string> = {
   design: '设计',
@@ -262,13 +267,7 @@ const taskTypeLabels: Record<TaskType, string> = {
 }
 
 const canViewOutsourceTask = computed(() => authStore.hasPermission('outsource_task:read'))
-const taskAssignPermissions: Record<TaskType, string> = {
-  design: 'design_task:assign',
-  production: 'production_task:assign',
-  installation: 'installation_task:assign',
-}
-const canAssignTask = computed(() => authStore.hasPermission(taskAssignPermissions[props.taskType]))
-
+const canManageTaskItems = computed(() => authStore.hasPermission(`${props.taskType}_task:assign`))
 const linkedItemIds = computed(() => {
   if (props.currentItemIds?.length) return props.currentItemIds
   return props.currentItemId ? [props.currentItemId] : []
@@ -286,51 +285,25 @@ const isHistoricalReadOnly = computed(() => {
 })
 
 const changeStatusCapability = computed(() => props.taskCapabilities?.change_status)
-const assignedToId = computed(() => assignmentTarget.value || '')
+const stageChangePermission = computed(() => `${props.taskType}_task:change_status`)
+const canChangeStageByPermission = computed(() => authStore.hasPermission(stageChangePermission.value))
 const canChangeTaskStatus = computed(() => (
-  (!canAssignTask.value || Boolean(assignedToId.value))
+  canChangeStageByPermission.value
   && (changeStatusCapability.value?.allowed ?? !isHistoricalReadOnly.value)
 ))
-const changeStatusDisabledReason = computed(() => (
-  canAssignTask.value && !assignedToId.value
-    ? '请先选择分配人，再变更任务状态'
-    : changeStatusCapability.value?.disabled_reason || '该任务当前状态不允许继续变更'
-))
-const assignmentChanged = computed(() => assignmentTarget.value !== (props.assignedTo || ''))
-const canSaveAssignment = computed(() => (
-  canAssignTask.value && assignmentChanged.value && !props.changing && !props.assigning
-))
-const savedAssigneeLabel = computed(() => (
-  props.assignedTo
-    ? (props.assignedToName || '已分配')
-    : '未分配'
-))
-const selectedAssigneeLabel = computed(() => {
-  if (!assignmentTarget.value) return '未分配'
-  const employee = props.employeeOptions.find(
-    item => (item.user_id || item.id) === assignmentTarget.value,
-  )
-  return employee?.name || '已选择负责人'
+const changeStatusDisabledReason = computed(() => {
+  if (!canChangeStageByPermission.value) {
+    return `当前账号只能查看${taskTypeLabels[props.taskType]}流程，不能变更状态`
+  }
+  return changeStatusCapability.value?.disabled_reason || '该任务当前状态不允许继续变更'
 })
-const assignmentSummary = computed(() => (
-  assignmentChanged.value
-    ? `待保存：${selectedAssigneeLabel.value}`
-    : `当前负责人：${savedAssigneeLabel.value}`
-))
 const statusSectionNote = computed(() => {
   if (isHistoricalReadOnly.value) return '历史终态不可变更状态，可补录明细'
-  if (canAssignTask.value && !assignedToId.value) return '请先选择分配人，再变更任务状态'
-  if (!canAssignTask.value) return '状态变更后自动记录当前登录员工'
   if (workflowControl.value.hasMixedStatuses) {
     return '已选明细状态不同，请选择状态相同的明细后再批量推进'
   }
   return '点击可执行的下一步或回退'
 })
-const itemAssigneeLabel = computed(() => (
-  props.assignedTo
-    ? (props.assignedToName || '已分配')
-    : '未分配'
-))
 
 const workflowControl = computed(() => getTaskWorkflowControl(
   items.value,
@@ -372,6 +345,14 @@ const stageSelectionState = computed<Record<TaskStageSelectionKey, StageSelectio
   return result
 })
 
+const reassignableSelectedItemIds = computed(() => items.value
+  .filter(item => (
+    selectedItemIds.value.includes(item.id)
+    && item.is_linked
+    && item.assignee_state !== 'terminal'
+  ))
+  .map(item => item.id))
+
 function itemLabel(item: TaskOrderItemOption) {
   return item.material_process
     ? `${item.item_name} · ${item.material_process}`
@@ -386,6 +367,13 @@ function itemSpec(item: TaskOrderItemOption) {
     item.width != null ? `${item.width}${item.width_unit || ''}` : '',
     item.height != null ? `${item.height}${item.height_unit || ''}` : '',
   ].filter(Boolean).join(' × ')
+}
+
+function itemAssigneeLabel(item: TaskOrderItemOption) {
+  if (item.assignee_name) return item.assignee_name
+  if (item.assignee_state === 'historical_unknown') return '历史未记录'
+  if (item.assignee_state === 'terminal') return '已完成（未记录）'
+  return '待领取'
 }
 
 function canSelect(item: TaskOrderItemOption) {
@@ -404,11 +392,6 @@ function handleStageSelection(stage: TaskStageSelectionKey, checked: boolean) {
   )
 }
 
-function handleSaveAssignment() {
-  if (!canSaveAssignment.value) return
-  emit('assign', assignmentTarget.value || null)
-}
-
 async function loadItems() {
   if (!props.orderId) {
     selectedItemIds.value = []
@@ -419,11 +402,25 @@ async function loadItems() {
   loadError.value = false
   try {
     items.value = await getTaskOrderItemOptions(props.taskType, props.taskId)
+    if (canManageTaskItems.value) {
+      await loadAssigneeOptions()
+    }
   } catch {
     items.value = []
     loadError.value = true
   } finally {
     loadingItems.value = false
+  }
+}
+
+async function loadAssigneeOptions() {
+  assigneeOptionsLoading.value = true
+  try {
+    assigneeOptions.value = await getTaskAssigneeOptions(props.taskType)
+  } catch {
+    assigneeOptions.value = []
+  } finally {
+    assigneeOptionsLoading.value = false
   }
 }
 
@@ -466,13 +463,62 @@ async function handleAddHistoricalItems() {
   }
 }
 
+async function reassignSelectedItems(release: boolean) {
+  const selected = selectedItemIds.value
+  const reassignable = reassignableSelectedItemIds.value
+  if (!selected.length) {
+    ElMessage.warning('请先勾选要改派的已关联订单明细')
+    return
+  }
+  if (selected.length !== reassignable.length) {
+    ElMessage.warning('明细改派只能选择当前任务中已关联且未完成的明细')
+    return
+  }
+  if (!release && !assigneeTargetUserId.value) {
+    ElMessage.warning('请先选择新的执行人')
+    return
+  }
+
+  const targetName = release
+    ? '待领取'
+    : assigneeOptions.value.find(option => option.user_id === assigneeTargetUserId.value)?.name || '所选员工'
+  try {
+    await ElMessageBox.confirm(
+      `确认将 ${reassignable.length} 条明细的执行人改为“${targetName}”吗？`,
+      '明细执行人改派',
+      { confirmButtonText: '确认改派', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+
+  reassigning.value = true
+  try {
+    const payload = {
+      order_item_ids: reassignable,
+      assignee_user_id: release ? null : assigneeTargetUserId.value,
+    }
+    if (props.taskType === 'design') {
+      await reassignDesignTaskItems(props.taskId, payload)
+    } else if (props.taskType === 'production') {
+      await reassignProductionTaskItems(props.taskId, payload)
+    } else {
+      await reassignInstallationTaskItems(props.taskId, payload)
+    }
+    ElMessage.success(release ? '已释放明细执行人' : '已完成明细改派')
+    assigneeTargetUserId.value = null
+    await loadItems()
+    emit('linked')
+  } catch {
+    // API error message is handled by the shared request interceptor.
+  } finally {
+    reassigning.value = false
+  }
+}
+
 function handleWorkflowChange(status: string) {
   if (!selectedItemIds.value.length) {
     ElMessage.warning('请先勾选要变更状态的订单明细')
-    return
-  }
-  if (canAssignTask.value && !assignedToId.value) {
-    ElMessage.info(changeStatusDisabledReason.value)
     return
   }
   if (!canChangeTaskStatus.value) {
@@ -493,13 +539,10 @@ function handleWorkflowChange(status: string) {
       return
     }
   }
-  emit('change', status, [...selectedItemIds.value], canAssignTask.value ? assignedToId.value : null)
+  emit('change', status, [...selectedItemIds.value])
 }
 
 watch([() => props.orderId, () => props.taskId, () => props.taskType, linkedItemIds], loadItems)
-watch(() => props.assignedTo, value => {
-  if (!assignmentChanged.value) assignmentTarget.value = value || ''
-})
 onMounted(loadItems)
 </script>
 
@@ -557,6 +600,42 @@ onMounted(loadItems)
 
 .stage-selection-summary {
   flex: 0 0 auto;
+  color: var(--ad-text-secondary);
+  font-size: 12px;
+}
+
+.item-assignee-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--el-color-primary-light-7);
+  border-radius: 6px;
+  background: var(--el-color-primary-light-9);
+}
+
+.item-assignee-toolbar-main,
+.item-assignee-toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.item-assignee-toolbar-label {
+  color: var(--ad-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.item-assignee-select {
+  width: 220px;
+}
+
+.item-assignee-toolbar-note {
   color: var(--ad-text-secondary);
   font-size: 12px;
 }
@@ -724,46 +803,6 @@ onMounted(loadItems)
   align-items: flex-start;
 }
 
-.assignment-controls {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-}
-
-.assignment-readonly {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  color: var(--ad-text-secondary);
-  font-size: 12px;
-}
-
-.assignment-readonly-hint {
-  color: var(--ad-text-tertiary, var(--ad-text-secondary));
-}
-
-.assignment-label {
-  color: var(--ad-text-secondary);
-  font-size: 12px;
-  font-weight: 400;
-  white-space: nowrap;
-}
-
-.assignment-select {
-  width: 220px;
-}
-
-.assignment-summary {
-  color: var(--ad-text-secondary);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
 @media (max-width: 640px) {
   .item-option {
     padding: 12px;
@@ -795,24 +834,20 @@ onMounted(loadItems)
     gap: 10px;
   }
 
-  .assignment-controls {
-    justify-content: flex-start;
-    width: 100%;
-  }
-
-  .assignment-readonly {
-    justify-content: flex-start;
-    width: 100%;
-  }
-
-  .assignment-select {
-    flex: 1;
-    min-width: 160px;
-  }
-
   .stage-selection-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .item-assignee-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .item-assignee-select,
+  .item-assignee-toolbar-actions,
+  .item-assignee-toolbar-actions .el-button {
+    width: 100%;
   }
 
 }

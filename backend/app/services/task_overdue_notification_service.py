@@ -7,11 +7,12 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
-from sqlalchemy import func, insert, select
+from sqlalchemy import and_, func, insert, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.notification import Notification
 from app.models.task import DesignTask, InstallationTask, ProductionTask
+from app.models.task_order_item_link import TaskOrderItemLink
 from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN
 from app.models.user import Permission, User, role_permissions, user_roles
 from app.schemas.notification import NotificationResponse
@@ -92,20 +93,26 @@ def build_overdue_escalation_notification(task_type: str, task) -> dict:
     }
 
 
-def should_notify_task(task, *, now: datetime | None = None) -> bool:
-    """Return whether an assigned task is currently overdue and non-terminal."""
+def should_notify_task(work_unit, *, now: datetime | None = None) -> bool:
+    """Return whether one claimed item work unit is overdue.
+
+    The scanner passes a row carrying ``assignee_user_id`` from
+    ``task_order_item_links``.  The legacy task-level ``assigned_to`` column
+    is intentionally not a fallback here because it could notify the wrong
+    employee when one task contains items owned by different employees.
+    """
     return bool(
-        task.assigned_to
-        and is_task_overdue(task.planned_end_at, task.status, now=now)
+        getattr(work_unit, "assignee_user_id", None)
+        and is_task_overdue(work_unit.planned_end_at, work_unit.status, now=now)
     )
 
 
-def should_escalate_task(task, *, now: datetime | None = None) -> bool:
-    """Return whether an assigned, non-terminal task passed the escalation threshold."""
+def should_escalate_task(work_unit, *, now: datetime | None = None) -> bool:
+    """Return whether one claimed item work unit passed the escalation threshold."""
     current = _normalize_datetime(now or datetime.now())
     return bool(
-        should_notify_task(task, now=current)
-        and current - _normalize_datetime(task.planned_end_at) >= OVERDUE_ESCALATION_AFTER
+        should_notify_task(work_unit, now=current)
+        and current - _normalize_datetime(work_unit.planned_end_at) >= OVERDUE_ESCALATION_AFTER
     )
 
 
@@ -115,14 +122,39 @@ async def _list_overdue_tasks(
     task_type: str,
     now: datetime,
 ) -> list:
+    """Return one row per overdue, claimed order-item work unit.
+
+    A task may have several active items and several executors, so querying
+    only the legacy task owner would silently send a mixed task's reminder to
+    the wrong person.  Item-level terminal states are excluded as well: a
+    completed item inside an overdue mixed task needs no reminder.
+    """
     columns = model.c
-    result = await db.execute(
-        select(model).where(
+    link_columns = TaskOrderItemLink.__table__.c
+    statement = (
+        select(model, link_columns.assignee_user_id.label("assignee_user_id"))
+        .select_from(
+            model.join(
+                TaskOrderItemLink.__table__,
+                and_(
+                    link_columns.task_type == task_type,
+                    link_columns.task_id == columns.id,
+                ),
+            )
+        )
+        .where(
             columns.planned_end_at.is_not(None),
             columns.planned_end_at < now,
             columns.status.not_in(TERMINAL_STATUSES),
-            columns.assigned_to.is_not(None),
+            link_columns.assignee_user_id.is_not(None),
+            or_(
+                link_columns.item_status.is_(None),
+                link_columns.item_status.not_in(TERMINAL_STATUSES),
+            ),
         )
+    )
+    result = await db.execute(
+        statement
     )
     return [SimpleNamespace(**row) for row in result.mappings().all()]
 
@@ -228,19 +260,21 @@ async def scan_overdue_tasks(
     active_admin_ids = None
 
     for table, task_type, _, _, _ in _TASK_SPECS:
-        tasks = await _list_overdue_tasks(db, table, task_type, current)
-        for task in tasks:
-            if not task.assigned_to:
+        work_units = await _list_overdue_tasks(db, table, task_type, current)
+        for work_unit in work_units:
+            task = work_unit
+            assignee_user_id = getattr(work_unit, "assignee_user_id", None)
+            if not assignee_user_id:
                 summary.skipped_unassigned += 1
                 continue
-            if not should_notify_task(task, now=current):
+            if not should_notify_task(work_unit, now=current):
                 continue
 
             summary.eligible += 1
             notification = build_overdue_notification(task_type, task)
             if await _notification_exists(
                 db,
-                user_id=task.assigned_to,
+                user_id=assignee_user_id,
                 notification=notification,
             ):
                 summary.skipped_duplicate += 1
@@ -248,7 +282,7 @@ async def scan_overdue_tasks(
                 try:
                     await _create_notification(
                         db,
-                        user_id=task.assigned_to,
+                        user_id=assignee_user_id,
                         notification=notification,
                     )
                     summary.created += 1
@@ -261,7 +295,7 @@ async def scan_overdue_tasks(
                         task.id,
                     )
 
-            if not should_escalate_task(task, now=current):
+            if not should_escalate_task(work_unit, now=current):
                 continue
 
             if active_admin_ids is None:
@@ -272,7 +306,7 @@ async def scan_overdue_tasks(
 
             escalation = build_overdue_escalation_notification(task_type, task)
             for admin_id in active_admin_ids:
-                if str(admin_id) == str(task.assigned_to):
+                if str(admin_id) == str(assignee_user_id):
                     continue
                 summary.escalation_eligible += 1
                 if await _notification_exists(

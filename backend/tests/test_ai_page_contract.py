@@ -76,16 +76,16 @@ def test_every_page_capability_declares_safe_operation_semantics():
 
 def test_page_action_semantics_resolve_permission_by_matching_route():
     order_semantics = build_page_action_semantics(
-        "task-assignee",
+        "task-item-assignee",
         "/design-tasks/11111111-1111-1111-1111-111111111111",
     )
     installation_semantics = build_page_action_semantics(
-        "task-assignee",
+        "task-item-assignee",
         "/installation-tasks/11111111-1111-1111-1111-111111111111",
     )
 
-    assert order_semantics["required_permission"] == "design_task:update"
-    assert installation_semantics["required_permission"] == "installation_task:update"
+    assert order_semantics["required_permission"] == "design_task:assign"
+    assert installation_semantics["required_permission"] == "installation_task:assign"
     assert order_semantics["effect"] == "write"
     assert order_semantics["requires_confirmation"] is True
 

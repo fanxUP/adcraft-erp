@@ -30,6 +30,7 @@ from app.services.order_task_assignment_service import (
     order_task_visibility_clause,
     resolve_current_employee_user_id,
 )
+from app.services.task_queue_service import can_view_task_stage
 from app.services.task_service import _resolve_status_assignee
 
 
@@ -65,6 +66,14 @@ def test_new_task_permissions_are_explicit_and_not_implied_by_stage_read():
     manager = _viewer(PERM_DESIGN_TASK_ASSIGN, PERM_ORDER_TASK_ASSIGN)
     assert can_assign_task("design", manager) is True
     assert user_has_permission(manager, PERM_ORDER_TASK_ASSIGN) is True
+
+
+def test_task_queue_respects_stage_read_permissions_when_roles_are_composed():
+    viewer = _viewer(PERM_TASK_QUEUE_READ, PERM_DESIGN_TASK_READ)
+
+    assert can_view_task_stage("design", viewer) is True
+    assert can_view_task_stage("production", viewer) is False
+    assert can_view_task_stage("installation", viewer) is False
 
 
 def test_order_visibility_clause_has_unassigned_or_current_employee_branches():
@@ -128,10 +137,10 @@ async def test_unbound_status_owner_gets_plain_language_error():
 
 
 @pytest.mark.asyncio
-async def test_worker_cannot_submit_another_owner_during_status_change():
+async def test_status_change_rejects_whole_task_owner_override():
     task = MagicMock(assigned_to=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
 
-    with pytest.raises(ValueError, match="不能指定其他员工"):
+    with pytest.raises(ValueError, match="不再设置整张任务负责人"):
         await _resolve_status_assignee(
             MagicMock(),
             task,

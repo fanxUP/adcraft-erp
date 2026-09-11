@@ -35,6 +35,12 @@ class TaskOrderItemLink(Base):
         ForeignKey("business_document_items.id", ondelete="CASCADE"),
         nullable=False,
     )
+    assignee_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     item_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     item_progress_pct: Mapped[int | None] = mapped_column(Integer, nullable=True)

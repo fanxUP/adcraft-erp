@@ -3,6 +3,12 @@ from uuid import UUID
 from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.permissions import (
+    PERM_DESIGN_TASK_READ,
+    PERM_INSTALLATION_TASK_READ,
+    PERM_PRODUCTION_TASK_READ,
+    user_has_permission,
+)
 from app.models.task import DesignTask, InstallationTask, ProductionTask
 from app.models.task_order_item_link import TaskOrderItemLink
 from app.models.user import User
@@ -28,6 +34,19 @@ _TASK_SOURCES = (
 )
 
 
+def can_view_task_stage(task_type: str, viewer: User | None) -> bool:
+    """Keep the cross-stage board read boundary explicit and composable."""
+    if viewer is None:
+        return True
+    permissions = {
+        "design": PERM_DESIGN_TASK_READ,
+        "production": PERM_PRODUCTION_TASK_READ,
+        "installation": PERM_INSTALLATION_TASK_READ,
+    }
+    permission = permissions.get(task_type)
+    return permission is not None and user_has_permission(viewer, permission)
+
+
 async def list_task_queue(
     db: AsyncSession,
     *,
@@ -48,6 +67,8 @@ async def list_task_queue(
 
     for task_type, model, no_field, response_model in _TASK_SOURCES:
         if stage and stage != task_type:
+            continue
+        if viewer is not None and not can_view_task_stage(task_type, viewer):
             continue
 
         query = select(model).where(task_visibility_clause(model, viewer))

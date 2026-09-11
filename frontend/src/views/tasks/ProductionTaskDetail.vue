@@ -26,23 +26,17 @@
       />
 
       <TaskOrderItemLinkCard
-        data-ai-targets="task-assignee"
         :task-type="'production'"
         :task-id="task.id"
         :order-id="task.order_id"
         :current-item-id="task.order_item_id"
         :current-item-ids="task.order_item_ids"
         :task-capabilities="task.capabilities"
-        :assigned-to="task.assigned_to"
-        :assigned-to-name="task.assigned_to_name"
-        :employee-options="employeeOptions"
-        :assigning="assigning"
         :steps="prodSteps"
         :current-status="task.status"
         :workflow="PROD_WORKFLOW"
         :changing="changing"
         @linked="fetchTask"
-        @assign="handleSaveAssignment"
         @change="handleWorkflowChange"
       />
       <OutsourceTaskCard
@@ -181,9 +175,9 @@ import { useRoute, useRouter } from 'vue-router'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { TaskOverviewCard } from '@/components/ui'
-import { assignProductionTask, getProductionTask, getTaskAssigneeOptions, changeProductionTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
+import { getProductionTask, changeProductionTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { AttachmentResponse, ProductionTaskResponse, TaskAssigneeOption } from '@/types/api'
+import type { AttachmentResponse, ProductionTaskResponse } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { useAuthStore } from '@/stores/auth'
 import { deleteProductionTask } from '@/api/tasks'
@@ -207,8 +201,6 @@ const loading = ref(false)
 const changing = ref(false)
 const deleting = ref(false)
 const task = ref<ProductionTaskResponse | null>(null)
-const employeeOptions = ref<TaskAssigneeOption[]>([])
-const assigning = ref(false)
 const attachmentInput = ref<HTMLInputElement | null>(null)
 const attachmentDragActive = ref(false)
 const attachmentUploadQueue = ref<AttachmentUploadItem[]>([])
@@ -260,7 +252,7 @@ const prodSteps = [
   { key: 'completed', label: '已完成' },
 ]
 
-async function handleWorkflowChange(to_status: string, orderItemIds: string[], assignedTo: string | null) {
+async function handleWorkflowChange(to_status: string, orderItemIds: string[]) {
   const labelMap: Record<string, string> = { pending: '待制作', in_progress: '制作中', rework: '返工', completed: '已完成', cancelled: '已取消' }
   if (to_status === 'cancelled') {
     const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
@@ -268,23 +260,22 @@ async function handleWorkflowChange(to_status: string, orderItemIds: string[], a
       inputPlaceholder: '取消原因',
     })
     if (!reason) return
-    await doChangeStatus(to_status, reason, orderItemIds, assignedTo)
+    await doChangeStatus(to_status, reason, orderItemIds)
   } else {
     await ElMessageBox.confirm(`确定将任务状态变更为「${labelMap[to_status]}」？`, '变更状态', {
       confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
     })
-    await doChangeStatus(to_status, '', orderItemIds, assignedTo)
+    await doChangeStatus(to_status, '', orderItemIds)
   }
 }
 
-async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[], assignedTo: string | null) {
+async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[]) {
   changing.value = true
   try {
     await changeProductionTaskStatus(route.params.id as string, {
       to_status,
       reason,
       order_item_ids: orderItemIds,
-      assigned_to: assignedTo,
     })
     ElMessage.success('状态已变更')
     await fetchTask()
@@ -298,23 +289,6 @@ async function fetchTask() {
     const data = await getProductionTask(route.params.id as string)
     task.value = data
   } finally { loading.value = false }
-}
-
-async function loadEmployees() {
-  try {
-    if (!authStore.hasPermission('production_task:assign')) return
-    employeeOptions.value = await getTaskAssigneeOptions('production')
-  } catch { /* employees module may not be ready */ }
-}
-
-async function handleSaveAssignment(assignedTo: string | null) {
-  assigning.value = true
-  try {
-    await assignProductionTask(route.params.id as string, assignedTo)
-    ElMessage.success(assignedTo ? '已保存分配' : '已取消分配')
-    await fetchTask()
-    await aiStore.notifyBusinessMutation()
-  } catch { /* handled */ } finally { assigning.value = false }
 }
 
 function openAttachmentPicker() {
@@ -457,7 +431,6 @@ async function handleDelete() {
 
 onMounted(() => {
   void fetchTask()
-  void loadEmployees()
 })
 </script>
 

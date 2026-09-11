@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from app.ai_assistant.page_capabilities import build_page_action_semantics
 
 from .installation_preparation import build_installation_preparation
+from .task_assignment import has_unassigned_task_items
 
 STAGES = (
     ("order", "订单确认"),
@@ -181,18 +182,18 @@ def build_order_alerts(
         key, terminal_status, label, task_page, prefix = config
         current_task = _current_task(snapshot, key, terminal_status)
         task_path = f"{prefix}/{current_task.get('id')}" if current_task else ""
-        if current_task and not current_task.get("assigned_to"):
+        if current_task and has_unassigned_task_items(current_task):
             alerts.append(
                 _alert(
                     "task_unassigned",
                     "warning",
-                    f"{label}尚未分配负责人",
-                    "分配负责人后，AI 才能继续检查责任人与执行进度。",
+                    f"{label}仍有订单明细未分配执行人",
+                    "请在任务处理卡中为未分配的订单明细选择执行人；订单可见员工不等于明细执行人。",
                     _workflow_action(
-                        "分配任务负责人",
+                        "分配订单明细执行人",
                         task_page,
                         task_path,
-                        "task-assignee",
+                        "task-item-assignee",
                     ),
                 )
             )

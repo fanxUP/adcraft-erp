@@ -58,7 +58,7 @@ TASK_CONFIGS = {
 }
 
 
-def _get_task_service(db, task_type: str):
+def _get_task_service(db, user, task_type: str):
     from app.services.task_service import (
         DesignTaskService,
         InstallationTaskService,
@@ -70,13 +70,17 @@ def _get_task_service(db, task_type: str):
         "production_task": ProductionTaskService,
         "installation_task": InstallationTaskService,
     }
-    return services[task_type](db)
+    return services[task_type](db, user)
 
 
-def _validate_task_requirements(task_type: str, task: dict, target_status: str) -> None:
-    current_status = str(task.get("status") or "")
-    if current_status == "pending" and not task.get("assigned_to"):
-        raise ValueError("任务尚未分配负责人，请先完成分配")
+def _validate_task_requirements(
+    task_type: str,
+    task: dict,
+    target_status: str,
+    order_item_ids: list[str] | None,
+) -> None:
+    if not order_item_ids:
+        raise ValueError("请先指定要处理的订单明细")
 
     if (
         task_type == "design_task"
@@ -101,6 +105,7 @@ def _validate_transition(
     current_status: str,
     target_status: str,
     *,
+    order_item_ids: list[str] | None = None,
     stale_message: str,
 ) -> None:
     config = TASK_CONFIGS[task_type]
@@ -113,7 +118,7 @@ def _validate_transition(
         )
     if target_status not in allowed_targets(config["workflow"], live_status):
         raise ValueError(f"不允许从 {live_status} 流转到 {target_status}")
-    _validate_task_requirements(task_type, task, target_status)
+    _validate_task_requirements(task_type, task, target_status, order_item_ids)
 
 
 async def preview_task_status_change(
@@ -125,9 +130,10 @@ async def preview_task_status_change(
     current_status: str,
     target_status: str,
     reason: str = "",
+    order_item_ids: list[str] | None = None,
 ):
     config = TASK_CONFIGS[task_type]
-    service = _get_task_service(db, task_type)
+    service = _get_task_service(db, user, task_type)
     task = await service.get_task(UUID(business_id))
     if not task:
         raise ValueError(f"{config['label']}不存在")
@@ -136,6 +142,7 @@ async def preview_task_status_change(
         task,
         current_status,
         target_status,
+        order_item_ids=order_item_ids,
         stale_message="请重新获取流程建议",
     )
     labels = config["status_labels"]
@@ -149,6 +156,7 @@ async def preview_task_status_change(
         "current_status_label": labels.get(current_status, current_status),
         "target_status": target_status,
         "target_status_label": labels.get(target_status, target_status),
+        "order_item_ids": order_item_ids or [],
         "reason": reason,
         "effects": [
             f"{config['label']}将进入「{labels.get(target_status, target_status)}」",
@@ -166,9 +174,10 @@ async def execute_task_status_change(
     current_status: str,
     target_status: str,
     reason: str = "",
+    order_item_ids: list[str] | None = None,
 ):
     config = TASK_CONFIGS[task_type]
-    service = _get_task_service(db, task_type)
+    service = _get_task_service(db, user, task_type)
     task = await service.get_task(UUID(business_id))
     if not task:
         raise ValueError(f"{config['label']}不存在")
@@ -177,12 +186,15 @@ async def execute_task_status_change(
         task,
         current_status,
         target_status,
+        order_item_ids=order_item_ids,
         stale_message="原操作已停止",
     )
     updated = await service.change_status(
         UUID(business_id),
         target_status,
-        user.id,
+        operated_by=user.id,
+        reason=reason,
+        order_item_ids=order_item_ids,
     )
     labels = config["status_labels"]
     return {
@@ -228,13 +240,20 @@ def register_task_status_action_tools():
                         "enum": list(workflow),
                         "description": "流程导航允许的目标状态",
                     },
+                    "order_item_ids": {
+                        "type": "array",
+                        "items": {"type": "string", "format": "uuid"},
+                        "minItems": 1,
+                        "maxItems": 100,
+                        "description": "本次要推进的订单明细ID，只对这些明细生效",
+                    },
                     "reason": {
                         "type": "string",
                         "maxLength": 500,
                         "description": "状态变更原因",
                     },
                 },
-                "required": ["business_id", "current_status", "target_status"],
+                "required": ["business_id", "current_status", "target_status", "order_item_ids"],
                 "additionalProperties": False,
             },
             risk_level="level_3",

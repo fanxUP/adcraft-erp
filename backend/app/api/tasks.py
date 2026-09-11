@@ -47,6 +47,7 @@ from app.schemas.task import (
     ProductionTaskCreate,
     ProductionTaskUpdate,
     TaskAssigneeUpdate,
+    TaskItemAssigneeUpdate,
     TaskStatusChange,
     TaskType,
 )
@@ -405,8 +406,23 @@ async def assign_design_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_ASSIGN)),
 ):
+    raise ValueError("整张设计任务负责人已停用，请在订单上设置可见员工，或在任务处理卡中改派订单明细")
+
+
+@design_router.put("/{task_id}/order-item-assignees")
+async def reassign_design_task_items(
+    task_id: str,
+    data: TaskItemAssigneeUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_DESIGN_TASK_ASSIGN)),
+):
     service = DesignTaskService(db, current_user)
-    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
+    task = await service.reassign_items(
+        _ensure_uuid(task_id),
+        data.order_item_ids,
+        data.assignee_user_id,
+        current_user.id,
+    )
     return success(task)
 
 
@@ -510,8 +526,23 @@ async def assign_production_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_ASSIGN)),
 ):
+    raise ValueError("整张制作任务负责人已停用，请在订单上设置可见员工，或在任务处理卡中改派订单明细")
+
+
+@prod_router.put("/{task_id}/order-item-assignees")
+async def reassign_production_task_items(
+    task_id: str,
+    data: TaskItemAssigneeUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_ASSIGN)),
+):
     service = ProductionTaskService(db, current_user)
-    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
+    task = await service.reassign_items(
+        _ensure_uuid(task_id),
+        data.order_item_ids,
+        data.assignee_user_id,
+        current_user.id,
+    )
     return success(task)
 
 
@@ -615,8 +646,23 @@ async def assign_installation_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_ASSIGN)),
 ):
+    raise ValueError("整张安装任务负责人已停用，请在订单上设置可见员工，或在任务处理卡中改派订单明细")
+
+
+@inst_router.put("/{task_id}/order-item-assignees")
+async def reassign_installation_task_items(
+    task_id: str,
+    data: TaskItemAssigneeUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_ASSIGN)),
+):
     service = InstallationTaskService(db, current_user)
-    task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
+    task = await service.reassign_items(
+        _ensure_uuid(task_id),
+        data.order_item_ids,
+        data.assignee_user_id,
+        current_user.id,
+    )
     return success(task)
 
 

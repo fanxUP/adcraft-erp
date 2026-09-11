@@ -11,6 +11,21 @@ from app.models.user import User
 from app.services.order_task_assignment_service import task_visibility_clause
 
 
+def _item_assignee_filter(task_model, task_type: str, assigned_to: str):
+    """Filter a task by an explicitly claimed order item.
+
+    ``assigned_to`` used to point at the legacy whole-task owner column.  That
+    column is intentionally no longer authoritative: one task can now have
+    different employees on different order items.  Keep the public query
+    parameter for compatibility, but resolve it through the link table.
+    """
+    return exists().where(
+        TaskOrderItemLink.task_type == task_type,
+        TaskOrderItemLink.task_id == task_model.id,
+        TaskOrderItemLink.assignee_user_id == UUID(assigned_to),
+    )
+
+
 class DesignTaskRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -47,7 +62,7 @@ class DesignTaskRepository:
             )
             q = q.where(or_(DesignTask.order_item_id == item_id, linked))
         if assigned_to:
-            q = q.where(DesignTask.assigned_to == UUID(assigned_to))
+            q = q.where(_item_assignee_filter(DesignTask, "design", assigned_to))
         if outsourced is not None:
             has_out = exists().where(
                 OutsourceTask.source_task_type == "design",
@@ -109,7 +124,7 @@ class ProductionTaskRepository:
             )
             q = q.where(or_(ProductionTask.order_item_id == item_id, linked))
         if assigned_to:
-            q = q.where(ProductionTask.assigned_to == UUID(assigned_to))
+            q = q.where(_item_assignee_filter(ProductionTask, "production", assigned_to))
         if outsourced is not None:
             has_out = exists().where(
                 OutsourceTask.source_task_type == "production",
@@ -175,7 +190,7 @@ class InstallationTaskRepository:
             )
             q = q.where(or_(InstallationTask.order_item_id == item_id, linked))
         if assigned_to:
-            q = q.where(InstallationTask.assigned_to == UUID(assigned_to))
+            q = q.where(_item_assignee_filter(InstallationTask, "installation", assigned_to))
         if outsourced is not None:
             has_out = exists().where(
                 OutsourceTask.source_task_type == "installation",

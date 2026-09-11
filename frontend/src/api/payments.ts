@@ -1,5 +1,5 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, ProjectCostItemSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse } from '@/types/api'
+import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, ProjectCostItemSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse, TaskCompletionDetailsResponse, TaskCompletionKind, TaskCompletionPeriod, TaskCompletionSummary, TaskCompletionType } from '@/types/api'
 
 export function getPayments(params?: { page?: number; page_size?: number; order_id?: string; customer_id?: string; status?: string }) { return get<PaginatedData<PaymentResponse>>('/payments/', { params }) }
 export function getPayment(id: string) { return get<PaymentResponse>(`/payments/${id}`) }
@@ -28,6 +28,19 @@ export function getDashboard() { return get<DashboardData>('/reports/dashboard')
 export function getDailyReport(date?: string) { return get<DailyReportData>('/reports/daily', { params: { date } }) }
 export function getMonthlyReport(year?: number, month?: number) { return get<MonthlyReportData>('/reports/monthly', { params: { year, month } }) }
 export function getCustomerDebt() { return get<CustomerDebtItem[]>('/reports/customer-debt') }
+export function getTaskCompletionSummary(period: TaskCompletionPeriod) {
+  return get<TaskCompletionSummary>('/reports/task-completion/summary', { params: { period } })
+}
+export function getTaskCompletionDetails(params: {
+  period: TaskCompletionPeriod
+  kind: TaskCompletionKind
+  employee_id?: string
+  task_type?: TaskCompletionType
+  page?: number
+  page_size?: number
+}) {
+  return get<TaskCompletionDetailsResponse>('/reports/task-completion/details', { params })
+}
 
 // ── Project Costs ──
 

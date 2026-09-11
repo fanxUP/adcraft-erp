@@ -116,15 +116,14 @@ describe('任务详情页界面收敛', () => {
     expect(source).toContain(':changing="changing || isHistoricalReadOnly || !canChangeTaskStatus"')
   })
 
-  it('任务分配与变更状态合并到共享卡片，并要求负责人', () => {
+  it('任务处理按明细显示执行人，不再使用整张任务负责人', () => {
     const cardSource = readSource('components/tasks/TaskOrderItemLinkCard.vue')
 
-    expect(cardSource).toContain('employeeOptions')
-    expect(cardSource).toContain('assignedTo')
-    expect(cardSource).toContain('请先选择分配人，再变更任务状态')
-    expect(cardSource).toContain("emit('assign', assignmentTarget.value || null)")
-    expect(cardSource).toContain('assignedToId')
-    expect(cardSource).toContain('分配人：')
+    expect(cardSource).toContain('item.assignee_name')
+    expect(cardSource).toContain('itemAssigneeLabel(item)')
+    expect(cardSource).toContain('执行人：')
+    expect(cardSource).not.toContain('assignmentTarget')
+    expect(cardSource).not.toContain('请先选择分配人，再变更任务状态')
 
     for (const relativePath of [
       'views/tasks/DesignTaskDetail.vue',
@@ -132,6 +131,15 @@ describe('任务详情页界面收敛', () => {
       'views/tasks/InstallationTaskDetail.vue',
     ]) {
       expect(readSource(relativePath)).not.toContain('<template #header><span>任务分配</span></template>')
+    }
+
+    expect(readSource('components/ui/TaskBoardCard.vue')).not.toContain('负责人：')
+    for (const relativePath of [
+      'views/tasks/DesignTaskList.vue',
+      'views/tasks/ProductionTaskList.vue',
+      'views/tasks/InstallationTaskList.vue',
+    ]) {
+      expect(readSource(relativePath)).not.toContain('label="派发"')
     }
   })
 

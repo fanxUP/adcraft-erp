@@ -95,7 +95,7 @@ describe('page action guidance helpers', () => {
     const assigneeGuide: AiPageActionGuide = {
       label: '分配任务负责人',
       target_path: '/installation-tasks/44444444-4444-4444-4444-444444444444',
-      target_key: 'task-assignee',
+      target_key: 'task-item-assignee',
     }
     const checklist = {
       title: '安装准备清单',

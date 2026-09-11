@@ -10,6 +10,7 @@ from app.domain.workflows import (
 
 from .common import action, guidance_result, unknown_guidance
 from .installation_preparation import build_installation_preparation
+from .task_assignment import has_unassigned_task_items
 from .order_progress import attach_order_overview
 
 TASK_CONFIGS = {
@@ -93,8 +94,8 @@ def build_task_guidance(snapshot: dict, task_type: str) -> dict:
         return unknown_guidance(snapshot, config["prefix"])
 
     blockers = []
-    if status == "pending" and not snapshot.get("assigned_to"):
-        blockers.append("尚未分配负责人")
+    if status == "pending" and has_unassigned_task_items(snapshot):
+        blockers.append("尚有订单明细未分配执行人")
     if task_type == "design_task" and status == "designing" and not snapshot.get("design_file_url"):
         blockers.append("尚未上传设计稿")
     if task_type == "installation_task" and status in ("pending", "assigned"):

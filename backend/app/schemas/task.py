@@ -36,6 +36,9 @@ class TaskOrderItemState(BaseModel):
     progress_pct: int = Field(0, ge=0, le=100)
     status_view: StatusView | None = None
     capabilities: dict[str, ActionCapability] = Field(default_factory=dict)
+    assignee_user_id: str | None = None
+    assignee_name: str | None = None
+    assignee_state: Literal["unassigned", "claimed", "historical_unknown", "terminal"] = "unassigned"
 
 
 # -- Design Task --
@@ -244,6 +247,13 @@ class TaskAssigneeUpdate(BaseModel):
     assigned_to: str | None = None
 
 
+class TaskItemAssigneeUpdate(BaseModel):
+    """Assign or release the explicitly selected order-item work units."""
+
+    order_item_ids: list[str] = Field(min_length=1, max_length=100)
+    assignee_user_id: str | None = None
+
+
 class TaskStatusChange(BaseModel):
     to_status: str
     reason: str | None = None
@@ -278,6 +288,9 @@ class TaskOrderItemOption(OrderItemResponse):
     disabled_reason: str | None = None
     is_linked: bool = False
     task_status: str | None = None
+    assignee_user_id: str | None = None
+    assignee_name: str | None = None
+    assignee_state: Literal["unassigned", "claimed", "historical_unknown", "terminal"] = "unassigned"
     task_status_label: str | None = None
     task_status_view: StatusView | None = None
     task_progress_pct: int | None = Field(default=None, ge=0, le=100)

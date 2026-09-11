@@ -1,6 +1,7 @@
 import inspect
 from datetime import UTC, datetime
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,13 +14,19 @@ from app.domain.workflows import (
 )
 from app.domain.presentation import make_action_capability, make_status_view
 from app.models.business_document import BusinessDocument, BusinessDocumentItem
+from app.models.customer import Customer  # noqa: F401  # register BusinessDocument.customer
+from app.models.task_item_status_log import TaskItemStatusLog
 from app.models.task_order_item_link import TaskOrderItemLink
 from app.models.user import User
+from app.models.vehicle import Vehicle  # noqa: F401  # register Attachment.vehicle
 from app.core.permissions import (
     ORDER_ITEM_PRICE_FIELDS,
+    PERM_DESIGN_TASK_CHANGE_STATUS,
+    PERM_INSTALLATION_TASK_CHANGE_STATUS,
     PERM_ORDER_ITEM_VIEW_PRICE,
     PERM_ORDER_VIEW_PRICE,
     PERM_OUTSOURCE_TASK_READ,
+    PERM_PRODUCTION_TASK_CHANGE_STATUS,
     user_has_permission,
 )
 from app.repositories.task_repo import (
@@ -77,6 +84,11 @@ TASK_TYPE_LABELS = {
     "production": "制作",
     "installation": "安装",
 }
+TASK_CHANGE_PERMISSION_BY_TYPE = {
+    "design": PERM_DESIGN_TASK_CHANGE_STATUS,
+    "production": PERM_PRODUCTION_TASK_CHANGE_STATUS,
+    "installation": PERM_INSTALLATION_TASK_CHANGE_STATUS,
+}
 
 DESIGN_IN_PROGRESS_STATUSES = {
     "pending",
@@ -95,11 +107,24 @@ INSTALLATION_IN_PROGRESS_STATUSES = {
 }
 INSTALLATION_COMPLETED_STATUSES = {"completed"}
 TASK_CANCELLED_STATUS = "cancelled"
+TASK_RELEASE_STATUSES = {
+    "design": {"pending"},
+    "production": {"pending"},
+    "installation": {"pending"},
+}
 
 
 def _utc_now() -> datetime:
     """Return naive UTC for the existing task timestamp columns."""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+_BUSINESS_TIMEZONE = ZoneInfo("Asia/Shanghai")
+
+
+def _business_now_naive() -> datetime:
+    """Return Shanghai business time for completion event history."""
+    return datetime.now(_BUSINESS_TIMEZONE).replace(tzinfo=None)
 
 TASK_STATUS_PROGRESS = {
     "design": {
@@ -486,6 +511,178 @@ async def _task_order_item_link_rows(
     except AttributeError:
         rows = []
     return [row for row in rows if isinstance(row, TaskOrderItemLink)]
+
+
+async def _task_link_assignee_names(
+    db: AsyncSession,
+    links: list[TaskOrderItemLink],
+) -> dict[UUID, str]:
+    """Resolve only the current per-item executors used by task views."""
+    assignee_ids = {
+        assignee_id
+        for link in links
+        if (assignee_id := _coerce_uuid(getattr(link, "assignee_user_id", None)))
+    }
+    if not assignee_ids:
+        return {}
+    result = await db.execute(
+        select(User.id, User.real_name).where(User.id.in_(assignee_ids))
+    )
+    try:
+        rows = result.all()
+        if inspect.isawaitable(rows):
+            rows = await rows
+    except AttributeError:
+        rows = []
+    return {
+        user_id: real_name
+        for row in rows
+        for user_id, real_name in [(_coerce_uuid(row[0]), row[1])]
+        if user_id is not None and real_name
+    }
+
+
+def _task_item_assignee_state(
+    task_type: str,
+    status: str | None,
+    assignee_user_id: UUID | None,
+) -> str:
+    """Describe whether a link can still be claimed or is historical."""
+    if _is_terminal_item_status(task_type, status or ""):
+        return "terminal" if assignee_user_id else "historical_unknown"
+    return "claimed" if assignee_user_id else "unassigned"
+
+
+def _task_item_owner_conflict_message(
+    item_ids: list[UUID],
+    names_by_item: dict[UUID, str],
+) -> str:
+    labels = [names_by_item.get(item_id, str(item_id)) for item_id in item_ids]
+    return f"所选明细中有明细已由其他员工负责：{'、'.join(labels)}，请取消勾选后再操作"
+
+
+def _ensure_task_stage_change_permission(
+    task_type: str,
+    viewer: User | None,
+) -> None:
+    """Enforce the stage write boundary again inside the service layer."""
+    if viewer is not None and not user_has_permission(
+        viewer,
+        TASK_CHANGE_PERMISSION_BY_TYPE[task_type],
+    ):
+        raise ValueError(
+            f"当前账号只能查看{TASK_TYPE_LABELS[task_type]}流程，不能变更状态"
+        )
+
+
+async def _validate_and_claim_task_items(
+    db: AsyncSession,
+    task_type: str,
+    task,
+    selected_ids: list[UUID],
+    *,
+    viewer: User | None,
+    assignee_user_id: UUID | None,
+) -> list[TaskOrderItemLink]:
+    """Validate ownership for a batch, then claim only selected unassigned links."""
+    if viewer is None and assignee_user_id is None:
+        # Legacy service-unit callers do not have an authenticated employee
+        # context. Real API requests always pass both values, while this path
+        # keeps old transition tests and compatibility jobs read-only here.
+        return []
+    links = await _task_order_item_link_rows(db, task_type, task.id)
+    link_by_item = {
+        item_id: link
+        for link in links
+        if (item_id := _coerce_uuid(getattr(link, "order_item_id", None)))
+    }
+    selected_links = [link_by_item[item_id] for item_id in selected_ids if item_id in link_by_item]
+    is_manager = can_assign_task(task_type, viewer)
+    conflicts: list[UUID] = []
+    for item_id in selected_ids:
+        link = link_by_item.get(item_id)
+        if link is None:
+            continue
+        owner_id = _coerce_uuid(getattr(link, "assignee_user_id", None))
+        if owner_id and owner_id != assignee_user_id and not is_manager:
+            conflicts.append(item_id)
+    if conflicts:
+        item_names: dict[UUID, str] = {}
+        result = await db.execute(
+            select(BusinessDocumentItem.id, BusinessDocumentItem.item_name).where(
+                BusinessDocumentItem.id.in_(conflicts)
+            )
+        )
+        try:
+            rows = result.all()
+            if inspect.isawaitable(rows):
+                rows = await rows
+        except AttributeError:
+            rows = []
+        item_names = {
+            item_id: name
+            for row in rows
+            for item_id, name in [(_coerce_uuid(row[0]), row[1])]
+            if item_id is not None and name
+        }
+        raise ValueError(_task_item_owner_conflict_message(conflicts, item_names))
+
+    if assignee_user_id is not None:
+        for link in selected_links:
+            if getattr(link, "assignee_user_id", None) is None:
+                link.assignee_user_id = assignee_user_id
+    return selected_links
+
+
+async def _reassign_task_item_links(
+    db: AsyncSession,
+    task_type: str,
+    task,
+    raw_item_ids: list[str],
+    raw_assignee_user_id,
+    *,
+    viewer: User | None,
+) -> list[UUID]:
+    """Reassign only the explicitly named, non-terminal task item links."""
+    if not can_assign_task(task_type, viewer):
+        raise ValueError(f"当前账号没有{TASK_TYPE_LABELS[task_type]}明细改派权限")
+
+    item_ids: list[UUID] = []
+    seen: set[UUID] = set()
+    for raw_item_id in raw_item_ids:
+        item_id = _coerce_uuid(raw_item_id)
+        if item_id is None:
+            raise ValueError("订单明细编号格式不正确")
+        if item_id in seen:
+            raise ValueError("订单明细不能重复")
+        seen.add(item_id)
+        item_ids.append(item_id)
+
+    links = await _task_order_item_link_rows(db, task_type, task.id)
+    links_by_item = {
+        item_id: link
+        for link in links
+        if (item_id := _coerce_uuid(getattr(link, "order_item_id", None)))
+    }
+    missing = [item_id for item_id in item_ids if item_id not in links_by_item]
+    if missing:
+        raise ValueError("只能改派已经关联到当前任务的订单明细")
+    terminal = [
+        item_id
+        for item_id in item_ids
+        if _is_terminal_item_status(
+            task_type,
+            getattr(links_by_item[item_id], "item_status", None)
+            or getattr(task, "status", "pending"),
+        )
+    ]
+    if terminal:
+        raise ValueError("已完成或已取消的订单明细不能重新分配")
+
+    assignee_user_id = await validate_task_assignee(db, raw_assignee_user_id)
+    for item_id in item_ids:
+        links_by_item[item_id].assignee_user_id = assignee_user_id
+    return item_ids
 
 
 def _is_terminal_task_status(task_type: str, task) -> bool:
@@ -934,6 +1131,21 @@ async def _task_order_item_option_map(
             for link in await _task_order_item_link_rows(db, task_type, task_id)
             if (item_id := _coerce_uuid(link.order_item_id)) is not None
         }
+    linked_rows = list(linked_by_item.values())
+    assignee_names = await _task_link_assignee_names(db, linked_rows)
+    can_manage_items = can_assign_task(task_type, viewer)
+    can_change_stage = viewer is None or user_has_permission(
+        viewer,
+        TASK_CHANGE_PERMISSION_BY_TYPE[task_type],
+    )
+    current_employee_user_id: UUID | None = None
+    if viewer is not None and not can_manage_items:
+        try:
+            current_employee_user_id = await resolve_current_employee_user_id(db, viewer)
+        except ValueError:
+            # The options API remains readable for an account whose employee
+            # binding is incomplete, but its checkboxes become read-only.
+            current_employee_user_id = None
     outsource_by_item = await _blocking_outsource_map(
         db,
         document_id,
@@ -959,6 +1171,17 @@ async def _task_order_item_option_map(
             if link and link.item_progress_pct is not None
             else None
         )
+        assignee_user_id = (
+            _coerce_uuid(getattr(link, "assignee_user_id", None))
+            if link
+            else None
+        )
+        assignee_name = assignee_names.get(assignee_user_id) if assignee_user_id else None
+        assignee_state = _task_item_assignee_state(
+            task_type,
+            task_status,
+            assignee_user_id,
+        )
         outsource = outsource_by_item.get(item_id, {
             "outsource_blocked": False,
             "outsource_status": None,
@@ -968,16 +1191,44 @@ async def _task_order_item_option_map(
         })
         can_view_outsource = can_view_outsource_tasks(viewer)
         if is_linked:
-            can_select = not _is_terminal_item_status(task_type, task_status or "")
-            if can_select:
+            can_select = can_change_stage and not _is_terminal_item_status(task_type, task_status or "")
+            if (
+                can_select
+                and assignee_user_id is not None
+                and not can_manage_items
+                and assignee_user_id != current_employee_user_id
+            ):
+                can_select = False
+                disabled_reason = f"该明细由{assignee_name or '其他员工'}负责"
+            elif (
+                can_select
+                and viewer is not None
+                and not can_manage_items
+                and current_employee_user_id is None
+            ):
+                can_select = False
+                disabled_reason = "当前账号未绑定在职员工，不能领取明细"
+            elif not can_change_stage:
+                disabled_reason = f"当前账号只能查看{TASK_TYPE_LABELS[task_type]}流程，不能变更状态"
+            elif can_select:
                 disabled_reason = None
             elif _is_completed_item_status(task_type, task_status or ""):
                 disabled_reason = "该明细在本任务中已完成，不能再次处理"
             else:
                 disabled_reason = "该明细在本任务中已取消"
         else:
-            can_select = stage == expected_stage and not outsource["outsource_blocked"]
-            if outsource["outsource_blocked"] and can_view_outsource:
+            can_select = can_change_stage and stage == expected_stage and not outsource["outsource_blocked"]
+            if (
+                can_select
+                and viewer is not None
+                and not can_manage_items
+                and current_employee_user_id is None
+            ):
+                can_select = False
+                disabled_reason = "当前账号未绑定在职员工，不能领取明细"
+            elif not can_change_stage:
+                disabled_reason = f"当前账号只能查看{TASK_TYPE_LABELS[task_type]}流程，不能变更状态"
+            elif outsource["outsource_blocked"] and can_view_outsource:
                 disabled_reason = (
                     f"{outsource['outsource_status_label']}，完成后才能关联"
                     f"{TASK_TYPE_LABELS[task_type]}任务"
@@ -1023,6 +1274,9 @@ async def _task_order_item_option_map(
                 "disabled_reason": disabled_reason,
                 "is_linked": is_linked,
                 "task_status": task_status,
+                "assignee_user_id": str(assignee_user_id) if assignee_user_id else None,
+                "assignee_name": assignee_name,
+                "assignee_state": assignee_state,
                 "task_status_label": _item_status_label(task_type, task_status),
                 "task_status_view": (
                     _task_status_view(task_type, task_status).model_dump(mode="json")
@@ -1124,6 +1378,9 @@ async def _sync_task_order_item_links(
                     "task_type": task_type,
                     "task_id": task.id,
                     "order_item_id": item_id,
+                    "assignee_user_id": _coerce_uuid(
+                        getattr(existing, "assignee_user_id", None)
+                    ) if existing is not None else None,
                     "position": position,
                     "item_status": item_status,
                     "item_progress_pct": item_progress,
@@ -1262,11 +1519,13 @@ async def _enrich_task_order(
     if task_type and task_uuid is not None and linked_ids:
         fallback_status = task_dict.get("status", "pending")
         fallback_progress = int(task_dict.get("progress_pct", 0) or 0)
+        link_rows = await _task_order_item_link_rows(db, task_type, task_uuid)
         link_by_item = {
             item_id: link
-            for link in await _task_order_item_link_rows(db, task_type, task_uuid)
+            for link in link_rows
             if (item_id := _coerce_uuid(link.order_item_id)) is not None
         }
+        assignee_names = await _task_link_assignee_names(db, link_rows)
         for item_id in linked_ids:
             link = link_by_item.get(item_id)
             status = (link.item_status if link and link.item_status else fallback_status)
@@ -1275,12 +1534,24 @@ async def _enrich_task_order(
                 if link and link.item_progress_pct is not None
                 else _item_status_progress(task_type, status, fallback_progress)
             )
+            assignee_user_id = (
+                _coerce_uuid(getattr(link, "assignee_user_id", None))
+                if link
+                else None
+            )
             item_states[str(item_id)] = {
                 "status": status,
                 "status_label": _item_status_label(task_type, status),
                 "progress_pct": max(0, min(100, progress)),
                 "status_view": _task_status_view(task_type, status).model_dump(mode="json"),
                 "capabilities": _task_capabilities(task_type, status),
+                "assignee_user_id": str(assignee_user_id) if assignee_user_id else None,
+                "assignee_name": assignee_names.get(assignee_user_id) if assignee_user_id else None,
+                "assignee_state": _task_item_assignee_state(
+                    task_type,
+                    status,
+                    assignee_user_id,
+                ),
             }
     task_dict["order_item_states"] = item_states
     return task_dict
@@ -1780,8 +2051,11 @@ async def _apply_task_item_status_change(
     to_status: str,
     raw_item_ids: list[str] | None,
     viewer: User | None = None,
+    assignee_user_id: UUID | None = None,
+    operated_by: UUID | None = None,
 ) -> tuple[list[UUID], dict[UUID, tuple[str, int]]]:
     """Apply one status transition only to the checked item work units."""
+    _ensure_task_stage_change_permission(task_type, viewer)
     workflows = {
         "design": DESIGN_TASK_WORKFLOW,
         "production": PRODUCTION_TASK_WORKFLOW,
@@ -1795,8 +2069,10 @@ async def _apply_task_item_status_change(
         raw_item_ids,
     )
     states = await _task_item_state_map(db, task_type, task)
+    previous_statuses: dict[UUID, str] = {}
     for item_id in selected_ids:
         current_status = states.get(item_id, (getattr(task, "status", "pending"), 0))[0]
+        previous_statuses[item_id] = current_status
         if to_status not in allowed_targets(workflow, current_status):
             current_label = _item_status_label(task_type, current_status) or "当前状态"
             target_label = _item_status_label(task_type, to_status) or "目标状态"
@@ -1839,6 +2115,26 @@ async def _apply_task_item_status_change(
                 f"{TASK_TYPE_LABELS[task_type]}任务"
             )
 
+    selected_links = await _validate_and_claim_task_items(
+        db,
+        task_type,
+        task,
+        selected_ids,
+        viewer=viewer,
+        assignee_user_id=assignee_user_id,
+    )
+    event_assignees = {
+        _coerce_uuid(link.order_item_id): (
+            _coerce_uuid(getattr(link, "assignee_user_id", None))
+            or assignee_user_id
+        )
+        for link in selected_links
+        if _coerce_uuid(link.order_item_id) is not None
+    }
+    if to_status in TASK_RELEASE_STATUSES.get(task_type, set()):
+        for link in selected_links:
+            link.assignee_user_id = None
+
     progress = _item_status_progress(
         task_type,
         to_status,
@@ -1859,6 +2155,25 @@ async def _apply_task_item_status_change(
             ),
         )
     )
+    event_time = _business_now_naive()
+    status_logs = [
+        TaskItemStatusLog(
+            task_type=task_type,
+            task_id=task.id,
+            document_id=task.document_id,
+            order_item_id=item_id,
+            from_status=previous_statuses.get(item_id),
+            to_status=to_status,
+            assignee_user_id=event_assignees.get(item_id) or assignee_user_id,
+            operated_by=operated_by,
+            operated_at=event_time,
+            source="live",
+        )
+        for item_id in selected_ids
+    ]
+    added_logs = db.add_all(status_logs)
+    if inspect.isawaitable(added_logs):
+        await added_logs
     for item_id in selected_ids:
         states[item_id] = (to_status, progress)
 
@@ -1920,20 +2235,41 @@ async def _resolve_status_assignee(
     *,
     task_type: str,
     viewer: User | None,
-) -> UUID:
-    """Resolve the owner used for a status operation.
+) -> UUID | None:
+    """Resolve the current login as the executor of selected item rows.
 
-    Assignment-capable users may choose a valid employee/user explicitly.
-    Ordinary delivery workers cannot impersonate another owner: every status
-    operation is recorded against the employee bound to their login.
+    ``task.assigned_to`` was the old whole-task owner. It is deliberately not
+    consulted for real API requests anymore: visibility and execution belong to
+    different layers, and a status request may only claim its checked rows.
+    ``viewer is None`` is retained for legacy service-unit callers that do not
+    construct an authenticated request context.
     """
-    if viewer is not None and not can_assign_task(task_type, viewer):
-        if requested_assigned_to not in (None, ""):
-            raise ValueError(
-                "当前账号没有任务分配权限，状态变更会自动记录当前登录员工，不能指定其他员工"
-            )
-        return await resolve_current_employee_user_id(db, viewer)
-    return await _resolve_task_assignee(db, task, requested_assigned_to)
+    if viewer is None:
+        return await _resolve_task_assignee(db, task, requested_assigned_to)
+    if requested_assigned_to not in (None, ""):
+        raise ValueError("状态变更不再设置整张任务负责人，请直接勾选要处理的订单明细")
+    if can_assign_task(task_type, viewer):
+        try:
+            return await resolve_current_employee_user_id(db, viewer)
+        except ValueError:
+            # Stage managers/admins may operate selected rows without being an
+            # employee themselves.  They do not claim an unassigned row unless
+            # the login is actually bound to an active employee.
+            return None
+    return await resolve_current_employee_user_id(db, viewer)
+
+
+def _reject_legacy_task_assignee_input(
+    data: dict,
+    task_type: str,
+    viewer: User | None,
+) -> None:
+    """Prevent authenticated requests from reviving whole-task ownership."""
+    if viewer is not None and "assigned_to" in data:
+        raise ValueError(
+            f"整张{TASK_TYPE_LABELS[task_type]}任务负责人已停用，请在订单上设置可见员工，"
+            "或在任务处理卡中改派订单明细"
+        )
 
 
 async def _notify_task_assignee(
@@ -1997,6 +2333,7 @@ class DesignTaskService:
         return await self._to_dict(task) if task else None
 
     async def create_task(self, data: dict, operated_by: UUID | None = None) -> dict:
+        _reject_legacy_task_assignee_input(data, "design", self.viewer)
         if "assigned_to" in data:
             if not can_assign_task("design", self.viewer):
                 raise ValueError("当前账号没有任务分配权限，不能指定任务负责人")
@@ -2042,6 +2379,7 @@ class DesignTaskService:
         task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         if not task:
             raise ValueError("设计任务不存在")
+        _reject_legacy_task_assignee_input(data, "design", self.viewer)
         if "assigned_to" in data:
             if not can_assign_task("design", self.viewer):
                 raise ValueError("当前账号没有任务分配权限，不能修改任务负责人")
@@ -2115,6 +2453,39 @@ class DesignTaskService:
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
+    async def reassign_items(
+        self,
+        task_id: UUID,
+        order_item_ids: list[str],
+        assignee_user_id: str | None,
+        operated_by: UUID | None = None,
+    ) -> dict:
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
+        if not task:
+            raise ValueError("设计任务不存在")
+        before = task_history_snapshot(task)
+        await _reassign_task_item_links(
+            self.db,
+            "design",
+            task,
+            order_item_ids,
+            assignee_user_id,
+            viewer=self.viewer,
+        )
+        await record_task_event(
+            self.db,
+            "design",
+            task,
+            ACTION_UPDATE,
+            operated_by,
+            before=before,
+            reason="明细执行人改派" if assignee_user_id else "释放明细执行人",
+            changed_fields=["order_item_assignees", "order_item_ids"],
+        )
+        await self.db.flush()
+        await _refresh_task_for_response(self.db, task)
+        return await self._to_dict(task)
+
     async def change_status(
         self,
         task_id: UUID,
@@ -2131,7 +2502,6 @@ class DesignTaskService:
         await _ensure_terminal_unlinked_task_is_read_only(self.db, "design", task)
         if not order_item_ids and _task_order_item_id(task) is None:
             raise ValueError("请先勾选要处理的订单明细")
-        old_assigned = getattr(task, "assigned_to", None)
         effective_assignee = await _resolve_status_assignee(
             self.db,
             task,
@@ -2148,8 +2518,9 @@ class DesignTaskService:
                 to_status,
                 order_item_ids,
                 viewer=self.viewer,
+                assignee_user_id=effective_assignee,
+                operated_by=operated_by,
             )
-            task.assigned_to = effective_assignee
             await record_task_event(
                 self.db,
                 "design",
@@ -2159,7 +2530,6 @@ class DesignTaskService:
                 before=before,
                 reason=reason,
                 changed_fields=[
-                    "assigned_to",
                     "order_item_ids",
                     "item_status",
                     "status",
@@ -2193,17 +2563,9 @@ class DesignTaskService:
                     operated_by,
                 )
                 await _maybe_complete_order(self.db, task.document_id, operated_by)
-            if effective_assignee != _coerce_uuid(old_assigned):
-                await _notify_task_assignee(
-                    self.db,
-                    "design",
-                    task,
-                    effective_assignee,
-                )
             await _refresh_task_for_response(self.db, task)
             return await self._to_dict(task)
         except Exception:
-            task.assigned_to = old_assigned
             raise
 
     async def delete_task(self, task_id: UUID) -> None:
@@ -2304,6 +2666,7 @@ class ProductionTaskService:
         return await self._to_dict(task) if task else None
 
     async def create_task(self, data: dict, operated_by: UUID | None = None) -> dict:
+        _reject_legacy_task_assignee_input(data, "production", self.viewer)
         if "assigned_to" in data:
             if not can_assign_task("production", self.viewer):
                 raise ValueError("当前账号没有任务分配权限，不能指定任务负责人")
@@ -2349,6 +2712,7 @@ class ProductionTaskService:
         task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         if not task:
             raise ValueError("制作任务不存在")
+        _reject_legacy_task_assignee_input(data, "production", self.viewer)
         if "assigned_to" in data:
             if not can_assign_task("production", self.viewer):
                 raise ValueError("当前账号没有任务分配权限，不能修改任务负责人")
@@ -2422,6 +2786,39 @@ class ProductionTaskService:
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
+    async def reassign_items(
+        self,
+        task_id: UUID,
+        order_item_ids: list[str],
+        assignee_user_id: str | None,
+        operated_by: UUID | None = None,
+    ) -> dict:
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
+        if not task:
+            raise ValueError("制作任务不存在")
+        before = task_history_snapshot(task)
+        await _reassign_task_item_links(
+            self.db,
+            "production",
+            task,
+            order_item_ids,
+            assignee_user_id,
+            viewer=self.viewer,
+        )
+        await record_task_event(
+            self.db,
+            "production",
+            task,
+            ACTION_UPDATE,
+            operated_by,
+            before=before,
+            reason="明细执行人改派" if assignee_user_id else "释放明细执行人",
+            changed_fields=["order_item_assignees", "order_item_ids"],
+        )
+        await self.db.flush()
+        await _refresh_task_for_response(self.db, task)
+        return await self._to_dict(task)
+
     async def change_status(
         self,
         task_id: UUID,
@@ -2438,7 +2835,6 @@ class ProductionTaskService:
         await _ensure_terminal_unlinked_task_is_read_only(self.db, "production", task)
         if not order_item_ids and _task_order_item_id(task) is None:
             raise ValueError("请先勾选要处理的订单明细")
-        old_assigned = getattr(task, "assigned_to", None)
         effective_assignee = await _resolve_status_assignee(
             self.db,
             task,
@@ -2455,8 +2851,9 @@ class ProductionTaskService:
                 to_status,
                 order_item_ids,
                 viewer=self.viewer,
+                assignee_user_id=effective_assignee,
+                operated_by=operated_by,
             )
-            task.assigned_to = effective_assignee
             await record_task_event(
                 self.db,
                 "production",
@@ -2466,7 +2863,6 @@ class ProductionTaskService:
                 before=before,
                 reason=reason,
                 changed_fields=[
-                    "assigned_to",
                     "order_item_ids",
                     "item_status",
                     "status",
@@ -2500,17 +2896,9 @@ class ProductionTaskService:
                     operated_by,
                 )
                 await _maybe_complete_order(self.db, task.document_id, operated_by)
-            if effective_assignee != _coerce_uuid(old_assigned):
-                await _notify_task_assignee(
-                    self.db,
-                    "production",
-                    task,
-                    effective_assignee,
-                )
             await _refresh_task_for_response(self.db, task)
             return await self._to_dict(task)
         except Exception:
-            task.assigned_to = old_assigned
             raise
 
     async def delete_task(self, task_id: UUID) -> None:
@@ -2604,6 +2992,7 @@ class InstallationTaskService:
         return await self._to_dict(task) if task else None
 
     async def create_task(self, data: dict, operated_by: UUID | None = None) -> dict:
+        _reject_legacy_task_assignee_input(data, "installation", self.viewer)
         if "assigned_to" in data:
             if not can_assign_task("installation", self.viewer):
                 raise ValueError("当前账号没有任务分配权限，不能指定任务负责人")
@@ -2649,6 +3038,7 @@ class InstallationTaskService:
         task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         if not task:
             raise ValueError("安装任务不存在")
+        _reject_legacy_task_assignee_input(data, "installation", self.viewer)
         if "assigned_to" in data:
             if not can_assign_task("installation", self.viewer):
                 raise ValueError("当前账号没有任务分配权限，不能修改任务负责人")
@@ -2722,6 +3112,39 @@ class InstallationTaskService:
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
+    async def reassign_items(
+        self,
+        task_id: UUID,
+        order_item_ids: list[str],
+        assignee_user_id: str | None,
+        operated_by: UUID | None = None,
+    ) -> dict:
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
+        if not task:
+            raise ValueError("安装任务不存在")
+        before = task_history_snapshot(task)
+        await _reassign_task_item_links(
+            self.db,
+            "installation",
+            task,
+            order_item_ids,
+            assignee_user_id,
+            viewer=self.viewer,
+        )
+        await record_task_event(
+            self.db,
+            "installation",
+            task,
+            ACTION_UPDATE,
+            operated_by,
+            before=before,
+            reason="明细执行人改派" if assignee_user_id else "释放明细执行人",
+            changed_fields=["order_item_assignees", "order_item_ids"],
+        )
+        await self.db.flush()
+        await _refresh_task_for_response(self.db, task)
+        return await self._to_dict(task)
+
     async def change_status(
         self,
         task_id: UUID,
@@ -2738,7 +3161,6 @@ class InstallationTaskService:
         await _ensure_terminal_unlinked_task_is_read_only(self.db, "installation", task)
         if not order_item_ids and _task_order_item_id(task) is None:
             raise ValueError("请先勾选要处理的订单明细")
-        old_assigned = getattr(task, "assigned_to", None)
         effective_assignee = await _resolve_status_assignee(
             self.db,
             task,
@@ -2755,8 +3177,9 @@ class InstallationTaskService:
                 to_status,
                 order_item_ids,
                 viewer=self.viewer,
+                assignee_user_id=effective_assignee,
+                operated_by=operated_by,
             )
-            task.assigned_to = effective_assignee
             await record_task_event(
                 self.db,
                 "installation",
@@ -2766,7 +3189,6 @@ class InstallationTaskService:
                 before=before,
                 reason=reason,
                 changed_fields=[
-                    "assigned_to",
                     "order_item_ids",
                     "item_status",
                     "status",
@@ -2775,17 +3197,9 @@ class InstallationTaskService:
             )
             if task.document_id and selected_item_ids:
                 await _maybe_complete_order(self.db, task.document_id, operated_by)
-            if effective_assignee != _coerce_uuid(old_assigned):
-                await _notify_task_assignee(
-                    self.db,
-                    "installation",
-                    task,
-                    effective_assignee,
-                )
             await _refresh_task_for_response(self.db, task)
             return await self._to_dict(task)
         except Exception:
-            task.assigned_to = old_assigned
             raise
 
     async def delete_task(self, task_id: UUID) -> None:

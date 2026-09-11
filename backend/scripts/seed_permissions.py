@@ -157,6 +157,9 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "outsource_payment:create", "name": "登记外协付款", "description": "登记外协任务付款"},
     # Report
     {"code": "report:read", "name": "查看报表", "description": "查看销售报表"},
+    # Delivery completion metrics
+    {"code": "task_completion:read", "name": "查看个人完成统计", "description": "查看本人完成的项目和订单明细统计"},
+    {"code": "task_completion:view_all", "name": "查看全员完成统计", "description": "查看组织总计、员工分组和指定员工完成明细"},
     # Vehicle
     {"code": "vehicle:read", "name": "查看车辆", "description": "查看车辆和司机档案"},
     {"code": "vehicle:create", "name": "创建车辆", "description": "新增车辆和司机"},
@@ -231,6 +234,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "design_task:read", "design_task:create", "design_task:update", "design_task:change_status",
         "production_task:read",
         "installation_task:read",
+        "task_completion:read",
     ],
     "production": [
         "customer:read",
@@ -238,13 +242,19 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "material:read",
         "process:read",
         "task_queue:read",
+        "design_task:read",
         "production_task:read", "production_task:create", "production_task:update", "production_task:change_status",
+        "installation_task:read",
         "inventory:read", "inventory:create", "inventory:update", "inventory:stock_in", "inventory:stock_out",
+        "task_completion:read",
     ],
     "installer": [
         "customer:read",
         "task_queue:read",
+        "design_task:read",
+        "production_task:read",
         "installation_task:read", "installation_task:create", "installation_task:update", "installation_task:change_status",
+        "task_completion:read",
     ],
     "finance": [
         "customer:read",
@@ -278,7 +288,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
 
 # ── Roles referenced by the init-db.sh script ──────────────────────────────
 ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance", "resource_manager", "outsource_manager"]
-PERMISSION_SEED_VERSION = 1
+PERMISSION_SEED_VERSION = 2
 
 
 def builtin_role_permission_codes(role_name: str) -> list[str] | None:

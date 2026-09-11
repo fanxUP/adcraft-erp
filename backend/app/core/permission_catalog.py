@@ -90,6 +90,9 @@ PERMISSION_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "outsource_task:update": ("outsource_center:read", "outsource_task:read"),
     "outsource_task:change_status": ("outsource_center:read", "outsource_task:read"),
     "outsource_task:delete": ("outsource_center:read", "outsource_task:read"),
+    # Completion metrics are non-financial, but organization-wide visibility
+    # must always include the personal read capability.
+    "task_completion:view_all": ("task_completion:read",),
 }
 
 

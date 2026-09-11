@@ -515,6 +515,7 @@ async def test_design_task_preview_rejects_submission_without_design_file():
                 business_id=str(task_id),
                 current_status="designing",
                 target_status="pending_review",
+                order_item_ids=[str(UUID("77777777-7777-7777-7777-777777777777"))],
             )
 
 

@@ -189,6 +189,12 @@ def test_order_guidance_reports_actionable_delivery_anomalies():
                     "installation_no": "I20260729-0001",
                     "status": "pending",
                     "assigned_to": None,
+                    "order_item_states": {
+                        "77777777-7777-7777-7777-777777777777": {
+                            "status": "pending",
+                            "assignee_user_id": None,
+                        }
+                    },
                     "address": None,
                     "scheduled_at": None,
                 }
@@ -212,7 +218,7 @@ def test_order_guidance_reports_actionable_delivery_anomalies():
         for alert in guidance["alerts"]
     }
     assert alerts_by_code["task_unassigned"]["action"]["target_key"] == (
-        "task-assignee"
+        "task-item-assignee"
     )
     assert "action" not in alerts_by_code["installation_address_missing"]
     assert "action" not in alerts_by_code["installation_schedule_missing"]
@@ -261,7 +267,9 @@ def test_installation_stage_builds_reviewable_preparation_checklist():
     ]
     assert all(item["state"] == "pending" for item in checklist["items"])
     checklist_items = {item["key"]: item for item in checklist["items"]}
-    assert checklist_items["assigned_to"]["action"]["target_key"] == "task-assignee"
+    assert checklist_items["assigned_to"]["action"]["target_key"] == (
+        "task-item-assignee"
+    )
     assert "action" not in checklist_items["address"]
     assert "action" not in checklist_items["scheduled_at"]
     assert checklist["draft_action"]["target_key"] == "installation-draft"

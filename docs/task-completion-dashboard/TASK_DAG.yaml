@@ -1,0 +1,42 @@
+version: 1
+mode: STRICT
+status: implementation_complete_local_verification_pending_release
+objective: >-
+  为经营驾驶舱增加全部/当月的项目与订单明细完成统计，按完成时员工归属隔离
+  普通员工数据，并为管理员提供组织总计、员工分组和个人明细，同时保持价格权限安全。
+nodes:
+  - id: P01
+    name: 固定统计口径与契约
+    acceptance: A01
+    depends_on: []
+    status: complete
+  - id: P02
+    name: 明细完成事件模型与迁移
+    acceptance: A02
+    depends_on: [P01]
+    status: complete
+  - id: P03
+    name: 状态变更事件写入
+    acceptance: A02
+    depends_on: [P02]
+    status: complete
+  - id: P04
+    name: 统计服务与后端权限
+    acceptance: A03
+    depends_on: [P02, P03]
+    status: complete
+  - id: P05
+    name: 汇总与明细 API
+    acceptance: A04
+    depends_on: [P04]
+    status: complete
+  - id: P06
+    name: 驾驶舱前端
+    acceptance: A05-A06
+    depends_on: [P05]
+    status: complete
+  - id: P07
+    name: 验证、数据核对与发布准备
+    acceptance: A07-A08
+    depends_on: [P06]
+    status: verification_complete_local_release_pending

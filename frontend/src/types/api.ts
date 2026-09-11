@@ -204,6 +204,9 @@ export interface TaskOrderItemOption extends Omit<OrderItemResponse,
   task_status_label?: string | null
   task_status_view?: StatusView | null
   task_progress_pct?: number | null
+  assignee_user_id?: string | null
+  assignee_name?: string | null
+  assignee_state: 'unassigned' | 'claimed' | 'historical_unknown' | 'terminal'
   capabilities?: Record<string, ActionCapability>
   outsource_blocked: boolean
   outsource_status?: 'pending' | 'in_progress' | null
@@ -1479,6 +1482,86 @@ export interface DashboardData {
   pending_installation_count: number
   overdue_order_count: number
   customer_debt_ranking: CustomerDebtItem[]
+}
+
+export type TaskCompletionPeriod = 'all' | 'month'
+export type TaskCompletionKind = 'project' | 'detail'
+export type TaskCompletionType = 'design' | 'production' | 'installation'
+
+export interface TaskCompletionStats {
+  completed_project_count: number
+  completed_work_unit_count: number
+  stage_breakdown: Record<TaskCompletionType, number>
+}
+
+export interface TaskCompletionOrganizationStats extends TaskCompletionStats {
+  completed_order_project_count: number
+  completed_detail_count: number
+  backfill_work_unit_count: number
+  unknown_completion_time_count: number
+}
+
+export interface TaskCompletionEmployee {
+  employee_id: string | null
+  user_id: string | null
+  employee_no: string | null
+  name: string
+  is_active: boolean
+  employment_status: string | null
+}
+
+export interface TaskCompletionEmployeeStats extends TaskCompletionEmployee, TaskCompletionStats {}
+
+export interface TaskCompletionSummary {
+  period: TaskCompletionPeriod
+  period_start: string | null
+  period_end: string | null
+  scope: 'own' | 'all'
+  employee: TaskCompletionEmployee | null
+  own: TaskCompletionStats
+  organization: TaskCompletionOrganizationStats | null
+  employees: TaskCompletionEmployeeStats[]
+  unassigned: TaskCompletionStats
+  message: string | null
+}
+
+export interface TaskCompletionProjectRow {
+  kind: 'project'
+  project_id: string
+  project_no: string | null
+  project_name: string | null
+  completed_detail_count: number
+  completed_work_unit_count: number
+  stages: TaskCompletionType[]
+  last_completed_at: string | null
+}
+
+export interface TaskCompletionDetailRow {
+  kind: 'detail'
+  project_id: string
+  project_no: string
+  project_name: string
+  order_item_id: string
+  item_name: string
+  task_type: TaskCompletionType
+  task_label: string
+  task_id: string
+  task_no: string | null
+  employee_id: string | null
+  employee_name: string
+  completed_at: string | null
+  status: string
+  source: string
+}
+
+export interface TaskCompletionDetailsResponse {
+  items: Array<TaskCompletionProjectRow | TaskCompletionDetailRow>
+  total: number
+  page: number
+  page_size: number
+  scope: 'own' | 'all'
+  employee?: TaskCompletionEmployee | null
+  message: string | null
 }
 
 export interface DailyReportOrder {

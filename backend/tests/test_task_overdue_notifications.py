@@ -27,7 +27,7 @@ def make_task(task_type="design", **overrides):
         "project_name": "门头项目",
         "status": "in_progress",
         "planned_end_at": NOW - timedelta(minutes=30),
-        "assigned_to": USER_ID,
+        "assignee_user_id": USER_ID,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -56,7 +56,7 @@ def test_build_overdue_escalation_notification_is_distinct_and_actionable():
 
 
 @pytest.mark.parametrize(
-    ("status", "assigned_to", "planned_end_at", "expected"),
+    ("status", "assignee_user_id", "planned_end_at", "expected"),
     [
         ("in_progress", USER_ID, NOW - timedelta(minutes=30), True),
         ("confirmed", USER_ID, NOW - timedelta(minutes=30), False),
@@ -66,12 +66,12 @@ def test_build_overdue_escalation_notification_is_distinct_and_actionable():
         ("in_progress", USER_ID, NOW + timedelta(minutes=30), False),
     ],
 )
-def test_should_notify_only_non_terminal_assigned_overdue_tasks(
-    status, assigned_to, planned_end_at, expected
+def test_should_notify_only_non_terminal_claimed_overdue_items(
+    status, assignee_user_id, planned_end_at, expected
 ):
     task = make_task(
         status=status,
-        assigned_to=assigned_to,
+        assignee_user_id=assignee_user_id,
         planned_end_at=planned_end_at,
     )
 
@@ -79,7 +79,7 @@ def test_should_notify_only_non_terminal_assigned_overdue_tasks(
 
 
 @pytest.mark.parametrize(
-    ("status", "assigned_to", "planned_end_at", "expected"),
+    ("status", "assignee_user_id", "planned_end_at", "expected"),
     [
         ("in_progress", USER_ID, NOW - timedelta(days=1), True),
         ("in_progress", USER_ID, NOW - timedelta(days=1, minutes=-1), False),
@@ -89,12 +89,12 @@ def test_should_notify_only_non_terminal_assigned_overdue_tasks(
         ("in_progress", None, NOW - timedelta(days=2), False),
     ],
 )
-def test_should_escalate_only_after_one_day_and_only_for_assigned_non_terminal_tasks(
-    status, assigned_to, planned_end_at, expected
+def test_should_escalate_only_after_one_day_and_only_for_claimed_non_terminal_items(
+    status, assignee_user_id, planned_end_at, expected
 ):
     task = make_task(
         status=status,
-        assigned_to=assigned_to,
+        assignee_user_id=assignee_user_id,
         planned_end_at=planned_end_at,
     )
 
@@ -153,7 +153,7 @@ async def test_scan_is_idempotent_and_re_sends_after_deadline_changes(monkeypatc
 
 @pytest.mark.asyncio
 async def test_scan_skips_unassigned_task_even_if_query_returns_it(monkeypatch):
-    task = make_task(assigned_to=None)
+    task = make_task(assignee_user_id=None)
     created = []
 
     async def fake_list_overdue_tasks(db, model, task_type, now):

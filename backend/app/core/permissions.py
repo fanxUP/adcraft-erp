@@ -174,6 +174,12 @@ PERM_OUTSOURCE_PAYMENT_CREATE = "outsource_payment:create"
 # Report
 PERM_REPORT_READ = "report:read"
 
+# Delivery completion metrics.  These permissions are deliberately separate
+# from financial reports: execution staff can see their own work results
+# without gaining access to order prices, costs or profit.
+PERM_TASK_COMPLETION_READ = "task_completion:read"
+PERM_TASK_COMPLETION_VIEW_ALL = "task_completion:view_all"
+
 # AI Features
 PERM_AI_QUOTE_READ = "ai_quote:read"
 PERM_AI_ANOMALY_READ = "ai_anomaly:read"

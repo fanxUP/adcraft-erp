@@ -4,6 +4,8 @@ from datetime import datetime
 
 from app.ai_assistant.page_capabilities import build_page_action_semantics
 
+from .task_assignment import has_unassigned_task_items
+
 
 def _action(label: str, path: str, target_key: str, draft: dict | None = None) -> dict:
     result = {
@@ -35,17 +37,50 @@ def build_installation_preparation(
     order_deadline=None,
 ) -> dict:
     """Build a deterministic checklist without changing business data."""
-    fields = [
-        {
-            "key": "assigned_to",
-            "label": "负责人",
-            "value": _text_value(task.get("assigned_to")),
-            "source": "task",
-            "target_key": "task-assignee",
-            "pending_detail": "需要从系统人员中选择安装负责人",
-            "completed_detail": "已分配安装负责人",
-            "hint": "请选择实际负责本次安装的人员。",
-        },
+    fields = []
+    if "order_item_states" not in task:
+        # Compatibility for old, hand-built snapshots only. Live task
+        # responses use order_item_states and never read the legacy owner.
+        fields.append(
+            {
+                "key": "assigned_to",
+                "label": "负责人",
+                "value": _text_value(task.get("assigned_to")),
+                "source": "task",
+                "target_key": "task-item-assignee",
+                "pending_detail": "需要在任务处理卡中为订单明细选择执行人",
+                "completed_detail": "订单明细已分配执行人",
+                "hint": "请在任务处理卡中选择具体订单明细的执行人。",
+            }
+        )
+    elif has_unassigned_task_items(task):
+        fields.append(
+            {
+                "key": "assigned_to",
+                "label": "订单明细执行人",
+                "value": None,
+                "source": "manual",
+                "target_key": "task-item-assignee",
+                "pending_detail": "仍有订单明细未分配执行人",
+                "completed_detail": "订单明细已分配执行人",
+                "hint": "请在任务处理卡中勾选明细并改派执行人。",
+                "include_in_draft": False,
+            }
+        )
+    else:
+        fields.append(
+            {
+                "key": "assigned_to",
+                "label": "订单明细执行人",
+                "value": "已分配",
+                "source": "task",
+                "pending_detail": "订单明细已分配执行人",
+                "completed_detail": "订单明细已分配执行人",
+                "hint": "订单明细执行人已在任务处理卡中维护。",
+                "include_in_draft": False,
+            }
+        )
+    fields.extend([
         {
             "key": "address",
             "label": "安装地址",
@@ -82,7 +117,7 @@ def build_installation_preparation(
                 else "请与客户和施工人员确认后选择实际进场时间。"
             ),
         },
-    ]
+    ])
 
     items = []
     draft_fields = []
@@ -115,15 +150,16 @@ def build_installation_preparation(
                 target_key,
             )
         items.append(item)
-        draft_fields.append(
-            {
-                "key": field["key"],
-                "label": field["label"],
-                "value": suggested_value,
-                "source": "order" if suggested_value else "manual",
-                "hint": field["hint"],
-            }
-        )
+        if field.get("include_in_draft", True):
+            draft_fields.append(
+                {
+                    "key": field["key"],
+                    "label": field["label"],
+                    "value": suggested_value,
+                    "source": "order" if suggested_value else "manual",
+                    "hint": field["hint"],
+                }
+            )
 
     checklist = {
         "title": "安装准备清单",

@@ -38,9 +38,6 @@
             <ProgressBar :percentage="row.progress_pct" :tone="row.status_view?.tone" size="sm" aria-label="设计任务进度" />
           </template>
         </el-table-column>
-        <el-table-column label="派发" width="90">
-          <template #default="{ row }">{{ row.assigned_to_name || row.assigned_to || '-' }}</template>
-        </el-table-column>
         <el-table-column v-if="canViewOutsourceTask" label="外协" width="80">
           <template #default="{ row }">
             <el-tag v-if="row.is_outsourced" type="warning" size="small">已外协</el-tag>

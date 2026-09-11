@@ -26,7 +26,7 @@ export function hasPageActionCompleted(
   }
   if (checklist) {
     const targetByItemKey: Partial<Record<AiFormDraftFieldKey, string>> = {
-      assigned_to: 'task-assignee',
+      assigned_to: 'task-item-assignee',
     }
     const matchingItem = checklist.items.find(item =>
       item.action?.target_key === guide.target_key

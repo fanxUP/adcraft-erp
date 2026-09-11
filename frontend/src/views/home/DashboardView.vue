@@ -56,6 +56,171 @@
       </el-col>
     </el-row>
 
+    <el-card v-if="canViewTaskCompletion" shadow="never" class="completion-card" v-loading="completionLoading">
+      <template #header>
+        <div class="completion-header">
+          <div>
+            <span class="completion-title">项目完成统计</span>
+            <el-tag v-if="completionSummary" size="small" type="info" effect="plain">
+              {{ completionSummary.scope === 'all' ? '全员可见' : '仅本人' }}
+            </el-tag>
+          </div>
+          <el-radio-group v-model="completionPeriod" size="small" @change="handleCompletionPeriodChange">
+            <el-radio-button label="month">当月</el-radio-button>
+            <el-radio-button label="all">全部</el-radio-button>
+          </el-radio-group>
+        </div>
+      </template>
+
+      <el-alert
+        v-if="completionError"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="completion-alert"
+      >
+        <span>{{ completionError }}</span>
+        <el-button link type="warning" size="small" @click="fetchTaskCompletion">重试</el-button>
+      </el-alert>
+      <el-alert
+        v-if="completionSummary?.message"
+        :title="completionSummary.message"
+        type="info"
+        :closable="false"
+        show-icon
+        class="completion-alert"
+      />
+
+      <template v-if="completionSummary">
+        <div class="completion-kpis">
+          <div class="completion-kpi">
+            <span class="completion-kpi-label">{{ canViewCompletionAll ? '整单完成项目' : '我完成的项目' }}</span>
+            <strong>{{ canViewCompletionAll ? completionSummary.organization?.completed_order_project_count || 0 : completionSummary.own.completed_project_count }}</strong>
+          </div>
+          <div class="completion-kpi">
+            <span class="completion-kpi-label">{{ canViewCompletionAll ? '最终交付明细' : '我完成的明细' }}</span>
+            <strong>{{ canViewCompletionAll ? completionSummary.organization?.completed_detail_count || 0 : completionSummary.own.completed_work_unit_count }}</strong>
+          </div>
+          <div v-if="canViewCompletionAll" class="completion-kpi">
+            <span class="completion-kpi-label">完成工作明细</span>
+            <strong>{{ completionSummary.organization?.completed_work_unit_count || 0 }}</strong>
+          </div>
+          <div class="completion-kpi completion-kpi--stages">
+            <span class="completion-kpi-label">阶段完成明细</span>
+            <div class="stage-counts">
+              <span v-for="stage in completionStages" :key="stage.key">
+                {{ stage.label }} {{ (canViewCompletionAll ? completionSummary.organization?.stage_breakdown : completionSummary.own.stage_breakdown)?.[stage.key] || 0 }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="canViewCompletionAll" class="completion-workspace">
+          <div class="completion-employees">
+            <div class="completion-subtitle">员工完成统计</div>
+            <button
+              type="button"
+              class="employee-filter"
+              :class="{ 'is-active': !selectedCompletionEmployeeId }"
+              @click="selectCompletionEmployee(null)"
+            >
+              <span>全部员工</span>
+              <strong>{{ completionSummary.organization?.completed_work_unit_count || 0 }}</strong>
+            </button>
+            <button
+              v-for="employee in completionSummary.employees"
+              :key="employee.employee_id || employee.user_id || employee.name"
+              type="button"
+              class="employee-filter"
+              :class="{ 'is-active': selectedCompletionEmployeeId === employee.employee_id }"
+              @click="selectCompletionEmployee(employee.employee_id)"
+            >
+              <span>{{ employee.name }}<small v-if="!employee.is_active">（非在职）</small></span>
+              <strong>{{ employee.completed_work_unit_count }}</strong>
+            </button>
+            <div v-if="completionSummary.unassigned.completed_work_unit_count" class="unassigned-hint">
+              未分配：{{ completionSummary.unassigned.completed_work_unit_count }} 条
+            </div>
+          </div>
+
+          <div class="completion-details" v-loading="completionDetailsLoading">
+            <div class="completion-detail-toolbar">
+              <div class="completion-subtitle">
+                {{ selectedCompletionEmployeeName ? `${selectedCompletionEmployeeName}的完成明细` : '全员完成明细' }}
+              </div>
+              <el-select v-model="completionTaskType" size="small" clearable placeholder="全部阶段" @change="handleCompletionFilterChange">
+                <el-option v-for="stage in completionStages" :key="stage.key" :label="stage.label" :value="stage.key" />
+              </el-select>
+            </div>
+            <el-tabs v-model="completionKind" @tab-change="handleCompletionFilterChange">
+              <el-tab-pane label="按项目" name="project">
+                <el-table :data="completionProjectRows" size="small" stripe class="completion-table" empty-text="暂无完成项目">
+                  <el-table-column prop="project_no" label="订单编号" width="170" />
+                  <el-table-column prop="project_name" label="项目名称" min-width="180" show-overflow-tooltip />
+                  <el-table-column prop="completed_detail_count" label="完成明细" width="90" align="center" />
+                  <el-table-column prop="completed_work_unit_count" label="工作明细" width="90" align="center" />
+                  <el-table-column label="完成阶段" min-width="120">
+                    <template #default="{ row }">{{ row.stages.map(stageLabel).join('、') }}</template>
+                  </el-table-column>
+                  <el-table-column label="最近完成" width="165">
+                    <template #default="{ row }">{{ formatCompletionDate(row.last_completed_at) }}</template>
+                  </el-table-column>
+                </el-table>
+              </el-tab-pane>
+              <el-tab-pane label="按明细" name="detail">
+                <el-table :data="completionDetailRows" size="small" stripe class="completion-table" empty-text="暂无完成明细">
+                  <el-table-column prop="project_no" label="订单编号" width="170" />
+                  <el-table-column prop="item_name" label="订单明细" min-width="150" show-overflow-tooltip />
+                  <el-table-column prop="task_label" label="阶段" width="75" align="center" />
+                  <el-table-column prop="employee_name" label="完成员工" width="100" />
+                  <el-table-column label="完成时间" width="165">
+                    <template #default="{ row }">{{ formatCompletionDate(row.completed_at) }}</template>
+                  </el-table-column>
+                </el-table>
+              </el-tab-pane>
+            </el-tabs>
+            <el-pagination
+              v-if="completionDetails && completionDetails.total > completionDetails.page_size"
+              v-model:current-page="completionPage"
+              :page-size="completionDetails.page_size"
+              :total="completionDetails.total"
+              layout="total, prev, pager, next"
+              small
+              class="completion-pagination"
+              @current-change="fetchCompletionDetails"
+            />
+          </div>
+        </div>
+
+        <div v-else class="completion-details completion-details--personal" v-loading="completionDetailsLoading">
+          <div class="completion-detail-toolbar">
+            <div class="completion-subtitle">我的完成明细</div>
+            <el-select v-model="completionTaskType" size="small" clearable placeholder="全部阶段" @change="handleCompletionFilterChange">
+              <el-option v-for="stage in completionStages" :key="stage.key" :label="stage.label" :value="stage.key" />
+            </el-select>
+          </div>
+          <el-table :data="completionDetailRows" size="small" stripe class="completion-table" empty-text="暂无完成明细">
+            <el-table-column prop="project_no" label="订单编号" width="170" />
+            <el-table-column prop="item_name" label="订单明细" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="task_label" label="阶段" width="75" align="center" />
+            <el-table-column label="完成时间" width="165">
+              <template #default="{ row }">{{ formatCompletionDate(row.completed_at) }}</template>
+            </el-table-column>
+          </el-table>
+          <el-pagination
+            v-if="completionDetails && completionDetails.total > completionDetails.page_size"
+            v-model:current-page="completionPage"
+            :page-size="completionDetails.page_size"
+            :total="completionDetails.total"
+            layout="total, prev, pager, next"
+            small
+            class="completion-pagination"
+            @current-change="fetchCompletionDetails"
+          />
+        </div>
+      </template>
+    </el-card>
+
     <el-row :gutter="16">
       <el-col v-if="canViewPricedOrders" :span="12">
         <el-card shadow="never" class="info-card">
@@ -131,11 +296,23 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
-import { getDashboard } from '@/api/payments'
+import { getDashboard, getTaskCompletionDetails, getTaskCompletionSummary } from '@/api/payments'
 import { getOrders } from '@/api/orders'
 import { getTaskQueue } from '@/api/tasks'
 import { getQuotes } from '@/api/quotes'
-import type { CustomerDebtItem, OrderListResponse, QuoteListResponse, TaskQueueItem } from '@/types/api'
+import type {
+  CustomerDebtItem,
+  OrderListResponse,
+  QuoteListResponse,
+  TaskCompletionDetailRow,
+  TaskCompletionKind,
+  TaskCompletionPeriod,
+  TaskCompletionProjectRow,
+  TaskCompletionSummary,
+  TaskCompletionType,
+  TaskCompletionDetailsResponse,
+  TaskQueueItem,
+} from '@/types/api'
 import TaskBoardCard from '@/components/ui/TaskBoardCard.vue'
 import { isTaskVisible, TASK_BOARD_COLUMNS } from '@/utils/task-board'
 import { useAuthStore } from '@/stores/auth'
@@ -145,6 +322,8 @@ const canViewFinancial = computed(() => authStore.hasPermission('report:view_fin
 const canViewPricedOrders = computed(() => (
   authStore.hasPermission('order:read') && authStore.hasPermission('order:view_price')
 ))
+const canViewTaskCompletion = computed(() => authStore.can('task_completion:read'))
+const canViewCompletionAll = computed(() => authStore.can('task_completion:view_all'))
 
 const loading = ref(false)
 const data = reactive({
@@ -156,6 +335,35 @@ const data = reactive({
 })
 
 const quoteList = ref<QuoteListResponse[]>([])
+
+const completionPeriod = ref<TaskCompletionPeriod>('month')
+const completionSummary = ref<TaskCompletionSummary | null>(null)
+const completionDetails = ref<TaskCompletionDetailsResponse | null>(null)
+const completionKind = ref<TaskCompletionKind>('detail')
+const completionTaskType = ref<TaskCompletionType | undefined>(undefined)
+const selectedCompletionEmployeeId = ref<string | null>(null)
+const completionPage = ref(1)
+const completionLoading = ref(false)
+const completionDetailsLoading = ref(false)
+const completionError = ref('')
+const completionStages: Array<{ key: TaskCompletionType; label: string }> = [
+  { key: 'design', label: '设计' },
+  { key: 'production', label: '制作' },
+  { key: 'installation', label: '安装' },
+]
+
+const completionProjectRows = computed<TaskCompletionProjectRow[]>(() => (
+  completionDetails.value?.items.filter((item): item is TaskCompletionProjectRow => item.kind === 'project') || []
+))
+const completionDetailRows = computed<TaskCompletionDetailRow[]>(() => (
+  completionDetails.value?.items.filter((item): item is TaskCompletionDetailRow => item.kind === 'detail') || []
+))
+const selectedCompletionEmployeeName = computed(() => {
+  if (!selectedCompletionEmployeeId.value || !completionSummary.value) return ''
+  return completionSummary.value.employees.find(
+    employee => employee.employee_id === selectedCompletionEmployeeId.value,
+  )?.name || ''
+})
 
 const boardLoading = ref(false)
 const allProjects = ref<OrderListResponse[]>([])
@@ -204,6 +412,71 @@ async function fetchData() {
     const d = await getDashboard()
     Object.assign(data, d)
   } finally { loading.value = false }
+}
+
+async function fetchCompletionSummary() {
+  completionLoading.value = true
+  try {
+    completionSummary.value = await getTaskCompletionSummary(completionPeriod.value)
+  } catch {
+    completionError.value = '完成统计暂时无法加载，请稍后重试'
+  } finally {
+    completionLoading.value = false
+  }
+}
+
+async function fetchCompletionDetails() {
+  if (!canViewTaskCompletion.value) return
+  completionError.value = ''
+  completionDetailsLoading.value = true
+  try {
+    const params: Parameters<typeof getTaskCompletionDetails>[0] = {
+      period: completionPeriod.value,
+      kind: completionKind.value,
+      page: completionPage.value,
+      page_size: 10,
+    }
+    if (selectedCompletionEmployeeId.value) params.employee_id = selectedCompletionEmployeeId.value
+    if (completionTaskType.value) params.task_type = completionTaskType.value
+    completionDetails.value = await getTaskCompletionDetails(params)
+  } catch {
+    completionError.value = '完成明细暂时无法加载，请稍后重试'
+  } finally {
+    completionDetailsLoading.value = false
+  }
+}
+
+async function fetchTaskCompletion() {
+  if (!canViewTaskCompletion.value) return
+  completionError.value = ''
+  await Promise.allSettled([fetchCompletionSummary(), fetchCompletionDetails()])
+}
+
+function handleCompletionPeriodChange() {
+  completionPage.value = 1
+  fetchTaskCompletion()
+}
+
+function handleCompletionFilterChange() {
+  completionPage.value = 1
+  fetchCompletionDetails()
+}
+
+function selectCompletionEmployee(employeeId: string | null) {
+  selectedCompletionEmployeeId.value = employeeId
+  completionPage.value = 1
+  fetchCompletionDetails()
+}
+
+function stageLabel(stage: TaskCompletionType) {
+  return completionStages.find(item => item.key === stage)?.label || stage
+}
+
+function formatCompletionDate(value: string | null) {
+  if (!value) return '时间未记录'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 async function fetchQuotes() {
@@ -256,6 +529,7 @@ onMounted(() => {
   fetchData()
   fetchQuotes()
   fetchBoardData()
+  fetchTaskCompletion()
   window.addEventListener('pageshow', handlePageShow)
 })
 
@@ -279,6 +553,29 @@ onBeforeUnmount(() => {
 .stat-value.is-danger { color: #dc2626; }
 .task-card .stat-value { font-size: 30px; margin-top: 4px; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
+.completion-card { margin-bottom: 16px; background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
+.completion-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.completion-title { font-size: 16px; font-weight: 700; margin-right: 10px; }
+.completion-alert { margin-bottom: 12px; }
+.completion-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.completion-kpi { min-height: 82px; padding: 14px 16px; border: 1px solid var(--ad-border); border-radius: 8px; background: color-mix(in srgb, var(--ad-card) 88%, var(--ad-primary) 12%); }
+.completion-kpi-label { display: block; color: var(--ad-text-secondary); font-size: 13px; margin-bottom: 8px; }
+.completion-kpi strong { color: var(--ad-text); font-size: 26px; line-height: 1; }
+.completion-kpi--stages { min-width: 0; }
+.stage-counts { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--ad-text); font-size: 13px; }
+.completion-workspace { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; }
+.completion-employees { border-right: 1px solid var(--ad-border); padding-right: 16px; }
+.completion-subtitle { color: var(--ad-text); font-size: 14px; font-weight: 700; }
+.employee-filter { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 10px; margin-top: 7px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ad-text); cursor: pointer; text-align: left; }
+.employee-filter:hover { background: var(--ad-border); }
+.employee-filter.is-active { border-color: var(--ad-primary); background: color-mix(in srgb, var(--ad-card) 86%, var(--ad-primary) 14%); color: var(--ad-primary); }
+.employee-filter small { color: var(--ad-text-secondary); }
+.unassigned-hint { margin-top: 12px; color: var(--ad-text-secondary); font-size: 12px; }
+.completion-details { min-width: 0; }
+.completion-details--personal { margin-top: 8px; }
+.completion-detail-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.completion-table { width: 100%; }
+.completion-pagination { justify-content: flex-end; margin-top: 12px; }
 .debt-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--ad-border); }
 .quote-row { cursor: pointer; }
 .quote-row:hover { background: var(--ad-border); }
@@ -291,4 +588,17 @@ onBeforeUnmount(() => {
 .debt-rank { width: 28px; height: 28px; background: #e63946; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; font-size: 16px; margin-right: 12px; }
 .debt-name { flex: 1; color: var(--ad-text); }
 .debt-amount { font-weight: bold; font-size: 16px; color: #e63946; }
+
+@media (max-width: 1100px) {
+  .completion-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .completion-header { align-items: flex-start; flex-direction: column; }
+  .completion-kpis { grid-template-columns: 1fr 1fr; }
+  .completion-workspace { grid-template-columns: 1fr; gap: 12px; }
+  .completion-employees { border-right: 0; border-bottom: 1px solid var(--ad-border); padding: 0 0 12px; }
+  .completion-detail-toolbar { align-items: flex-start; flex-direction: column; }
+  .completion-detail-toolbar .el-select { width: 100%; }
+}
 </style>

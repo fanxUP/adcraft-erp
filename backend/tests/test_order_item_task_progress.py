@@ -422,7 +422,7 @@ async def test_execution_viewer_gets_generic_block_reason_without_outsource_deta
     assert option["outsource_task_count"] == 0
     assert option.get("outsource_task_nos") == []
     assert "外协" not in option["disabled_reason"]
-    assert "前置事项" in option["disabled_reason"]
+    assert "只能查看制作流程" in option["disabled_reason"]
 
 
 @pytest.mark.asyncio
@@ -475,7 +475,10 @@ async def test_execution_status_error_hides_outsource_task_reference():
         ]
     )
     viewer = SimpleNamespace(
-        roles=[SimpleNamespace(permissions=[SimpleNamespace(code="installation_task:change_status")])]
+        roles=[SimpleNamespace(permissions=[
+            SimpleNamespace(code="installation_task:read"),
+            SimpleNamespace(code="installation_task:change_status"),
+        ])]
     )
 
     with (

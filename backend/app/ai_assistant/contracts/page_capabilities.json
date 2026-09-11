@@ -219,7 +219,7 @@
       ]
     },
     {
-      "target_key": "task-assignee",
+      "target_key": "task-item-assignee",
       "business_types": [
         "design_task",
         "installation_task",
@@ -230,17 +230,26 @@
         {
           "name": "DesignTaskDetail",
           "path": "/design-tasks/:id",
-          "marker_files": ["frontend/src/views/tasks/DesignTaskDetail.vue"]
+          "marker_files": [
+            "frontend/src/views/tasks/DesignTaskDetail.vue",
+            "frontend/src/components/tasks/TaskOrderItemLinkCard.vue"
+          ]
         },
         {
           "name": "ProductionTaskDetail",
           "path": "/production-tasks/:id",
-          "marker_files": ["frontend/src/views/tasks/ProductionTaskDetail.vue"]
+          "marker_files": [
+            "frontend/src/views/tasks/ProductionTaskDetail.vue",
+            "frontend/src/components/tasks/TaskOrderItemLinkCard.vue"
+          ]
         },
         {
           "name": "InstallationTaskDetail",
           "path": "/installation-tasks/:id",
-          "marker_files": ["frontend/src/views/tasks/InstallationTaskDetail.vue"]
+          "marker_files": [
+            "frontend/src/views/tasks/InstallationTaskDetail.vue",
+            "frontend/src/components/tasks/TaskOrderItemLinkCard.vue"
+          ]
         }
       ]
     },
@@ -604,17 +613,17 @@
       "requires_confirmation": true,
       "required_permissions": {"ReceivablesView": "payment:create"}
     },
-    "task-assignee": {
-      "purpose": "为任务分配实际负责人",
-      "prerequisites": ["已确认人员可用且职责匹配"],
-      "completion_signal": "任务详情显示已分配负责人",
-      "blocking_conditions": ["人员不可用、任务已锁定或权限不足"],
+    "task-item-assignee": {
+      "purpose": "为任务处理卡片中选中的订单明细分配执行人",
+      "prerequisites": ["已勾选需要改派的未完成订单明细", "已确认人员可用且职责匹配"],
+      "completion_signal": "选中的订单明细显示新的执行人",
+      "blocking_conditions": ["未勾选订单明细、明细已完成、人员不可用或权限不足"],
       "effect": "write",
       "requires_confirmation": true,
       "required_permissions": {
-        "DesignTaskDetail": "design_task:update",
-        "ProductionTaskDetail": "production_task:update",
-        "InstallationTaskDetail": "installation_task:update"
+        "DesignTaskDetail": "design_task:assign",
+        "ProductionTaskDetail": "production_task:assign",
+        "InstallationTaskDetail": "installation_task:assign"
       }
     },
     "task-status-assigned": {

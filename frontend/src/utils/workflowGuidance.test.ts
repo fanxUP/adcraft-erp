@@ -127,7 +127,7 @@ describe('workflow guidance helpers', () => {
             label: '分配任务负责人',
             target_page: '设计任务详情',
             target_path: '/design-tasks/22222222-2222-2222-2222-222222222222',
-            target_key: 'task-assignee',
+            target_key: 'task-item-assignee',
           },
         },
       ],
@@ -146,7 +146,7 @@ describe('workflow guidance helpers', () => {
           severity: 'warning',
           action: {
             label: '分配任务负责人',
-            target_key: 'task-assignee',
+            target_key: 'task-item-assignee',
           },
         },
       ],

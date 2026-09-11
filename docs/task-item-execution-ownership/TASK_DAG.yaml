@@ -1,0 +1,82 @@
+version: 1
+name: task-item-execution-ownership
+objective: >-
+  将订单可见范围、阶段明细执行人和设计/制作/安装阶段权限拆分，
+  修复单条明细状态变更覆盖整张任务负责人问题，并安全纠正历史数据。
+mode: STRICT
+status: implementation_complete_local_verification_complete_release_pending
+nodes:
+  - id: TIO-P01
+    title: 现状契约与失败用例冻结
+    acceptance: A-TIO-01
+    depends_on: []
+    status: complete
+  - id: TIO-P02
+    title: 明细执行人数据模型与迁移
+    acceptance: A-TIO-02
+    depends_on: [TIO-P01]
+    status: complete
+  - id: TIO-P03
+    title: 订单可见范围与阶段权限收敛
+    acceptance: A-TIO-03
+    depends_on: [TIO-P01]
+    status: complete
+  - id: TIO-P04
+    title: 后端明细领取、状态校验与改派接口
+    acceptance: A-TIO-04
+    depends_on: [TIO-P02, TIO-P03]
+    status: complete
+  - id: TIO-P05
+    title: 前端任务处理和跨阶段只读视图
+    acceptance: A-TIO-05
+    depends_on: [TIO-P03, TIO-P04]
+    status: complete
+  - id: TIO-P06
+    title: 历史数据核查、问题任务修复和统计通知适配
+    acceptance: A-TIO-06
+    depends_on: [TIO-P02, TIO-P04]
+    status: complete_local_release_pending
+  - id: TIO-P07
+    title: 全链路验证与发布门禁
+    acceptance: A-TIO-07
+    depends_on: [TIO-P04, TIO-P05, TIO-P06]
+    status: verification_complete_release_pending
+edges:
+  - from: TIO-P01
+    to: TIO-P02
+  - from: TIO-P01
+    to: TIO-P03
+  - from: TIO-P02
+    to: TIO-P04
+  - from: TIO-P03
+    to: TIO-P04
+  - from: TIO-P03
+    to: TIO-P05
+  - from: TIO-P04
+    to: TIO-P05
+  - from: TIO-P02
+    to: TIO-P06
+  - from: TIO-P04
+    to: TIO-P06
+  - from: TIO-P04
+    to: TIO-P07
+  - from: TIO-P05
+    to: TIO-P07
+  - from: TIO-P06
+    to: TIO-P07
+backlog:
+  - id: B-TIO-01
+    title: 明细负责人完整变更时间线
+    priority: P1
+  - id: B-TIO-02
+    title: 按阶段和执行人筛选未完成明细
+    priority: P2
+  - id: B-TIO-03
+    title: 未领取明细提醒和工作量看板
+    priority: P2
+  - id: B-TIO-04
+    title: 短信、邮件或飞书通知
+    priority: P2
+  - id: B-TIO-05
+    title: 稳定后删除任务表旧 assigned_to 字段
+    priority: P2
