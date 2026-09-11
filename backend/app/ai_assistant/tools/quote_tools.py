@@ -68,7 +68,7 @@ def _preview_ai_quote_item(item: dict) -> dict:
 async def search_quotes(db, user, keyword="", page=1, page_size=20, status=None, customer_id=None):
     """Search existing quotes (not orders) with keyword/doc_no/customer/status."""
     from app.services.business_document_service import BusinessDocumentService
-    svc = BusinessDocumentService(db, doc_type="quote")
+    svc = BusinessDocumentService(db, doc_type="quote", viewer=user)
     cid = UUID(customer_id) if customer_id else None
     quotes, total = await svc.list_all(page, page_size, status=status, customer_id=cid, keyword=keyword or None)
     return {"quotes": quotes, "total": total, "page": page, "page_size": page_size}
@@ -77,7 +77,7 @@ async def search_quotes(db, user, keyword="", page=1, page_size=20, status=None,
 async def get_quote_detail(db, user, quote_id):
     """Get full detail of an existing quote (not order), including items and status."""
     from app.services.business_document_service import BusinessDocumentService
-    svc = BusinessDocumentService(db, doc_type="quote")
+    svc = BusinessDocumentService(db, doc_type="quote", viewer=user)
     quote = await svc.get_by_id(UUID(quote_id))
     if not quote:
         return {"error": "报价单不存在"}

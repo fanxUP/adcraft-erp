@@ -160,12 +160,15 @@ async def test_update_user_validates_role_combination_before_mutating_user(servi
     mock_repo.get_by_id.return_value = existing_user
 
     designer = MagicMock(id=SAMPLE_USER_ID, name="designer")
-    designer.permissions = [MagicMock(code="design_task:read")]
+    designer.permissions = [
+        MagicMock(code="design_task:read"),
+        MagicMock(code="design_task:update"),
+    ]
     finance = MagicMock(id=SAMPLE_USER_ID, name="finance")
     finance.permissions = [MagicMock(code="payment:read")]
     mock_repo.get_roles.return_value = [designer, finance]
 
-    with pytest.raises(ValueError, match="执行角色不能与带价格或财务权限的角色同时分配"):
+    with pytest.raises(ValueError, match="任务执行能力不能与价格或财务能力同时启用"):
         await service.update_user(
             SAMPLE_USER_ID,
             {

@@ -243,9 +243,14 @@ def build_order_alerts(
                 )
             )
 
+    financial_visible = snapshot.get("_financial_visible")
+    if financial_visible is None:
+        financial_visible = (
+            "total_amount" in snapshot and "total_paid" in snapshot
+        )
     total = _money(snapshot.get("total_amount"))
     paid = _money(snapshot.get("total_paid"))
-    if status == "completed" and total > paid:
+    if financial_visible and status == "completed" and total > paid:
         alerts.append(
             _alert(
                 "receivable_outstanding",
@@ -260,9 +265,14 @@ def build_order_alerts(
 
 def build_order_progress(snapshot: dict) -> dict:
     status = str(snapshot.get("status") or "")
+    financial_visible = snapshot.get("_financial_visible")
+    if financial_visible is None:
+        financial_visible = (
+            "total_amount" in snapshot and "total_paid" in snapshot
+        )
     total = _money(snapshot.get("total_amount"))
     paid = _money(snapshot.get("total_paid"))
-    paid_in_full = status == "completed" and paid >= total
+    paid_in_full = financial_visible and status == "completed" and paid >= total
     current_index = CURRENT_STAGE_INDEX.get(status, 0)
     completed_steps = len(STAGES) if paid_in_full else current_index
 
@@ -272,7 +282,11 @@ def build_order_progress(snapshot: dict) -> dict:
         _task_detail(snapshot.get("production_tasks") or [], "completed", "制作"),
         _task_detail(snapshot.get("installation_tasks") or [], "completed", "安装"),
         _acceptance_detail(snapshot),
-        f"已收 {paid:.2f} / 应收 {total:.2f} 元",
+        (
+            f"已收 {paid:.2f} / 应收 {total:.2f} 元"
+            if financial_visible
+            else "回款进度需具备财务查看权限"
+        ),
     )
     steps = []
     for index, ((key, label), detail) in enumerate(zip(STAGES, details)):

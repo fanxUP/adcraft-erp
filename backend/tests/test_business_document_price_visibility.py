@@ -9,6 +9,7 @@ import pytest
 from app.core.permissions import (
     PERM_FINANCE_VIEW_COST,
     PERM_ORDER_ITEM_VIEW_PRICE,
+    PERM_ORDER_READ,
     PERM_ORDER_VIEW_PRICE,
 )
 from app.services.business_document_service import BusinessDocumentService
@@ -118,7 +119,7 @@ async def test_order_summary_and_detail_keep_only_granted_price_groups():
     service = BusinessDocumentService(
         AsyncMock(),
         doc_type="order",
-        viewer=make_viewer(PERM_ORDER_VIEW_PRICE, PERM_ORDER_ITEM_VIEW_PRICE),
+        viewer=make_viewer(PERM_ORDER_READ, PERM_ORDER_VIEW_PRICE, PERM_ORDER_ITEM_VIEW_PRICE),
     )
     order = make_order()
 
@@ -136,7 +137,7 @@ async def test_order_summary_and_detail_keep_only_granted_price_groups():
     finance_service = BusinessDocumentService(
         AsyncMock(),
         doc_type="order",
-        viewer=make_viewer(PERM_ORDER_VIEW_PRICE, PERM_FINANCE_VIEW_COST),
+        viewer=make_viewer(PERM_ORDER_READ, PERM_ORDER_VIEW_PRICE, PERM_FINANCE_VIEW_COST),
     )
     finance_summary = finance_service._to_summary(order)
     assert finance_summary["cost_amount"] == 100.0

@@ -10,12 +10,21 @@ from app.ai.gateway_providers.gateway_ai_client import GatewayAIClient
 from app.ai.rule_based.report_composer import ReportComposer
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import (
+    PERM_AI_REPORT_READ,
+    PERM_REPORT_VIEW_FINANCIAL,
+    require_all_permissions,
+)
 from app.models.user import User
 from app.schemas.common import success
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ai/reports", tags=["AI Reports"])
+router = APIRouter(
+    prefix="/ai/reports",
+    tags=["AI Reports"],
+    dependencies=[Depends(require_all_permissions(PERM_AI_REPORT_READ, PERM_REPORT_VIEW_FINANCIAL))],
+)
 
 
 @router.get("/business-narrative")

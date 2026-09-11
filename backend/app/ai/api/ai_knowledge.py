@@ -9,10 +9,19 @@ from app.ai.core.resolver import FeatureResolver
 from app.ai.rule_based.quote_finder import QuoteFinder
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import (
+    PERM_AI_KNOWLEDGE_READ,
+    PERM_ORDER_VIEW_PRICE,
+    require_all_permissions,
+)
 from app.models.user import User
 from app.schemas.common import success
 
-router = APIRouter(prefix="/ai/knowledge", tags=["AI Knowledge Base"])
+router = APIRouter(
+    prefix="/ai/knowledge",
+    tags=["AI Knowledge Base"],
+    dependencies=[Depends(require_all_permissions(PERM_AI_KNOWLEDGE_READ, PERM_ORDER_VIEW_PRICE))],
+)
 
 
 @router.get("/similar-quotes")

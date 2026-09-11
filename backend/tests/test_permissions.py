@@ -7,10 +7,16 @@ from fastapi import HTTPException
 
 from app.core.permissions import (
     PERM_CATALOG_VIEW_PRICE,
+    PERM_CUSTOMER_READ,
     PERM_FINANCE_VIEW_COST,
     PERM_ORDER_ITEM_VIEW_PRICE,
     PERM_ORDER_VIEW_PRICE,
     PERM_REPORT_VIEW_FINANCIAL,
+    PERM_PRODUCT_READ,
+    PERM_PROCESS_READ,
+    PERM_BACKUP_CREATE,
+    PERM_BACKUP_READ,
+    PERM_TASK_QUEUE_READ,
     PERM_RESOURCE_CENTER_READ,
     PERM_OUTSOURCE_CENTER_READ,
     PERM_OUTSOURCE_PAYMENT_READ,
@@ -75,24 +81,24 @@ class TestRequirePermission:
 
     async def test_user_with_permission_passes(self):
         """User with the required permission in one of their roles passes."""
-        role = _make_role("editor", ["document:read", "document:write"])
+        role = _make_role("editor", [PERM_BACKUP_READ, PERM_BACKUP_CREATE])
         user = _make_user([role])
-        assert await self._check("document:write", user) is True
+        assert await self._check(PERM_BACKUP_CREATE, user) is True
 
     async def test_user_without_permission_fails(self):
         """User without the required permission fails with 403."""
-        role = _make_role("viewer", ["document:read"])
+        role = _make_role("viewer", [PERM_BACKUP_READ])
         user = _make_user([role])
-        assert await self._check("document:write", user) is False
+        assert await self._check(PERM_BACKUP_CREATE, user) is False
 
     async def test_user_with_multiple_roles_checks_all(self):
         """The dependency checks all roles, not just the first one."""
-        role_a = _make_role("role_a", ["perm:a"])
-        role_b = _make_role("role_b", ["perm:b"])
+        role_a = _make_role("role_a", [PERM_CUSTOMER_READ])
+        role_b = _make_role("role_b", [PERM_PRODUCT_READ])
         user = _make_user([role_a, role_b])
-        assert await self._check("perm:a", user) is True
-        assert await self._check("perm:b", user) is True
-        assert await self._check("perm:c", user) is False
+        assert await self._check(PERM_CUSTOMER_READ, user) is True
+        assert await self._check(PERM_PRODUCT_READ, user) is True
+        assert await self._check(PERM_PROCESS_READ, user) is False
 
     async def test_user_with_no_roles_fails(self):
         """User with no roles fails for any permission."""
@@ -101,10 +107,10 @@ class TestRequirePermission:
 
     async def test_permission_in_any_role_suffices(self):
         """Having the permission in any one role is sufficient."""
-        viewer = _make_role("viewer", ["read"])
-        editor = _make_role("editor", ["read", "write"])
+        viewer = _make_role("viewer", [PERM_CUSTOMER_READ])
+        editor = _make_role("editor", [PERM_CUSTOMER_READ, PERM_PRODUCT_READ])
         user = _make_user([viewer, editor])
-        assert await self._check("write", user) is True
+        assert await self._check(PERM_PRODUCT_READ, user) is True
 
     async def test_admin_role_has_all_permissions(self):
         """Admin role (with all permissions) passes any permission check."""
@@ -121,14 +127,14 @@ class TestRequirePermission:
 
 class TestRequireAnyPermission:
     async def test_one_matching_permission_is_enough(self):
-        user = _make_user([_make_role("operator", ["task:update"])])
-        dependency = require_any_permission("task:create", "task:update")
+        user = _make_user([_make_role("operator", [PERM_TASK_QUEUE_READ])])
+        dependency = require_any_permission(PERM_BACKUP_CREATE, PERM_TASK_QUEUE_READ)
 
         assert await dependency(user) is user
 
     async def test_missing_all_permissions_is_rejected(self):
-        user = _make_user([_make_role("viewer", ["task:read"])])
-        dependency = require_any_permission("task:create", "task:update")
+        user = _make_user([_make_role("viewer", [PERM_CUSTOMER_READ])])
+        dependency = require_any_permission(PERM_BACKUP_CREATE, PERM_TASK_QUEUE_READ)
 
         with pytest.raises(HTTPException) as exc_info:
             await dependency(user)
@@ -138,20 +144,20 @@ class TestRequireAnyPermission:
 
 class TestRequireAllPermissions:
     async def test_all_permissions_are_required(self):
-        user = _make_user([_make_role("operator", ["module:read", "task:update"])])
-        dependency = require_all_permissions("module:read", "task:update")
+        user = _make_user([_make_role("operator", [PERM_CUSTOMER_READ, PERM_PRODUCT_READ])])
+        dependency = require_all_permissions(PERM_CUSTOMER_READ, PERM_PRODUCT_READ)
 
         assert await dependency(user) is user
 
     async def test_missing_one_permission_is_rejected_with_plain_language(self):
-        user = _make_user([_make_role("operator", ["module:read"])])
-        dependency = require_all_permissions("module:read", "task:update")
+        user = _make_user([_make_role("operator", [PERM_CUSTOMER_READ])])
+        dependency = require_all_permissions(PERM_CUSTOMER_READ, PERM_PRODUCT_READ)
 
         with pytest.raises(HTTPException) as exc_info:
             await dependency(user)
 
         assert exc_info.value.status_code == 403
-        assert "task:update" in exc_info.value.detail
+        assert PERM_PRODUCT_READ in exc_info.value.detail
 
 
 async def test_sales_role_can_read_project_delivery_tasks():
@@ -279,10 +285,11 @@ async def test_execution_roles_only_read_catalog_metadata():
 
 async def test_permission_context_exposes_price_capabilities_without_role_name_checks():
     user = _make_user([
-        _make_role("custom-business", [PERM_ORDER_VIEW_PRICE, PERM_REPORT_VIEW_FINANCIAL]),
+        _make_role("custom-business", ["order:read", PERM_ORDER_VIEW_PRICE, PERM_REPORT_VIEW_FINANCIAL]),
     ])
 
     assert get_user_permission_codes(user) == frozenset({
+        "order:read",
         PERM_ORDER_VIEW_PRICE,
         PERM_REPORT_VIEW_FINANCIAL,
     })
@@ -296,35 +303,38 @@ async def test_permission_context_exposes_price_capabilities_without_role_name_c
 
 
 async def test_execution_roles_cannot_receive_sensitive_permissions():
-    with pytest.raises(ValueError, match="设计、制作、安装角色不能拥有价格或财务权限"):
+    with pytest.raises(ValueError, match="任务执行能力不能与价格或财务能力同时启用"):
         validate_role_sensitive_permissions(
             "designer",
-            ["design_task:read", PERM_ORDER_VIEW_PRICE],
+            ["design_task:read", "design_task:update", "order:read", PERM_ORDER_VIEW_PRICE],
         )
 
 
 async def test_execution_roles_cannot_receive_resource_center_permissions():
-    with pytest.raises(ValueError, match="设计、制作、安装角色不能拥有资源中心权限"):
+    with pytest.raises(ValueError, match="任务执行能力不能与资源中心车辆/高空车能力同时启用"):
         validate_role_resource_permissions(
             "production",
-            ["production_task:read", PERM_RESOURCE_CENTER_READ, "vehicle:read"],
+            [
+                "production_task:read", "production_task:update",
+                PERM_RESOURCE_CENTER_READ, "vehicle:read",
+            ],
         )
 
 
 async def test_custom_execution_role_cannot_hide_sensitive_permissions_behind_a_new_name():
-    with pytest.raises(ValueError, match="设计、制作、安装角色不能拥有价格或财务权限"):
+    with pytest.raises(ValueError, match="任务执行能力不能与价格或财务能力同时启用"):
         validate_role_sensitive_permissions(
             "custom-production-team",
-            ["production_task:read", "quote:read"],
+            ["production_task:read", "production_task:update", "quote:read"],
         )
 
 
 async def test_execution_role_cannot_be_combined_with_sales_or_finance():
-    with pytest.raises(ValueError, match="执行角色不能与销售或财务角色同时分配"):
-        validate_execution_role_combination(["designer", "sales"])
-
-    with pytest.raises(ValueError, match="执行角色不能与销售或财务角色同时分配"):
-        validate_execution_role_combination(["installer", "finance"])
+    # Role names are labels.  Security validation is performed on the
+    # effective permission union, so arbitrary role labels do not block a
+    # combination by themselves.
+    validate_execution_role_combination(["designer", "sales"])
+    validate_execution_role_combination(["installer", "finance"])
 
 
 async def test_admin_can_be_combined_without_triggering_execution_role_conflict():

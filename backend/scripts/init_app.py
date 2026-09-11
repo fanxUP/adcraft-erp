@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import engine, async_session_maker
+from app.core.permission_catalog import get_permission_definition
 from app.models.user import Role, Permission, User, user_roles
 from app.utils.security import hash_password
 
@@ -112,6 +113,7 @@ async def init_app():
         # 4. Seed permissions (import the logic from seed_permissions.py)
         from scripts.seed_permissions import (
             ALL_PERMISSIONS,
+            PERMISSION_SEED_VERSION,
             ROLE_NAMES,
             builtin_role_permission_codes,
             replace_role_permissions,
@@ -121,7 +123,7 @@ async def init_app():
         result = await session.execute(select(Permission))
         existing_perms: dict[str, Permission] = {p.code: p for p in result.scalars().all()}
 
-        for p_def in ALL_PERMISSIONS:
+        for sort_order, p_def in enumerate(ALL_PERMISSIONS):
             if p_def["code"] not in existing_perms:
                 perm = Permission(
                     id=uuid4(),
@@ -131,6 +133,17 @@ async def init_app():
                 )
                 session.add(perm)
                 existing_perms[p_def["code"]] = perm
+            perm = existing_perms[p_def["code"]]
+            definition = get_permission_definition(p_def["code"])
+            perm.name = p_def["name"]
+            perm.description = p_def.get("description")
+            perm.module = definition.module
+            perm.resource = definition.resource
+            perm.action = definition.action
+            perm.kind = definition.kind
+            perm.sensitivity = definition.sensitivity
+            perm.status = "active"
+            perm.sort_order = sort_order
 
         await session.flush()
 
@@ -140,8 +153,13 @@ async def init_app():
                 print(f"  ↷ Custom role preserved: {role_name}")
                 continue
             codes = builtin_role_permission_codes(role_name)
-            target_perms = [existing_perms[c] for c in codes if c in existing_perms]
-            replace_role_permissions(role, target_perms)
+            if getattr(role, "permission_seed_version", 0) < PERMISSION_SEED_VERSION:
+                target_perms = [existing_perms[c] for c in codes if c in existing_perms]
+                replace_role_permissions(role, target_perms)
+                role.permission_seed_version = PERMISSION_SEED_VERSION
+                print(f"  → Initialized {role_name}: {len(target_perms)} permissions")
+            else:
+                print(f"  ↷ Existing {role_name} permission combination preserved ({len(role.permissions)} permissions)")
 
         await session.flush()
         await session.commit()

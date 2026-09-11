@@ -3,12 +3,17 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission
 from app.schemas.salary_rule import SalaryRuleCreate, SalaryRuleUpdate
 from app.schemas.common import success, success_paginated
 from app.services.salary_rule_service import SalaryRuleService
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/salary-rules", tags=["Salary Rules"])
+router = APIRouter(
+    prefix="/salary-rules",
+    tags=["Salary Rules"],
+    dependencies=[Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN))],
+)
 
 
 @router.get("/")

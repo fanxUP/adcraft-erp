@@ -4,12 +4,17 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission
 from app.schemas.employment_history import EmploymentHistoryCreate, EmploymentHistoryUpdate
 from app.schemas.common import success, success_paginated
 from app.services.employment_history_service import EmploymentHistoryService
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/employment-histories", tags=["EmploymentHistories"])
+router = APIRouter(
+    prefix="/employment-histories",
+    tags=["EmploymentHistories"],
+    dependencies=[Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN))],
+)
 
 
 @router.get("/")

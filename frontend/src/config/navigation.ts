@@ -10,18 +10,18 @@ export interface NavigationItem {
 
 export const navigationItems: NavigationItem[] = [
   { label: '工作台', path: '/', icon: 'DataAnalysis', accessKey: 'authenticated' },
-  { label: '项目看板', path: '/production-tasks/board', icon: 'Grid', accessKey: 'production' },
+  { label: '项目看板', path: '/production-tasks/board', icon: 'Grid', accessKey: 'boardRead' },
   {
     label: '客户与销售',
     icon: 'User',
     accessKey: 'sales',
     children: [
-      { label: '客户管理', path: '/customers', accessKey: 'sales' },
-      { label: '常规报价', path: '/quotes', accessKey: 'sales' },
-      { label: '智能报价', path: '/cdr/quotes', accessKey: 'sales' },
-      { label: '定价规则', path: '/cdr/price-rules', accessKey: 'sales' },
-      { label: '合同管理', path: '/contracts', accessKey: 'sales' },
-      { label: '订单管理', path: '/orders', accessKey: 'sales' },
+      { label: '客户管理', path: '/customers', accessKey: 'customer' },
+      { label: '常规报价', path: '/quotes', accessKey: 'quote' },
+      { label: '智能报价', path: '/cdr/quotes', accessKey: 'cdrQuote' },
+      { label: '定价规则', path: '/cdr/price-rules', accessKey: 'cdrPriceRules' },
+      { label: '合同管理', path: '/contracts', accessKey: 'contract' },
+      { label: '订单管理', path: '/orders', accessKey: 'orderRead' },
     ],
   },
   {
@@ -32,7 +32,7 @@ export const navigationItems: NavigationItem[] = [
       { label: '设计任务', path: '/design-tasks', accessKey: 'designListRead' },
       { label: '制作任务', path: '/production-tasks', accessKey: 'productionListRead' },
       { label: '安装任务', path: '/installation-tasks', accessKey: 'installationListRead' },
-      { label: '验收管理', path: '/acceptances', accessKey: 'sales' },
+      { label: '验收管理', path: '/acceptances', accessKey: 'acceptance' },
       { label: '外协任务', path: '/outsource/tasks', accessKey: 'outsourceTask' },
       { label: '外协商', path: '/outsource/vendors', accessKey: 'outsourceVendor' },
       { label: '库存管理', path: '/inventory', accessKey: 'inventory' },
@@ -44,12 +44,12 @@ export const navigationItems: NavigationItem[] = [
     icon: 'Money',
     accessKey: 'finance',
     children: [
-      { label: '应收管理', path: '/receivables', accessKey: 'finance' },
-      { label: '支出管理', path: '/expenses', accessKey: 'finance' },
-      { label: '项目成本', path: '/project-costs', accessKey: 'finance' },
-      { label: '成本欠款', path: '/cost-debts', accessKey: 'finance' },
-      { label: '外协付款', path: '/outsource/payments', accessKey: 'finance' },
-      { label: '客户对账', path: '/statements', accessKey: 'finance' },
+      { label: '应收管理', path: '/receivables', accessKey: 'payment' },
+      { label: '支出管理', path: '/expenses', accessKey: 'expense' },
+      { label: '项目成本', path: '/project-costs', accessKey: 'projectCost' },
+      { label: '成本欠款', path: '/cost-debts', accessKey: 'costDebt' },
+      { label: '外协付款', path: '/outsource/payments', accessKey: 'outsourcePayment' },
+      { label: '客户对账', path: '/statements', accessKey: 'statement' },
     ],
   },
   {
@@ -117,7 +117,7 @@ export const navigationItems: NavigationItem[] = [
     children: [
       { label: '销售日报', path: '/reports/daily', accessKey: 'reports' },
       { label: '销售月报', path: '/reports/monthly', accessKey: 'reports' },
-      { label: '异常提醒', path: '/ai/anomalies', accessKey: 'aiReports' },
+      { label: '异常提醒', path: '/ai/anomalies', accessKey: 'aiAnomaly' },
       { label: '经营报告', path: '/ai/reports', accessKey: 'aiReports' },
     ],
   },

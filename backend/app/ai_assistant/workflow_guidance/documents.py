@@ -122,6 +122,20 @@ def build_order_guidance(snapshot: dict) -> dict:
         )
 
     if status == "completed":
+        financial_visible = snapshot.get("_financial_visible")
+        if financial_visible is None:
+            financial_visible = (
+                "total_amount" in snapshot and "total_paid" in snapshot
+            )
+        if not financial_visible:
+            return guidance_result(
+                snapshot,
+                "流程已完成",
+                [],
+                None,
+                "订单交付流程已完成，回款进度需具备财务查看权限",
+                ORDER_WORKFLOW,
+            )
         total = float(snapshot.get("total_amount") or 0)
         paid = float(snapshot.get("total_paid") or 0)
         unpaid = max(0.0, total - paid)

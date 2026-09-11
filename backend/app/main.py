@@ -99,6 +99,12 @@ def _error_meta(request: Request) -> dict:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail fast if a future permission edit introduces an unknown dependency,
+    # cycle or self-conflict.  This protects every route from running with a
+    # partially understood authorization catalog.
+    from app.core.permission_catalog import ensure_permission_catalog
+    ensure_permission_catalog()
+
     if not settings.SECRET_KEY or settings.SECRET_KEY in ("change_me", "change_me_to_a_random_32_byte_hex_string"):
         message = "SECRET_KEY 未设置或过弱，请使用 openssl rand -hex 32 生成"
         if settings.APP_ENV.lower() in {"production", "prod"}:

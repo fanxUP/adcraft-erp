@@ -12,8 +12,8 @@ from app.core.permissions import (
     PERM_ORDER_READ,
     PERM_ORDER_TASK_ASSIGN,
     PERM_ORDER_UPDATE,
+    PERM_SYSTEM_SUPER_ADMIN,
     require_permission,
-    require_role,
 )
 from app.models.user import User
 from app.schemas.order import (
@@ -71,7 +71,7 @@ async def list_deleted_orders(
     page_size: int = Query(20, ge=1, le=200),
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_ORDER_DELETE)),
 ):
     service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     orders, total = await service.list_deleted(page, page_size, keyword=keyword)
@@ -418,7 +418,7 @@ async def reopen_completed_order(
     data: OrderStatusChange,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
     oid = UUID(order_id)

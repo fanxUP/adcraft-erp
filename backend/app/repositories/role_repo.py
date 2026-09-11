@@ -1,8 +1,9 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
-from app.models.user import Role, Permission
+from app.models.user import Role, Permission, User, user_roles
 
 
 class RoleRepository:
@@ -52,3 +53,23 @@ class RoleRepository:
     async def list_permissions(self) -> list[Permission]:
         result = await self.db.execute(select(Permission).order_by(Permission.code))
         return list(result.scalars().all())
+
+    async def get_bound_users(self, role_id: UUID) -> list[User]:
+        """Load active users and their complete role-permission union.
+
+        Role edits are validated against the effective permissions of every
+        affected user before the association table is changed.  Eager loading
+        keeps that check deterministic and avoids a lazy-load after the
+        request transaction has started mutating the role.
+        """
+        result = await self.db.execute(
+            select(User)
+            .join(user_roles, user_roles.c.user_id == User.id)
+            .where(
+                user_roles.c.role_id == role_id,
+                User.deleted_at.is_(None),
+                User.is_active.is_(True),
+            )
+            .options(selectinload(User.roles).selectinload(Role.permissions))
+        )
+        return list(result.scalars().unique().all())

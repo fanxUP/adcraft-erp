@@ -12,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.notification import Notification
 from app.models.task import DesignTask, InstallationTask, ProductionTask
-from app.models.user import Role, User, user_roles
+from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN
+from app.models.user import Permission, User, role_permissions, user_roles
 from app.schemas.notification import NotificationResponse
 from app.services.notification_service import broadcast_to_user
 from app.services.task_schedule_service import TERMINAL_STATUSES, is_task_overdue
@@ -23,7 +24,6 @@ logger = logging.getLogger(__name__)
 OVERDUE_NOTIFICATION_TYPE = "task_overdue"
 OVERDUE_ESCALATION_NOTIFICATION_TYPE = "task_overdue_escalation"
 OVERDUE_ESCALATION_AFTER = timedelta(days=1)
-OVERDUE_ESCALATION_ROLE = "admin"
 SCAN_INTERVAL_SECONDS = 15 * 60
 
 _TASK_SPECS = (
@@ -146,20 +146,21 @@ async def _notification_exists(
 
 
 async def _list_active_admin_ids(db: AsyncSession) -> list:
-    """Resolve management recipients from the existing RBAC admin role."""
+    """Resolve active management recipients by capability, not role name."""
     user_table = User.__table__
-    role_table = Role.__table__
+    permission_table = Permission.__table__
     statement = (
         select(user_table.c.id)
         .select_from(
             user_table
             .join(user_roles, user_roles.c.user_id == user_table.c.id)
-            .join(role_table, role_table.c.id == user_roles.c.role_id)
+            .join(role_permissions, role_permissions.c.role_id == user_roles.c.role_id)
+            .join(permission_table, permission_table.c.id == role_permissions.c.permission_id)
         )
         .where(
             user_table.c.is_active.is_(True),
             user_table.c.deleted_at.is_(None),
-            role_table.c.name == OVERDUE_ESCALATION_ROLE,
+            permission_table.c.code == PERM_SYSTEM_SUPER_ADMIN,
         )
         .distinct()
     )

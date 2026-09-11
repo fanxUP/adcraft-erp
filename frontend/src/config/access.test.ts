@@ -57,6 +57,13 @@ describe('page access matrix', () => {
     }
   })
 
+  it('lets any delivery-stage operator enter the shared project board', () => {
+    expect(findNavigationItem('/production-tasks/board')?.accessKey).toBe('boardRead')
+    expect(canAccess('boardRead', ['designer'], ['design_task:read'])).toBe(true)
+    expect(canAccess('boardRead', ['production'], ['production_task:read'])).toBe(true)
+    expect(canAccess('boardRead', ['installer'], ['installation_task:read'])).toBe(true)
+  })
+
   it('keeps legacy route meta roles as an additional guard', () => {
     expect(canAccessRoute('Home', ['sales'], ['admin'])).toBe(false)
     expect(canAccessRoute('Home', ['admin'], ['admin'])).toBe(true)
@@ -80,7 +87,17 @@ describe('page access matrix', () => {
       [],
       ['installation_task:list'],
     )).toBe(true)
-    expect(canAccess('production', ['sales'], ['production_task:read'])).toBe(false)
+    expect(canAccess('production', ['sales'], ['production_task:read'])).toBe(true)
+  })
+
+  it('uses atomic permissions for sales, order and finance pages', () => {
+    expect(canAccess('customer', ['custom'], ['customer:read'])).toBe(true)
+    expect(canAccess('quote', ['custom'], ['customer:read'])).toBe(false)
+    expect(canAccess('orderManage', ['custom'], ['order:read'])).toBe(false)
+    expect(canAccess('orderRead', ['custom'], ['order:read'])).toBe(true)
+    expect(canAccess('finance', ['custom'], ['expense:read'])).toBe(true)
+    expect(canAccess('projectCost', ['custom'], ['expense:read'])).toBe(true)
+    expect(canAccess('statement', ['custom'], ['expense:read'])).toBe(false)
   })
 
   it('connects resource-center page access to explicit server permissions', () => {
@@ -112,5 +129,28 @@ describe('page access matrix', () => {
     expect(canAccess('outsourceTask', ['custom-outsourcing'], vendorRead)).toBe(false)
     expect(canAccess('outsourceTask', ['custom-outsourcing'], ['outsource_task:read'])).toBe(false)
     expect(canAccess('outsourceTask', ['designer'], [])).toBe(false)
+  })
+
+  it('keeps AI pages aligned with their exact backend permission contracts', () => {
+    const custom = ['custom-ai']
+
+    expect(canAccessRoute('AIQuoteAssistant', custom, [], ['ai_quote:read'])).toBe(true)
+    expect(canAccessRoute('QuoteKnowledgeBase', custom, [], ['ai_knowledge:read'])).toBe(false)
+    expect(canAccessRoute(
+      'QuoteKnowledgeBase',
+      custom,
+      [],
+      ['ai_knowledge:read', 'order:view_price'],
+    )).toBe(true)
+    expect(canAccessRoute('AnomalyDashboard', custom, [], ['ai_anomaly:read'])).toBe(true)
+    expect(canAccessRoute('BusinessNarrativeReport', custom, [], ['ai_report:read'])).toBe(false)
+    expect(canAccessRoute(
+      'BusinessNarrativeReport',
+      custom,
+      [],
+      ['ai_report:read', 'report:view_financial'],
+    )).toBe(true)
+    expect(canAccessRoute('SitePhotoRecognition', custom, [], ['ai_quote:read'])).toBe(true)
+    expect(canAccessRoute('PaymentOCR', custom, [], ['ai_quote:read'])).toBe(true)
   })
 })

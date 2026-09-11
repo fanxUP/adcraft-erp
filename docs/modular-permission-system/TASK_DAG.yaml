@@ -1,0 +1,79 @@
+name: modular-permission-system
+version: 1
+mode: STRICT
+status: in_progress
+
+tasks:
+  - id: P-MP-01
+    title: 权限现状清单与授权契约冻结
+    acceptance: A-MP-01
+    depends_on: []
+
+  - id: P-MP-02
+    title: 建立权限目录、依赖和冲突规则
+    acceptance: A-MP-02
+    depends_on: [P-MP-01]
+
+  - id: P-MP-03
+    title: 统一后端授权评估器与错误契约
+    acceptance: A-MP-03
+    depends_on: [P-MP-02]
+
+  - id: P-MP-04
+    title: 角色、权限包和用户组合事务化
+    acceptance: A-MP-04
+    depends_on: [P-MP-03]
+
+  - id: P-MP-05
+    title: 前端权限优先和模块化管理界面
+    acceptance: A-MP-05
+    depends_on: [P-MP-03, P-MP-04]
+
+  - id: P-MP-06
+    title: 任务、外协、订单价格和对象范围接入统一策略
+    acceptance: A-MP-06
+    depends_on: [P-MP-03, P-MP-04]
+
+  - id: P-MP-07
+    title: 组合矩阵、静态契约和安全回归
+    acceptance: A-MP-07
+    depends_on: [P-MP-05, P-MP-06]
+
+  - id: P-MP-08
+    title: 分批发布、线上验证和回滚演练
+    acceptance: A-MP-08
+    depends_on: [P-MP-07]
+
+edges:
+  - from: P-MP-01
+    to: P-MP-02
+  - from: P-MP-02
+    to: P-MP-03
+  - from: P-MP-03
+    to: P-MP-04
+  - from: P-MP-03
+    to: P-MP-05
+  - from: P-MP-04
+    to: P-MP-05
+  - from: P-MP-03
+    to: P-MP-06
+  - from: P-MP-04
+    to: P-MP-06
+  - from: P-MP-05
+    to: P-MP-07
+  - from: P-MP-06
+    to: P-MP-07
+  - from: P-MP-07
+    to: P-MP-08
+
+backlog:
+  - id: B-MP-01
+    title: 按部门、客户、区域和项目的 ABAC 数据范围
+  - id: B-MP-02
+    title: 临时授权申请与审批流程
+  - id: B-MP-03
+    title: 权限变更影响图和风险评分
+  - id: B-MP-04
+    title: 权限使用率统计和闲置权限回收
+  - id: B-MP-05
+    title: 权限模块跨环境导入导出

@@ -40,10 +40,10 @@ describe('filterNavigation', () => {
     })
   })
 
-  it('hides 项目看板 from sales roles', () => {
+  it('shows the shared 项目看板 to sales read roles', () => {
     const labels = filterNavigation(navigationItems, ['sales']).map(item => item.label)
 
-    expect(labels).not.toContain('项目看板')
+    expect(labels).toContain('项目看板')
   })
 
   it('shows only the delivery entry granted to a custom permission role', () => {

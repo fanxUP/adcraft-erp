@@ -27,6 +27,10 @@ class Role(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Built-in defaults are applied once by the bootstrap script.  A later
+    # seed refreshes the permission catalog but never overwrites a role that
+    # has already been initialized or customized.
+    permission_seed_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     permissions: Mapped[list["Permission"]] = relationship(secondary=role_permissions, lazy="selectin")
     users: Mapped[list["User"]] = relationship(secondary=user_roles, back_populates="roles", lazy="selectin")
@@ -39,6 +43,16 @@ class Permission(Base):
     code: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Structured authorization metadata.  The stable code remains the
+    # compatibility identifier; these fields drive grouping, dependency
+    # validation and sensitivity-aware admin UI.
+    module: Mapped[str] = mapped_column(String(64), nullable=False, default="system")
+    resource: Mapped[str] = mapped_column(String(128), nullable=False, default="system")
+    action: Mapped[str] = mapped_column(String(64), nullable=False, default="read")
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, default="action")
+    sensitivity: Mapped[str] = mapped_column(String(32), nullable=False, default="normal")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class User(Base, TimestampMixin, SoftDeleteMixin):

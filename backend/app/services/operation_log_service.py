@@ -7,6 +7,7 @@ from app.repositories.operation_log_repo import OperationLogRepository
 
 # Object types for consistent logging
 OBJ_CUSTOMER = "customer"
+OBJ_USER = "user"
 OBJ_QUOTE = "quote"
 OBJ_ORDER = "order"
 OBJ_PAYMENT = "payment"

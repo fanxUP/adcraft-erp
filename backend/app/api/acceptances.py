@@ -14,7 +14,6 @@ from app.core.permissions import (
     PERM_ACCEPTANCE_READ,
     PERM_ACCEPTANCE_UPDATE,
     require_permission,
-    require_role,
 )
 from app.models.user import User
 from app.schemas.common import success, success_paginated, error
@@ -140,7 +139,7 @@ async def update_acceptance(
 async def admin_delete_acceptance(
     acceptance_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_ACCEPTANCE_DELETE)),
 ):
     service = AcceptanceService(db)
     try:

@@ -116,6 +116,27 @@ def test_completed_order_with_balance_guides_user_to_receivables():
     assert guidance["completion_signal"] == "订单未收金额变为 0.00 元"
 
 
+def test_completed_order_hides_payment_progress_without_financial_capability():
+    guidance = build_workflow_guidance(
+        {
+            "business_type": "order",
+            "business_id": str(SAMPLE_ORDER_ID),
+            "status": "completed",
+            "design_tasks": [],
+            "production_tasks": [],
+            "installation_tasks": [],
+            "acceptances": [],
+            "_financial_visible": False,
+        }
+    )
+
+    assert guidance["blockers"] == []
+    assert guidance["next_action"] is None
+    assert guidance["completion_signal"] == "订单交付流程已完成，回款进度需具备财务查看权限"
+    assert guidance["progress"]["steps"][5]["detail"] == "回款进度需具备财务查看权限"
+    assert guidance["alerts"] == []
+
+
 def test_order_guidance_includes_full_delivery_progress():
     guidance = build_workflow_guidance(
         {

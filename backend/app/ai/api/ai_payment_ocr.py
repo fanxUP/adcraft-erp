@@ -13,6 +13,7 @@ from app.ai.gateway_providers.gateway_ai_client import GatewayAIClient
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import PERM_AI_QUOTE_READ, require_permission
 from app.models.business_document import BusinessDocument
 from app.models.customer import Customer
 from app.models.user import User
@@ -20,7 +21,11 @@ from app.schemas.common import success
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ai/payment-ocr", tags=["AI Payment OCR"])
+router = APIRouter(
+    prefix="/ai/payment-ocr",
+    tags=["AI Payment OCR"],
+    dependencies=[Depends(require_permission(PERM_AI_QUOTE_READ))],
+)
 
 
 def _utc_month_dir() -> str:

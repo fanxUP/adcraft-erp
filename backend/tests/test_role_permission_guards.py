@@ -32,16 +32,17 @@ async def test_role_service_rejects_partial_or_unknown_permission_ids():
 
 
 @pytest.mark.asyncio
-async def test_role_service_rejects_sensitive_permissions_for_execution_role():
+async def test_role_service_rejects_sensitive_permission_without_object_read():
     service = RoleService(AsyncMock())
     service.repo.get_by_id = AsyncMock(return_value=_role("production"))
+    service.repo.get_bound_users = AsyncMock(return_value=[])
     permission = MagicMock()
     permission.id = UUID("22222222-2222-2222-2222-222222222222")
     permission.code = "order:view_price"
     permission.name = "查看订单价格"
     service.repo.get_permissions_by_ids = AsyncMock(return_value=[permission])
 
-    with pytest.raises(ValueError, match="设计、制作、安装角色不能拥有价格或财务权限"):
+    with pytest.raises(ValueError, match="缺少前置权限.*order:read"):
         await service.set_role_permissions(
             UUID("11111111-1111-1111-1111-111111111111"),
             [str(permission.id)],
@@ -52,22 +53,124 @@ async def test_role_service_rejects_sensitive_permissions_for_execution_role():
 async def test_role_service_rejects_resource_permissions_for_execution_role():
     service = RoleService(AsyncMock())
     service.repo.get_by_id = AsyncMock(return_value=_role("production"))
-    permission = MagicMock()
-    permission.id = UUID("22222222-2222-2222-2222-222222222222")
-    permission.code = "resource_center:read"
-    permission.name = "进入资源中心"
-    service.repo.get_permissions_by_ids = AsyncMock(return_value=[permission])
+    service.repo.get_bound_users = AsyncMock(return_value=[])
+    permission_specs = [
+        ("22222222-2222-2222-2222-222222222222", "production_task:read"),
+        ("33333333-3333-3333-3333-333333333333", "production_task:update"),
+        ("44444444-4444-4444-4444-444444444444", "resource_center:read"),
+    ]
+    permissions = []
+    for permission_id, code in permission_specs:
+        permission = MagicMock()
+        permission.id = UUID(permission_id)
+        permission.code = code
+        permission.name = code
+        permissions.append(permission)
+    service.repo.get_permissions_by_ids = AsyncMock(return_value=permissions)
 
-    with pytest.raises(ValueError, match="设计、制作、安装角色不能拥有资源中心权限"):
+    with pytest.raises(ValueError, match="任务执行能力不能与资源中心"):
         await service.set_role_permissions(
             UUID("11111111-1111-1111-1111-111111111111"),
-            [str(permission.id)],
+            [str(permission.id) for permission in permissions],
         )
 
 
+@pytest.mark.asyncio
+async def test_role_service_rejects_change_that_conflicts_for_bound_user():
+    role_id = UUID("11111111-1111-1111-1111-111111111111")
+    service = RoleService(AsyncMock())
+    role = _role("custom-delivery", str(role_id), ["production_task:read"])
+    service.repo.get_by_id = AsyncMock(return_value=role)
+    service.repo.get_bound_users = AsyncMock()
+    service.repo.set_permissions = AsyncMock()
+
+    requested = []
+    for permission_id, code in [
+        ("22222222-2222-2222-2222-222222222222", "production_task:read"),
+        ("33333333-3333-3333-3333-333333333333", "production_task:update"),
+    ]:
+        permission = MagicMock(id=UUID(permission_id), code=code, name=code)
+        requested.append(permission)
+    service.repo.get_permissions_by_ids = AsyncMock(return_value=requested)
+
+    affected_user = MagicMock()
+    affected_user.roles = [
+        _role("custom-delivery", str(role_id), ["production_task:read"]),
+        _role("commercial-viewer", "22222222-2222-2222-2222-222222222222", ["order:read", "order:view_price"]),
+    ]
+    service.repo.get_bound_users.return_value = [affected_user]
+
+    with pytest.raises(ValueError, match="已绑定用户.*任务执行能力不能与价格或财务能力同时启用"):
+        await service.set_role_permissions(role_id, [str(permission.id) for permission in requested])
+
+    service.repo.set_permissions.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_role_service_rejects_deleting_role_bound_to_active_user():
+    role_id = UUID("11111111-1111-1111-1111-111111111111")
+    service = RoleService(AsyncMock())
+    service.repo.get_by_id = AsyncMock(return_value=_role("custom-role", str(role_id)))
+    service.repo.get_bound_users = AsyncMock(return_value=[MagicMock()])
+    service.repo.delete = AsyncMock()
+
+    with pytest.raises(ValueError, match="仍绑定在职用户"):
+        await service.delete_role(role_id)
+
+    service.repo.delete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_role_service_can_keep_a_legacy_deprecated_permission_until_removed():
+    role_id = UUID("11111111-1111-1111-1111-111111111111")
+    permission_id = UUID("22222222-2222-2222-2222-222222222222")
+    service = RoleService(AsyncMock())
+    role = _role("custom-role", str(role_id), ["customer:read"])
+    service.repo.get_by_id = AsyncMock(return_value=role)
+    service.repo.get_bound_users = AsyncMock(return_value=[])
+    service.repo.set_permissions = AsyncMock()
+    permission = MagicMock(
+        id=permission_id,
+        code="customer:read",
+        name="查看客户",
+        status="deprecated",
+    )
+    service.repo.get_permissions_by_ids = AsyncMock(return_value=[permission])
+
+    result = await service.set_role_permissions(role_id, [str(permission_id)])
+
+    assert result["removed_permissions"] == []
+    service.repo.set_permissions.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_role_service_rejects_new_assignment_of_deprecated_permission():
+    role_id = UUID("11111111-1111-1111-1111-111111111111")
+    permission_id = UUID("22222222-2222-2222-2222-222222222222")
+    service = RoleService(AsyncMock())
+    service.repo.get_by_id = AsyncMock(return_value=_role("custom-role", str(role_id)))
+    service.repo.get_bound_users = AsyncMock(return_value=[])
+    service.repo.set_permissions = AsyncMock()
+    permission = MagicMock(
+        id=permission_id,
+        code="customer:read",
+        name="查看客户",
+        status="deprecated",
+    )
+    service.repo.get_permissions_by_ids = AsyncMock(return_value=[permission])
+
+    with pytest.raises(ValueError, match="已停用，不能新分配"):
+        await service.set_role_permissions(role_id, [str(permission_id)])
+
+    service.repo.set_permissions.assert_not_awaited()
+
+
 def test_execution_role_resource_permission_guard_is_explicit():
-    with pytest.raises(ValueError, match="设计、制作、安装角色不能拥有资源中心权限"):
-        validate_role_resource_permissions("installer", ["aerial:read"])
+    with pytest.raises(ValueError, match="任务执行能力不能与资源中心车辆/高空车能力同时启用"):
+        validate_role_resource_permissions(
+            "installer",
+            ["installation_task:read", "installation_task:update", "resource_center:read", "aerial:read"],
+        )
 
 
 @pytest.mark.asyncio
@@ -75,13 +178,16 @@ async def test_user_service_rejects_mixed_execution_and_finance_roles():
     service = UserService(AsyncMock())
     service.repo.get_by_username = AsyncMock(return_value=None)
     service.repo.get_roles = AsyncMock(
-        return_value=[_role("designer"), _role("finance")]
+        return_value=[
+            _role("designer", permissions=["design_task:read", "design_task:update"]),
+            _role("finance", permissions=["payment:read"]),
+        ]
     )
 
-    with pytest.raises(ValueError, match="执行角色不能与销售或财务角色同时分配"):
+    with pytest.raises(ValueError, match="任务执行能力不能与价格或财务能力同时启用"):
         await service.create_user({
             "username": "operator",
-            "password": "Secret123!",
+            "password": "test-only-password",
             "role_ids": [
                 "11111111-1111-1111-1111-111111111111",
                 "11111111-1111-1111-1111-111111111111",
@@ -93,11 +199,11 @@ def test_user_service_rejects_custom_execution_role_with_sensitive_role_permissi
     first_id = "11111111-1111-1111-1111-111111111111"
     second_id = "22222222-2222-2222-2222-222222222222"
 
-    with pytest.raises(ValueError, match="执行角色不能与带价格或财务权限的角色同时分配"):
+    with pytest.raises(ValueError, match="任务执行能力不能与价格或财务能力同时启用"):
         UserService._validate_roles(
             [first_id, second_id],
             [
-                _role("delivery-operator", first_id, ["production_task:read"]),
+                _role("delivery-operator", first_id, ["production_task:read", "production_task:update"]),
                 _role("commercial-viewer", second_id, ["quote:read"]),
             ],
         )
@@ -106,7 +212,7 @@ def test_user_service_rejects_custom_execution_role_with_sensitive_role_permissi
 def test_user_service_allows_sales_role_task_read_access():
     UserService._validate_roles(
         ["11111111-1111-1111-1111-111111111111"],
-        [_role("sales", permissions=["design_task:read", "order:view_price"])],
+        [_role("sales", permissions=["design_task:read", "order:read", "order:view_price"])],
     )
 
 

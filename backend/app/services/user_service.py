@@ -1,13 +1,7 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import (
-    EXECUTION_PERMISSION_CODES,
-    EXECUTION_ROLE_NAMES,
-    SENSITIVE_ROLE_NAMES,
-    SENSITIVE_PERMISSION_CODES,
-    validate_execution_role_combination,
-)
+from app.core.permission_catalog import validate_permission_set
 from app.repositories.user_repo import UserRepository
 from app.utils.security import hash_password
 
@@ -19,7 +13,11 @@ class UserService:
 
     @staticmethod
     def _validate_roles(role_ids: list[str], roles: list) -> None:
-        """Validate role references and prevent privilege-conflicting mixes."""
+        """Validate role references and the effective capability composition.
+
+        Role names are labels only.  The effective permission union is the
+        security input, so custom roles behave exactly like built-in roles.
+        """
         try:
             requested_ids = {str(UUID(role_id)) for role_id in role_ids}
         except (AttributeError, TypeError, ValueError):
@@ -28,32 +26,14 @@ class UserService:
         if requested_ids != loaded_ids:
             raise ValueError("存在无效角色编号，未保存本次角色变更")
 
-        role_names = [role.name for role in roles]
-        validate_execution_role_combination(role_names)
-        if "admin" in role_names:
-            return
-        role_codes = {
-            role.name: {
-                permission.code
-                for permission in getattr(role, "permissions", ())
-            }
+        effective_codes = {
+            permission.code
             for role in roles
+            for permission in getattr(role, "permissions", ())
         }
-        execution_capable = any(
-            role.name in EXECUTION_ROLE_NAMES
-            or (
-                role.name not in SENSITIVE_ROLE_NAMES
-                and bool(EXECUTION_PERMISSION_CODES.intersection(role_codes[role.name]))
-            )
-            for role in roles
-        )
-        sensitive_capable = any(
-            role.name in SENSITIVE_ROLE_NAMES
-            or bool(SENSITIVE_PERMISSION_CODES.intersection(role_codes[role.name]))
-            for role in roles
-        )
-        if execution_capable and sensitive_capable:
-            raise ValueError("执行角色不能与带价格或财务权限的角色同时分配")
+        issues = validate_permission_set(effective_codes)
+        if issues:
+            raise ValueError("；".join(dict.fromkeys(issue.message for issue in issues)))
 
     async def list_users(self, page: int, page_size: int, keyword: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size

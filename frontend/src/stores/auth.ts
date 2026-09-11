@@ -27,8 +27,27 @@ export const useAuthStore = defineStore('auth', () => {
     return permissions.value.includes(permissionCode)
   }
 
-  /** Whether the user is the admin (has the admin role). */
-  const isAdmin = computed(() => hasRole('admin'))
+  const isSuperAdmin = computed(() => hasPermission('system:super_admin'))
+
+  /**
+   * Capability-first UI helper.  The backend remains authoritative; this
+   * helper only keeps buttons, navigation and direct-route guards consistent.
+   */
+  function can(permissionCode: string): boolean {
+    return isSuperAdmin.value || hasPermission(permissionCode)
+  }
+
+  function canAny(permissionCodes: string[]): boolean {
+    return isSuperAdmin.value || permissionCodes.some(permission => hasPermission(permission))
+  }
+
+  function canAll(permissionCodes: string[]): boolean {
+    return isSuperAdmin.value || permissionCodes.every(permission => hasPermission(permission))
+  }
+
+  // Compatibility name for existing views.  It now reflects the explicit
+  // capability instead of the display role name.
+  const isAdmin = computed(() => isSuperAdmin.value)
 
   async function login(username: string, password: string) {
     const data = await loginApi({ username, password })
@@ -88,8 +107,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   return {
-    token, user, isLoggedIn, roles, permissions, isAdmin,
-    hasRole, hasAnyRole, hasPermission,
+    token, user, isLoggedIn, roles, permissions, isAdmin, isSuperAdmin,
+    hasRole, hasAnyRole, hasPermission, can, canAny, canAll,
     login, fetchProfile, logout, clearMustChangePassword,
   }
 })

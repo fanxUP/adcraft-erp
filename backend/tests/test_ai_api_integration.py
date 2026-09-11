@@ -42,12 +42,16 @@ class MockResult:
 def make_mock_user():
     """Create a mock admin user for auth dependency."""
     from app.models.user import User
+    from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN
     user = MagicMock(spec=User)
     user.id = SAMPLE_USER_ID
     user.username = "testadmin"
     user.real_name = "Test Admin"
     user.is_active = True
-    user.roles = [SimpleNamespace(name="admin", permissions=[])]
+    user.roles = [SimpleNamespace(
+        name="admin",
+        permissions=[SimpleNamespace(code=PERM_SYSTEM_SUPER_ADMIN)],
+    )]
     return user
 
 

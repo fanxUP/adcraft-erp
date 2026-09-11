@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.permissions import require_role
+from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission
 from app.models.user import User
 from app.repositories.ai_task_route_repo import AITaskRouteRepository
 from app.schemas.ai_task_route import TaskRouteCreate, TaskRouteUpdate
@@ -29,7 +29,7 @@ async def list_routes(
     page_size: int = Query(20, ge=1, le=200),
     enabled_only: bool = Query(False),
     search: Optional[str] = Query(None),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
     service: AITaskRouteService = Depends(_get_service),
 ):
     """List task routes with pagination and search."""
@@ -46,7 +46,7 @@ async def list_routes(
 @router.post("/ai/routes/")
 async def create_route(
     data: TaskRouteCreate,
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
     service: AITaskRouteService = Depends(_get_service),
 ):
     """Create a new task route."""
@@ -66,7 +66,7 @@ async def create_route(
 @router.get("/ai/routes/{route_id}")
 async def get_route(
     route_id: UUID,
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
     service: AITaskRouteService = Depends(_get_service),
 ):
     """Get a single task route by ID."""
@@ -80,7 +80,7 @@ async def get_route(
 async def update_route(
     route_id: UUID,
     data: TaskRouteUpdate,
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
     service: AITaskRouteService = Depends(_get_service),
 ):
     """Update a task route."""
@@ -96,7 +96,7 @@ async def update_route(
 @router.delete("/ai/routes/{route_id}")
 async def delete_route(
     route_id: UUID,
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
     service: AITaskRouteService = Depends(_get_service),
 ):
     """Delete a task route."""

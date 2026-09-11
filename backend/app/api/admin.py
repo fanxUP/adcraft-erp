@@ -1,4 +1,4 @@
-"""后台管理 API — 仅 admin 角色可访问。"""
+"""后台管理 API — 仅显式 system:super_admin 能力可访问。"""
 
 import logging
 import os
@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.deps import get_current_user
-from app.core.permissions import require_role
+from app.core.permission_catalog import permission_pack_definitions
+from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission
 from app.models.user import User
 from app.schemas.admin import RoleCreate, RoleUpdate, RolePermissionUpdate, SettingsUpdate
 from app.schemas.common import success, error
@@ -59,7 +59,7 @@ OBJ_SETTINGS = "settings"
 @router.get("/roles")
 async def list_roles(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     service = RoleService(db)
     return success(await service.list_roles())
@@ -70,7 +70,7 @@ async def create_role(
     data: RoleCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     service = RoleService(db)
     try:
@@ -95,7 +95,7 @@ async def update_role(
     data: RoleUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     service = RoleService(db)
     try:
@@ -119,7 +119,7 @@ async def delete_role(
     role_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     service = RoleService(db)
     try:
@@ -143,10 +143,12 @@ async def set_role_permissions(
     data: RolePermissionUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     service = RoleService(db)
     try:
+        role_before = await service.repo.get_by_id(UUID(role_id))
+        before_codes = [permission.code for permission in getattr(role_before, "permissions", ()) or ()] if role_before else []
         result = await service.set_role_permissions(UUID(role_id), data.permission_ids)
     except ValueError as e:
         msg = str(e)
@@ -159,10 +161,34 @@ async def set_role_permissions(
             db, current_user.id, current_user.real_name or current_user.username,
             OBJ_PERMISSION, UUID(role_id), ACTION_UPDATE,
             ip_address=request.client.host if request.client else None,
-            after_data={"permission_count": len(result.get("permissions", []))},
+            before_data={"permissions": before_codes},
+            after_data={
+                "permissions": [permission["code"] for permission in result.get("permissions", [])],
+                "added_permissions": result.get("added_permissions", []),
+                "removed_permissions": result.get("removed_permissions", []),
+            },
         )
     except Exception:
         logger.warning("Failed to log set_role_permissions operation", exc_info=True)
+    return success(result)
+
+
+@router.post("/roles/{role_id}/permissions/preview")
+async def preview_role_permissions(
+    role_id: str,
+    data: RolePermissionUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
+):
+    """Dry-run a complete permission composition without persisting it."""
+    service = RoleService(db)
+    try:
+        result = await service.preview_role_permissions(UUID(role_id), data.permission_ids)
+    except ValueError as e:
+        msg = str(e)
+        if "不存在" in msg:
+            return error(40401, msg)
+        return error(40001, msg)
     return success(result)
 
 
@@ -171,10 +197,26 @@ async def set_role_permissions(
 @router.get("/permissions")
 async def list_permissions(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     service = RoleService(db)
     return success(await service.list_permissions())
+
+
+@router.get("/permission-packs")
+async def list_permission_packs(
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
+):
+    """Return editor shortcuts; roles persist the expanded permission IDs."""
+    return success([
+        {
+            "code": pack.code,
+            "name": pack.name,
+            "description": pack.description,
+            "permissions": list(pack.permissions),
+        }
+        for pack in permission_pack_definitions()
+    ])
 
 
 # ── System Settings ────────────────────────────────────────────────────────
@@ -182,7 +224,7 @@ async def list_permissions(
 @router.post("/force-relogin")
 async def force_relogin(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     """递增所有活跃用户的令牌版本，使现有 JWT 在下次请求时失效。"""
     await db.execute(
@@ -195,7 +237,7 @@ async def force_relogin(
 
 @router.get("/settings")
 async def get_settings(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     api_key = settings.AI_API_KEY
     masked_key = api_key[:8] + "****" + api_key[-4:] if api_key and len(api_key) > 12 else "未配置"
@@ -219,7 +261,7 @@ async def update_settings(
     data: SettingsUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     # 向上查找现有 .env 文件（兼容 Docker /app 与本地 /opt/adcraft/backend 两种部署），
     # 避免固定层数上溯算错路径导致设置写入无效位置

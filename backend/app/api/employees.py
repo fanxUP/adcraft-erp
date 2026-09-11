@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db; from app.core.deps import get_current_user
-from app.core.permissions import require_role; from app.models.user import User
+from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission; from app.models.user import User
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate
 from app.schemas.common import success, success_paginated
 from app.services.employee_service import EmployeeService
@@ -12,7 +12,11 @@ from app.services.task_service import AttachmentService
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/employees", tags=["Employees"])
+router = APIRouter(
+    prefix="/employees",
+    tags=["Employees"],
+    dependencies=[Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN))],
+)
 
 @router.get("/")
 async def list_employees(page: int = Query(1,ge=1), page_size: int = Query(20,ge=1,le=100), keyword=None, department=None, employment_status=None, db=Depends(get_db), current_user=Depends(get_current_user)):
@@ -50,7 +54,7 @@ async def update_employee(employee_id: str, data: EmployeeUpdate, db=Depends(get
     except ValueError as e: return {"code": 40401, "message": str(e), "data": None}
 
 @router.delete("/{employee_id}")
-async def delete_employee(employee_id: str, db=Depends(get_db), current_user=Depends(require_role("admin"))):
+async def delete_employee(employee_id: str, db=Depends(get_db), current_user=Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN))):
     if not await EmployeeService(db).delete_employee(UUID(employee_id)): return {"code": 40401, "message": "员工不存在", "data": None}
     return success(None)
 

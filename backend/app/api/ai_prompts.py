@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission
 from app.models.user import User
 from app.schemas.ai_prompt import (
     PromptTemplateCreate,
@@ -21,7 +22,11 @@ from app.services.ai_prompt_service import AIPromptService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ai/prompts", tags=["AI Prompts"])
+router = APIRouter(
+    prefix="/ai/prompts",
+    tags=["AI Prompts"],
+    dependencies=[Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN))],
+)
 
 _TENANT_ID = "00000000-0000-0000-0000-000000000001"
 

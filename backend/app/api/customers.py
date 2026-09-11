@@ -7,8 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
-from app.core.permissions import require_role
+from app.core.permissions import (
+    PERM_CUSTOMER_CREATE,
+    PERM_CUSTOMER_DELETE,
+    PERM_CUSTOMER_READ,
+    PERM_CUSTOMER_UPDATE,
+    require_permission,
+)
 from app.models.user import User
 from app.schemas.customer import CustomerCreate, CustomerUpdate
 from app.schemas.common import success, success_paginated
@@ -26,7 +31,7 @@ async def list_customers(
     keyword: str | None = None,
     customer_type: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CUSTOMER_READ)),
 ):
     service = CustomerService(db)
     customers, total = await service.list_customers(page, page_size, keyword, customer_type)
@@ -38,7 +43,7 @@ async def create_customer(
     data: CustomerCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CUSTOMER_CREATE)),
 ):
     service = CustomerService(db)
     customer = await service.create_customer(data.model_dump())
@@ -67,7 +72,7 @@ CUSTOMER_LEVEL_VALUES = {"A", "B", "C"}
 @router.get("/tree")
 async def get_customer_tree(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CUSTOMER_READ)),
 ):
     """Get customer type -> level -> customer tree for pricing center navigation."""
     service = CustomerService(db)
@@ -79,7 +84,7 @@ async def import_customers(
     file: UploadFile = File(...),
     request: Request = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CUSTOMER_CREATE)),
 ):
     """Batch import customers from Excel file."""
     ip_addr = request.client.host if request and request.client else None
@@ -142,7 +147,7 @@ async def import_customers(
 async def get_customer(
     customer_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CUSTOMER_READ)),
 ):
     service = CustomerService(db)
     customer = await service.get_customer(UUID(customer_id))
@@ -157,7 +162,7 @@ async def update_customer(
     data: CustomerUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(PERM_CUSTOMER_UPDATE)),
 ):
     service = CustomerService(db)
     cid = UUID(customer_id)
@@ -175,7 +180,7 @@ async def delete_customer(
     customer_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_CUSTOMER_DELETE)),
 ):
     service = CustomerService(db)
     cid = UUID(customer_id)

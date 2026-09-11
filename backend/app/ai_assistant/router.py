@@ -15,7 +15,7 @@ from app.ai_assistant.schemas import AiChatRequest, WorkflowGuidanceRequest
 from app.ai_assistant.service import AiAssistantService
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.permissions import require_role
+from app.core.permissions import PERM_SYSTEM_LOGS, PERM_SYSTEM_SUPER_ADMIN, require_permission
 from app.models.user import User
 from app.schemas.common import error, success
 
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/ai-assistant", tags=["AI Assistant"])
 @router.get("/business-rules/status")
 async def business_rule_status(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     """Return source/database drift and the latest synchronization result."""
     return success(await BusinessRuleSyncService(db).build_status())
@@ -35,7 +35,7 @@ async def business_rule_status(
 @router.post("/business-rules/sync")
 async def synchronize_business_rules(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     """Synchronize source-controlled rules into the versioned AI registry."""
     return success(await BusinessRuleSyncService(db).synchronize())
@@ -215,9 +215,6 @@ async def get_tool_call_logs(page: int = Query(1, ge=1), page_size: int = Query(
 @router.get("/audit-logs")
 async def get_audit_logs(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
                          db: AsyncSession = Depends(get_db),
-                         current_user: User = Depends(get_current_user)):
-    is_admin = any(role.name == "admin" for role in current_user.roles)
-    if not is_admin:
-        return error(403, "权限不足: 需要管理员角色")
+                         current_user: User = Depends(require_permission(PERM_SYSTEM_LOGS))):
     service = AiAssistantService(db)
     return success(await service.get_audit_logs(page, page_size))

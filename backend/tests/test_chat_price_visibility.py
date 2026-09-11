@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 
 from app.api.conversations import _redact_chat_payload
+from app.core.permissions import PERM_ORDER_READ
 
 
 def make_viewer(*permission_codes: str):
@@ -41,7 +42,7 @@ def test_chat_payload_keeps_prices_only_for_users_with_explicit_permissions():
 
     result = _redact_chat_payload(
         payload,
-        make_viewer("order:view_price", "order_item:view_price"),
+        make_viewer(PERM_ORDER_READ, "order:view_price", "order_item:view_price"),
     )
 
     assert result == payload

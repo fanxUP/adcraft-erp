@@ -14,24 +14,27 @@ from app.core.permissions import (
     PERM_DESIGN_TASK_CHANGE_STATUS,
     PERM_DESIGN_TASK_CREATE,
     PERM_DESIGN_TASK_ASSIGN,
+    PERM_DESIGN_TASK_DELETE,
     PERM_DESIGN_TASK_LIST,
     PERM_DESIGN_TASK_READ,
     PERM_DESIGN_TASK_UPDATE,
     PERM_INSTALLATION_TASK_CHANGE_STATUS,
     PERM_INSTALLATION_TASK_CREATE,
     PERM_INSTALLATION_TASK_ASSIGN,
+    PERM_INSTALLATION_TASK_DELETE,
     PERM_INSTALLATION_TASK_LIST,
     PERM_INSTALLATION_TASK_READ,
     PERM_INSTALLATION_TASK_UPDATE,
     PERM_PRODUCTION_TASK_CHANGE_STATUS,
     PERM_PRODUCTION_TASK_CREATE,
     PERM_PRODUCTION_TASK_ASSIGN,
+    PERM_PRODUCTION_TASK_DELETE,
     PERM_PRODUCTION_TASK_LIST,
     PERM_PRODUCTION_TASK_READ,
     PERM_PRODUCTION_TASK_UPDATE,
     PERM_TASK_QUEUE_READ,
     require_permission,
-    require_role,
+    user_has_permission as _user_has_permission,
 )
 from app.models.user import User
 from app.models.task import Attachment, DesignTask, InstallationTask, ProductionTask
@@ -247,14 +250,6 @@ def validate_task_attachment(
     return None, rule["extension"], category
 
 
-def _user_has_permission(user: User, permission_code: str) -> bool:
-    return any(
-        permission.code == permission_code
-        for role in user.roles
-        for permission in role.permissions
-    )
-
-
 # -- Unified project task queue --
 
 queue_router = APIRouter(prefix="/task-queue", tags=["Task Queue"])
@@ -419,7 +414,7 @@ async def assign_design_task(
 async def delete_design_task(
     task_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_DESIGN_TASK_DELETE)),
 ):
     service = DesignTaskService(db, current_user)
     try:
@@ -524,7 +519,7 @@ async def assign_production_task(
 async def delete_production_task(
     task_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_DELETE)),
 ):
     service = ProductionTaskService(db, current_user)
     try:
@@ -629,7 +624,7 @@ async def assign_installation_task(
 async def delete_installation_task(
     task_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_DELETE)),
 ):
     service = InstallationTaskService(db, current_user)
     try:

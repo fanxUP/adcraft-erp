@@ -11,6 +11,7 @@ from app.ai.gateway.providers.openai_chat import OpenAICompatibleAdapter
 from app.ai.gateway.security.ssrf_guard import validate_url
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission
 from app.models.user import User
 from app.schemas.ai_provider import AIProviderCreate, AIProviderUpdate
 from app.schemas.common import success, success_paginated, error
@@ -19,7 +20,11 @@ from app.services.ai_model_service import AIModelService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ai/providers", tags=["AI Providers"])
+router = APIRouter(
+    prefix="/ai/providers",
+    tags=["AI Providers"],
+    dependencies=[Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN))],
+)
 
 
 @router.get("/")

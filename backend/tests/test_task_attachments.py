@@ -133,20 +133,28 @@ def test_validate_installation_media_rejects_invalid_video_or_oversized_content(
 
 
 def _installation_uploader():
+    codes = [
+        task_api.PERM_INSTALLATION_TASK_UPDATE,
+        task_api.PERM_INSTALLATION_TASK_READ,
+    ]
     return SimpleNamespace(
         id=uuid4(),
-        roles=[
-            SimpleNamespace(
-                permissions=[SimpleNamespace(code=task_api.PERM_INSTALLATION_TASK_UPDATE)]
-            )
-        ],
+        roles=[SimpleNamespace(permissions=[SimpleNamespace(code=code) for code in codes])],
     )
 
 
 def _task_uploader(permission: str):
+    codes = [permission]
+    stage_reads = {
+        task_api.PERM_DESIGN_TASK_UPDATE: task_api.PERM_DESIGN_TASK_READ,
+        task_api.PERM_PRODUCTION_TASK_UPDATE: task_api.PERM_PRODUCTION_TASK_READ,
+        task_api.PERM_INSTALLATION_TASK_UPDATE: task_api.PERM_INSTALLATION_TASK_READ,
+    }
+    if permission in stage_reads:
+        codes.append(stage_reads[permission])
     return SimpleNamespace(
         id=uuid4(),
-        roles=[SimpleNamespace(permissions=[SimpleNamespace(code=permission)])],
+        roles=[SimpleNamespace(permissions=[SimpleNamespace(code=code) for code in codes])],
     )
 
 

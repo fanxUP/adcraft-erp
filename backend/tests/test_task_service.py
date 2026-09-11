@@ -20,7 +20,10 @@ from tests.conftest import (
 
 def _viewer_with_permissions(*permission_codes: str):
     role = MagicMock()
-    role.permissions = [MagicMock(code=code) for code in permission_codes]
+    codes = list(permission_codes)
+    if "outsource_task:read" in codes and "outsource_center:read" not in codes:
+        codes.insert(0, "outsource_center:read")
+    role.permissions = [MagicMock(code=code) for code in codes]
     viewer = MagicMock()
     viewer.roles = [role]
     return viewer

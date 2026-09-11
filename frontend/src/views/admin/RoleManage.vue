@@ -41,20 +41,31 @@
           </div>
           <div v-else>
             <el-alert
-              v-if="selectedRoleIsExecution"
-              title="设计、制作、安装角色不能配置资源中心、报价、合同、财务或价格权限"
+              title="权限按服务端目录中的模块、动作和前置能力组合；保存前会校验冲突，并检查已绑定用户的最终权限。"
               type="info"
               :closable="false"
               show-icon
               style="margin-bottom: 12px"
             />
+            <div v-if="permissionPacks.length" style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px">
+              <span style="color: var(--ad-text-secondary); font-size: 13px">快捷加入权限包：</span>
+              <el-button
+                v-for="pack in permissionPacks"
+                :key="pack.code"
+                size="small"
+                plain
+                @click="applyPermissionPack(pack)"
+              >
+                {{ pack.name }}
+              </el-button>
+            </div>
             <el-checkbox :model-value="checkAll" :indeterminate="isIndeterminate" @change="handleCheckAll" style="margin-bottom: 12px">
               全选
             </el-checkbox>
             <el-divider style="margin: 8px 0" />
             <div v-for="(perms, group) in groupedPerms" :key="group" style="margin-bottom: 16px">
               <div style="font-weight: bold; margin-bottom: 8px; color: var(--ad-text)">{{ groupLabels[group as string] || group }}</div>
-              <el-checkbox-group v-model="checkedPermIds">
+              <el-checkbox-group v-model="checkedPermIds" @change="handlePermissionGroupChange">
                 <el-checkbox
                   v-for="p in perms"
                   :key="p.id"
@@ -64,8 +75,11 @@
                 >
                   {{ p.name }}
                   <span style="color: var(--ad-text-secondary); font-size: 12px">({{ p.code }})</span>
-                  <el-tag v-if="isSensitivePermission(p.code) || (selectedRoleIsExecution && isResourceCenterPermission(p.code))" size="small" type="warning" effect="plain" style="margin-left: 6px">
-                    {{ selectedRoleIsExecution ? '执行角色禁用' : '敏感数据' }}
+                  <el-tag v-if="p.kind === 'field' || p.sensitivity !== 'normal'" size="small" type="warning" effect="plain" style="margin-left: 6px">
+                    {{ sensitivityLabel(p.sensitivity) }}
+                  </el-tag>
+                  <el-tag v-if="p.requires?.length" size="small" type="info" effect="plain" style="margin-left: 6px">
+                    前置：{{ p.requires.join('、') }}
                   </el-tag>
                 </el-checkbox>
               </el-checkbox-group>
@@ -95,7 +109,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { getRoles, createRole, updateRole, deleteRole, setRolePermissions, getPermissions, type RoleItem, type PermissionItem } from '@/api/admin'
+import { getRoles, createRole, updateRole, deleteRole, setRolePermissions, previewRolePermissions, getPermissions, getPermissionPacks, type RoleItem, type PermissionItem, type PermissionPackItem } from '@/api/admin'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
 import { getErrorMessage } from '@/utils/error'
@@ -123,44 +137,12 @@ const groupLabels: Record<string, string> = {
   ai_knowledge: 'AI知识库', ai_report: 'AI报告',
 }
 
-const EXECUTION_ROLE_NAMES = new Set(['designer', 'production', 'installer'])
-const EXECUTION_PERMISSION_CODES = new Set([
-  'design_task:read', 'design_task:create', 'design_task:update',
-  'design_task:change_status', 'design_task:delete',
-  'production_task:read', 'production_task:create', 'production_task:update',
-  'production_task:change_status', 'production_task:delete',
-  'installation_task:read', 'installation_task:create', 'installation_task:update',
-  'installation_task:change_status', 'installation_task:delete',
-])
-const SENSITIVE_PERMISSION_CODES = new Set([
-  'quote:read', 'quote:create', 'quote:update', 'quote:delete',
-  'quote:confirm', 'quote:convert',
-  'contract:read', 'contract:create', 'contract:update', 'contract:delete',
-  'contract:change_status',
-  'cdr_quote:read', 'cdr_quote:create', 'cdr_quote:update', 'cdr_quote:delete',
-  'cdr_quote:view_cost', 'cdr_quote:view_profit', 'cdr_quote:adjust_price',
-  'cdr_quote:approve', 'cdr_quote:convert', 'cdr_rule_set:publish',
-  'cdr_customer_agreement:manage',
-  'order:view_price', 'order_item:view_price', 'catalog:view_price',
-  'finance:view_cost', 'report:view_financial', 'report:read',
-  'payment:read', 'payment:create', 'payment:void',
-  'statement:read', 'statement:create', 'statement:confirm',
-  'expense:read', 'expense:create', 'expense:update', 'expense:delete',
-  'outsource_payment:read', 'outsource_payment:create',
-])
-const RESOURCE_CENTER_PERMISSION_CODES = new Set([
-  'resource_center:read',
-  'vehicle:read', 'vehicle:create', 'vehicle:update', 'vehicle:delete',
-  'finance:review',
-  'aerial:read', 'aerial:create', 'aerial:update', 'aerial:delete',
-  'aerial:finance', 'aerial:wage',
-])
-
 const loading = ref(false)
 const saving = ref(false)
 const savingPerms = ref(false)
 const roles = ref<RoleItem[]>([])
 const allPerms = ref<PermissionItem[]>([])
+const permissionPacks = ref<PermissionPackItem[]>([])
 const selectedRole = ref<RoleItem | null>(null)
 const checkedPermIds = ref<string[]>([])
 const showDialog = ref(false)
@@ -173,26 +155,11 @@ const roleTableState = computed(() => loading.value ? 'loading' : loadError.valu
 const groupedPerms = computed(() => {
   const groups: Record<string, PermissionItem[]> = {}
   for (const p of allPerms.value) {
-    const group = p.code.split(':')[0]
+    const group = p.module || p.code.split(':')[0]
     if (!groups[group]) groups[group] = []
     groups[group].push(p)
   }
   return groups
-})
-
-const selectedRoleIsExecution = computed(() => {
-  const role = selectedRole.value
-  if (!role || role.name === 'admin') return false
-  if (EXECUTION_ROLE_NAMES.has(role.name)) return true
-
-  // 新建或编辑自定义角色时，勾选执行权限后立即收紧敏感权限，
-  // 不等到保存接口返回错误才提示管理员。
-  const executionPermissionIds = new Set(
-    allPerms.value
-      .filter(permission => EXECUTION_PERMISSION_CODES.has(permission.code))
-      .map(permission => permission.id),
-  )
-  return checkedPermIds.value.some(id => executionPermissionIds.has(id))
 })
 
 const assignablePerms = computed(() => allPerms.value.filter(permission => !permissionDisabled(permission)))
@@ -201,27 +168,64 @@ const checkedAssignableCount = computed(() => checkedPermIds.value.filter(id => 
 const checkAll = computed(() => assignablePerms.value.length > 0 && checkedAssignableCount.value === assignablePerms.value.length)
 const isIndeterminate = computed(() => checkedAssignableCount.value > 0 && !checkAll.value)
 
-function isSensitivePermission(code: string): boolean {
-  return SENSITIVE_PERMISSION_CODES.has(code)
-}
-
-function isResourceCenterPermission(code: string): boolean {
-  return RESOURCE_CENTER_PERMISSION_CODES.has(code)
-}
-
 function permissionDisabled(permission: PermissionItem): boolean {
-  const restricted = isSensitivePermission(permission.code) || isResourceCenterPermission(permission.code)
-  if (!selectedRoleIsExecution.value || !restricted) return false
-
-  // 历史上已经误配的受限权限必须保持可取消，否则管理员无法修复角色。
+  if (permission.status === 'active') return false
+  // Deprecated permissions remain visible and removable, but cannot be newly
+  // assigned. The server repeats this policy during save.
   return !selectedRole.value?.permissions.some(existing => existing.id === permission.id)
+}
+
+function sensitivityLabel(sensitivity: string): string {
+  return {
+    price: '价格字段',
+    financial: '财务数据',
+    external: '外协数据',
+    security: '系统安全',
+  }[sensitivity] || '敏感能力'
 }
 
 function handleCheckAll(val: boolean) {
   const assignableIds = assignablePerms.value.map(permission => permission.id)
   const assignableIdSet = new Set(assignableIds)
   const preservedIds = checkedPermIds.value.filter(id => !assignableIdSet.has(id))
-  checkedPermIds.value = val ? [...preservedIds, ...assignableIds] : preservedIds
+  checkedPermIds.value = val ? normalizePermissionIds([...preservedIds, ...assignableIds]) : preservedIds
+}
+
+function normalizePermissionIds(ids: string[]): string[] {
+  const byCode = new Map(allPerms.value.map(permission => [permission.code, permission.id]))
+  const byId = new Map(allPerms.value.map(permission => [permission.id, permission]))
+  const normalized = new Set(ids)
+  const pending = [...normalized]
+  while (pending.length) {
+    const id = pending.pop()!
+    const permission = byId.get(id)
+    for (const requiredCode of permission?.requires || []) {
+      const requiredId = byCode.get(requiredCode)
+      if (requiredId && !normalized.has(requiredId)) {
+        normalized.add(requiredId)
+        pending.push(requiredId)
+      }
+    }
+  }
+  return [...normalized]
+}
+
+function handlePermissionGroupChange(value: string[] | number[]) {
+  checkedPermIds.value = normalizePermissionIds(value.map(String))
+}
+
+function applyPermissionPack(pack: PermissionPackItem) {
+  const idsByCode = new Map(allPerms.value.map(permission => [permission.code, permission.id]))
+  const packIds = pack.permissions
+    .map(code => idsByCode.get(code))
+    .filter((id): id is string => Boolean(id))
+  const missing = pack.permissions.filter(code => !idsByCode.has(code))
+  checkedPermIds.value = normalizePermissionIds([...new Set([...checkedPermIds.value, ...packIds])])
+  if (missing.length) {
+    ElMessage.warning(`${pack.name}缺少目录权限：${missing.join('、')}`)
+    return
+  }
+  ElMessage.success(`已加入权限包：${pack.name}，保存前仍会进行依赖和冲突校验`)
 }
 
 async function fetchRoles() {
@@ -232,6 +236,10 @@ async function fetchRoles() {
 
 async function fetchPerms() {
   try { allPerms.value = await getPermissions() } catch { /* ignore */ }
+}
+
+async function fetchPermissionPacks() {
+  try { permissionPacks.value = await getPermissionPacks() } catch { /* ignore */ }
 }
 
 function onRoleSelect(role: RoleItem | null) {
@@ -287,6 +295,11 @@ async function handleSavePerms() {
   if (!selectedRole.value) return
   savingPerms.value = true
   try {
+    const preview = await previewRolePermissions(selectedRole.value.id, checkedPermIds.value)
+    if (!preview.valid) {
+      ElMessage.error(preview.issues.map(issue => issue.message).join('；') || '权限组合校验未通过，未保存')
+      return
+    }
     const updated = await setRolePermissions(selectedRole.value.id, checkedPermIds.value)
     // Update local data
     const idx = roles.value.findIndex(r => r.id === selectedRole.value!.id)
@@ -296,5 +309,5 @@ async function handleSavePerms() {
   } catch { /* handled */ } finally { savingPerms.value = false }
 }
 
-onMounted(() => { fetchRoles(); fetchPerms() })
+onMounted(() => { fetchRoles(); fetchPerms(); fetchPermissionPacks() })
 </script>

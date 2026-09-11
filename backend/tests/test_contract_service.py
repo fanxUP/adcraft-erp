@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from app.core.permissions import PERM_ORDER_READ
 
 
 SAMPLE_ORDER_UUID = UUID("33333333-3333-3333-3333-333333333333")
@@ -13,7 +14,10 @@ SAMPLE_CUSTOMER_UUID = UUID("44444444-4444-4444-4444-444444444444")
 
 
 def make_viewer(*permission_codes: str):
-    permissions = [SimpleNamespace(code=code) for code in permission_codes]
+    codes = list(permission_codes)
+    if "order:view_price" in codes and PERM_ORDER_READ not in codes:
+        codes.insert(0, PERM_ORDER_READ)
+    permissions = [SimpleNamespace(code=code) for code in codes]
     return SimpleNamespace(roles=[SimpleNamespace(permissions=permissions)])
 
 

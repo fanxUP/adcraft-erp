@@ -11,14 +11,14 @@ Usage in route definitions:
     ):
         ...
 
-For admin-only endpoints:
+For system-management endpoints, use the explicit super-admin capability:
 
-    from app.core.permissions import require_role
+    from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission
 
     @router.delete("/{user_id}")
     async def delete_user(
         ...,
-        current_user: User = Depends(require_role("admin")),
+        current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
     ):
         ...
 """
@@ -26,12 +26,18 @@ For admin-only endpoints:
 from fastapi import Depends, HTTPException, status
 
 from app.core.deps import get_current_user
+from app.core.permission_catalog import (
+    RESOURCE_CENTER_PERMISSIONS,
+    SENSITIVE_PERMISSIONS,
+    TASK_MUTATION_PERMISSIONS,
+)
 from app.models.user import User
 
 # ── Permission code constants ──────────────────────────────────────────────
 
 # System
 PERM_SYSTEM_LOGS = "system:logs"
+PERM_SYSTEM_SUPER_ADMIN = "system:super_admin"
 
 # Backup
 PERM_BACKUP_CREATE = "backup:create"
@@ -215,20 +221,9 @@ PERM_AERIAL_WAGE = "aerial:wage"
 # The parent gate is intentionally separate from the vehicle/aerial action
 # permissions. A user must have both the module entry permission and the
 # relevant child permission before a resource-center route is usable.
-RESOURCE_CENTER_PERMISSION_CODES = frozenset({
-    PERM_RESOURCE_CENTER_READ,
-    PERM_VEHICLE_READ,
-    PERM_VEHICLE_CREATE,
-    PERM_VEHICLE_UPDATE,
-    PERM_VEHICLE_DELETE,
-    PERM_FINANCE_REVIEW,
-    PERM_AERIAL_READ,
-    PERM_AERIAL_CREATE,
-    PERM_AERIAL_UPDATE,
-    PERM_AERIAL_DELETE,
-    PERM_AERIAL_FINANCE,
-    PERM_AERIAL_WAGE,
-})
+# Compatibility export. The catalog is the single source of truth for this
+# security classification; callers should prefer its semantic name.
+RESOURCE_CENTER_PERMISSION_CODES = RESOURCE_CENTER_PERMISSIONS
 
 # CDR 智能报价
 PERM_CDR_QUOTE_READ = "cdr_quote:read"
@@ -272,78 +267,22 @@ EXECUTION_PERMISSION_CODES = frozenset({
     PERM_DESIGN_TASK_READ,
     PERM_DESIGN_TASK_LIST,
     PERM_DESIGN_TASK_ASSIGN,
-    PERM_DESIGN_TASK_CREATE,
-    PERM_DESIGN_TASK_UPDATE,
-    PERM_DESIGN_TASK_CHANGE_STATUS,
-    PERM_DESIGN_TASK_DELETE,
     PERM_PRODUCTION_TASK_READ,
     PERM_PRODUCTION_TASK_LIST,
     PERM_PRODUCTION_TASK_ASSIGN,
-    PERM_PRODUCTION_TASK_CREATE,
-    PERM_PRODUCTION_TASK_UPDATE,
-    PERM_PRODUCTION_TASK_CHANGE_STATUS,
-    PERM_PRODUCTION_TASK_DELETE,
     PERM_INSTALLATION_TASK_READ,
     PERM_INSTALLATION_TASK_LIST,
     PERM_INSTALLATION_TASK_ASSIGN,
-    PERM_INSTALLATION_TASK_CREATE,
-    PERM_INSTALLATION_TASK_UPDATE,
-    PERM_INSTALLATION_TASK_CHANGE_STATUS,
-    PERM_INSTALLATION_TASK_DELETE,
-})
+}) | TASK_MUTATION_PERMISSIONS
 
 
 # Sensitive permissions are kept in one immutable set so role-management and
 # response serializers can share the same security boundary.  The set is
 # intentionally permission-code based rather than role-name based: custom
 # business roles can still be evaluated consistently.
-SENSITIVE_PERMISSION_CODES = frozenset({
-    # Complete quote/contract capabilities are sensitive because their
-    # normal read responses contain commercial amounts, even when a route is
-    # not named ``view_price``.
-    PERM_QUOTE_READ,
-    PERM_QUOTE_CREATE,
-    PERM_QUOTE_UPDATE,
-    PERM_QUOTE_DELETE,
-    PERM_QUOTE_CONFIRM,
-    PERM_QUOTE_CONVERT,
-    PERM_CONTRACT_READ,
-    PERM_CONTRACT_CREATE,
-    PERM_CONTRACT_UPDATE,
-    PERM_CONTRACT_DELETE,
-    PERM_CONTRACT_CHANGE_STATUS,
-    # CDR quoting includes pricing rules, calculated totals and customer
-    # agreements, so it must not be attached to an execution role either.
-    PERM_CDR_QUOTE_READ,
-    PERM_CDR_QUOTE_CREATE,
-    PERM_CDR_QUOTE_UPDATE,
-    PERM_CDR_QUOTE_DELETE,
-    PERM_CDR_QUOTE_VIEW_COST,
-    PERM_CDR_QUOTE_VIEW_PROFIT,
-    PERM_CDR_QUOTE_ADJUST_PRICE,
-    PERM_CDR_QUOTE_APPROVE,
-    PERM_CDR_QUOTE_CONVERT,
-    PERM_CDR_RULE_SET_PUBLISH,
-    PERM_CDR_CUSTOMER_AGREEMENT_MANAGE,
-    PERM_ORDER_VIEW_PRICE,
-    PERM_ORDER_ITEM_VIEW_PRICE,
-    PERM_CATALOG_VIEW_PRICE,
-    PERM_FINANCE_VIEW_COST,
-    PERM_REPORT_VIEW_FINANCIAL,
-    PERM_REPORT_READ,
-    PERM_PAYMENT_READ,
-    PERM_PAYMENT_CREATE,
-    PERM_PAYMENT_VOID,
-    PERM_STATEMENT_READ,
-    PERM_STATEMENT_CREATE,
-    PERM_STATEMENT_CONFIRM,
-    PERM_EXPENSE_READ,
-    PERM_EXPENSE_CREATE,
-    PERM_EXPENSE_UPDATE,
-    PERM_EXPENSE_DELETE,
-    PERM_OUTSOURCE_PAYMENT_READ,
-    PERM_OUTSOURCE_PAYMENT_CREATE,
-})
+# Compatibility export. Keep the old import name while avoiding a second
+# sensitive-permission list that could drift from the central catalog.
+SENSITIVE_PERMISSION_CODES = SENSITIVE_PERMISSIONS
 
 ORDER_PRICE_FIELDS = frozenset({
     "total_amount",
@@ -393,69 +332,68 @@ def get_user_capabilities(user: User) -> dict[str, bool]:
     authorization or field-level response filtering.
     """
 
-    granted = get_user_permission_codes(user)
     return {
-        "view_order_price": PERM_ORDER_VIEW_PRICE in granted,
-        "view_order_item_price": PERM_ORDER_ITEM_VIEW_PRICE in granted,
-        "view_catalog_price": PERM_CATALOG_VIEW_PRICE in granted,
-        "view_cost": PERM_FINANCE_VIEW_COST in granted,
-        "view_financial_report": PERM_REPORT_VIEW_FINANCIAL in granted,
+        "view_order_price": user_has_permission(user, PERM_ORDER_VIEW_PRICE),
+        "view_order_item_price": user_has_permission(user, PERM_ORDER_ITEM_VIEW_PRICE),
+        "view_catalog_price": user_has_permission(user, PERM_CATALOG_VIEW_PRICE),
+        "view_cost": user_has_permission(user, PERM_FINANCE_VIEW_COST),
+        "view_financial_report": user_has_permission(user, PERM_REPORT_VIEW_FINANCIAL),
     }
 
 
 def user_has_permission(user: User, permission_code: str) -> bool:
-    """Return whether a database-loaded user has one explicit permission."""
+    """Return whether a user can exercise one capability.
 
-    return permission_code in get_user_permission_codes(user)
+    This compatibility helper now delegates to the same evaluator used by
+    FastAPI dependencies, including super-admin bypass, prerequisite checks
+    and conflict blocking for sensitive fields.
+    """
+
+    from app.core.authorization import AuthorizationEvaluator
+
+    return AuthorizationEvaluator(user).check(permission_code).allowed
 
 
 def validate_role_sensitive_permissions(
     role_name: str,
     permission_codes: set[str] | list[str] | tuple[str, ...],
 ) -> None:
-    """Prevent execution roles from being granted commercial permissions."""
+    """Compatibility wrapper for code-level permission composition validation.
 
-    if role_name in {ROLE_ADMIN, *SENSITIVE_ROLE_NAMES}:
-        return
-    codes = set(permission_codes)
-    execution_capable = (
-        role_name in EXECUTION_ROLE_NAMES
-        or bool(EXECUTION_PERMISSION_CODES.intersection(codes))
-    )
-    if execution_capable and SENSITIVE_PERMISSION_CODES.intersection(codes):
-        raise ValueError("设计、制作、安装角色不能拥有价格或财务权限")
+    ``role_name`` is intentionally ignored.  The old signature is retained
+    for third-party callers during migration, but a display name must never
+    decide whether a capability combination is safe.
+    """
+
+    from app.core.permission_catalog import validate_permission_set
+
+    issues = validate_permission_set(permission_codes)
+    if issues:
+        raise ValueError("；".join(dict.fromkeys(issue.message for issue in issues)))
 
 
 def validate_role_resource_permissions(
     role_name: str,
     permission_codes: set[str] | list[str] | tuple[str, ...],
 ) -> None:
-    """Keep resource-center access in a separate role boundary.
+    """Compatibility wrapper; resource conflicts are validated by capability code."""
 
-    Built-in delivery roles must not be used as a shortcut to grant vehicle or
-    aerial access. A separate resource role can still be assigned alongside a
-    delivery role when that is an intentional business decision.
-    """
+    from app.core.permission_catalog import validate_permission_set
 
-    if role_name in {ROLE_ADMIN, *SENSITIVE_ROLE_NAMES}:
-        return
-    codes = set(permission_codes)
-    execution_capable = (
-        role_name in EXECUTION_ROLE_NAMES
-        or bool(EXECUTION_PERMISSION_CODES.intersection(codes))
-    )
-    if execution_capable and RESOURCE_CENTER_PERMISSION_CODES.intersection(codes):
-        raise ValueError("设计、制作、安装角色不能拥有资源中心权限")
+    issues = validate_permission_set(permission_codes)
+    if issues:
+        raise ValueError("；".join(dict.fromkeys(issue.message for issue in issues)))
 
 
 def validate_execution_role_combination(role_names: list[str] | tuple[str, ...]) -> None:
-    """Prevent ordinary users from combining execution and sensitive roles."""
+    """Deprecated role-name API kept as a no-op during the migration.
 
-    names = set(role_names)
-    if ROLE_ADMIN in names:
-        return
-    if EXECUTION_ROLE_NAMES.intersection(names) and SENSITIVE_ROLE_NAMES.intersection(names):
-        raise ValueError("执行角色不能与销售或财务角色同时分配")
+    Callers that need validation must pass the effective permission union to
+    ``validate_permission_set``.  Role names are labels and cannot express a
+    security boundary for arbitrary custom roles.
+    """
+
+    del role_names
 
 
 # ── Dependency factories ──────────────────────────────────────────────────
@@ -468,11 +406,16 @@ def require_permission(permission_code: str):
     """
 
     async def dependency(current_user: User = Depends(get_current_user)) -> User:
-        if user_has_permission(current_user, permission_code):
+        # Lazy import avoids a module cycle: the evaluator reuses the
+        # historical permission-code constants from this module.
+        from app.core.authorization import AuthorizationEvaluator
+
+        decision = AuthorizationEvaluator(current_user).check(permission_code)
+        if decision.allowed:
             return current_user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"权限不足: 需要「{permission_code}」权限",
+            detail=decision.message or f"权限不足: 需要「{permission_code}」权限",
         )
 
     return dependency
@@ -482,16 +425,14 @@ def require_any_permission(*permission_codes: str):
     """要求当前用户至少拥有一个指定权限。"""
 
     async def dependency(current_user: User = Depends(get_current_user)) -> User:
-        granted = {
-            permission.code
-            for role in current_user.roles
-            for permission in role.permissions
-        }
-        if granted.intersection(permission_codes):
+        from app.core.authorization import AuthorizationEvaluator
+
+        decision = AuthorizationEvaluator(current_user).check_any(*permission_codes)
+        if decision.allowed:
             return current_user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"权限不足: 需要以下任一权限「{'/'.join(permission_codes)}」",
+            detail=decision.message or f"权限不足: 需要以下任一权限「{'/'.join(permission_codes)}」",
         )
 
     return dependency
@@ -510,23 +451,26 @@ def require_all_permissions(*permission_codes: str):
         raise ValueError("至少需要一个权限码")
 
     async def dependency(current_user: User = Depends(get_current_user)) -> User:
-        granted = get_user_permission_codes(current_user)
-        missing = tuple(code for code in required if code not in granted)
-        if not missing:
+        from app.core.authorization import AuthorizationEvaluator
+
+        decision = AuthorizationEvaluator(current_user).check_all(*required)
+        if decision.allowed:
             return current_user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"权限不足：请联系管理员开通「{'、'.join(missing)}」权限",
+            detail=decision.message or f"权限不足：请联系管理员开通「{'、'.join(required)}」权限",
         )
 
     return dependency
 
 
 def require_role(role_name: str):
-    """FastAPI dependency: require the current user to have a specific role.
+    """Compatibility-only role-name dependency for unmigrated integrations.
 
-    Simpler than require_permission — checks role name directly.
-    Useful for broad admin/supervisor checks.
+    New business routes must use ``require_permission`` or one of its
+    composition helpers.  Keeping this adapter temporarily avoids breaking
+    external integrations, but role names are not a safe authorization model
+    for new code because custom roles may carry the same capabilities.
     """
 
     async def dependency(current_user: User = Depends(get_current_user)) -> User:
@@ -542,7 +486,7 @@ def require_role(role_name: str):
 
 
 def require_any_role(*role_names: str):
-    """FastAPI dependency: require the current user to have at least one of the specified roles."""
+    """Compatibility-only role-name dependency for unmigrated integrations."""
 
     async def dependency(current_user: User = Depends(get_current_user)) -> User:
         for role in current_user.roles:

@@ -4,13 +4,18 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission
 from app.models.user import User
 from app.schemas.leave import LeaveRequestCreate, LeaveRequestUpdate, LeaveRequestApprove
 from app.schemas.common import success, success_paginated
 from app.services.leave_service import LeaveRequestService
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/leaves", tags=["Leaves"])
+router = APIRouter(
+    prefix="/leaves",
+    tags=["Leaves"],
+    dependencies=[Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN))],
+)
 
 
 @router.get("/")

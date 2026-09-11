@@ -38,7 +38,18 @@ VIEWER_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
 def _viewer(*permission_codes: str):
     role = MagicMock()
-    role.permissions = [MagicMock(code=code) for code in permission_codes]
+    codes = list(permission_codes)
+    stage_by_action = {
+        PERM_DESIGN_TASK_ASSIGN: PERM_DESIGN_TASK_READ,
+        PERM_PRODUCTION_TASK_ASSIGN: PERM_PRODUCTION_TASK_READ,
+        PERM_INSTALLATION_TASK_ASSIGN: PERM_INSTALLATION_TASK_READ,
+    }
+    for action, read in stage_by_action.items():
+        if action in codes and read not in codes:
+            codes.append(read)
+    if PERM_ORDER_TASK_ASSIGN in codes and "order:read" not in codes:
+        codes.append("order:read")
+    role.permissions = [MagicMock(code=code) for code in codes]
     viewer = MagicMock(id=VIEWER_ID)
     viewer.roles = [role]
     return viewer

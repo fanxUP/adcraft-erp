@@ -15,6 +15,38 @@ export interface PermissionItem {
   code: string
   name: string
   description?: string
+  module: string
+  resource: string
+  action: string
+  kind: 'module' | 'action' | 'field' | string
+  sensitivity: 'normal' | 'price' | 'financial' | 'external' | 'security' | string
+  status: 'active' | 'deprecated' | string
+  sort_order: number
+  requires: string[]
+}
+
+export interface PermissionPackItem {
+  code: string
+  name: string
+  description: string
+  permissions: string[]
+}
+
+export interface RolePermissionIssue {
+  kind: string
+  code: string
+  message: string
+  permissions: string[]
+}
+
+export interface RolePermissionPreview {
+  role_id: string
+  valid: boolean
+  issues: RolePermissionIssue[]
+  added_permissions: string[]
+  removed_permissions: string[]
+  affected_user_count: number
+  permissions: PermissionItem[]
 }
 
 export function getRoles() {
@@ -37,10 +69,18 @@ export function setRolePermissions(id: string, permissionIds: string[]) {
   return put<RoleItem>(`/admin/roles/${id}/permissions`, { permission_ids: permissionIds })
 }
 
+export function previewRolePermissions(id: string, permissionIds: string[]) {
+  return post<RolePermissionPreview>(`/admin/roles/${id}/permissions/preview`, { permission_ids: permissionIds })
+}
+
 // ── Permissions ──
 
 export function getPermissions() {
   return get<PermissionItem[]>('/admin/permissions')
+}
+
+export function getPermissionPacks() {
+  return get<PermissionPackItem[]>('/admin/permission-packs')
 }
 
 // ── System Settings ──

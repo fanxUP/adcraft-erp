@@ -13,12 +13,18 @@ from app.core.permissions import (
     PERM_AERIAL_DELETE,
     PERM_AERIAL_FINANCE,
     PERM_AERIAL_WAGE,
+    PERM_RESOURCE_CENTER_READ,
 )
 
 def _make_role(name: str, permission_codes: list[str]) -> MagicMock:
     role = MagicMock()
     role.name = name
-    role.permissions = [_make_perm(code) for code in permission_codes]
+    codes = list(permission_codes)
+    # Resource-center child actions are intentionally parent-gated.  Keep the
+    # helper explicit about the valid composition used by the positive cases.
+    if any(code.startswith("aerial:") for code in codes) and PERM_RESOURCE_CENTER_READ not in codes:
+        codes.insert(0, PERM_RESOURCE_CENTER_READ)
+    role.permissions = [_make_perm(code) for code in codes]
     return role
 
 

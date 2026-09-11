@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.permissions import require_role
+from app.core.permissions import PERM_SYSTEM_LOGS, require_permission
 from app.models.user import User
 from app.repositories.ai_request_repo import AIRequestRepository
 from app.schemas.common import success, success_paginated
@@ -31,7 +31,7 @@ async def list_requests(
     provider_id: Optional[UUID] = Query(None),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_LOGS)),
     service: AIRequestService = Depends(_get_service),
 ):
     """List AI request logs with filters."""
@@ -53,7 +53,7 @@ async def get_usage_summary(
     start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: date = Query(..., description="End date (YYYY-MM-DD)"),
     task_code: Optional[str] = Query(None),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_LOGS)),
     service: AIRequestService = Depends(_get_service),
 ):
     """Get AI usage summary for a date range."""

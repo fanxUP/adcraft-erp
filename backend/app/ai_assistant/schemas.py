@@ -117,5 +117,6 @@ class ToolDefinition(BaseModel):
     description: str
     parameters: dict[str, Any]  # JSON Schema
     risk_level: str  # level_1/level_2/level_3/level_4
-    required_permission: str
+    required_permission: str = ""
+    required_permissions: list[str] = Field(default_factory=list)
     requires_confirmation: bool = False

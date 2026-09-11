@@ -7,10 +7,15 @@ from app.ai.core.resolver import FeatureResolver
 from app.ai.rule_based.anomaly_detector import AnomalyDetector
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import PERM_AI_ANOMALY_READ, require_permission
 from app.models.user import User
 from app.schemas.common import success
 
-router = APIRouter(prefix="/ai/anomalies", tags=["AI Anomalies"])
+router = APIRouter(
+    prefix="/ai/anomalies",
+    tags=["AI Anomalies"],
+    dependencies=[Depends(require_permission(PERM_AI_ANOMALY_READ))],
+)
 
 
 @router.get("/scan")

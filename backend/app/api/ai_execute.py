@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.gateway.gateway import AIGateway, AIGatewayError
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.permissions import require_role
+from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission
 from app.models.user import User
 from app.schemas.common import success
 
@@ -37,7 +37,7 @@ class ExecuteRequest(BaseModel):
 @router.post("/ai/tasks/execute")
 async def execute_task(
     req: ExecuteRequest,
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
     db: AsyncSession = Depends(get_db),
 ):
     """Unified AI task execution endpoint.

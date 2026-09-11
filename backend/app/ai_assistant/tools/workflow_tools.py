@@ -33,7 +33,7 @@ async def _load_order_snapshot(db, user, business_id: str) -> dict:
             _require_uuid(str(acceptance_summaries[0]["id"]))
         )
         acceptances = [detail]
-    return {
+    snapshot = {
         **order,
         "business_type": "order",
         "business_id": business_id,
@@ -41,8 +41,16 @@ async def _load_order_snapshot(db, user, business_id: str) -> dict:
         "production_tasks": progress.get("production_tasks", {}).get("items", []),
         "installation_tasks": progress.get("installation_tasks", {}).get("items", []),
         "acceptances": acceptances,
-        "total_paid": progress.get("total_paid", order.get("paid_amount", 0)),
     }
+    # The progress tool omits payment data unless both order-price and
+    # payment-read capabilities are present. Preserve that omission here so
+    # workflow guidance cannot turn a hidden amount into a misleading zero.
+    if "total_paid" in progress:
+        snapshot["total_paid"] = progress["total_paid"]
+    snapshot["_financial_visible"] = (
+        "total_amount" in snapshot and "total_paid" in snapshot
+    )
+    return snapshot
 
 
 async def _load_quote_snapshot(db, user, business_id: str) -> dict:
@@ -81,7 +89,7 @@ async def _load_task_snapshot(db, user, business_type: str, business_id: str) ->
         "production_task": ProductionTaskService,
         "installation_task": InstallationTaskService,
     }[business_type]
-    task = await service_class(db).get_task(_require_uuid(business_id))
+    task = await service_class(db, viewer=user).get_task(_require_uuid(business_id))
     if not task:
         raise ValueError("任务不存在")
     snapshot = {**task, "business_type": business_type, "business_id": business_id}

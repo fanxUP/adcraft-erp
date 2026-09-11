@@ -4,12 +4,17 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission
 from app.schemas.department import DepartmentCreate, DepartmentUpdate
 from app.schemas.common import success
 from app.services.department_service import DepartmentService
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/departments", tags=["Departments"])
+router = APIRouter(
+    prefix="/departments",
+    tags=["Departments"],
+    dependencies=[Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN))],
+)
 
 
 @router.get("/")

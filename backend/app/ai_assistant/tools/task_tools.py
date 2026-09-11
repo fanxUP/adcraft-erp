@@ -11,13 +11,13 @@ async def list_today_tasks(db, user, task_type=None):
     )
     result = {}
     if not task_type or task_type == "design":
-        svc = DesignTaskService(db); t, n = await svc.list_tasks(page=1, page_size=50)
+        svc = DesignTaskService(db, viewer=user); t, n = await svc.list_tasks(page=1, page_size=50)
         result["design_tasks"] = {"items": t, "total": n}
     if not task_type or task_type == "production":
-        svc = ProductionTaskService(db); t, n = await svc.list_tasks(page=1, page_size=50)
+        svc = ProductionTaskService(db, viewer=user); t, n = await svc.list_tasks(page=1, page_size=50)
         result["production_tasks"] = {"items": t, "total": n}
     if not task_type or task_type == "installation":
-        svc = InstallationTaskService(db); t, n = await svc.list_tasks(page=1, page_size=50)
+        svc = InstallationTaskService(db, viewer=user); t, n = await svc.list_tasks(page=1, page_size=50)
         result["installation_tasks"] = {"items": t, "total": n}
     return result
 

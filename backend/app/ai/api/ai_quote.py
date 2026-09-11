@@ -10,10 +10,20 @@ from app.ai.rule_based.quote_finder import QuoteFinder
 from app.ai.schemas.ai_quote import AIQuoteAssistRequest
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import (
+    PERM_AI_QUOTE_READ,
+    PERM_QUOTE_CREATE,
+    require_all_permissions,
+    require_permission,
+)
 from app.models.user import User
 from app.schemas.common import success
 
-router = APIRouter(prefix="/ai/quotes", tags=["AI Quotes"])
+router = APIRouter(
+    prefix="/ai/quotes",
+    tags=["AI Quotes"],
+    dependencies=[Depends(require_permission(PERM_AI_QUOTE_READ))],
+)
 
 
 @router.post("/assist")
@@ -47,7 +57,7 @@ async def assist_quote(
 async def save_assisted_quote(
     draft: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_all_permissions(PERM_AI_QUOTE_READ, PERM_QUOTE_CREATE)),
 ):
     """Save an AI-generated draft as a real Quote in 'draft' status.
 

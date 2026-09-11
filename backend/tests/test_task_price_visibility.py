@@ -8,6 +8,7 @@ import pytest
 
 from app.core.permissions import (
     PERM_ORDER_ITEM_VIEW_PRICE,
+    PERM_ORDER_READ,
     PERM_ORDER_VIEW_PRICE,
 )
 from app.schemas.order import OrderItemResponse
@@ -23,11 +24,15 @@ TASK_ID = UUID("99999999-9999-9999-9999-999999999999")
 
 
 def _viewer(*permission_codes: str):
+    codes = list(permission_codes)
+    if any(code in {PERM_ORDER_VIEW_PRICE, PERM_ORDER_ITEM_VIEW_PRICE} for code in codes):
+        if PERM_ORDER_READ not in codes:
+            codes.insert(0, PERM_ORDER_READ)
     return SimpleNamespace(
         roles=[
             SimpleNamespace(
                 name="viewer",
-                permissions=[SimpleNamespace(code=code) for code in permission_codes],
+                permissions=[SimpleNamespace(code=code) for code in codes],
             )
         ]
     )

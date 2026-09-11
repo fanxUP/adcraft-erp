@@ -11,6 +11,11 @@ class AiToolDefinition:
     parameters: dict[str, Any]
     risk_level: str = "level_1"
     required_permission: str = ""
+    # Some tools return data that is protected by more than one independent
+    # capability.  Keep ``required_permission`` for backwards compatibility,
+    # but allow a tool to declare an all-of contract without encoding it in
+    # handler code or relying on the caller to remember a second check.
+    required_permissions: tuple[str, ...] = ()
     requires_confirmation: bool = False
     handler: Callable[..., Coroutine[Any, Any, dict]] | None = None
     preview_handler: Callable[..., Coroutine[Any, Any, dict]] | None = None
@@ -45,6 +50,7 @@ class ToolRegistry:
             {
                 "name": t.name, "description": t.description, "parameters": t.parameters,
                 "risk_level": t.risk_level, "required_permission": t.required_permission,
+                "required_permissions": list(t.required_permissions),
                 "requires_confirmation": t.requires_confirmation,
             }
             for t in self._tools.values()

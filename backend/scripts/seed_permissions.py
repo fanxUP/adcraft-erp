@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.config import settings
 from app.core.database import engine, async_session_maker
+from app.core.permission_catalog import get_permission_definition
 from app.models.user import Permission, Role
 from sqlalchemy import select
 
@@ -27,6 +28,7 @@ from sqlalchemy import select
 ALL_PERMISSIONS: list[dict[str, str | None]] = [
     # System
     {"code": "system:logs", "name": "查看操作日志", "description": "查看系统操作日志"},
+    {"code": "system:super_admin", "name": "超级管理员", "description": "管理所有模块、权限和系统安全设置"},
     # Backup
     {"code": "backup:create", "name": "创建备份", "description": "创建数据库备份"},
     {"code": "backup:read", "name": "查看备份", "description": "查看备份文件列表"},
@@ -276,6 +278,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
 
 # ── Roles referenced by the init-db.sh script ──────────────────────────────
 ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance", "resource_manager", "outsource_manager"]
+PERMISSION_SEED_VERSION = 1
 
 
 def builtin_role_permission_codes(role_name: str) -> list[str] | None:
@@ -309,8 +312,10 @@ async def seed_permissions():
         existing_perms: dict[str, Permission] = {p.code: p for p in result.scalars().all()}
 
         created_count = 0
-        for p_def in ALL_PERMISSIONS:
-            if p_def["code"] not in existing_perms:
+        for index, p_def in enumerate(ALL_PERMISSIONS):
+            definition = get_permission_definition(p_def["code"])
+            perm = existing_perms.get(p_def["code"])
+            if perm is None:
                 perm = Permission(
                     code=p_def["code"],
                     name=p_def["name"],
@@ -320,6 +325,18 @@ async def seed_permissions():
                 existing_perms[p_def["code"]] = perm
                 created_count += 1
 
+            # Keep labels backward-compatible while making the semantic
+            # catalog queryable by the admin UI and authorization services.
+            perm.name = p_def["name"]
+            perm.description = p_def.get("description")
+            perm.module = definition.module
+            perm.resource = definition.resource
+            perm.action = definition.action
+            perm.kind = definition.kind
+            perm.sensitivity = definition.sensitivity
+            perm.status = "active"
+            perm.sort_order = index
+
         await session.flush()
 
         if created_count:
@@ -327,13 +344,19 @@ async def seed_permissions():
         else:
             print("✓ All permissions already exist.")
 
-        # 3. Map permissions to roles (clear and re-apply)
+        # 3. Initialize built-in roles once.  Existing role associations are
+        # intentionally preserved so a deployment cannot erase a custom
+        # combination.  Future default changes must use an explicit migration
+        # and a new seed version rather than silently overwriting roles.
         for role_name, role in existing_roles.items():
             codes = builtin_role_permission_codes(role_name) or []
-            target_perms = [existing_perms[c] for c in codes if c in existing_perms]
-
-            replace_role_permissions(role, target_perms)
-            print(f"  → {role_name}: {len(target_perms)} permissions")
+            if getattr(role, "permission_seed_version", 0) < PERMISSION_SEED_VERSION:
+                target_perms = [existing_perms[c] for c in codes if c in existing_perms]
+                replace_role_permissions(role, target_perms)
+                role.permission_seed_version = PERMISSION_SEED_VERSION
+                print(f"  → {role_name}: initialized {len(target_perms)} permissions")
+            else:
+                print(f"  ↷ {role_name}: existing permission combination preserved ({len(role.permissions)} permissions)")
 
         await session.flush()
         await session.commit()

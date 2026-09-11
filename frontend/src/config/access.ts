@@ -3,14 +3,25 @@
  *
  * These rules keep the shell and router consistent, but they are not the
  * security boundary. API permissions and object-state checks on the server
- * remain authoritative; P04 will add the server-provided action capabilities.
+ * remain authoritative; this file only mirrors server-issued page entry
+ * capabilities.
  */
 
 export type AccessKey =
   | 'public'
   | 'authenticated'
   | 'sales'
+  | 'customer'
+  | 'quote'
+  | 'quoteCreate'
+  | 'quoteUpdate'
+  | 'contract'
   | 'orderRead'
+  | 'orderManage'
+  | 'orderDelete'
+  | 'acceptance'
+  | 'cdrQuote'
+  | 'cdrPriceRules'
   | 'product'
   | 'design'
   | 'designRead'
@@ -23,6 +34,12 @@ export type AccessKey =
   | 'installationListRead'
   | 'boardRead'
   | 'finance'
+  | 'payment'
+  | 'expense'
+  | 'statement'
+  | 'projectCost'
+  | 'costDebt'
+  | 'outsourcePayment'
   | 'reports'
   | 'outsourceVendor'
   | 'outsourceTask'
@@ -40,10 +57,22 @@ export type AccessKey =
   | 'aerialOperations'
   | 'aerialFinance'
   | 'aerialFinanceOperations'
-  | 'aiSales'
+  | 'aiQuote'
+  | 'aiKnowledge'
+  | 'aiAnomaly'
   | 'aiReports'
+  | 'aiSitePhoto'
+  | 'aiPaymentOcr'
 
 type AccessRoles = readonly string[] | null
+
+export type PermissionRequirement =
+  | readonly string[]
+  | { allOf?: readonly string[]; anyOf?: readonly string[] }
+
+function isPermissionList(requirement: PermissionRequirement): requirement is readonly string[] {
+  return Array.isArray(requirement)
+}
 
 /**
  * Role groups are deliberately about page visibility only. They do not grant
@@ -53,7 +82,17 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   public: [],
   authenticated: null,
   sales: ['admin', 'sales'],
+  customer: ['admin', 'sales'],
+  quote: ['admin', 'sales'],
+  quoteCreate: ['admin', 'sales'],
+  quoteUpdate: ['admin', 'sales'],
+  contract: ['admin', 'sales'],
   orderRead: ['admin', 'sales', 'finance'],
+  orderManage: ['admin', 'sales'],
+  orderDelete: ['admin'],
+  acceptance: ['admin', 'sales'],
+  cdrQuote: ['admin', 'sales'],
+  cdrPriceRules: ['admin', 'sales'],
   product: ['admin', 'designer', 'production'],
   design: ['admin', 'designer'],
   designRead: ['admin', 'sales', 'designer'],
@@ -66,6 +105,12 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   installationListRead: ['admin', 'sales'],
   boardRead: ['admin', 'sales', 'designer', 'production', 'installer'],
   finance: ['admin', 'finance'],
+  payment: ['admin', 'finance'],
+  expense: ['admin', 'finance'],
+  statement: ['admin', 'finance'],
+  projectCost: ['admin', 'finance'],
+  costDebt: ['admin', 'finance'],
+  outsourcePayment: ['admin', 'finance'],
   reports: ['admin', 'sales', 'finance'],
   outsourceVendor: ['admin', 'finance', 'outsource_manager'],
   outsourceTask: ['admin', 'finance', 'outsource_manager'],
@@ -83,18 +128,35 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   aerialOperations: ['admin', 'resource_manager'],
   aerialFinance: ['admin', 'finance', 'resource_manager'],
   aerialFinanceOperations: ['admin', 'finance', 'resource_manager'],
-  aiSales: ['admin', 'sales', 'finance'],
+  aiQuote: ['admin', 'sales', 'finance'],
+  aiKnowledge: ['admin', 'sales', 'finance'],
+  aiAnomaly: ['admin', 'sales', 'finance'],
   aiReports: ['admin', 'sales', 'finance'],
+  // Site-photo and payment-OCR APIs currently share the historical
+  // ai_quote:read backend capability. Keep the page keys separate so a
+  // future backend split does not require another broad any-of grant.
+  aiSitePhoto: ['admin', 'sales', 'finance'],
+  aiPaymentOcr: ['admin', 'sales', 'finance'],
 }
 
 /**
- * Permission fallbacks for custom roles. Resource-center and outsourcing keys
- * become permission-first whenever the authenticated profile has supplied the
- * server permission list, so an admin can revoke a built-in role's access
- * without leaving a stale navigation entry. These are page-entry permissions
- * only, never data-field or write authorization.
+ * Permission requirements for custom roles.  The profile from /auth/me is the
+ * source of truth after it has loaded; these are page-entry requirements only,
+ * never data-field or write authorization.
  */
-export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, readonly string[]>> = {
+export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement>> = {
+  sales: { anyOf: ['customer:read', 'quote:read', 'contract:read', 'order:read'] },
+  customer: ['customer:read'],
+  quote: ['quote:read'],
+  quoteCreate: ['quote:create'],
+  quoteUpdate: ['quote:update'],
+  contract: ['contract:read'],
+  orderRead: ['order:read'],
+  orderManage: ['order:update'],
+  orderDelete: ['order:delete'],
+  acceptance: ['acceptance:read'],
+  cdrQuote: ['cdr_quote:read'],
+  cdrPriceRules: ['cdr_rule_set:publish'],
   product: ['product:read'],
   design: ['design_task:read'],
   designRead: ['design_task:read'],
@@ -105,24 +167,37 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, readonly string[]>> =
   installation: ['installation_task:read'],
   installationRead: ['installation_task:read'],
   installationListRead: ['installation_task:list'],
-  boardRead: ['design_task:read', 'production_task:read', 'installation_task:read'],
-  outsourceVendor: ['outsource_center:read', 'outsource_vendor:read'],
-  outsourceTask: ['outsource_center:read', 'outsource_task:read'],
-  outsourceTaskRecycle: ['outsource_center:read', 'outsource_task:delete'],
+  boardRead: { anyOf: ['design_task:read', 'production_task:read', 'installation_task:read'] },
+  outsourceVendor: { allOf: ['outsource_center:read', 'outsource_vendor:read'] },
+  outsourceTask: { allOf: ['outsource_center:read', 'outsource_task:read'] },
+  outsourceTaskRecycle: { allOf: ['outsource_center:read', 'outsource_task:delete'] },
   inventory: ['inventory:read'],
   resourceCenter: ['resource_center:read'],
-  vehicleRead: ['resource_center:read', 'vehicle:read'],
-  vehicleFleet: ['resource_center:read', 'vehicle:read'],
-  vehicleDrivers: ['resource_center:read', 'vehicle:read'],
-  vehicleOperations: ['resource_center:read', 'vehicle:read'],
-  vehicleExpenses: ['resource_center:read', 'vehicle:read'],
-  vehicleReports: ['resource_center:read', 'vehicle:read'],
-  aerialRead: ['resource_center:read', 'aerial:read'],
-  aerialOperations: ['resource_center:read', 'aerial:read'],
-  aerialFinance: ['resource_center:read', 'aerial:read'],
-  aerialFinanceOperations: ['resource_center:read', 'aerial:read'],
-  finance: ['payment:read', 'expense:read', 'statement:read'],
-  reports: ['report:read'],
+  vehicleRead: { allOf: ['resource_center:read', 'vehicle:read'] },
+  vehicleFleet: { allOf: ['resource_center:read', 'vehicle:read'] },
+  vehicleDrivers: { allOf: ['resource_center:read', 'vehicle:read'] },
+  vehicleOperations: { allOf: ['resource_center:read', 'vehicle:read'] },
+  vehicleExpenses: { allOf: ['resource_center:read', 'vehicle:read'] },
+  vehicleReports: { allOf: ['resource_center:read', 'vehicle:read'] },
+  aerialRead: { allOf: ['resource_center:read', 'aerial:read'] },
+  aerialOperations: { allOf: ['resource_center:read', 'aerial:read'] },
+  aerialFinance: { allOf: ['resource_center:read', 'aerial:read'] },
+  aerialFinanceOperations: { allOf: ['resource_center:read', 'aerial:read'] },
+  finance: { anyOf: ['payment:read', 'expense:read', 'statement:read', 'outsource_payment:read', 'finance:view_cost'] },
+  payment: ['payment:read'],
+  expense: ['expense:read'],
+  statement: ['statement:read'],
+  projectCost: { anyOf: ['expense:read', 'finance:view_cost'] },
+  costDebt: { anyOf: ['expense:read', 'finance:view_cost'] },
+  outsourcePayment: ['outsource_payment:read'],
+  reports: { anyOf: ['report:read', 'report:view_financial'] },
+  system: ['system:super_admin'],
+  aiQuote: ['ai_quote:read'],
+  aiKnowledge: { allOf: ['ai_knowledge:read', 'order:view_price'] },
+  aiAnomaly: ['ai_anomaly:read'],
+  aiReports: { allOf: ['ai_report:read', 'report:view_financial'] },
+  aiSitePhoto: ['ai_quote:read'],
+  aiPaymentOcr: ['ai_quote:read'],
 }
 
 const BUILTIN_ROLE_NAMES = new Set([
@@ -136,38 +211,26 @@ const BUILTIN_ROLE_NAMES = new Set([
   'outsource_manager',
 ])
 
-const RESOURCE_CENTER_PERMISSION_FIRST_KEYS = new Set<AccessKey>([
-  'resourceCenter',
-  'vehicleRead', 'vehicleFleet', 'vehicleDrivers', 'vehicleOperations',
-  'vehicleExpenses', 'vehicleReports', 'aerialRead', 'aerialOperations',
-  'aerialFinance', 'aerialFinanceOperations',
-])
-
-const PERMISSION_FIRST_KEYS = new Set<AccessKey>([
-  ...RESOURCE_CENTER_PERMISSION_FIRST_KEYS,
-  'outsourceVendor', 'outsourceTask', 'outsourceTaskRecycle',
-])
-
 /** Route-level visibility uses the exact same keys as navigation items. */
 export const ROUTE_ACCESS: Record<string, AccessKey> = {
   Login: 'public',
   Home: 'authenticated',
   ProfileCenter: 'authenticated',
 
-  CustomerList: 'sales',
-  CustomerDetail: 'sales',
+  CustomerList: 'customer',
+  CustomerDetail: 'customer',
   ProductManage: 'product',
-  QuoteList: 'sales',
-  QuoteCreate: 'sales',
-  QuoteEdit: 'sales',
-  ContractList: 'sales',
-  ContractDetail: 'sales',
+  QuoteList: 'quote',
+  QuoteCreate: 'quoteCreate',
+  QuoteEdit: 'quoteUpdate',
+  ContractList: 'contract',
+  ContractDetail: 'contract',
   OrderList: 'orderRead',
-  OrderRecycle: 'system',
-  OrderEdit: 'sales',
+  OrderRecycle: 'orderDelete',
+  OrderEdit: 'orderManage',
   OrderDetail: 'orderRead',
-  AcceptanceList: 'sales',
-  AcceptanceDetail: 'sales',
+  AcceptanceList: 'acceptance',
+  AcceptanceDetail: 'acceptance',
 
   DesignTaskList: 'designListRead',
   DesignTaskDetail: 'designRead',
@@ -177,24 +240,24 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   InstallationTaskList: 'installationListRead',
   InstallationTaskDetail: 'installationRead',
 
-  ReceivablesView: 'finance',
-  ExpenseList: 'finance',
-  StatementList: 'finance',
-  StatementDetail: 'finance',
-  ProjectCostList: 'finance',
-  ProjectCostDetail: 'finance',
-  QuoteCostDetail: 'finance',
-  CostDebtList: 'finance',
+  ReceivablesView: 'payment',
+  ExpenseList: 'expense',
+  StatementList: 'statement',
+  StatementDetail: 'statement',
+  ProjectCostList: 'projectCost',
+  ProjectCostDetail: 'projectCost',
+  QuoteCostDetail: 'projectCost',
+  CostDebtList: 'costDebt',
 
   DailyReport: 'reports',
   MonthlyReport: 'reports',
-  AnomalyDashboard: 'aiReports',
+  AnomalyDashboard: 'aiAnomaly',
   BusinessNarrativeReport: 'aiReports',
 
   OutsourceVendorList: 'outsourceVendor',
   OutsourceTaskList: 'outsourceTask',
   OutsourceTaskRecycle: 'outsourceTaskRecycle',
-  OutsourcePaymentList: 'finance',
+  OutsourcePaymentList: 'outsourcePayment',
   InventoryList: 'inventory',
 
   OperationLogList: 'system',
@@ -240,16 +303,16 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   AerialAgentDraftList: 'aerialFinanceOperations',
   AerialAttendanceList: 'aerialOperations',
 
-  AIQuoteAssistant: 'aiSales',
-  QuoteKnowledgeBase: 'aiSales',
-  SitePhotoRecognition: 'aiSales',
-  PaymentOCR: 'aiSales',
+  AIQuoteAssistant: 'aiQuote',
+  QuoteKnowledgeBase: 'aiKnowledge',
+  SitePhotoRecognition: 'aiSitePhoto',
+  PaymentOCR: 'aiPaymentOcr',
 
-  CDRQuoteList: 'sales',
-  CDRQuoteCreate: 'sales',
-  CDRQuoteDetail: 'sales',
-  CDRQuoteEdit: 'sales',
-  PriceRuleList: 'sales',
+  CDRQuoteList: 'cdrQuote',
+  CDRQuoteCreate: 'cdrQuote',
+  CDRQuoteDetail: 'cdrQuote',
+  CDRQuoteEdit: 'cdrQuote',
+  PriceRuleList: 'cdrPriceRules',
 
   MobileHome: 'authenticated',
   MobileInstallation: 'authenticated',
@@ -350,10 +413,10 @@ export interface SmartToolItem {
 }
 
 export const SMART_TOOL_ITEMS: SmartToolItem[] = [
-  { label: 'AI 报价助手', path: '/ai/quotes', accessKey: 'aiSales' },
-  { label: '报价知识库', path: '/ai/knowledge', accessKey: 'aiSales' },
-  { label: '现场照片识别', path: '/ai/site-photos', accessKey: 'aiSales' },
-  { label: '收款截图识别', path: '/ai/payment-ocr', accessKey: 'aiSales' },
+  { label: 'AI 报价助手', path: '/ai/quotes', accessKey: 'aiQuote' },
+  { label: '报价知识库', path: '/ai/knowledge', accessKey: 'aiKnowledge' },
+  { label: '现场照片识别', path: '/ai/site-photos', accessKey: 'aiSitePhoto' },
+  { label: '收款截图识别', path: '/ai/payment-ocr', accessKey: 'aiPaymentOcr' },
 ]
 
 export function canAccess(
@@ -361,14 +424,20 @@ export function canAccess(
   roles: readonly string[],
   permissions?: readonly string[],
 ): boolean {
-  const requiredPermissions = ACCESS_PERMISSIONS[accessKey] || []
+  const requirement = ACCESS_PERMISSIONS[accessKey]
 
-  // The profile's permission array is the source of truth for resource-center
-  // and outsourcing entries once it has been loaded. Keeping the role
-  // fallback for an omitted argument preserves pure route-matrix callers and
-  // the loading state before /auth/me has completed.
-  if (PERMISSION_FIRST_KEYS.has(accessKey) && permissions !== undefined) {
-    return requiredPermissions.length > 0 && requiredPermissions.every(permission => permissions.includes(permission))
+  // Once /auth/me has supplied a permission list, every mapped page is
+  // permission-first.  Role names remain only as a compatibility fallback for
+  // pure callers that intentionally omit the server profile.
+  if (requirement && permissions !== undefined) {
+    if (permissions.includes('system:super_admin')) return true
+    if (isPermissionList(requirement)) {
+      return requirement.every(permission => permissions.includes(permission))
+    }
+    const allOf = requirement.allOf || []
+    const anyOf = requirement.anyOf || []
+    return allOf.every(permission => permissions.includes(permission))
+      && (anyOf.length === 0 || anyOf.some(permission => permissions.includes(permission)))
   }
 
   const allowedRoles = ACCESS_ROLES[accessKey]
@@ -379,7 +448,14 @@ export function canAccess(
   // Custom roles, however, have no role-name entry in ACCESS_ROLES and can be
   // admitted by the server-issued module permission.
   if (roles.some(role => BUILTIN_ROLE_NAMES.has(role))) return false
-  return requiredPermissions.some(permission => (permissions || []).includes(permission))
+  if (!requirement) return false
+  if (isPermissionList(requirement)) {
+    return requirement.every(permission => (permissions || []).includes(permission))
+  }
+  const allOf = requirement.allOf || []
+  const anyOf = requirement.anyOf || []
+  return allOf.every(permission => (permissions || []).includes(permission))
+    && (anyOf.length === 0 || anyOf.some(permission => (permissions || []).includes(permission)))
 }
 
 export function canAccessRoute(
@@ -388,7 +464,7 @@ export function canAccessRoute(
   legacyRoles: readonly string[] = [],
   permissions?: readonly string[],
 ): boolean {
-  if (legacyRoles.length > 0 && !legacyRoles.some(role => roles.includes(role))) {
+  if (permissions === undefined && legacyRoles.length > 0 && !legacyRoles.some(role => roles.includes(role))) {
     return false
   }
   if (typeof routeName !== 'string') return true
