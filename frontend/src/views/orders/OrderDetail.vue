@@ -491,6 +491,10 @@
             </el-table>
           </el-card>
         </el-tab-pane>
+
+        <el-tab-pane label="任务资料" name="task-attachments">
+          <OrderTaskAttachments :order-id="order.id" />
+        </el-tab-pane>
       </el-tabs>
     </div>
 
@@ -503,6 +507,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { Printer } from '@element-plus/icons-vue'
 import OrderWorkflow from './OrderWorkflow.vue'
 import OrderProjectOverview from './OrderProjectOverview.vue'
+import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import {

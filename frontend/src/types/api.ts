@@ -538,6 +538,47 @@ export interface AttachmentResponse {
   created_at?: string
 }
 
+/** Order-detail task materials intentionally omit the server storage path. */
+export interface OrderTaskAttachmentResponse {
+  id: string
+  related_type: 'design_task' | 'production_task' | 'installation_task'
+  related_id: string
+  filename: string
+  file_size?: number | null
+  file_type?: string | null
+  category?: string | null
+  uploaded_by?: string | null
+  uploaded_by_name?: string | null
+  remark?: string | null
+  created_at?: string | null
+}
+
+export interface OrderTaskAttachmentTask {
+  task_id: string
+  task_no?: string | null
+  status: string
+  status_label: string
+  completed_at?: string | null
+  upload_allowed: boolean
+  read_only_reason?: string | null
+  attachments: OrderTaskAttachmentResponse[]
+}
+
+export interface OrderTaskAttachmentGroup {
+  task_type: TaskType
+  label: string
+  task_label: string
+  accept: string
+  task_count: number
+  attachment_count: number
+  tasks: OrderTaskAttachmentTask[]
+}
+
+export interface OrderTaskAttachmentsResponse {
+  order_id: string
+  groups: OrderTaskAttachmentGroup[]
+}
+
 export type TaskType = 'design' | 'production' | 'installation'
 
 export interface TaskOrderItemState {

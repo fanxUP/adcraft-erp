@@ -26,6 +26,10 @@ def _route_permission(router, method: str, path: str) -> str | None:
     [
         ("GET", "/orders/", "order:read"),
         ("GET", "/orders/{order_id}", "order:read"),
+        ("GET", "/orders/{order_id}/task-attachments", "order:read"),
+        ("POST", "/orders/{order_id}/task-attachments", "order:read"),
+        ("GET", "/orders/{order_id}/task-attachments/{attachment_id}/file", "order:read"),
+        ("DELETE", "/orders/{order_id}/task-attachments/{attachment_id}", "order:read"),
         ("GET", "/orders/{order_id}/items/editability", "order:read"),
         ("GET", "/orders/{order_id}/items/change-batches", "order:read"),
         ("GET", "/orders/{order_id}/items/change-batches/{change_batch_id}", "order:read"),

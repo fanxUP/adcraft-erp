@@ -1,4 +1,4 @@
-import { get, post, put, del, patch } from './index'
+import { get, post, put, del, patch, apiClient } from './index'
 import {
   PaginatedData,
   OrderItemEditabilityResponse,
@@ -13,6 +13,8 @@ import {
   OrderDetailResponse,
   OrderTaskAssigneesResponse,
   TaskAssigneeOption,
+  OrderTaskAttachmentResponse,
+  OrderTaskAttachmentsResponse,
 } from '@/types/api'
 import { dedupeProjectQueueOrders, PROJECT_QUEUE_STATUSES } from '@/utils/project-queue'
 
@@ -33,6 +35,41 @@ export async function getProjectQueueOrders(pageSize = 200): Promise<OrderListRe
 
 export function getOrder(id: string) {
   return get<OrderDetailResponse>(`/orders/${id}`)
+}
+
+export function getOrderTaskAttachments(id: string) {
+  return get<OrderTaskAttachmentsResponse>(`/orders/${id}/task-attachments`)
+}
+
+export function uploadOrderTaskAttachment(
+  orderId: string,
+  taskType: 'design' | 'production' | 'installation',
+  taskId: string,
+  file: File,
+) {
+  const formData = new FormData()
+  formData.append('task_type', taskType)
+  formData.append('task_id', taskId)
+  formData.append('file', file)
+  return post<OrderTaskAttachmentResponse>(`/orders/${orderId}/task-attachments`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export async function downloadOrderTaskAttachment(
+  orderId: string,
+  attachmentId: string,
+  download = false,
+): Promise<Blob> {
+  const response = await apiClient.get(`/orders/${orderId}/task-attachments/${attachmentId}/file`, {
+    params: { download },
+    responseType: 'blob',
+  })
+  return response.data as Blob
+}
+
+export function deleteOrderTaskAttachment(orderId: string, attachmentId: string) {
+  return del(`/orders/${orderId}/task-attachments/${attachmentId}`)
 }
 
 export function getOrderTaskAssigneeOptions() {
