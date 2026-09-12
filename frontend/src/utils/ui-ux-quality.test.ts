@@ -55,7 +55,7 @@ describe('P08 UI/UX quality guardrails', () => {
 
     const mobileInstallation = readSource('views/tasks/MobileInstallation.vue')
     expect(includesAny(mobileInstallation, ['retry-btn', 'fetchTasks()'])).toBe(true)
-    expect(includesAny(mobileInstallation, ['capture="environment"', 'uploadPhoto'])).toBe(true)
+    expect(includesAny(mobileInstallation, ['capture', 'OrderTaskAttachments'])).toBe(true)
   })
 
   it('does not introduce obvious credentials into UI source', () => {

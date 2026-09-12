@@ -122,117 +122,30 @@
           <div class="section-heading">
             <div>
               <h3>任务资料</h3>
-              <span>三类资料分行展示，现场资料按安装任务归档</span>
+              <span>订单资料源头，按设计、制作、安装分组展示</span>
             </div>
+            <span class="readonly-hint">只读</span>
           </div>
 
           <div class="resource-grid">
-            <el-card
-              v-for="stage in RESOURCE_STAGES"
-              :key="stage.key"
-              shadow="never"
-              class="resource-card"
-            >
-              <template #header>
-                <div class="resource-heading">
-                  <span>{{ stage.title }}</span>
-                  <div v-if="resourceFor(stage.key)" class="resource-heading-meta">
-                    <el-tag size="small" type="info">
-                      {{ resourceFor(stage.key)?.task_count || 0 }} 个任务
-                    </el-tag>
-                    <span class="resource-attachment-count">
-                      {{ resourceFor(stage.key)?.attachment_count || 0 }} 个资料
-                    </span>
-                  </div>
-                </div>
-              </template>
-
-              <template v-if="resourceFor(stage.key)?.tasks.length">
-                <div
-                  v-for="task in resourceFor(stage.key)?.tasks || []"
-                  :key="task.task_id"
-                  class="resource-task"
-                >
-                  <div class="resource-task-heading">
-                    <span>{{ stage.label }} {{ task.task_no || '未编号任务' }}</span>
-                    <span class="resource-task-count">{{ task.attachments.length }} 个资料</span>
-                  </div>
-
-                  <div v-if="visualAttachments(task, stage.key).length" class="media-grid">
-                    <template v-for="attachment in visualAttachments(task, stage.key)" :key="attachment.id">
-                      <button
-                        v-if="isVideoAttachment(attachment)"
-                        type="button"
-                        class="media-thumb video-thumb"
-                        :aria-label="`播放视频 ${attachment.filename}`"
-                        @click="openVideoPreview(attachment)"
-                      >
-                        <video
-                          :src="getAttachmentUrl(attachment.file_path)"
-                          :aria-label="attachment.filename"
-                          preload="metadata"
-                          muted
-                          playsinline
-                        />
-                        <span class="video-play-badge" aria-hidden="true">▶</span>
-                      </button>
-                      <el-image
-                        v-else
-                        class="media-thumb"
-                        :src="getAttachmentUrl(attachment.file_path)"
-                        :alt="attachment.filename"
-                        fit="cover"
-                        lazy
-                        :preview-src-list="imageUrls(task, stage.key)"
-                        :initial-index="imagePreviewIndex(attachment, task, stage.key)"
-                        :zoom-rate="TASK_ATTACHMENT_PREVIEW_ZOOM_RATE"
-                        preview-teleported
-                      />
-                    </template>
-                  </div>
-
-                  <el-table
-                    v-if="fileAttachments(task, stage.key).length"
-                    :data="fileAttachments(task, stage.key)"
-                    stripe
-                    size="small"
-                    class="resource-file-table"
-                  >
-                    <el-table-column prop="filename" label="文件名" min-width="180" show-overflow-tooltip />
-                    <el-table-column label="类型" width="100">
-                      <template #default="{ row }">{{ getTaskAttachmentTypeLabel(row) }}</template>
-                    </el-table-column>
-                    <el-table-column label="大小" width="90">
-                      <template #default="{ row }">{{ formatAttachmentSize(row.file_size) }}</template>
-                    </el-table-column>
-                    <el-table-column label="上传时间" width="155">
-                      <template #default="{ row }">{{ formatDateTimeFull(row.created_at) }}</template>
-                    </el-table-column>
-                    <el-table-column label="操作" width="120">
-                      <template #default="{ row }">
-                        <el-button
-                          v-if="isPreviewableAttachment(row)"
-                          text
-                          type="primary"
-                          size="small"
-                          @click="previewAttachment(row)"
-                        >预览</el-button>
-                        <el-button text size="small" @click="downloadAttachment(row)">下载</el-button>
-                      </template>
-                    </el-table-column>
-                  </el-table>
-
-                  <div
-                    v-if="!visualAttachments(task, stage.key).length && !fileAttachments(task, stage.key).length"
-                    class="resource-empty"
-                  >{{ stage.key === 'installation' ? '暂无现场照片或视频' : '暂无任务附件' }}</div>
-                  <div v-else-if="visualAttachments(task, stage.key).length" class="media-caption">
-                    图片点击放大，视频点击播放
-                  </div>
-                </div>
-              </template>
-              <div v-else class="resource-empty">暂无可见资料</div>
-            </el-card>
+            <OrderTaskAttachments
+              v-if="project.stages.includes('design')"
+              :order-id="project.project_id"
+              stage="design"
+              readonly
+            />
+            <OrderTaskAttachments
+              v-if="project.stages.includes('production')"
+              :order-id="project.project_id"
+              stage="production"
+              readonly
+            />
+            <OrderTaskAttachments
+              v-if="project.stages.includes('installation')"
+              :order-id="project.project_id"
+              stage="installation"
+              readonly
+            />
           </div>
         </section>
       </template>
@@ -240,24 +153,6 @@
       <el-empty v-else-if="!loading && !error" description="暂无项目详情" :image-size="64" />
     </el-card>
 
-    <el-dialog
-      v-model="videoPreviewVisible"
-      title="视频预览"
-      width="min(900px, 92vw)"
-      destroy-on-close
-      @closed="videoPreviewAttachment = null"
-    >
-      <video
-        v-if="videoPreviewAttachment"
-        class="video-player"
-        :src="getAttachmentUrl(videoPreviewAttachment.file_path)"
-        controls
-        autoplay
-        playsinline
-      >
-        您的浏览器不支持视频播放
-      </video>
-    </el-dialog>
   </div>
 </template>
 
@@ -267,41 +162,20 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { getCompletedProject } from '@/api/tasks'
 import type {
-  AttachmentResponse,
   CompletedProjectDetail as CompletedProjectDetailType,
   CompletedProjectDetailItem,
-  CompletedProjectResourceTask,
   CompletedProjectStage,
-  TaskCompletionType,
 } from '@/types/api'
 import StatusTag from '@/components/ui/StatusTag.vue'
+import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
 import { formatDate, formatDateTimeFull } from '@/utils/datetime'
 import { formatMoney } from '@/utils/format'
-import {
-  TASK_ATTACHMENT_PREVIEW_ZOOM_RATE,
-  formatAttachmentSize,
-  getAttachmentUrl,
-  getTaskAttachmentKind,
-  getTaskAttachmentTypeLabel,
-} from '@/utils/taskPhotoUpload'
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const error = ref('')
 const project = ref<CompletedProjectDetailType | null>(null)
-const videoPreviewVisible = ref(false)
-const videoPreviewAttachment = ref<AttachmentResponse | null>(null)
-
-const RESOURCE_STAGES: ReadonlyArray<{
-  key: TaskCompletionType
-  label: string
-  title: string
-}> = [
-  { key: 'design', label: '设计任务', title: '设计任务：任务附件' },
-  { key: 'production', label: '制作任务', title: '制作任务：任务附件' },
-  { key: 'installation', label: '安装任务', title: '安装任务：现场照片与视频' },
-]
 
 async function fetchProject() {
   const projectId = String(route.params.projectId || '')
@@ -338,78 +212,6 @@ function formatQuantity(row: CompletedProjectDetailItem) {
 
 function formatStageDate(stage?: CompletedProjectStage | null) {
   return formatDate(stage?.completed_at)
-}
-
-function resourceFor(taskType: TaskCompletionType) {
-  return project.value?.resources?.[taskType]
-}
-
-function attachmentKind(attachment: AttachmentResponse) {
-  return getTaskAttachmentKind(attachment)
-}
-
-function isVideoAttachment(attachment: AttachmentResponse) {
-  return attachmentKind(attachment) === 'video'
-}
-
-function visualAttachments(task: CompletedProjectResourceTask, taskType: TaskCompletionType) {
-  return task.attachments.filter(attachment => {
-    const kind = attachmentKind(attachment)
-    return taskType === 'installation'
-      ? kind === 'image' || kind === 'video'
-      : kind === 'image' || kind === 'video'
-  })
-}
-
-function imageUrls(task: CompletedProjectResourceTask, taskType: TaskCompletionType) {
-  return visualAttachments(task, taskType)
-    .filter(attachment => attachmentKind(attachment) === 'image')
-    .map(attachment => getAttachmentUrl(attachment.file_path))
-}
-
-function imagePreviewIndex(
-  attachment: AttachmentResponse,
-  task: CompletedProjectResourceTask,
-  taskType: TaskCompletionType,
-) {
-  return visualAttachments(task, taskType)
-    .filter(item => attachmentKind(item) === 'image')
-    .findIndex(item => item.id === attachment.id)
-}
-
-function fileAttachments(task: CompletedProjectResourceTask, taskType: TaskCompletionType) {
-  if (taskType === 'installation') return []
-  return task.attachments.filter(attachment => {
-    const kind = attachmentKind(attachment)
-    return kind !== 'image' && kind !== 'video'
-  })
-}
-
-function isPreviewableAttachment(attachment: AttachmentResponse) {
-  const kind = attachmentKind(attachment)
-  return kind === 'video' || kind === 'pdf'
-}
-
-function openVideoPreview(attachment: AttachmentResponse) {
-  videoPreviewAttachment.value = attachment
-  videoPreviewVisible.value = true
-}
-
-function previewAttachment(attachment: AttachmentResponse) {
-  if (isVideoAttachment(attachment)) {
-    openVideoPreview(attachment)
-    return
-  }
-  window.open(getAttachmentUrl(attachment.file_path), '_blank', 'noopener,noreferrer')
-}
-
-function downloadAttachment(attachment: AttachmentResponse) {
-  const link = document.createElement('a')
-  link.href = getAttachmentUrl(attachment.file_path)
-  link.download = attachment.filename || '附件'
-  link.target = '_blank'
-  link.rel = 'noreferrer'
-  link.click()
 }
 
 watch(() => route.params.projectId, () => {
@@ -453,24 +255,6 @@ onMounted(() => {
 .stage-empty { color: var(--ad-text-placeholder); }
 .resource-section { padding-bottom: 4px; }
 .resource-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-.resource-card { min-width: 0; border-color: var(--ad-border); background: var(--ad-card); }
-.resource-heading, .resource-task-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.resource-heading { color: var(--ad-text); font-weight: 600; }
-.resource-heading-meta { display: flex; align-items: center; gap: 10px; }
-.resource-attachment-count { color: var(--ad-text-secondary); font-size: 12px; font-weight: normal; }
-.resource-task + .resource-task { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--ad-border); }
-.resource-task-heading { margin-bottom: 10px; color: var(--ad-text); font-size: 13px; font-weight: 600; }
-.resource-task-count, .media-caption { color: var(--ad-text-secondary); font-size: 12px; font-weight: normal; }
-.media-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.media-thumb { display: block; width: 100%; height: 116px; overflow: hidden; border: 0; border-radius: 6px; background: #151525; cursor: zoom-in; object-fit: cover; }
-.media-thumb :deep(img), .media-thumb video { display: block; width: 100%; height: 100%; object-fit: cover; }
-.video-thumb { position: relative; padding: 0; cursor: pointer; }
-.video-play-badge { position: absolute; top: 50%; left: 50%; display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; color: #fff; background: rgb(0 0 0 / 64%); font-size: 18px; transform: translate(-50%, -50%); }
-.resource-file-table { margin-top: 10px; }
-.resource-file-table :deep(.cell) { line-height: 1.35; white-space: normal; word-break: break-word; }
-.media-caption { margin-top: 8px; }
-.resource-empty { padding: 20px 8px; color: var(--ad-text-secondary); text-align: center; font-size: 13px; }
-.video-player { display: block; width: 100%; max-height: 70vh; background: #000; }
 
 @media (max-width: 900px) {
   .project-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -1,10 +1,8 @@
-"""Order-scoped access to design, production, and installation materials.
+"""Canonical order-owned materials for the design/production/install stages.
 
-The existing task attachment API is intentionally task-permission scoped.  An
-order detail page has a different boundary: a user who can view the order can
-manage the materials belonging to that order, without receiving permissions
-to list or mutate an entire task queue.  Every method below re-checks the
-order -> task -> attachment relationship in the database.
+The order owns these three collections. A task detail page may provide a task
+id as an access context, but a task is never required to create, read, or
+delete an order-stage attachment and is never used as the attachment owner.
 """
 
 from __future__ import annotations
@@ -14,32 +12,40 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.file_security import confined_path, safe_upload_name
+from app.core.permissions import (
+    PERM_DESIGN_TASK_READ,
+    PERM_DESIGN_TASK_UPDATE,
+    PERM_INSTALLATION_TASK_READ,
+    PERM_INSTALLATION_TASK_UPDATE,
+    PERM_ORDER_READ,
+    PERM_PRODUCTION_TASK_READ,
+    PERM_PRODUCTION_TASK_UPDATE,
+    PERM_TASK_COMPLETION_READ,
+    PERM_TASK_COMPLETION_VIEW_ALL,
+    user_has_permission,
+)
 from app.models.business_document import BusinessDocument
 from app.models.task import Attachment, DesignTask, InstallationTask, ProductionTask
+from app.models.task_item_status_log import TaskItemStatusLog
 from app.models.user import User
-from app.services.operation_log_service import (
-    ACTION_CREATE,
-    ACTION_DELETE,
-    OBJ_DESIGN_TASK,
-    OBJ_INSTALLATION_TASK,
-    OBJ_PRODUCTION_TASK,
-    log_operation,
-)
+from app.services.operation_log_service import ACTION_CREATE, ACTION_DELETE, OBJ_ORDER, log_operation
+from app.services.order_task_assignment_service import get_visible_task
 
 
-_TASK_CONFIG = {
+STAGE_CONFIG = {
     "design": {
         "related_type": "design_task",
         "model": DesignTask,
         "number_field": "design_no",
         "label": "设计任务：任务附件",
         "task_label": "设计任务",
-        "object_type": OBJ_DESIGN_TASK,
+        "read_permission": PERM_DESIGN_TASK_READ,
+        "write_permission": PERM_DESIGN_TASK_UPDATE,
         "accept": (
             "image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,"
             "application/pdf,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.dwg,.dxf,.zip,.rar,.7z"
@@ -51,7 +57,8 @@ _TASK_CONFIG = {
         "number_field": "production_no",
         "label": "制作任务：任务附件",
         "task_label": "制作任务",
-        "object_type": OBJ_PRODUCTION_TASK,
+        "read_permission": PERM_PRODUCTION_TASK_READ,
+        "write_permission": PERM_PRODUCTION_TASK_UPDATE,
         "accept": (
             "image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,"
             "application/pdf,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.dwg,.dxf,.zip,.rar,.7z"
@@ -63,33 +70,26 @@ _TASK_CONFIG = {
         "number_field": "installation_no",
         "label": "安装任务：现场照片与视频",
         "task_label": "安装任务",
-        "object_type": OBJ_INSTALLATION_TASK,
+        "read_permission": PERM_INSTALLATION_TASK_READ,
+        "write_permission": PERM_INSTALLATION_TASK_UPDATE,
         "accept": "image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime",
     },
 }
+STAGES = tuple(STAGE_CONFIG)
 
-_STATUS_LABELS = {
-    "pending": "待分配",
-    "assigned": "已分配",
-    "designing": "设计中",
-    "pending_review": "待确认",
-    "revision": "需修改",
-    "confirmed": "已完成",
-    "in_progress": "制作中",
-    "rework": "返工中",
-    "pending_acceptance": "待验收",
-    "completed": "已完成",
-    "cancelled": "已取消",
-    "canceled": "已取消",
-}
-_CANCELLED_STATUSES = frozenset({"cancelled", "canceled"})
-_ORDER_TASK_RELATED_TYPES = tuple(config["related_type"] for config in _TASK_CONFIG.values())
+# Compatibility name used by older code and tests. New code should use
+# STAGE_CONFIG and stage instead of task_type.
+_TASK_CONFIG = STAGE_CONFIG
 
 
-def _task_config(task_type: str) -> dict:
-    config = _TASK_CONFIG.get(task_type)
+class OrderTaskAttachmentPermissionError(PermissionError):
+    """The entry point has no permission for the requested order/stage."""
+
+
+def _stage_config(stage: str) -> dict:
+    config = STAGE_CONFIG.get(stage)
     if config is None:
-        raise ValueError("资料所属任务类型无效")
+        raise ValueError("资料阶段无效，只支持设计、制作、安装")
     return config
 
 
@@ -102,12 +102,15 @@ def serialize_order_task_attachment(
     *,
     uploaded_by_name: str | None = None,
 ) -> dict:
-    """Expose attachment metadata without exposing the server storage path."""
+    """Expose metadata only; never expose the server storage path."""
 
+    order_id = getattr(attachment, "order_id", None)
     return {
         "id": str(attachment.id),
         "related_type": attachment.related_type,
         "related_id": str(attachment.related_id),
+        "order_id": str(order_id) if order_id else None,
+        "stage": getattr(attachment, "stage", None),
         "filename": attachment.filename,
         "file_size": attachment.file_size,
         "file_type": attachment.file_type,
@@ -123,6 +126,10 @@ class OrderTaskAttachmentService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @staticmethod
+    def _has_permission(viewer: User | None, permission: str) -> bool:
+        return viewer is None or user_has_permission(viewer, permission)
+
     async def _get_order(self, order_id: UUID) -> BusinessDocument:
         result = await self.db.execute(
             select(BusinessDocument).where(
@@ -136,126 +143,226 @@ class OrderTaskAttachmentService:
             raise ValueError("订单不存在")
         return order
 
-    async def _get_task(self, order_id: UUID, task_type: str, task_id: UUID):
-        config = _task_config(task_type)
-        result = await self.db.execute(
-            select(config["model"]).where(
-                config["model"].id == task_id,
-                config["model"].document_id == order_id,
+    async def _get_task(
+        self,
+        order_id: UUID,
+        stage: str,
+        task_id: UUID,
+        viewer: User | None = None,
+    ):
+        config = _stage_config(stage)
+        if viewer is None:
+            result = await self.db.execute(
+                select(config["model"]).where(
+                    config["model"].id == task_id,
+                    config["model"].document_id == order_id,
+                )
             )
-        )
-        task = result.scalar_one_or_none()
+            task = result.scalar_one_or_none()
+        else:
+            task = await get_visible_task(self.db, config["model"], task_id, viewer)
+            if task is not None and task.document_id != order_id:
+                task = None
         if task is None:
             raise ValueError("任务不存在或不属于该订单")
-        return task, config
+        return task
 
-    @staticmethod
-    def _attachment_rows_query(attachment_id: UUID, order_id: UUID):
-        """Build an exact order-scoped attachment lookup.
+    async def _can_view_completed_project(
+        self,
+        order: BusinessDocument,
+        stage: str,
+        viewer: User,
+    ) -> bool:
+        """Allow the completed-project entry without inventing a task owner.
 
-        Attachment.related_id is polymorphic and therefore cannot use one
-        foreign key.  The stage-specific subqueries make the ownership check
-        explicit and prevent an attachment ID from another order being used
-        through a guessed URL.
+        Completion pages can be reached by employees who have completion-read
+        permission but not order-read permission.  Their access is still
+        scoped to a completed order where they have a completion event; the
+        attachment itself remains owned by ``order_id + stage``.
         """
+        if order.status != "completed" or not self._has_permission(
+            viewer,
+            PERM_TASK_COMPLETION_READ,
+        ):
+            return False
+        if self._has_permission(viewer, PERM_TASK_COMPLETION_VIEW_ALL):
+            return True
 
-        design_ids = select(DesignTask.id).where(DesignTask.document_id == order_id)
-        production_ids = select(ProductionTask.id).where(ProductionTask.document_id == order_id)
-        installation_ids = select(InstallationTask.id).where(InstallationTask.document_id == order_id)
-        belongs_to_order = or_(
-            and_(Attachment.related_type == "design_task", Attachment.related_id.in_(design_ids)),
-            and_(Attachment.related_type == "production_task", Attachment.related_id.in_(production_ids)),
-            and_(Attachment.related_type == "installation_task", Attachment.related_id.in_(installation_ids)),
-        )
-        return select(Attachment).where(
-            Attachment.id == attachment_id,
-            Attachment.related_type.in_(_ORDER_TASK_RELATED_TYPES),
-            belongs_to_order,
-        )
-
-    async def _get_order_attachment(self, order_id: UUID, attachment_id: UUID) -> Attachment:
-        await self._get_order(order_id)
-        result = await self.db.execute(self._attachment_rows_query(attachment_id, order_id))
-        attachment = result.scalar_one_or_none()
-        if attachment is None:
-            raise ValueError("附件不存在或不属于该订单")
-        return attachment
-
-    async def list_for_order(self, order_id: UUID) -> dict:
-        await self._get_order(order_id)
-        groups: list[dict] = []
-
-        for task_type, config in _TASK_CONFIG.items():
-            task_result = await self.db.execute(
-                select(config["model"])
-                .where(config["model"].document_id == order_id)
-                .order_by(config["model"].created_at.asc())
+        completed_statuses = {
+            "design": ("confirmed", "completed"),
+            "production": ("completed",),
+            "installation": ("completed",),
+        }[stage]
+        result = await self.db.execute(
+            select(TaskItemStatusLog.id)
+            .where(
+                TaskItemStatusLog.document_id == order.id,
+                TaskItemStatusLog.task_type == stage,
+                TaskItemStatusLog.to_status.in_(completed_statuses),
+                TaskItemStatusLog.assignee_user_id == viewer.id,
             )
-            tasks = []
-            for task in task_result.scalars().all():
-                attachment_result = await self.db.execute(
-                    select(Attachment, User.real_name, User.username)
-                    .outerjoin(User, User.id == Attachment.uploaded_by)
-                    .where(
-                        Attachment.related_type == config["related_type"],
-                        Attachment.related_id == task.id,
-                    )
-                    .order_by(Attachment.created_at.desc())
-                )
-                attachments = []
-                for attachment, real_name, username in attachment_result.all():
-                    attachments.append(
-                        serialize_order_task_attachment(
-                            attachment,
-                            uploaded_by_name=real_name or username,
-                        )
-                    )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
 
-                status = getattr(task, "status", "pending") or "pending"
-                tasks.append(
-                    {
-                        "task_id": str(task.id),
-                        "task_no": getattr(task, config["number_field"], None),
-                        "status": status,
-                        "status_label": _STATUS_LABELS.get(status, status),
-                        "completed_at": _iso(getattr(task, "completed_at", None)),
-                        "upload_allowed": status not in _CANCELLED_STATUSES,
-                        "read_only_reason": "已取消的任务只能查看资料" if status in _CANCELLED_STATUSES else None,
-                        "attachments": attachments,
-                    }
+    async def _authorize(
+        self,
+        order_id: UUID,
+        stage: str,
+        viewer: User | None,
+        *,
+        operation: str,
+        task_id: UUID | None = None,
+        order: BusinessDocument | None = None,
+    ) -> BusinessDocument:
+        config = _stage_config(stage)
+        order_access = self._has_permission(viewer, PERM_ORDER_READ)
+
+        if not order_access:
+            required = config["read_permission"] if operation == "read" else config["write_permission"]
+            if not self._has_permission(viewer, required):
+                action = "查看" if operation == "read" else "操作"
+                raise OrderTaskAttachmentPermissionError(
+                    f"当前账号没有{config['task_label']}资料{action}权限"
                 )
 
+        # Check the caller's capability before looking up the order. This keeps
+        # a task-only account from learning whether an arbitrary order id is
+        # real when it does not even have the requested stage permission.
+        order = order or await self._get_order(order_id)
+        if not order_access:
+            if task_id is None and not (
+                operation == "read"
+                and viewer is not None
+                and await self._can_view_completed_project(order, stage, viewer)
+            ):
+                raise OrderTaskAttachmentPermissionError(
+                    "任务资料入口缺少任务上下文，请从对应任务详情进入"
+                )
+
+        if task_id is not None:
+            # An order reader can use a task id only as a consistency check;
+            # task visibility still applies to task-only entry points.
+            await self._get_task(
+                order_id,
+                stage,
+                task_id,
+                viewer=None if order_access else viewer,
+            )
+        return order
+
+    async def _attachment_rows(
+        self,
+        order_id: UUID,
+        stage: str | None = None,
+    ) -> list[tuple[Attachment, str | None, str | None]]:
+        conditions = [Attachment.order_id == order_id]
+        if stage is not None:
+            config = _stage_config(stage)
+            conditions.extend(
+                (
+                    Attachment.stage == stage,
+                    Attachment.related_type.in_(("order_stage", config["related_type"])),
+                )
+            )
+        else:
+            conditions.append(
+                Attachment.related_type.in_(
+                    ("order_stage",) + tuple(config["related_type"] for config in STAGE_CONFIG.values())
+                )
+            )
+        result = await self.db.execute(
+            select(Attachment, User.real_name, User.username)
+            .outerjoin(User, User.id == Attachment.uploaded_by)
+            .where(and_(*conditions))
+            .order_by(Attachment.created_at.desc(), Attachment.id.desc())
+        )
+        return list(result.all())
+
+    async def list_for_order(
+        self,
+        order_id: UUID,
+        *,
+        stage: str | None = None,
+        task_id: UUID | None = None,
+        viewer: User | None = None,
+    ) -> dict:
+        if task_id is not None and stage is None:
+            raise ValueError("任务资料阶段不能为空")
+        if (
+            task_id is None
+            and stage is None
+            and not self._has_permission(viewer, PERM_ORDER_READ)
+        ):
+            raise OrderTaskAttachmentPermissionError("请从完成项目详情按阶段查看资料")
+
+        requested_stages = [stage] if stage is not None else list(STAGES)
+        await self._authorize(
+            order_id,
+            requested_stages[0],
+            viewer,
+            operation="read",
+            task_id=task_id,
+        )
+
+        groups: list[dict] = []
+        order_access = self._has_permission(viewer, PERM_ORDER_READ)
+        for current_stage in requested_stages:
+            config = _stage_config(current_stage)
+            rows = await self._attachment_rows(order_id, current_stage)
+            attachments = [
+                serialize_order_task_attachment(
+                    attachment,
+                    uploaded_by_name=real_name or username,
+                )
+                for attachment, real_name, username in rows
+            ]
+            can_manage_stage = order_access or self._has_permission(
+                viewer,
+                config["write_permission"],
+            )
             groups.append(
                 {
-                    "task_type": task_type,
+                    "stage": current_stage,
+                    "task_type": current_stage,  # compatibility alias
                     "label": config["label"],
                     "task_label": config["task_label"],
                     "accept": config["accept"],
-                    "tasks": tasks,
-                    "task_count": len(tasks),
-                    "attachment_count": sum(len(task["attachments"]) for task in tasks),
+                    "task_count": 0,
+                    "attachment_count": len(attachments),
+                    "can_upload": can_manage_stage,
+                    "can_delete": can_manage_stage,
+                    "attachments": attachments,
+                    "tasks": [],  # compatibility shape; no task ownership
                 }
             )
-
         return {"order_id": str(order_id), "groups": groups}
 
     async def upload(
         self,
         order_id: UUID,
         task_type: str,
-        task_id: UUID,
+        task_id: UUID | None,
         file,
         uploaded_by: UUID,
         uploaded_by_name: str | None = None,
+        *,
+        viewer: User | None = None,
     ) -> dict:
-        await self._get_order(order_id)
-        task, config = await self._get_task(order_id, task_type, task_id)
-        if (getattr(task, "status", None) or "pending") in _CANCELLED_STATUSES:
-            raise ValueError("已取消的任务不能上传资料")
+        """Create an order-stage attachment; ``task_id`` is optional context."""
+
+        _stage_config(task_type)
+        await self._authorize(
+            order_id,
+            task_type,
+            viewer,
+            operation="write",
+            task_id=task_id,
+        )
 
         contents = await file.read()
-        # Keep the existing, magic-byte-aware policy as the single validation
-        # source for both the task pages and this order-scoped entry point.
+        # Reuse the established magic-byte and extension policy so the order
+        # entry and task-entry adapters cannot drift apart.
         from app.api.tasks import validate_installation_media, validate_task_attachment
 
         if task_type == "installation":
@@ -279,17 +386,19 @@ class OrderTaskAttachmentService:
         unique_name = f"{uuid4().hex}{safe_extension or ''}"
         stored_path = dest_dir / unique_name
         relative_path = f"{date_dir}/{unique_name}"
-
         _, display_name = safe_upload_name(file.filename, "attachment")
         now = datetime.now(timezone.utc).replace(tzinfo=None)
+
         try:
             with stored_path.open("wb") as output:
                 output.write(contents)
             os.chmod(stored_path, 0o640)
 
             attachment = Attachment(
-                related_type=config["related_type"],
-                related_id=task_id,
+                related_type="order_stage",
+                related_id=order_id,
+                order_id=order_id,
+                stage=task_type,
                 filename=display_name or unique_name,
                 file_path=relative_path,
                 file_size=len(contents),
@@ -305,12 +414,13 @@ class OrderTaskAttachmentService:
                 self.db,
                 uploaded_by,
                 uploaded_by_name,
-                config["object_type"],
-                task_id,
+                OBJ_ORDER,
+                order_id,
                 ACTION_CREATE,
                 after_data={
                     "attachment_id": str(attachment.id),
-                    "order_id": str(order_id),
+                    "stage": task_type,
+                    "entry_task_id": str(task_id) if task_id else None,
                     "filename": attachment.filename,
                     "file_size": attachment.file_size,
                     "file_type": attachment.file_type,
@@ -327,8 +437,65 @@ class OrderTaskAttachmentService:
             uploaded_by_name=uploaded_by_name,
         )
 
-    async def get_file(self, order_id: UUID, attachment_id: UUID) -> tuple[Attachment, str]:
-        attachment = await self._get_order_attachment(order_id, attachment_id)
+    async def _get_order_attachment(
+        self,
+        order_id: UUID,
+        attachment_id: UUID,
+        *,
+        stage: str | None = None,
+    ) -> Attachment:
+        conditions = [
+            Attachment.id == attachment_id,
+            Attachment.order_id == order_id,
+        ]
+        if stage is not None:
+            config = _stage_config(stage)
+            conditions.extend(
+                (
+                    Attachment.stage == stage,
+                    Attachment.related_type.in_(("order_stage", config["related_type"])),
+                )
+            )
+        else:
+            conditions.append(
+                Attachment.related_type.in_(
+                    ("order_stage",) + tuple(config["related_type"] for config in STAGE_CONFIG.values())
+                )
+            )
+        result = await self.db.execute(select(Attachment).where(and_(*conditions)))
+        attachment = result.scalar_one_or_none()
+        if attachment is None:
+            raise ValueError("附件不存在或不属于该订单")
+        return attachment
+
+    async def get_file(
+        self,
+        order_id: UUID,
+        attachment_id: UUID,
+        *,
+        stage: str | None = None,
+        task_id: UUID | None = None,
+        viewer: User | None = None,
+    ) -> tuple[Attachment, str]:
+        if task_id is not None and stage is None:
+            raise ValueError("任务资料阶段不能为空")
+        if stage is None:
+            if not self._has_permission(viewer, PERM_ORDER_READ):
+                raise OrderTaskAttachmentPermissionError("请从对应任务详情进入订单阶段资料")
+            await self._get_order(order_id)
+        else:
+            await self._authorize(
+                order_id,
+                stage,
+                viewer,
+                operation="read",
+                task_id=task_id,
+            )
+        attachment = await self._get_order_attachment(
+            order_id,
+            attachment_id,
+            stage=stage,
+        )
         stored_path = confined_path(settings.LOCAL_UPLOAD_DIR, attachment.file_path)
         if not os.path.isfile(stored_path):
             raise ValueError("附件文件不存在")
@@ -340,29 +507,44 @@ class OrderTaskAttachmentService:
         attachment_id: UUID,
         operated_by: UUID,
         operated_by_name: str | None = None,
+        *,
+        stage: str | None = None,
+        task_id: UUID | None = None,
+        viewer: User | None = None,
     ) -> tuple[dict, str]:
-        attachment = await self._get_order_attachment(order_id, attachment_id)
+        if task_id is not None and stage is None:
+            raise ValueError("任务资料阶段不能为空")
+        if stage is None:
+            if not self._has_permission(viewer, PERM_ORDER_READ):
+                raise OrderTaskAttachmentPermissionError("请从对应任务详情进入订单阶段资料")
+            await self._get_order(order_id)
+        else:
+            await self._authorize(
+                order_id,
+                stage,
+                viewer,
+                operation="write",
+                task_id=task_id,
+            )
+        attachment = await self._get_order_attachment(
+            order_id,
+            attachment_id,
+            stage=stage,
+        )
         before = serialize_order_task_attachment(attachment)
-        stored_path = attachment.file_path
-        object_type = {
-            "design_task": OBJ_DESIGN_TASK,
-            "production_task": OBJ_PRODUCTION_TASK,
-            "installation_task": OBJ_INSTALLATION_TASK,
-        }[attachment.related_type]
-        task_id = attachment.related_id
-
+        relative_path = attachment.file_path
         await self.db.delete(attachment)
         await self.db.flush()
         await log_operation(
             self.db,
             operated_by,
             operated_by_name,
-            object_type,
-            task_id,
+            OBJ_ORDER,
+            order_id,
             ACTION_DELETE,
             before_data={
                 **before,
-                "order_id": str(order_id),
+                "entry_task_id": str(task_id) if task_id else None,
             },
         )
-        return before, stored_path
+        return before, relative_path

@@ -541,8 +541,10 @@ export interface AttachmentResponse {
 /** Order-detail task materials intentionally omit the server storage path. */
 export interface OrderTaskAttachmentResponse {
   id: string
-  related_type: 'design_task' | 'production_task' | 'installation_task'
+  related_type: 'order_stage' | 'design_task' | 'production_task' | 'installation_task'
   related_id: string
+  order_id?: string | null
+  stage?: TaskType | null
   filename: string
   file_size?: number | null
   file_type?: string | null
@@ -566,12 +568,17 @@ export interface OrderTaskAttachmentTask {
 
 export interface OrderTaskAttachmentGroup {
   task_type: TaskType
+  stage?: TaskType
   label: string
   task_label: string
   accept: string
-  task_count: number
+  task_count?: number
   attachment_count: number
-  tasks: OrderTaskAttachmentTask[]
+  can_upload?: boolean
+  can_delete?: boolean
+  attachments: OrderTaskAttachmentResponse[]
+  /** Kept only for one release so older clients can decode the response. */
+  tasks?: OrderTaskAttachmentTask[]
 }
 
 export interface OrderTaskAttachmentsResponse {

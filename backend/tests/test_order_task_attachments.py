@@ -41,8 +41,13 @@ class _Db:
         return self._results.pop(0)
 
 
-def _order(order_id):
-    return SimpleNamespace(id=order_id, doc_type="order", deleted_at=None)
+def _order(order_id, *, status="designing"):
+    return SimpleNamespace(
+        id=order_id,
+        doc_type="order",
+        deleted_at=None,
+        status=status,
+    )
 
 
 def _task(task_id, order_id, *, task_type="design", status="pending"):
@@ -61,11 +66,13 @@ def _task(task_id, order_id, *, task_type="design", status="pending"):
     )
 
 
-def _attachment(attachment_id, task_id):
+def _attachment(attachment_id, order_id, *, stage="design"):
     return SimpleNamespace(
         id=attachment_id,
-        related_type="design_task",
-        related_id=task_id,
+        related_type="order_stage",
+        related_id=order_id,
+        order_id=order_id,
+        stage=stage,
         filename="设计说明.pdf",
         file_path="202609/private.pdf",
         file_size=128,
@@ -80,11 +87,9 @@ def _attachment(attachment_id, task_id):
 @pytest.mark.asyncio
 async def test_list_returns_three_stage_groups_and_never_exposes_storage_path():
     order_id = uuid4()
-    task_id = uuid4()
-    attachment = _attachment(uuid4(), task_id)
+    attachment = _attachment(uuid4(), order_id)
     db = _Db(
         _Result(scalar=_order(order_id)),
-        _Result(rows=[_task(task_id, order_id)]),
         _Result(rows=[(attachment, "设计员", "designer")]),
         _Result(rows=[]),
         _Result(rows=[]),
@@ -97,10 +102,11 @@ async def test_list_returns_three_stage_groups_and_never_exposes_storage_path():
         "production",
         "installation",
     ]
-    design_task = payload["groups"][0]["tasks"][0]
-    assert design_task["upload_allowed"] is True
-    assert design_task["attachments"][0]["uploaded_by_name"] == "设计员"
-    assert "file_path" not in design_task["attachments"][0]
+    design_group = payload["groups"][0]
+    assert design_group["attachment_count"] == 1
+    assert design_group["attachments"][0]["uploaded_by_name"] == "设计员"
+    assert design_group["attachments"][0]["stage"] == "design"
+    assert "file_path" not in design_group["attachments"][0]
 
 
 @pytest.mark.asyncio
@@ -121,7 +127,7 @@ async def test_upload_rejects_task_that_does_not_belong_to_requested_order(tmp_p
 
 
 @pytest.mark.asyncio
-async def test_cancelled_task_is_read_only_for_order_attachment_upload(tmp_path, monkeypatch):
+async def test_cancelled_task_context_does_not_block_order_attachment_upload(tmp_path, monkeypatch):
     order_id = uuid4()
     task_id = uuid4()
     monkeypatch.setattr("app.services.order_task_attachment_service.settings.LOCAL_UPLOAD_DIR", str(tmp_path))
@@ -131,14 +137,19 @@ async def test_cancelled_task_is_read_only_for_order_attachment_upload(tmp_path,
     )
     file = UploadFile(filename="设计说明.pdf", file=BytesIO(b"%PDF-1.7"))
 
-    with pytest.raises(ValueError, match="已取消的任务不能上传资料"):
-        await OrderTaskAttachmentService(db).upload(
+    from unittest.mock import patch
+
+    with patch("app.services.order_task_attachment_service.log_operation", new=AsyncMock()):
+        payload = await OrderTaskAttachmentService(db).upload(
             order_id,
             "design",
             task_id,
             file,
             uuid4(),
         )
+    assert payload["related_type"] == "order_stage"
+    assert payload["order_id"] == str(order_id)
+    assert payload["stage"] == "design"
 
 
 @pytest.mark.asyncio
@@ -171,8 +182,109 @@ async def test_upload_returns_metadata_and_keeps_physical_path_private(tmp_path,
 
     assert payload["filename"] == "设计说明.pdf"
     assert payload["category"] == "pdf"
+    assert payload["related_type"] == "order_stage"
+    assert payload["order_id"] == str(order_id)
+    assert payload["stage"] == "design"
     assert "file_path" not in payload
     assert list(tmp_path.rglob("*.pdf"))
+
+
+@pytest.mark.asyncio
+async def test_upload_does_not_require_a_task_to_exist(tmp_path, monkeypatch):
+    order_id = uuid4()
+    uploader_id = uuid4()
+    monkeypatch.setattr("app.services.order_task_attachment_service.settings.LOCAL_UPLOAD_DIR", str(tmp_path))
+    db = _Db(_Result(scalar=_order(order_id)))
+    file = UploadFile(
+        filename="设计说明.pdf",
+        file=BytesIO(b"%PDF-1.7\ncontent"),
+        headers={"content-type": "application/pdf"},
+    )
+
+    from unittest.mock import patch
+
+    with patch("app.services.order_task_attachment_service.log_operation", new=AsyncMock()):
+        payload = await OrderTaskAttachmentService(db).upload(
+            order_id,
+            "design",
+            None,
+            file,
+            uploader_id,
+        )
+
+    assert db.execute.await_count == 1
+    assert payload["related_id"] == str(order_id)
+    assert payload["order_id"] == str(order_id)
+    assert payload["stage"] == "design"
+
+
+@pytest.mark.asyncio
+async def test_order_source_can_download_without_task_context(tmp_path, monkeypatch):
+    order_id = uuid4()
+    attachment = _attachment(uuid4(), order_id)
+    stored_file = tmp_path / attachment.file_path
+    stored_file.parent.mkdir(parents=True)
+    stored_file.write_bytes(b"%PDF-1.7\ncontent")
+    monkeypatch.setattr("app.services.order_task_attachment_service.settings.LOCAL_UPLOAD_DIR", str(tmp_path))
+    db = _Db(
+        _Result(scalar=_order(order_id)),
+        _Result(scalar=attachment),
+    )
+
+    result_attachment, stored_path = await OrderTaskAttachmentService(db).get_file(
+        order_id,
+        attachment.id,
+        stage="design",
+    )
+
+    assert result_attachment is attachment
+    assert stored_path == str(stored_file.resolve())
+    assert db.execute.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_order_source_can_delete_without_task_context(monkeypatch):
+    order_id = uuid4()
+    attachment = _attachment(uuid4(), order_id)
+    db = _Db(
+        _Result(scalar=_order(order_id)),
+        _Result(scalar=attachment),
+    )
+
+    from unittest.mock import patch
+
+    with patch("app.services.order_task_attachment_service.log_operation", new=AsyncMock()):
+        metadata, relative_path = await OrderTaskAttachmentService(db).delete(
+            order_id,
+            attachment.id,
+            uuid4(),
+            "管理员",
+            stage="design",
+        )
+
+    assert metadata["order_id"] == str(order_id)
+    assert metadata["stage"] == "design"
+    assert relative_path == attachment.file_path
+    db.delete.assert_awaited_once_with(attachment)
+
+
+@pytest.mark.asyncio
+async def test_task_entry_cannot_use_another_stage(monkeypatch):
+    import app.services.order_task_attachment_service as attachment_service
+
+    viewer = SimpleNamespace(permissions={"design_task:read"})
+    monkeypatch.setattr(
+        attachment_service,
+        "user_has_permission",
+        lambda user, permission: permission in user.permissions,
+    )
+    with pytest.raises(PermissionError, match="没有制作任务资料查看权限"):
+        await OrderTaskAttachmentService(_Db()).list_for_order(
+            uuid4(),
+            stage="production",
+            task_id=uuid4(),
+            viewer=viewer,
+        )
 
 
 @pytest.mark.asyncio
@@ -182,3 +294,61 @@ async def test_file_access_rejects_attachment_from_another_order():
 
     with pytest.raises(ValueError, match="附件不存在或不属于该订单"):
         await OrderTaskAttachmentService(db).get_file(order_id, uuid4())
+
+
+@pytest.mark.asyncio
+async def test_completed_project_reader_can_read_stage_materials_without_task_context(monkeypatch):
+    import app.services.order_task_attachment_service as attachment_service
+
+    order_id = uuid4()
+    viewer = SimpleNamespace(
+        id=uuid4(),
+        permissions={"design_task:read", "task_completion:read"},
+    )
+    monkeypatch.setattr(
+        attachment_service,
+        "user_has_permission",
+        lambda user, permission: permission in user.permissions,
+    )
+    db = _Db(
+        _Result(scalar=_order(order_id, status="completed")),
+        _Result(scalar=uuid4()),
+        _Result(rows=[]),
+    )
+
+    payload = await OrderTaskAttachmentService(db).list_for_order(
+        order_id,
+        stage="design",
+        viewer=viewer,
+    )
+
+    assert payload["order_id"] == str(order_id)
+    assert [group["stage"] for group in payload["groups"]] == ["design"]
+    assert db.execute.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_completed_project_reader_without_own_completion_event_is_rejected(monkeypatch):
+    import app.services.order_task_attachment_service as attachment_service
+
+    order_id = uuid4()
+    viewer = SimpleNamespace(
+        id=uuid4(),
+        permissions={"design_task:read", "task_completion:read"},
+    )
+    monkeypatch.setattr(
+        attachment_service,
+        "user_has_permission",
+        lambda user, permission: permission in user.permissions,
+    )
+    db = _Db(
+        _Result(scalar=_order(order_id, status="completed")),
+        _Result(scalar=None),
+    )
+
+    with pytest.raises(PermissionError, match="缺少任务上下文"):
+        await OrderTaskAttachmentService(db).list_for_order(
+            order_id,
+            stage="design",
+            viewer=viewer,
+        )

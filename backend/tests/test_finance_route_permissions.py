@@ -21,6 +21,24 @@ def _route_permission(router, method: str, path: str) -> str | None:
     return None
 
 
+def _route_permission_tuple(router, method: str, path: str) -> tuple[str, ...]:
+    route = next(
+        route
+        for route in router.routes
+        if method in route.methods and route.path == path
+    )
+    for dependency in route.dependant.dependencies:
+        call = dependency.call
+        closure = getattr(call, "__closure__", None)
+        if getattr(call, "__name__", None) != "dependency" or not closure:
+            continue
+        for cell in closure:
+            value = cell.cell_contents
+            if isinstance(value, tuple) and all(isinstance(item, str) for item in value):
+                return value
+    return ()
+
+
 @pytest.mark.parametrize(
     ("method", "path", "permission"),
     [
@@ -46,6 +64,57 @@ def _route_permission(router, method: str, path: str) -> str | None:
 )
 def test_order_routes_require_business_permissions(method, path, permission):
     assert _route_permission(orders.router, method, path) == permission
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "permissions"),
+    [
+        (
+            "GET",
+            "/orders/{order_id}/attachments",
+            (
+                "order:read",
+                "design_task:read",
+                "production_task:read",
+                "installation_task:read",
+                "task_completion:read",
+            ),
+        ),
+        (
+            "POST",
+            "/orders/{order_id}/attachments",
+            (
+                "order:read",
+                "design_task:update",
+                "production_task:update",
+                "installation_task:update",
+            ),
+        ),
+        (
+            "GET",
+            "/orders/{order_id}/attachments/{attachment_id}/file",
+            (
+                "order:read",
+                "design_task:read",
+                "production_task:read",
+                "installation_task:read",
+                "task_completion:read",
+            ),
+        ),
+        (
+            "DELETE",
+            "/orders/{order_id}/attachments/{attachment_id}",
+            (
+                "order:read",
+                "design_task:update",
+                "production_task:update",
+                "installation_task:update",
+            ),
+        ),
+    ],
+)
+def test_canonical_order_material_routes_have_stage_aware_permissions(method, path, permissions):
+    assert _route_permission_tuple(orders.router, method, path) == permissions
 
 
 @pytest.mark.parametrize(

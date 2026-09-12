@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Integer, Numeric, String, Text, ForeignKey
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -109,9 +109,31 @@ class InstallationTask(Base, TimestampMixin):
 class Attachment(Base, TimestampMixin):
     __tablename__ = "attachments"
 
+    __table_args__ = (
+        Index(
+            "ix_attachments_order_stage_created_at",
+            "order_id",
+            "stage",
+            "created_at",
+        ),
+        CheckConstraint(
+            "stage IS NULL OR stage IN ('design', 'production', 'installation')",
+            name="ck_attachments_order_stage",
+        ),
+    )
+
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     related_type: Mapped[str] = mapped_column(String(64), nullable=False)
     related_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # Order-stage attachments are owned by the order.  The polymorphic
+    # related_type/related_id pair remains for old modules and provenance, but
+    # it is no longer the authorization source for the three delivery stages.
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("business_documents.id"),
+        nullable=True,
+    )
+    stage: Mapped[str | None] = mapped_column(String(32), nullable=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)

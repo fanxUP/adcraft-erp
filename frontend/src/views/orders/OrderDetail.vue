@@ -492,7 +492,7 @@
           </el-card>
         </el-tab-pane>
 
-        <el-tab-pane label="任务资料" name="task-attachments">
+        <el-tab-pane label="订单资料" name="task-attachments">
           <OrderTaskAttachments :order-id="order.id" />
         </el-tab-pane>
       </el-tabs>

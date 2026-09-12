@@ -1,9 +1,13 @@
 <template>
-  <el-card shadow="never" class="info-card order-task-attachments-card">
+  <el-card
+    shadow="never"
+    class="info-card order-task-attachments-card"
+    :class="{ 'is-compact': compact }"
+  >
     <template #header>
       <div class="card-header">
-        <span>任务资料</span>
-        <span class="header-hint">查看订单权限可上传、下载和删除</span>
+        <span>{{ stage ? (groups[0]?.label || '阶段资料') : '订单资料' }}</span>
+        <span class="header-hint">订单为资料源头，任务详情仅显示对应阶段</span>
       </div>
     </template>
 
@@ -13,148 +17,161 @@
         type="error"
         :closable="false"
         show-icon
-        title="任务资料加载失败，请刷新订单详情后重试"
+        title="订单资料加载失败，请刷新后重试"
         style="margin-bottom: 16px"
       />
 
-      <section v-for="group in groups" :key="group.task_type" class="stage-section">
+      <section v-for="group in groups" :key="group.stage || group.task_type" class="stage-section">
         <div class="stage-heading">
           <div>
             <h3>{{ group.label }}</h3>
-            <span class="stage-summary">
-              {{ group.task_count }} 个任务 · {{ group.attachment_count }} 个资料
-            </span>
+            <span class="stage-summary">{{ group.attachment_count }} 个资料</span>
           </div>
           <el-tag size="small" type="info">
-            {{ group.task_type === 'installation' ? '仅图片/视频' : '图片、视频及文件' }}
+            {{ group.stage === 'installation' ? '图片/视频' : '图片、视频及文件' }}
           </el-tag>
         </div>
 
-        <el-empty v-if="!group.tasks.length" :description="`暂无${group.task_label}`" :image-size="64" />
-
-        <div v-for="task in group.tasks" :key="task.task_id" class="task-material-block">
-          <div class="task-material-heading">
-            <div class="task-material-title">
-              <span>{{ task.task_no || `${group.task_label}（未编号）` }}</span>
-              <el-tag size="small" :type="statusTagType(task.status)">
-                {{ task.status_label || task.status }}
-              </el-tag>
-            </div>
-            <span class="task-material-count">{{ task.attachments.length }} 个资料</span>
+        <div
+          v-if="!readonly"
+          class="material-dropzone"
+          :class="{
+            'is-dragover': dragStage === group.stage,
+            'is-disabled': !canUpload(group),
+          }"
+          role="button"
+          tabindex="0"
+          @click="openPicker(group)"
+          @keydown.enter.prevent="openPicker(group)"
+          @keydown.space.prevent="openPicker(group)"
+          @dragenter.prevent="handleDragEnter(group)"
+          @dragover.prevent="handleDragEnter(group)"
+          @dragleave.prevent="handleDragLeave(group)"
+          @drop.prevent="handleDrop(group, $event)"
+        >
+          <el-icon class="dropzone-icon"><UploadFilled /></el-icon>
+          <div v-if="canUpload(group)" class="dropzone-title">拖拽或点击上传资料</div>
+          <div v-else class="dropzone-title">当前账号只能查看该阶段资料</div>
+          <div v-if="canUpload(group)" class="dropzone-hint">
+            支持批量上传 · {{ group.stage === 'installation' ? 'JPG、PNG、WEBP、MP4、WEBM、MOV' : '图片、视频、PDF、Word、Excel、CAD、压缩包' }}
           </div>
+        </div>
 
-          <div
-            class="material-dropzone"
-            :class="{ 'is-dragover': dragTaskId === task.task_id, 'is-disabled': !task.upload_allowed }"
-            role="button"
-            tabindex="0"
-            @click="openPicker(group, task)"
-            @keydown.enter.prevent="openPicker(group, task)"
-            @keydown.space.prevent="openPicker(group, task)"
-            @dragenter.prevent="handleDragEnter(task)"
-            @dragover.prevent="handleDragEnter(task)"
-            @dragleave.prevent="handleDragLeave(task)"
-            @drop.prevent="handleDrop(group, task, $event)"
-          >
-            <el-icon class="dropzone-icon"><UploadFilled /></el-icon>
-            <div v-if="task.upload_allowed" class="dropzone-title">拖拽或点击上传资料</div>
-            <div v-else class="dropzone-title">{{ task.read_only_reason || '该任务当前只能查看资料' }}</div>
-            <div v-if="task.upload_allowed" class="dropzone-hint">
-              支持批量上传 · {{ group.task_type === 'installation' ? 'JPG、PNG、WEBP、MP4、WEBM、MOV' : '图片、视频、PDF、Word、Excel、CAD、压缩包' }}
-            </div>
+        <div v-if="groupUploadQueue(group.stage).length" class="upload-queue">
+          <div v-for="item in groupUploadQueue(group.stage)" :key="item.id" class="upload-queue-row">
+            <span class="upload-queue-name" :title="item.name">{{ item.name }}</span>
+            <el-tag v-if="item.status === 'uploading'" size="small" type="warning">上传中</el-tag>
+            <el-tag v-else-if="item.status === 'done'" size="small" type="success">已完成</el-tag>
+            <template v-else>
+              <el-tag size="small" type="danger">{{ item.error || '上传失败' }}</el-tag>
+              <el-button text type="primary" size="small" @click="retryUpload(group, item)">重试</el-button>
+            </template>
           </div>
+        </div>
 
-          <div v-if="taskUploadQueue(task.task_id).length" class="upload-queue">
-            <div v-for="item in taskUploadQueue(task.task_id)" :key="item.id" class="upload-queue-row">
-              <span class="upload-queue-name" :title="item.name">{{ item.name }}</span>
-              <el-tag v-if="item.status === 'uploading'" size="small" type="warning">上传中</el-tag>
-              <el-tag v-else-if="item.status === 'done'" size="small" type="success">已完成</el-tag>
-              <template v-else>
-                <el-tag size="small" type="danger">{{ item.error || '上传失败' }}</el-tag>
-                <el-button text type="primary" size="small" @click="retryUpload(group, task, item)">重试</el-button>
-              </template>
-            </div>
-          </div>
-
-          <div v-if="previewAttachments(task).length" class="preview-grid">
-            <div v-for="attachment in previewAttachments(task)" :key="attachment.id" class="preview-item">
-              <button
-                v-if="isVideo(attachment)"
-                type="button"
-                class="video-preview-button"
-                :aria-label="`播放视频 ${attachment.filename}`"
-                @click="openVideoPreview(attachment)"
-              >
-                <video
-                  v-if="attachment.preview_url"
-                  class="preview-image"
-                  :src="attachment.preview_url"
-                  preload="metadata"
-                  muted
-                  playsinline
-                />
-                <span v-else class="preview-placeholder"><el-icon><VideoPlay /></el-icon></span>
-                <span class="video-play-badge" aria-hidden="true">▶</span>
-              </button>
-              <el-image
-                v-else-if="attachment.preview_url"
+        <div v-if="previewAttachments(group).length" class="preview-grid">
+          <div v-for="attachment in previewAttachments(group)" :key="attachment.id" class="preview-item">
+            <button
+              v-if="isVideo(attachment)"
+              type="button"
+              class="video-preview-button"
+              :aria-label="`播放视频 ${attachment.filename}`"
+              @click="openVideoPreview(attachment, group)"
+            >
+              <video
+                v-if="attachment.preview_url"
                 class="preview-image"
                 :src="attachment.preview_url"
-                :alt="attachment.filename"
-                fit="cover"
-                lazy
-                :preview-src-list="imageUrls(task)"
-                :initial-index="imagePreviewIndex(task, attachment.id)"
-                preview-teleported
-                :zoom-rate="1.05"
+                preload="metadata"
+                muted
+                playsinline
               />
-              <div v-else class="preview-placeholder"><el-icon><Picture /></el-icon></div>
-              <div class="preview-caption">
-                <span :title="attachment.filename">{{ attachment.filename }}</span>
-                <el-button text type="danger" size="small" @click="removeAttachment(attachment)">删除</el-button>
-              </div>
+              <span v-else class="preview-placeholder"><el-icon><VideoPlay /></el-icon></span>
+              <span class="video-play-badge" aria-hidden="true">▶</span>
+            </button>
+            <el-image
+              v-else-if="attachment.preview_url"
+              class="preview-image"
+              :src="attachment.preview_url"
+              :alt="attachment.filename"
+              fit="cover"
+              lazy
+              :preview-src-list="imageUrls(group)"
+              :initial-index="imagePreviewIndex(group, attachment.id)"
+              preview-teleported
+              :zoom-rate="1.05"
+            />
+            <div v-else class="preview-placeholder"><el-icon><Picture /></el-icon></div>
+            <div class="preview-caption">
+              <span :title="attachment.filename">{{ attachment.filename }}</span>
+              <el-button
+                v-if="canDelete(group)"
+                text
+                type="danger"
+                size="small"
+                @click="removeAttachment(attachment, group)"
+              >删除</el-button>
             </div>
           </div>
+        </div>
 
-          <el-table
-            v-if="fileAttachments(task).length"
-            :data="fileAttachments(task)"
-            stripe
-            size="small"
-            class="file-table"
-          >
-            <el-table-column prop="filename" label="文件名" min-width="220" show-overflow-tooltip />
-            <el-table-column label="类型" width="105">
-              <template #default="{ row }">{{ getTaskAttachmentTypeLabel(row) }}</template>
-            </el-table-column>
-            <el-table-column label="大小" width="105">
-              <template #default="{ row }">{{ formatAttachmentSize(row.file_size) }}</template>
-            </el-table-column>
-            <el-table-column label="上传时间" width="180">
-              <template #default="{ row }">{{ formatDateTimeFull(row.created_at) || '-' }}</template>
-            </el-table-column>
-            <el-table-column label="上传人" width="120">
-              <template #default="{ row }">{{ row.uploaded_by_name || '-' }}</template>
-            </el-table-column>
-            <el-table-column label="操作" width="150" fixed="right">
-              <template #default="{ row }">
-                <el-button text type="primary" size="small" @click="downloadAttachment(row)">下载</el-button>
-                <el-button text type="danger" size="small" @click="removeAttachment(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+        <el-table
+          v-if="fileAttachments(group).length"
+          :data="fileAttachments(group)"
+          stripe
+          size="small"
+          class="file-table"
+        >
+          <el-table-column prop="filename" label="文件名" min-width="220" show-overflow-tooltip />
+          <el-table-column label="类型" width="105">
+            <template #default="{ row }">{{ getTaskAttachmentTypeLabel(row) }}</template>
+          </el-table-column>
+          <el-table-column label="大小" width="105">
+            <template #default="{ row }">{{ formatAttachmentSize(row.file_size) }}</template>
+          </el-table-column>
+          <el-table-column label="上传时间" width="180">
+            <template #default="{ row }">{{ formatDateTimeFull(row.created_at) || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="上传人" width="120">
+            <template #default="{ row }">{{ row.uploaded_by_name || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="190" fixed="right">
+            <template #default="{ row }">
+              <el-button
+                v-if="isPreviewableAttachment(row)"
+                text
+                type="primary"
+                size="small"
+                @click="previewAttachment(row, group)"
+              >预览</el-button>
+              <el-button text size="small" @click="downloadAttachment(row, group)">下载</el-button>
+              <el-button
+                v-if="canDelete(group)"
+                text
+                type="danger"
+                size="small"
+                @click="removeAttachment(row, group)"
+              >删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
 
-          <div v-if="!task.attachments.length" class="material-empty">暂无资料</div>
+        <div v-if="!group.attachments.length" class="material-empty">
+          {{ group.stage === 'installation' ? '暂无现场照片或视频' : '暂无订单阶段资料' }}
         </div>
       </section>
+
+      <el-empty v-if="!groups.length && !loading" description="暂无可见阶段资料" :image-size="64" />
     </div>
 
     <input
+      v-if="!readonly"
       ref="fileInput"
       class="file-input"
       type="file"
       multiple
       :accept="activeAccept"
+      :capture="capture ? 'environment' : undefined"
       @change="handleInputChange"
     />
 
@@ -172,7 +189,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Picture, UploadFilled, VideoPlay } from '@element-plus/icons-vue'
 import { formatDateTimeFull } from '@/utils/datetime'
@@ -185,28 +202,41 @@ import {
 } from '@/utils/taskPhotoUpload'
 import { downloadBlob } from '@/utils/download'
 import {
-  deleteOrderTaskAttachment,
-  downloadOrderTaskAttachment,
-  getOrderTaskAttachments,
-  uploadOrderTaskAttachment,
+  deleteOrderAttachment,
+  downloadOrderAttachment,
+  getOrderAttachments,
+  uploadOrderAttachment,
 } from '@/api/orders'
 import type {
   OrderTaskAttachmentGroup,
   OrderTaskAttachmentResponse,
-  OrderTaskAttachmentTask,
+  TaskType,
 } from '@/types/api'
 
-const props = defineProps<{ orderId: string }>()
+const props = withDefaults(defineProps<{
+  orderId: string
+  stage?: TaskType
+  taskId?: string
+  readonly?: boolean
+  compact?: boolean
+  capture?: boolean
+}>(), {
+  readonly: false,
+  compact: false,
+  capture: false,
+})
 
 type LocalAttachment = OrderTaskAttachmentResponse & {
   preview_url?: string
   preview_error?: boolean
 }
-type LocalTask = Omit<OrderTaskAttachmentTask, 'attachments'> & { attachments: LocalAttachment[] }
-type LocalGroup = Omit<OrderTaskAttachmentGroup, 'tasks'> & { tasks: LocalTask[] }
+type LocalGroup = Omit<OrderTaskAttachmentGroup, 'attachments'> & {
+  stage: TaskType
+  attachments: LocalAttachment[]
+}
 type UploadQueueItem = {
   id: string
-  taskId: string
+  stage: TaskType
   name: string
   file: File
   status: 'uploading' | 'done' | 'error'
@@ -217,28 +247,20 @@ const loading = ref(false)
 const loadError = ref(false)
 const groups = ref<LocalGroup[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
-const activeTaskId = ref<string | null>(null)
+const activeStage = ref<TaskType | null>(null)
 const activeAccept = ref('')
-const dragTaskId = ref<string | null>(null)
+const dragStage = ref<TaskType | null>(null)
 const uploadQueue = ref<UploadQueueItem[]>([])
 const videoDialogVisible = ref(false)
 const videoPreviewUrl = ref('')
 const objectUrls = new Map<string, string>()
 
-const taskGroupMap = computed(() => {
-  const map = new Map<string, LocalGroup>()
-  for (const group of groups.value) {
-    for (const task of group.tasks) map.set(task.task_id, group)
-  }
-  return map
-})
+function canUpload(group: LocalGroup) {
+  return !props.readonly && group.can_upload !== false
+}
 
-function statusTagType(status: string): 'success' | 'warning' | 'primary' | 'info' | 'danger' {
-  if (['completed', 'confirmed'].includes(status)) return 'success'
-  if (['cancelled', 'canceled'].includes(status)) return 'info'
-  if (['pending', 'pending_review', 'revision', 'rework'].includes(status)) return 'warning'
-  if (status === 'blocked') return 'danger'
-  return 'primary'
+function canDelete(group: LocalGroup) {
+  return !props.readonly && group.can_delete !== false
 }
 
 function attachmentKind(attachment: LocalAttachment) {
@@ -253,74 +275,66 @@ function isVideo(attachment: LocalAttachment) {
   return attachmentKind(attachment) === 'video'
 }
 
-function previewAttachments(task: LocalTask) {
-  return task.attachments.filter(attachment => isImage(attachment) || isVideo(attachment))
+function previewAttachments(group: LocalGroup) {
+  return group.attachments.filter(attachment => isImage(attachment) || isVideo(attachment))
 }
 
-function fileAttachments(task: LocalTask) {
-  return task.attachments.filter(attachment => !isImage(attachment) && !isVideo(attachment))
+function fileAttachments(group: LocalGroup) {
+  return group.attachments.filter(attachment => !isImage(attachment) && !isVideo(attachment))
 }
 
-function imageUrls(task: LocalTask) {
-  return task.attachments
+function imageUrls(group: LocalGroup) {
+  return group.attachments
     .filter(attachment => isImage(attachment) && attachment.preview_url)
     .map(attachment => attachment.preview_url as string)
 }
 
-function imagePreviewIndex(task: LocalTask, attachmentId: string) {
-  const attachment = task.attachments.find(item => item.id === attachmentId)
-  if (!attachment) return 0
-  return imageUrls(task).indexOf(attachment.preview_url || '')
+function imagePreviewIndex(group: LocalGroup, attachmentId: string) {
+  const attachment = group.attachments.find(item => item.id === attachmentId)
+  return attachment ? imageUrls(group).indexOf(attachment.preview_url || '') : 0
 }
 
-function taskUploadQueue(taskId: string) {
-  return uploadQueue.value.filter(item => item.taskId === taskId)
+function groupUploadQueue(stage: TaskType) {
+  return uploadQueue.value.filter(item => item.stage === stage)
 }
 
-function openPicker(group: LocalGroup, task: LocalTask) {
-  if (!task.upload_allowed) return
-  activeTaskId.value = task.task_id
+function openPicker(group: LocalGroup) {
+  if (!canUpload(group)) return
+  activeStage.value = group.stage
   activeAccept.value = group.accept
   fileInput.value?.click()
 }
 
-function handleDragEnter(task: LocalTask) {
-  if (task.upload_allowed) dragTaskId.value = task.task_id
+function handleDragEnter(group: LocalGroup) {
+  if (canUpload(group)) dragStage.value = group.stage
 }
 
-function handleDragLeave(task: LocalTask) {
-  if (dragTaskId.value === task.task_id) dragTaskId.value = null
+function handleDragLeave(group: LocalGroup) {
+  if (dragStage.value === group.stage) dragStage.value = null
 }
 
-function handleDrop(group: LocalGroup, task: LocalTask, event: DragEvent) {
-  dragTaskId.value = null
-  if (!task.upload_allowed || !event.dataTransfer?.files.length) return
-  handleFiles(group, task, Array.from(event.dataTransfer.files))
+function handleDrop(group: LocalGroup, event: DragEvent) {
+  dragStage.value = null
+  if (!canUpload(group) || !event.dataTransfer?.files.length) return
+  handleFiles(group, Array.from(event.dataTransfer.files))
 }
 
 function handleInputChange(event: Event) {
   const input = event.target as HTMLInputElement
-  const task = activeTaskId.value ? findTask(activeTaskId.value) : null
-  const group = activeTaskId.value ? taskGroupMap.value.get(activeTaskId.value) : null
-  if (task && group && input.files?.length) handleFiles(group, task, Array.from(input.files))
+  const group = activeStage.value
+    ? groups.value.find(item => item.stage === activeStage.value)
+    : undefined
+  if (group && input.files?.length) handleFiles(group, Array.from(input.files))
   input.value = ''
 }
 
-function findTask(taskId: string) {
-  for (const group of groups.value) {
-    const task = group.tasks.find(item => item.task_id === taskId)
-    if (task) return task
-  }
-  return null
-}
-
 function validateFile(group: LocalGroup, file: File) {
-  return group.task_type === 'installation'
+  return group.stage === 'installation'
     ? validateInstallationMedia(file)
     : validateTaskAttachment(file)
 }
 
-async function handleFiles(group: LocalGroup, task: LocalTask, files: File[]) {
+async function handleFiles(group: LocalGroup, files: File[]) {
   const validFiles: File[] = []
   for (const file of files.slice(0, 20)) {
     const error = validateFile(group, file)
@@ -330,41 +344,50 @@ async function handleFiles(group: LocalGroup, task: LocalTask, files: File[]) {
   if (files.length > 20) ElMessage.warning('单次最多上传 20 个资料，已忽略超出部分')
   const queueItems: UploadQueueItem[] = validFiles.map(file => ({
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    taskId: task.task_id,
+    stage: group.stage,
     name: file.name,
     file,
     status: 'uploading' as const,
   }))
   uploadQueue.value.push(...queueItems)
-  for (const item of queueItems) await uploadOne(group, task, item)
+  for (const item of queueItems) await uploadOne(group, item)
   uploadQueue.value = uploadQueue.value.filter(item => item.status !== 'done')
 }
 
-async function uploadOne(group: LocalGroup, task: LocalTask, item: UploadQueueItem) {
+async function uploadOne(group: LocalGroup, item: UploadQueueItem): Promise<boolean> {
   try {
-    const attachment = await uploadOrderTaskAttachment(props.orderId, group.task_type, task.task_id, item.file)
-    const localAttachment: LocalAttachment = { ...attachment }
-    task.attachments.unshift(localAttachment)
-    await loadPreview(localAttachment)
+    const attachment = await uploadOrderAttachment(
+      props.orderId,
+      group.stage,
+      item.file,
+      props.taskId,
+    )
+    group.attachments.unshift({ ...attachment })
+    await loadPreview(group.attachments[0], group)
     item.status = 'done'
+    return true
   } catch (error: unknown) {
     item.status = 'error'
     item.error = error instanceof Error ? error.message : '上传失败'
+    return false
   }
 }
 
-async function retryUpload(group: LocalGroup, task: LocalTask, item: UploadQueueItem) {
+async function retryUpload(group: LocalGroup, item: UploadQueueItem) {
   item.status = 'uploading'
   item.error = ''
-  await uploadOne(group, task, item)
-  if ((item.status as string) === 'done') uploadQueue.value = uploadQueue.value.filter(queueItem => queueItem.id !== item.id)
+  const success = await uploadOne(group, item)
+  if (success) uploadQueue.value = uploadQueue.value.filter(queueItem => queueItem.id !== item.id)
 }
 
-async function loadPreview(attachment: LocalAttachment) {
+async function loadPreview(attachment: LocalAttachment, group: LocalGroup) {
   if (!isImage(attachment) && !isVideo(attachment)) return
   if (attachment.preview_url || attachment.preview_error) return
   try {
-    const blob = await downloadOrderTaskAttachment(props.orderId, attachment.id)
+    const blob = await downloadOrderAttachment(props.orderId, attachment.id, {
+      stage: group.stage,
+      task_id: props.taskId,
+    })
     const url = URL.createObjectURL(blob)
     objectUrls.set(attachment.id, url)
     attachment.preview_url = url
@@ -376,15 +399,13 @@ async function loadPreview(attachment: LocalAttachment) {
 async function loadAllPreviews() {
   const pending: Promise<void>[] = []
   for (const group of groups.value) {
-    for (const task of group.tasks) {
-      for (const attachment of task.attachments) pending.push(loadPreview(attachment))
-    }
+    for (const attachment of group.attachments) pending.push(loadPreview(attachment, group))
   }
   await Promise.all(pending)
 }
 
-async function openVideoPreview(attachment: LocalAttachment) {
-  await loadPreview(attachment)
+async function openVideoPreview(attachment: LocalAttachment, group: LocalGroup) {
+  await loadPreview(attachment, group)
   if (!attachment.preview_url) {
     ElMessage.error('视频加载失败，请稍后重试')
     return
@@ -393,20 +414,50 @@ async function openVideoPreview(attachment: LocalAttachment) {
   videoDialogVisible.value = true
 }
 
-async function downloadAttachment(attachment: LocalAttachment) {
-  const blob = await downloadOrderTaskAttachment(props.orderId, attachment.id, true)
-  downloadBlob(blob, attachment.filename || '任务资料')
+async function downloadAttachment(attachment: LocalAttachment, group: LocalGroup) {
+  const blob = await downloadOrderAttachment(props.orderId, attachment.id, {
+    download: true,
+    stage: group.stage,
+    task_id: props.taskId,
+  })
+  downloadBlob(blob, attachment.filename || '订单资料')
 }
 
-async function removeAttachment(attachment: LocalAttachment) {
-  await ElMessageBox.confirm('确定删除此资料？删除后无法恢复。', '删除任务资料', {
+function isPreviewableAttachment(attachment: LocalAttachment) {
+  const kind = attachmentKind(attachment)
+  return kind === 'video' || kind === 'pdf'
+}
+
+async function previewAttachment(attachment: LocalAttachment, group: LocalGroup) {
+  if (isVideo(attachment)) {
+    await openVideoPreview(attachment, group)
+    return
+  }
+  try {
+    const blob = await downloadOrderAttachment(props.orderId, attachment.id, {
+      stage: group.stage,
+      task_id: props.taskId,
+    })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener,noreferrer')
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch {
+    ElMessage.error('文件预览失败，请下载后查看')
+  }
+}
+
+async function removeAttachment(attachment: LocalAttachment, group: LocalGroup) {
+  if (!canDelete(group)) return
+  await ElMessageBox.confirm('确定删除此资料？删除后无法恢复。', '删除订单资料', {
     confirmButtonText: '确定删除',
     cancelButtonText: '取消',
     type: 'warning',
   })
-  await deleteOrderTaskAttachment(props.orderId, attachment.id)
-  const task = findTask(attachment.related_id)
-  if (task) task.attachments = task.attachments.filter(item => item.id !== attachment.id)
+  await deleteOrderAttachment(props.orderId, attachment.id, {
+    stage: group.stage,
+    task_id: props.taskId,
+  })
+  group.attachments = group.attachments.filter(item => item.id !== attachment.id)
   const url = objectUrls.get(attachment.id)
   if (url) {
     URL.revokeObjectURL(url)
@@ -416,16 +467,19 @@ async function removeAttachment(attachment: LocalAttachment) {
 }
 
 async function loadMaterials() {
+  clearObjectUrls()
+  groups.value = []
   loading.value = true
   loadError.value = false
   try {
-    const response = await getOrderTaskAttachments(props.orderId)
+    const response = await getOrderAttachments(props.orderId, {
+      stage: props.stage,
+      task_id: props.taskId,
+    })
     groups.value = response.groups.map(group => ({
       ...group,
-      tasks: group.tasks.map(task => ({
-        ...task,
-        attachments: task.attachments.map(attachment => ({ ...attachment })),
-      })),
+      stage: group.stage || group.task_type,
+      attachments: group.attachments.map(attachment => ({ ...attachment })),
     }))
     await loadAllPreviews()
   } catch {
@@ -435,23 +489,29 @@ async function loadMaterials() {
   }
 }
 
-onMounted(loadMaterials)
-onUnmounted(() => {
+function clearObjectUrls() {
   for (const url of objectUrls.values()) URL.revokeObjectURL(url)
   objectUrls.clear()
+}
+
+watch(
+  () => [props.orderId, props.stage, props.taskId],
+  () => void loadMaterials(),
+  { immediate: true },
+)
+
+onUnmounted(() => {
+  clearObjectUrls()
 })
 </script>
 
 <style scoped>
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.header-hint, .stage-summary, .task-material-count { color: var(--ad-text-secondary); font-size: 12px; font-weight: normal; }
+.header-hint, .stage-summary { color: var(--ad-text-secondary); font-size: 12px; font-weight: normal; }
 .stage-section + .stage-section { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--ad-border); }
-.stage-heading, .task-material-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.stage-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .stage-heading h3 { margin: 0 0 5px; color: var(--ad-text); font-size: 16px; }
-.task-material-block { margin-top: 14px; padding: 14px; border: 1px solid var(--ad-border); border-radius: 8px; }
-.task-material-heading { margin-bottom: 12px; }
-.task-material-title { display: flex; align-items: center; gap: 8px; color: var(--ad-text); font-weight: 600; }
 .material-dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 116px; padding: 16px; border: 1px dashed var(--ad-border); border-radius: 8px; background: var(--ad-bg-secondary, #f8fafc); cursor: pointer; transition: border-color .15s, background .15s; }
 .material-dropzone:hover, .material-dropzone.is-dragover { border-color: var(--ad-primary, #409eff); background: var(--ad-primary-light, #ecf5ff); }
 .material-dropzone.is-disabled { cursor: not-allowed; opacity: .72; }
@@ -466,10 +526,15 @@ onUnmounted(() => {
 .preview-item { min-width: 0; overflow: hidden; border: 1px solid var(--ad-border); border-radius: 7px; background: var(--ad-card); }
 .preview-image, .preview-placeholder { display: flex; align-items: center; justify-content: center; width: 100%; height: 120px; background: var(--ad-bg-secondary, #f1f5f9); color: var(--ad-text-secondary); font-size: 28px; }
 .video-preview-button { position: relative; display: block; width: 100%; padding: 0; border: 0; cursor: pointer; }
-.video-play-badge { position: absolute; inset: 50% auto auto 50%; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; transform: translate(-50%, -50%); border-radius: 50%; background: rgba(0, 0, 0, .62); color: #fff; font-size: 16px; }
+.video-play-badge { position: absolute; inset: 50% auto auto 50%; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; transform: translate(-50%, -50%); border-radius: 50%; background: rgb(0 0 0 / 62%); color: #fff; font-size: 16px; }
 .preview-caption { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; }
 .preview-caption > span { flex: 1; overflow: hidden; color: var(--ad-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .file-table { margin-top: 14px; }
 .material-empty { padding: 12px 0 2px; color: var(--ad-text-secondary); font-size: 12px; text-align: center; }
 .video-player { display: block; width: 100%; max-height: 70vh; background: #000; }
+.is-compact { margin-top: 16px; }
+@media (max-width: 560px) {
+  .card-header { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+}
 </style>

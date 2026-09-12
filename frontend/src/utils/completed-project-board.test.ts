@@ -76,19 +76,23 @@ describe('完成项目看板', () => {
     expect(source).toContain('row.stages.design')
     expect(source).toContain('执行人：')
     expect(source).toContain('完成时间：')
-    expect(source).toContain('设计任务：任务附件')
-    expect(source).toContain('制作任务：任务附件')
-    expect(source).toContain('安装任务：现场照片与视频')
+    expect(source).toContain('OrderTaskAttachments')
+    expect(source).toContain('订单资料源头，按设计、制作、安装分组展示')
+    expect(source).toContain('stage="design"')
+    expect(source).toContain('stage="production"')
+    expect(source).toContain('stage="installation"')
     expect(source).not.toContain('handleDeleteAttachment')
   })
 
-  it('完成详情的三类任务资料按整行排列，并标识多条安装任务的归档范围', () => {
+  it('完成详情按订单阶段整行展示共享只读资料组件', () => {
     const source = readSource('views/tasks/CompletedProjectDetail.vue')
 
-    expect(source).toContain('三类资料分行展示，现场资料按安装任务归档')
     expect(source).toContain('.resource-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }')
-    expect(source).toContain('resourceFor(stage.key)?.task_count')
-    expect(source).toContain('class="resource-task"')
+    expect((source.match(/<OrderTaskAttachments/g) || []).length).toBe(3)
+    expect(source).toContain("project.stages.includes('design')")
+    expect(source).toContain("project.stages.includes('production')")
+    expect(source).toContain("project.stages.includes('installation')")
+    expect(source).not.toContain(':task-id=')
   })
 
   it('前端 API 和类型包含完成项目列表与只读详情契约', () => {

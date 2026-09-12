@@ -39,6 +39,14 @@
         @linked="fetchTask"
         @change="handleWorkflowChange"
       />
+
+      <OrderTaskAttachments
+        :order-id="task.order_id"
+        stage="production"
+        :task-id="task.id"
+        compact
+      />
+
       <OutsourceTaskCard
         v-if="authStore.hasPermission('outsource_task:read')"
         :task-type="'production'"
@@ -54,144 +62,23 @@
         <span style="color: var(--ad-text-secondary); margin-left: 12px; font-size: 12px;">删除后订单将回退到设计中状态，下游任务将被清除</span>
       </el-card>
 
-      <el-card shadow="never" class="info-card attachment-card" style="margin-top: 16px">
-        <template #header>
-          <div class="card-header">
-            <span>任务附件 <el-tag size="small" type="info">{{ attachments.length }} 个</el-tag></span>
-            <span class="attachment-header-hint">拖拽或点击上传</span>
-          </div>
-        </template>
-        <div
-          class="attachment-dropzone"
-          :class="{ 'is-dragover': attachmentDragActive, 'is-disabled': attachmentUploadDisabled }"
-          role="button"
-          tabindex="0"
-          @click="openAttachmentPicker"
-          @keydown.enter.prevent="openAttachmentPicker"
-          @keydown.space.prevent="openAttachmentPicker"
-          @dragenter.prevent="handleAttachmentDragEnter"
-          @dragover.prevent="handleAttachmentDragOver"
-          @dragleave.prevent="handleAttachmentDragLeave"
-          @drop.prevent="handleAttachmentDrop"
-        >
-          <input
-            ref="attachmentInput"
-            class="attachment-input"
-            type="file"
-            multiple
-            :accept="TASK_ATTACHMENT_ACCEPT"
-            :disabled="attachmentUploadDisabled"
-            @click.stop
-            @change="handleAttachmentInputChange"
-          />
-          <el-icon class="attachment-drop-icon"><UploadFilled /></el-icon>
-          <div class="attachment-drop-title">将制作图片、视频或文件拖到这里上传</div>
-          <div class="attachment-drop-subtitle">或点击选择文件，支持批量上传</div>
-          <div class="attachment-drop-hint">图片仅支持 JPG、PNG、WEBP（≤10MB）；视频、PDF、Word、Excel、CAD、压缩包（≤45MB）</div>
-        </div>
-
-        <div v-if="attachmentUploadQueue.length" class="attachment-upload-queue">
-          <div v-for="item in attachmentUploadQueue" :key="item.id" class="attachment-upload-row">
-            <span class="attachment-upload-name" :title="item.name">{{ item.name }}</span>
-            <el-tag v-if="item.status === 'uploading'" size="small" type="warning">上传中</el-tag>
-            <template v-else-if="item.status === 'error'">
-              <el-tag size="small" type="danger">{{ item.error || '上传失败' }}</el-tag>
-              <el-button text type="primary" size="small" @click="retryAttachment(item)">重试</el-button>
-            </template>
-          </div>
-        </div>
-
-        <div v-if="imageAttachments.length" class="attachment-image-grid">
-          <div v-for="att in imageAttachments" :key="att.id" class="attachment-image-item">
-            <el-image
-              class="attachment-image"
-              :src="getAttachmentUrl(att.file_path)"
-              :alt="att.filename"
-              fit="cover"
-              lazy
-              :preview-src-list="imageUrls"
-              :initial-index="imagePreviewIndex(att.id)"
-              :zoom-rate="TASK_ATTACHMENT_PREVIEW_ZOOM_RATE"
-              preview-teleported
-            />
-            <div class="attachment-image-actions">
-              <span class="attachment-image-name" :title="att.filename">{{ att.filename }}</span>
-              <span class="attachment-action-group">
-                <el-button text size="small" @click="downloadAttachment(att)">下载</el-button>
-                <el-button text type="danger" size="small" @click="handleDeleteAttachment(att.id)">删除</el-button>
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <el-table v-if="fileAttachments.length" :data="fileAttachments" stripe size="small" class="attachment-file-table">
-          <el-table-column prop="filename" label="文件名" min-width="220" show-overflow-tooltip />
-          <el-table-column label="类型" width="110">
-            <template #default="{ row }">{{ getTaskAttachmentTypeLabel(row) }}</template>
-          </el-table-column>
-          <el-table-column label="大小" width="110">
-            <template #default="{ row }">{{ formatAttachmentSize(row.file_size) }}</template>
-          </el-table-column>
-          <el-table-column label="上传时间" width="180">
-            <template #default="{ row }">{{ formatDateTimeFull(row.created_at) || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="190" fixed="right">
-            <template #default="{ row }">
-              <el-button v-if="isPreviewableAttachment(row)" text type="primary" size="small" @click="previewAttachment(row)">预览</el-button>
-              <el-button text size="small" @click="downloadAttachment(row)">下载</el-button>
-              <el-button text type="danger" size="small" @click="handleDeleteAttachment(row.id)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div v-if="!attachments.length" class="attachment-empty">暂无附件，拖入或点击上方区域上传</div>
-      </el-card>
-
-      <el-dialog
-        v-model="videoPreviewVisible"
-        title="视频预览"
-        width="min(900px, 92vw)"
-        destroy-on-close
-        @closed="videoPreviewAttachment = null"
-      >
-        <video
-          v-if="videoPreviewAttachment"
-          class="attachment-video-player"
-          :src="getAttachmentUrl(videoPreviewAttachment.file_path)"
-          controls
-          autoplay
-          playsinline
-        >
-          您的浏览器不支持视频播放
-        </video>
-      </el-dialog>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
-import { formatDateTimeFull } from '@/utils/datetime'
 import { useRoute, useRouter } from 'vue-router'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
+import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { TaskOverviewCard } from '@/components/ui'
-import { getProductionTask, changeProductionTaskStatus, uploadAttachment, deleteAttachment } from '@/api/tasks'
+import { getProductionTask, changeProductionTaskStatus } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { AttachmentResponse, ProductionTaskResponse } from '@/types/api'
+import type { ProductionTaskResponse } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import { useAuthStore } from '@/stores/auth'
 import { deleteProductionTask } from '@/api/tasks'
-import {
-  TASK_ATTACHMENT_ACCEPT,
-  TASK_ATTACHMENT_MAX_BATCH,
-  TASK_ATTACHMENT_MAX_CONCURRENCY,
-  TASK_ATTACHMENT_PREVIEW_ZOOM_RATE,
-  formatAttachmentSize,
-  getAttachmentUrl,
-  getTaskAttachmentKind,
-  getTaskAttachmentTypeLabel,
-  validateTaskAttachment,
-} from '@/utils/taskPhotoUpload'
 
 const route = useRoute()
 const router = useRouter()
@@ -201,27 +88,6 @@ const loading = ref(false)
 const changing = ref(false)
 const deleting = ref(false)
 const task = ref<ProductionTaskResponse | null>(null)
-const attachmentInput = ref<HTMLInputElement | null>(null)
-const attachmentDragActive = ref(false)
-const attachmentUploadQueue = ref<AttachmentUploadItem[]>([])
-const videoPreviewVisible = ref(false)
-const videoPreviewAttachment = ref<AttachmentResponse | null>(null)
-let attachmentDragDepth = 0
-let activeAttachmentUploads = 0
-
-interface AttachmentUploadItem {
-  id: string
-  file: File
-  name: string
-  status: 'queued' | 'uploading' | 'error'
-  error?: string
-}
-
-const attachments = computed(() => task.value?.attachments || [])
-const imageAttachments = computed(() => attachments.value.filter(att => getTaskAttachmentKind(att) === 'image'))
-const fileAttachments = computed(() => attachments.value.filter(att => getTaskAttachmentKind(att) !== 'image'))
-const imageUrls = computed(() => imageAttachments.value.map(att => getAttachmentUrl(att.file_path)))
-const attachmentUploadDisabled = computed(() => !task.value || deleting.value)
 const productionOverviewFields = computed(() => [
   { label: '尺寸', value: formatProductionDimensions(task.value) },
   { label: '数量', value: task.value?.quantity ?? '-' },
@@ -291,131 +157,6 @@ async function fetchTask() {
   } finally { loading.value = false }
 }
 
-function openAttachmentPicker() {
-  if (!attachmentUploadDisabled.value) attachmentInput.value?.click()
-}
-
-function handleAttachmentDragEnter() {
-  if (attachmentUploadDisabled.value) return
-  attachmentDragDepth += 1
-  attachmentDragActive.value = true
-}
-
-function handleAttachmentDragOver() {
-  if (!attachmentUploadDisabled.value) attachmentDragActive.value = true
-}
-
-function handleAttachmentDragLeave() {
-  attachmentDragDepth = Math.max(0, attachmentDragDepth - 1)
-  if (attachmentDragDepth === 0) attachmentDragActive.value = false
-}
-
-function handleAttachmentDrop(event: DragEvent) {
-  attachmentDragDepth = 0
-  attachmentDragActive.value = false
-  if (attachmentUploadDisabled.value) return
-  enqueueAttachments(Array.from(event.dataTransfer?.files || []))
-}
-
-function handleAttachmentInputChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  const files = Array.from(input.files || [])
-  input.value = ''
-  enqueueAttachments(files)
-}
-
-function enqueueAttachments(files: File[]) {
-  if (!files.length) return
-  const selectedFiles = files.slice(0, TASK_ATTACHMENT_MAX_BATCH)
-  if (files.length > TASK_ATTACHMENT_MAX_BATCH) {
-    ElMessage.warning(`一次最多上传 ${TASK_ATTACHMENT_MAX_BATCH} 个文件，超出部分未加入队列`)
-  }
-  const accepted: File[] = []
-  let rejectedCount = 0
-  for (const file of selectedFiles) {
-    if (validateTaskAttachment(file)) rejectedCount += 1
-    else accepted.push(file)
-  }
-  if (rejectedCount) ElMessage.warning(`${rejectedCount} 个文件不符合格式或大小要求，未加入队列`)
-  if (!accepted.length) return
-  attachmentUploadQueue.value.push(...accepted.map(file => ({
-    id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
-    file,
-    name: file.name,
-    status: 'queued' as const,
-  })))
-  startAttachmentUploadQueue()
-}
-
-function startAttachmentUploadQueue() {
-  while (activeAttachmentUploads < TASK_ATTACHMENT_MAX_CONCURRENCY) {
-    const next = attachmentUploadQueue.value.find(item => item.status === 'queued')
-    if (!next) return
-    next.status = 'uploading'
-    activeAttachmentUploads += 1
-    void uploadAttachmentItem(next).finally(() => {
-      activeAttachmentUploads -= 1
-      startAttachmentUploadQueue()
-    })
-  }
-}
-
-async function uploadAttachmentItem(item: AttachmentUploadItem) {
-  try {
-    const category = getTaskAttachmentKind({ filename: item.file.name, file_type: item.file.type })
-    const uploaded = await uploadAttachment('production_task', route.params.id as string, item.file, category)
-    if (task.value && uploaded) task.value.attachments = [...(task.value.attachments || []), uploaded]
-    attachmentUploadQueue.value = attachmentUploadQueue.value.filter(queueItem => queueItem.id !== item.id)
-    ElMessage.success(`${item.name} 上传成功`)
-    await aiStore.notifyBusinessMutation()
-  } catch {
-    item.status = 'error'
-    item.error = '上传失败，请重试'
-  }
-}
-
-function retryAttachment(item: AttachmentUploadItem) {
-  item.status = 'queued'
-  item.error = undefined
-  startAttachmentUploadQueue()
-}
-
-function imagePreviewIndex(attachmentId: string) {
-  return imageAttachments.value.findIndex(att => att.id === attachmentId)
-}
-
-function isPreviewableAttachment(attachment: AttachmentResponse) {
-  const kind = getTaskAttachmentKind(attachment)
-  return kind === 'video' || kind === 'pdf'
-}
-
-function previewAttachment(attachment: AttachmentResponse) {
-  if (getTaskAttachmentKind(attachment) === 'video') {
-    videoPreviewAttachment.value = attachment
-    videoPreviewVisible.value = true
-    return
-  }
-  window.open(getAttachmentUrl(attachment.file_path), '_blank', 'noopener,noreferrer')
-}
-
-function downloadAttachment(attachment: AttachmentResponse) {
-  const link = document.createElement('a')
-  link.href = getAttachmentUrl(attachment.file_path)
-  link.download = attachment.filename || '附件'
-  link.target = '_blank'
-  link.rel = 'noreferrer'
-  link.click()
-}
-
-async function handleDeleteAttachment(id: string) {
-  await ElMessageBox.confirm('确定删除此附件？删除后无法恢复。', '删除附件', {
-    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
-  })
-  await deleteAttachment(id)
-  if (task.value) task.value.attachments = (task.value.attachments || []).filter(attachment => attachment.id !== id)
-  ElMessage.success('已删除')
-}
-
 async function handleDelete() {
   await ElMessageBox.confirm(
     `确定删除制作任务 ${task.value?.production_no || ''}？删除后不可恢复，关联订单将回退到设计中状态。`,
@@ -438,51 +179,4 @@ onMounted(() => {
 .page { padding: 0; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
-.attachment-header-hint { color: var(--ad-text-secondary); font-size: 12px; font-weight: normal; }
-.progress-suffix { margin-left: 8px; color: var(--ad-text-secondary); }
-.attachment-dropzone {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 150px;
-  padding: 24px;
-  border: 1px dashed var(--ad-border);
-  border-radius: 8px;
-  color: var(--ad-text-secondary);
-  background: color-mix(in srgb, var(--ad-card) 92%, var(--el-color-primary) 8%);
-  cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-.attachment-dropzone:hover,
-.attachment-dropzone.is-dragover {
-  border-color: var(--el-color-primary);
-  background: color-mix(in srgb, var(--ad-card) 84%, var(--el-color-primary) 16%);
-}
-.attachment-dropzone.is-disabled { cursor: not-allowed; opacity: 0.65; }
-.attachment-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.attachment-drop-icon { font-size: 30px; color: var(--el-color-primary); margin-bottom: 8px; }
-.attachment-drop-title { color: var(--ad-text); font-size: 15px; font-weight: 600; }
-.attachment-drop-subtitle { margin-top: 6px; font-size: 13px; }
-.attachment-drop-hint { margin-top: 8px; font-size: 12px; color: var(--ad-text-secondary); text-align: center; }
-.attachment-upload-queue { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
-.attachment-upload-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 10px; border-radius: 6px; background: var(--ad-bg-secondary, rgba(255, 255, 255, 0.04)); }
-.attachment-upload-name { overflow: hidden; flex: 1; color: var(--ad-text-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.attachment-image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
-.attachment-image-item { overflow: hidden; background: #252540; border: 1px solid var(--ad-border); border-radius: 6px; }
-.attachment-image { display: block; width: 100%; height: 160px; cursor: zoom-in; }
-.attachment-image-actions { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; }
-.attachment-image-name { overflow: hidden; flex: 1; color: var(--ad-text-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.attachment-action-group { display: inline-flex; flex-shrink: 0; }
-.attachment-file-table { margin-top: 16px; }
-.attachment-empty { padding: 18px 8px 4px; color: var(--ad-text-secondary); text-align: center; font-size: 13px; }
-.attachment-video-player { display: block; width: 100%; max-height: 70vh; background: #000; }
-@media (max-width: 640px) {
-  .card-header { align-items: flex-start; gap: 8px; }
-  .attachment-header-hint { text-align: right; }
-  .attachment-dropzone { min-height: 130px; padding: 18px 12px; }
-  .attachment-image-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .attachment-image { height: 120px; }
-}
 </style>

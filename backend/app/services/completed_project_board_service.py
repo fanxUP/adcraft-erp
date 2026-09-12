@@ -15,7 +15,6 @@ from uuid import UUID
 
 from sqlalchemy import and_, exists, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import noload
 
 from app.core.permissions import (
     PERM_DESIGN_TASK_READ,
@@ -32,7 +31,7 @@ from app.models.business_document import (
     BusinessDocumentStatusLog,
 )
 from app.models.employee import Employee
-from app.models.task import Attachment, DesignTask, InstallationTask, ProductionTask
+from app.models.task import DesignTask, InstallationTask, ProductionTask
 from app.models.task_item_status_log import TaskItemStatusLog
 from app.models.user import User
 from app.schemas.attachment import AttachmentResponse
@@ -583,44 +582,6 @@ class CompletedProjectBoardService:
         )
         return list(result.scalars().all())
 
-    async def _load_project_resources(
-        self,
-        project_id: UUID,
-        task_types: Iterable[str],
-    ) -> dict[str, dict]:
-        resources: dict[str, dict] = {}
-        for task_type in task_types:
-            model = TASK_MODELS[task_type]
-            result = await self.db.execute(
-                select(model)
-                .options(noload(model.attachments))
-                .where(
-                    model.document_id == project_id,
-                    model.status != "cancelled",
-                    task_visibility_clause(model, self.viewer),
-                )
-                .order_by(model.created_at.desc(), model.id.desc())
-            )
-            task_rows = list(result.scalars().all())
-            task_ids = [task.id for task in task_rows]
-            attachment_rows: list[Attachment] = []
-            if task_ids:
-                attachment_result = await self.db.execute(
-                    select(Attachment)
-                    .where(
-                        Attachment.related_type == f"{task_type}_task",
-                        Attachment.related_id.in_(task_ids),
-                    )
-                    .order_by(Attachment.created_at.desc(), Attachment.id.desc())
-                )
-                attachment_rows = list(attachment_result.scalars().all())
-            resources[task_type] = serialize_completed_project_resources(
-                task_type,
-                task_rows,
-                attachment_rows,
-            )
-        return resources
-
     async def _load_projection(
         self,
         *,
@@ -703,9 +664,7 @@ class CompletedProjectBoardService:
             raise CompletedProjectNotFound(COMPLETED_PROJECT_NOT_FOUND_MESSAGE)
         if not self.is_super_admin and not events:
             raise CompletedProjectNotFound(COMPLETED_PROJECT_NOT_FOUND_MESSAGE)
-        allowed_types = self.allowed_task_types()
         order_items = await self._load_active_order_items(document.id)
-        resources = await self._load_project_resources(document.id, allowed_types)
         return build_completed_project_detail(
             document,
             status_log.operated_at,
@@ -714,5 +673,4 @@ class CompletedProjectBoardService:
             owner_user_id=owner_user_id,
             include_amount=user_has_permission(self.viewer, PERM_ORDER_VIEW_PRICE),
             order_items=order_items,
-            resources=resources,
         )

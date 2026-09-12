@@ -1,0 +1,67 @@
+version: 1
+name: order-stage-attachments
+objective: >-
+  将设计、制作、安装三类资料从任务级归属调整为订单级归属，
+  让订单成为统一源接口，任务详情页只作为对应阶段的调用入口，
+  同时保留历史文件、权限隔离和跨入口一致性。
+mode: STRICT
+status: implemented_pending_release
+nodes:
+  - id: OSA-P01
+    title: 锁定订单级归属、接口和权限契约
+    acceptance: A-OSA-01
+    depends_on: []
+    status: implemented
+  - id: OSA-P02
+    title: 增加订单级附件数据模型和统一服务
+    acceptance: A-OSA-02
+    depends_on: [OSA-P01]
+    status: implemented
+  - id: OSA-P03
+    title: 历史资料回填与旧接口兼容
+    acceptance: A-OSA-03
+    depends_on: [OSA-P02]
+    status: implemented_pending_migration
+  - id: OSA-P04
+    title: 统一订单、任务和完成详情的前端入口
+    acceptance: A-OSA-04
+    depends_on: [OSA-P02, OSA-P03]
+    status: implemented
+  - id: OSA-P05
+    title: 安全边界、权限回归和数据一致性验证
+    acceptance: A-OSA-05
+    depends_on: [OSA-P03, OSA-P04]
+    status: verified
+  - id: OSA-P06
+    title: 全量质量门禁与发布准备
+    acceptance: A-OSA-06
+    depends_on: [OSA-P05]
+    status: pending_release_validation
+edges:
+  - from: OSA-P01
+    to: OSA-P02
+  - from: OSA-P02
+    to: OSA-P03
+  - from: OSA-P02
+    to: OSA-P04
+  - from: OSA-P03
+    to: OSA-P04
+  - from: OSA-P03
+    to: OSA-P05
+  - from: OSA-P04
+    to: OSA-P05
+  - from: OSA-P05
+    to: OSA-P06
+backlog:
+  - id: OSA-B01
+    title: 独立订单资料权限
+    priority: P2
+  - id: OSA-B02
+    title: 订单资料按明细关联
+    priority: P2
+  - id: OSA-B03
+    title: 资料版本与对象存储生命周期
+    priority: P2
+  - id: OSA-B04
+    title: 病毒扫描和 Office/CAD 在线预览
+    priority: P2

@@ -37,6 +37,53 @@ export function getOrder(id: string) {
   return get<OrderDetailResponse>(`/orders/${id}`)
 }
 
+export function getOrderAttachments(
+  orderId: string,
+  params?: { stage?: 'design' | 'production' | 'installation'; task_id?: string },
+) {
+  return get<OrderTaskAttachmentsResponse>(`/orders/${orderId}/attachments`, { params })
+}
+
+export function uploadOrderAttachment(
+  orderId: string,
+  stage: 'design' | 'production' | 'installation',
+  file: File,
+  taskId?: string,
+) {
+  const formData = new FormData()
+  formData.append('stage', stage)
+  if (taskId) formData.append('task_id', taskId)
+  formData.append('file', file)
+  return post<OrderTaskAttachmentResponse>(`/orders/${orderId}/attachments`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export async function downloadOrderAttachment(
+  orderId: string,
+  attachmentId: string,
+  options?: {
+    download?: boolean
+    stage?: 'design' | 'production' | 'installation'
+    task_id?: string
+  },
+): Promise<Blob> {
+  const response = await apiClient.get(`/orders/${orderId}/attachments/${attachmentId}/file`, {
+    params: options,
+    responseType: 'blob',
+  })
+  return response.data as Blob
+}
+
+export function deleteOrderAttachment(
+  orderId: string,
+  attachmentId: string,
+  params?: { stage?: 'design' | 'production' | 'installation'; task_id?: string },
+) {
+  return del(`/orders/${orderId}/attachments/${attachmentId}`, { params })
+}
+
+// Compatibility adapters. New pages use the order-stage methods above.
 export function getOrderTaskAttachments(id: string) {
   return get<OrderTaskAttachmentsResponse>(`/orders/${id}/task-attachments`)
 }

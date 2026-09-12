@@ -80,7 +80,6 @@
         <div class="task-footer">
           <span v-if="task.contact_name" class="meta-item">👤 {{ task.contact_name }}</span>
           <span v-if="task.scheduled_at" class="meta-item">📅 {{ formatDate(task.scheduled_at) }}</span>
-          <span v-if="task.attachments?.length" class="meta-item photo-count">📷 {{ task.attachments.length }}</span>
         </div>
       </div>
     </div>
@@ -125,38 +124,15 @@
           </div>
         </div>
 
-        <!-- Photo section -->
-        <div class="section-title">现场照片</div>
-        <div class="photo-actions">
-          <button class="photo-btn primary" @click="takePhoto" :disabled="uploadLoading">
-            <span>📷</span> 拍照
-          </button>
-          <button class="photo-btn" @click="uploadPhoto" :disabled="uploadLoading">
-            <span>🖼️</span> 相册
-          </button>
-          <input
-            ref="fileInput"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            style="display:none"
-            @change="onFileChange"
-          />
-        </div>
-        <div v-if="uploadLoading" class="upload-progress">上传中…</div>
-
-        <div v-if="currentTask.attachments?.length" class="photo-grid">
-          <div
-            v-for="att in currentTask.attachments"
-            :key="att.id"
-            class="photo-item"
-            @click="previewImage = `/uploads/${att.file_path}`"
-          >
-            <img :src="`/uploads/${att.file_path}`" :alt="att.filename" class="photo-img" />
-            <button class="photo-delete" @click.stop="deletePhoto(att.id)">×</button>
-          </div>
-        </div>
-        <div v-else class="photo-empty">暂无现场照片，请拍摄或上传</div>
+        <!-- 订单是资料源头，移动任务只传入任务作为权限上下文。 -->
+        <OrderTaskAttachments
+          v-if="currentTask"
+          :order-id="currentTask.order_id"
+          stage="installation"
+          :task-id="currentTask.id"
+          compact
+          capture
+        />
 
         <!-- Status actions -->
         <div class="status-actions">
@@ -172,11 +148,6 @@
       </div>
     </el-drawer>
 
-    <!-- Image preview overlay -->
-    <div v-if="previewImage" class="preview-overlay" @click="previewImage = ''">
-      <img :src="previewImage" class="preview-img" @click.stop />
-      <button class="preview-close" @click="previewImage = ''">×</button>
-    </div>
   </div>
 </template>
 
@@ -188,9 +159,8 @@ import {
   getInstallationTasks,
   getInstallationTask,
   changeInstallationTaskStatus,
-  uploadAttachment,
-  deleteAttachment,
 } from '@/api/tasks'
+import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { InstallationTaskResponse } from '@/types/api'
@@ -207,9 +177,6 @@ const allTasks = ref<InstallationTaskResponse[]>([])
 const currentTask = ref<InstallationTaskResponse | null>(null)
 const drawerVisible = ref(false)
 const activeTab = ref('')
-const fileInput = ref<HTMLInputElement | null>(null)
-const uploadLoading = ref(false)
-const previewImage = ref('')
 const pullDistance = ref(0)
 let touchStartY = 0
 
@@ -347,55 +314,6 @@ async function openTask(task: InstallationTaskResponse) {
   }
 }
 
-// --- Photos ---
-function takePhoto() {
-  if (fileInput.value) {
-    fileInput.value.setAttribute('capture', 'environment')
-    fileInput.value.click()
-  }
-}
-
-function uploadPhoto() {
-  if (fileInput.value) {
-    fileInput.value.removeAttribute('capture')
-    fileInput.value.click()
-  }
-}
-
-async function onFileChange(ev: Event) {
-  const input = ev.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file || !currentTask.value) return
-
-  uploadLoading.value = true
-  try {
-    // Compress large images before upload (max 1920px)
-    const compressed = await compressImage(file, 1920, 0.8)
-    await uploadAttachment('installation_task', currentTask.value.id, compressed, 'photo')
-    ElMessage.success('上传成功')
-    currentTask.value = await getInstallationTask(currentTask.value.id)
-  } catch {
-    ElMessage.error('上传失败')
-  } finally {
-    uploadLoading.value = false
-  }
-  input.value = ''
-}
-
-async function deletePhoto(attId: string) {
-  if (!currentTask.value) return
-  await ElMessageBox.confirm('确定删除此照片？删除后无法恢复。', '删除照片', {
-    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
-  })
-  try {
-    await deleteAttachment(attId)
-    ElMessage.success('已删除')
-    currentTask.value = await getInstallationTask(currentTask.value.id)
-  } catch {
-    ElMessage.error('删除失败')
-  }
-}
-
 // --- Status change ---
 async function changeStatus(toStatus: string) {
   if (!currentTask.value) return
@@ -423,60 +341,6 @@ async function changeStatus(toStatus: string) {
   } catch (e: unknown) {
     ElMessage.error(getErrorMessage(e, '状态更新失败'))
   }
-}
-
-// --- Image compression ---
-function compressImage(file: File, maxDim: number, quality: number): Promise<File> {
-  return new Promise((resolve) => {
-    // Skip non-image files or already small files
-    if (!file.type.startsWith('image/') || file.size < 500 * 1024) {
-      resolve(file)
-      return
-    }
-
-    const img = new Image()
-    const url = URL.createObjectURL(file)
-
-    img.onload = () => {
-      URL.revokeObjectURL(url)
-      let { width, height } = img
-      if (width > maxDim || height > maxDim) {
-        if (width > height) {
-          height = (height / width) * maxDim
-          width = maxDim
-        } else {
-          width = (width / height) * maxDim
-          height = maxDim
-        }
-      }
-
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) { resolve(file); return }
-
-      ctx.drawImage(img, 0, 0, width, height)
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(new File([blob], file.name, { type: 'image/jpeg' }))
-          } else {
-            resolve(file)
-          }
-        },
-        'image/jpeg',
-        quality
-      )
-    }
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      resolve(file)
-    }
-
-    img.src = url
-  })
 }
 
 // --- Lifecycle ---
@@ -698,7 +562,6 @@ watch(() => document.visibilityState, (state) => {
   align-items: center;
   gap: 2px;
 }
-.photo-count { color: var(--ad-red, #e63946); }
 
 /* Drawer */
 :deep(.el-drawer) {
@@ -754,104 +617,6 @@ watch(() => document.visibilityState, (state) => {
   font-weight: 500;
 }
 
-.section-title {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 10px;
-  margin-top: 4px;
-}
-
-/* Photo actions */
-.photo-actions {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.photo-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 12px;
-  border-radius: 10px;
-  border: 1px solid #2a2a3e;
-  background: #1e1e30;
-  color: var(--ad-text, #e0e0e0);
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
-.photo-btn:active { background: #2a2a3e; }
-.photo-btn.primary {
-  background: var(--ad-red, #e63946);
-  border-color: var(--ad-red, #e63946);
-  color: #fff;
-}
-.photo-btn.primary:active { opacity: 0.85; }
-.photo-btn:disabled { opacity: 0.5; }
-
-.upload-progress {
-  text-align: center;
-  font-size: 13px;
-  color: var(--ad-red, #e63946);
-  margin-bottom: 8px;
-}
-
-/* Photo grid */
-.photo-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.photo-item {
-  position: relative;
-  border-radius: 8px;
-  overflow: hidden;
-  aspect-ratio: 1;
-}
-.photo-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  cursor: pointer;
-}
-.photo-delete {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0,0,0,0.6);
-  color: #fff;
-  font-size: 14px;
-  line-height: 22px;
-  text-align: center;
-  cursor: pointer;
-  display: none;
-}
-.photo-item:hover .photo-delete,
-.photo-item:active .photo-delete {
-  display: block;
-}
-
-/* Mobile-friendly: always show delete on mobile */
-@media (pointer: coarse) {
-  .photo-delete { display: block; }
-}
-
-.photo-empty {
-  text-align: center;
-  color: #555;
-  font-size: 13px;
-  padding: 20px 0;
-  margin-bottom: 16px;
-}
-
 /* Status action buttons */
 .status-actions { margin-top: 4px; }
 .action-btn {
@@ -884,43 +649,6 @@ watch(() => document.visibilityState, (state) => {
   background: #e65100;
   border-color: #e65100;
   color: #fff;
-}
-
-/* Image preview overlay */
-.preview-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: rgba(0,0,0,0.92);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: fadeIn 0.2s;
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-.preview-img {
-  max-width: 95vw;
-  max-height: 90vh;
-  object-fit: contain;
-}
-.preview-close {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255,255,255,0.15);
-  color: #fff;
-  font-size: 22px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 /* Safe area for mobile */

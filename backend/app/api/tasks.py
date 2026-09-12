@@ -2,6 +2,7 @@ import os
 import uuid as _uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,7 @@ from app.core.permissions import (
     PERM_INSTALLATION_TASK_LIST,
     PERM_INSTALLATION_TASK_READ,
     PERM_INSTALLATION_TASK_UPDATE,
+    PERM_ORDER_READ,
     PERM_PRODUCTION_TASK_CHANGE_STATUS,
     PERM_PRODUCTION_TASK_CREATE,
     PERM_PRODUCTION_TASK_ASSIGN,
@@ -58,13 +60,17 @@ from app.services.completed_project_board_service import (
     CompletedProjectNotFound,
 )
 from app.services.task_service import (
-    AttachmentService,
     DesignTaskService,
     InstallationTaskService,
     ProductionTaskService,
     get_task_order_item_options,
 )
 from app.services.order_task_assignment_service import list_task_assignee_options, get_visible_task
+from app.services.operation_log_service import ACTION_CREATE, OBJ_ORDER, log_operation
+from app.services.order_task_attachment_service import (
+    OrderTaskAttachmentService,
+    serialize_order_task_attachment,
+)
 
 
 def _ensure_uuid(s: str):
@@ -75,8 +81,6 @@ INSTALLATION_PHOTO_MAX_BYTES = 10 * 1024 * 1024
 INSTALLATION_VIDEO_MAX_BYTES = 45 * 1024 * 1024
 TASK_ATTACHMENT_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 TASK_ATTACHMENT_FILE_MAX_BYTES = 45 * 1024 * 1024
-UPLOAD_DIRECTORY_MODE = 0o750
-UPLOAD_FILE_MODE = 0o640
 _INSTALLATION_PHOTO_TYPES = {
     "image/jpeg": (b"\xff\xd8\xff", ".jpg"),
     "image/png": (b"\x89PNG\r\n\x1a\n", ".png"),
@@ -159,6 +163,68 @@ _TASK_ATTACHMENT_PERMISSIONS = {
     "production_task": PERM_PRODUCTION_TASK_UPDATE,
     "installation_task": PERM_INSTALLATION_TASK_UPDATE,
 }
+
+
+class AttachmentService:
+    """Compatibility writer for the legacy ``/attachments/upload`` adapter.
+
+    The old route still receives a task id from older clients, but it writes
+    the same order-owned row as the canonical order endpoint.  Keeping this
+    small compatibility surface also lets older integrations finish their
+    release window without restoring task-owned persistence.
+    """
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def add_attachment(
+        self,
+        related_type: str,
+        related_id,
+        data: dict,
+        uploaded_by=None,
+        uploaded_by_name: str | None = None,
+    ) -> dict:
+        del related_type
+        values = dict(data)
+        entry_task_id = values.pop("entry_task_id", None)
+        order_id = values.get("order_id") or related_id
+        values.update(
+            {
+                "related_type": "order_stage",
+                "related_id": order_id,
+                "order_id": order_id,
+            }
+        )
+        attachment = Attachment(
+            **values,
+            uploaded_by=uploaded_by,
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        self.db.add(attachment)
+        await self.db.flush()
+        await log_operation(
+            self.db,
+            uploaded_by,
+            uploaded_by_name,
+            OBJ_ORDER,
+            order_id,
+            ACTION_CREATE,
+            after_data={
+                "attachment_id": str(attachment.id),
+                "stage": values.get("stage"),
+                "entry_task_id": str(entry_task_id) if entry_task_id else None,
+                "filename": attachment.filename,
+                "file_size": attachment.file_size,
+                "file_type": attachment.file_type,
+                "category": attachment.category,
+            },
+        )
+        return serialize_order_task_attachment(
+            attachment,
+            uploaded_by_name=uploaded_by_name,
+        )
 
 
 def validate_installation_photo(content_type: str | None, contents: bytes) -> tuple[str | None, str | None]:
@@ -751,10 +817,15 @@ async def upload_attachment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    exact_permission = _TASK_ATTACHMENT_PERMISSIONS.get(related_type)
     task_model = _TASK_ATTACHMENT_TASK_MODELS.get(related_type)
-    if exact_permission is None or task_model is None:
+    stage = {
+        "design_task": "design",
+        "production_task": "production",
+        "installation_task": "installation",
+    }.get(related_type)
+    if stage is None or task_model is None:
         return {"code": 40001, "message": "附件关联任务类型无效", "data": None}
+    exact_permission = _TASK_ATTACHMENT_PERMISSIONS[related_type]
     if not _user_has_permission(current_user, exact_permission):
         raise HTTPException(status_code=403, detail="没有该附件关联对象的上传权限")
 
@@ -765,57 +836,70 @@ async def upload_attachment(
     task = await get_visible_task(db, task_model, related_uuid, current_user)
     if task is None:
         return {"code": 40401, "message": "关联任务不存在或当前账号无权查看", "data": None}
-
-    upload_dir = settings.LOCAL_UPLOAD_DIR
-    date_dir = datetime.now(timezone.utc).strftime("%Y%m")
-    dest_dir = os.path.join(upload_dir, date_dir)
-
-    contents = await file.read()
-    safe_extension: str | None = None
-    attachment_category: str | None = None
-    if related_type == "installation_task":
-        message, safe_extension, installation_media_category = validate_installation_media(
-            file.content_type, contents
-        )
-        if message:
-            return {"code": 40001, "message": message, "data": None}
-        attachment_category = installation_media_category
-    else:
-        message, safe_extension, attachment_category = validate_task_attachment(
-            file.filename, file.content_type, contents
-        )
-        if message:
-            return {"code": 40001, "message": message, "data": None}
-
-    # Nginx serves /uploads/ from the same filesystem as the backend.  The
-    # production service uses a restrictive umask, so relying on the default
-    # modes would create 700 directories and 600 files that Nginx cannot read.
-    # Set the modes explicitly and keep the upload owner as the backend user.
-    os.makedirs(dest_dir, mode=UPLOAD_DIRECTORY_MODE, exist_ok=True)
-    os.chmod(dest_dir, UPLOAD_DIRECTORY_MODE)
-    ext = safe_extension or ""
-    unique_name = f"{_uuid.uuid4().hex}{ext}"
-    file_path = os.path.join(dest_dir, unique_name)
-
-    with open(file_path, "wb") as f:
-        f.write(contents)
-    os.chmod(file_path, UPLOAD_FILE_MODE)
-
-    service = AttachmentService(db)
-    _, display_name = safe_upload_name(file.filename, "attachment")
-    att = await service.add_attachment(
-        related_type=related_type,
-        related_id=related_uuid,
-        data={
-            "filename": display_name or unique_name,
-            "file_path": f"{date_dir}/{unique_name}",
-            "file_size": len(contents),
-            "file_type": file.content_type,
-            "category": attachment_category,
-        },
-        uploaded_by=current_user.id,
+    order_id = getattr(task, "document_id", None) or related_uuid
+    uploader_name = getattr(current_user, "real_name", None) or getattr(
+        current_user,
+        "username",
+        None,
     )
-    return success(att)
+    contents = await file.read()
+    if stage == "installation":
+        message, safe_extension, category = validate_installation_media(
+            file.content_type,
+            contents,
+        )
+    else:
+        message, safe_extension, category = validate_task_attachment(
+            file.filename,
+            file.content_type,
+            contents,
+        )
+    if message:
+        return {"code": 40001, "message": message, "data": None}
+
+    date_dir = datetime.now(timezone.utc).strftime("%Y%m")
+    dest_dir = Path(settings.LOCAL_UPLOAD_DIR) / date_dir
+    dest_dir.mkdir(mode=0o750, parents=True, exist_ok=True)
+    os.chmod(dest_dir, 0o750)
+    unique_name = f"{uuid4().hex}{safe_extension or ''}"
+    stored_path = dest_dir / unique_name
+    relative_path = f"{date_dir}/{unique_name}"
+    _, display_name = safe_upload_name(file.filename, "attachment")
+
+    try:
+        with stored_path.open("wb") as output:
+            output.write(contents)
+        os.chmod(stored_path, 0o640)
+        att = await AttachmentService(db).add_attachment(
+            "order_stage",
+            order_id,
+            data={
+                "order_id": order_id,
+                "stage": stage,
+                "filename": display_name or unique_name,
+                "file_path": relative_path,
+                "file_size": len(contents),
+                "file_type": file.content_type,
+                "category": category,
+                "entry_task_id": related_uuid,
+            },
+            uploaded_by=current_user.id,
+            uploaded_by_name=uploader_name,
+        )
+        return success(att)
+    except PermissionError as exc:
+        if stored_path.is_file():
+            stored_path.unlink()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        if stored_path.is_file():
+            stored_path.unlink()
+        await db.rollback()
+        return {"code": 40001, "message": str(exc), "data": None}
+    except Exception:
+        if stored_path.is_file():
+            stored_path.unlink()
+        raise
 
 
 @att_router.delete("/{attachment_id}")
@@ -831,24 +915,58 @@ async def delete_attachment(
     attachment = await db.get(Attachment, attachment_uuid)
     if attachment is None:
         return {"code": 40401, "message": "附件不存在", "data": None}
-    permission = _TASK_ATTACHMENT_PERMISSIONS.get(attachment.related_type)
-    if permission is None or not _user_has_permission(current_user, permission):
-        raise HTTPException(status_code=403, detail="没有该附件关联对象的删除权限")
-
-    task_model = _TASK_ATTACHMENT_TASK_MODELS.get(attachment.related_type)
-    if task_model is not None:
+    service = OrderTaskAttachmentService(db)
+    if attachment.related_type == "order_stage":
+        if not _user_has_permission(current_user, PERM_ORDER_READ):
+            raise HTTPException(
+                status_code=403,
+                detail="该订单资料已统一由订单资料接口管理，请从订单或对应任务详情进入",
+            )
+        order_id = attachment.order_id
+        stage = attachment.stage
+        task_id = None
+    else:
+        stage = {
+            "design_task": "design",
+            "production_task": "production",
+            "installation_task": "installation",
+        }.get(attachment.related_type)
+        task_model = _TASK_ATTACHMENT_TASK_MODELS.get(attachment.related_type)
+        if stage is None or task_model is None:
+            return {"code": 40001, "message": "附件关联任务类型无效", "data": None}
+        permission = _TASK_ATTACHMENT_PERMISSIONS[attachment.related_type]
+        if not _user_has_permission(current_user, permission):
+            raise HTTPException(status_code=403, detail="没有该附件关联对象的删除权限")
+        related_id = getattr(attachment, "related_id", None)
+        if related_id is None:
+            return {"code": 40401, "message": "附件归属信息不存在", "data": None}
         visible_task = await get_visible_task(
-            db, task_model, attachment.related_id, current_user
+            db, task_model, related_id, current_user
         )
         if visible_task is None:
             return {"code": 40401, "message": "附件关联任务不存在或当前账号无权查看", "data": None}
+        order_id = visible_task.document_id
+        task_id = related_id
 
-    service = AttachmentService(db)
-    ok = await service.delete_attachment(attachment_uuid)
-    if not ok:
-        return {"code": 40401, "message": "附件不存在", "data": None}
+    if not order_id or not stage:
+        return {"code": 40401, "message": "附件归属信息不存在", "data": None}
     try:
-        stored_path = confined_path(settings.LOCAL_UPLOAD_DIR, attachment.file_path)
+        _, relative_path = await service.delete(
+            order_id,
+            attachment_uuid,
+            current_user.id,
+            current_user.real_name or current_user.username,
+            stage=stage,
+            task_id=task_id,
+            viewer=current_user,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        await db.rollback()
+        return {"code": 40401, "message": str(exc), "data": None}
+    try:
+        stored_path = confined_path(settings.LOCAL_UPLOAD_DIR, relative_path)
         if os.path.isfile(stored_path):
             os.remove(stored_path)
     except HTTPException:

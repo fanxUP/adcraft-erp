@@ -9,12 +9,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.permissions import (
+    PERM_DESIGN_TASK_READ,
+    PERM_DESIGN_TASK_UPDATE,
     PERM_ORDER_CHANGE_STATUS,
     PERM_ORDER_DELETE,
     PERM_ORDER_READ,
     PERM_ORDER_TASK_ASSIGN,
     PERM_ORDER_UPDATE,
+    PERM_INSTALLATION_TASK_READ,
+    PERM_INSTALLATION_TASK_UPDATE,
+    PERM_PRODUCTION_TASK_READ,
+    PERM_PRODUCTION_TASK_UPDATE,
     PERM_SYSTEM_SUPER_ADMIN,
+    PERM_TASK_COMPLETION_READ,
+    require_any_permission,
     require_permission,
 )
 from app.models.user import User
@@ -38,7 +46,10 @@ from app.services.order_task_assignment_service import (
     list_task_assignee_options,
     replace_order_task_assignees,
 )
-from app.services.order_task_attachment_service import OrderTaskAttachmentService
+from app.services.order_task_attachment_service import (
+    OrderTaskAttachmentPermissionError,
+    OrderTaskAttachmentService,
+)
 from app.core.file_security import confined_path
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -143,6 +154,158 @@ def _parse_order_attachment_uuid(value: str, label: str) -> UUID:
         raise HTTPException(status_code=404, detail=f"{label}编号无效")
 
 
+_ORDER_ATTACHMENT_READ_PERMISSIONS = (
+    PERM_ORDER_READ,
+    PERM_DESIGN_TASK_READ,
+    PERM_PRODUCTION_TASK_READ,
+    PERM_INSTALLATION_TASK_READ,
+    PERM_TASK_COMPLETION_READ,
+)
+_ORDER_ATTACHMENT_WRITE_PERMISSIONS = (
+    PERM_ORDER_READ,
+    PERM_DESIGN_TASK_UPDATE,
+    PERM_PRODUCTION_TASK_UPDATE,
+    PERM_INSTALLATION_TASK_UPDATE,
+)
+
+
+def _parse_optional_order_attachment_uuid(value: str | None, label: str) -> UUID | None:
+    return _parse_order_attachment_uuid(value, label) if value else None
+
+
+@router.get(
+    "/{order_id}/attachments",
+)
+async def list_order_attachments(
+    order_id: str,
+    stage: str | None = Query(None),
+    task_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_permission(*_ORDER_ATTACHMENT_READ_PERMISSIONS)),
+):
+    """List canonical order-owned materials, optionally from a task entry."""
+    service = OrderTaskAttachmentService(db)
+    try:
+        return success(
+            await service.list_for_order(
+                _parse_order_attachment_uuid(order_id, "订单"),
+                stage=stage,
+                task_id=_parse_optional_order_attachment_uuid(task_id, "任务"),
+                viewer=current_user,
+            )
+        )
+    except OrderTaskAttachmentPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        return error(40401, str(exc))
+
+
+@router.post(
+    "/{order_id}/attachments",
+)
+async def upload_order_attachment(
+    order_id: str,
+    stage: str = Form(...),
+    task_id: str | None = Form(None),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_permission(*_ORDER_ATTACHMENT_WRITE_PERMISSIONS)),
+):
+    """Upload to the order/stage source; task id is optional context only."""
+    service = OrderTaskAttachmentService(db)
+    try:
+        attachment = await service.upload(
+            _parse_order_attachment_uuid(order_id, "订单"),
+            stage,
+            _parse_optional_order_attachment_uuid(task_id, "任务"),
+            file,
+            current_user.id,
+            current_user.real_name or current_user.username,
+            viewer=current_user,
+        )
+        return success(attachment)
+    except OrderTaskAttachmentPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        await db.rollback()
+        return error(40001, str(exc))
+
+
+@router.get(
+    "/{order_id}/attachments/{attachment_id}/file",
+)
+async def read_order_attachment_file(
+    order_id: str,
+    attachment_id: str,
+    stage: str | None = Query(None),
+    task_id: str | None = Query(None),
+    download: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_permission(*_ORDER_ATTACHMENT_READ_PERMISSIONS)),
+):
+    """Read an order attachment only through the authenticated API."""
+    service = OrderTaskAttachmentService(db)
+    try:
+        attachment, stored_path = await service.get_file(
+            _parse_order_attachment_uuid(order_id, "订单"),
+            _parse_order_attachment_uuid(attachment_id, "附件"),
+            stage=stage,
+            task_id=_parse_optional_order_attachment_uuid(task_id, "任务"),
+            viewer=current_user,
+        )
+    except OrderTaskAttachmentPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    media_type = (attachment.file_type or "application/octet-stream").split(";", 1)[0]
+    return FileResponse(
+        stored_path,
+        media_type=media_type,
+        filename=attachment.filename,
+        content_disposition_type="attachment" if download else "inline",
+    )
+
+
+@router.delete(
+    "/{order_id}/attachments/{attachment_id}",
+)
+async def delete_order_attachment(
+    order_id: str,
+    attachment_id: str,
+    stage: str | None = Query(None),
+    task_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_permission(*_ORDER_ATTACHMENT_WRITE_PERMISSIONS)),
+):
+    """Delete an order attachment after exact order/stage authorization."""
+    service = OrderTaskAttachmentService(db)
+    try:
+        _, relative_path = await service.delete(
+            _parse_order_attachment_uuid(order_id, "订单"),
+            _parse_order_attachment_uuid(attachment_id, "附件"),
+            current_user.id,
+            current_user.real_name or current_user.username,
+            stage=stage,
+            task_id=_parse_optional_order_attachment_uuid(task_id, "任务"),
+            viewer=current_user,
+        )
+        try:
+            stored_path = confined_path(settings.LOCAL_UPLOAD_DIR, relative_path)
+            if os.path.isfile(stored_path):
+                os.remove(stored_path)
+        except HTTPException:
+            # The database deletion and audit log remain authoritative; never
+            # expose a malformed server path to the caller.
+            pass
+        return success(None)
+    except OrderTaskAttachmentPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        await db.rollback()
+        return error(40401, str(exc))
+
+
 @router.get("/{order_id}/task-attachments")
 async def list_order_task_attachments(
     order_id: str,
@@ -154,9 +317,12 @@ async def list_order_task_attachments(
     try:
         return success(
             await service.list_for_order(
-                _parse_order_attachment_uuid(order_id, "订单")
+                _parse_order_attachment_uuid(order_id, "订单"),
+                viewer=current_user,
             )
         )
+    except OrderTaskAttachmentPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         return error(40401, str(exc))
 
@@ -165,7 +331,7 @@ async def list_order_task_attachments(
 async def upload_order_task_attachment(
     order_id: str,
     task_type: str = Form(...),
-    task_id: str = Form(...),
+    task_id: str | None = Form(None),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_READ)),
@@ -176,12 +342,15 @@ async def upload_order_task_attachment(
         attachment = await service.upload(
             _parse_order_attachment_uuid(order_id, "订单"),
             task_type,
-            _parse_order_attachment_uuid(task_id, "任务"),
+            _parse_optional_order_attachment_uuid(task_id, "任务"),
             file,
             current_user.id,
             current_user.real_name or current_user.username,
+            viewer=current_user,
         )
         return success(attachment)
+    except OrderTaskAttachmentPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except HTTPException:
         raise
     except ValueError as exc:
@@ -203,6 +372,7 @@ async def read_order_task_attachment_file(
         attachment, stored_path = await service.get_file(
             _parse_order_attachment_uuid(order_id, "订单"),
             _parse_order_attachment_uuid(attachment_id, "附件"),
+            viewer=current_user,
         )
     except HTTPException:
         raise
@@ -233,6 +403,7 @@ async def delete_order_task_attachment(
             _parse_order_attachment_uuid(attachment_id, "附件"),
             current_user.id,
             current_user.real_name or current_user.username,
+            viewer=current_user,
         )
         try:
             stored_path = confined_path(settings.LOCAL_UPLOAD_DIR, relative_path)
@@ -243,6 +414,8 @@ async def delete_order_task_attachment(
             # expose a server path when a legacy file path is malformed.
             pass
         return success(None)
+    except OrderTaskAttachmentPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except HTTPException:
         raise
     except ValueError as exc:
