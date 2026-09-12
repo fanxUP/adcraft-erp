@@ -69,3 +69,16 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="首次登录需强制改密")
 
     roles: Mapped[list["Role"]] = relationship(secondary=user_roles, back_populates="users", lazy="selectin")
+    preferences: Mapped["UserPreference | None"] = relationship(
+        "UserPreference",
+        back_populates="user",
+        uselist=False,
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+
+# Register the related model whenever the user model is imported.  The
+# relationship uses a string target to avoid a circular import in the model
+# modules, while Alembic still receives the table through env.py.
+from app.models.user_preferences import UserPreference  # noqa: E402,F401

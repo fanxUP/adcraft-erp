@@ -48,10 +48,14 @@ export interface PaginatedData<T> {
 
 // ---- Auth ----
 
+export type { UserPreferences } from '@/config/userPreferences'
+import type { UserPreferences } from '@/config/userPreferences'
+
 export interface LoginResponse {
   token: string
   username: string
   real_name?: string
+  must_change_password?: boolean
 }
 
 export interface UserProfile {
@@ -71,6 +75,7 @@ export interface UserProfile {
     view_cost: boolean
     view_financial_report: boolean
   }
+  preferences?: UserPreferences
 }
 
 // ---- User ----

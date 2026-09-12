@@ -1,36 +1,6 @@
 <template>
   <AppPage>
-    <template #header><PageHeader title="系统设置" description="统一管理界面风格、安全控制、文字显示和系统运行参数。" /></template>
-
-    <!-- Theme Selector -->
-    <el-card shadow="never" style="margin-bottom: 16px">
-      <template #header>
-        <span>界面风格</span>
-      </template>
-      <div class="theme-grid">
-        <div
-          v-for="t in themes"
-          :key="t.name"
-          class="theme-card"
-          :class="{ active: appStore.theme === t.name }"
-          @click="appStore.setTheme(t.name)"
-        >
-          <div class="theme-preview">
-            <div class="preview-bg" :style="{ background: t.colors[1] }">
-              <div class="preview-card" :style="{ background: t.colors[2], borderColor: t.colors[2] === '#ffffff' ? '#e0e0e0' : 'transparent' }">
-                <div class="preview-accent" :style="{ background: t.colors[0] }"></div>
-                <div class="preview-line" :style="{ background: t.colors[0], opacity: 0.3 }"></div>
-                <div class="preview-line short" :style="{ background: t.colors[0], opacity: 0.15 }"></div>
-              </div>
-            </div>
-          </div>
-          <div class="theme-info">
-            <div class="theme-name">{{ t.label }}</div>
-            <div class="theme-desc">{{ t.desc }}</div>
-          </div>
-        </div>
-      </div>
-    </el-card>
+    <template #header><PageHeader title="系统设置" description="统一管理安全控制和系统运行参数。界面风格与文字大小请在个人中心修改。" /></template>
 
     <!-- Force Re-login -->
     <el-card shadow="never" style="margin-bottom: 16px">
@@ -47,40 +17,6 @@
               发布需要重新登录才能生效的更新后，点击此按钮强制所有已登录用户退出并重新登录
             </div>
           </div>
-        </el-form-item>
-      </el-form>
-    </el-card>
-
-    <!-- Typography Settings -->
-    <el-card shadow="never" style="margin-bottom: 16px">
-      <template #header>
-        <span>文字设置</span>
-      </template>
-      <el-form label-width="100px" style="max-width: 500px">
-        <el-form-item label="文字大小">
-          <div style="width: 100%">
-            <el-slider
-              v-model="fontSizeLocal"
-              :min="12" :max="20" :step="1"
-              show-stops
-            />
-            <div style="text-align: center; margin-top: 4px; color: var(--ad-text-secondary); font-size: 12px">
-              当前: {{ appStore.fontSize }}px
-            </div>
-          </div>
-        </el-form-item>
-        <el-form-item label="文字粗细">
-          <el-select
-            v-model="fontWeightLocal"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="opt in fontWeightOptions"
-              :key="opt.value"
-              :label="`${opt.label} (${opt.value})`"
-              :value="opt.value"
-            />
-          </el-select>
         </el-form-item>
       </el-form>
     </el-card>
@@ -141,24 +77,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { getSystemSettings, updateSystemSettings, type SystemSettings } from '@/api/admin'
-import { useAppStore, THEME_LIST, FONT_WEIGHT_OPTIONS } from '@/stores/app'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { AppPage, PageHeader } from '@/components/ui'
-
-const appStore = useAppStore()
-const themes = THEME_LIST
-const fontWeightOptions = FONT_WEIGHT_OPTIONS
-
-const fontSizeLocal = computed({
-  get: () => appStore.fontSize,
-  set: (v) => appStore.setFontSize(v),
-})
-const fontWeightLocal = computed({
-  get: () => appStore.fontWeight,
-  set: (v) => appStore.setFontWeight(v),
-})
 
 const loading = ref(false)
 const saving = ref(false)
@@ -241,74 +163,3 @@ async function handleSave() {
 
 onMounted(fetchSettings)
 </script>
-
-<style scoped>
-.theme-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
-}
-.theme-card {
-  border: 2px solid var(--ad-border);
-  border-radius: 8px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.theme-card:hover {
-  border-color: var(--ad-text-secondary);
-  transform: translateY(-2px);
-}
-.theme-card.active {
-  border-color: var(--ad-red);
-  box-shadow: 0 0 12px var(--ad-accent-glow, rgba(230, 57, 70, 0.2));
-}
-.theme-preview {
-  height: 72px;
-  padding: 8px;
-}
-.preview-bg {
-  width: 100%;
-  height: 100%;
-  border-radius: 4px;
-  padding: 6px;
-  display: flex;
-  align-items: stretch;
-}
-.preview-card {
-  flex: 1;
-  border-radius: 3px;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border: 1px solid transparent;
-}
-.preview-accent {
-  width: 24px;
-  height: 4px;
-  border-radius: 2px;
-}
-.preview-line {
-  height: 3px;
-  border-radius: 1px;
-  width: 80%;
-}
-.preview-line.short {
-  width: 50%;
-}
-.theme-info {
-  padding: 8px 10px;
-  background: var(--ad-card);
-}
-.theme-name {
-  font-size: 13px;
-  font-weight: bold;
-  color: var(--ad-text);
-}
-.theme-desc {
-  font-size: 11px;
-  color: var(--ad-text-secondary);
-  margin-top: 2px;
-}
-</style>

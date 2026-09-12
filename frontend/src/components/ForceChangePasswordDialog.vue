@@ -14,13 +14,13 @@
     </div>
     <el-form ref="formRef" :model="form" :rules="rules" label-width="80px" @submit.prevent>
       <el-form-item label="原密码" prop="old_password">
-        <el-input v-model="form.old_password" type="password" show-password placeholder="请输入当前密码" />
+        <el-input v-model="form.old_password" type="password" show-password maxlength="128" placeholder="请输入当前密码" />
       </el-form-item>
       <el-form-item label="新密码" prop="new_password">
-        <el-input v-model="form.new_password" type="password" show-password placeholder="至少 6 位" />
+        <el-input v-model="form.new_password" type="password" show-password maxlength="128" placeholder="6-128 位" />
       </el-form-item>
       <el-form-item label="确认密码" prop="confirm_password">
-        <el-input v-model="form.confirm_password" type="password" show-password placeholder="再次输入新密码" />
+        <el-input v-model="form.confirm_password" type="password" show-password maxlength="128" placeholder="再次输入新密码" />
       </el-form-item>
     </el-form>
     <template #footer>
@@ -52,10 +52,21 @@ const form = reactive({
 })
 
 const rules: FormRules = {
-  old_password: [{ required: true, message: '请输入当前密码', trigger: 'blur' }],
-  new_password: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '新密码至少 6 位', trigger: 'blur' },
+    old_password: [
+      { required: true, message: '请输入当前密码', trigger: 'blur' },
+      { max: 128, message: '密码不能超过 128 位', trigger: 'blur' },
+    ],
+    new_password: [
+      { required: true, message: '请输入新密码', trigger: 'blur' },
+      { min: 6, message: '新密码至少 6 位', trigger: 'blur' },
+      { max: 128, message: '新密码不能超过 128 位', trigger: 'blur' },
+      {
+        validator: (_rule, value, callback) => {
+          if (value && value === form.old_password) callback(new Error('新密码不能与原密码相同'))
+          else callback()
+        },
+        trigger: 'blur',
+      },
   ],
   confirm_password: [
     { required: true, message: '请再次输入新密码', trigger: 'blur' },
@@ -75,7 +86,7 @@ async function handleSubmit() {
   submitting.value = true
   try {
     await changePassword({ old_password: form.old_password, new_password: form.new_password })
-    ElMessage.success('密码修改成功，请使用新密码登录')
+    ElMessage.success('密码修改成功，已可以继续使用系统')
     authStore.clearMustChangePassword()
     form.old_password = ''
     form.new_password = ''

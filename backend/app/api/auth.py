@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
-from app.schemas.auth import ChangePasswordRequest, LoginRequest
+from app.schemas.auth import ChangePasswordRequest, LoginRequest, UserPreferencesUpdate
 from app.schemas.common import success
 from app.services.auth_service import AuthService
 
@@ -31,6 +31,22 @@ async def me(current_user: User = Depends(get_current_user), db: AsyncSession = 
     service = AuthService(db)
     profile = await service.get_profile(current_user.id)
     return success(profile)
+
+
+@router.patch("/preferences")
+async def update_preferences(
+    data: UserPreferencesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AuthService(db)
+    preferences = await service.update_preferences(
+        current_user.id,
+        data.model_dump(exclude_none=True),
+    )
+    if preferences is None:
+        return {"code": 40401, "message": "当前用户不存在", "data": None}
+    return success(preferences)
 
 
 @router.post("/change-password")

@@ -29,6 +29,10 @@
       </div>
     </div>
 
+    <div class="settings-section">
+      <PersonalSettingsCard />
+    </div>
+
     <!-- Quick links -->
     <div class="info-section">
       <div class="info-title">快捷入口</div>
@@ -64,6 +68,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
+import PersonalSettingsCard from '@/components/profile/PersonalSettingsCard.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -108,8 +113,8 @@ async function handleLogout() {
   margin: 0 auto;
   min-height: calc(100vh - 64px);
   padding: 0 0 24px;
-  background: #0f0f1a;
-  color: var(--ad-text, #e0e0e0);
+  background: var(--ui-bg);
+  color: var(--ad-text);
 }
 
 /* Profile header */
@@ -118,13 +123,13 @@ async function handleLogout() {
   align-items: center;
   gap: 16px;
   padding: 24px 16px;
-  background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+  background: linear-gradient(180deg, var(--ui-surface-subtle) 0%, var(--ui-bg) 100%);
 }
 .avatar {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--ad-red, #e63946);
+  background: var(--ad-red);
   color: #fff;
   font-size: 24px;
   font-weight: 700;
@@ -144,11 +149,11 @@ async function handleLogout() {
 }
 .profile-role {
   font-size: 13px;
-  color: #888;
+  color: var(--ad-text-secondary);
 }
 .profile-phone {
   font-size: 13px;
-  color: #4fc3f7;
+  color: var(--ui-brand);
   margin-top: 2px;
 }
 
@@ -156,16 +161,24 @@ async function handleLogout() {
 .info-section {
   padding: 8px 16px;
 }
+
+.settings-section {
+  padding: 8px 16px;
+}
+
+.settings-section :deep(.personal-settings-card) {
+  margin-bottom: 0;
+}
 .info-title {
   font-size: 14px;
   font-weight: 600;
-  color: #888;
+  color: var(--ad-text-secondary);
   margin-bottom: 8px;
   padding-left: 4px;
 }
 .info-card {
-  background: #1e1e30;
-  border: 1px solid #2a2a3e;
+  background: var(--ui-surface);
+  border: 1px solid var(--ad-border);
   border-radius: 10px;
   padding: 4px 12px;
 }
@@ -174,26 +187,26 @@ async function handleLogout() {
   justify-content: space-between;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid #2a2a3e;
+  border-bottom: 1px solid var(--ad-border);
 }
 .info-row:last-child { border-bottom: none; }
 .info-label {
   font-size: 14px;
-  color: #888;
+  color: var(--ad-text-secondary);
 }
 .info-value {
   font-size: 14px;
   text-align: right;
 }
 .phone-link {
-  color: #4fc3f7;
+  color: var(--ui-brand);
   text-decoration: none;
 }
 
 /* Link list */
 .link-list {
-  background: #1e1e30;
-  border: 1px solid #2a2a3e;
+  background: var(--ui-surface);
+  border: 1px solid var(--ad-border);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -202,16 +215,16 @@ async function handleLogout() {
   align-items: center;
   gap: 10px;
   padding: 14px 12px;
-  border-bottom: 1px solid #2a2a3e;
+  border-bottom: 1px solid var(--ad-border);
   cursor: pointer;
   transition: background 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
 .link-item:last-child { border-bottom: none; }
-.link-item:active { background: #2a2a3e; }
+.link-item:active { background: var(--ui-surface-subtle); }
 .link-icon { font-size: 20px; }
 .link-text { flex: 1; font-size: 14px; }
-.link-arrow { font-size: 18px; color: #555; }
+.link-arrow { font-size: 18px; color: var(--ad-text-muted); }
 
 /* Logout */
 .logout-section {
@@ -221,9 +234,9 @@ async function handleLogout() {
   width: 100%;
   padding: 14px;
   border-radius: 10px;
-  border: 1px solid #e63946;
+  border: 1px solid var(--ui-danger);
   background: transparent;
-  color: #e63946;
+  color: var(--ui-danger);
   font-size: 16px;
   font-weight: 500;
   cursor: pointer;
@@ -231,7 +244,7 @@ async function handleLogout() {
   -webkit-tap-highlight-color: transparent;
 }
 .logout-btn:active {
-  background: #e63946;
+  background: var(--ui-danger);
   color: #fff;
 }
 
@@ -243,6 +256,6 @@ async function handleLogout() {
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
-  color: #444;
+  color: var(--ad-text-muted);
 }
 </style>

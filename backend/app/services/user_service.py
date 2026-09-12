@@ -1,7 +1,10 @@
+from inspect import isawaitable
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permission_catalog import validate_permission_set
+from app.core.password_policy import validate_new_password
+from app.models.user_preferences import UserPreference
 from app.repositories.user_repo import UserRepository
 from app.utils.security import hash_password
 
@@ -82,6 +85,11 @@ class UserService:
 
         data["password_hash"] = hash_password(data.pop("password"))
         user = await self.repo.create(data)
+        preference = UserPreference(user_id=user.id)
+        added = self.db.add(preference)
+        if isawaitable(added):
+            await added
+        await self.db.flush()
         if roles:
             await self.repo.set_roles(user, roles)
 
@@ -119,9 +127,11 @@ class UserService:
         return True
 
     async def reset_password(self, user_id: UUID, new_password: str) -> bool:
+        validate_new_password(new_password)
         user = await self.repo.get_by_id(user_id)
         if not user:
             return False
         user.password_hash = hash_password(new_password)
+        user.must_change_password = True
         await self.repo.update(user, {})
         return True

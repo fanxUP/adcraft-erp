@@ -6,6 +6,7 @@ import type { UserProfile } from '@/types/api'
 import router from '@/router'
 import { useNotificationStore } from '@/stores/notification'
 import { useChatStore } from '@/stores/chat'
+import { useAppStore } from '@/stores/app'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
@@ -66,7 +67,19 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function fetchProfile(quiet = false) {
     try {
-      user.value = await getProfile()
+      const appStore = useAppStore()
+      const cachedUserId = tokenSubject(token.value)
+      if (cachedUserId) {
+        // Cache is only a visual warm start.  The profile response below is
+        // always authoritative and replaces this value.
+        appStore.restoreCachedUserPreferences(cachedUserId)
+      }
+      const profile = await getProfile()
+      if (user.value?.id && user.value.id !== profile.id) {
+        appStore.resetToDefaults()
+      }
+      user.value = profile
+      appStore.applyUserPreferences(profile.id, profile.preferences)
       // Connect WebSocket for notifications after profile is loaded
       if (token.value) {
         const notificationStore = useNotificationStore()
@@ -95,6 +108,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     token.value = ''
     user.value = null
+    useAppStore().resetToDefaults()
     localStorage.removeItem('token')
     router.push('/login')
   }
@@ -106,9 +120,27 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function setUserPreferences(preferences: UserProfile['preferences']) {
+    if (!user.value || !preferences) return
+    const appStore = useAppStore()
+    user.value.preferences = appStore.applyUserPreferences(user.value.id, preferences)
+  }
+
+  function tokenSubject(rawToken: string): string | null {
+    try {
+      const encodedPayload = rawToken.split('.')[1]
+      if (!encodedPayload) return null
+      const normalized = encodedPayload.replace(/-/g, '+').replace(/_/g, '/')
+      const payload = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='))) as { sub?: unknown }
+      return typeof payload.sub === 'string' && payload.sub ? payload.sub : null
+    } catch {
+      return null
+    }
+  }
+
   return {
     token, user, isLoggedIn, roles, permissions, isAdmin, isSuperAdmin,
     hasRole, hasAnyRole, hasPermission, can, canAny, canAll,
-    login, fetchProfile, logout, clearMustChangePassword,
+    login, fetchProfile, logout, clearMustChangePassword, setUserPreferences,
   }
 })

@@ -1,0 +1,63 @@
+version: 1
+name: user-personal-settings
+objective: >-
+  为每个登录用户提供独立的密码、界面风格和文字大小设置，并让偏好在桌面端与移动端
+  持久化、按账号隔离，同时不改变既有角色权限和业务数据可见范围。
+mode: STRICT
+nodes:
+  - id: USER-PREF-P01
+    title: 冻结入口、范围与重复设置清理策略
+    acceptance: A-USER-PREF-01
+    depends_on: []
+  - id: USER-PREF-P02
+    title: 建立用户偏好数据模型和接口契约
+    acceptance: A-USER-PREF-02
+    depends_on: [USER-PREF-P01]
+  - id: USER-PREF-P03
+    title: 收紧密码修改与重置后的安全语义
+    acceptance: A-USER-PREF-03
+    depends_on: [USER-PREF-P01]
+  - id: USER-PREF-P04
+    title: 统一用户偏好加载、应用和按账号缓存
+    acceptance: A-USER-PREF-04
+    depends_on: [USER-PREF-P02, USER-PREF-P03]
+  - id: USER-PREF-P05
+    title: 实现桌面端和移动端个人设置界面
+    acceptance: A-USER-PREF-05
+    depends_on: [USER-PREF-P04]
+  - id: USER-PREF-P06
+    title: 安全、回归和交付质量验证
+    acceptance: A-USER-PREF-06
+    depends_on: [USER-PREF-P05]
+edges:
+  - from: USER-PREF-P01
+    to: USER-PREF-P02
+  - from: USER-PREF-P01
+    to: USER-PREF-P03
+  - from: USER-PREF-P02
+    to: USER-PREF-P04
+  - from: USER-PREF-P03
+    to: USER-PREF-P04
+  - from: USER-PREF-P04
+    to: USER-PREF-P05
+  - from: USER-PREF-P05
+    to: USER-PREF-P06
+backlog:
+  - id: B-USER-PREF-01
+    title: 退出其他设备和登录设备列表
+    priority: P1
+  - id: B-USER-PREF-02
+    title: 短信邮件飞书密码找回或安全提醒
+    priority: P2
+  - id: B-USER-PREF-03
+    title: 系统默认主题和新用户默认偏好管理
+    priority: P2
+  - id: B-USER-PREF-04
+    title: 界面密度语言时区和通知偏好
+    priority: P2
+  - id: B-USER-PREF-05
+    title: 管理员按授权为指定用户重置界面偏好
+    priority: P3
+  - id: B-USER-PREF-06
+    title: 更强密码策略密码历史和双因素认证
+    priority: P1

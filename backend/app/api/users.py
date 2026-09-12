@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -9,13 +9,14 @@ from app.core.deps import get_current_user
 from app.core.permissions import require_permission, PERM_USER_READ, PERM_USER_CREATE, PERM_USER_UPDATE, PERM_USER_DELETE
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
+from app.core.password_policy import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
 from app.schemas.common import success, success_paginated
 from app.services.user_service import UserService
 from app.services.operation_log_service import OBJ_USER, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, log_operation
 
 
 class ResetPasswordRequest(BaseModel):
-    new_password: str
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
