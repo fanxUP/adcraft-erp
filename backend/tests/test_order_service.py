@@ -170,6 +170,93 @@ async def test_order_restore_refreshes_server_updated_at_before_detail(service):
 
 
 @pytest.mark.asyncio
+async def test_reopen_completed_order_refreshes_server_updated_at_before_detail(service):
+    """撤回已完成订单后必须刷新数据库时间戳，再序列化响应。"""
+    order_service, repository, db = service
+    order = make_order(status="completed")
+    repository.get_by_id.return_value = order
+    repository.create_status_log = AsyncMock()
+
+    open_task = MagicMock(status="pending")
+    open_task_result = MagicMock()
+    open_task_result.scalars.return_value.first.return_value = open_task
+    db.execute.return_value = open_task_result
+
+    refreshed_at = "2026-09-12T12:00:00"
+
+    async def refresh(document, attribute_names=None):
+        assert attribute_names == ["updated_at"]
+        document.updated_at = refreshed_at
+
+    db.refresh = AsyncMock(side_effect=refresh)
+    order_service._to_detail = MagicMock(
+        side_effect=lambda document: {
+            "status": document.status,
+            "updated_at": document.updated_at,
+        }
+    )
+
+    result = await order_service.reopen_completed_order(
+        SAMPLE_ORDER_ID,
+        reason="客户要求重新确认安装结果",
+        operated_by=uuid4(),
+    )
+
+    assert result == {"status": "in_installation", "updated_at": refreshed_at}
+    db.refresh.assert_awaited_once_with(order, attribute_names=["updated_at"])
+
+
+@pytest.mark.asyncio
+async def test_reopen_completed_order_includes_new_installation_task_in_detail(service):
+    """没有进行中安装任务时，撤回响应应包含自动创建的安装任务。"""
+    order_service, repository, db = service
+    order = make_order(status="completed", installation_tasks=[])
+    repository.get_by_id.return_value = order
+    repository.create_status_log = AsyncMock()
+
+    open_task_result = MagicMock()
+    open_task_result.scalars.return_value.first.return_value = None
+    db.execute.return_value = open_task_result
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+
+    refreshed_at = "2026-09-12T12:00:00"
+
+    async def refresh(document, attribute_names=None):
+        assert attribute_names == ["updated_at"]
+        document.updated_at = refreshed_at
+
+    db.refresh = AsyncMock(side_effect=refresh)
+    order_service._to_detail = MagicMock(
+        side_effect=lambda document: {
+            "status": document.status,
+            "updated_at": document.updated_at,
+            "installation_tasks": [
+                task.installation_no for task in document.installation_tasks
+            ],
+        }
+    )
+
+    with patch(
+        "app.services.number_generator.generate_installation_no",
+        new=AsyncMock(return_value="I20260912-0001"),
+    ):
+        result = await order_service.reopen_completed_order(
+            SAMPLE_ORDER_ID,
+            reason="客户要求重新确认安装结果",
+            operated_by=uuid4(),
+        )
+
+    assert result == {
+        "status": "in_installation",
+        "updated_at": refreshed_at,
+        "installation_tasks": ["I20260912-0001"],
+    }
+    db.add.assert_called_once()
+    db.refresh.assert_awaited_once_with(order, attribute_names=["updated_at"])
+
+
+@pytest.mark.asyncio
 async def test_order_cancellation_closes_all_open_delivery_tasks(service):
     order_service, repository, db = service
     order = make_order(status="in_installation")
