@@ -1172,7 +1172,12 @@ class BusinessDocumentService:
         # 订单取消会连带取消下游任务、软删验收单，恢复时一并还原，避免交付链卡死
         if doc.doc_type == "order":
             await self._restore_delivery_chain(doc_id)
-        doc.status = await self._pre_cancel_status(doc)
+        restored_status = await self._pre_cancel_status(doc)
+        restored_status = await self._reconcile_restored_order_status(
+            doc_id,
+            restored_status,
+        )
+        doc.status = restored_status
         await self.db.flush()
         # repo.restore()/flush() 会触发数据库侧 onupdate(updated_at)。异步
         # SQLAlchemy 会将该字段标记为过期，序列化前必须显式刷新，避免同步
@@ -1197,6 +1202,35 @@ class BusinessDocumentService:
         if log and log.from_status:
             return log.from_status
         return "pending_confirm" if doc.doc_type == "order" else "draft"
+
+    async def _reconcile_restored_order_status(
+        self,
+        doc_id: UUID,
+        restored_status: str,
+    ) -> str:
+        """Do not restore a completed delivery chain into an active-only gap.
+
+        A cancelled order remembers the status it had before cancellation, but
+        that status can become stale when an administrator has changed or
+        removed a task before restoring the order.  Recheck the live task
+        facts so a fully completed order returns to the completed board.
+        """
+        if self.doc_type != "order" or restored_status == "completed":
+            return restored_status
+
+        from app.services.task_service import _all_execution_tasks_completed
+
+        if not await _all_execution_tasks_completed(self.db, doc_id):
+            return restored_status
+
+        await self.repo.create_status_log(
+            doc_id,
+            restored_status,
+            "completed",
+            "恢复订单时检测到所有设计、制作、安装任务已完成，系统自动恢复为已完成",
+            None,
+        )
+        return "completed"
 
     async def _restore_delivery_chain(self, doc_id: UUID) -> None:
         """还原取消对交付链的影响：被取消的任务重置为可推进状态，被软删的验收单恢复。"""

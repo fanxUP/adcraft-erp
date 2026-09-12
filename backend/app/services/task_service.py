@@ -3257,6 +3257,10 @@ class InstallationTaskService:
         inst_ids = [task_id]
         await _clear_task_order_item_links(self.db, "installation", inst_ids)
         await self.db.delete(task)
+        # Make the deletion visible to the task-completion check.  A blank
+        # successor task created by reopening a completed order must not make
+        # the surviving completed delivery chain regress to production.
+        await self.db.flush()
 
         if doc_id:
             from app.models.business_document import BusinessDocument
@@ -3264,24 +3268,36 @@ class InstallationTaskService:
 
             order = await self.db.get(BusinessDocument, doc_id)
             if order and order.doc_type == "order" and order.status == "in_installation":
-                # Soft-delete acceptance if exists
-                from app.models.acceptance import AcceptanceForm
-                ac_result = await self.db.execute(
-                    select(AcceptanceForm).where(
-                        AcceptanceForm.document_id == doc_id,
-                        AcceptanceForm.deleted_at.is_(None),
+                if await _all_execution_tasks_completed(self.db, doc_id):
+                    old_status = order.status
+                    order.status = "completed"
+                    order_svc = BusinessDocumentService(self.db, doc_type="order")
+                    await order_svc.repo.create_status_log(
+                        doc_id,
+                        old_status,
+                        "completed",
+                        "安装任务删除后检测到所有设计、制作、安装任务已完成，系统自动恢复为已完成",
+                        None,
                     )
-                )
-                for form in ac_result.scalars().all():
-                    form.deleted_at = _utc_now()
+                else:
+                    # Soft-delete acceptance if exists
+                    from app.models.acceptance import AcceptanceForm
+                    ac_result = await self.db.execute(
+                        select(AcceptanceForm).where(
+                            AcceptanceForm.document_id == doc_id,
+                            AcceptanceForm.deleted_at.is_(None),
+                        )
+                    )
+                    for form in ac_result.scalars().all():
+                        form.deleted_at = _utc_now()
 
-                old_status = order.status
-                order_svc = BusinessDocumentService(self.db, doc_type="order")
-                # 回退到制作中；若无制作任务则补建一个，保证看板制作栏有任务可跳转
-                await order_svc._auto_create_production_task(order)
-                order.status = "in_production"
-                await order_svc.repo.create_status_log(doc_id, old_status, "in_production",
-                    "安装任务已被管理员删除，系统自动回退", None)
+                    old_status = order.status
+                    order_svc = BusinessDocumentService(self.db, doc_type="order")
+                    # 回退到制作中；若无制作任务则补建一个，保证看板制作栏有任务可跳转
+                    await order_svc._auto_create_production_task(order)
+                    order.status = "in_production"
+                    await order_svc.repo.create_status_log(doc_id, old_status, "in_production",
+                        "安装任务已被管理员删除，系统自动回退", None)
 
         # 清空外协任务对已删任务的悬空来源引用
         await _clear_outsource_source_refs(self.db, "installation", inst_ids)
