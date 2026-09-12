@@ -8,7 +8,11 @@ from uuid import uuid4
 import pytest
 
 from app.services.business_document_service import BusinessDocumentService, ORDER_TRANSITIONS
-from app.services.task_service import DesignTaskService, InstallationTaskService
+from app.services.task_service import (
+    DesignTaskService,
+    InstallationTaskService,
+    ProductionTaskService,
+)
 from tests.conftest import SAMPLE_CUSTOMER_ID, SAMPLE_ORDER_ID
 
 
@@ -237,6 +241,79 @@ async def test_deleting_blank_installation_task_reopens_production_order():
     assert order.status == "in_production"
     all_completed.assert_not_awaited()
     reopen_production.assert_awaited_once_with(order, reopen_terminal=True)
+
+
+@pytest.mark.asyncio
+async def test_deleting_production_task_reopens_design_order():
+    """删除制作任务后，已完成的设计卡片也必须重新打开。"""
+    db = MagicMock()
+    empty_result = MagicMock()
+    empty_result.scalars.return_value.all.return_value = []
+    db.execute = AsyncMock(return_value=empty_result)
+    db.delete = AsyncMock()
+    db.flush = AsyncMock()
+    order = make_order(status="in_production")
+    db.get = AsyncMock(return_value=order)
+
+    repository = MagicMock()
+    repository.get_by_id = AsyncMock()
+    task = MagicMock(id=uuid4(), document_id=SAMPLE_ORDER_ID, status="completed")
+    repository.get_by_id.return_value = task
+    production_service = ProductionTaskService(db)
+    production_service.repo = repository
+
+    with patch.object(
+        BusinessDocumentService,
+        "_auto_create_design_task",
+        new=AsyncMock(),
+    ) as reopen_design:
+        await production_service.delete_task(task.id)
+
+    assert order.status == "designing"
+    reopen_design.assert_awaited_once_with(order, reopen_terminal=True)
+
+
+@pytest.mark.asyncio
+async def test_reopening_design_stage_resets_completed_card_items():
+    """回退到设计阶段时，原设计卡片及其明细应恢复为待处理。"""
+    db = MagicMock()
+    existing = MagicMock()
+    existing.id = uuid4()
+    existing.document_id = SAMPLE_ORDER_ID
+    existing.order_item_id = None
+    existing.status = "confirmed"
+    existing.progress_pct = 100
+
+    item_one = MagicMock(id=uuid4(), lifecycle_status="active")
+    item_two = MagicMock(id=uuid4(), lifecycle_status="active")
+    order = make_order(status="designing", items=[item_one, item_two])
+
+    existing_result = MagicMock()
+    existing_result.scalars.return_value.all.return_value = [existing]
+    links_result = MagicMock()
+    links_result.scalars.return_value.all.return_value = [item_one.id, item_two.id]
+    db.execute = AsyncMock(side_effect=[existing_result, links_result])
+
+    service = BusinessDocumentService(db, doc_type="order")
+    service._linked_task_item_ids = AsyncMock(
+        return_value={item_one.id, item_two.id}
+    )
+    sync_links = AsyncMock()
+
+    with patch(
+        "app.services.task_service._sync_task_order_item_links",
+        new=sync_links,
+    ):
+        await service._auto_create_design_task(order, reopen_terminal=True)
+
+    sync_links.assert_awaited_once_with(
+        db,
+        "design",
+        existing,
+        [item_one.id, item_two.id],
+        new_item_state=("pending", 0),
+        reset_existing=True,
+    )
 
 
 @pytest.mark.asyncio

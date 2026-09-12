@@ -876,8 +876,17 @@ class BusinessDocumentService:
                 **sync_kwargs,
             )
 
-    async def _auto_create_design_task(self, doc) -> None:
-        await self._auto_create_stage_task(doc, "design")
+    async def _auto_create_design_task(
+        self,
+        doc,
+        *,
+        reopen_terminal: bool = False,
+    ) -> None:
+        await self._auto_create_stage_task(
+            doc,
+            "design",
+            reopen_terminal=reopen_terminal,
+        )
 
     async def _auto_create_production_task(
         self,

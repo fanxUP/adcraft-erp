@@ -3002,8 +3002,11 @@ class ProductionTaskService:
 
                 old_status = order.status
                 order_svc = BusinessDocumentService(self.db, doc_type="order")
-                # 回退到设计中；若无设计任务则补建一个，保证看板设计栏有任务可跳转
-                await order_svc._auto_create_design_task(order)
+                # 回退到设计中；已完成的历史设计卡片也要重新打开，保证看板设计栏有任务可处理。
+                await order_svc._auto_create_design_task(
+                    order,
+                    reopen_terminal=True,
+                )
                 order.status = "designing"
                 await order_svc.repo.create_status_log(doc_id, old_status, "designing",
                     "制作任务已被管理员删除，系统自动回退", None)
