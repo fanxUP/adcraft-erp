@@ -7,6 +7,7 @@ import pytest
 
 from app.models.task import DesignTask, InstallationTask, ProductionTask
 from app.models.customer import Customer  # noqa: F401 - register vehicle relationships
+from app.models.contract import Contract  # noqa: F401 - register framework-contract relationships
 from app.models.user import User  # noqa: F401 - register task FK mappers
 from app.models.vehicle import Vehicle  # noqa: F401 - register polymorphic attachment mapper
 from app.services.business_document_service import BusinessDocumentService
@@ -293,6 +294,48 @@ async def test_later_stage_item_reuses_completed_automatic_card(creator, task_ty
         existing,
         [ITEM_ONE_ID, ITEM_TWO_ID],
         new_item_state=("pending", 0),
+    )
+
+
+@pytest.mark.asyncio
+async def test_reopening_production_stage_resets_existing_completed_items():
+    """回退到制作阶段时，应重新打开历史完成卡片的全部明细。"""
+    db = MagicMock()
+    existing = MagicMock(spec=ProductionTask)
+    existing.id = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
+    existing.document_id = ORDER_ID
+    existing.order_item_id = None
+    existing.status = "completed"
+    existing.progress_pct = 100
+    existing.assigned_to = None
+    db.execute = AsyncMock(
+        side_effect=[
+            _ScalarResult([existing]),
+            _ScalarResult([ITEM_ONE_ID, ITEM_TWO_ID]),
+        ]
+    )
+    db.flush = AsyncMock()
+    db.add = MagicMock()
+    service = BusinessDocumentService(db, doc_type="order")
+    service._linked_task_item_ids = AsyncMock(
+        return_value={ITEM_ONE_ID, ITEM_TWO_ID}
+    )
+    order = _order([_item(ITEM_ONE_ID), _item(ITEM_TWO_ID)])
+
+    sync_links = AsyncMock()
+    with patch(
+        "app.services.task_service._sync_task_order_item_links",
+        new=sync_links,
+    ):
+        await service._auto_create_production_task(order, reopen_terminal=True)
+
+    sync_links.assert_awaited_once_with(
+        db,
+        "production",
+        existing,
+        [ITEM_ONE_ID, ITEM_TWO_ID],
+        new_item_state=("pending", 0),
+        reset_existing=True,
     )
 
 

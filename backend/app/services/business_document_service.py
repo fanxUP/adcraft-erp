@@ -713,7 +713,13 @@ class BusinessDocumentService:
             item_ids.update(result.scalars().all())
         return item_ids
 
-    async def _auto_create_stage_task(self, doc, task_type: str) -> None:
+    async def _auto_create_stage_task(
+        self,
+        doc,
+        task_type: str,
+        *,
+        reopen_terminal: bool = False,
+    ) -> None:
         """Create one automatic card per order stage and link its active items.
 
         The old implementation created one task row for every order item. That
@@ -779,7 +785,12 @@ class BusinessDocumentService:
             not _is_terminal_task_status(task_type, candidate)
             for candidate in existing_tasks
         )
-        if existing_tasks and not has_unlinked_items and not has_open_task:
+        if (
+            existing_tasks
+            and not has_unlinked_items
+            and not has_open_task
+            and not reopen_terminal
+        ):
             # All active order items already belong to a terminal historical
             # task. Do not create an empty successor card.
             return
@@ -850,8 +861,13 @@ class BusinessDocumentService:
 
         if target_item_ids:
             sync_kwargs = {}
-            if reused_terminal_task and len(target_item_ids) > len(target_item_ids_before):
+            if reused_terminal_task and (
+                reopen_terminal
+                or len(target_item_ids) > len(target_item_ids_before)
+            ):
                 sync_kwargs["new_item_state"] = ("pending", 0)
+            if reused_terminal_task and reopen_terminal:
+                sync_kwargs["reset_existing"] = True
             await _sync_task_order_item_links(
                 self.db,
                 task_type,
@@ -863,8 +879,17 @@ class BusinessDocumentService:
     async def _auto_create_design_task(self, doc) -> None:
         await self._auto_create_stage_task(doc, "design")
 
-    async def _auto_create_production_task(self, doc) -> None:
-        await self._auto_create_stage_task(doc, "production")
+    async def _auto_create_production_task(
+        self,
+        doc,
+        *,
+        reopen_terminal: bool = False,
+    ) -> None:
+        await self._auto_create_stage_task(
+            doc,
+            "production",
+            reopen_terminal=reopen_terminal,
+        )
 
     async def _auto_create_installation_task(self, doc) -> None:
         await self._auto_create_stage_task(doc, "installation")

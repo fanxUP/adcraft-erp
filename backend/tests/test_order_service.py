@@ -203,10 +203,12 @@ async def test_order_restore_reconciles_completed_delivery_chain(service):
 
 
 @pytest.mark.asyncio
-async def test_deleting_blank_installation_task_preserves_completed_order():
-    """删除撤回时生成的空安装任务不能让订单退出完成状态。"""
+async def test_deleting_blank_installation_task_reopens_production_order():
+    """删除安装任务是回退操作，不能把订单误判为已完成。"""
     db = MagicMock()
-    db.execute = AsyncMock()
+    acceptance_result = MagicMock()
+    acceptance_result.scalars.return_value.all.return_value = []
+    db.execute = AsyncMock(return_value=acceptance_result)
     db.delete = AsyncMock()
     db.flush = AsyncMock()
     order = make_order(status="in_installation")
@@ -219,13 +221,22 @@ async def test_deleting_blank_installation_task_preserves_completed_order():
     installation_service = InstallationTaskService(db)
     installation_service.repo = repository
 
-    with patch(
-        "app.services.task_service._all_execution_tasks_completed",
-        new=AsyncMock(return_value=True),
+    with (
+        patch(
+            "app.services.task_service._all_execution_tasks_completed",
+            new=AsyncMock(return_value=True),
+        ) as all_completed,
+        patch.object(
+            BusinessDocumentService,
+            "_auto_create_production_task",
+            new=AsyncMock(),
+        ) as reopen_production,
     ):
         await installation_service.delete_task(task.id)
 
-    assert order.status == "completed"
+    assert order.status == "in_production"
+    all_completed.assert_not_awaited()
+    reopen_production.assert_awaited_once_with(order, reopen_terminal=True)
 
 
 @pytest.mark.asyncio

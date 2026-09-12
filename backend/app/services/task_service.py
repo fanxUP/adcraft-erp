@@ -1375,8 +1375,14 @@ async def _sync_task_order_item_links(
     *,
     previous_legacy_item_id: UUID | None = None,
     new_item_state: tuple[str, int] | None = None,
+    reset_existing: bool = False,
 ) -> None:
-    """Replace one task's links atomically inside the current transaction."""
+    """Replace one task's links atomically inside the current transaction.
+
+    ``reset_existing`` is reserved for an explicit stage rollback. Normal
+    task grouping must preserve the status of already-linked details; a
+    rollback intentionally turns those historical details back into work.
+    """
     if previous_legacy_item_id is None:
         legacy_scope_ids = await _materialize_legacy_task_scope(
             db,
@@ -1407,13 +1413,18 @@ async def _sync_task_order_item_links(
         link_payload = []
         for position, item_id in enumerate(item_ids):
             existing = existing_by_item.get(item_id)
-            item_status = getattr(existing, "item_status", None) or new_status
-            item_progress = getattr(existing, "item_progress_pct", None)
-            if item_progress is None:
+            if reset_existing and existing is not None:
+                item_status = new_status
                 item_progress = new_progress
-            item_completed_at = getattr(existing, "item_completed_at", None)
-            if item_completed_at is None and _is_completed_item_status(task_type, item_status):
-                item_completed_at = _utc_now()
+                item_completed_at = None
+            else:
+                item_status = getattr(existing, "item_status", None) or new_status
+                item_progress = getattr(existing, "item_progress_pct", None)
+                if item_progress is None:
+                    item_progress = new_progress
+                item_completed_at = getattr(existing, "item_completed_at", None)
+                if item_completed_at is None and _is_completed_item_status(task_type, item_status):
+                    item_completed_at = _utc_now()
             link_payload.append(
                 {
                     "task_type": task_type,
@@ -3257,9 +3268,9 @@ class InstallationTaskService:
         inst_ids = [task_id]
         await _clear_task_order_item_links(self.db, "installation", inst_ids)
         await self.db.delete(task)
-        # Make the deletion visible to the task-completion check.  A blank
-        # successor task created by reopening a completed order must not make
-        # the surviving completed delivery chain regress to production.
+        # Make the deletion visible before rebuilding the previous stage. A
+        # blank successor created by reopening a completed order is not work
+        # itself; removing it must still leave the order in production.
         await self.db.flush()
 
         if doc_id:
@@ -3268,36 +3279,30 @@ class InstallationTaskService:
 
             order = await self.db.get(BusinessDocument, doc_id)
             if order and order.doc_type == "order" and order.status == "in_installation":
-                if await _all_execution_tasks_completed(self.db, doc_id):
-                    old_status = order.status
-                    order.status = "completed"
-                    order_svc = BusinessDocumentService(self.db, doc_type="order")
-                    await order_svc.repo.create_status_log(
-                        doc_id,
-                        old_status,
-                        "completed",
-                        "安装任务删除后检测到所有设计、制作、安装任务已完成，系统自动恢复为已完成",
-                        None,
+                # Soft-delete acceptance if exists. Deleting a task is a
+                # rollback operation; it must never be interpreted as proof
+                # that the order is complete, even when historical tasks are
+                # all terminal.
+                from app.models.acceptance import AcceptanceForm
+                ac_result = await self.db.execute(
+                    select(AcceptanceForm).where(
+                        AcceptanceForm.document_id == doc_id,
+                        AcceptanceForm.deleted_at.is_(None),
                     )
-                else:
-                    # Soft-delete acceptance if exists
-                    from app.models.acceptance import AcceptanceForm
-                    ac_result = await self.db.execute(
-                        select(AcceptanceForm).where(
-                            AcceptanceForm.document_id == doc_id,
-                            AcceptanceForm.deleted_at.is_(None),
-                        )
-                    )
-                    for form in ac_result.scalars().all():
-                        form.deleted_at = _utc_now()
+                )
+                for form in ac_result.scalars().all():
+                    form.deleted_at = _utc_now()
 
-                    old_status = order.status
-                    order_svc = BusinessDocumentService(self.db, doc_type="order")
-                    # 回退到制作中；若无制作任务则补建一个，保证看板制作栏有任务可跳转
-                    await order_svc._auto_create_production_task(order)
-                    order.status = "in_production"
-                    await order_svc.repo.create_status_log(doc_id, old_status, "in_production",
-                        "安装任务已被管理员删除，系统自动回退", None)
+                old_status = order.status
+                order_svc = BusinessDocumentService(self.db, doc_type="order")
+                # 回退到制作中，并重新打开历史制作明细，保证制作看板有任务可处理。
+                await order_svc._auto_create_production_task(
+                    order,
+                    reopen_terminal=True,
+                )
+                order.status = "in_production"
+                await order_svc.repo.create_status_log(doc_id, old_status, "in_production",
+                    "安装任务已被管理员删除，系统自动回退", None)
 
         # 清空外协任务对已删任务的悬空来源引用
         await _clear_outsource_source_refs(self.db, "installation", inst_ids)
