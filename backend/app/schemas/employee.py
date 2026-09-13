@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import date, datetime
 from typing import Optional
 
@@ -15,6 +15,11 @@ class EmployeeCreate(BaseModel):
     bank_name: Optional[str] = None; bank_account: Optional[str] = None; address: Optional[str] = None
     user_id: Optional[str] = None; remark: Optional[str] = None; is_active: bool = True
 
+    @field_validator("birth_date", "hire_date", "resignation_date", mode="before")
+    @classmethod
+    def empty_optional_date_to_none(cls, value):
+        return None if value == "" else value
+
 class EmployeeUpdate(BaseModel):
     name: Optional[str] = None; phone: Optional[str] = None; gender: Optional[str] = None; ethnicity: Optional[str] = None
     birth_date: Optional[date] = None; department: Optional[str] = None; position: Optional[str] = None
@@ -26,6 +31,11 @@ class EmployeeUpdate(BaseModel):
     skills: Optional[list[str]] = None
     bank_name: Optional[str] = None; bank_account: Optional[str] = None; address: Optional[str] = None
     user_id: Optional[str] = None; remark: Optional[str] = None; is_active: Optional[bool] = None
+
+    @field_validator("birth_date", "hire_date", "resignation_date", mode="before")
+    @classmethod
+    def empty_optional_date_to_none(cls, value):
+        return None if value == "" else value
 
 class EmployeeResponse(BaseModel):
     id: str; employee_no: str; name: str; phone: Optional[str] = None; gender: Optional[str] = None; ethnicity: Optional[str] = None

@@ -125,9 +125,17 @@ const DEPTS = [{value:"design",label:"设计部"},{value:"production",label:"生
 const list=ref<EmployeeResponse[]>([]); const loading=ref(false); const loadError=ref(false); const page=ref(1); const pageSize=ref(20); const total=ref(0); const keyword=ref(""); const filterDept=ref(""); const filterStatus=ref("")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const attachments=ref<AttachmentResponse[]>([]); const attCategory=ref("other")
-const initForm={name:"",phone:"",gender:"",ethnicity:"",birth_date:"",department:"",position:"",employment_type:"",education:"",id_card:"",license_no:"",license_type:"",license_expire_date:"",id_card_front_url:"",id_card_back_url:"",hire_date:"",resignation_date:"",employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],bank_name:"",bank_account:"",address:"",remark:""}
+const initForm={name:"",phone:"",gender:"",ethnicity:"",birth_date:null,department:"",position:"",employment_type:"",education:"",id_card:"",license_no:"",license_type:"",license_expire_date:null,id_card_front_url:"",id_card_back_url:"",hire_date:null,resignation_date:null,employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],bank_name:"",bank_account:"",address:"",remark:""}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form=ref<any>({...initForm})
+const DATE_FIELDS = ["birth_date", "hire_date", "resignation_date", "license_expire_date"] as const
+function getEmployeePayload(){
+  const payload={...form.value}
+  for(const field of DATE_FIELDS){
+    if(payload[field]==="") payload[field]=null
+  }
+  return payload
+}
 const deptLabel=(v:string)=>DEPTS.find(d=>d.value===v)?.label||v
 const typeLabel=(v:string)=>({full_time:"全职",part_time:"兼职",contract:"合同",intern:"实习"})[v]||v||"-"
 const statusLabel=(s:string)=>({active:"在职",resigned:"离职",suspended:"停职"})[s]||s
@@ -138,7 +146,7 @@ async function fetchData(){loading.value=true;loadError.value=false;try{const r=
 async function loadAttachments(){attachments.value=(await getEmployeeAttachments(editId.value))||[]}
 function openCreate(){isEditing.value=false;editId.value="";attachments.value=[];form.value={...initForm};showDialog.value=true}
 function openEdit(r:EmployeeResponse){isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[]};showDialog.value=true;loadAttachments()}
-async function handleSave(){saving.value=true;try{if(isEditing.value){await updateEmployee(editId.value,form.value);ElMessage.success("已更新");showDialog.value=false;await fetchData()}else{const r=await createEmployee(form.value);isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[]};ElMessage.success("已创建，可继续上传附件");await loadAttachments()}}finally{saving.value=false}}
+async function handleSave(){saving.value=true;try{const payload=getEmployeePayload();if(isEditing.value){await updateEmployee(editId.value,payload);ElMessage.success("已更新");showDialog.value=false;await fetchData()}else{const r=await createEmployee(payload);isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[]};ElMessage.success("已创建，可继续上传附件");await loadAttachments()}}finally{saving.value=false}}
 async function handleDelete(r:EmployeeResponse){await ElMessageBox.confirm("确定删除？","提示",{type:"warning"});await deleteEmployee(r.id);ElMessage.success("已删除");await fetchData()}
 async function handleUploadAttachment(options: UploadRequestOptions){try{await uploadEmployeeAttachment(editId.value,options.file,attCategory.value);ElMessage.success("上传成功");await loadAttachments()}catch{ElMessage.error("上传失败")}}
 async function handleUploadIdCard(options: UploadRequestOptions, slot:'front'|'back'){try{const res=await uploadEmployeeImage(options.file);if(slot==='front')form.value.id_card_front_url=res.file_url;else form.value.id_card_back_url=res.file_url;ElMessage.success("照片已上传")}catch{ElMessage.error("上传失败")}}
