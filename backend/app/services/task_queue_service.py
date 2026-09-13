@@ -3,11 +3,11 @@ from uuid import UUID
 from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_policy import AuthorizationPolicy
 from app.core.permissions import (
     PERM_DESIGN_TASK_READ,
     PERM_INSTALLATION_TASK_READ,
     PERM_PRODUCTION_TASK_READ,
-    user_has_permission,
 )
 from app.models.task import DesignTask, InstallationTask, ProductionTask
 from app.models.task_order_item_link import TaskOrderItemLink
@@ -44,7 +44,7 @@ def can_view_task_stage(task_type: str, viewer: User | None) -> bool:
         "installation": PERM_INSTALLATION_TASK_READ,
     }
     permission = permissions.get(task_type)
-    return permission is not None and user_has_permission(viewer, permission)
+    return permission is not None and AuthorizationPolicy(viewer).allows(permission)
 
 
 async def list_task_queue(

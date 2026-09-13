@@ -8,13 +8,13 @@ from uuid import UUID
 from sqlalchemy import exists, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_policy import AuthorizationPolicy
 from app.core.permissions import (
     PERM_DESIGN_TASK_ASSIGN,
     PERM_INSTALLATION_TASK_ASSIGN,
     PERM_ORDER_TASK_ASSIGN,
     PERM_PRODUCTION_TASK_ASSIGN,
     PERM_TASK_QUEUE_VIEW_ALL,
-    user_has_permission,
 )
 from app.models.business_document import BusinessDocument
 from app.models.employee import Employee
@@ -35,19 +35,17 @@ def can_assign_task(task_type: str, viewer: User | None) -> bool:
     if viewer is None:
         return True
     permission = TASK_ASSIGN_PERMISSION_BY_TYPE.get(task_type)
-    return permission is not None and user_has_permission(viewer, permission)
+    return permission is not None and AuthorizationPolicy(viewer).allows(permission)
 
 
 def can_manage_order_task_assignments(viewer: User | None) -> bool:
-    return viewer is None or user_has_permission(viewer, PERM_ORDER_TASK_ASSIGN)
+    return viewer is None or AuthorizationPolicy(viewer).allows(PERM_ORDER_TASK_ASSIGN)
 
 
 def can_view_all_task_scope(viewer: User | None) -> bool:
     """Whether a viewer may see every task without managing assignments."""
-    return (
-        viewer is None
-        or can_manage_order_task_assignments(viewer)
-        or user_has_permission(viewer, PERM_TASK_QUEUE_VIEW_ALL)
+    return AuthorizationPolicy(viewer).allows_all_scope(
+        (PERM_ORDER_TASK_ASSIGN, PERM_TASK_QUEUE_VIEW_ALL)
     )
 
 

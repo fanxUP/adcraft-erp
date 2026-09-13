@@ -12,6 +12,7 @@ from app.domain.workflows import (
     PRODUCTION_TASK_WORKFLOW,
     allowed_targets,
 )
+from app.core.access_policy import AuthorizationPolicy
 from app.domain.presentation import make_action_capability, make_status_view
 from app.models.business_document import BusinessDocument, BusinessDocumentItem
 from app.models.customer import Customer  # noqa: F401  # register BusinessDocument.customer
@@ -207,7 +208,7 @@ def can_view_outsource_tasks(viewer: User | None) -> bool:
     task-module permissions alone never imply visibility of outsourcing.
     """
 
-    return viewer is None or user_has_permission(viewer, PERM_OUTSOURCE_TASK_READ)
+    return AuthorizationPolicy(viewer).allows(PERM_OUTSOURCE_TASK_READ)
 
 
 def visible_outsource_fields(viewer: User | None, outsource: dict) -> dict:

@@ -1,0 +1,81 @@
+name: workflow-authorization-governance
+version: 1
+mode: STRICT
+status: batch_1_complete
+
+tasks:
+  - id: P-GOV-01
+    title: 治理基线和范围锁定
+    acceptance: A-GOV-01
+    status: complete
+    depends_on: []
+
+  - id: P-GOV-02
+    title: 统一状态机注册表
+    acceptance: A-GOV-02
+    status: complete
+    depends_on: [P-GOV-01]
+
+  - id: P-GOV-03
+    title: 统一授权策略入口
+    acceptance: A-GOV-03
+    status: complete
+    depends_on: [P-GOV-01, P-GOV-02]
+
+  - id: P-GOV-04
+    title: 明细工作单和任务编排
+    acceptance: A-GOV-04
+    status: pending
+    depends_on: [P-GOV-03]
+
+  - id: P-GOV-05
+    title: 查询投影和分页治理
+    acceptance: A-GOV-05
+    status: pending
+    depends_on: [P-GOV-03, P-GOV-04]
+
+  - id: P-GOV-06
+    title: 敏感字段和附件策略
+    acceptance: A-GOV-06
+    status: pending
+    depends_on: [P-GOV-03, P-GOV-04]
+
+  - id: P-GOV-07
+    title: 应用服务边界拆分
+    acceptance: A-GOV-07
+    status: pending
+    depends_on: [P-GOV-05, P-GOV-06]
+
+  - id: P-GOV-08
+    title: 清理、审计和发布
+    acceptance: A-GOV-08
+    status: pending
+    depends_on: [P-GOV-07]
+
+edges:
+  - from: P-GOV-01
+    to: P-GOV-02
+  - from: P-GOV-01
+    to: P-GOV-03
+  - from: P-GOV-02
+    to: P-GOV-03
+  - from: P-GOV-03
+    to: P-GOV-04
+  - from: P-GOV-04
+    to: P-GOV-05
+  - from: P-GOV-04
+    to: P-GOV-06
+  - from: P-GOV-05
+    to: P-GOV-07
+  - from: P-GOV-06
+    to: P-GOV-07
+  - from: P-GOV-07
+    to: P-GOV-08
+
+backlog:
+  - id: B-GOV-01
+    title: 按部门、客户和区域的 ABAC 数据范围
+  - id: B-GOV-02
+    title: 临时授权及有效期
+  - id: B-GOV-03
+    title: 权限使用率和闲置权限回收

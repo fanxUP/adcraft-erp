@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.core.access_policy import AccessRequest, AuthorizationPolicy, DataScope
 from app.core.authorization import AuthorizationEvaluator
 from app.core.permission_catalog import (
     get_permission_pack,
@@ -27,6 +28,8 @@ from app.core.permissions import (
     PERM_OUTSOURCE_TASK_READ,
     PERM_PAYMENT_READ,
     PERM_SYSTEM_SUPER_ADMIN,
+    PERM_TASK_QUEUE_READ,
+    PERM_TASK_QUEUE_VIEW_ALL,
 )
 
 
@@ -39,6 +42,47 @@ def _user(*permission_codes: str):
             )
         ]
     )
+
+
+def test_access_policy_requires_explicit_all_scope_permission():
+    viewer = _user(PERM_TASK_QUEUE_READ)
+    policy = AuthorizationPolicy(viewer)
+
+    decision = policy.check_access(
+        AccessRequest(
+            permission=PERM_TASK_QUEUE_READ,
+            scope=DataScope.ALL,
+            all_scope_permissions=(PERM_TASK_QUEUE_VIEW_ALL,),
+        )
+    )
+
+    assert decision.allowed is False
+    assert decision.reason_code == "AUTHZ_SCOPE_PERMISSION_MISSING"
+
+
+def test_access_policy_allows_only_the_explicitly_assigned_user():
+    viewer = _user(PERM_TASK_QUEUE_READ)
+    viewer.id = "user-001"
+    policy = AuthorizationPolicy(viewer)
+
+    own_decision = policy.check_access(
+        AccessRequest(
+            permission=PERM_TASK_QUEUE_READ,
+            scope=DataScope.ASSIGNED,
+            assignee_user_ids=frozenset({"user-001"}),
+        )
+    )
+    other_decision = policy.check_access(
+        AccessRequest(
+            permission=PERM_TASK_QUEUE_READ,
+            scope=DataScope.ASSIGNED,
+            assignee_user_ids=frozenset({"user-002"}),
+        )
+    )
+
+    assert own_decision.allowed is True
+    assert other_decision.allowed is False
+    assert other_decision.reason_code == "AUTHZ_SCOPE_DENIED"
 
 
 def test_every_declared_permission_has_structured_catalog_metadata():
