@@ -33,7 +33,7 @@
 - [x] 后端专项和全量测试通过。
 - [x] 前端类型检查、Vitest、Lint、生产构建通过。
 - [x] `git diff --check` 和 scope/quality/security 检查通过。
-- [ ] 发布前完成数据库备份、迁移 dry-run 和线上迁移后的健康检查。
+- [x] 发布前完成数据库备份、迁移 dry-run 和线上迁移后的健康检查。
 
 > 隔离演练使用生产库的仅结构克隆（未复制业务数据），从当前线上版本
 > `osa01_order_stage_attachments` 升级到 `eub01_employee_user_binding`，验证了
@@ -41,3 +41,11 @@
 > 历史迁移链从空库全量重放时，在既有迁移 `63a384fdefbc` 处因引用尚未创建的
 > `employees` 表而失败；这不属于本次迁移路径，线上数据库已处于当前 head，故未将
 > 空库重放结果作为本次迁移的验收依据。
+
+## 发布记录
+
+- GitHub `master` 与服务器部署提交：`de5793c7bb28f94c9a232214143f65a753cebbff`。
+- 发布前数据库备份：`/opt/adcraft/backups/backup_20260913_100027.tar.gz`，数据库导出约 3.4 MB，归档约 460 KB。
+- 线上迁移后检查：`eub01_employee_user_binding (head)`，唯一索引存在，未删除员工重复绑定数为 0。
+- 线上健康检查：原生 API、Nginx 公网入口均返回数据库正常；新账号关联接口未登录时返回预期的 401。
+- 线上服务：`adcraft-backend`、`nginx` 均为 active；最近 10 分钟无 error/alert 日志。

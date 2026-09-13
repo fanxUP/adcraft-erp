@@ -1,6 +1,6 @@
 version: 1
 mode: STRICT
-status: implementation_complete_pending_release
+status: completed
 objective: >-
   在员工档案与登录用户分离维护的前提下，建立安全、可视化的一对一绑定闭环，
   并保持任务执行、可见性和完成统计的既有行为。
@@ -29,4 +29,4 @@ nodes:
     name: 发布准备与线上迁移
     acceptance: A01,A05
     depends_on: [P04]
-    status: in_progress_release
+    status: completed
