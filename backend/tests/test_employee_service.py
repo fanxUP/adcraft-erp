@@ -40,6 +40,7 @@ def make_mock_employee(**kwargs):
     e.bank_account = kwargs.get("bank_account", "6222021234567890")
     e.address = kwargs.get("address", None)
     e.user_id = kwargs.get("user_id", None)
+    e.user = kwargs.get("user", None)
     e.remark = kwargs.get("remark", None)
     e.is_active = kwargs.get("is_active", True)
     e.created_at = kwargs.get("created_at", datetime(2026, 7, 31, 9, 0))

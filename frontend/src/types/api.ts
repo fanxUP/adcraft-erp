@@ -90,6 +90,12 @@ export interface UserResponse {
   must_change_password?: boolean
   created_at?: string
   roles: string[]
+  linked_employee?: {
+    id: string
+    employee_no: string
+    name: string
+    department?: string | null
+  } | null
 }
 
 // ---- Customer ----

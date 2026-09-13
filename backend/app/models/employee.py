@@ -1,13 +1,21 @@
 import uuid
 from datetime import date, datetime
-from sqlalchemy import Boolean, Date, DateTime, Numeric, String, Text, ForeignKey
+from sqlalchemy import Boolean, Date, DateTime, Index, Numeric, String, Text, ForeignKey, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, SoftDeleteMixin
 
 class Employee(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "employees"
-    __table_args__ = {"comment": "员工档案"}
+    __table_args__ = (
+        Index(
+            "uq_employees_user_id_not_deleted",
+            "user_id",
+            unique=True,
+            postgresql_where=text("user_id IS NOT NULL AND deleted_at IS NULL"),
+        ),
+        {"comment": "员工档案"},
+    )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     employee_no: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -35,5 +43,6 @@ class Employee(Base, TimestampMixin, SoftDeleteMixin):
     bank_account: Mapped[str | None] = mapped_column(String(64), nullable=True)
     address: Mapped[str | None] = mapped_column(String, nullable=True)
     user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    user = relationship("User", foreign_keys=[user_id], lazy="joined")
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

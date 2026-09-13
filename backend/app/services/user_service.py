@@ -1,10 +1,12 @@
 from inspect import isawaitable
 from uuid import UUID
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permission_catalog import validate_permission_set
 from app.core.password_policy import validate_new_password
 from app.models.user_preferences import UserPreference
+from app.models.employee import Employee
 from app.repositories.user_repo import UserRepository
 from app.utils.security import hash_password
 
@@ -41,6 +43,7 @@ class UserService:
     async def list_users(self, page: int, page_size: int, keyword: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
         users, total = await self.repo.list_users(skip=skip, limit=page_size, keyword=keyword)
+        employee_map = await self._linked_employee_map([u.id for u in users])
         user_list = []
         for u in users:
             user_list.append({
@@ -52,6 +55,7 @@ class UserService:
                 "is_active": u.is_active,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
                 "roles": [r.name for r in u.roles],
+                "linked_employee": employee_map.get(u.id),
             })
         return user_list, total
 
@@ -59,6 +63,7 @@ class UserService:
         user = await self.repo.get_by_id(user_id)
         if not user:
             return None
+        employee_map = await self._linked_employee_map([user.id])
         return {
             "id": str(user.id),
             "username": user.username,
@@ -68,6 +73,29 @@ class UserService:
             "is_active": user.is_active,
             "created_at": user.created_at.isoformat() if user.created_at else None,
             "roles": [r.name for r in user.roles],
+            "linked_employee": employee_map.get(user.id),
+        }
+
+    async def _linked_employee_map(self, user_ids: list[UUID]) -> dict[UUID, dict]:
+        if not user_ids:
+            return {}
+        result = await self.db.execute(
+            select(Employee)
+            .where(
+                Employee.user_id.in_(user_ids),
+                Employee.deleted_at.is_(None),
+            )
+            .order_by(Employee.created_at.desc())
+        )
+        return {
+            employee.user_id: {
+                "id": str(employee.id),
+                "employee_no": employee.employee_no,
+                "name": employee.name,
+                "department": employee.department,
+            }
+            for employee in result.scalars().all()
+            if employee.user_id is not None
         }
 
     async def create_user(self, data: dict) -> dict:

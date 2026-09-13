@@ -1,0 +1,32 @@
+version: 1
+mode: STRICT
+status: implementation_complete_pending_release
+objective: >-
+  在员工档案与登录用户分离维护的前提下，建立安全、可视化的一对一绑定闭环，
+  并保持任务执行、可见性和完成统计的既有行为。
+nodes:
+  - id: P01
+    name: 数据现状检查与唯一约束迁移
+    acceptance: A01
+    depends_on: []
+    status: completed
+  - id: P02
+    name: 后端绑定服务与接口
+    acceptance: A02
+    depends_on: [P01]
+    status: completed
+  - id: P03
+    name: 员工与用户管理页面
+    acceptance: A03
+    depends_on: [P02]
+    status: completed
+  - id: P04
+    name: 回归验证与安全审查
+    acceptance: A04-A05
+    depends_on: [P03]
+    status: completed
+  - id: P05
+    name: 发布准备与线上迁移
+    acceptance: A01,A05
+    depends_on: [P04]
+    status: in_progress_release

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db; from app.core.deps import get_current_user
 from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission; from app.models.user import User
-from app.schemas.employee import EmployeeCreate, EmployeeUpdate
+from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeUserBindingRequest
 from app.schemas.common import success, success_paginated
 from app.services.employee_service import EmployeeService
 from app.services.task_service import AttachmentService
@@ -27,6 +27,10 @@ async def list_employees(page: int = Query(1,ge=1), page_size: int = Query(20,ge
 async def create_employee(data: EmployeeCreate, db=Depends(get_db), current_user=Depends(get_current_user)):
     return success(await EmployeeService(db).create_employee(data.model_dump()))
 
+@router.get("/account-options")
+async def list_account_options(employee_id: UUID | None = Query(None), db=Depends(get_db), current_user=Depends(get_current_user)):
+    return success(await EmployeeService(db).list_account_options(employee_id))
+
 @router.post("/upload")
 async def upload_employee_image(file: UploadFile = File(...), db=Depends(get_db), current_user=Depends(get_current_user)):
     """上传人员图片（身份证正反面等），返回 /uploads/ 相对 URL"""
@@ -47,6 +51,10 @@ async def get_employee(employee_id: str, db=Depends(get_db), current_user=Depend
     emp = await EmployeeService(db).get_employee(UUID(employee_id))
     if not emp: return {"code": 40401, "message": "员工不存在", "data": None}
     return success(emp)
+
+@router.put("/{employee_id}/account")
+async def bind_employee_account(employee_id: str, data: EmployeeUserBindingRequest, db=Depends(get_db), current_user=Depends(get_current_user)):
+    return success(await EmployeeService(db).bind_user(UUID(employee_id), data.user_id))
 
 @router.put("/{employee_id}")
 async def update_employee(employee_id: str, data: EmployeeUpdate, db=Depends(get_db), current_user=Depends(get_current_user)):

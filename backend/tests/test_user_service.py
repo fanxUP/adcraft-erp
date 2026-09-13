@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.user_service import UserService
-from tests.conftest import SAMPLE_USER_ID
+from tests.conftest import MockResult, SAMPLE_USER_ID
 
 
 def make_mock_user(**kwargs):
@@ -51,6 +51,7 @@ def service(mock_repo):
     with patch("app.services.user_service.UserRepository") as MockRepoClass:
         MockRepoClass.return_value = mock_repo
         db = AsyncMock()
+        db.execute = AsyncMock(return_value=MockResult())
         svc = UserService(db)
         svc.repo = mock_repo
         yield svc

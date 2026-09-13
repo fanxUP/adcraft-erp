@@ -1,6 +1,19 @@
 from pydantic import BaseModel, field_validator
 from datetime import date, datetime
 from typing import Optional
+from uuid import UUID
+
+
+class EmployeeAccountOption(BaseModel):
+    id: UUID
+    username: str
+    real_name: Optional[str] = None
+
+
+class EmployeeUserBindingRequest(BaseModel):
+    # Keep the wire value as text so the service can return the same plain-
+    # language message for malformed IDs as it does for other binding errors.
+    user_id: Optional[str] = None
 
 class EmployeeCreate(BaseModel):
     employee_no: Optional[str] = None
@@ -48,5 +61,6 @@ class EmployeeResponse(BaseModel):
     skills: Optional[list[str]] = None
     bank_name: Optional[str] = None; bank_account: Optional[str] = None; address: Optional[str] = None
     user_id: Optional[str] = None; remark: Optional[str] = None; is_active: bool
+    user_username: Optional[str] = None; user_real_name: Optional[str] = None
     created_at: Optional[datetime] = None
     model_config = {"from_attributes": True}

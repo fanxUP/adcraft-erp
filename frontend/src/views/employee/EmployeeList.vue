@@ -16,7 +16,16 @@
       <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
       <el-table :data="list" v-loading="loading" stripe style="width:100%">
       <el-table-column prop="employee_no" label="工号" width="120" />
-      <el-table-column prop="name" label="姓名" width="240" />
+      <el-table-column prop="name" label="姓名" width="180" />
+      <el-table-column label="登录账号" width="190">
+        <template #default="{row}">
+          <template v-if="row.user_username">
+            <span>{{ row.user_username }}</span>
+            <span v-if="row.user_real_name" class="linked-account-name">（{{ row.user_real_name }}）</span>
+          </template>
+          <el-tag v-else type="warning" size="small">未绑定</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="phone" label="手机号" width="130" />
       <el-table-column label="性别" width="60"><template #default="{row}">{{ {male:"男",female:"女"} [row.gender] || row.gender || "-" }}</template></el-table-column>
       <el-table-column prop="ethnicity" label="族别" width="90"><template #default="{row}">{{ row.ethnicity || "-" }}</template></el-table-column>
@@ -45,6 +54,14 @@
         <el-form-item label="聘用类型"><el-select v-model="form.employment_type" clearable style="width:100%"><el-option label="全职" value="full_time" /><el-option label="兼职" value="part_time" /><el-option label="合同" value="contract" /><el-option label="实习" value="intern" /></el-select></el-form-item>
         <el-form-item label="学历"><el-select v-model="form.education" clearable style="width:100%"><el-option label="初中" value="middle_school" /><el-option label="高中" value="high_school" /><el-option label="中专" value="vocational" /><el-option label="大专" value="college" /><el-option label="本科" value="bachelor" /><el-option label="硕士" value="master" /><el-option label="博士" value="phd" /></el-select></el-form-item>
         <el-form-item label="在职状态"><el-select v-model="form.employment_status" style="width:100%"><el-option label="在职" value="active" /><el-option label="离职" value="resigned" /><el-option label="停职" value="suspended" /></el-select></el-form-item>
+        <el-divider content-position="left" style="grid-column:1/3;margin:8px 0 4px">账号关联</el-divider>
+        <el-form-item label="登录账号" style="grid-column:1/3">
+          <el-select v-if="isEditing" v-model="bindingUserId" clearable filterable style="width:100%" placeholder="选择要绑定的登录账号">
+            <el-option v-for="account in accountOptions" :key="account.id" :label="`${account.username}${account.real_name ? `（${account.real_name}）` : ''}`" :value="account.id" />
+          </el-select>
+          <div v-else class="binding-after-save">保存员工档案后即可绑定登录账号</div>
+          <div class="binding-tip">绑定只建立身份对应关系，不会自动改变用户角色和系统权限；清空后表示解除绑定。</div>
+        </el-form-item>
         <el-divider content-position="left" style="grid-column:1/3;margin:8px 0 4px">证件信息</el-divider>
         <el-form-item label="身份证号"><el-input v-model="form.id_card" /></el-form-item>
         <el-form-item label="驾驶证号"><el-input v-model="form.license_no" /></el-form-item>
@@ -113,7 +130,7 @@
 </template>
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue"
-import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttachments, uploadEmployeeAttachment, deleteEmployeeAttachment, uploadEmployeeImage, type EmployeeResponse } from "@/api/employees"
+import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttachments, uploadEmployeeAttachment, deleteEmployeeAttachment, uploadEmployeeImage, getEmployeeAccountOptions, bindEmployeeAccount, type EmployeeResponse, type EmployeeAccountOption } from "@/api/employees"
 import type { AttachmentResponse } from "@/types/api"
 import { ElMessage, ElMessageBox } from "element-plus"
 import type { UploadRequestOptions } from "element-plus"
@@ -125,12 +142,14 @@ const DEPTS = [{value:"design",label:"设计部"},{value:"production",label:"生
 const list=ref<EmployeeResponse[]>([]); const loading=ref(false); const loadError=ref(false); const page=ref(1); const pageSize=ref(20); const total=ref(0); const keyword=ref(""); const filterDept=ref(""); const filterStatus=ref("")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const attachments=ref<AttachmentResponse[]>([]); const attCategory=ref("other")
+const bindingUserId=ref(""); const initialBindingUserId=ref(""); const accountOptions=ref<EmployeeAccountOption[]>([])
 const initForm={name:"",phone:"",gender:"",ethnicity:"",birth_date:null,department:"",position:"",employment_type:"",education:"",id_card:"",license_no:"",license_type:"",license_expire_date:null,id_card_front_url:"",id_card_back_url:"",hire_date:null,resignation_date:null,employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],bank_name:"",bank_account:"",address:"",remark:""}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form=ref<any>({...initForm})
 const DATE_FIELDS = ["birth_date", "hire_date", "resignation_date", "license_expire_date"] as const
 function getEmployeePayload(){
   const payload={...form.value}
+  delete payload.user_id
   for(const field of DATE_FIELDS){
     if(payload[field]==="") payload[field]=null
   }
@@ -144,9 +163,10 @@ const tableState = computed(() => loadError.value ? 'error' as const : loading.v
 
 async function fetchData(){loading.value=true;loadError.value=false;try{const r=await getEmployees({page:page.value,page_size:pageSize.value,keyword:keyword.value||undefined,department:filterDept.value||undefined,employment_status:filterStatus.value||undefined});list.value=r?.items||[];total.value=r?.total||0}catch(e:unknown){loadError.value=true;ElMessage.error((e as {message?:string})?.message||'员工列表加载失败')}finally{loading.value=false}}
 async function loadAttachments(){attachments.value=(await getEmployeeAttachments(editId.value))||[]}
-function openCreate(){isEditing.value=false;editId.value="";attachments.value=[];form.value={...initForm};showDialog.value=true}
-function openEdit(r:EmployeeResponse){isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[]};showDialog.value=true;loadAttachments()}
-async function handleSave(){saving.value=true;try{const payload=getEmployeePayload();if(isEditing.value){await updateEmployee(editId.value,payload);ElMessage.success("已更新");showDialog.value=false;await fetchData()}else{const r=await createEmployee(payload);isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[]};ElMessage.success("已创建，可继续上传附件");await loadAttachments()}}finally{saving.value=false}}
+function openCreate(){isEditing.value=false;editId.value="";attachments.value=[];bindingUserId.value="";initialBindingUserId.value="";accountOptions.value=[];form.value={...initForm};showDialog.value=true}
+async function loadAccountOptions(){if(!isEditing.value)return;try{accountOptions.value=await getEmployeeAccountOptions(editId.value)}catch{accountOptions.value=[]}}
+function openEdit(r:EmployeeResponse){isEditing.value=true;editId.value=r.id;bindingUserId.value=r.user_id||"";initialBindingUserId.value=bindingUserId.value;form.value={...r,skills:r.skills||[]};showDialog.value=true;loadAttachments();loadAccountOptions()}
+async function handleSave(){saving.value=true;try{const payload=getEmployeePayload();if(isEditing.value){await updateEmployee(editId.value,payload);if(bindingUserId.value!==initialBindingUserId.value){await bindEmployeeAccount(editId.value,bindingUserId.value||null);initialBindingUserId.value=bindingUserId.value}ElMessage.success("已更新");showDialog.value=false;await fetchData()}else{const r=await createEmployee(payload);isEditing.value=true;editId.value=r.id;bindingUserId.value=r.user_id||"";initialBindingUserId.value=bindingUserId.value;form.value={...r,skills:r.skills||[]};ElMessage.success("已创建，可继续绑定登录账号和上传附件");await loadAttachments();await loadAccountOptions()}}finally{saving.value=false}}
 async function handleDelete(r:EmployeeResponse){await ElMessageBox.confirm("确定删除？","提示",{type:"warning"});await deleteEmployee(r.id);ElMessage.success("已删除");await fetchData()}
 async function handleUploadAttachment(options: UploadRequestOptions){try{await uploadEmployeeAttachment(editId.value,options.file,attCategory.value);ElMessage.success("上传成功");await loadAttachments()}catch{ElMessage.error("上传失败")}}
 async function handleUploadIdCard(options: UploadRequestOptions, slot:'front'|'back'){try{const res=await uploadEmployeeImage(options.file);if(slot==='front')form.value.id_card_front_url=res.file_url;else form.value.id_card_back_url=res.file_url;ElMessage.success("照片已上传")}catch{ElMessage.error("上传失败")}}
@@ -157,4 +177,7 @@ onMounted(fetchData)
 .idcard-slot { display:flex; align-items:center; gap:10px; width:100%; }
 .idcard-preview { width:70px; height:46px; border-radius:4px; border:1px solid #e4e7ed; }
 .idcard-tip { color:#c0c4cc; font-size:13px; }
+.linked-account-name { color:var(--el-text-color-secondary); font-size:12px; }
+.binding-after-save, .binding-tip { color:var(--el-text-color-secondary); font-size:13px; line-height:1.6; }
+.binding-tip { margin-top:6px; }
 </style>

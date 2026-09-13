@@ -9,6 +9,15 @@
       <el-table :data="list" v-loading="loading" stripe>
       <el-table-column prop="username" label="用户名" width="140" />
       <el-table-column prop="real_name" label="姓名" width="120" />
+      <el-table-column label="关联员工" width="210">
+        <template #default="{ row }">
+          <template v-if="row.linked_employee">
+            <div>{{ row.linked_employee.name }}（{{ row.linked_employee.employee_no }}）</div>
+            <span class="linked-department">{{ departmentLabel(row.linked_employee.department) }}</span>
+          </template>
+          <el-tag v-else type="warning" size="small">未关联员工</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="phone" label="手机号" width="130" />
       <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
       <el-table-column label="角色" width="200">
@@ -84,6 +93,11 @@ const ROLE_MAP: Record<string, string> = {
   outsource_manager: '外协管理员', manager: '经理',
 }
 function roleLabel(name: string) { return ROLE_MAP[name] || name }
+const DEPARTMENT_MAP: Record<string, string> = {
+  design: '设计部', production: '生产部', installation: '安装部',
+  sales: '销售部', finance: '财务部', admin: '行政部',
+}
+function departmentLabel(value?: string | null) { return value ? (DEPARTMENT_MAP[value] || value) : '未设置部门' }
 
 const loading = ref(false)
 const loadError = ref(false)
@@ -199,4 +213,5 @@ onMounted(() => { fetchData(); loadRoles() })
 </script>
 
 <style scoped>
+.linked-department { color: var(--el-text-color-secondary); font-size: 12px; }
 </style>

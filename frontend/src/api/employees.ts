@@ -12,7 +12,14 @@ export interface EmployeeResponse {
   emergency_contact?: string | null; emergency_phone?: string | null; skills?: string[]
   bank_name?: string | null; bank_account?: string | null
   address?: string | null; user_id?: string | null; remark?: string | null
+  user_username?: string | null; user_real_name?: string | null
   is_active: boolean; created_at?: string | null
+}
+
+export interface EmployeeAccountOption {
+  id: string
+  username: string
+  real_name?: string | null
 }
 
 export interface EmployeeCreateInput { name: string; phone?: string | null; gender?: string | null; ethnicity?: string | null; birth_date?: string | null; department?: string | null; position?: string | null; employment_type?: string | null; hire_date?: string | null; resignation_date?: string | null; employment_status?: string; id_card?: string | null; education?: string | null; license_no?: string | null; license_type?: string | null; license_expire_date?: string | null; id_card_front_url?: string | null; id_card_back_url?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; skills?: string[]; bank_name?: string | null; bank_account?: string | null; address?: string | null; user_id?: string | null; remark?: string | null; is_active?: boolean }
@@ -24,6 +31,14 @@ export function createEmployee(data: EmployeeCreateInput) { return post<Employee
 export function getEmployee(id: string) { return get<EmployeeResponse>('/employees/' + id) }
 export function updateEmployee(id: string, data: EmployeeUpdateInput) { return put<EmployeeResponse>('/employees/' + id, data) }
 export function deleteEmployee(id: string) { return del<SuccessResponse>('/employees/' + id) }
+export function getEmployeeAccountOptions(employeeId?: string) {
+  return get<EmployeeAccountOption[]>('/employees/account-options', {
+    params: employeeId ? { employee_id: employeeId } : undefined,
+  })
+}
+export function bindEmployeeAccount(employeeId: string, userId: string | null) {
+  return put<EmployeeResponse>('/employees/' + employeeId + '/account', { user_id: userId })
+}
 
 export async function uploadEmployeeImage(file: File) {
   const form = new FormData()
