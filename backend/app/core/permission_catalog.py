@@ -45,6 +45,7 @@ class PermissionPackDefinition:
 # and validate the complete set.
 PERMISSION_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     # Delivery task list/actions require detail read permission.
+    "task_queue:view_all": ("task_queue:read",),
     "design_task:list": ("design_task:read",),
     "design_task:assign": ("design_task:read",),
     "design_task:create": ("design_task:read",),
@@ -143,7 +144,6 @@ SENSITIVE_PERMISSIONS = frozenset({
     "catalog:view_price",
     "finance:view_cost",
     "report:view_financial",
-    "report:read",
     "payment:read",
     "payment:create",
     "payment:void",
@@ -277,6 +277,23 @@ PERMISSION_PACKS: tuple[PermissionPackDefinition, ...] = (
             "expense:read",
         ),
     ),
+    PermissionPackDefinition(
+        code="manager_operational_readonly",
+        name="经理运营只读",
+        description="查看经营驾驶舱、运营报表、项目进度和完成统计，不包含价格、成本、收付款或任务变更",
+        permissions=(
+            "dashboard:read",
+            "report:read",
+            "order:read",
+            "task_queue:read",
+            "task_queue:view_all",
+            "design_task:read",
+            "production_task:read",
+            "installation_task:read",
+            "task_completion:read",
+            "task_completion:view_all",
+        ),
+    ),
 )
 
 
@@ -316,7 +333,7 @@ def _build_definition(code: str) -> PermissionDefinition:
         sensitivity = "price"
     elif (
         action == "view_cost"
-        or module in FINANCIAL_MODULES
+        or (module in FINANCIAL_MODULES and code != "report:read")
         or module == "finance"
         or code in {"ai_report:read", "ai_anomaly:read"}
     ):

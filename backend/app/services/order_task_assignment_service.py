@@ -13,6 +13,7 @@ from app.core.permissions import (
     PERM_INSTALLATION_TASK_ASSIGN,
     PERM_ORDER_TASK_ASSIGN,
     PERM_PRODUCTION_TASK_ASSIGN,
+    PERM_TASK_QUEUE_VIEW_ALL,
     user_has_permission,
 )
 from app.models.business_document import BusinessDocument
@@ -41,15 +42,25 @@ def can_manage_order_task_assignments(viewer: User | None) -> bool:
     return viewer is None or user_has_permission(viewer, PERM_ORDER_TASK_ASSIGN)
 
 
+def can_view_all_task_scope(viewer: User | None) -> bool:
+    """Whether a viewer may see every task without managing assignments."""
+    return (
+        viewer is None
+        or can_manage_order_task_assignments(viewer)
+        or user_has_permission(viewer, PERM_TASK_QUEUE_VIEW_ALL)
+    )
+
+
 def order_task_visibility_clause(model, viewer: User | None):
     """Return the SQL predicate for a task visible to ``viewer``.
 
     No rows in ``order_task_assignees`` means unrestricted visibility. Once an
     order has one or more rows, only an active employee bound to the current
-    login may see its tasks. Admin/sales users with the management permission
-    bypass the row filter so they can maintain assignments.
+    login may see its tasks. Users with either the assignment-management
+    permission or the separate read-only all-scope permission bypass the row
+    filter; only the former may maintain assignments.
     """
-    if can_manage_order_task_assignments(viewer):
+    if can_view_all_task_scope(viewer):
         return true()
 
     task_table = getattr(model, "__table__", model)

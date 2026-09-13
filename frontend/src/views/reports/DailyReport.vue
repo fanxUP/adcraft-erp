@@ -18,11 +18,13 @@
       </el-col>
       <el-col :span="6">
         <el-card shadow="never" class="stat-card">
-          <div class="stat-label">订单数 / 金额</div>
-          <div class="stat-value">{{ data.order_count }} 单 / ¥ {{ data.order_amount?.toFixed(2) }}</div>
+          <div class="stat-label">{{ canViewFinancial ? '订单数 / 金额' : '订单数' }}</div>
+          <div class="stat-value">
+            {{ data.order_count }} 单<span v-if="canViewFinancial"> / ¥ {{ data.order_amount?.toFixed(2) }}</span>
+          </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col v-if="canViewFinancial" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">收款笔数 / 金额</div>
           <div class="stat-value" style="color: #22c55e">{{ data.payment_count }} 笔 / ¥ {{ data.payment_amount?.toFixed(2) }}</div>
@@ -41,7 +43,7 @@
       <el-table :data="data.orders || []" stripe size="small">
         <el-table-column prop="order_no" label="订单编号" width="180" />
         <el-table-column prop="project_name" label="项目名称" min-width="200" />
-        <el-table-column label="金额" width="120">
+        <el-table-column v-if="canViewFinancial" label="金额" width="120">
           <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
         </el-table-column>
         <el-table-column label="状态" width="100">
@@ -53,7 +55,7 @@
       <div v-if="!data.orders?.length" style="text-align: center; padding: 20px; color: var(--ad-text-secondary)">暂无订单</div>
     </el-card>
 
-    <el-card shadow="never" class="info-card">
+    <el-card v-if="canViewFinancial" shadow="never" class="info-card">
       <template #header><span>当日收款</span></template>
       <el-table :data="data.payments || []" stripe size="small">
         <el-table-column prop="payment_no" label="收款编号" width="180" />
@@ -75,13 +77,16 @@
 <script setup lang="ts">
 import { Printer } from '@element-plus/icons-vue'
 import { usePrint } from '@/composables/usePrint'
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getDailyReport } from '@/api/payments'
 import type { DailyReportOrder, DailyReportPayment } from '@/types/api'
+import { useAuthStore } from '@/stores/auth'
 
 const loading = ref(false)
 const reportDate = ref('')
-const data = reactive({ date: '', order_count: 0, order_amount: 0, payment_count: 0, payment_amount: 0, new_customer_count: 0, orders: [] as DailyReportOrder[], payments: [] as DailyReportPayment[] })
+const authStore = useAuthStore()
+const canViewFinancial = computed(() => authStore.can('report:view_financial'))
+const data = reactive({ date: '', order_count: 0, order_amount: null as number | null, payment_count: null as number | null, payment_amount: null as number | null, new_customer_count: 0, orders: [] as DailyReportOrder[], payments: [] as DailyReportPayment[] })
 
 function orderStatusLabel(s: string) {
   const map: Record<string, string> = { pending_confirm: '待确认', confirmed: '已确认', in_progress: '进行中', completed: '已完成', cancelled: '已取消' }

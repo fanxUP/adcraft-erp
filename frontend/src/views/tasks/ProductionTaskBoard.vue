@@ -85,7 +85,7 @@ const onlyOverdue = ref(false)
 const authStore = useAuthStore()
 const router = useRouter()
 const canViewCompleted = computed(() => authStore.can('task_completion:read'))
-const canViewProjectQueue = computed(() => authStore.canAll(['order:read', 'order:view_price']))
+const canViewProjectQueue = computed(() => authStore.can('order:read'))
 
 const columns = [
   { key: 'queue', label: '项目队列' },

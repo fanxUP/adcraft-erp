@@ -81,6 +81,7 @@ import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui
 const ROLE_MAP: Record<string, string> = {
   admin: '管理员', sales: '销售', designer: '设计师',
   production: '生产', installer: '安装', finance: '财务', resource_manager: '资源管理员',
+  outsource_manager: '外协管理员', manager: '经理',
 }
 function roleLabel(name: string) { return ROLE_MAP[name] || name }
 

@@ -1586,16 +1586,16 @@ export interface CustomerDebtItem {
 }
 
 export interface DashboardData {
-  today_order_amount: number
-  today_payment_amount: number
-  month_order_amount: number
-  month_payment_amount: number
-  month_unpaid_amount: number
+  today_order_amount?: number
+  today_payment_amount?: number
+  month_order_amount?: number
+  month_payment_amount?: number
+  month_unpaid_amount?: number
   pending_design_count: number
   pending_production_count: number
   pending_installation_count: number
   overdue_order_count: number
-  customer_debt_ranking: CustomerDebtItem[]
+  customer_debt_ranking?: CustomerDebtItem[]
 }
 
 export type TaskCompletionPeriod = 'all' | 'month'
@@ -1643,13 +1643,13 @@ export interface DailyReportOrder {
   order_no: string
   project_name: string
   department?: string
-  total_amount: number
+  total_amount?: number
   status: string
 }
 
 export interface DailyReportPayment {
   payment_no: string
-  amount: number
+  amount?: number
   payment_method?: string
   is_voided: boolean
 }
@@ -1657,9 +1657,9 @@ export interface DailyReportPayment {
 export interface DailyReportData {
   date: string
   order_count: number
-  order_amount: number
-  payment_count: number
-  payment_amount: number
+  order_amount: number | null
+  payment_count: number | null
+  payment_amount: number | null
   new_customer_count: number
   orders: DailyReportOrder[]
   payments: DailyReportPayment[]
@@ -1670,18 +1670,18 @@ export interface MonthlyReportOrder {
   order_no: string
   project_name: string
   department?: string
-  total_amount: number
-  paid_amount: number
-  unpaid_amount: number
+  total_amount?: number
+  paid_amount?: number
+  unpaid_amount?: number
   status: string
 }
 
 export interface MonthlyReportData {
   order_count: number
-  order_amount: number
-  payment_count: number
-  payment_amount: number
-  unpaid_amount: number
+  order_amount: number | null
+  payment_count: number | null
+  payment_amount: number | null
+  unpaid_amount: number | null
   status_breakdown: Record<string, number>
   orders: MonthlyReportOrder[]
 }

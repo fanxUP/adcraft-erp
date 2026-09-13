@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import PERM_REPORT_VIEW_FINANCIAL, user_has_permission
+from app.core.permissions import PERM_REPORT_READ, PERM_REPORT_VIEW_FINANCIAL, user_has_permission
 from app.models.business_document import BusinessDocument
 from app.models.contract import Contract, ContractDocument
 from app.models.customer import Customer
@@ -33,6 +33,14 @@ class ReportService:
         return self.viewer is not None and user_has_permission(
             self.viewer,
             PERM_REPORT_VIEW_FINANCIAL,
+        )
+
+    @property
+    def can_view_report(self) -> bool:
+        """Operational reports are separate from their financial fields."""
+        return self.viewer is not None and (
+            user_has_permission(self.viewer, PERM_REPORT_READ)
+            or self.can_view_financial
         )
 
     async def get_dashboard(self) -> dict:
@@ -78,12 +86,16 @@ class ReportService:
             result["customer_debt_ranking"] = await self._customer_debt_ranking()
         return result
 
+    def _ensure_report_access(self) -> None:
+        if not self.can_view_report:
+            raise PermissionError("没有查看运营报表的权限")
+
     def _ensure_financial_access(self) -> None:
         if not self.can_view_financial:
             raise PermissionError("没有查看财务报表的权限")
 
     async def get_daily_report(self, report_date: str | None = None) -> dict:
-        self._ensure_financial_access()
+        self._ensure_report_access()
         if report_date:
             d = datetime.fromisoformat(report_date)
         else:
@@ -92,19 +104,21 @@ class ReportService:
         day_end = datetime(d.year, d.month, d.day, 23, 59, 59)
 
         orders = await self._list_orders_in_range(day_start, day_end)
-        payments = await self._list_payments_in_range(day_start, day_end)
+        payments = await self._list_payments_in_range(day_start, day_end) if self.can_view_financial else []
         new_customers = await self._count_new_customers(day_start, day_end)
 
-        # 车辆与安装运输部分
-        vehicle_svc = VehicleDashboardService(self.db)
-        vehicle_report = await vehicle_svc.get_daily_report(report_date)
+        # 车辆日报包含费用字段，未获得财务权限时不返回，避免通过运营报表旁路读取成本。
+        vehicle_report = None
+        if self.can_view_financial:
+            vehicle_svc = VehicleDashboardService(self.db)
+            vehicle_report = await vehicle_svc.get_daily_report(report_date)
 
         return {
             "date": d.strftime("%Y-%m-%d"),
             "order_count": len(orders),
-            "order_amount": float(sum(o.total_amount for o in orders)),
-            "payment_count": len(payments),
-            "payment_amount": float(sum(p.amount for p in payments)),
+            "order_amount": float(sum(o.total_amount for o in orders)) if self.can_view_financial else None,
+            "payment_count": len(payments) if self.can_view_financial else None,
+            "payment_amount": float(sum(p.amount for p in payments)) if self.can_view_financial else None,
             "new_customer_count": new_customers,
             "orders": [
                 BusinessDocumentService._to_ref(o, viewer=self.viewer)
@@ -119,7 +133,7 @@ class ReportService:
         }
 
     async def get_monthly_report(self, year: int | None = None, month: int | None = None) -> dict:
-        self._ensure_financial_access()
+        self._ensure_report_access()
         now = _business_now_naive()
         y = year or now.year
         m = month or now.month
@@ -130,10 +144,10 @@ class ReportService:
             month_end = datetime(y, m + 1, 1)
 
         orders = await self._list_orders_in_range(month_start, month_end)
-        payments = await self._list_payments_in_range(month_start, month_end)
+        payments = await self._list_payments_in_range(month_start, month_end) if self.can_view_financial else []
 
-        order_amount = float(sum(o.total_amount for o in orders))
-        payment_amount = float(sum(p.amount for p in payments))
+        order_amount = float(sum(o.total_amount for o in orders)) if self.can_view_financial else None
+        payment_amount = float(sum(p.amount for p in payments)) if self.can_view_financial else None
 
         status_breakdown = {}
         for o in orders:
@@ -145,9 +159,9 @@ class ReportService:
             "month": m,
             "order_count": len(orders),
             "order_amount": order_amount,
-            "payment_count": len(payments),
+            "payment_count": len(payments) if self.can_view_financial else None,
             "payment_amount": payment_amount,
-            "unpaid_amount": order_amount - payment_amount,
+            "unpaid_amount": order_amount - payment_amount if self.can_view_financial else None,
             "status_breakdown": status_breakdown,
             "orders": [
                 BusinessDocumentService._to_ref(o, viewer=self.viewer)

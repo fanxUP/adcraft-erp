@@ -4,10 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
 from app.core.permissions import (
+    PERM_CUSTOMER_READ,
+    PERM_DASHBOARD_READ,
+    PERM_ORDER_READ,
+    PERM_OUTSOURCE_CENTER_READ,
+    PERM_REPORT_READ,
     PERM_REPORT_VIEW_FINANCIAL,
+    PERM_RESOURCE_CENTER_READ,
     PERM_TASK_COMPLETION_READ,
+    PERM_TASK_QUEUE_READ,
+    require_any_permission,
     require_permission,
 )
 from app.models.user import User
@@ -26,7 +33,17 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 @router.get("/dashboard")
 async def get_dashboard(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_any_permission(
+        PERM_DASHBOARD_READ,
+        PERM_TASK_QUEUE_READ,
+        PERM_TASK_COMPLETION_READ,
+        PERM_REPORT_READ,
+        PERM_REPORT_VIEW_FINANCIAL,
+        PERM_ORDER_READ,
+        PERM_CUSTOMER_READ,
+        PERM_RESOURCE_CENTER_READ,
+        PERM_OUTSOURCE_CENTER_READ,
+    )),
 ):
     service = ReportService(db, viewer=current_user)
     data = await service.get_dashboard()
@@ -37,7 +54,7 @@ async def get_dashboard(
 async def get_daily_report(
     date: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_REPORT_VIEW_FINANCIAL)),
+    current_user: User = Depends(require_any_permission(PERM_REPORT_READ, PERM_REPORT_VIEW_FINANCIAL)),
 ):
     service = ReportService(db, viewer=current_user)
     data = await service.get_daily_report(date)
@@ -49,7 +66,7 @@ async def get_monthly_report(
     year: int | None = None,
     month: int | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_REPORT_VIEW_FINANCIAL)),
+    current_user: User = Depends(require_any_permission(PERM_REPORT_READ, PERM_REPORT_VIEW_FINANCIAL)),
 ):
     service = ReportService(db, viewer=current_user)
     data = await service.get_monthly_report(year, month)

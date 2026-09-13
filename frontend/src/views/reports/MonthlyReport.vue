@@ -23,19 +23,19 @@
           <div class="stat-value">{{ data.order_count }}</div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col v-if="canViewFinancial" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">订单金额</div>
           <div class="stat-value">¥ {{ data.order_amount?.toFixed(2) }}</div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col v-if="canViewFinancial" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">收款金额</div>
           <div class="stat-value" style="color: #22c55e">¥ {{ data.payment_amount?.toFixed(2) }}</div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col v-if="canViewFinancial" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">未收金额</div>
           <div class="stat-value" style="color: #e63946">¥ {{ data.unpaid_amount?.toFixed(2) }}</div>
@@ -58,13 +58,13 @@
       <el-table :data="data.orders || []" stripe size="small">
         <el-table-column prop="order_no" label="订单编号" width="180" />
         <el-table-column prop="project_name" label="项目名称" min-width="200" />
-        <el-table-column label="订单金额" width="120">
+        <el-table-column v-if="canViewFinancial" label="订单金额" width="120">
           <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
         </el-table-column>
-        <el-table-column label="已收" width="120">
+        <el-table-column v-if="canViewFinancial" label="已收" width="120">
           <template #default="{ row }">¥ {{ row.paid_amount?.toFixed(2) }}</template>
         </el-table-column>
-        <el-table-column label="未收" width="120">
+        <el-table-column v-if="canViewFinancial" label="未收" width="120">
           <template #default="{ row }">
             <span :style="{ color: row.unpaid_amount > 0 ? '#e63946' : '#22c55e' }">¥ {{ row.unpaid_amount?.toFixed(2) }}</span>
           </template>
@@ -83,16 +83,19 @@
 <script setup lang="ts">
 import { Printer } from '@element-plus/icons-vue'
 import { usePrint } from '@/composables/usePrint'
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getMonthlyReport } from '@/api/payments'
 import type { MonthlyReportOrder } from '@/types/api'
+import { useAuthStore } from '@/stores/auth'
 
 const loading = ref(false)
 const now = new Date()
 const reportYear = ref(now.getFullYear())
 const reportMonth = ref(now.getMonth() + 1)
 const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i)
-const data = reactive({ year: 0, month: 0, order_count: 0, order_amount: 0, payment_count: 0, payment_amount: 0, unpaid_amount: 0, status_breakdown: {} as Record<string, number>, orders: [] as MonthlyReportOrder[] })
+const authStore = useAuthStore()
+const canViewFinancial = computed(() => authStore.can('report:view_financial'))
+const data = reactive({ year: 0, month: 0, order_count: 0, order_amount: null as number | null, payment_count: null as number | null, payment_amount: null as number | null, unpaid_amount: null as number | null, status_breakdown: {} as Record<string, number>, orders: [] as MonthlyReportOrder[] })
 
 function orderStatusLabel(s: string) {
   const map: Record<string, string> = { pending_confirm: '待确认', confirmed: '已确认', in_progress: '进行中', completed: '已完成', cancelled: '已取消' }

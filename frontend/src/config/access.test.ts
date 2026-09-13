@@ -64,6 +64,27 @@ describe('page access matrix', () => {
     expect(canAccess('boardRead', ['installer'], ['installation_task:read'])).toBe(true)
   })
 
+  it('gives the manager operational read access without commercial or write access', () => {
+    const managerPermissions = [
+      'dashboard:read',
+      'report:read',
+      'order:read',
+      'task_queue:read',
+      'design_task:read',
+      'production_task:read',
+      'installation_task:read',
+      'task_completion:read',
+      'task_completion:view_all',
+    ]
+
+    expect(canAccess('boardRead', ['manager'], managerPermissions)).toBe(true)
+    expect(canAccess('orderRead', ['manager'], managerPermissions)).toBe(true)
+    expect(canAccess('orderManage', ['manager'], managerPermissions)).toBe(false)
+    expect(canAccess('reports', ['manager'], managerPermissions)).toBe(true)
+    expect(canAccess('taskCompletion', ['manager'], managerPermissions)).toBe(true)
+    expect(canAccess('finance', ['manager'], managerPermissions)).toBe(false)
+  })
+
   it('protects the standalone completed-project detail route with completion read permission', () => {
     expect(ROUTE_ACCESS.CompletedProjectDetail).toBe('taskCompletion')
     expect(canAccess('taskCompletion', ['custom'], ['task_completion:read'])).toBe(true)

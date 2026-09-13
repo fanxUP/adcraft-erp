@@ -99,6 +99,10 @@ PERM_REPORT_VIEW_FINANCIAL = "report:view_financial"
 
 # Task queue / task list / task assignment
 PERM_TASK_QUEUE_READ = "task_queue:read"
+# A read-only organization-wide scope for managers and similar operational
+# roles.  This is deliberately separate from ``order:task_assign``: seeing
+# every task must not allow changing who can see an order's tasks.
+PERM_TASK_QUEUE_VIEW_ALL = "task_queue:view_all"
 
 # Design Task
 PERM_DESIGN_TASK_READ = "design_task:read"
@@ -172,6 +176,7 @@ PERM_OUTSOURCE_PAYMENT_READ = "outsource_payment:read"
 PERM_OUTSOURCE_PAYMENT_CREATE = "outsource_payment:create"
 
 # Report
+PERM_DASHBOARD_READ = "dashboard:read"
 PERM_REPORT_READ = "report:read"
 
 # Delivery completion metrics.  These permissions are deliberately separate
@@ -256,6 +261,7 @@ ROLE_INSTALLER = "installer"
 ROLE_FINANCE = "finance"
 ROLE_RESOURCE_MANAGER = "resource_manager"
 ROLE_OUTSOURCE_MANAGER = "outsource_manager"
+ROLE_MANAGER = "manager"
 
 EXECUTION_ROLE_NAMES = frozenset({
     ROLE_DESIGNER,

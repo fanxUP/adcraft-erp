@@ -19,7 +19,7 @@
             <el-table-column label="操作" width="200" fixed="right">
               <template #default="{ row }">
                 <el-button text type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button>
-                <el-button v-if="row.name !== 'admin'" text type="danger" size="small" @click.stop="handleDelete(row)">删除</el-button>
+                <el-button v-if="!['admin', 'manager'].includes(row.name)" text type="danger" size="small" @click.stop="handleDelete(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -117,7 +117,7 @@ import { getErrorMessage } from '@/utils/error'
 const ROLE_MAP: Record<string, string> = {
   admin: '管理员', sales: '销售', designer: '设计师',
   production: '生产', installer: '安装', finance: '财务', resource_manager: '资源管理员',
-  outsource_manager: '外协管理员',
+  outsource_manager: '外协管理员', manager: '经理',
 }
 function roleLabel(name: string) { return ROLE_MAP[name] || name }
 

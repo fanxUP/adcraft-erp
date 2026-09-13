@@ -254,6 +254,7 @@ const canViewFinancial = computed(() => authStore.hasPermission('report:view_fin
 const canViewPricedOrders = computed(() => (
   authStore.canAll(['order:read', 'order:view_price'])
 ))
+const canViewProjectQueue = computed(() => authStore.can('order:read'))
 const canViewTaskCompletion = computed(() => authStore.can('task_completion:read'))
 const canViewCompletionAll = computed(() => authStore.can('task_completion:view_all'))
 
@@ -291,7 +292,7 @@ const columns = [
 ] as const
 
 const visibleColumns = computed(() => columns.filter(col => (
-  (col.key !== 'queue' || canViewPricedOrders.value)
+  (col.key !== 'queue' || canViewProjectQueue.value)
   && (col.key !== 'completed' || canViewTaskCompletion.value)
 )))
 
@@ -316,7 +317,7 @@ async function fetchBoardData() {
   try {
     const emptyCompleted = { items: [] as CompletedProjectCardType[], total: 0, page: 1, page_size: 200 }
     const [orders, tasks, completed] = await Promise.all([
-      canViewPricedOrders.value
+      canViewProjectQueue.value
         ? getProjectQueueOrders().catch(() => [] as OrderListResponse[])
         : Promise.resolve([] as OrderListResponse[]),
       getTaskQueue({ page: 1, page_size: 200 }).catch(() => ({ items: [] as TaskQueueItem[] })),

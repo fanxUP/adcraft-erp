@@ -5,7 +5,7 @@ Usage:
 
 This script reads the DATABASE_URL from the project config,
 creates all permission records (idempotent), and maps them
-to the eight built-in roles, including separate resource_manager and
+to the built-in roles, including separate resource_manager and
 outsource_manager roles.
 """
 
@@ -80,6 +80,7 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "report:view_financial", "name": "查看财务报表", "description": "查看收款、欠款和经营财务统计"},
     # Task queue and task assignment
     {"code": "task_queue:read", "name": "查看工作台任务", "description": "在工作台查看本人可见的设计、制作、安装任务"},
+    {"code": "task_queue:view_all", "name": "查看全部任务", "description": "查看公司所有订单中的设计、制作、安装任务，不改变任务分配"},
     # Design task
     {"code": "design_task:read", "name": "查看设计任务", "description": "查看设计任务列表和详情"},
     {"code": "design_task:list", "name": "查看设计任务列表", "description": "进入设计任务列表页并查询设计任务"},
@@ -156,6 +157,7 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "outsource_payment:read", "name": "查看外协付款", "description": "查看外协付款记录和任务付款摘要"},
     {"code": "outsource_payment:create", "name": "登记外协付款", "description": "登记外协任务付款"},
     # Report
+    {"code": "dashboard:read", "name": "查看经营驾驶舱", "description": "查看公司运营数据驾驶舱"},
     {"code": "report:read", "name": "查看报表", "description": "查看销售报表"},
     # Delivery completion metrics
     {"code": "task_completion:read", "name": "查看个人完成统计", "description": "查看本人完成的项目和订单明细统计"},
@@ -284,10 +286,22 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "outsource_task:read", "outsource_task:create", "outsource_task:update",
         "outsource_task:change_status", "outsource_task:delete",
     ],
+    "manager": [
+        "dashboard:read",
+        "report:read",
+        "order:read",
+        "task_queue:read",
+        "task_queue:view_all",
+        "design_task:read",
+        "production_task:read",
+        "installation_task:read",
+        "task_completion:read",
+        "task_completion:view_all",
+    ],
 }
 
 # ── Roles referenced by the init-db.sh script ──────────────────────────────
-ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance", "resource_manager", "outsource_manager"]
+ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance", "resource_manager", "outsource_manager", "manager"]
 PERMISSION_SEED_VERSION = 2
 
 
