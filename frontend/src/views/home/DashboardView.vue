@@ -135,17 +135,6 @@
             </div>
           </div>
 
-          <div class="completion-details-entry">
-            <div class="completion-subtitle">完成明细</div>
-            <p>完成明细已集中到完成看板</p>
-            <span>请在下方“完成”列点击项目卡片查看明细。</span>
-          </div>
-        </div>
-
-        <div v-else class="completion-details-entry completion-details-entry--personal">
-          <div class="completion-subtitle">我的完成明细</div>
-          <p>完成明细已集中到完成看板</p>
-          <span>请在下方“完成”列点击项目卡片查看本人可见明细。</span>
         </div>
       </template>
     </el-card>
@@ -455,10 +444,6 @@ onBeforeUnmount(() => {
 .employee-stat strong { color: var(--ad-primary); font-variant-numeric: tabular-nums; }
 .employee-stat small { color: var(--ad-text-secondary); }
 .unassigned-hint { margin-top: 12px; color: var(--ad-text-secondary); font-size: 12px; }
-.completion-details-entry { min-width: 0; align-self: center; padding: 20px; border: 1px dashed var(--ad-border); border-radius: 8px; background: color-mix(in srgb, var(--ad-card) 92%, var(--ad-primary) 8%); }
-.completion-details-entry p { margin: 12px 0 6px; color: var(--ad-text); font-size: 16px; font-weight: 650; }
-.completion-details-entry span { color: var(--ad-text-secondary); font-size: 13px; }
-.completion-details-entry--personal { margin-top: 8px; }
 .debt-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--ad-border); }
 .quote-row { cursor: pointer; }
 .quote-row:hover { background: var(--ad-border); }

@@ -51,7 +51,7 @@ describe('完成项目看板', () => {
     expect(source).not.toContain('删除项目')
   })
 
-  it('工作台只保留完成统计摘要，不嵌入完成明细查询和表格', () => {
+  it('工作台只保留完成统计摘要，不再显示完成明细提示卡片', () => {
     const source = readSource('views/home/DashboardView.vue')
 
     expect(source).not.toContain('getTaskCompletionDetails')
@@ -59,7 +59,8 @@ describe('完成项目看板', () => {
     expect(source).not.toContain('completionDetailRows')
     expect(source).not.toContain('completionDetailsLoading')
     expect(source).not.toContain('CompletedProjectDetailDrawer')
-    expect(source).toContain('完成明细已集中到完成看板')
+    expect(source).not.toContain('completion-details-entry')
+    expect(source).not.toContain('完成明细已集中到完成看板')
   })
 
   it('独立完成详情页复用只读详情接口并处理加载、错误和空数据状态', () => {
