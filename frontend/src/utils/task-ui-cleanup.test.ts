@@ -390,6 +390,38 @@ describe('单条订单明细动作', () => {
     })
   })
 
+  it('历史取消的制作或安装明细提供明确的恢复入口', () => {
+    const productionActions = getTaskItemActions('production', {
+      is_linked: true,
+      stage: 'in_production',
+      task_status: 'cancelled',
+      can_select: false,
+    }, {
+      cancelled: [],
+    })
+    const installationActions = getTaskItemActions('installation', {
+      is_linked: true,
+      stage: 'in_installation',
+      task_status: 'cancelled',
+      can_select: false,
+    }, {
+      cancelled: [],
+    })
+
+    expect(productionActions.find(action => action.key === 'rollback_stage')).toMatchObject({
+      label: '恢复到设计',
+      operation: 'rollback',
+      target_stage: 'design',
+      allowed: false,
+    })
+    expect(installationActions.find(action => action.key === 'rollback_stage')).toMatchObject({
+      label: '恢复到制作',
+      operation: 'rollback',
+      target_stage: 'production',
+      allowed: false,
+    })
+  })
+
   it('没有操作权限时仍返回禁用动作和可读原因', () => {
     const actions = getTaskItemActions('design', {
       is_linked: true,

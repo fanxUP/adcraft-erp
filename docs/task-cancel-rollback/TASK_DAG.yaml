@@ -4,7 +4,7 @@ mode: STRICT
 status: planned
 objective: >-
   将设计、制作、安装任务的明细取消改为逐级跨阶段回退；设计阶段不允许取消明细，
-  设计任务仅允许有权限的用户整卡删除；保留历史取消只读和订单级取消能力。
+  设计任务仅允许有权限的用户整卡删除；历史取消不批量迁移，制作/安装历史取消支持有权限用户逐条恢复，订单级取消能力保留。
 non_goals:
   - order_level_cancel_and_recycle_restore
   - historical_cancelled_data_migration

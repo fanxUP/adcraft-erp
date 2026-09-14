@@ -350,7 +350,9 @@ function secondaryActions(item: TaskOrderItemOption) {
 }
 
 function disabledReason(item: TaskOrderItemOption) {
-  const actionReason = itemActions(item).find(action => !action.allowed)?.disabled_reason
+  const actions = itemActions(item)
+  const actionReason = actions.find(action => !action.allowed)?.disabled_reason
+  if (actions.some(action => action.allowed)) return actionReason || ''
   return actionReason || item.capabilities?.select?.disabled_reason || item.disabled_reason || ''
 }
 
@@ -378,9 +380,10 @@ async function handleItemAction(item: TaskOrderItemOption, action: TaskItemActio
   try {
     if (action.operation === 'rollback') {
       const targetLabel = action.target_stage === 'design' ? '设计' : '制作'
+      const actionTitle = action.label || `退回${targetLabel}`
       const result = await ElMessageBox.prompt(
-        `确认将“${itemLabel(item)}”退回${targetLabel}吗？本次只影响这条订单明细，其他明细不受影响。可填写原因（可选）`,
-        `退回${targetLabel}`,
+        `确认将“${itemLabel(item)}”${actionTitle}吗？本次只影响这条订单明细，其他明细不受影响。可填写原因（可选）`,
+        actionTitle,
         {
           confirmButtonText: '确认退回',
           cancelButtonText: '返回',

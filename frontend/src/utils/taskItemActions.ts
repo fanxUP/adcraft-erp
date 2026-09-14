@@ -158,13 +158,13 @@ export function getTaskItemActions(
       : null
   if (
     rollbackTarget
-    && !['completed', 'confirmed', 'cancelled', 'rolled_back'].includes(currentStatus)
+    && !['completed', 'confirmed', 'rolled_back'].includes(currentStatus)
   ) {
     const rollbackAllowed = allowed && !item.outsource_blocked
     actions.push({
       key: 'rollback_stage',
       to_status: 'rolled_back',
-      label: `退回${rollbackTarget === 'design' ? '设计' : '制作'}`,
+      label: `${currentStatus === 'cancelled' ? '恢复到' : '退回'}${rollbackTarget === 'design' ? '设计' : '制作'}`,
       allowed: rollbackAllowed,
       disabled_reason: rollbackAllowed
         ? null

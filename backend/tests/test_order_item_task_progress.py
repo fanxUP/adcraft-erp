@@ -140,6 +140,34 @@ def test_design_item_actions_never_offer_cancellation():
     assert not any(action.get("operation") == "rollback" for action in actions)
 
 
+@pytest.mark.parametrize(
+    ("task_type", "target_stage", "label"),
+    [
+        ("production", "design", "恢复到设计"),
+        ("installation", "production", "恢复到制作"),
+    ],
+)
+def test_historical_cancelled_item_can_be_explicitly_restored(
+    task_type,
+    target_stage,
+    label,
+):
+    actions = _task_item_actions(
+        task_type,
+        "cancelled",
+        can_operate=True,
+        is_linked=True,
+        disabled_reason="该明细历史上已取消，只能查看",
+        outsource_blocked=False,
+    )
+
+    rollback = next(action for action in actions if action["key"] == "rollback_stage")
+    assert rollback["label"] == label
+    assert rollback["target_stage"] == target_stage
+    assert rollback["allowed"] is True
+    assert all(action["to_status"] != "cancelled" for action in actions)
+
+
 def test_rollback_request_requires_explicit_item_ids_and_optional_reason():
     request = TaskItemRollbackRequest(
         order_item_ids=[ITEM_ID],
@@ -244,6 +272,67 @@ async def test_retried_item_rollback_is_a_safe_noop():
     assert changed == []
     assert link.item_status == "rolled_back"
     db.add_all.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_historical_cancelled_item_can_be_restored_to_previous_stage():
+    db = MagicMock()
+    db.flush = AsyncMock()
+    task = SimpleNamespace(
+        id=UUID("22222222-2222-2222-2222-222222222222"),
+        document_id=UUID(ORDER_ID),
+        order_item_id=None,
+        status="pending",
+        progress_pct=33,
+    )
+    link = TaskOrderItemLink(
+        task_type="production",
+        task_id=task.id,
+        order_item_id=ITEM_UUID,
+        item_status="cancelled",
+        item_progress_pct=100,
+    )
+    target_task = SimpleNamespace(
+        id=UUID("33333333-3333-3333-3333-333333333333"),
+    )
+
+    with (
+        patch(
+            "app.services.task_service._task_order_item_link_rows",
+            new=AsyncMock(return_value=[link]),
+        ),
+        patch(
+            "app.services.task_service._blocking_outsource_map",
+            new=AsyncMock(return_value={}),
+        ),
+        patch(
+            "app.services.task_service._get_or_create_rollback_target_task",
+            new=AsyncMock(return_value=(target_task, "confirmed")),
+        ),
+        patch(
+            "app.services.task_service._refresh_task_aggregate",
+            new=AsyncMock(),
+        ),
+        patch(
+            "app.services.task_service._reconcile_order_stage_after_item_rollback",
+            new=AsyncMock(),
+        ),
+    ):
+        changed = await _rollback_task_items(
+            db,
+            "production",
+            task,
+            [ITEM_ID],
+            reason="历史任务恢复",
+            viewer=None,
+            operated_by=None,
+        )
+
+    assert changed == [ITEM_UUID]
+    assert link.item_status == "rolled_back"
+    assert link.item_progress_pct == 0
+    assert link.assignee_user_id is None
+    db.add_all.assert_called_once()
 
 
 def _mock_result(items):

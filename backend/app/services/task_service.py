@@ -370,8 +370,12 @@ def _task_item_actions(
         "production": "design",
         "installation": "production",
     }.get(task_type)
-    if rollback_target and not _is_terminal_item_status(task_type, status):
-        rollback_label = f"退回{TASK_TYPE_LABELS[rollback_target]}"
+    if rollback_target and (
+        not _is_terminal_item_status(task_type, status)
+        or status == TASK_CANCELLED_STATUS
+    ):
+        rollback_prefix = "恢复到" if status == TASK_CANCELLED_STATUS else "退回"
+        rollback_label = f"{rollback_prefix}{TASK_TYPE_LABELS[rollback_target]}"
         rollback_blocked = bool(outsource_blocked)
         actions.append({
             "key": "rollback_stage",
@@ -2668,7 +2672,11 @@ async def _rollback_task_items(
             # never reset that link if the user has progressed it further.
             continue
         if current_status == TASK_CANCELLED_STATUS:
-            raise ValueError("历史已取消明细只能查看，不能再次回退")
+            # Records created before stage rollback was introduced are still
+            # recoverable, but only through this explicit single-item action.
+            previous_statuses[item_id] = current_status
+            processable_item_ids.append(item_id)
+            continue
         if _is_completed_item_status(task_type, current_status):
             raise ValueError("已完成明细不能由普通操作回退，请联系经理或管理员处理")
         previous_statuses[item_id] = current_status
