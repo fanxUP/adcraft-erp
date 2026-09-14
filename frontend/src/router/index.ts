@@ -40,6 +40,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'production-tasks', name: 'ProductionTaskList', component: () => import('@/views/tasks/ProductionTaskList.vue') },
       { path: 'projects/board', name: 'ProjectKanbanBoard', component: () => import('@/views/tasks/ProductionTaskBoard.vue') },
       { path: 'projects/completed/:projectId', name: 'CompletedProjectDetail', component: () => import('@/views/tasks/CompletedProjectDetail.vue') },
+      { path: 'reports/task-completion', name: 'TaskCompletionStats', component: () => import('@/views/reports/TaskCompletionStats.vue') },
       { path: 'production-tasks/board', redirect: '/projects/board' },
       { path: 'production-tasks/:id', name: 'ProductionTaskDetail', component: () => import('@/views/tasks/ProductionTaskDetail.vue') },
       { path: 'installation-tasks', name: 'InstallationTaskList', component: () => import('@/views/tasks/InstallationTaskList.vue') },

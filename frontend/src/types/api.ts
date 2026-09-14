@@ -1606,6 +1606,7 @@ export interface DashboardData {
 
 export type TaskCompletionPeriod = 'all' | 'month'
 export type TaskCompletionType = 'design' | 'production' | 'installation'
+export type TaskCompletionKind = 'project' | 'detail'
 
 export interface TaskCompletionStats {
   completed_project_count: number
@@ -1642,6 +1643,43 @@ export interface TaskCompletionSummary {
   employees: TaskCompletionEmployeeStats[]
   unassigned: TaskCompletionStats
   message: string | null
+}
+
+export interface TaskCompletionProjectRow {
+  kind: 'project'
+  project_id: string
+  project_no: string
+  project_name: string
+  completed_detail_count: number
+  completed_work_unit_count: number
+  stages: TaskCompletionType[]
+  last_completed_at: string | null
+}
+
+export interface TaskCompletionDetailRow {
+  kind: 'detail'
+  project_id: string
+  project_no: string
+  project_name: string
+  order_item_id: string
+  item_name: string
+  task_type: TaskCompletionType
+  task_label: string
+  task_id: string
+  task_no: string | null
+  employee_id: string | null
+  employee_name: string
+  completed_at: string | null
+  status: string
+  source: string
+}
+
+export type TaskCompletionRow = TaskCompletionProjectRow | TaskCompletionDetailRow
+
+export interface TaskCompletionDetailsResponse extends PaginatedData<TaskCompletionRow> {
+  scope: 'own' | 'all'
+  employee?: TaskCompletionEmployee | null
+  message?: string | null
 }
 
 export interface DailyReportOrder {

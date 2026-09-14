@@ -115,27 +115,28 @@
           </div>
         </div>
 
-        <div v-if="canViewCompletionAll" class="completion-summary-layout">
-          <div class="completion-employees">
-            <div class="completion-subtitle">员工完成统计</div>
-            <div class="employee-stat">
-              <span>全部员工</span>
-              <strong>{{ completionSummary.organization?.completed_work_unit_count || 0 }}</strong>
-            </div>
-            <div
-              v-for="employee in completionSummary.employees"
-              :key="employee.employee_id || employee.user_id || employee.name"
-              class="employee-stat"
-            >
-              <span>{{ employee.name }}<small v-if="!employee.is_active">（非在职）</small></span>
-              <strong>{{ employee.completed_work_unit_count }}</strong>
-            </div>
-            <div v-if="completionSummary.unassigned.completed_work_unit_count" class="unassigned-hint">
-              未分配：{{ completionSummary.unassigned.completed_work_unit_count }} 条
-            </div>
-          </div>
-
-        </div>
+        <button type="button" class="completion-entry-card" @click="handleCompletionStatsClick">
+          <span class="completion-entry-icon" aria-hidden="true">✓</span>
+          <span class="completion-entry-content">
+            <span class="completion-entry-heading">
+              <span class="completion-entry-title">{{ canViewCompletionAll ? '员工完成统计' : '我的完成统计' }}</span>
+              <span class="completion-entry-action">查看详细统计</span>
+            </span>
+            <span class="completion-entry-summary">
+              <template v-if="canViewCompletionAll">{{ completionSummary.employees.length }} 名员工 · </template>
+              {{ canViewCompletionAll ? '完成工作明细' : '我完成的明细' }} {{ completionEntryStats?.completed_work_unit_count || 0 }} 条
+            </span>
+            <span class="completion-entry-stages">
+              <span v-for="stage in completionStages" :key="stage.key">
+                {{ stage.label }} {{ completionEntryStats?.stage_breakdown?.[stage.key] || 0 }}
+              </span>
+              <span v-if="canViewCompletionAll && completionSummary.unassigned.completed_work_unit_count" class="completion-entry-unassigned">
+                未分配 {{ completionSummary.unassigned.completed_work_unit_count }} 条
+              </span>
+            </span>
+          </span>
+          <el-icon class="completion-entry-arrow" aria-hidden="true"><ArrowRight /></el-icon>
+        </button>
       </template>
     </el-card>
 
@@ -217,6 +218,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ArrowRight } from '@element-plus/icons-vue'
 import { getDashboard, getTaskCompletionSummary } from '@/api/payments'
 import { getProjectQueueOrders } from '@/api/orders'
 import { getCompletedProjects, getTaskQueue } from '@/api/tasks'
@@ -267,6 +269,11 @@ const completionStages: Array<{ key: TaskCompletionType; label: string }> = [
   { key: 'production', label: '制作' },
   { key: 'installation', label: '安装' },
 ]
+const completionEntryStats = computed(() => (
+  canViewCompletionAll.value
+    ? completionSummary.value?.organization
+    : completionSummary.value?.own
+))
 
 const boardLoading = ref(false)
 const projectQueueOrders = ref<OrderListResponse[]>([])
@@ -347,6 +354,13 @@ async function fetchTaskCompletion() {
 
 function handleCompletionPeriodChange() {
   fetchTaskCompletion()
+}
+
+function handleCompletionStatsClick() {
+  router.push({
+    name: 'TaskCompletionStats',
+    query: { period: completionPeriod.value },
+  })
 }
 
 async function fetchQuotes() {
@@ -437,13 +451,18 @@ onBeforeUnmount(() => {
 .completion-kpi strong { color: var(--ad-text); font-size: 26px; line-height: 1; }
 .completion-kpi--stages { min-width: 0; }
 .stage-counts { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--ad-text); font-size: 13px; }
-.completion-summary-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; }
-.completion-employees { border-right: 1px solid var(--ad-border); padding-right: 16px; }
-.completion-subtitle { color: var(--ad-text); font-size: 14px; font-weight: 700; }
-.employee-stat { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 10px; margin-top: 7px; border: 1px solid transparent; border-radius: 6px; color: var(--ad-text); }
-.employee-stat strong { color: var(--ad-primary); font-variant-numeric: tabular-nums; }
-.employee-stat small { color: var(--ad-text-secondary); }
-.unassigned-hint { margin-top: 12px; color: var(--ad-text-secondary); font-size: 12px; }
+.completion-entry-card { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--ad-border); border-radius: 10px; background: color-mix(in srgb, var(--ad-card) 92%, var(--ad-primary) 8%); color: var(--ad-text); text-align: left; cursor: pointer; font: inherit; transition: border-color 0.2s ease, background 0.2s ease; }
+.completion-entry-card:hover,
+.completion-entry-card:focus-visible { border-color: var(--ad-primary); background: color-mix(in srgb, var(--ad-card) 86%, var(--ad-primary) 14%); outline: none; }
+.completion-entry-icon { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%; background: var(--ad-primary); color: #fff; font-size: 18px; font-weight: 700; }
+.completion-entry-content { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 5px; }
+.completion-entry-heading { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.completion-entry-title { font-size: 15px; font-weight: 700; }
+.completion-entry-action { color: var(--ad-primary); font-size: 12px; }
+.completion-entry-summary { color: var(--ad-text); font-size: 13px; font-weight: 600; }
+.completion-entry-stages { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--ad-text-secondary); font-size: 12px; }
+.completion-entry-unassigned { color: var(--ad-text-secondary); }
+.completion-entry-arrow { flex: 0 0 auto; color: var(--ad-primary); font-size: 18px; }
 .debt-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--ad-border); }
 .quote-row { cursor: pointer; }
 .quote-row:hover { background: var(--ad-border); }
@@ -464,7 +483,5 @@ onBeforeUnmount(() => {
 @media (max-width: 720px) {
   .completion-header { align-items: flex-start; flex-direction: column; }
   .completion-kpis { grid-template-columns: 1fr 1fr; }
-  .completion-summary-layout { grid-template-columns: 1fr; gap: 12px; }
-  .completion-employees { border-right: 0; border-bottom: 1px solid var(--ad-border); padding: 0 0 12px; }
  }
 </style>

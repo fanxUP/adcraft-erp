@@ -63,6 +63,33 @@ describe('完成项目看板', () => {
     expect(source).not.toContain('完成明细已集中到完成看板')
   })
 
+  it('工作台将员工完成统计收起为可点击入口卡片', () => {
+    const source = readSource('views/home/DashboardView.vue')
+
+    expect(source).toContain('completion-entry-card')
+    expect(source).toContain('handleCompletionStatsClick')
+    expect(source).toContain("name: 'TaskCompletionStats'")
+    expect(source).not.toContain('completion-summary-layout')
+    expect(source).not.toContain('v-for="employee in completionSummary.employees"')
+  })
+
+  it('独立完成统计页提供管理员全员表和员工明细入口', () => {
+    const pagePath = resolve(srcRoot, 'views/reports/TaskCompletionStats.vue')
+    expect(existsSync(pagePath)).toBe(true)
+    const source = readFileSync(pagePath, 'utf8')
+
+    expect(source).toContain('getTaskCompletionSummary')
+    expect(source).toContain('getTaskCompletionDetails')
+    expect(source).toContain('task_completion:view_all')
+    expect(source).toContain('按项目')
+    expect(source).toContain('按明细')
+    expect(source).toContain('员工完成统计')
+    expect(source).toContain('订单编号')
+    expect(source).toContain('完成执行人')
+    expect(source).toContain('task_type')
+    expect(source).toContain('page_size')
+  })
+
   it('独立完成详情页复用只读详情接口并处理加载、错误和空数据状态', () => {
     const source = readSource('views/tasks/CompletedProjectDetail.vue')
 
@@ -107,5 +134,21 @@ describe('完成项目看板', () => {
     expect(typeSource).toContain('interface CompletedProjectDetail')
     expect(typeSource).toContain('interface CompletedProjectStage')
     expect(typeSource).toContain('interface CompletedProjectResourceSection')
+  })
+
+  it('完成统计页复用服务端分页明细 API 和独立权限路由', () => {
+    const apiSource = readSource('api/payments.ts')
+    const typeSource = readSource('types/api.ts')
+    const routerSource = readSource('router/index.ts')
+    const accessSource = readSource('config/access.ts')
+
+    expect(apiSource).toContain('getTaskCompletionDetails')
+    expect(apiSource).toContain('/reports/task-completion/details')
+    expect(typeSource).toContain('TaskCompletionDetailRow')
+    expect(typeSource).toContain('TaskCompletionDetailsResponse')
+    expect(routerSource).toContain("name: 'TaskCompletionStats'")
+    expect(routerSource).toContain("path: 'reports/task-completion'")
+    expect(accessSource).toContain("TaskCompletionStats: 'taskCompletion'")
+    expect(accessSource).toContain("TaskCompletionStats: '完成统计'")
   })
 })

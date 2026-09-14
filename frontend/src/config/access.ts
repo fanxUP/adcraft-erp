@@ -244,6 +244,7 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   InstallationTaskList: 'installationListRead',
   InstallationTaskDetail: 'installationRead',
   CompletedProjectDetail: 'taskCompletion',
+  TaskCompletionStats: 'taskCompletion',
 
   ReceivablesView: 'payment',
   ExpenseList: 'expense',
@@ -350,6 +351,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   InstallationTaskList: '安装任务',
   InstallationTaskDetail: '安装任务详情',
   CompletedProjectDetail: '完成项目详情',
+  TaskCompletionStats: '完成统计',
   ReceivablesView: '应收管理',
   ExpenseList: '支出管理',
   StatementList: '客户对账',
