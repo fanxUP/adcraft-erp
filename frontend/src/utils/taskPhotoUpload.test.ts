@@ -18,6 +18,7 @@ import {
   validateInstallationMedia,
   validateInstallationPhoto,
 } from './taskPhotoUpload'
+import { groupAttachmentsByDate } from './orderAttachmentAlbum'
 
 describe('task photo upload helpers', () => {
   it('uses a gentle wheel zoom step for site photo previews', () => {
@@ -85,5 +86,25 @@ describe('task photo upload helpers', () => {
     expect(getTaskAttachmentKind({ filename: '旧文件.bin', file_type: 'application/octet-stream' })).toBe('file')
     expect(formatAttachmentSize(1024)).toBe('1.0 KB')
     expect(formatAttachmentSize(1024 * 1024)).toBe('1.0 MB')
+  })
+
+  it('groups attachments by server upload date in descending order', () => {
+    const groups = groupAttachmentsByDate([
+      { id: 'older', created_at: '2026-09-13T08:00:00+08:00' },
+      { id: 'newer', created_at: '2026-09-14T16:20:00+08:00' },
+      { id: 'same-day-later', created_at: '2026-09-14T18:20:00+08:00' },
+      { id: 'unknown', created_at: null },
+    ])
+
+    expect(groups.map(group => group.label)).toEqual([
+      '2026-09-14',
+      '2026-09-13',
+      '时间未知',
+    ])
+    expect(groups[0].attachments.map(item => item.id)).toEqual([
+      'same-day-later',
+      'newer',
+    ])
+    expect(groups[2].isUnknown).toBe(true)
   })
 })

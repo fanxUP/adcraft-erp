@@ -69,92 +69,106 @@
           </div>
         </div>
 
-        <div v-if="previewAttachments(group).length" class="preview-grid">
-          <div v-for="attachment in previewAttachments(group)" :key="attachment.id" class="preview-item">
-            <button
-              v-if="isVideo(attachment)"
-              type="button"
-              class="video-preview-button"
-              :aria-label="`播放视频 ${attachment.filename}`"
-              @click="openVideoPreview(attachment, group)"
-            >
-              <video
-                v-if="attachment.preview_url"
+        <div
+          v-for="album in attachmentAlbums(group)"
+          :key="`${group.stage}-${album.key}`"
+          class="album-section"
+        >
+          <div class="album-heading">
+            <span class="album-date">{{ album.label }}</span>
+            <span class="stage-summary">{{ album.attachments.length }} 个资料</span>
+          </div>
+
+          <div v-if="previewAttachments(album.attachments).length" class="preview-grid">
+            <div v-for="attachment in previewAttachments(album.attachments)" :key="attachment.id" class="preview-item">
+              <button
+                v-if="isVideo(attachment)"
+                type="button"
+                class="video-preview-button"
+                :aria-label="`播放视频 ${attachment.filename}`"
+                @click="openVideoPreview(attachment, group)"
+              >
+                <video
+                  v-if="attachment.preview_url"
+                  class="preview-image"
+                  :src="attachment.preview_url"
+                  preload="metadata"
+                  muted
+                  playsinline
+                />
+                <span v-else class="preview-placeholder"><el-icon><VideoPlay /></el-icon></span>
+                <span class="video-play-badge" aria-hidden="true">▶</span>
+              </button>
+              <el-image
+                v-else-if="attachment.preview_url"
                 class="preview-image"
                 :src="attachment.preview_url"
-                preload="metadata"
-                muted
-                playsinline
+                :alt="attachment.filename"
+                fit="cover"
+                lazy
+                :preview-src-list="imageUrls(album.attachments)"
+                :initial-index="imagePreviewIndex(album.attachments, attachment.id)"
+                preview-teleported
+                :zoom-rate="1.05"
               />
-              <span v-else class="preview-placeholder"><el-icon><VideoPlay /></el-icon></span>
-              <span class="video-play-badge" aria-hidden="true">▶</span>
-            </button>
-            <el-image
-              v-else-if="attachment.preview_url"
-              class="preview-image"
-              :src="attachment.preview_url"
-              :alt="attachment.filename"
-              fit="cover"
-              lazy
-              :preview-src-list="imageUrls(group)"
-              :initial-index="imagePreviewIndex(group, attachment.id)"
-              preview-teleported
-              :zoom-rate="1.05"
-            />
-            <div v-else class="preview-placeholder"><el-icon><Picture /></el-icon></div>
-            <div class="preview-caption">
-              <span :title="attachment.filename">{{ attachment.filename }}</span>
-              <el-button
-                v-if="canDelete(group)"
-                text
-                type="danger"
-                size="small"
-                @click="removeAttachment(attachment, group)"
-              >删除</el-button>
+              <div v-else class="preview-placeholder"><el-icon><Picture /></el-icon></div>
+              <div class="preview-caption">
+                <div class="preview-caption-main">
+                  <span :title="attachment.filename">{{ attachment.filename }}</span>
+                  <small>{{ attachment.created_at ? formatDateTimeFull(attachment.created_at) : '时间未知' }}</small>
+                </div>
+                <el-button
+                  v-if="canDelete(group)"
+                  text
+                  type="danger"
+                  size="small"
+                  @click="removeAttachment(attachment, group)"
+                >删除</el-button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <el-table
-          v-if="fileAttachments(group).length"
-          :data="fileAttachments(group)"
-          stripe
-          size="small"
-          class="file-table"
-        >
-          <el-table-column prop="filename" label="文件名" min-width="220" show-overflow-tooltip />
-          <el-table-column label="类型" width="105">
-            <template #default="{ row }">{{ getTaskAttachmentTypeLabel(row) }}</template>
-          </el-table-column>
-          <el-table-column label="大小" width="105">
-            <template #default="{ row }">{{ formatAttachmentSize(row.file_size) }}</template>
-          </el-table-column>
-          <el-table-column label="上传时间" width="180">
-            <template #default="{ row }">{{ formatDateTimeFull(row.created_at) || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="上传人" width="120">
-            <template #default="{ row }">{{ row.uploaded_by_name || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="190" fixed="right">
-            <template #default="{ row }">
-              <el-button
-                v-if="isPreviewableAttachment(row)"
-                text
-                type="primary"
-                size="small"
-                @click="previewAttachment(row, group)"
-              >预览</el-button>
-              <el-button text size="small" @click="downloadAttachment(row, group)">下载</el-button>
-              <el-button
-                v-if="canDelete(group)"
-                text
-                type="danger"
-                size="small"
-                @click="removeAttachment(row, group)"
-              >删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+          <el-table
+            v-if="fileAttachments(album.attachments).length"
+            :data="fileAttachments(album.attachments)"
+            stripe
+            size="small"
+            class="file-table"
+          >
+            <el-table-column prop="filename" label="文件名" min-width="220" show-overflow-tooltip />
+            <el-table-column label="类型" width="105">
+              <template #default="{ row }">{{ getTaskAttachmentTypeLabel(row) }}</template>
+            </el-table-column>
+            <el-table-column label="大小" width="105">
+              <template #default="{ row }">{{ formatAttachmentSize(row.file_size) }}</template>
+            </el-table-column>
+            <el-table-column label="上传时间" width="180">
+              <template #default="{ row }">{{ formatDateTimeFull(row.created_at) || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="上传人" width="120">
+              <template #default="{ row }">{{ row.uploaded_by_name || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="190" fixed="right">
+              <template #default="{ row }">
+                <el-button
+                  v-if="isPreviewableAttachment(row)"
+                  text
+                  type="primary"
+                  size="small"
+                  @click="previewAttachment(row, group)"
+                >预览</el-button>
+                <el-button text size="small" @click="downloadAttachment(row, group)">下载</el-button>
+                <el-button
+                  v-if="canDelete(group)"
+                  text
+                  type="danger"
+                  size="small"
+                  @click="removeAttachment(row, group)"
+                >删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
 
         <div v-if="!group.attachments.length" class="material-empty">
           {{ group.stage === 'installation' ? '暂无现场照片或视频' : '暂无订单阶段资料' }}
@@ -207,6 +221,7 @@ import {
   getOrderAttachments,
   uploadOrderAttachment,
 } from '@/api/orders'
+import { groupAttachmentsByDate } from '@/utils/orderAttachmentAlbum'
 import type {
   OrderTaskAttachmentGroup,
   OrderTaskAttachmentResponse,
@@ -275,23 +290,27 @@ function isVideo(attachment: LocalAttachment) {
   return attachmentKind(attachment) === 'video'
 }
 
-function previewAttachments(group: LocalGroup) {
-  return group.attachments.filter(attachment => isImage(attachment) || isVideo(attachment))
+function attachmentAlbums(group: LocalGroup) {
+  return groupAttachmentsByDate(group.attachments)
 }
 
-function fileAttachments(group: LocalGroup) {
-  return group.attachments.filter(attachment => !isImage(attachment) && !isVideo(attachment))
+function previewAttachments(attachments: readonly LocalAttachment[]) {
+  return attachments.filter(attachment => isImage(attachment) || isVideo(attachment))
 }
 
-function imageUrls(group: LocalGroup) {
-  return group.attachments
+function fileAttachments(attachments: readonly LocalAttachment[]) {
+  return attachments.filter(attachment => !isImage(attachment) && !isVideo(attachment))
+}
+
+function imageUrls(attachments: readonly LocalAttachment[]) {
+  return attachments
     .filter(attachment => isImage(attachment) && attachment.preview_url)
     .map(attachment => attachment.preview_url as string)
 }
 
-function imagePreviewIndex(group: LocalGroup, attachmentId: string) {
-  const attachment = group.attachments.find(item => item.id === attachmentId)
-  return attachment ? imageUrls(group).indexOf(attachment.preview_url || '') : 0
+function imagePreviewIndex(attachments: readonly LocalAttachment[], attachmentId: string) {
+  const attachment = attachments.find(item => item.id === attachmentId)
+  return attachment ? imageUrls(attachments).indexOf(attachment.preview_url || '') : 0
 }
 
 function groupUploadQueue(stage: TaskType) {
@@ -362,8 +381,10 @@ async function uploadOne(group: LocalGroup, item: UploadQueueItem): Promise<bool
       item.file,
       props.taskId,
     )
-    group.attachments.unshift({ ...attachment })
-    await loadPreview(group.attachments[0], group)
+    const localAttachment = { ...attachment }
+    group.attachments.unshift(localAttachment)
+    group.attachment_count += 1
+    await loadPreview(localAttachment, group)
     item.status = 'done'
     return true
   } catch (error: unknown) {
@@ -458,6 +479,7 @@ async function removeAttachment(attachment: LocalAttachment, group: LocalGroup) 
     task_id: props.taskId,
   })
   group.attachments = group.attachments.filter(item => item.id !== attachment.id)
+  group.attachment_count = Math.max(0, group.attachment_count - 1)
   const url = objectUrls.get(attachment.id)
   if (url) {
     URL.revokeObjectURL(url)
@@ -522,13 +544,19 @@ onUnmounted(() => {
 .upload-queue { margin-top: 10px; padding: 8px 10px; background: var(--ad-bg-secondary, #f8fafc); border-radius: 6px; }
 .upload-queue-row { display: flex; align-items: center; gap: 8px; min-height: 28px; }
 .upload-queue-name { flex: 1; overflow: hidden; color: var(--ad-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.album-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--ad-border); }
+.album-section:first-of-type { margin-top: 8px; padding-top: 0; border-top: 0; }
+.album-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.album-date { color: var(--ad-text); font-size: 14px; font-weight: 600; }
 .preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
 .preview-item { min-width: 0; overflow: hidden; border: 1px solid var(--ad-border); border-radius: 7px; background: var(--ad-card); }
 .preview-image, .preview-placeholder { display: flex; align-items: center; justify-content: center; width: 100%; height: 120px; background: var(--ad-bg-secondary, #f1f5f9); color: var(--ad-text-secondary); font-size: 28px; }
 .video-preview-button { position: relative; display: block; width: 100%; padding: 0; border: 0; cursor: pointer; }
 .video-play-badge { position: absolute; inset: 50% auto auto 50%; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; transform: translate(-50%, -50%); border-radius: 50%; background: rgb(0 0 0 / 62%); color: #fff; font-size: 16px; }
 .preview-caption { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; }
-.preview-caption > span { flex: 1; overflow: hidden; color: var(--ad-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.preview-caption-main { min-width: 0; flex: 1; }
+.preview-caption-main > span { display: block; overflow: hidden; color: var(--ad-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.preview-caption-main > small { display: block; margin-top: 2px; color: var(--ad-text-secondary); font-size: 11px; }
 .file-table { margin-top: 14px; }
 .material-empty { padding: 12px 0 2px; color: var(--ad-text-secondary); font-size: 12px; text-align: center; }
 .video-player { display: block; width: 100%; max-height: 70vh; background: #000; }

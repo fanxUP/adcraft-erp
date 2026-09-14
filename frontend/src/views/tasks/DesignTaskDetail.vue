@@ -30,10 +30,9 @@
         :order-id="task.order_id"
         :current-item-id="task.order_item_id"
         :current-item-ids="task.order_item_ids"
-        :task-capabilities="task.capabilities"
-        :steps="designSteps"
         :current-status="task.status"
         :workflow="DESIGN_WORKFLOW"
+        :refresh-key="task.updated_at"
         :changing="changing"
         @linked="fetchTask"
         @change="handleWorkflowChange"
@@ -67,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDesignTask, changeDesignTaskStatus } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -97,30 +96,8 @@ const DESIGN_WORKFLOW: Record<string, string[]> = {
   cancelled: [],
 }
 
-// 旧 pending_review/revision 仅保留给后端兼容，不再作为前端任务流程节点展示。
-const designSteps = computed(() => {
-  return [
-    { key: 'pending', label: '待分配' },
-    { key: 'designing', label: '设计中' },
-    { key: 'confirmed', label: '已完成' },
-  ]
-})
-
-async function handleWorkflowChange(to_status: string, orderItemIds: string[]) {
-  const labelMap: Record<string, string> = { pending: '待分配', designing: '设计中', pending_review: '待处理', revision: '需调整', confirmed: '已完成', cancelled: '已取消' }
-  if (to_status === 'cancelled') {
-    const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
-      confirmButtonText: '确定', cancelButtonText: '取消',
-      inputPlaceholder: '取消原因',
-    })
-    if (!reason) return
-    await doChangeStatus(to_status, reason, orderItemIds)
-  } else {
-    await ElMessageBox.confirm(`确定将任务状态变更为「${labelMap[to_status]}」？`, '变更状态', {
-      confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
-    })
-    await doChangeStatus(to_status, '', orderItemIds)
-  }
+async function handleWorkflowChange(to_status: string, orderItemIds: string[], reason = '') {
+  await doChangeStatus(to_status, reason, orderItemIds)
 }
 
 async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[]) {

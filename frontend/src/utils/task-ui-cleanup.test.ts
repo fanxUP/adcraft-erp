@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { getTaskWorkflowControl } from './taskItemWorkflow'
+import { getTaskItemActions } from './taskItemActions'
 
 const srcRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -55,19 +55,21 @@ describe('任务详情页界面收敛', () => {
 
   it('任务处理明细按后端阶段展示标签并禁用不可关联明细', () => {
     const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
-    const selectionSource = readSource('utils/taskStageSelection.ts')
 
     expect(source).toContain('getTaskOrderItemOptions')
     expect(source).toContain('item.stage_label')
-    expect(source).toContain('isTaskOrderItemSelectable')
-    expect(selectionSource).toContain('item.capabilities?.select')
-    expect(source).toContain('function canSelect')
+    expect(source).toContain('getTaskItemActions')
+    expect(source).toContain('handleItemAction')
+    expect(source).toContain('item-table-actions')
     expect(source).toContain('function disabledReason')
     expect(source).toContain('<StatusTag')
     expect(source).toContain('item.outsource_blocked')
     expect(source).toContain('item.outsource_status_label')
-    expect(source).toContain('外协完成后才能推进该明细到下一阶段')
+    expect(source).toContain('action.disabled_reason')
     expect(source).toContain('刷新状态')
+    expect(source).not.toContain('勾选要推进的明细')
+    expect(source).not.toContain('stageSelectionGroups')
+    expect(source).not.toContain('TaskWorkflow')
     expect(source).not.toContain('getOrder(props.orderId)')
   })
 
@@ -126,8 +128,8 @@ describe('任务详情页界面收敛', () => {
 
     expect(source).not.toContain(':title="isHistoricalReadOnly')
     expect(source).not.toContain('v-if="!canChangeTaskStatus && !isHistoricalReadOnly"')
-    expect(source).toContain('changeStatusDisabledReason.value')
-    expect(source).toContain(':changing="changing || isHistoricalReadOnly || !canChangeTaskStatus"')
+    expect(source).toContain('action.disabled_reason')
+    expect(source).toContain('!action.allowed')
   })
 
   it('任务处理按明细显示执行人，不再使用整张任务负责人', () => {
@@ -157,24 +159,24 @@ describe('任务详情页界面收敛', () => {
     }
   })
 
-  it('设计、制作、安装任务提供按状态的三态分类全选', () => {
+  it('设计、制作、安装任务不再使用批量状态全选', () => {
     const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
-    const selectionSource = readSource('utils/taskStageSelection.ts')
 
-    expect(source).toContain('v-if="stageSelectionGroups.length && !isHistoricalReadOnly"')
-    expect(source).toContain('{{ group.label }}（{{ stageSelectionItemIds[group.key].length }} 条可选）')
-    expect(source).toContain(':indeterminate="stageSelectionState[group.key].indeterminate"')
-    expect(source).toContain('@change="handleStageSelection(group.key, $event)"')
-    expect(source).toContain('getTaskStageSelectionGroups')
-    expect(source).toContain('getTaskStageSelectionItemIds')
-    expect(selectionSource).toContain("design: [")
-    expect(selectionSource).toContain("production: [")
-    expect(selectionSource).toContain("installation: [")
-    expect(selectionSource).toContain("label: '设计中'")
-    expect(selectionSource).toContain("label: '制作中'")
-    expect(selectionSource).toContain("label: '安装中'")
-    expect(source).toContain('toggleStageSelection')
-    expect(source).toContain('selectedItemIds.value')
+    expect(source).not.toContain('stageSelectionGroups')
+    expect(source).not.toContain('getTaskStageSelectionGroups')
+    expect(source).not.toContain('toggleStageSelection')
+    expect(source).not.toContain('按状态选择订单明细')
+    expect(source).toContain('仅用于批量改派')
+  })
+
+  it('移动端状态变更只提交当前点击的订单明细', () => {
+    const source = readSource('views/tasks/MobileInstallation.vue')
+
+    expect(source).toContain('getTaskOrderItemOptions')
+    expect(source).toContain('handleItemAction')
+    expect(source).toContain('order_item_ids: [item.id]')
+    expect(source).not.toContain('const orderItemIds = currentTask.value.order_item_ids')
+    expect(source).not.toContain('order_item_ids: orderItemIds')
   })
 
   it('工作台项目看板与独立项目看板复用任务进度', () => {
@@ -264,51 +266,97 @@ describe('任务详情页界面收敛', () => {
   })
 })
 
-describe('按已选订单明细控制任务状态', () => {
+describe('单条订单明细动作', () => {
   const designWorkflow = {
     pending: ['designing', 'cancelled'],
     designing: ['confirmed', 'pending', 'cancelled'],
     confirmed: [],
   }
 
-  it('任务整体已在设计中时，待分配明细仍可单独推进到设计中', () => {
-    const control = getTaskWorkflowControl(
-      [{ id: 'sign', is_linked: true, task_status: 'pending' }],
-      ['sign'],
-      'designing',
-      designWorkflow,
-    )
+  it('待分配明细只显示开始设计，且只包含一个目标状态', () => {
+    const actions = getTaskItemActions('design', {
+      is_linked: true,
+      stage: 'designing',
+      task_status: 'pending',
+      can_select: true,
+    }, designWorkflow)
 
-    expect(control.currentStatus).toBe('pending')
-    expect(control.workflow.pending).toContain('designing')
-    expect(control.workflow.pending).not.toContain('confirmed')
+    expect(actions[0]).toMatchObject({
+      key: 'start',
+      to_status: 'designing',
+      label: '开始设计',
+      allowed: true,
+    })
   })
 
-  it('新勾选但尚未写入关联表的明细按待分配处理', () => {
-    const control = getTaskWorkflowControl(
-      [{ id: 'sign', is_linked: false, task_status: null }],
-      ['sign'],
-      'designing',
-      designWorkflow,
-    )
+  it('设计中明细提供完成设计和退回待分配两个独立动作', () => {
+    const actions = getTaskItemActions('design', {
+      is_linked: true,
+      stage: 'designing',
+      task_status: 'designing',
+      can_select: true,
+    }, designWorkflow)
 
-    expect(control.currentStatus).toBe('pending')
-    expect(control.workflow.pending).toEqual(['designing', 'cancelled'])
+    expect(actions.map(action => action.to_status)).toEqual([
+      'confirmed',
+      'pending',
+      'cancelled',
+    ])
+    expect(actions.find(action => action.to_status === 'confirmed')?.label).toBe('完成设计')
+    expect(actions.find(action => action.to_status === 'pending')?.label).toBe('退回待分配')
   })
 
-  it('混合状态批量选择只保留所有明细都允许的目标状态', () => {
-    const control = getTaskWorkflowControl(
-      [
-        { id: 'pending-item', is_linked: true, task_status: 'pending' },
-        { id: 'designing-item', is_linked: true, task_status: 'designing' },
-      ],
-      ['pending-item', 'designing-item'],
-      'designing',
-      designWorkflow,
-    )
+  it('未关联明细使用加入并开始动作，不会暗示已经关联', () => {
+    const actions = getTaskItemActions('design', {
+      is_linked: false,
+      stage: 'designing',
+      task_status: null,
+      can_select: true,
+    }, designWorkflow)
 
-    expect(control.currentStatus).toBe('__selected_mixed__')
-    expect(control.workflow.__selected_mixed__).toEqual(['cancelled'])
+    expect(actions).toHaveLength(1)
+    expect(actions[0]).toMatchObject({
+      key: 'link_start',
+      to_status: 'designing',
+      label: '加入并开始设计',
+    })
+  })
+
+  it('动作由服务端提供时优先使用服务端语义', () => {
+    const serverActions = [{
+      key: 'complete',
+      to_status: 'completed',
+      label: '完成制作',
+      allowed: false,
+      disabled_reason: '外协任务进行中',
+      kind: 'primary' as const,
+    }]
+    const actions = getTaskItemActions('production', {
+      is_linked: true,
+      stage: 'in_production',
+      task_status: 'in_progress',
+      can_select: false,
+      actions: serverActions,
+    }, {
+      pending: ['in_progress'],
+      in_progress: ['completed', 'pending'],
+    })
+
+    expect(actions).toEqual(serverActions)
+  })
+
+  it('服务端返回空动作时保持只读，不回退生成旧流程按钮', () => {
+    const actions = getTaskItemActions('design', {
+      is_linked: true,
+      stage: 'completed',
+      task_status: 'confirmed',
+      can_select: true,
+      actions: [],
+    }, {
+      confirmed: ['cancelled'],
+    })
+
+    expect(actions).toEqual([])
   })
 
   it('制作中明细支持回退到待制作，同时保留完成入口', () => {
@@ -319,23 +367,33 @@ describe('按已选订单明细控制任务状态', () => {
       completed: [],
       cancelled: [],
     }
-    const control = getTaskWorkflowControl(
-      [{ id: 'production-item', is_linked: true, task_status: 'in_progress' }],
-      ['production-item'],
-      'in_progress',
-      productionWorkflow,
-    )
+    const actions = getTaskItemActions('production', {
+      is_linked: true,
+      stage: 'in_production',
+      task_status: 'in_progress',
+      can_select: true,
+    }, productionWorkflow)
 
-    expect(control.workflow.in_progress).toContain('pending')
-    expect(control.workflow.in_progress).toContain('completed')
+    expect(actions.map(action => action.to_status)).toEqual([
+      'completed',
+      'rework',
+      'pending',
+      'cancelled',
+    ])
+    expect(actions.find(action => action.to_status === 'pending')?.label).toBe('退回待制作')
+    expect(actions.find(action => action.to_status === 'completed')?.label).toBe('完成制作')
   })
 
-  it('制作任务页面和状态条明确提供回退入口', () => {
-    const productionSource = readSource('views/tasks/ProductionTaskDetail.vue')
-    const workflowSource = readSource('components/workflow/TaskWorkflow.vue')
+  it('没有操作权限时仍返回禁用动作和可读原因', () => {
+    const actions = getTaskItemActions('design', {
+      is_linked: true,
+      stage: 'designing',
+      task_status: 'designing',
+      can_select: false,
+      disabled_reason: '该明细由李四负责',
+    }, designWorkflow)
 
-    expect(productionSource).toContain("in_progress: ['completed', 'rework', 'pending', 'cancelled']")
-    expect(workflowSource).toContain('function isRollback')
-    expect(workflowSource).toContain('可回退')
+    expect(actions.every(action => action.allowed === false)).toBe(true)
+    expect(actions[0].disabled_reason).toBe('该明细由李四负责')
   })
 })

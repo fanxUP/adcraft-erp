@@ -134,16 +134,48 @@
           capture
         />
 
-        <!-- Status actions -->
-        <div class="status-actions">
-          <button
-            v-for="s in nextStatuses"
-            :key="s.value"
-            :class="['action-btn', s.type]"
-            @click="changeStatus(s.value)"
-          >
-            {{ s.label }}
-          </button>
+        <!-- 每条订单明细独立推进，不能用整张任务的状态覆盖其他明细。 -->
+        <div class="item-action-section">
+          <div class="item-action-heading">
+            <span class="item-action-title">订单明细</span>
+            <span class="item-action-hint">点击单条明细的操作按钮</span>
+          </div>
+          <div v-if="itemOptionsLoading" class="item-options-state">正在加载明细状态…</div>
+          <div v-else-if="itemOptionsError" class="item-options-state item-options-error">
+            {{ itemOptionsError }}
+            <button class="inline-retry-btn" type="button" @click="loadCurrentItemOptions">重试</button>
+          </div>
+          <div v-else-if="!currentItemOptions.length" class="item-options-state">
+            该任务暂无可显示的订单明细
+          </div>
+          <div v-for="item in currentItemOptions" :key="item.id" class="mobile-item-row">
+            <div class="mobile-item-topline">
+              <span class="mobile-item-name">{{ item.item_name }}</span>
+              <el-tag size="small" :type="item.task_status_view?.tone || 'info'">
+                {{ item.task_status_label || (item.is_linked ? '待分配' : '未关联') }}
+              </el-tag>
+            </div>
+            <div class="mobile-item-meta">
+              <span v-if="item.material_process">{{ item.material_process }}</span>
+              <span v-if="item.assignee_name" class="mobile-item-assignee">执行人：{{ item.assignee_name }}</span>
+              <span v-else-if="item.is_linked">执行人：待领取</span>
+            </div>
+            <div class="mobile-item-actions">
+              <button
+                v-for="action in itemActions(item)"
+                :key="`${item.id}-${action.key}-${action.to_status}`"
+                type="button"
+                :class="['action-btn', action.kind === 'primary' ? 'primary' : 'secondary']"
+                :disabled="!action.allowed || actionBusyItemId === item.id"
+                @click="handleItemAction(item, action)"
+              >
+                {{ action.label }}
+              </button>
+            </div>
+            <div v-if="itemDisabledReason(item)" class="mobile-item-reason">
+              {{ itemDisabledReason(item) }}
+            </div>
+          </div>
         </div>
       </div>
     </el-drawer>
@@ -159,12 +191,14 @@ import {
   getInstallationTasks,
   getInstallationTask,
   changeInstallationTaskStatus,
+  getTaskOrderItemOptions,
 } from '@/api/tasks'
 import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { InstallationTaskResponse } from '@/types/api'
+import type { InstallationTaskResponse, TaskItemAction, TaskOrderItemOption } from '@/types/api'
 import { getErrorMessage } from '@/utils/error'
+import { getTaskItemActions } from '@/utils/taskItemActions'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -178,6 +212,10 @@ const currentTask = ref<InstallationTaskResponse | null>(null)
 const drawerVisible = ref(false)
 const activeTab = ref('')
 const pullDistance = ref(0)
+const currentItemOptions = ref<TaskOrderItemOption[]>([])
+const itemOptionsLoading = ref(false)
+const itemOptionsError = ref('')
+const actionBusyItemId = ref<string | null>(null)
 let touchStartY = 0
 
 // --- Status config ---
@@ -216,29 +254,16 @@ function statusColor(s: string) {
   return map[s] ?? 'info'
 }
 
-const statusTransitions: Record<string, { value: string; label: string; type: string }[]> = {
-  pending: [
-    { value: 'assigned', label: '确认分配', type: 'primary' },
-    { value: 'in_progress', label: '开始安装', type: 'primary' },
-  ],
-  assigned: [
-    { value: 'in_progress', label: '开始安装', type: 'primary' },
-  ],
-  in_progress: [
-    { value: 'pending_acceptance', label: '提交验收', type: 'success' },
-  ],
-  pending_acceptance: [
-    { value: 'completed', label: '验收通过', type: 'success' },
-    { value: 'in_progress', label: '返回修改', type: 'warning' },
-  ],
+const INST_WORKFLOW: Record<string, string[]> = {
+  pending: ['assigned', 'in_progress', 'cancelled'],
+  assigned: ['in_progress', 'pending', 'cancelled'],
+  in_progress: ['completed', 'pending_acceptance', 'pending', 'cancelled'],
+  pending_acceptance: ['completed', 'in_progress', 'cancelled'],
   completed: [],
+  cancelled: [],
 }
 
 // --- Computed ---
-const nextStatuses = computed(() =>
-  currentTask.value ? (statusTransitions[currentTask.value.status] || []) : []
-)
-
 const statusCounts = computed(() => {
   const counts: Record<string, number> = { all: allTasks.value.length }
   for (const tab of statusTabs) {
@@ -309,37 +334,88 @@ async function openTask(task: InstallationTaskResponse) {
   try {
     currentTask.value = await getInstallationTask(task.id)
     drawerVisible.value = true
+    await loadCurrentItemOptions()
   } catch {
     ElMessage.error('加载任务详情失败')
   }
 }
 
-// --- Status change ---
-async function changeStatus(toStatus: string) {
+async function loadCurrentItemOptions() {
   if (!currentTask.value) return
-  const orderItemIds = currentTask.value.order_item_ids?.length
-    ? currentTask.value.order_item_ids
-    : currentTask.value.order_item_id
-      ? [currentTask.value.order_item_id]
-      : []
-  if (!orderItemIds.length) {
-    ElMessage.warning('该历史任务尚未关联订单明细，请先在任务处理页关联')
+  itemOptionsLoading.value = true
+  itemOptionsError.value = ''
+  try {
+    currentItemOptions.value = await getTaskOrderItemOptions('installation', currentTask.value.id)
+  } catch {
+    currentItemOptions.value = []
+    itemOptionsError.value = '订单明细加载失败，请重试'
+  } finally {
+    itemOptionsLoading.value = false
+  }
+}
+
+function itemActions(item: TaskOrderItemOption) {
+  return getTaskItemActions('installation', item, INST_WORKFLOW)
+}
+
+function itemDisabledReason(item: TaskOrderItemOption) {
+  return itemActions(item).find(action => !action.allowed)?.disabled_reason
+    || item.disabled_reason
+    || ''
+}
+
+function itemStatusLabel(item: TaskOrderItemOption) {
+  return item.task_status_label || item.task_status || '未关联'
+}
+
+// --- Per-item status change ---
+async function handleItemAction(item: TaskOrderItemOption, action: TaskItemAction) {
+  if (!currentTask.value) return
+  if (!action.allowed) {
+    ElMessage.info(action.disabled_reason || '当前账号不能操作该明细')
     return
   }
-  await ElMessageBox.confirm(`确定将安装状态变更为「${toStatus}」？`, '变更状态', {
-    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
-  })
+  if (actionBusyItemId.value) return
+
+  let reason = ''
+  try {
+    if (action.to_status === 'cancelled') {
+      const result = await ElMessageBox.prompt(
+        `请输入取消“${item.item_name}”的原因`,
+        '取消明细任务',
+        { confirmButtonText: '确认取消', cancelButtonText: '返回', inputPlaceholder: '请输入取消原因' },
+      )
+      reason = result.value?.trim() || ''
+      if (!reason) {
+        ElMessage.warning('请输入取消原因')
+        return
+      }
+    } else {
+      await ElMessageBox.confirm(
+        `确认将“${item.item_name}”从“${itemStatusLabel(item)}”变更为“${action.label}”吗？`,
+        '变更明细状态',
+        { confirmButtonText: '确认操作', cancelButtonText: '取消', type: action.kind === 'primary' ? 'warning' : 'info' },
+      )
+    }
+  } catch {
+    return
+  }
+
+  actionBusyItemId.value = item.id
   try {
     await changeInstallationTaskStatus(currentTask.value.id, {
-      to_status: toStatus,
-      order_item_ids: orderItemIds,
+      to_status: action.to_status,
+      reason,
+      order_item_ids: [item.id],
     })
 
     ElMessage.success('状态已更新')
     currentTask.value = await getInstallationTask(currentTask.value.id)
-    fetchTasks()
+    await Promise.all([loadCurrentItemOptions(), fetchTasks()])
   } catch (e: unknown) {
     ElMessage.error(getErrorMessage(e, '状态更新失败'))
+  } finally {
+    actionBusyItemId.value = null
   }
 }
 
@@ -617,13 +693,44 @@ watch(() => document.visibilityState, (state) => {
   font-weight: 500;
 }
 
-/* Status action buttons */
-.status-actions { margin-top: 4px; }
-.action-btn {
-  display: block;
-  width: 100%;
-  padding: 14px;
+/* Per-item status actions */
+.item-action-section {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #2a2a3e;
+  border-radius: 10px;
+  background: #1e1e30;
+}
+.item-action-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 10px;
+}
+.item-action-title { font-size: 15px; font-weight: 600; }
+.item-action-hint { color: #888; font-size: 12px; }
+.item-options-state { padding: 16px 4px; color: #888; font-size: 13px; text-align: center; }
+.item-options-error { color: #ff8a80; }
+.inline-retry-btn {
+  margin-left: 8px;
+  border: 0;
+  background: transparent;
+  color: #4fc3f7;
+  cursor: pointer;
+  font-size: 13px;
+}
+.mobile-item-row { padding: 12px 0; border-top: 1px solid #2a2a3e; }
+.mobile-item-row:first-of-type { border-top: 0; }
+.mobile-item-topline { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mobile-item-name { min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.mobile-item-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 6px; color: #888; font-size: 12px; line-height: 1.5; }
+.mobile-item-assignee { color: #ff8a80; }
+.mobile-item-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.action-btn {
+  flex: 1 1 140px;
+  min-width: 120px;
+  padding: 11px 12px;
   border-radius: 10px;
   border: 1px solid #2a2a3e;
   font-size: 15px;
@@ -635,10 +742,16 @@ watch(() => document.visibilityState, (state) => {
   color: var(--ad-text, #e0e0e0);
 }
 .action-btn:active { transform: scale(0.98); }
+.action-btn:disabled { cursor: not-allowed; opacity: .45; transform: none; }
 .action-btn.primary {
   background: var(--ad-red, #e63946);
   border-color: var(--ad-red, #e63946);
   color: #fff;
+}
+.action-btn.secondary {
+  background: #292940;
+  border-color: #464661;
+  color: #e0e0e0;
 }
 .action-btn.success {
   background: #2e7d32;
@@ -650,6 +763,7 @@ watch(() => document.visibilityState, (state) => {
   border-color: #e65100;
   color: #fff;
 }
+.mobile-item-reason { margin-top: 8px; color: #ffb74d; font-size: 12px; line-height: 1.5; }
 
 /* Safe area for mobile */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {

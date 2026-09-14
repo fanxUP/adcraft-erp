@@ -26,6 +26,7 @@ from app.services.task_service import (
     _ensure_task_order_item_links,
     _materialize_legacy_task_scope,
     _resolve_order_item_stage,
+    _task_item_actions,
     _task_order_item_option_map,
     _validate_order_item_id,
     _validate_order_item_ids,
@@ -79,6 +80,44 @@ def test_task_order_item_option_exposes_stage_and_selectability():
     assert "outsource_status_label" in option_fields
     assert "outsource_task_count" in option_fields
     assert "outsource_task_nos" in option_fields
+    assert "actions" in option_fields
+
+
+def test_task_item_actions_use_single_item_plain_language_commands():
+    actions = _task_item_actions(
+        "production",
+        "in_progress",
+        can_operate=True,
+        is_linked=True,
+        disabled_reason=None,
+        outsource_blocked=False,
+    )
+
+    assert [action["to_status"] for action in actions] == [
+        "completed",
+        "rework",
+        "pending",
+        "cancelled",
+    ]
+    assert actions[0]["label"] == "完成制作"
+    assert actions[2]["label"] == "退回待制作"
+    assert all(action["allowed"] for action in actions)
+
+
+def test_task_item_actions_disable_completion_when_outsource_is_active():
+    actions = _task_item_actions(
+        "installation",
+        "in_progress",
+        can_operate=True,
+        is_linked=True,
+        disabled_reason=None,
+        outsource_blocked=True,
+        outsource_reason="外协任务进行中，外协完成后才能完成安装任务",
+    )
+
+    completed = next(action for action in actions if action["to_status"] == "completed")
+    assert completed["allowed"] is False
+    assert completed["disabled_reason"] == "外协任务进行中，外协完成后才能完成安装任务"
 
 
 def _mock_result(items):

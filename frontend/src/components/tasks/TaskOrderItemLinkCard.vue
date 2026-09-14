@@ -17,7 +17,7 @@
       <div id="order-item-section-title" class="section-heading">
         <div class="section-heading-main">
           <span>订单明细</span>
-          <span class="section-note">勾选要推进的明细，未勾选明细不会变更</span>
+          <span class="section-note">点击每条明细的操作按钮，只改变当前明细</span>
         </div>
         <el-button
           text
@@ -30,33 +30,7 @@
         </el-button>
       </div>
 
-      <div
-        v-if="stageSelectionGroups.length && !isHistoricalReadOnly"
-        class="stage-selection-toolbar"
-        role="group"
-        :aria-label="stageSelectionAriaLabel"
-      >
-        <div class="stage-selection-controls">
-          <el-checkbox
-            v-for="group in stageSelectionGroups"
-            :key="group.key"
-            :model-value="stageSelectionState[group.key].checked"
-            :indeterminate="stageSelectionState[group.key].indeterminate"
-            :disabled="changing || !stageSelectionItemIds[group.key].length"
-            :aria-label="`选择${group.label}明细，共 ${stageSelectionItemIds[group.key].length} 条可选`"
-            @change="handleStageSelection(group.key, $event)"
-          >
-            {{ group.label }}（{{ stageSelectionItemIds[group.key].length }} 条可选）
-          </el-checkbox>
-        </div>
-        <span class="stage-selection-summary">已选 {{ selectedItemIds.length }} 条</span>
-      </div>
-
-      <div
-        v-if="canManageTaskItems"
-        data-ai-target="task-item-assignee"
-        class="item-assignee-toolbar"
-      >
+      <div v-if="canManageTaskItems" class="item-assignee-toolbar">
         <div class="item-assignee-toolbar-main">
           <span class="item-assignee-toolbar-label">明细改派</span>
           <el-select
@@ -75,7 +49,7 @@
               :value="option.user_id"
             />
           </el-select>
-          <span class="item-assignee-toolbar-note">只对已关联、未完成的已选明细生效</span>
+          <span class="item-assignee-toolbar-note">只对勾选的已关联、未完成明细生效</span>
         </div>
         <div class="item-assignee-toolbar-actions">
           <el-button
@@ -97,19 +71,27 @@
         </div>
       </div>
 
+      <div v-if="canManageTaskItems && items.length" class="selection-context-note">
+        <span>勾选仅用于批量改派，不用于变更状态。</span>
+        <span v-if="selectedItemIds.length">已选 {{ selectedItemIds.length }} 条</span>
+      </div>
+
       <div v-loading="loadingItems" class="link-panel">
         <div
           v-if="items.length"
           class="item-table"
           :class="{
+            'has-selection-column': selectionEnabled,
             'has-price-columns': canViewItemPrice,
             'has-outsource-column': canViewOutsourceTask,
           }"
           role="table"
-          aria-label="订单明细（可多选）"
+          aria-label="订单明细逐条操作列表"
         >
           <div class="item-table-header" role="row">
-            <span class="item-table-cell item-table-select" role="columnheader" aria-label="选择" />
+            <span v-if="selectionEnabled" class="item-table-cell item-table-select" role="columnheader">
+              选择
+            </span>
             <span class="item-table-cell" role="columnheader">项目内容</span>
             <span class="item-table-cell" role="columnheader">产品/材质/工艺</span>
             <span class="item-table-cell" role="columnheader">规格</span>
@@ -121,27 +103,29 @@
             <span v-if="canViewItemPrice" class="item-table-cell item-table-number" role="columnheader">小计</span>
             <span class="item-table-cell item-table-number" role="columnheader">本任务进度</span>
             <span v-if="canViewOutsourceTask" class="item-table-cell" role="columnheader">外协</span>
+            <span class="item-table-cell item-table-actions-header" role="columnheader">操作</span>
           </div>
 
-          <label
+          <div
             v-for="item in items"
             :key="item.id"
             class="item-table-row"
             :class="{
               'is-selected': selectedItemIds.includes(item.id),
-              'is-disabled': !canSelect(item),
+              'is-disabled': rowDisabled(item),
             }"
-            :aria-disabled="!canSelect(item)"
+            :aria-disabled="rowDisabled(item)"
             role="row"
           >
-            <span class="item-table-cell item-table-select" data-label="选择" role="cell">
+            <span v-if="selectionEnabled" class="item-table-cell item-table-select" data-label="选择" role="cell">
               <input
                 v-model="selectedItemIds"
                 class="item-table-checkbox"
                 type="checkbox"
                 :value="item.id"
-                :disabled="changing || !canSelect(item)"
-                :aria-label="`选择订单明细 ${item.item_name}`"
+                :disabled="changing || reassigning || !canSelect(item)"
+                :aria-label="`选择订单明细 ${item.item_name} 用于改派`"
+                @click.stop
               />
             </span>
             <span class="item-table-cell item-table-name" data-label="项目内容" role="cell">
@@ -197,13 +181,34 @@
               </el-tag>
               <span v-else class="item-table-placeholder">—</span>
             </span>
-            <span v-if="!canSelect(item) && disabledReason(item)" class="item-table-detail-reason" role="cell">
-              {{ disabledReason(item) }}
+            <span class="item-table-cell item-table-actions" data-label="操作" role="cell">
+              <el-button
+                v-if="primaryAction(item)"
+                :type="primaryAction(item)?.kind === 'primary' ? 'primary' : 'warning'"
+                size="small"
+                :plain="primaryAction(item)?.kind !== 'primary'"
+                :loading="actionLoadingId === item.id"
+                :disabled="changing || reassigning || actionLoadingId === item.id || !primaryAction(item)?.allowed"
+                @click.stop="handleItemAction(item, primaryAction(item)!)"
+              >
+                {{ primaryAction(item)?.label }}
+              </el-button>
+              <el-button
+                v-for="action in secondaryActions(item)"
+                :key="`${item.id}-${action.key}-${action.to_status}`"
+                text
+                :type="action.key === 'cancel' ? 'danger' : 'warning'"
+                size="small"
+                :disabled="changing || reassigning || actionLoadingId === item.id || !action.allowed"
+                @click.stop="handleItemAction(item, action)"
+              >
+                {{ action.label }}
+              </el-button>
+              <span v-if="disabledReason(item)" class="item-action-reason">
+                {{ disabledReason(item) }}
+              </span>
             </span>
-            <span v-if="canViewOutsourceTask && item.outsource_blocked && canSelect(item)" class="item-table-outsourcing-reason" role="cell">
-              外协完成后才能推进该明细到下一阶段
-            </span>
-          </label>
+          </div>
         </div>
 
         <div v-if="loadError" class="link-tip error-tip">订单明细加载失败，请刷新后重试。</div>
@@ -225,24 +230,6 @@
         </div>
       </div>
     </section>
-
-    <el-divider />
-
-    <section class="task-section status-section" aria-labelledby="task-status-section-title">
-      <div id="task-status-section-title" class="section-heading status-heading">
-        <div class="section-heading-main">
-          <span>变更状态</span>
-          <span class="section-note">{{ statusSectionNote }}</span>
-        </div>
-      </div>
-      <TaskWorkflow
-        :steps="steps"
-        :current-status="workflowControl.currentStatus"
-        :workflow="workflowControl.workflow"
-        :changing="changing || isHistoricalReadOnly || !canChangeTaskStatus"
-        @change="handleWorkflowChange"
-      />
-    </section>
   </el-card>
 </template>
 
@@ -256,23 +243,13 @@ import {
   reassignInstallationTaskItems,
   reassignProductionTaskItems,
   updateDesignTask,
-  updateProductionTask,
   updateInstallationTask,
+  updateProductionTask,
 } from '@/api/tasks'
-import type { ActionCapability, TaskAssigneeOption, TaskType, TaskOrderItemOption } from '@/types/api'
+import type { TaskAssigneeOption, TaskItemAction, TaskOrderItemOption, TaskType } from '@/types/api'
 import { StatusTag } from '@/components/ui'
-import TaskWorkflow from '@/components/workflow/TaskWorkflow.vue'
-import { getTaskWorkflowControl } from '@/utils/taskItemWorkflow'
 import { useAuthStore } from '@/stores/auth'
-import {
-  getTaskStageSelectionGroups,
-  getTaskStageSelectionItemIds,
-  getStageSelectionState,
-  isTaskOrderItemSelectable,
-  toggleStageSelection,
-  type StageSelectionState,
-  type TaskStageSelectionKey,
-} from '@/utils/taskStageSelection'
+import { getTaskItemActions, isTaskOrderItemSelectable } from '@/utils/taskItemActions'
 import { formatMoney } from '@/utils/format'
 
 const authStore = useAuthStore()
@@ -283,20 +260,19 @@ const props = withDefaults(defineProps<{
   orderId: string
   currentItemId?: string | null
   currentItemIds?: string[] | null
-  taskCapabilities?: Record<string, ActionCapability> | null
-  steps: { key: string; label: string }[]
   currentStatus: string
   workflow: Record<string, string[]>
+  refreshKey?: string | null
   changing: boolean
 }>(), {
   currentItemId: null,
   currentItemIds: () => [],
-  taskCapabilities: null,
+  refreshKey: null,
 })
 
 const emit = defineEmits<{
   linked: []
-  change: [status: string, orderItemIds: string[]]
+  change: [status: string, orderItemIds: string[], reason?: string]
 }>()
 
 const items = ref<TaskOrderItemOption[]>([])
@@ -308,11 +284,12 @@ const assigneeOptions = ref<TaskAssigneeOption[]>([])
 const assigneeOptionsLoading = ref(false)
 const assigneeTargetUserId = ref<string | null>(null)
 const reassigning = ref(false)
+const actionLoadingId = ref<string | null>(null)
 
-const taskTypeLabels: Record<TaskType, string> = {
-  design: '设计',
-  production: '制作',
-  installation: '安装',
+const terminalStatuses: Record<TaskType, string[]> = {
+  design: ['confirmed', 'cancelled'],
+  production: ['completed', 'cancelled'],
+  installation: ['completed', 'cancelled'],
 }
 
 const canViewItemPrice = computed(() => authStore.hasPermission('order_item:view_price'))
@@ -322,86 +299,11 @@ const linkedItemIds = computed(() => {
   if (props.currentItemIds?.length) return props.currentItemIds
   return props.currentItemId ? [props.currentItemId] : []
 })
-
-const terminalStatuses: Record<TaskType, string[]> = {
-  design: ['confirmed', 'cancelled'],
-  production: ['completed', 'cancelled'],
-  installation: ['completed', 'cancelled'],
-}
-
 const isHistoricalReadOnly = computed(() => {
   if (linkedItemIds.value.length) return false
   return terminalStatuses[props.taskType]?.includes(props.currentStatus) ?? false
 })
-
-const changeStatusCapability = computed(() => props.taskCapabilities?.change_status)
-const stageChangePermission = computed(() => `${props.taskType}_task:change_status`)
-const canChangeStageByPermission = computed(() => authStore.hasPermission(stageChangePermission.value))
-const canChangeTaskStatus = computed(() => (
-  canChangeStageByPermission.value
-  && (changeStatusCapability.value?.allowed ?? !isHistoricalReadOnly.value)
-))
-const changeStatusDisabledReason = computed(() => {
-  if (!canChangeStageByPermission.value) {
-    return `当前账号只能查看${taskTypeLabels[props.taskType]}流程，不能变更状态`
-  }
-  return changeStatusCapability.value?.disabled_reason || '该任务当前状态不允许继续变更'
-})
-const statusSectionNote = computed(() => {
-  if (isHistoricalReadOnly.value) return '历史终态不可变更状态，可补录明细'
-  if (workflowControl.value.hasMixedStatuses) {
-    return '已选明细状态不同，请选择状态相同的明细后再批量推进'
-  }
-  return '点击可执行的下一步或回退'
-})
-
-const workflowControl = computed(() => getTaskWorkflowControl(
-  items.value,
-  selectedItemIds.value,
-  props.currentStatus,
-  props.workflow,
-))
-
-const stageSelectionGroups = computed(() => getTaskStageSelectionGroups(props.taskType))
-
-const stageSelectionAriaLabel = computed(() => `按${taskTypeLabels[props.taskType]}状态选择订单明细`)
-
-const stageSelectionItemIds = computed<Record<TaskStageSelectionKey, string[]>>(() => {
-  const result: Record<TaskStageSelectionKey, string[]> = {
-    pending: [],
-    designing: [],
-    assigned: [],
-    in_progress: [],
-  }
-  for (const group of stageSelectionGroups.value) {
-    result[group.key] = getTaskStageSelectionItemIds(items.value, props.taskType, group.key)
-  }
-  return result
-})
-
-const stageSelectionState = computed<Record<TaskStageSelectionKey, StageSelectionState>>(() => {
-  const result: Record<TaskStageSelectionKey, StageSelectionState> = {
-    pending: getStageSelectionState(selectedItemIds.value, []),
-    designing: getStageSelectionState(selectedItemIds.value, []),
-    assigned: getStageSelectionState(selectedItemIds.value, []),
-    in_progress: getStageSelectionState(selectedItemIds.value, []),
-  }
-  for (const group of stageSelectionGroups.value) {
-    result[group.key] = getStageSelectionState(
-      selectedItemIds.value,
-      stageSelectionItemIds.value[group.key],
-    )
-  }
-  return result
-})
-
-const reassignableSelectedItemIds = computed(() => items.value
-  .filter(item => (
-    selectedItemIds.value.includes(item.id)
-    && item.is_linked
-    && item.assignee_state !== 'terminal'
-  ))
-  .map(item => item.id))
+const selectionEnabled = computed(() => canManageTaskItems.value || isHistoricalReadOnly.value)
 
 function itemLabel(item: TaskOrderItemOption) {
   return item.material_process
@@ -430,16 +332,76 @@ function canSelect(item: TaskOrderItemOption) {
   return isTaskOrderItemSelectable(item)
 }
 
-function disabledReason(item: TaskOrderItemOption) {
-  return item.capabilities?.select?.disabled_reason || item.disabled_reason || ''
+function itemActions(item: TaskOrderItemOption) {
+  return getTaskItemActions(props.taskType, item, props.workflow)
 }
 
-function handleStageSelection(stage: TaskStageSelectionKey, checked: boolean) {
-  selectedItemIds.value = toggleStageSelection(
-    selectedItemIds.value,
-    stageSelectionItemIds.value[stage],
-    checked,
-  )
+function primaryAction(item: TaskOrderItemOption): TaskItemAction | undefined {
+  const actions = itemActions(item)
+  return actions.find(action => action.kind === 'primary') || actions[0]
+}
+
+function secondaryActions(item: TaskOrderItemOption) {
+  const actions = itemActions(item)
+  const primary = actions.find(action => action.kind === 'primary') || actions[0]
+  return actions.filter(action => action !== primary)
+}
+
+function disabledReason(item: TaskOrderItemOption) {
+  const actionReason = itemActions(item).find(action => !action.allowed)?.disabled_reason
+  return actionReason || item.capabilities?.select?.disabled_reason || item.disabled_reason || ''
+}
+
+function rowDisabled(item: TaskOrderItemOption) {
+  return !canSelect(item) && !itemActions(item).some(action => action.allowed)
+}
+
+function currentItemStatusLabel(item: TaskOrderItemOption) {
+  if (!item.is_linked) return '未关联'
+  return item.task_status_label || item.task_status || '待分配'
+}
+
+async function handleItemAction(item: TaskOrderItemOption, action: TaskItemAction) {
+  if (!action.allowed) {
+    ElMessage.info(action.disabled_reason || '当前账号不能操作该明细')
+    return
+  }
+  if (actionLoadingId.value) return
+
+  let reason = ''
+  try {
+    if (action.to_status === 'cancelled') {
+      const result = await ElMessageBox.prompt(
+        `请输入取消“${itemLabel(item)}”的原因`,
+        '取消明细任务',
+        {
+          confirmButtonText: '确认取消',
+          cancelButtonText: '返回',
+          inputPlaceholder: '请输入取消原因',
+        },
+      )
+      reason = result.value?.trim() || ''
+      if (!reason) {
+        ElMessage.warning('请输入取消原因')
+        return
+      }
+    } else {
+      await ElMessageBox.confirm(
+        `确认将“${itemLabel(item)}”从“${currentItemStatusLabel(item)}”变更为“${action.label}”吗？`,
+        '变更明细状态',
+        {
+          confirmButtonText: '确认操作',
+          cancelButtonText: '取消',
+          type: action.kind === 'primary' ? 'warning' : 'info',
+        },
+      )
+    }
+  } catch {
+    return
+  }
+
+  actionLoadingId.value = item.id
+  emit('change', action.to_status, [item.id], reason)
 }
 
 async function loadItems() {
@@ -452,9 +414,7 @@ async function loadItems() {
   loadError.value = false
   try {
     items.value = await getTaskOrderItemOptions(props.taskType, props.taskId)
-    if (canManageTaskItems.value) {
-      await loadAssigneeOptions()
-    }
+    if (canManageTaskItems.value) await loadAssigneeOptions()
   } catch {
     items.value = []
     loadError.value = true
@@ -475,12 +435,8 @@ async function loadAssigneeOptions() {
 }
 
 async function updateTaskItems(itemIds: string[]) {
-  if (props.taskType === 'design') {
-    return updateDesignTask(props.taskId, { order_item_ids: itemIds })
-  }
-  if (props.taskType === 'production') {
-    return updateProductionTask(props.taskId, { order_item_ids: itemIds })
-  }
+  if (props.taskType === 'design') return updateDesignTask(props.taskId, { order_item_ids: itemIds })
+  if (props.taskType === 'production') return updateProductionTask(props.taskId, { order_item_ids: itemIds })
   return updateInstallationTask(props.taskId, { order_item_ids: itemIds })
 }
 
@@ -512,6 +468,14 @@ async function handleAddHistoricalItems() {
     linking.value = false
   }
 }
+
+const reassignableSelectedItemIds = computed(() => items.value
+  .filter(item => (
+    selectedItemIds.value.includes(item.id)
+    && item.is_linked
+    && item.assignee_state !== 'terminal'
+  ))
+  .map(item => item.id))
 
 async function reassignSelectedItems(release: boolean) {
   const selected = selectedItemIds.value
@@ -566,416 +530,79 @@ async function reassignSelectedItems(release: boolean) {
   }
 }
 
-function handleWorkflowChange(status: string) {
-  if (!selectedItemIds.value.length) {
-    ElMessage.warning('请先勾选要变更状态的订单明细')
-    return
-  }
-  if (!canChangeTaskStatus.value) {
-    ElMessage.info(changeStatusDisabledReason.value)
-    return
-  }
-  if (
-    status === 'completed'
-    && (props.taskType === 'production' || props.taskType === 'installation')
-    && canViewOutsourceTask.value
-  ) {
-    const blockedItems = items.value.filter(
-      item => selectedItemIds.value.includes(item.id) && item.outsource_blocked,
-    )
-    if (blockedItems.length) {
-      const names = blockedItems.map(itemLabel).join('、')
-      ElMessage.warning(`${names}存在未完成的外协任务，外协完成后才能完成本任务`)
-      return
-    }
-  }
-  emit('change', status, [...selectedItemIds.value])
-}
-
-watch([() => props.orderId, () => props.taskId, () => props.taskType, linkedItemIds], loadItems)
+watch(
+  [() => props.orderId, () => props.taskId, () => props.taskType, () => props.refreshKey],
+  () => void loadItems(),
+)
+watch(() => props.changing, value => {
+  if (!value) actionLoadingId.value = null
+})
 onMounted(loadItems)
 </script>
 
 <style scoped>
-.task-processing-card {
-  margin-top: 16px;
-}
-
-.task-section {
-  min-width: 0;
-}
-
-.section-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
-  color: var(--ad-text);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.section-heading-main {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.section-note {
-  color: var(--ad-text-secondary);
-  font-size: 12px;
-  font-weight: 400;
-}
-
-.stage-selection-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 6px;
-  background: var(--el-fill-color-lighter);
-}
-
-.stage-selection-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-}
-
-.stage-selection-summary {
-  flex: 0 0 auto;
-  color: var(--ad-text-secondary);
-  font-size: 12px;
-}
-
-.item-assignee-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--el-color-primary-light-7);
-  border-radius: 6px;
-  background: var(--el-color-primary-light-9);
-}
-
-.item-assignee-toolbar-main,
-.item-assignee-toolbar-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.item-assignee-toolbar-label {
-  color: var(--ad-text);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.item-assignee-select {
-  width: 220px;
-}
-
-.item-assignee-toolbar-note {
-  color: var(--ad-text-secondary);
-  font-size: 12px;
-}
-
-.link-panel {
-  margin-top: 16px;
-}
-
-.item-table {
-  --item-table-columns: 36px minmax(76px, 1fr) minmax(100px, 1.55fr) minmax(72px, 0.9fr) minmax(52px, 0.65fr) minmax(64px, 0.75fr) minmax(64px, 0.75fr) minmax(74px, 0.85fr) minmax(62px, 0.65fr);
-  overflow: visible;
-  border: 1px solid var(--el-border-color);
-  border-radius: 6px;
-}
-
-.item-table.has-price-columns {
-  --item-table-columns: 36px minmax(76px, 1fr) minmax(100px, 1.45fr) minmax(72px, 0.85fr) minmax(52px, 0.6fr) minmax(64px, 0.7fr) minmax(64px, 0.7fr) minmax(74px, 0.8fr) minmax(62px, 0.6fr) minmax(70px, 0.65fr) minmax(74px, 0.7fr);
-}
-
-.item-table.has-outsource-column:not(.has-price-columns) {
-  --item-table-columns: 36px minmax(76px, 1fr) minmax(100px, 1.45fr) minmax(72px, 0.85fr) minmax(52px, 0.6fr) minmax(64px, 0.7fr) minmax(64px, 0.7fr) minmax(74px, 0.8fr) minmax(62px, 0.6fr) minmax(70px, 0.7fr);
-}
-
-.item-table.has-price-columns.has-outsource-column {
-  --item-table-columns: 36px minmax(76px, 0.95fr) minmax(100px, 1.35fr) minmax(72px, 0.8fr) minmax(52px, 0.55fr) minmax(64px, 0.65fr) minmax(64px, 0.65fr) minmax(74px, 0.75fr) minmax(62px, 0.55fr) minmax(70px, 0.6fr) minmax(74px, 0.65fr) minmax(70px, 0.7fr);
-}
-
-.item-table-header,
-.item-table-row {
-  display: grid;
-  grid-template-columns: var(--item-table-columns);
-  align-items: stretch;
-}
-
-.item-table-header {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--el-border-color);
-  background: var(--el-fill-color-lighter);
-  color: var(--ad-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.item-table-row {
-  position: relative;
-  min-width: 0;
-  padding: 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-
-.item-table-row:last-child {
-  border-bottom: 0;
-}
-
-.item-table-row:hover {
-  background: var(--el-fill-color-light);
-}
-
-.item-table-row.is-disabled {
-  cursor: not-allowed;
-  opacity: 0.72;
-  background: var(--el-fill-color-lighter);
-}
-
-.item-table-row.is-disabled:hover {
-  background: var(--el-fill-color-lighter);
-}
-
-.item-table-row.is-selected {
-  background: var(--el-color-primary-light-9);
-}
-
-.item-table-cell {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  padding: 0 6px;
-  color: var(--ad-text);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.item-table-header .item-table-cell {
-  color: var(--ad-text-secondary);
-}
-
-.item-table-select {
-  justify-content: center;
-  padding-right: 2px;
-  padding-left: 2px;
-}
-
-.item-table-checkbox {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: var(--el-color-primary);
-}
-
-.item-table-name,
-.item-table-product,
-.item-table-spec {
-  align-items: flex-start;
-  white-space: normal;
-  word-break: break-word;
-}
-
-.item-table-name {
-  font-weight: 600;
-}
-
-.item-table-product {
-  overflow-wrap: anywhere;
-}
-
-.item-table-number {
-  justify-content: flex-end;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: normal;
-}
-
-.item-table-assignee {
-  align-items: flex-start;
-}
-
-.item-assignee-name {
-  color: var(--el-color-danger);
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.item-assignee-placeholder,
-.item-table-placeholder {
-  color: var(--ad-text-secondary);
-}
-
-.item-table-outsourcing {
-  align-items: flex-start;
-}
-
-.item-table-detail-reason,
-.item-table-outsourcing-reason {
-  grid-column: 1 / -1;
-  min-width: 0;
-  padding: 6px 6px 0;
-  font-size: 12px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.item-table-detail-reason {
-  color: var(--el-text-color-placeholder);
-}
-
-.item-table-outsourcing-reason {
-  color: var(--el-color-warning-dark-2);
-}
-
-.link-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.link-context-note {
-  color: var(--ad-text-secondary);
-  font-size: 12px;
-}
-
-.link-tip {
-  margin-top: 10px;
-  color: var(--ad-text-secondary);
-  font-size: 12px;
-}
-
-.error-tip {
-  color: var(--el-color-danger);
-}
-
-.status-section :deep(.tw-bar) {
-  margin: 0;
-  padding: 4px 0 0;
-  border: 0;
-  background: transparent;
-}
-
-.status-section :deep(.tw-flow) {
-  max-width: 100%;
-  overflow-x: auto;
-  padding: 4px 4px 8px;
-}
-
-.status-heading {
-  align-items: flex-start;
-}
-
+.task-processing-card { margin-top: 16px; }
+.task-section { min-width: 0; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; color: var(--ad-text); font-size: 15px; font-weight: 600; }
+.section-heading-main { display: flex; align-items: center; gap: 10px; }
+.section-note { color: var(--ad-text-secondary); font-size: 12px; font-weight: 400; }
+.item-assignee-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--el-color-primary-light-7); border-radius: 6px; background: var(--el-color-primary-light-9); }
+.item-assignee-toolbar-main, .item-assignee-toolbar-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.item-assignee-toolbar-label { color: var(--ad-text); font-size: 13px; font-weight: 600; }
+.item-assignee-select { width: 220px; }
+.item-assignee-toolbar-note, .selection-context-note { color: var(--ad-text-secondary); font-size: 12px; }
+.selection-context-note { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 8px; padding: 0 4px; }
+.link-panel { margin-top: 16px; }
+.item-table { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.55fr) minmax(80px, .9fr) minmax(56px, .65fr) minmax(70px, .75fr) minmax(72px, .75fr) minmax(84px, .85fr) minmax(80px, .7fr) minmax(150px, 1.2fr); overflow: visible; border: 1px solid var(--el-border-color); border-radius: 6px; }
+.item-table.has-selection-column { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.55fr) minmax(80px, .9fr) minmax(56px, .65fr) minmax(70px, .75fr) minmax(72px, .75fr) minmax(84px, .85fr) minmax(80px, .7fr) minmax(150px, 1.2fr); }
+.item-table.has-price-columns { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(72px, .6fr) minmax(72px, .65fr) minmax(80px, .7fr) minmax(150px, 1.1fr); }
+.item-table.has-selection-column.has-price-columns { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(72px, .6fr) minmax(72px, .65fr) minmax(80px, .7fr) minmax(150px, 1.1fr); }
+.item-table.has-outsource-column:not(.has-price-columns) { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(80px, .7fr) minmax(100px, .7fr) minmax(150px, 1.1fr); }
+.item-table.has-selection-column.has-outsource-column:not(.has-price-columns) { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(80px, .7fr) minmax(100px, .7fr) minmax(150px, 1.1fr); }
+.item-table.has-price-columns.has-outsource-column { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.35fr) minmax(80px, .8fr) minmax(56px, .55fr) minmax(70px, .65fr) minmax(72px, .65fr) minmax(84px, .75fr) minmax(72px, .6fr) minmax(72px, .6fr) minmax(80px, .65fr) minmax(100px, .7fr) minmax(150px, 1fr); }
+.item-table.has-selection-column.has-price-columns.has-outsource-column { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.35fr) minmax(80px, .8fr) minmax(56px, .55fr) minmax(70px, .65fr) minmax(72px, .65fr) minmax(84px, .75fr) minmax(72px, .6fr) minmax(72px, .6fr) minmax(80px, .65fr) minmax(100px, .7fr) minmax(150px, 1fr); }
+.item-table-header, .item-table-row { display: grid; grid-template-columns: var(--item-table-columns); align-items: stretch; }
+.item-table-header { padding: 10px 12px; border-bottom: 1px solid var(--el-border-color); background: var(--el-fill-color-lighter); color: var(--ad-text-secondary); font-size: 12px; font-weight: 600; }
+.item-table-row { min-width: 0; padding: 12px; border-bottom: 1px solid var(--el-border-color-lighter); transition: background-color .15s ease; }
+.item-table-row:last-child { border-bottom: 0; }
+.item-table-row:hover { background: var(--el-fill-color-light); }
+.item-table-row.is-disabled { background: var(--el-fill-color-lighter); }
+.item-table-row.is-selected { background: var(--el-color-primary-light-9); }
+.item-table-cell { display: flex; min-width: 0; align-items: center; padding: 0 6px; color: var(--ad-text); line-height: 1.5; overflow-wrap: anywhere; }
+.item-table-header .item-table-cell { color: var(--ad-text-secondary); }
+.item-table-select { justify-content: center; padding-right: 2px; padding-left: 2px; }
+.item-table-checkbox { width: 16px; height: 16px; margin: 0; accent-color: var(--el-color-primary); }
+.item-table-name, .item-table-product, .item-table-spec { align-items: flex-start; white-space: normal; word-break: break-word; }
+.item-table-name { font-weight: 600; }
+.item-table-number { justify-content: flex-end; text-align: right; font-variant-numeric: tabular-nums; white-space: normal; }
+.item-table-assignee, .item-table-outsourcing { align-items: flex-start; }
+.item-assignee-name { color: var(--el-color-danger); font-weight: 600; overflow-wrap: anywhere; }
+.item-assignee-placeholder, .item-table-placeholder { color: var(--ad-text-secondary); }
+.item-table-actions-header { justify-content: flex-start; }
+.item-table-actions { align-items: flex-start; flex-wrap: wrap; gap: 4px; }
+.item-action-reason { flex-basis: 100%; color: var(--el-color-warning-dark-2); font-size: 12px; line-height: 1.5; }
+.link-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.link-context-note, .link-tip { color: var(--ad-text-secondary); font-size: 12px; }
+.link-tip { margin-top: 10px; }
+.error-tip { color: var(--el-color-danger); }
 @media (max-width: 900px) {
-  .item-table-header {
-    display: none;
-  }
-
-  .item-table-row {
-    grid-template-columns: 32px repeat(2, minmax(0, 1fr));
-    padding: 10px;
-  }
-
-  .item-table-row .item-table-cell:not(.item-table-select):not(.item-table-detail-reason):not(.item-table-outsourcing-reason) {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    padding: 5px 6px;
-  }
-
-  .item-table-row .item-table-cell:not(.item-table-select):not(.item-table-detail-reason):not(.item-table-outsourcing-reason)::before {
-    content: attr(data-label);
-    color: var(--ad-text-secondary);
-    font-size: 11px;
-    line-height: 1.4;
-  }
-
-  .item-table-row .item-table-number {
-    justify-content: flex-start;
-    text-align: left;
-  }
-
-  .item-table-detail-reason,
-  .item-table-outsourcing-reason {
-    padding-right: 6px;
-    padding-left: 6px;
-  }
+  .item-table-header { display: none; }
+  .item-table, .item-table.has-selection-column, .item-table.has-price-columns, .item-table.has-selection-column.has-price-columns, .item-table.has-outsource-column:not(.has-price-columns), .item-table.has-selection-column.has-outsource-column:not(.has-price-columns), .item-table.has-price-columns.has-outsource-column, .item-table.has-selection-column.has-price-columns.has-outsource-column { --item-table-columns: minmax(0, 1fr) minmax(128px, auto); }
+  .item-table-row { grid-template-columns: var(--item-table-columns); padding: 10px; }
+  .item-table-row .item-table-cell:not(.item-table-actions):not(.item-table-select):not(.item-action-reason) { grid-column: 1 / -1; flex-direction: column; align-items: flex-start; gap: 2px; padding: 5px 6px; }
+  .item-table-row .item-table-cell:not(.item-table-actions):not(.item-table-select):not(.item-action-reason)::before { content: attr(data-label); color: var(--ad-text-secondary); font-size: 11px; line-height: 1.4; }
+  .item-table-row .item-table-select { grid-column: 1; grid-row: 1; align-self: flex-start; }
+  .item-table-row .item-table-actions { grid-column: 2; grid-row: 1; justify-content: flex-end; }
+  .item-table-row .item-table-number { justify-content: flex-start; text-align: left; }
+  .item-table-row .item-action-reason { grid-column: 1 / -1; padding: 6px; }
 }
-
 @media (max-width: 640px) {
-  .item-table-row {
-    grid-template-columns: 30px minmax(0, 1fr);
-  }
-
-  .item-table-row .item-table-cell:not(.item-table-select):not(.item-table-detail-reason):not(.item-table-outsourcing-reason) {
-    grid-column: 2;
-  }
-
-  .item-table-row .item-table-select {
-    grid-column: 1;
-    grid-row: span 1;
-    align-self: flex-start;
-    padding-top: 8px;
-  }
-
-  .link-actions,
-  .link-actions .el-button {
-    width: 100%;
-  }
-
-  .section-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .section-heading-main {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .status-heading {
-    gap: 10px;
-  }
-
-  .stage-selection-toolbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .item-assignee-toolbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .item-assignee-select,
-  .item-assignee-toolbar-actions,
-  .item-assignee-toolbar-actions .el-button {
-    width: 100%;
-  }
-
+  .section-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .section-heading-main { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .item-assignee-toolbar, .selection-context-note { align-items: flex-start; flex-direction: column; }
+  .item-assignee-select, .item-assignee-toolbar-actions, .item-assignee-toolbar-actions .el-button { width: 100%; }
+  .link-actions, .link-actions .el-button { width: 100%; }
+  .item-table, .item-table.has-selection-column, .item-table.has-price-columns, .item-table.has-selection-column.has-price-columns, .item-table.has-outsource-column:not(.has-price-columns), .item-table.has-selection-column.has-outsource-column:not(.has-price-columns), .item-table.has-price-columns.has-outsource-column, .item-table.has-selection-column.has-price-columns.has-outsource-column { --item-table-columns: minmax(0, 1fr); }
+  .item-table-row .item-table-select, .item-table-row .item-table-actions { grid-column: 1; grid-row: auto; justify-content: flex-start; }
 }
 </style>

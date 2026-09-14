@@ -261,6 +261,18 @@ class TaskStatusChange(BaseModel):
     assigned_to: str | None = None
 
 
+class TaskItemAction(BaseModel):
+    """One server-authorized action for a single order-item work unit."""
+
+    key: str
+    to_status: str
+    label: str
+    allowed: bool
+    disabled_reason: str | None = None
+    kind: Literal["primary", "secondary"] = "secondary"
+    requires_confirmation: bool = True
+
+
 class TaskOrderItemOption(OrderItemResponse):
     """任务处理页使用的订单明细阶段与可选性。"""
 
@@ -295,6 +307,7 @@ class TaskOrderItemOption(OrderItemResponse):
     task_status_view: StatusView | None = None
     task_progress_pct: int | None = Field(default=None, ge=0, le=100)
     capabilities: dict[str, ActionCapability] = Field(default_factory=dict)
+    actions: list[TaskItemAction] = Field(default_factory=list)
     outsource_blocked: bool = False
     outsource_status: Literal["pending", "in_progress"] | None = None
     outsource_status_label: str | None = None

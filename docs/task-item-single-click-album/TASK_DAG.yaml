@@ -1,0 +1,63 @@
+version: 1
+objective: "将设计、制作、安装任务改为订单明细逐条状态操作，并将订单源附件按服务端上传日期展示为相册时间轴"
+mode: STRICT
+status: complete
+data_migration: false
+new_dependencies: false
+tasks:
+  - id: TASK-SINGLE-ALBUM-P01
+    title: "确定单项状态与附件相册交互契约"
+    depends_on: []
+    acceptance: A01
+    status: done
+  - id: TASK-SINGLE-ALBUM-P02
+    title: "补齐服务端单项动作描述与安全校验"
+    depends_on:
+      - TASK-SINGLE-ALBUM-P01
+    acceptance: A02
+    status: done
+  - id: TASK-SINGLE-ALBUM-P03
+    title: "改造桌面端设计、制作、安装明细操作"
+    depends_on:
+      - TASK-SINGLE-ALBUM-P01
+      - TASK-SINGLE-ALBUM-P02
+    acceptance: A03
+    status: done
+  - id: TASK-SINGLE-ALBUM-P04
+    title: "改造移动端安装任务为逐条操作"
+    depends_on:
+      - TASK-SINGLE-ALBUM-P01
+      - TASK-SINGLE-ALBUM-P02
+      - TASK-SINGLE-ALBUM-P03
+    acceptance: A04
+    status: done
+  - id: TASK-SINGLE-ALBUM-P05
+    title: "将订单附件改为日期相册时间轴"
+    depends_on:
+      - TASK-SINGLE-ALBUM-P01
+    acceptance: A05
+    status: done
+  - id: TASK-SINGLE-ALBUM-P06
+    title: "执行回归测试、代码清理和质量门禁"
+    depends_on:
+      - TASK-SINGLE-ALBUM-P02
+      - TASK-SINGLE-ALBUM-P03
+      - TASK-SINGLE-ALBUM-P04
+      - TASK-SINGLE-ALBUM-P05
+    acceptance: A06
+    status: done
+acceptance_mapping:
+  A01: TASK-SINGLE-ALBUM-P01
+  A02: TASK-SINGLE-ALBUM-P02
+  A03: TASK-SINGLE-ALBUM-P03
+  A04: TASK-SINGLE-ALBUM-P04
+  A05: TASK-SINGLE-ALBUM-P05
+  A06: TASK-SINGLE-ALBUM-P06
+verification:
+  frontend_tests: "182 passed"
+  backend_tests: "1185 passed"
+  frontend_typecheck: passed
+  frontend_build: passed
+  frontend_lint: passed
+  diff_check: passed
+  deployment: not_requested

@@ -219,11 +219,22 @@ export interface TaskOrderItemOption extends Omit<OrderItemResponse,
   assignee_name?: string | null
   assignee_state: 'unassigned' | 'claimed' | 'historical_unknown' | 'terminal'
   capabilities?: Record<string, ActionCapability>
+  actions?: TaskItemAction[]
   outsource_blocked: boolean
   outsource_status?: 'pending' | 'in_progress' | null
   outsource_status_label?: string | null
   outsource_task_count: number
   outsource_task_nos: string[]
+}
+
+export interface TaskItemAction {
+  key: string
+  to_status: string
+  label: string
+  allowed: boolean
+  disabled_reason?: string | null
+  kind: 'primary' | 'secondary'
+  requires_confirmation?: boolean
 }
 
 export interface OrderItemMutationFields {

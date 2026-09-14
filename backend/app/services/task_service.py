@@ -242,6 +242,122 @@ def _task_status_view(task_type: str, status: str | None):
     )
 
 
+def _task_item_action_label(task_type: str, current_status: str, target_status: str) -> str:
+    stage_label = TASK_TYPE_LABELS[task_type]
+    if target_status in {"confirmed", "completed"}:
+        return f"完成{stage_label}"
+    if target_status == TASK_CANCELLED_STATUS:
+        return f"取消{stage_label}"
+    if target_status == "pending":
+        return "退回待制作" if task_type == "production" else "退回待分配"
+    if task_type == "design" and target_status == "designing":
+        return "开始设计"
+    if task_type == "production" and target_status == "in_progress":
+        return "继续制作" if current_status == "rework" else "开始制作"
+    if task_type == "installation" and target_status == "in_progress":
+        return "开始安装"
+    if target_status == "assigned":
+        return "确认分配"
+    if target_status == "rework":
+        return "提交返工"
+    if target_status == "revision":
+        return "退回修改"
+    if target_status in {"pending_review", "pending_acceptance"}:
+        return "提交待处理"
+    return f"变更为{target_status}"
+
+
+def _task_item_action_key(current_status: str, target_status: str) -> str:
+    if target_status in {"confirmed", "completed"}:
+        return "complete"
+    if target_status == TASK_CANCELLED_STATUS:
+        return "cancel"
+    if target_status == "pending":
+        return "rollback"
+    if target_status in {"rework", "revision"}:
+        return "rework"
+    if target_status in {"pending_review", "pending_acceptance"}:
+        return "submit"
+    if target_status == "assigned":
+        return "assign"
+    if target_status == current_status:
+        return "continue"
+    return "start"
+
+
+def _task_item_action_kind(task_type: str, target_status: str) -> str:
+    if target_status in {"confirmed", "completed"}:
+        return "primary"
+    if target_status == {
+        "design": "designing",
+        "production": "in_progress",
+        "installation": "in_progress",
+    }[task_type]:
+        return "primary"
+    return "secondary"
+
+
+def _task_item_actions(
+    task_type: str,
+    current_status: str | None,
+    *,
+    can_operate: bool,
+    is_linked: bool,
+    disabled_reason: str | None,
+    outsource_blocked: bool = False,
+    outsource_reason: str | None = None,
+    order_stage: str | None = None,
+) -> list[dict]:
+    """Describe actions for one item; authorization remains enforced on write."""
+    workflows = {
+        "design": DESIGN_TASK_WORKFLOW,
+        "production": PRODUCTION_TASK_WORKFLOW,
+        "installation": INSTALLATION_TASK_WORKFLOW,
+    }
+    expected_stage = TASK_TYPE_STAGES[task_type]
+    start_status = {
+        "design": "designing",
+        "production": "in_progress",
+        "installation": "in_progress",
+    }[task_type]
+    if not is_linked:
+        if order_stage != expected_stage:
+            return []
+        return [{
+            "key": "link_start",
+            "to_status": start_status,
+            "label": f"加入并开始{TASK_TYPE_LABELS[task_type]}",
+            "allowed": can_operate,
+            "disabled_reason": None if can_operate else disabled_reason,
+            "kind": "primary",
+            "requires_confirmation": True,
+        }]
+
+    status = current_status or "pending"
+    actions: list[dict] = []
+    for target_status in allowed_targets(workflows[task_type], status):
+        is_completion = _is_completed_item_status(task_type, target_status)
+        blocked_by_outsource = is_completion and outsource_blocked
+        allowed = can_operate and not blocked_by_outsource
+        reason = (
+            None
+            if allowed
+            else outsource_reason
+            if blocked_by_outsource and outsource_reason
+            else disabled_reason
+        )
+        actions.append({
+            "key": _task_item_action_key(status, target_status),
+            "to_status": target_status,
+            "label": _task_item_action_label(task_type, status, target_status),
+            "allowed": allowed,
+            "disabled_reason": reason,
+            "kind": _task_item_action_kind(task_type, target_status),
+            "requires_confirmation": True,
+        })
+    return actions
+
+
 def _task_capabilities(task_type: str, status: str | None) -> dict:
     normalized = status or "unknown"
     terminal = normalized in TASK_TERMINAL_STATUSES.get(task_type, set())
@@ -1134,6 +1250,7 @@ async def _task_order_item_option_map(
     *,
     task_id: UUID | None = None,
     viewer: User | None = None,
+    task_scope_status: str | None = None,
 ) -> dict[UUID, dict]:
     """Build the authoritative order-item option catalog for one task type."""
     if task_type not in TASK_TYPE_STAGES:
@@ -1227,6 +1344,18 @@ async def _task_order_item_option_map(
             "outsource_task_nos": [],
         })
         can_view_outsource = can_view_outsource_tasks(viewer)
+        outsource_action_reason = None
+        if outsource["outsource_blocked"]:
+            if can_view_outsource:
+                outsource_action_reason = (
+                    f"{outsource['outsource_status_label']}，外协完成后才能完成"
+                    f"{TASK_TYPE_LABELS[task_type]}任务"
+                )
+            else:
+                outsource_action_reason = (
+                    f"当前明细有未完成的前置事项，完成后才能完成"
+                    f"{TASK_TYPE_LABELS[task_type]}任务"
+                )
         if is_linked:
             can_select = can_change_stage and not _is_terminal_item_status(task_type, task_status or "")
             if (
@@ -1321,6 +1450,20 @@ async def _task_order_item_option_map(
                     else None
                 ),
                 "task_progress_pct": task_progress_pct,
+                "actions": (
+                    []
+                    if task_scope_status in TASK_TERMINAL_STATUSES.get(task_type, set())
+                    else _task_item_actions(
+                        task_type,
+                        task_status,
+                        can_operate=can_select,
+                        is_linked=is_linked,
+                        disabled_reason=disabled_reason,
+                        outsource_blocked=bool(outsource["outsource_blocked"]),
+                        outsource_reason=outsource_action_reason,
+                        order_stage=stage,
+                    )
+                ),
                 "capabilities": {
                     "select": make_action_capability(
                         can_select,
@@ -1364,6 +1507,7 @@ async def get_task_order_item_options(
         task_type,
         task_id=task_id,
         viewer=viewer,
+        task_scope_status=getattr(task, "status", None),
     )
     return list(options.values())
 

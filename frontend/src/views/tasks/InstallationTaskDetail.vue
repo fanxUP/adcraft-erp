@@ -31,10 +31,9 @@
         :order-id="task.order_id"
         :current-item-id="task.order_item_id"
         :current-item-ids="task.order_item_ids"
-        :task-capabilities="task.capabilities"
-        :steps="instSteps"
         :current-status="task.status"
-        :workflow="instWorkflow"
+        :workflow="INST_WORKFLOW"
+        :refresh-key="task.updated_at"
         :changing="changing"
         @linked="fetchTask"
         @change="handleWorkflowChange"
@@ -102,49 +101,8 @@ const INST_WORKFLOW: Record<string, string[]> = {
   cancelled: [],
 }
 
-const instSteps = computed(() => {
-  const currentStatus = task.value?.status
-  const isLegacyAcceptanceTask = !task.value?.order_item_id || currentStatus === 'pending_acceptance'
-  if (!isLegacyAcceptanceTask) {
-    return [
-      { key: 'pending', label: '待分配' },
-      { key: 'assigned', label: '已分配' },
-      { key: 'in_progress', label: '安装中' },
-      { key: 'completed', label: '已完成' },
-    ]
-  }
-  return [
-    { key: 'pending', label: '待分配' },
-    { key: 'assigned', label: '已分配' },
-    { key: 'in_progress', label: '安装中' },
-    { key: 'pending_acceptance', label: '历史待验收' },
-    { key: 'completed', label: '已完成' },
-  ]
-})
-
-const instWorkflow = computed(() => {
-  if (task.value?.order_item_id) return INST_WORKFLOW
-  return {
-    ...INST_WORKFLOW,
-    in_progress: INST_WORKFLOW.in_progress.filter(status => status !== 'completed'),
-  }
-})
-
-async function handleWorkflowChange(to_status: string, orderItemIds: string[]) {
-  const labelMap: Record<string, string> = { pending: '待分配', assigned: '已分配', in_progress: '安装中', pending_acceptance: '待验收', completed: '已完成', cancelled: '已取消' }
-  if (to_status === 'cancelled') {
-    const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消任务', {
-      confirmButtonText: '确定', cancelButtonText: '取消',
-      inputPlaceholder: '取消原因',
-    })
-    if (!reason) return
-    await doChangeStatus(to_status, reason, orderItemIds)
-  } else {
-    await ElMessageBox.confirm(`确定将任务状态变更为「${labelMap[to_status]}」？`, '变更状态', {
-      confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
-    })
-    await doChangeStatus(to_status, '', orderItemIds)
-  }
+async function handleWorkflowChange(to_status: string, orderItemIds: string[], reason = '') {
+  await doChangeStatus(to_status, reason, orderItemIds)
 }
 
 async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[]) {
