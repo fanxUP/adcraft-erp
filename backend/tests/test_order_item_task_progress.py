@@ -9,10 +9,13 @@ import pytest
 from pydantic import ValidationError
 
 from app.domain.workflows import DESIGN_TASK_WORKFLOW, INSTALLATION_TASK_WORKFLOW
+from app.models.task_order_item_link import TaskOrderItemLink
 from app.schemas.order import OrderItemResponse
 from app.schemas.task import (
     DesignTaskCreate,
     DesignTaskResponse,
+    TaskItemAction,
+    TaskItemRollbackRequest,
     TaskStatusChange,
     TaskOrderItemOption,
     TaskQueueItem,
@@ -26,6 +29,7 @@ from app.services.task_service import (
     _ensure_task_order_item_links,
     _materialize_legacy_task_scope,
     _resolve_order_item_stage,
+    _rollback_task_items,
     _task_item_actions,
     _task_order_item_option_map,
     _validate_order_item_id,
@@ -97,11 +101,67 @@ def test_task_item_actions_use_single_item_plain_language_commands():
         "completed",
         "rework",
         "pending",
-        "cancelled",
+        "rolled_back",
     ]
     assert actions[0]["label"] == "完成制作"
     assert actions[2]["label"] == "退回待制作"
     assert all(action["allowed"] for action in actions)
+
+
+def test_task_item_actions_use_stage_rollback_instead_of_item_cancellation():
+    actions = _task_item_actions(
+        "production",
+        "in_progress",
+        can_operate=True,
+        is_linked=True,
+        disabled_reason=None,
+        outsource_blocked=False,
+    )
+
+    rollback = next(action for action in actions if action["key"] == "rollback_stage")
+    assert rollback["to_status"] == "rolled_back"
+    assert rollback["label"] == "退回设计"
+    assert rollback["operation"] == "rollback"
+    assert rollback["target_stage"] == "design"
+    assert all(action["to_status"] != "cancelled" for action in actions)
+
+
+def test_design_item_actions_never_offer_cancellation():
+    actions = _task_item_actions(
+        "design",
+        "designing",
+        can_operate=True,
+        is_linked=True,
+        disabled_reason=None,
+        outsource_blocked=False,
+    )
+
+    assert all(action["to_status"] != "cancelled" for action in actions)
+    assert not any(action.get("operation") == "rollback" for action in actions)
+
+
+def test_rollback_request_requires_explicit_item_ids_and_optional_reason():
+    request = TaskItemRollbackRequest(
+        order_item_ids=[ITEM_ID],
+        reason="尺寸需要重新确认",
+    )
+
+    assert request.order_item_ids == [ITEM_ID]
+    assert request.reason == "尺寸需要重新确认"
+
+
+def test_task_item_action_contract_exposes_cross_stage_operation():
+    action = TaskItemAction(
+        key="rollback_stage",
+        to_status="rolled_back",
+        label="退回设计",
+        allowed=True,
+        operation="rollback",
+        target_stage="design",
+    )
+
+    assert action.operation == "rollback"
+    assert action.target_stage == "design"
 
 
 def test_task_item_actions_disable_completion_when_outsource_is_active():
@@ -118,6 +178,72 @@ def test_task_item_actions_disable_completion_when_outsource_is_active():
     completed = next(action for action in actions if action["to_status"] == "completed")
     assert completed["allowed"] is False
     assert completed["disabled_reason"] == "外协任务进行中，外协完成后才能完成安装任务"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("task_type", "message"),
+    [
+        ("design", "设计明细不能单独取消"),
+        ("production", "制作明细不能取消"),
+        ("installation", "安装明细不能取消"),
+    ],
+)
+async def test_delivery_item_cancellation_is_rejected_with_plain_language(
+    task_type,
+    message,
+):
+    db = AsyncMock()
+    task = SimpleNamespace(
+        id=UUID("22222222-2222-2222-2222-222222222222"),
+        document_id=UUID(ORDER_ID),
+    )
+
+    with pytest.raises(ValueError, match=message):
+        await _apply_task_item_status_change(
+            db,
+            task_type,
+            task,
+            "cancelled",
+            [ITEM_ID],
+        )
+
+
+@pytest.mark.asyncio
+async def test_retried_item_rollback_is_a_safe_noop():
+    db = AsyncMock()
+    task = SimpleNamespace(
+        id=UUID("22222222-2222-2222-2222-222222222222"),
+        document_id=UUID(ORDER_ID),
+        order_item_id=None,
+        status="rolled_back",
+        progress_pct=0,
+    )
+    link = TaskOrderItemLink(
+        task_type="production",
+        task_id=task.id,
+        order_item_id=ITEM_UUID,
+        item_status="rolled_back",
+        item_progress_pct=0,
+    )
+
+    with patch(
+        "app.services.task_service._task_order_item_link_rows",
+        new=AsyncMock(return_value=[link]),
+    ):
+        changed = await _rollback_task_items(
+            db,
+            "production",
+            task,
+            [ITEM_ID],
+            reason=None,
+            viewer=None,
+            operated_by=None,
+        )
+
+    assert changed == []
+    assert link.item_status == "rolled_back"
+    db.add_all.assert_not_called()
 
 
 def _mock_result(items):
@@ -178,6 +304,12 @@ def test_mixed_item_status_uses_unfinished_state_for_task_summary():
     assert _aggregate_task_status("design", ["confirmed", "designing"]) == "designing"
     assert _aggregate_task_status("production", ["completed", "in_progress"]) == "in_progress"
     assert _aggregate_task_status("installation", ["completed", "assigned"]) == "assigned"
+
+
+def test_rolled_back_item_is_not_counted_as_completed_work():
+    assert _aggregate_task_status("production", ["completed", "rolled_back"]) == "completed"
+    assert _aggregate_task_status("production", ["in_progress", "rolled_back"]) == "in_progress"
+    assert _aggregate_task_status("production", ["rolled_back"]) == "rolled_back"
 
 
 def test_order_item_stage_resolver_supports_parallel_delivery_progress():

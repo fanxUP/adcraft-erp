@@ -1,0 +1,55 @@
+version: 1
+name: task-cancel-rollback
+mode: STRICT
+status: planned
+objective: >-
+  将设计、制作、安装任务的明细取消改为逐级跨阶段回退；设计阶段不允许取消明细，
+  设计任务仅允许有权限的用户整卡删除；保留历史取消只读和订单级取消能力。
+non_goals:
+  - order_level_cancel_and_recycle_restore
+  - historical_cancelled_data_migration
+  - completed_item_force_rollback_workflow
+  - notification_channels
+nodes:
+  - id: TRB-P01
+    title: 冻结业务规则与兼容边界
+    status: planned
+    acceptance: A-TRB-01
+    depends_on: []
+  - id: TRB-P02
+    title: 重构工作流与服务端动作契约
+    status: planned
+    acceptance: A-TRB-02
+    depends_on: [TRB-P01]
+  - id: TRB-P03
+    title: 实现明细级跨阶段回退事务
+    status: planned
+    acceptance: A-TRB-03
+    depends_on: [TRB-P02]
+  - id: TRB-P04
+    title: 收敛整张任务删除和设计起始规则
+    status: planned
+    acceptance: A-TRB-04
+    depends_on: [TRB-P01, TRB-P02]
+  - id: TRB-P05
+    title: 调整三个任务详情页和明细列表
+    status: planned
+    acceptance: A-TRB-05
+    depends_on: [TRB-P02, TRB-P03, TRB-P04]
+  - id: TRB-P06
+    title: 建立回退与混合进度回归验证
+    status: planned
+    acceptance: A-TRB-06
+    depends_on: [TRB-P03, TRB-P04, TRB-P05]
+  - id: TRB-P07
+    title: 发布前数据与回滚门禁
+    status: planned
+    acceptance: A-TRB-07
+    depends_on: [TRB-P06]
+backlog:
+  - title: 拆分独立的明细回退权限码
+    reason: 第一版沿用阶段 change_status 权限以保持现有角色兼容；后续单独设计授权迁移。
+  - title: 已完成明细经理强制回退
+    reason: 需要独立高权限和强审计，不与基础回退混合。
+  - title: 回退操作撤销
+    reason: 需要额外的反向状态机和数据一致性设计。

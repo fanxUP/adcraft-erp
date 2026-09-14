@@ -31,11 +31,9 @@ def test_delivery_workflows_are_centralized():
         "completed",
         "rework",
         "pending",
-        "cancelled",
     )
     assert allowed_targets(PRODUCTION_TASK_WORKFLOW, "rework") == (
         "in_progress",
-        "cancelled",
     )
     assert allowed_targets(ACCEPTANCE_WORKFLOW, "pending") == (
         "accepted",

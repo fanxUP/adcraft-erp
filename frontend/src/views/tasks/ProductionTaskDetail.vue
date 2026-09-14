@@ -37,6 +37,7 @@
         :changing="changing"
         @linked="fetchTask"
         @change="handleWorkflowChange"
+        @rollback="handleRollback"
       />
 
       <OrderTaskAttachments
@@ -72,7 +73,7 @@ import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { TaskOverviewCard } from '@/components/ui'
-import { getProductionTask, changeProductionTaskStatus } from '@/api/tasks'
+import { getProductionTask, changeProductionTaskStatus, rollbackProductionTaskItems } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ProductionTaskResponse } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
@@ -104,15 +105,29 @@ function formatProductionDimensions(value: ProductionTaskResponse | null) {
     : '-'
 }
 const PROD_WORKFLOW: Record<string, string[]> = {
-  pending: ['in_progress', 'cancelled'],
-  in_progress: ['completed', 'rework', 'pending', 'cancelled'],
-  rework: ['in_progress', 'cancelled'],
+  pending: ['in_progress'],
+  in_progress: ['completed', 'rework', 'pending'],
+  rework: ['in_progress'],
   completed: [],
   cancelled: [],
 }
 
 async function handleWorkflowChange(to_status: string, orderItemIds: string[], reason = '') {
   await doChangeStatus(to_status, reason, orderItemIds)
+}
+
+async function handleRollback(targetStage: 'design' | 'production', orderItemIds: string[], reason = '') {
+  if (targetStage !== 'design') return
+  changing.value = true
+  try {
+    await rollbackProductionTaskItems(route.params.id as string, {
+      order_item_ids: orderItemIds,
+      reason,
+    })
+    ElMessage.success('明细已退回设计')
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
+  } catch { /* handled */ } finally { changing.value = false }
 }
 
 async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[]) {

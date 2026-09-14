@@ -130,6 +130,8 @@ describe('任务详情页界面收敛', () => {
     expect(source).not.toContain('v-if="!canChangeTaskStatus && !isHistoricalReadOnly"')
     expect(source).toContain('action.disabled_reason')
     expect(source).toContain('!action.allowed')
+    expect(source).toContain("action.operation === 'rollback'")
+    expect(source).not.toContain('取消明细任务')
   })
 
   it('任务处理按明细显示执行人，不再使用整张任务负责人', () => {
@@ -268,8 +270,8 @@ describe('任务详情页界面收敛', () => {
 
 describe('单条订单明细动作', () => {
   const designWorkflow = {
-    pending: ['designing', 'cancelled'],
-    designing: ['confirmed', 'pending', 'cancelled'],
+    pending: ['designing'],
+    designing: ['confirmed', 'pending'],
     confirmed: [],
   }
 
@@ -289,7 +291,7 @@ describe('单条订单明细动作', () => {
     })
   })
 
-  it('设计中明细提供完成设计和退回待分配两个独立动作', () => {
+  it('设计中明细提供完成设计和退回待分配两个独立动作且不能取消', () => {
     const actions = getTaskItemActions('design', {
       is_linked: true,
       stage: 'designing',
@@ -300,10 +302,10 @@ describe('单条订单明细动作', () => {
     expect(actions.map(action => action.to_status)).toEqual([
       'confirmed',
       'pending',
-      'cancelled',
     ])
     expect(actions.find(action => action.to_status === 'confirmed')?.label).toBe('完成设计')
     expect(actions.find(action => action.to_status === 'pending')?.label).toBe('退回待分配')
+    expect(actions.some(action => action.to_status === 'cancelled')).toBe(false)
   })
 
   it('未关联明细使用加入并开始动作，不会暗示已经关联', () => {
@@ -359,13 +361,12 @@ describe('单条订单明细动作', () => {
     expect(actions).toEqual([])
   })
 
-  it('制作中明细支持回退到待制作，同时保留完成入口', () => {
+  it('制作中明细支持退回设计和回退到待制作，同时保留完成入口', () => {
     const productionWorkflow = {
-      pending: ['in_progress', 'cancelled'],
-      in_progress: ['completed', 'rework', 'pending', 'cancelled'],
-      rework: ['in_progress', 'cancelled'],
+      pending: ['in_progress'],
+      in_progress: ['completed', 'rework', 'pending'],
+      rework: ['in_progress'],
       completed: [],
-      cancelled: [],
     }
     const actions = getTaskItemActions('production', {
       is_linked: true,
@@ -378,10 +379,15 @@ describe('单条订单明细动作', () => {
       'completed',
       'rework',
       'pending',
-      'cancelled',
+      'rolled_back',
     ])
     expect(actions.find(action => action.to_status === 'pending')?.label).toBe('退回待制作')
     expect(actions.find(action => action.to_status === 'completed')?.label).toBe('完成制作')
+    expect(actions.find(action => action.to_status === 'rolled_back')).toMatchObject({
+      operation: 'rollback',
+      target_stage: 'design',
+      label: '退回设计',
+    })
   })
 
   it('没有操作权限时仍返回禁用动作和可读原因', () => {

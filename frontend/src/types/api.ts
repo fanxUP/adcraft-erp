@@ -217,7 +217,7 @@ export interface TaskOrderItemOption extends Omit<OrderItemResponse,
   task_progress_pct?: number | null
   assignee_user_id?: string | null
   assignee_name?: string | null
-  assignee_state: 'unassigned' | 'claimed' | 'historical_unknown' | 'terminal'
+  assignee_state: 'unassigned' | 'claimed' | 'historical_unknown' | 'terminal' | 'rolled_back'
   capabilities?: Record<string, ActionCapability>
   actions?: TaskItemAction[]
   outsource_blocked: boolean
@@ -235,6 +235,8 @@ export interface TaskItemAction {
   disabled_reason?: string | null
   kind: 'primary' | 'secondary'
   requires_confirmation?: boolean
+  operation?: 'status_change' | 'rollback'
+  target_stage?: 'design' | 'production' | 'installation' | null
 }
 
 export interface OrderItemMutationFields {

@@ -59,6 +59,7 @@ function baseDisabledReason(item: TaskItemActionSource) {
 function actionKey(toStatus: string, currentStatus: string) {
   if (toStatus === 'completed' || toStatus === 'confirmed') return 'complete'
   if (toStatus === 'cancelled') return 'cancel'
+  if (toStatus === 'rolled_back') return 'rollback_stage'
   if (toStatus === 'pending') return 'rollback'
   if (toStatus === currentStatus) return 'continue'
   if (toStatus === 'rework' || toStatus === 'revision') return 'rework'
@@ -70,6 +71,7 @@ function actionKey(toStatus: string, currentStatus: string) {
 function actionLabel(taskType: TaskType, toStatus: string, currentStatus: string) {
   if (toStatus === 'confirmed' || toStatus === 'completed') return `完成${STAGE_LABEL[taskType]}`
   if (toStatus === 'cancelled') return `取消${STAGE_LABEL[taskType]}`
+  if (toStatus === 'rolled_back') return `退回${taskType === 'production' ? '设计' : '制作'}`
   if (toStatus === 'pending') return `退回${taskType === 'production' ? '待制作' : '待分配'}`
   if (taskType === 'design' && toStatus === 'designing') return '开始设计'
   if (taskType === 'production' && toStatus === 'in_progress') {
@@ -122,11 +124,15 @@ export function getTaskItemActions(
       disabled_reason: allowed ? null : disabledReason,
       kind: 'primary',
       requires_confirmation: true,
+      operation: 'status_change',
+      target_stage: null,
     }]
   }
 
   const currentStatus = item.task_status || 'pending'
-  return (workflow[currentStatus] || []).map(toStatus => {
+  const actions: TaskItemAction[] = (workflow[currentStatus] || [])
+    .filter(toStatus => toStatus !== 'cancelled')
+    .map(toStatus => {
     const isCompletion = toStatus === 'completed' || toStatus === 'confirmed'
     const blockedByOutsource = isCompletion && Boolean(item.outsource_blocked)
     const actionAllowed = allowed && !blockedByOutsource
@@ -142,6 +148,34 @@ export function getTaskItemActions(
           : disabledReason,
       kind: actionKind(taskType, toStatus),
       requires_confirmation: true,
+      operation: 'status_change' as const,
     }
   })
+  const rollbackTarget = taskType === 'production'
+    ? 'design'
+    : taskType === 'installation'
+      ? 'production'
+      : null
+  if (
+    rollbackTarget
+    && !['completed', 'confirmed', 'cancelled', 'rolled_back'].includes(currentStatus)
+  ) {
+    const rollbackAllowed = allowed && !item.outsource_blocked
+    actions.push({
+      key: 'rollback_stage',
+      to_status: 'rolled_back',
+      label: `退回${rollbackTarget === 'design' ? '设计' : '制作'}`,
+      allowed: rollbackAllowed,
+      disabled_reason: rollbackAllowed
+        ? null
+        : item.outsource_blocked
+          ? '外协任务进行中，完成外协后才能退回上一阶段'
+          : disabledReason,
+      kind: 'secondary',
+      requires_confirmation: true,
+      operation: 'rollback' as const,
+      target_stage: rollbackTarget,
+    })
+  }
+  return actions
 }

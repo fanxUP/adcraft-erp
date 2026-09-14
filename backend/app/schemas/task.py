@@ -38,7 +38,7 @@ class TaskOrderItemState(BaseModel):
     capabilities: dict[str, ActionCapability] = Field(default_factory=dict)
     assignee_user_id: str | None = None
     assignee_name: str | None = None
-    assignee_state: Literal["unassigned", "claimed", "historical_unknown", "terminal"] = "unassigned"
+    assignee_state: Literal["unassigned", "claimed", "historical_unknown", "terminal", "rolled_back"] = "unassigned"
 
 
 # -- Design Task --
@@ -261,6 +261,13 @@ class TaskStatusChange(BaseModel):
     assigned_to: str | None = None
 
 
+class TaskItemRollbackRequest(BaseModel):
+    """Explicit cross-stage rollback for selected order-item work units."""
+
+    order_item_ids: list[str] = Field(min_length=1, max_length=100)
+    reason: str | None = Field(default=None, max_length=500)
+
+
 class TaskItemAction(BaseModel):
     """One server-authorized action for a single order-item work unit."""
 
@@ -271,6 +278,8 @@ class TaskItemAction(BaseModel):
     disabled_reason: str | None = None
     kind: Literal["primary", "secondary"] = "secondary"
     requires_confirmation: bool = True
+    operation: Literal["status_change", "rollback"] = "status_change"
+    target_stage: TaskType | None = None
 
 
 class TaskOrderItemOption(OrderItemResponse):
@@ -302,7 +311,7 @@ class TaskOrderItemOption(OrderItemResponse):
     task_status: str | None = None
     assignee_user_id: str | None = None
     assignee_name: str | None = None
-    assignee_state: Literal["unassigned", "claimed", "historical_unknown", "terminal"] = "unassigned"
+    assignee_state: Literal["unassigned", "claimed", "historical_unknown", "terminal", "rolled_back"] = "unassigned"
     task_status_label: str | None = None
     task_status_view: StatusView | None = None
     task_progress_pct: int | None = Field(default=None, ge=0, le=100)

@@ -12,7 +12,7 @@ export function taskProgress(task: Pick<TaskQueueItem, 'progress_pct'>) {
 
 export function isTaskVisible(task: Pick<TaskQueueItem, 'status' | 'progress_pct'> & { status_view?: StatusView | null }) {
   const terminal = task.status_view?.terminal
-    ?? ['completed', 'confirmed', 'cancelled'].includes(task.status)
+    ?? ['completed', 'confirmed', 'cancelled', 'rolled_back'].includes(task.status)
   return !terminal
     && taskProgress(task) < 100
 }

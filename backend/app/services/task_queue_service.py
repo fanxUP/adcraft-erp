@@ -79,6 +79,7 @@ async def list_task_queue(
                 TaskOrderItemLink.task_type == task_type,
                 TaskOrderItemLink.task_id == model.id,
                 TaskOrderItemLink.order_item_id == order_item_uuid,
+                TaskOrderItemLink.item_status != "rolled_back",
             )
             query = query.where(or_(model.order_item_id == order_item_uuid, linked))
         if statuses:
@@ -99,12 +100,13 @@ async def list_task_queue(
             items.append(item)
         normalized.extend(await _attach_outsource_flags(db, task_type, items, viewer=viewer))
 
-    # The project board is an active-work view. Completed, cancelled, and
+    # The project board is an active-work view. Completed, cancelled, rolled
+    # back, and
     # fully-progressed aggregate tasks remain available through the stage task
     # lists and history, but do not occupy the board.
     normalized = [
         item for item in normalized
-        if item.get("status") not in {"completed", "confirmed", "cancelled"}
+        if item.get("status") not in {"completed", "confirmed", "cancelled", "rolled_back"}
         and int(item.get("progress_pct") or 0) < 100
     ]
     normalized.sort(key=lambda item: item.get("created_at") or "", reverse=True)

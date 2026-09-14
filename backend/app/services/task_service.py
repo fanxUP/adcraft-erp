@@ -108,6 +108,7 @@ INSTALLATION_IN_PROGRESS_STATUSES = {
 }
 INSTALLATION_COMPLETED_STATUSES = {"completed"}
 TASK_CANCELLED_STATUS = "cancelled"
+TASK_ROLLED_BACK_STATUS = "rolled_back"
 TASK_RELEASE_STATUSES = {
     "design": {"pending"},
     "production": {"pending"},
@@ -136,6 +137,7 @@ TASK_STATUS_PROGRESS = {
         "confirmed": 100,
         "completed": 100,
         "cancelled": 100,
+        "rolled_back": 0,
     },
     "production": {
         "pending": 0,
@@ -143,6 +145,7 @@ TASK_STATUS_PROGRESS = {
         "rework": 30,
         "completed": 100,
         "cancelled": 100,
+        "rolled_back": 0,
     },
     "installation": {
         "pending": 0,
@@ -151,6 +154,7 @@ TASK_STATUS_PROGRESS = {
         "pending_acceptance": 75,
         "completed": 100,
         "cancelled": 100,
+        "rolled_back": 0,
     },
 }
 
@@ -163,6 +167,7 @@ TASK_STATUS_LABELS = {
         "confirmed": "已完成",
         "completed": "已完成",
         "cancelled": "已取消",
+        "rolled_back": "已退回上一阶段",
     },
     "production": {
         "pending": "待制作",
@@ -170,6 +175,7 @@ TASK_STATUS_LABELS = {
         "rework": "返工",
         "completed": "已完成",
         "cancelled": "已取消",
+        "rolled_back": "已退回设计",
     },
     "installation": {
         "pending": "待分配",
@@ -178,6 +184,7 @@ TASK_STATUS_LABELS = {
         "pending_acceptance": "待处理",
         "completed": "已完成",
         "cancelled": "已取消",
+        "rolled_back": "已退回制作",
     },
 }
 
@@ -188,7 +195,7 @@ TASK_COMPLETED_STATUSES = {
 }
 
 TASK_TERMINAL_STATUSES = {
-    task_type: statuses | {TASK_CANCELLED_STATUS}
+    task_type: statuses | {TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS}
     for task_type, statuses in TASK_COMPLETED_STATUSES.items()
 }
 
@@ -331,6 +338,8 @@ def _task_item_actions(
             "disabled_reason": None if can_operate else disabled_reason,
             "kind": "primary",
             "requires_confirmation": True,
+            "operation": "status_change",
+            "target_stage": None,
         }]
 
     status = current_status or "pending"
@@ -354,6 +363,30 @@ def _task_item_actions(
             "disabled_reason": reason,
             "kind": _task_item_action_kind(task_type, target_status),
             "requires_confirmation": True,
+            "operation": "status_change",
+            "target_stage": None,
+        })
+    rollback_target = {
+        "production": "design",
+        "installation": "production",
+    }.get(task_type)
+    if rollback_target and not _is_terminal_item_status(task_type, status):
+        rollback_label = f"退回{TASK_TYPE_LABELS[rollback_target]}"
+        rollback_blocked = bool(outsource_blocked)
+        actions.append({
+            "key": "rollback_stage",
+            "to_status": TASK_ROLLED_BACK_STATUS,
+            "label": rollback_label,
+            "allowed": can_operate and not rollback_blocked,
+            "disabled_reason": (
+                "外协任务进行中，完成外协后才能退回上一阶段"
+                if rollback_blocked
+                else None if can_operate else disabled_reason
+            ),
+            "kind": "secondary",
+            "requires_confirmation": True,
+            "operation": "rollback",
+            "target_stage": rollback_target,
         })
     return actions
 
@@ -364,7 +397,11 @@ def _task_capabilities(task_type: str, status: str | None) -> dict:
     return {
         "change_status": make_action_capability(
             not terminal,
-            "任务已完成或已取消，不能继续变更状态" if terminal else None,
+            (
+                "任务已退回上一阶段，不能继续变更状态"
+                if normalized == TASK_ROLLED_BACK_STATUS
+                else "任务已完成或已取消，不能继续变更状态"
+            ) if terminal else None,
         ).model_dump(mode="json"),
     }
 
@@ -665,6 +702,8 @@ def _task_item_assignee_state(
     assignee_user_id: UUID | None,
 ) -> str:
     """Describe whether a link can still be claimed or is historical."""
+    if status == TASK_ROLLED_BACK_STATUS:
+        return "rolled_back"
     if _is_terminal_item_status(task_type, status or ""):
         return "terminal" if assignee_user_id else "historical_unknown"
     return "claimed" if assignee_user_id else "unassigned"
@@ -979,11 +1018,16 @@ def _aggregate_task_status(task_type: str, statuses: list[str]) -> str:
     """Summarise mixed item states without hiding unfinished work."""
     if not statuses:
         return "pending"
+    effective_statuses = [
+        status for status in statuses if status != TASK_ROLLED_BACK_STATUS
+    ]
+    if not effective_statuses:
+        return TASK_ROLLED_BACK_STATUS
     completed = TASK_COMPLETED_STATUSES.get(task_type, set())
     terminal = TASK_TERMINAL_STATUSES.get(task_type, set())
-    if all(status in completed for status in statuses):
+    if all(status in completed for status in effective_statuses):
         return "confirmed" if task_type == "design" else "completed"
-    if all(status in terminal for status in statuses):
+    if all(status in terminal for status in effective_statuses):
         return "cancelled"
 
     priorities = {
@@ -991,7 +1035,7 @@ def _aggregate_task_status(task_type: str, statuses: list[str]) -> str:
         "production": {"pending": 0, "rework": 1, "in_progress": 2},
         "installation": {"pending": 0, "assigned": 1, "in_progress": 2, "pending_acceptance": 3},
     }
-    unfinished = [status for status in statuses if status not in terminal]
+    unfinished = [status for status in effective_statuses if status not in terminal]
     priority = priorities.get(task_type, {})
     return max(unfinished, key=lambda status: priority.get(status, 0))
 
@@ -1128,13 +1172,13 @@ def _resolve_order_item_stage(
     recognised_statuses = {
         "designing": DESIGN_IN_PROGRESS_STATUSES
         | DESIGN_COMPLETED_STATUSES
-        | {TASK_CANCELLED_STATUS},
+        | {TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS},
         "in_production": PRODUCTION_IN_PROGRESS_STATUSES
         | PRODUCTION_COMPLETED_STATUSES
-        | {TASK_CANCELLED_STATUS},
+        | {TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS},
         "in_installation": INSTALLATION_IN_PROGRESS_STATUSES
         | INSTALLATION_COMPLETED_STATUSES
-        | {TASK_CANCELLED_STATUS},
+        | {TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS},
     }
     for stage, statuses in merged_states.items():
         if any(status not in recognised_statuses.get(stage, set()) for status in statuses):
@@ -1380,8 +1424,12 @@ async def _task_order_item_option_map(
                 disabled_reason = None
             elif _is_completed_item_status(task_type, task_status or ""):
                 disabled_reason = "该明细在本任务中已完成，不能再次处理"
+            elif task_status == TASK_ROLLED_BACK_STATUS:
+                disabled_reason = "该明细已退回上一阶段，当前任务不能继续操作"
+            elif task_status == TASK_CANCELLED_STATUS:
+                disabled_reason = "该明细历史上已取消，只能查看"
             else:
-                disabled_reason = "该明细在本任务中已取消"
+                disabled_reason = "该明细当前不能继续操作"
         else:
             can_select = can_change_stage and stage == expected_stage and not outsource["outsource_blocked"]
             if (
@@ -1592,21 +1640,27 @@ async def _sync_task_order_item_links(
     await db.flush()
 
     states = await _task_item_state_map(db, task_type, task)
+    effective_states = {
+        item_id: state
+        for item_id, state in states.items()
+        if state[0] != TASK_ROLLED_BACK_STATUS
+    }
     aggregate_status = _aggregate_task_status(
         task_type,
         [status for status, _ in states.values()],
     )
     aggregate_progress = round(
-        sum(item_progress for _, item_progress in states.values()) / len(states)
-    ) if states else 0
+        sum(item_progress for _, item_progress in effective_states.values())
+        / len(effective_states)
+    ) if effective_states else 0
     task.status = aggregate_status
     task.progress_pct = max(0, min(100, aggregate_progress))
     if all(
         _is_completed_item_status(task_type, status)
-        for status, _ in states.values()
-    ) and states:
+        for status, _ in effective_states.values()
+    ) and effective_states:
         task.completed_at = _utc_now()
-    elif aggregate_status != "cancelled":
+    elif aggregate_status not in {TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS}:
         task.completed_at = None
     await db.flush()
 
@@ -1909,7 +1963,7 @@ async def _all_stage_tasks_completed(
     task_result = await db.execute(select(model).where(model.document_id == doc_id))
     tasks = list(task_result.scalars().all())
     task_type = _task_type_for_model(model)
-    item_ids_by_task = await _task_item_ids_by_task(db, task_type, tasks)
+    raw_item_ids_by_task = await _task_item_ids_by_task(db, task_type, tasks)
     link_statuses: dict[tuple[UUID, UUID], str] = {}
     task_ids = [
         task_id for task in tasks
@@ -1932,6 +1986,18 @@ async def _all_stage_tasks_completed(
         except AttributeError:
             pass
 
+    item_ids_by_task = {
+        task_id: [
+            item_id for item_id in item_ids
+            if link_statuses.get((task_id, item_id), getattr(
+                next((task for task in tasks if _coerce_uuid(task.id) == task_id), None),
+                "status",
+                None,
+            )) != TASK_ROLLED_BACK_STATUS
+        ]
+        for task_id, item_ids in raw_item_ids_by_task.items()
+    }
+
     def linked_items(task) -> list[UUID]:
         task_id = _coerce_uuid(getattr(task, "id", None))
         return item_ids_by_task.get(task_id, []) if task_id is not None else []
@@ -1940,8 +2006,14 @@ async def _all_stage_tasks_completed(
         active_ids = {item.id for item in active_items}
         relevant_tasks = [
             task for task in tasks
-            if not linked_items(task)
-            or any(item_id in active_ids for item_id in linked_items(task))
+            if getattr(task, "status", None) != TASK_ROLLED_BACK_STATUS
+            and (
+                not raw_item_ids_by_task.get(_coerce_uuid(task.id), [])
+                or any(
+                    item_id in active_ids
+                    for item_id in linked_items(task)
+                )
+            )
         ]
         for item_id in active_ids:
             item_tasks = [
@@ -1964,8 +2036,16 @@ async def _all_stage_tasks_completed(
             return False
         return bool(relevant_tasks)
 
-    return bool(tasks) and all(
-        task.status in terminal_statuses for task in tasks
+    effective_tasks = [
+        task for task in tasks
+        if getattr(task, "status", None) != TASK_ROLLED_BACK_STATUS
+        and (
+            not raw_item_ids_by_task.get(_coerce_uuid(task.id), [])
+            or linked_items(task)
+        )
+    ]
+    return bool(effective_tasks) and all(
+        task.status in terminal_statuses for task in effective_tasks
     )
 
 
@@ -1978,15 +2058,12 @@ async def _item_stage_tasks_completed(
 ) -> bool:
     result = await db.execute(select(model).where(model.document_id == doc_id))
     tasks = list(result.scalars().all())
-    item_ids_by_task = await _task_item_ids_by_task(
+    task_type = _task_type_for_model(model)
+    raw_item_ids_by_task = await _task_item_ids_by_task(
         db,
-        _task_type_for_model(model),
+        task_type,
         tasks,
     )
-    tasks = [
-        task for task in tasks
-        if item_id in item_ids_by_task.get(_coerce_uuid(task.id), [])
-    ]
     link_statuses: dict[tuple[UUID, UUID], str] = {}
     task_ids = [
         task_id for task in tasks
@@ -1995,7 +2072,7 @@ async def _item_stage_tasks_completed(
     if task_ids:
         link_result = await db.execute(
             select(TaskOrderItemLink).where(
-                TaskOrderItemLink.task_type == _task_type_for_model(model),
+                TaskOrderItemLink.task_type == task_type,
                 TaskOrderItemLink.task_id.in_(task_ids),
             )
         )
@@ -2008,6 +2085,22 @@ async def _item_stage_tasks_completed(
                     link_statuses[(task_id, linked_item_id)] = item_status
         except AttributeError:
             pass
+    item_ids_by_task = {
+        task_id: [
+            linked_item_id for linked_item_id in linked_item_ids
+            if link_statuses.get((task_id, linked_item_id), getattr(
+                next((task for task in tasks if _coerce_uuid(task.id) == task_id), None),
+                "status",
+                None,
+            )) != TASK_ROLLED_BACK_STATUS
+        ]
+        for task_id, linked_item_ids in raw_item_ids_by_task.items()
+    }
+    tasks = [
+        task for task in tasks
+        if getattr(task, "status", None) != TASK_ROLLED_BACK_STATUS
+        and item_id in item_ids_by_task.get(_coerce_uuid(task.id), [])
+    ]
     return bool(tasks) and all(
         link_statuses.get((_coerce_uuid(task.id), item_id), task.status)
         in terminal_statuses
@@ -2048,7 +2141,9 @@ async def _create_production_task_for_item(
             select(ProductionTask)
             .where(
                 ProductionTask.document_id == task.document_id,
-                ProductionTask.status != "cancelled",
+                ProductionTask.status.not_in(
+                    [TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS]
+                ),
             )
             .order_by(ProductionTask.created_at.asc(), ProductionTask.id.asc())
         )
@@ -2129,7 +2224,9 @@ async def _create_installation_task_for_item(
             select(InstallationTask)
             .where(
                 InstallationTask.document_id == task.document_id,
-                InstallationTask.status != "cancelled",
+                InstallationTask.status.not_in(
+                    [TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS]
+                ),
             )
             .order_by(InstallationTask.created_at.asc(), InstallationTask.id.asc())
         )
@@ -2245,6 +2342,407 @@ async def _maybe_complete_order(db: AsyncSession, doc_id: UUID, operated_by: UUI
         return
 
 
+TASK_ROLLBACK_TARGET_TYPES = {
+    "production": "design",
+    "installation": "production",
+}
+
+
+def _rollback_target_type(task_type: str) -> str:
+    try:
+        return TASK_ROLLBACK_TARGET_TYPES[task_type]
+    except KeyError as exc:
+        raise ValueError("设计明细不能单独回退，请删除整张设计任务") from exc
+
+
+async def _refresh_task_aggregate(
+    db: AsyncSession,
+    task_type: str,
+    task,
+) -> None:
+    """Recalculate one task card while ignoring links that left the stage."""
+    states = await _task_item_state_map(db, task_type, task)
+    effective_states = {
+        item_id: state
+        for item_id, state in states.items()
+        if state[0] != TASK_ROLLED_BACK_STATUS
+    }
+    task.status = _aggregate_task_status(
+        task_type,
+        [status for status, _ in states.values()],
+    )
+    task.progress_pct = max(
+        0,
+        min(
+            100,
+            round(
+                sum(progress for _, progress in effective_states.values())
+                / len(effective_states)
+            ) if effective_states else 0,
+        ),
+    )
+    if effective_states and all(
+        _is_completed_item_status(task_type, status)
+        for status, _ in effective_states.values()
+    ):
+        task.completed_at = _utc_now()
+    else:
+        task.completed_at = None
+    await db.flush()
+
+
+async def _get_or_create_rollback_target_task(
+    db: AsyncSession,
+    source_task,
+    source_task_type: str,
+    item_id: UUID,
+    *,
+    operated_by: UUID | None,
+) -> tuple[object, str | None]:
+    """Find an existing previous-stage card or create one for one item."""
+    target_type = _rollback_target_type(source_task_type)
+    from app.models.task import DesignTask, ProductionTask
+
+    target_models = {
+        "design": DesignTask,
+        "production": ProductionTask,
+    }
+    target_model = target_models[target_type]
+    result = await db.execute(
+        select(target_model)
+        .where(
+            target_model.document_id == source_task.document_id,
+            target_model.status != TASK_CANCELLED_STATUS,
+        )
+        .order_by(target_model.created_at.asc(), target_model.id.asc())
+    )
+    target_tasks = list(result.scalars().all())
+    blocked_task_ids: set[UUID] = set()
+    for candidate in target_tasks:
+        candidate_id = _coerce_uuid(getattr(candidate, "id", None))
+        rows = await _task_order_item_link_rows(db, target_type, candidate.id)
+        row = next(
+            (
+                link for link in rows
+                if _coerce_uuid(getattr(link, "order_item_id", None)) == item_id
+            ),
+            None,
+        )
+        if row is not None:
+            if getattr(row, "item_status", None) != TASK_CANCELLED_STATUS:
+                return candidate, getattr(row, "item_status", None)
+            if candidate_id is not None:
+                blocked_task_ids.add(candidate_id)
+            continue
+        if _task_order_item_id(candidate) == item_id:
+            return candidate, getattr(candidate, "status", None)
+
+    # Prefer an open, order-scoped card. A manually scoped legacy task is not
+    # silently expanded with an unrelated order item.
+    target = next(
+        (
+            candidate for candidate in target_tasks
+            if _coerce_uuid(getattr(candidate, "id", None)) not in blocked_task_ids
+            and _task_order_item_id(candidate) is None
+            and not _is_terminal_task_status(target_type, candidate)
+        ),
+        None,
+    )
+    if target is None:
+        target = next(
+            (
+                candidate for candidate in target_tasks
+                if _coerce_uuid(getattr(candidate, "id", None)) not in blocked_task_ids
+                and _task_order_item_id(candidate) is None
+                and getattr(candidate, "status", None) == TASK_ROLLED_BACK_STATUS
+            ),
+            None,
+        )
+
+    if target is None:
+        order = await db.get(BusinessDocument, source_task.document_id)
+        item = await db.get(BusinessDocumentItem, item_id)
+        if not order or not item or order.customer_id is None:
+            raise ValueError("订单或订单明细不存在，暂时不能回退")
+        if target_type == "design":
+            target = DesignTask(
+                design_no=await generate_design_no(db),
+                document_id=source_task.document_id,
+                order_item_id=None,
+                customer_id=order.customer_id,
+                project_name=order.project_name,
+                status="pending",
+            )
+        else:
+            target = ProductionTask(
+                production_no=await generate_production_no(db),
+                document_id=source_task.document_id,
+                order_item_id=None,
+                customer_id=order.customer_id,
+                project_name=order.project_name,
+                status="pending",
+                material_id=item.material_id,
+                process_id=item.process_id,
+                length=item.length,
+                width=item.width,
+                height=item.height,
+                quantity=item.quantity or 1,
+            )
+        db.add(target)
+        await db.flush()
+        await record_task_event(
+            db,
+            target_type,
+            target,
+            ACTION_CREATE,
+            operated_by,
+            reason="明细跨阶段回退，自动恢复上一阶段任务",
+            changed_fields=["document_id", "order_item_ids", "status"],
+        )
+
+    rows = await _task_order_item_link_rows(db, target_type, target.id)
+    target_link = next(
+        (
+            link for link in rows
+            if _coerce_uuid(getattr(link, "order_item_id", None)) == item_id
+        ),
+        None,
+    )
+    previous_status = getattr(target_link, "item_status", None)
+    if target_link is None:
+        positions = [int(getattr(link, "position", 0) or 0) for link in rows]
+        target_link = TaskOrderItemLink(
+            task_type=target_type,
+            task_id=target.id,
+            order_item_id=item_id,
+            position=max(positions, default=-1) + 1,
+            item_status="pending",
+            item_progress_pct=0,
+            item_completed_at=None,
+            assignee_user_id=None,
+        )
+        db.add(target_link)
+    elif previous_status == TASK_CANCELLED_STATUS:
+        raise ValueError("上一阶段已有历史取消记录，系统已新建恢复任务")
+    else:
+        target_link.item_status = "pending"
+        target_link.item_progress_pct = 0
+        target_link.item_completed_at = None
+        target_link.assignee_user_id = None
+    await db.flush()
+    await _refresh_task_aggregate(db, target_type, target)
+    return target, previous_status
+
+
+async def _reconcile_order_stage_after_item_rollback(
+    db: AsyncSession,
+    document_id: UUID,
+    operated_by: UUID | None,
+) -> None:
+    """Lower the order stage only when every active item has moved back."""
+    order = await db.get(BusinessDocument, document_id)
+    if not order or order.status not in ACTIVE_ORDER_STATUSES:
+        return
+    item_result = await db.execute(
+        select(BusinessDocumentItem.id).where(
+            BusinessDocumentItem.document_id == document_id,
+            BusinessDocumentItem.lifecycle_status == "active",
+        )
+    )
+    item_ids = [item_id for (item_id,) in item_result.all()]
+    if not item_ids:
+        return
+    states_by_item, global_states = await _task_stage_states_by_item(db, document_id)
+    rank = {
+        "designing": 0,
+        "in_production": 1,
+        "in_installation": 2,
+        "completed": 3,
+    }
+    desired_by_rank = {value: key for key, value in rank.items()}
+    item_stages = [
+        _resolve_order_item_stage(
+            order.status,
+            states_by_item.get(item_id, {}),
+            global_states,
+        )
+        for item_id in item_ids
+    ]
+    if any(stage not in rank for stage in item_stages):
+        return
+    desired = desired_by_rank[max(rank[stage] for stage in item_stages)]
+    if rank.get(desired, -1) >= rank.get(order.status, -1):
+        return
+    old_status = order.status
+    order.status = desired
+    from app.services.business_document_service import BusinessDocumentService
+
+    await BusinessDocumentService(db, doc_type="order").repo.create_status_log(
+        document_id,
+        old_status,
+        desired,
+        "订单明细跨阶段回退，系统同步回退订单阶段",
+        operated_by,
+    )
+    await db.flush()
+
+
+async def _rollback_task_items(
+    db: AsyncSession,
+    task_type: str,
+    task,
+    raw_item_ids: list[str],
+    *,
+    reason: str | None,
+    viewer: User | None,
+    operated_by: UUID | None,
+) -> list[UUID]:
+    """Move only selected, unfinished items to the immediately previous stage."""
+    _ensure_task_stage_change_permission(task_type, viewer)
+    target_type = _rollback_target_type(task_type)
+    item_ids: list[UUID] = []
+    seen: set[UUID] = set()
+    for raw_item_id in raw_item_ids or []:
+        item_id = _coerce_uuid(raw_item_id)
+        if item_id is None:
+            raise ValueError("订单明细编号格式不正确")
+        if item_id in seen:
+            raise ValueError("订单明细不能重复")
+        seen.add(item_id)
+        item_ids.append(item_id)
+    if not item_ids:
+        raise ValueError("请明确选择要退回的订单明细")
+
+    links = await _task_order_item_link_rows(db, task_type, task.id)
+    links_by_item = {
+        item_id: link
+        for link in links
+        if (item_id := _coerce_uuid(getattr(link, "order_item_id", None))) is not None
+    }
+    legacy_item_id = _task_order_item_id(task)
+    if legacy_item_id in item_ids and legacy_item_id not in links_by_item:
+        link = TaskOrderItemLink(
+            task_type=task_type,
+            task_id=task.id,
+            order_item_id=legacy_item_id,
+            position=0,
+            item_status=getattr(task, "status", "pending"),
+            item_progress_pct=_item_status_progress(
+                task_type,
+                getattr(task, "status", "pending"),
+                int(getattr(task, "progress_pct", 0) or 0),
+            ),
+            item_completed_at=None,
+        )
+        db.add(link)
+        await db.flush()
+        links_by_item[legacy_item_id] = link
+
+    missing = [item_id for item_id in item_ids if item_id not in links_by_item]
+    if missing:
+        raise ValueError("只能退回当前任务中已关联的订单明细")
+
+    if viewer is not None and not can_assign_task(task_type, viewer):
+        current_employee_user_id = await resolve_current_employee_user_id(db, viewer)
+    else:
+        current_employee_user_id = None
+    owner_conflicts = [
+        item_id for item_id in item_ids
+        if (
+            (owner_id := _coerce_uuid(getattr(links_by_item[item_id], "assignee_user_id", None)))
+            and owner_id != current_employee_user_id
+            and not can_assign_task(task_type, viewer)
+        )
+    ]
+    if owner_conflicts:
+        raise ValueError("所选明细由其他员工负责，不能退回，请联系负责人或管理员")
+
+    previous_statuses: dict[UUID, str] = {}
+    processable_item_ids: list[UUID] = []
+    for item_id in item_ids:
+        link = links_by_item[item_id]
+        current_status = getattr(link, "item_status", None) or getattr(task, "status", "pending")
+        if current_status == TASK_ROLLED_BACK_STATUS:
+            # A retried request after a network timeout is a safe no-op. The
+            # original transaction already created the previous-stage link;
+            # never reset that link if the user has progressed it further.
+            continue
+        if current_status == TASK_CANCELLED_STATUS:
+            raise ValueError("历史已取消明细只能查看，不能再次回退")
+        if _is_completed_item_status(task_type, current_status):
+            raise ValueError("已完成明细不能由普通操作回退，请联系经理或管理员处理")
+        previous_statuses[item_id] = current_status
+        processable_item_ids.append(item_id)
+
+    if not processable_item_ids:
+        return []
+
+    blocked_outsource = await _blocking_outsource_map(
+        db,
+        task.document_id,
+        task_type,
+        processable_item_ids,
+    )
+    if blocked_outsource:
+        raise ValueError("所选明细有外协任务进行中，请先完成或处理外协任务")
+
+    event_time = _business_now_naive()
+    source_logs: list[TaskItemStatusLog] = []
+    target_logs: list[TaskItemStatusLog] = []
+    for item_id in processable_item_ids:
+        source_link = links_by_item[item_id]
+        old_assignee = _coerce_uuid(getattr(source_link, "assignee_user_id", None))
+        source_link.item_status = TASK_ROLLED_BACK_STATUS
+        source_link.item_progress_pct = 0
+        source_link.item_completed_at = None
+        source_link.assignee_user_id = None
+        source_logs.append(
+            TaskItemStatusLog(
+                task_type=task_type,
+                task_id=task.id,
+                document_id=task.document_id,
+                order_item_id=item_id,
+                from_status=previous_statuses[item_id],
+                to_status=TASK_ROLLED_BACK_STATUS,
+                assignee_user_id=old_assignee or current_employee_user_id,
+                operated_by=operated_by,
+                operated_at=event_time,
+                source="rollback",
+            )
+        )
+        target_task, target_previous_status = await _get_or_create_rollback_target_task(
+            db,
+            task,
+            task_type,
+            item_id,
+            operated_by=operated_by,
+        )
+        target_logs.append(
+            TaskItemStatusLog(
+                task_type=target_type,
+                task_id=target_task.id,
+                document_id=task.document_id,
+                order_item_id=item_id,
+                from_status=target_previous_status,
+                to_status="pending",
+                assignee_user_id=None,
+                operated_by=operated_by,
+                operated_at=event_time,
+                source="rollback",
+            )
+        )
+
+    db.add_all([*source_logs, *target_logs])
+    await _refresh_task_aggregate(db, task_type, task)
+    await _reconcile_order_stage_after_item_rollback(
+        db,
+        task.document_id,
+        operated_by,
+    )
+    await db.flush()
+    return processable_item_ids
+
+
 async def _apply_task_item_status_change(
     db: AsyncSession,
     task_type: str,
@@ -2257,6 +2755,13 @@ async def _apply_task_item_status_change(
 ) -> tuple[list[UUID], dict[UUID, tuple[str, int]]]:
     """Apply one status transition only to the checked item work units."""
     _ensure_task_stage_change_permission(task_type, viewer)
+    if to_status == TASK_CANCELLED_STATUS:
+        if task_type == "design":
+            raise ValueError("设计明细不能单独取消，如需撤回请删除整张设计任务")
+        target_stage = "设计" if task_type == "production" else "制作"
+        raise ValueError(
+            f"{TASK_TYPE_LABELS[task_type]}明细不能取消，请使用“退回{target_stage}”操作"
+        )
     workflows = {
         "design": DESIGN_TASK_WORKFLOW,
         "production": PRODUCTION_TASK_WORKFLOW,
@@ -2382,17 +2887,23 @@ async def _apply_task_item_status_change(
         task_type,
         [status for status, _ in states.values()],
     )
+    effective_states = {
+        item_id: state
+        for item_id, state in states.items()
+        if state[0] != TASK_ROLLED_BACK_STATUS
+    }
     aggregate_progress = round(
-        sum(item_progress for _, item_progress in states.values()) / len(states)
-    ) if states else progress
+        sum(item_progress for _, item_progress in effective_states.values())
+        / len(effective_states)
+    ) if effective_states else 0
     task.status = aggregate_status
     task.progress_pct = max(0, min(100, aggregate_progress))
     if all(
         _is_completed_item_status(task_type, status)
-        for status, _ in states.values()
-    ):
+        for status, _ in effective_states.values()
+    ) and effective_states:
         task.completed_at = _utc_now()
-    elif aggregate_status != "cancelled":
+    elif aggregate_status not in {TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS}:
         task.completed_at = None
     await db.flush()
     return selected_ids, states
@@ -2821,10 +3332,15 @@ class DesignTaskService:
 
                 # Revert order
                 old_status = order.status
-                order.status = "pending_confirm"
+                order.status = "confirmed"
                 order_svc = BusinessDocumentService(self.db, doc_type="order")
-                await order_svc.repo.create_status_log(doc_id, old_status, "pending_confirm",
-                    "设计任务已被管理员删除，系统自动回退到待确认", None)
+                await order_svc.repo.create_status_log(
+                    doc_id,
+                    old_status,
+                    "confirmed",
+                    "设计任务已被删除，订单回退到设计前一级（已确认）",
+                    None,
+                )
 
         # 清空外协任务对已删任务的悬空来源引用
         await _clear_outsource_source_refs(self.db, "design", design_ids)
@@ -3101,6 +3617,47 @@ class ProductionTaskService:
             return await self._to_dict(task)
         except Exception:
             raise
+
+    async def rollback_items(
+        self,
+        task_id: UUID,
+        order_item_ids: list[str],
+        reason: str | None = None,
+        operated_by: UUID | None = None,
+    ) -> dict:
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
+        if not task:
+            raise ValueError("制作任务不存在")
+        before = task_history_snapshot(task)
+        changed_item_ids = await _rollback_task_items(
+            self.db,
+            "production",
+            task,
+            order_item_ids,
+            reason=reason,
+            viewer=self.viewer,
+            operated_by=operated_by,
+        )
+        if changed_item_ids:
+            await record_task_event(
+                self.db,
+                "production",
+                task,
+                ACTION_STATUS_CHANGE,
+                operated_by,
+                before=before,
+                reason=reason or "制作明细退回设计",
+                changed_fields=[
+                    "order_item_ids",
+                    "item_status",
+                    "rollback_target_stage",
+                    "status",
+                    "progress_pct",
+                ],
+            )
+        await self.db.flush()
+        await _refresh_task_for_response(self.db, task)
+        return await self._to_dict(task)
 
     async def delete_task(self, task_id: UUID) -> None:
         """管理员删除制作任务，回退订单到设计中状态。"""
@@ -3405,6 +3962,47 @@ class InstallationTaskService:
             return await self._to_dict(task)
         except Exception:
             raise
+
+    async def rollback_items(
+        self,
+        task_id: UUID,
+        order_item_ids: list[str],
+        reason: str | None = None,
+        operated_by: UUID | None = None,
+    ) -> dict:
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
+        if not task:
+            raise ValueError("安装任务不存在")
+        before = task_history_snapshot(task)
+        changed_item_ids = await _rollback_task_items(
+            self.db,
+            "installation",
+            task,
+            order_item_ids,
+            reason=reason,
+            viewer=self.viewer,
+            operated_by=operated_by,
+        )
+        if changed_item_ids:
+            await record_task_event(
+                self.db,
+                "installation",
+                task,
+                ACTION_STATUS_CHANGE,
+                operated_by,
+                before=before,
+                reason=reason or "安装明细退回制作",
+                changed_fields=[
+                    "order_item_ids",
+                    "item_status",
+                    "rollback_target_stage",
+                    "status",
+                    "progress_pct",
+                ],
+            )
+        await self.db.flush()
+        await _refresh_task_for_response(self.db, task)
+        return await self._to_dict(task)
 
     async def delete_task(self, task_id: UUID) -> None:
         """管理员删除安装任务，回退订单到生产中状态。"""

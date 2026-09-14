@@ -191,6 +191,7 @@ import {
   getInstallationTasks,
   getInstallationTask,
   changeInstallationTaskStatus,
+  rollbackInstallationTaskItems,
   getTaskOrderItemOptions,
 } from '@/api/tasks'
 import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
@@ -255,10 +256,10 @@ function statusColor(s: string) {
 }
 
 const INST_WORKFLOW: Record<string, string[]> = {
-  pending: ['assigned', 'in_progress', 'cancelled'],
-  assigned: ['in_progress', 'pending', 'cancelled'],
-  in_progress: ['completed', 'pending_acceptance', 'pending', 'cancelled'],
-  pending_acceptance: ['completed', 'in_progress', 'cancelled'],
+  pending: ['assigned', 'in_progress'],
+  assigned: ['in_progress', 'pending'],
+  in_progress: ['completed', 'pending_acceptance', 'pending'],
+  pending_acceptance: ['completed', 'in_progress'],
   completed: [],
   cancelled: [],
 }
@@ -380,16 +381,16 @@ async function handleItemAction(item: TaskOrderItemOption, action: TaskItemActio
   let reason = ''
   try {
     if (action.to_status === 'cancelled') {
+      ElMessage.info('设计、制作、安装明细不能取消，请使用退回上一阶段操作')
+      return
+    }
+    if (action.operation === 'rollback') {
       const result = await ElMessageBox.prompt(
-        `请输入取消“${item.item_name}”的原因`,
-        '取消明细任务',
-        { confirmButtonText: '确认取消', cancelButtonText: '返回', inputPlaceholder: '请输入取消原因' },
+        `请输入将“${item.item_name}”退回制作的原因（可选）`,
+        '退回上一阶段',
+        { confirmButtonText: '确认退回', cancelButtonText: '返回', inputPlaceholder: '例如：尺寸需要重新确认' },
       )
       reason = result.value?.trim() || ''
-      if (!reason) {
-        ElMessage.warning('请输入取消原因')
-        return
-      }
     } else {
       await ElMessageBox.confirm(
         `确认将“${item.item_name}”从“${itemStatusLabel(item)}”变更为“${action.label}”吗？`,
@@ -403,13 +404,24 @@ async function handleItemAction(item: TaskOrderItemOption, action: TaskItemActio
 
   actionBusyItemId.value = item.id
   try {
-    await changeInstallationTaskStatus(currentTask.value.id, {
-      to_status: action.to_status,
-      reason,
-      order_item_ids: [item.id],
-    })
+    if (action.operation === 'rollback') {
+      if (action.target_stage !== 'production') {
+        ElMessage.error('回退目标阶段无效，请刷新页面后重试')
+        return
+      }
+      await rollbackInstallationTaskItems(currentTask.value.id, {
+        order_item_ids: [item.id],
+        reason,
+      })
+    } else {
+      await changeInstallationTaskStatus(currentTask.value.id, {
+        to_status: action.to_status,
+        reason,
+        order_item_ids: [item.id],
+      })
+    }
 
-    ElMessage.success('状态已更新')
+    ElMessage.success(action.operation === 'rollback' ? '明细已退回制作' : '状态已更新')
     currentTask.value = await getInstallationTask(currentTask.value.id)
     await Promise.all([loadCurrentItemOptions(), fetchTasks()])
   } catch (e: unknown) {

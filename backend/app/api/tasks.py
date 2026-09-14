@@ -51,6 +51,7 @@ from app.schemas.task import (
     ProductionTaskUpdate,
     TaskAssigneeUpdate,
     TaskItemAssigneeUpdate,
+    TaskItemRollbackRequest,
     TaskStatusChange,
     TaskType,
 )
@@ -683,6 +684,27 @@ async def change_production_task_status(
     return success(task)
 
 
+@prod_router.post("/{task_id}/rollback-items")
+async def rollback_production_task_items(
+    task_id: str,
+    data: TaskItemRollbackRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_CHANGE_STATUS)),
+):
+    service = ProductionTaskService(db, current_user)
+    try:
+        task = await service.rollback_items(
+            _ensure_uuid(task_id),
+            data.order_item_ids,
+            data.reason,
+            current_user.id,
+        )
+        return success(task)
+    except ValueError as exc:
+        await db.rollback()
+        return {"code": 40001, "message": str(exc), "data": None}
+
+
 # -- Installation Tasks --
 
 inst_router = APIRouter(prefix="/installation-tasks", tags=["Installation Tasks"])
@@ -801,6 +823,27 @@ async def change_installation_task_status(
         assigned_to=data.assigned_to,
     )
     return success(task)
+
+
+@inst_router.post("/{task_id}/rollback-items")
+async def rollback_installation_task_items(
+    task_id: str,
+    data: TaskItemRollbackRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_CHANGE_STATUS)),
+):
+    service = InstallationTaskService(db, current_user)
+    try:
+        task = await service.rollback_items(
+            _ensure_uuid(task_id),
+            data.order_item_ids,
+            data.reason,
+            current_user.id,
+        )
+        return success(task)
+    except ValueError as exc:
+        await db.rollback()
+        return {"code": 40001, "message": str(exc), "data": None}
 
 
 # -- Attachments --

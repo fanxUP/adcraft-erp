@@ -54,10 +54,10 @@
       />
 
       <!-- 管理员删除 -->
-      <el-card v-if="authStore.isAdmin" shadow="never" class="info-card" style="margin-top: 16px; border-color: #ff4d4f;">
+      <el-card v-if="authStore.hasPermission('design_task:delete')" shadow="never" class="info-card" style="margin-top: 16px; border-color: #ff4d4f;">
         <template #header><span style="color: #ff4d4f;">危险操作</span></template>
         <el-button :loading="deleting" @click="handleDelete" type="danger">删除此任务</el-button>
-        <span style="color: var(--ad-text-secondary); margin-left: 12px; font-size: 12px;">删除后订单将回退到确认状态，下游任务将被清除</span>
+        <span style="color: var(--ad-text-secondary); margin-left: 12px; font-size: 12px;">删除后订单将回退到设计前的已确认状态，下游任务将被清除</span>
       </el-card>
 
 
@@ -88,11 +88,11 @@ const changing = ref(false)
 const deleting = ref(false)
 const task = ref<DesignTaskResponse | null>(null)
 const DESIGN_WORKFLOW: Record<string, string[]> = {
-  pending: ['designing', 'cancelled'],
-  designing: ['confirmed', 'pending_review', 'pending', 'cancelled'],
-  pending_review: ['confirmed', 'revision', 'cancelled'],
-  revision: ['designing', 'pending_review', 'cancelled'],
-  confirmed: ['cancelled'],
+  pending: ['designing'],
+  designing: ['confirmed', 'pending_review', 'pending'],
+  pending_review: ['confirmed', 'revision'],
+  revision: ['designing', 'pending_review'],
+  confirmed: [],
   cancelled: [],
 }
 
@@ -124,7 +124,7 @@ async function fetchTask() {
 
 async function handleDelete() {
   await ElMessageBox.confirm(
-    `确定删除设计任务 ${task.value?.design_no || ''}？删除后不可恢复，关联订单将回退到确认状态。`,
+    `确定删除设计任务 ${task.value?.design_no || ''}？删除后不可恢复，关联订单将回退到设计前的已确认状态。`,
     '删除任务', { confirmButtonText: '确定删除', cancelButtonText: '取消', type: 'error' }
   )
   deleting.value = true

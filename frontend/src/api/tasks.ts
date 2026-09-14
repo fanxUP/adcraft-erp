@@ -36,6 +36,11 @@ export interface TaskStatusChangeInput {
   order_item_ids: string[]
 }
 
+export interface TaskItemRollbackInput {
+  order_item_ids: string[]
+  reason?: string
+}
+
 export interface TaskItemAssigneeUpdateInput {
   order_item_ids: string[]
   assignee_user_id?: string | null
@@ -56,6 +61,7 @@ export function updateProductionTask(id: string, data: ProductionTaskUpdateInput
 export function assignProductionTask(id: string, assignedTo: string | null) { return put<ProductionTaskResponse>(`/production-tasks/${id}/assignee`, { assigned_to: assignedTo }) }
 export function reassignProductionTaskItems(id: string, data: TaskItemAssigneeUpdateInput) { return put<ProductionTaskResponse>(`/production-tasks/${id}/order-item-assignees`, data) }
 export function changeProductionTaskStatus(id: string, data: TaskStatusChangeInput) { return post<ProductionTaskResponse>(`/production-tasks/${id}/change-status`, data) }
+export function rollbackProductionTaskItems(id: string, data: TaskItemRollbackInput) { return post<ProductionTaskResponse>(`/production-tasks/${id}/rollback-items`, data) }
 
 export function getInstallationTasks(params?: { page?: number; page_size?: number; status?: string; assigned_to?: string; order_id?: string; order_item_id?: string; outsourced?: boolean }) { return get<PaginatedData<InstallationTaskResponse>>('/installation-tasks/', { params }) }
 export function getInstallationTask(id: string) { return get<InstallationTaskResponse>(`/installation-tasks/${id}`) }
@@ -64,6 +70,7 @@ export function updateInstallationTask(id: string, data: InstallationTaskUpdateI
 export function assignInstallationTask(id: string, assignedTo: string | null) { return put<InstallationTaskResponse>(`/installation-tasks/${id}/assignee`, { assigned_to: assignedTo }) }
 export function reassignInstallationTaskItems(id: string, data: TaskItemAssigneeUpdateInput) { return put<InstallationTaskResponse>(`/installation-tasks/${id}/order-item-assignees`, data) }
 export function changeInstallationTaskStatus(id: string, data: TaskStatusChangeInput) { return post<InstallationTaskResponse>(`/installation-tasks/${id}/change-status`, data) }
+export function rollbackInstallationTaskItems(id: string, data: TaskItemRollbackInput) { return post<InstallationTaskResponse>(`/installation-tasks/${id}/rollback-items`, data) }
 
 export function uploadAttachment(relatedType: string, relatedId: string, file: File, category?: string) {
   const form = new FormData()

@@ -37,6 +37,7 @@
         :changing="changing"
         @linked="fetchTask"
         @change="handleWorkflowChange"
+        @rollback="handleRollback"
       />
 
       <OrderTaskAttachments
@@ -73,7 +74,7 @@ import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { TaskOverviewCard } from '@/components/ui'
-import { getInstallationTask, changeInstallationTaskStatus } from '@/api/tasks'
+import { getInstallationTask, changeInstallationTaskStatus, rollbackInstallationTaskItems } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { InstallationTaskResponse } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
@@ -93,16 +94,30 @@ const installationOverviewFields = computed(() => [
   { label: '计划安装时间', value: formatDateTimeFull(task.value?.scheduled_at) },
 ])
 const INST_WORKFLOW: Record<string, string[]> = {
-  pending: ['assigned', 'in_progress', 'cancelled'],
-  assigned: ['in_progress', 'pending', 'cancelled'],
-  in_progress: ['completed', 'pending_acceptance', 'pending', 'cancelled'],
-  pending_acceptance: ['completed', 'in_progress', 'cancelled'],
+  pending: ['assigned', 'in_progress'],
+  assigned: ['in_progress', 'pending'],
+  in_progress: ['completed', 'pending_acceptance', 'pending'],
+  pending_acceptance: ['completed', 'in_progress'],
   completed: [],
   cancelled: [],
 }
 
 async function handleWorkflowChange(to_status: string, orderItemIds: string[], reason = '') {
   await doChangeStatus(to_status, reason, orderItemIds)
+}
+
+async function handleRollback(targetStage: 'design' | 'production', orderItemIds: string[], reason = '') {
+  if (targetStage !== 'production') return
+  changing.value = true
+  try {
+    await rollbackInstallationTaskItems(route.params.id as string, {
+      order_item_ids: orderItemIds,
+      reason,
+    })
+    ElMessage.success('明细已退回制作')
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
+  } catch { /* handled */ } finally { changing.value = false }
 }
 
 async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[]) {

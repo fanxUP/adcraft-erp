@@ -197,7 +197,7 @@
                 v-for="action in secondaryActions(item)"
                 :key="`${item.id}-${action.key}-${action.to_status}`"
                 text
-                :type="action.key === 'cancel' ? 'danger' : 'warning'"
+                type="warning"
                 size="small"
                 :disabled="changing || reassigning || actionLoadingId === item.id || !action.allowed"
                 @click.stop="handleItemAction(item, action)"
@@ -273,6 +273,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   linked: []
   change: [status: string, orderItemIds: string[], reason?: string]
+  rollback: [targetStage: 'design' | 'production', orderItemIds: string[], reason?: string]
 }>()
 
 const items = ref<TaskOrderItemOption[]>([])
@@ -287,9 +288,9 @@ const reassigning = ref(false)
 const actionLoadingId = ref<string | null>(null)
 
 const terminalStatuses: Record<TaskType, string[]> = {
-  design: ['confirmed', 'cancelled'],
-  production: ['completed', 'cancelled'],
-  installation: ['completed', 'cancelled'],
+  design: ['confirmed', 'cancelled', 'rolled_back'],
+  production: ['completed', 'cancelled', 'rolled_back'],
+  installation: ['completed', 'cancelled', 'rolled_back'],
 }
 
 const canViewItemPrice = computed(() => authStore.hasPermission('order_item:view_price'))
@@ -325,6 +326,7 @@ function itemAssigneeLabel(item: TaskOrderItemOption) {
   if (item.assignee_name) return item.assignee_name
   if (item.assignee_state === 'historical_unknown') return '历史未记录'
   if (item.assignee_state === 'terminal') return '已完成（未记录）'
+  if (item.assignee_state === 'rolled_back') return '已退回上一阶段'
   return '待领取'
 }
 
@@ -369,22 +371,23 @@ async function handleItemAction(item: TaskOrderItemOption, action: TaskItemActio
   if (actionLoadingId.value) return
 
   let reason = ''
+  if (action.to_status === 'cancelled') {
+    ElMessage.info('设计、制作、安装明细不能取消，请使用退回上一阶段操作')
+    return
+  }
   try {
-    if (action.to_status === 'cancelled') {
+    if (action.operation === 'rollback') {
+      const targetLabel = action.target_stage === 'design' ? '设计' : '制作'
       const result = await ElMessageBox.prompt(
-        `请输入取消“${itemLabel(item)}”的原因`,
-        '取消明细任务',
+        `确认将“${itemLabel(item)}”退回${targetLabel}吗？本次只影响这条订单明细，其他明细不受影响。可填写原因（可选）`,
+        `退回${targetLabel}`,
         {
-          confirmButtonText: '确认取消',
+          confirmButtonText: '确认退回',
           cancelButtonText: '返回',
-          inputPlaceholder: '请输入取消原因',
+          inputPlaceholder: '例如：尺寸需要重新确认',
         },
       )
       reason = result.value?.trim() || ''
-      if (!reason) {
-        ElMessage.warning('请输入取消原因')
-        return
-      }
     } else {
       await ElMessageBox.confirm(
         `确认将“${itemLabel(item)}”从“${currentItemStatusLabel(item)}”变更为“${action.label}”吗？`,
@@ -401,6 +404,16 @@ async function handleItemAction(item: TaskOrderItemOption, action: TaskItemActio
   }
 
   actionLoadingId.value = item.id
+  if (action.operation === 'rollback') {
+    const targetStage = action.target_stage
+    if (targetStage !== 'design' && targetStage !== 'production') {
+      actionLoadingId.value = null
+      ElMessage.error('回退目标阶段无效，请刷新页面后重试')
+      return
+    }
+    emit('rollback', targetStage, [item.id], reason)
+    return
+  }
   emit('change', action.to_status, [item.id], reason)
 }
 
