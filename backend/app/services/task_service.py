@@ -1508,7 +1508,17 @@ async def _task_order_item_option_map(
                     else _task_item_actions(
                         task_type,
                         task_status,
-                        can_operate=can_select,
+                        # Historical cancellation is intentionally not
+                        # selectable as a normal work item, but production
+                        # and installation operators still need the explicit
+                        # single-item restore action.
+                        can_operate=(
+                            can_select
+                            or (
+                                task_status == TASK_CANCELLED_STATUS
+                                and can_change_stage
+                            )
+                        ),
                         is_linked=is_linked,
                         disabled_reason=disabled_reason,
                         outsource_blocked=bool(outsource["outsource_blocked"]),

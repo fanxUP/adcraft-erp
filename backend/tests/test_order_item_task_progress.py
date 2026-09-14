@@ -169,6 +169,53 @@ def test_historical_cancelled_item_can_be_explicitly_restored(
     assert all(action["to_status"] != "cancelled" for action in actions)
 
 
+@pytest.mark.asyncio
+async def test_historical_cancelled_option_exposes_enabled_restore_action():
+    db = AsyncMock()
+    db.get = AsyncMock(
+        return_value=SimpleNamespace(
+            doc_type="order",
+            deleted_at=None,
+            status="in_production",
+        )
+    )
+    db.execute = AsyncMock(return_value=_mock_result([_mock_order_item()]))
+    link = TaskOrderItemLink(
+        task_type="production",
+        task_id=UUID("22222222-2222-2222-2222-222222222222"),
+        order_item_id=ITEM_UUID,
+        item_status="cancelled",
+        item_progress_pct=100,
+    )
+
+    with (
+        patch(
+            "app.services.task_service._task_stage_states_by_item",
+            new=AsyncMock(return_value=({}, {})),
+        ),
+        patch(
+            "app.services.task_service._task_order_item_link_rows",
+            new=AsyncMock(return_value=[link]),
+        ),
+        patch(
+            "app.services.task_service._blocking_outsource_map",
+            new=AsyncMock(return_value={}),
+        ),
+    ):
+        options = await _task_order_item_option_map(
+            db,
+            UUID(ORDER_ID),
+            "production",
+            task_id=link.task_id,
+        )
+
+    option = options[ITEM_UUID]
+    restore = next(action for action in option["actions"] if action["key"] == "rollback_stage")
+    assert option["can_select"] is False
+    assert restore["label"] == "恢复到设计"
+    assert restore["allowed"] is True
+
+
 def test_rollback_request_requires_explicit_item_ids_and_optional_reason():
     request = TaskItemRollbackRequest(
         order_item_ids=[ITEM_ID],
