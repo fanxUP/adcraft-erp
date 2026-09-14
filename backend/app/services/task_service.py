@@ -2422,6 +2422,8 @@ async def _get_or_create_rollback_target_task(
     )
     target_tasks = list(result.scalars().all())
     blocked_task_ids: set[UUID] = set()
+    target = None
+    target_link = None
     for candidate in target_tasks:
         candidate_id = _coerce_uuid(getattr(candidate, "id", None))
         rows = await _task_order_item_link_rows(db, target_type, candidate.id)
@@ -2434,24 +2436,31 @@ async def _get_or_create_rollback_target_task(
         )
         if row is not None:
             if getattr(row, "item_status", None) != TASK_CANCELLED_STATUS:
-                return candidate, getattr(row, "item_status", None)
+                # The item may already exist in the previous stage as a
+                # completed/confirmed link. Keep that task, then let the
+                # normalization below reopen this exact link as pending.
+                target = candidate
+                target_link = row
+                break
             if candidate_id is not None:
                 blocked_task_ids.add(candidate_id)
             continue
         if _task_order_item_id(candidate) == item_id:
-            return candidate, getattr(candidate, "status", None)
+            target = candidate
+            break
 
-    # Prefer an open, order-scoped card. A manually scoped legacy task is not
-    # silently expanded with an unrelated order item.
-    target = next(
-        (
-            candidate for candidate in target_tasks
-            if _coerce_uuid(getattr(candidate, "id", None)) not in blocked_task_ids
-            and _task_order_item_id(candidate) is None
-            and not _is_terminal_task_status(target_type, candidate)
-        ),
-        None,
-    )
+    if target is None:
+        # Prefer an open, order-scoped card. A manually scoped legacy task is
+        # not silently expanded with an unrelated order item.
+        target = next(
+            (
+                candidate for candidate in target_tasks
+                if _coerce_uuid(getattr(candidate, "id", None)) not in blocked_task_ids
+                and _task_order_item_id(candidate) is None
+                and not _is_terminal_task_status(target_type, candidate)
+            ),
+            None,
+        )
     if target is None:
         target = next(
             (
@@ -2504,14 +2513,15 @@ async def _get_or_create_rollback_target_task(
             changed_fields=["document_id", "order_item_ids", "status"],
         )
 
-    rows = await _task_order_item_link_rows(db, target_type, target.id)
-    target_link = next(
-        (
-            link for link in rows
-            if _coerce_uuid(getattr(link, "order_item_id", None)) == item_id
-        ),
-        None,
-    )
+    if target_link is None:
+        rows = await _task_order_item_link_rows(db, target_type, target.id)
+        target_link = next(
+            (
+                link for link in rows
+                if _coerce_uuid(getattr(link, "order_item_id", None)) == item_id
+            ),
+            None,
+        )
     previous_status = getattr(target_link, "item_status", None)
     if target_link is None:
         positions = [int(getattr(link, "position", 0) or 0) for link in rows]

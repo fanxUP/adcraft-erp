@@ -27,6 +27,7 @@ from app.services.task_service import (
     _apply_task_item_status_change,
     _blocking_outsource_map,
     _ensure_task_order_item_links,
+    _get_or_create_rollback_target_task,
     _materialize_legacy_task_scope,
     _resolve_order_item_stage,
     _rollback_task_items,
@@ -333,6 +334,57 @@ async def test_historical_cancelled_item_can_be_restored_to_previous_stage():
     assert link.item_progress_pct == 0
     assert link.assignee_user_id is None
     db.add_all.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_existing_completed_previous_stage_link_is_reset_when_restoring():
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.flush = AsyncMock()
+    source_task = SimpleNamespace(
+        id=UUID("22222222-2222-2222-2222-222222222222"),
+        document_id=UUID(ORDER_ID),
+    )
+    target_task = SimpleNamespace(
+        id=UUID("33333333-3333-3333-3333-333333333333"),
+        document_id=UUID(ORDER_ID),
+        status="confirmed",
+    )
+    db.execute.return_value = _mock_result([target_task])
+    target_link = TaskOrderItemLink(
+        task_type="design",
+        task_id=target_task.id,
+        order_item_id=ITEM_UUID,
+        item_status="confirmed",
+        item_progress_pct=100,
+        item_completed_at=SimpleNamespace(),
+        assignee_user_id=UUID("44444444-4444-4444-4444-444444444444"),
+    )
+
+    with (
+        patch(
+            "app.services.task_service._task_order_item_link_rows",
+            new=AsyncMock(return_value=[target_link]),
+        ),
+        patch(
+            "app.services.task_service._refresh_task_aggregate",
+            new=AsyncMock(),
+        ),
+    ):
+        target, previous_status = await _get_or_create_rollback_target_task(
+            db,
+            source_task,
+            "production",
+            ITEM_UUID,
+            operated_by=None,
+        )
+
+    assert target is target_task
+    assert previous_status == "confirmed"
+    assert target_link.item_status == "pending"
+    assert target_link.item_progress_pct == 0
+    assert target_link.item_completed_at is None
+    assert target_link.assignee_user_id is None
 
 
 def _mock_result(items):
