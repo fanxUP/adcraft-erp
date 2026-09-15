@@ -104,6 +104,16 @@ describe('任务详情页界面收敛', () => {
     expect(source).not.toContain('overflow-y: auto')
   })
 
+  it('任务明细各列在行内上下居中，长文本继续自动换行', () => {
+    const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
+
+    expect(source).toContain('.item-table-row > .item-table-cell { align-items: center; }')
+    expect(source).toContain('.item-table-name, .item-table-product, .item-table-spec { white-space: normal; word-break: break-word; }')
+    expect(source).not.toContain('.item-table-name, .item-table-product, .item-table-spec { align-items: flex-start;')
+    expect(source).not.toContain('.item-table-assignee, .item-table-outsourcing { align-items: flex-start; }')
+    expect(source).not.toContain('.item-table-actions { align-items: flex-start;')
+  })
+
   it('普通任务不显示独立关联保存按钮，历史任务保留补录入口', () => {
     const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
 

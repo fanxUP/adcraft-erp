@@ -585,17 +585,17 @@ onMounted(loadItems)
 .item-table-row.is-disabled { background: var(--el-fill-color-lighter); }
 .item-table-row.is-selected { background: var(--el-color-primary-light-9); }
 .item-table-cell { display: flex; min-width: 0; align-items: center; padding: 0 6px; color: var(--ad-text); line-height: 1.5; overflow-wrap: anywhere; }
+.item-table-row > .item-table-cell { align-items: center; }
 .item-table-header .item-table-cell { color: var(--ad-text-secondary); }
 .item-table-select { justify-content: center; padding-right: 2px; padding-left: 2px; }
 .item-table-checkbox { width: 16px; height: 16px; margin: 0; accent-color: var(--el-color-primary); }
-.item-table-name, .item-table-product, .item-table-spec { align-items: flex-start; white-space: normal; word-break: break-word; }
+.item-table-name, .item-table-product, .item-table-spec { white-space: normal; word-break: break-word; }
 .item-table-name { font-weight: 600; }
 .item-table-number { justify-content: flex-end; text-align: right; font-variant-numeric: tabular-nums; white-space: normal; }
-.item-table-assignee, .item-table-outsourcing { align-items: flex-start; }
 .item-assignee-name { color: var(--el-color-danger); font-weight: 600; overflow-wrap: anywhere; }
 .item-assignee-placeholder, .item-table-placeholder { color: var(--ad-text-secondary); }
 .item-table-actions-header { justify-content: flex-start; }
-.item-table-actions { align-items: flex-start; flex-wrap: wrap; gap: 4px; }
+.item-table-actions { flex-wrap: wrap; gap: 4px; }
 .item-action-reason { flex-basis: 100%; color: var(--el-color-warning-dark-2); font-size: 12px; line-height: 1.5; }
 .link-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
 .link-context-note, .link-tip { color: var(--ad-text-secondary); font-size: 12px; }
