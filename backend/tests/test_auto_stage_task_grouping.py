@@ -15,6 +15,7 @@ from app.services.task_service import (
     _create_installation_task_for_item,
     _create_production_task_for_item,
     _new_unstarted_item_state,
+    _task_item_ids_by_task,
 )
 
 
@@ -30,6 +31,14 @@ class _ScalarResult:
 
     def scalars(self):
         return self
+
+    def all(self):
+        return self._rows
+
+
+class _RowResult:
+    def __init__(self, rows):
+        self._rows = rows
 
     def all(self):
         return self._rows
@@ -246,6 +255,152 @@ async def test_later_stage_item_reuses_open_card(creator, task_type):
         task_type,
         existing,
         [ITEM_ONE_ID, ITEM_TWO_ID],
+    )
+
+
+@pytest.mark.asyncio
+async def test_effective_task_item_ids_ignore_rolled_back_link_without_legacy_revival():
+    """阶段重新进入时，历史回退关联不能继续占用订单明细。"""
+    db = MagicMock()
+    task_id = UUID("77777777-7777-7777-7777-777777777777")
+    task = MagicMock(id=task_id, order_item_id=ITEM_ONE_ID)
+    db.execute = AsyncMock(
+        return_value=_RowResult(
+            [
+                (task_id, ITEM_ONE_ID, "rolled_back"),
+                (task_id, ITEM_TWO_ID, "pending"),
+            ]
+        )
+    )
+
+    item_ids_by_task = await _task_item_ids_by_task(
+        db,
+        "production",
+        [task],
+        excluded_item_statuses={"rolled_back", "cancelled"},
+    )
+
+    assert item_ids_by_task == {task_id: [ITEM_TWO_ID]}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("creator", "task_type"),
+    [
+        (_create_production_task_for_item, "production"),
+        (_create_installation_task_for_item, "installation"),
+    ],
+)
+async def test_later_stage_reopens_only_rolled_back_item_on_existing_card(
+    creator,
+    task_type,
+):
+    """设计到制作、制作到安装都只重开本次重新进入的明细。"""
+    db = MagicMock()
+    db.get = AsyncMock()
+    order = _order([])
+    item = _item(ITEM_TWO_ID)
+    db.get.side_effect = [order, item]
+
+    existing = MagicMock()
+    existing.id = UUID("99999999-9999-9999-9999-999999999999")
+    existing.status = "pending"
+    existing.order_item_id = None
+    db.execute = AsyncMock(return_value=_ScalarResult([existing]))
+    db.flush = AsyncMock()
+    db.add = MagicMock()
+    source_task = MagicMock(document_id=ORDER_ID)
+
+    current_ids = AsyncMock(return_value=[ITEM_ONE_ID, ITEM_TWO_ID])
+    effective_ids = AsyncMock(return_value={existing.id: [ITEM_ONE_ID]})
+    rolled_back_link = MagicMock()
+    rolled_back_link.order_item_id = ITEM_TWO_ID
+    rolled_back_link.item_status = "rolled_back"
+    link_rows = AsyncMock(return_value=[rolled_back_link])
+    sync_links = AsyncMock()
+    with (
+        patch("app.services.task_service._task_order_item_ids", new=current_ids),
+        patch("app.services.task_service._task_item_ids_by_task", new=effective_ids),
+        patch("app.services.task_service._task_order_item_link_rows", new=link_rows),
+        patch("app.services.task_service._sync_task_order_item_links", new=sync_links),
+    ):
+        await creator(db, source_task, ITEM_TWO_ID)
+
+    effective_ids.assert_awaited_once()
+    assert effective_ids.await_args.kwargs["excluded_item_statuses"] == {
+        "rolled_back",
+        "cancelled",
+    }
+    sync_links.assert_awaited_once_with(
+        db,
+        task_type,
+        existing,
+        [ITEM_ONE_ID, ITEM_TWO_ID],
+        reopen_item_ids={ITEM_TWO_ID},
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("creator", "task_type", "generator_path"),
+    [
+        (
+            _create_production_task_for_item,
+            "production",
+            "app.services.task_service.generate_production_no",
+        ),
+        (
+            _create_installation_task_for_item,
+            "installation",
+            "app.services.task_service.generate_installation_no",
+        ),
+    ],
+)
+async def test_later_stage_does_not_revive_cancelled_item_link(
+    creator,
+    task_type,
+    generator_path,
+):
+    """历史取消关联不能被普通阶段推进复活，必须新建可执行关联。"""
+    db = MagicMock()
+    db.get = AsyncMock()
+    order = _order([])
+    item = _item(ITEM_TWO_ID)
+    db.get.side_effect = [order, item]
+
+    existing = MagicMock()
+    existing.id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    existing.status = "pending"
+    existing.order_item_id = None
+    db.execute = AsyncMock(return_value=_ScalarResult([existing]))
+    db.flush = AsyncMock()
+    db.add = MagicMock()
+    source_task = MagicMock(document_id=ORDER_ID)
+
+    current_ids = AsyncMock(return_value=[])
+    effective_ids = AsyncMock(return_value={existing.id: [ITEM_ONE_ID]})
+    cancelled_link = MagicMock()
+    cancelled_link.order_item_id = ITEM_TWO_ID
+    cancelled_link.item_status = "cancelled"
+    link_rows = AsyncMock(return_value=[cancelled_link])
+    sync_links = AsyncMock()
+    with (
+        patch(generator_path, new=AsyncMock(return_value="T20260909-0003")),
+        patch("app.services.task_service._task_order_item_ids", new=current_ids),
+        patch("app.services.task_service._task_item_ids_by_task", new=effective_ids),
+        patch("app.services.task_service._task_order_item_link_rows", new=link_rows),
+        patch("app.services.task_service._sync_task_order_item_links", new=sync_links),
+    ):
+        await creator(db, source_task, ITEM_TWO_ID)
+
+    db.add.assert_called_once()
+    new_task = db.add.call_args.args[0]
+    assert new_task is not existing
+    sync_links.assert_awaited_once_with(
+        db,
+        task_type,
+        new_task,
+        [ITEM_TWO_ID],
     )
 
 

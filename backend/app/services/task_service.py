@@ -1,4 +1,5 @@
 import inspect
+from collections.abc import Collection
 from datetime import UTC, datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -109,6 +110,9 @@ INSTALLATION_IN_PROGRESS_STATUSES = {
 INSTALLATION_COMPLETED_STATUSES = {"completed"}
 TASK_CANCELLED_STATUS = "cancelled"
 TASK_ROLLED_BACK_STATUS = "rolled_back"
+NON_ACTIVE_ITEM_LINK_STATUSES = frozenset(
+    {TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS}
+)
 TASK_RELEASE_STATUSES = {
     "design": {"pending"},
     "production": {"pending"},
@@ -713,6 +717,11 @@ def _task_item_assignee_state(
     return "claimed" if assignee_user_id else "unassigned"
 
 
+def _is_effective_item_status(status: str | None) -> bool:
+    """Return whether a detail link still participates in current work."""
+    return status not in NON_ACTIVE_ITEM_LINK_STATUSES
+
+
 def _task_item_owner_conflict_message(
     item_ids: list[UUID],
     names_by_item: dict[UUID, str],
@@ -885,6 +894,74 @@ def _select_reusable_stage_task(
     return terminal_automatic_task, terminal_automatic_task is not None
 
 
+async def _select_stage_entry_target(
+    db: AsyncSession,
+    task_type: str,
+    existing_tasks: list,
+    current_item_id: UUID,
+) -> tuple[object | None, bool, bool, bool]:
+    """Select a target card for one item entering a later stage.
+
+    Returns ``(target, reused_terminal_task, reopen_item, already_linked)``.
+    Current-stage links are the only links that block entry.  A rolled-back
+    link is preferred for re-entry, while a cancelled link blocks reuse of
+    that historical card so ordinary progression cannot revive it.
+    """
+    effective_item_ids = await _task_item_ids_by_task(
+        db,
+        task_type,
+        existing_tasks,
+        excluded_item_statuses=NON_ACTIVE_ITEM_LINK_STATUSES,
+    )
+    if any(
+        current_item_id in linked_ids
+        for linked_ids in effective_item_ids.values()
+    ):
+        return None, False, False, True
+
+    blocked_task_ids: set[UUID] = set()
+    for candidate in existing_tasks:
+        candidate_id = _coerce_uuid(getattr(candidate, "id", None))
+        if candidate_id is None:
+            continue
+        candidate_link = next(
+            (
+                link
+                for link in await _task_order_item_link_rows(
+                    db,
+                    task_type,
+                    candidate_id,
+                )
+                if _coerce_uuid(getattr(link, "order_item_id", None))
+                == current_item_id
+            ),
+            None,
+        )
+        if candidate_link is None:
+            continue
+        link_status = getattr(candidate_link, "item_status", None)
+        if link_status == TASK_ROLLED_BACK_STATUS:
+            return (
+                candidate,
+                _is_terminal_task_status(task_type, candidate),
+                True,
+                False,
+            )
+        if link_status == TASK_CANCELLED_STATUS:
+            blocked_task_ids.add(candidate_id)
+
+    target_candidates = [
+        candidate
+        for candidate in existing_tasks
+        if _coerce_uuid(getattr(candidate, "id", None)) not in blocked_task_ids
+    ]
+    target, reused_terminal_task = _select_reusable_stage_task(
+        target_candidates,
+        task_type,
+    )
+    return target, reused_terminal_task, False, False
+
+
 async def _ensure_terminal_unlinked_task_is_read_only(
     db: AsyncSession,
     task_type: str,
@@ -1023,10 +1100,14 @@ def _aggregate_task_status(task_type: str, statuses: list[str]) -> str:
     if not statuses:
         return "pending"
     effective_statuses = [
-        status for status in statuses if status != TASK_ROLLED_BACK_STATUS
+        status for status in statuses if _is_effective_item_status(status)
     ]
     if not effective_statuses:
-        return TASK_ROLLED_BACK_STATUS
+        return (
+            TASK_CANCELLED_STATUS
+            if TASK_CANCELLED_STATUS in statuses
+            else TASK_ROLLED_BACK_STATUS
+        )
     completed = TASK_COMPLETED_STATUSES.get(task_type, set())
     terminal = TASK_TERMINAL_STATUSES.get(task_type, set())
     if all(status in completed for status in effective_statuses):
@@ -1112,14 +1193,37 @@ async def _task_item_ids_by_task(
     db: AsyncSession,
     task_type: str,
     tasks: list,
+    *,
+    excluded_item_statuses: Collection[str] | None = None,
 ) -> dict[UUID, list[UUID]]:
-    task_ids = [task_id for task in tasks if (task_id := _coerce_uuid(getattr(task, "id", None)))]
+    """Return linked item ids, optionally limited to current-stage links.
+
+    The link row is the source of truth for a multi-item task.  A
+    ``rolled_back`` row remains in the database for history, but it must not
+    reserve the detail when the previous stage enters this stage again.
+    Legacy ``order_item_id`` is only used when no link row exists for that
+    detail, so an excluded historical row cannot be accidentally revived by
+    the compatibility fallback.
+    """
+    excluded_statuses = set(excluded_item_statuses or ())
+    task_ids = [
+        task_id
+        for task in tasks
+        if (task_id := _coerce_uuid(getattr(task, "id", None)))
+    ]
     linked: dict[UUID, list[UUID]] = {
         task_id: [] for task_id in task_ids
     }
+    known_item_ids: dict[UUID, set[UUID]] = {
+        task_id: set() for task_id in task_ids
+    }
     if task_ids:
         result = await db.execute(
-            select(TaskOrderItemLink.task_id, TaskOrderItemLink.order_item_id)
+            select(
+                TaskOrderItemLink.task_id,
+                TaskOrderItemLink.order_item_id,
+                TaskOrderItemLink.item_status,
+            )
             .where(
                 TaskOrderItemLink.task_type == task_type,
                 TaskOrderItemLink.task_id.in_(task_ids),
@@ -1134,12 +1238,19 @@ async def _task_item_ids_by_task(
             rows = []
         for row in rows:
             try:
-                task_id, item_id = row
+                task_id, item_id, item_status = row
             except (TypeError, ValueError):
-                continue
+                try:
+                    task_id, item_id = row
+                except (TypeError, ValueError):
+                    continue
+                item_status = None
             task_id = _coerce_uuid(task_id)
             item_id = _coerce_uuid(item_id)
             if task_id is not None and item_id is not None:
+                known_item_ids.setdefault(task_id, set()).add(item_id)
+                if item_status in excluded_statuses:
+                    continue
                 linked.setdefault(task_id, [])
                 if item_id not in linked[task_id]:
                     linked[task_id].append(item_id)
@@ -1149,7 +1260,11 @@ async def _task_item_ids_by_task(
         if task_id is None:
             continue
         legacy_id = _task_order_item_id(task)
-        if legacy_id is not None and legacy_id not in linked.setdefault(task_id, []):
+        if (
+            legacy_id is not None
+            and legacy_id not in known_item_ids.setdefault(task_id, set())
+            and legacy_id not in linked.setdefault(task_id, [])
+        ):
             linked[task_id].insert(0, legacy_id)
     return linked
 
@@ -1583,13 +1698,16 @@ async def _sync_task_order_item_links(
     previous_legacy_item_id: UUID | None = None,
     new_item_state: tuple[str, int] | None = None,
     reset_existing: bool = False,
+    reopen_item_ids: Collection[UUID] | None = None,
 ) -> None:
     """Replace one task's links atomically inside the current transaction.
 
-    ``reset_existing`` is reserved for an explicit stage rollback. Normal
-    task grouping must preserve the status of already-linked details; a
-    rollback intentionally turns those historical details back into work.
+    ``reset_existing`` is reserved for an explicit whole-card reopen. Normal
+    task grouping must preserve the status of already-linked details.
+    ``reopen_item_ids`` is used by stage re-entry and resets only the listed
+    details, leaving other rows in the same task card untouched.
     """
+    reopen_ids = set(reopen_item_ids or ())
     if previous_legacy_item_id is None:
         legacy_scope_ids = await _materialize_legacy_task_scope(
             db,
@@ -1620,7 +1738,8 @@ async def _sync_task_order_item_links(
         link_payload = []
         for position, item_id in enumerate(item_ids):
             existing = existing_by_item.get(item_id)
-            if reset_existing and existing is not None:
+            should_reopen = reset_existing or item_id in reopen_ids
+            if should_reopen and existing is not None:
                 item_status = new_status
                 item_progress = new_progress
                 item_completed_at = None
@@ -1637,9 +1756,15 @@ async def _sync_task_order_item_links(
                     "task_type": task_type,
                     "task_id": task.id,
                     "order_item_id": item_id,
-                    "assignee_user_id": _coerce_uuid(
-                        getattr(existing, "assignee_user_id", None)
-                    ) if existing is not None else None,
+                    "assignee_user_id": (
+                        None
+                        if should_reopen
+                        else (
+                            _coerce_uuid(getattr(existing, "assignee_user_id", None))
+                            if existing is not None
+                            else None
+                        )
+                    ),
                     "position": position,
                     "item_status": item_status,
                     "item_progress_pct": item_progress,
@@ -1657,7 +1782,7 @@ async def _sync_task_order_item_links(
     effective_states = {
         item_id: state
         for item_id, state in states.items()
-        if state[0] != TASK_ROLLED_BACK_STATUS
+        if _is_effective_item_status(state[0])
     }
     aggregate_status = _aggregate_task_status(
         task_type,
@@ -1674,7 +1799,7 @@ async def _sync_task_order_item_links(
         for status, _ in effective_states.values()
     ) and effective_states:
         task.completed_at = _utc_now()
-    elif aggregate_status not in {TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS}:
+    else:
         task.completed_at = None
     await db.flush()
 
@@ -2003,11 +2128,19 @@ async def _all_stage_tasks_completed(
     item_ids_by_task = {
         task_id: [
             item_id for item_id in item_ids
-            if link_statuses.get((task_id, item_id), getattr(
-                next((task for task in tasks if _coerce_uuid(task.id) == task_id), None),
-                "status",
-                None,
-            )) != TASK_ROLLED_BACK_STATUS
+            if _is_effective_item_status(
+                link_statuses.get(
+                    (task_id, item_id),
+                    getattr(
+                        next(
+                            (task for task in tasks if _coerce_uuid(task.id) == task_id),
+                            None,
+                        ),
+                        "status",
+                        None,
+                    ),
+                )
+            )
         ]
         for task_id, item_ids in raw_item_ids_by_task.items()
     }
@@ -2020,7 +2153,7 @@ async def _all_stage_tasks_completed(
         active_ids = {item.id for item in active_items}
         relevant_tasks = [
             task for task in tasks
-            if getattr(task, "status", None) != TASK_ROLLED_BACK_STATUS
+            if _is_effective_item_status(getattr(task, "status", None))
             and (
                 not raw_item_ids_by_task.get(_coerce_uuid(task.id), [])
                 or any(
@@ -2052,7 +2185,7 @@ async def _all_stage_tasks_completed(
 
     effective_tasks = [
         task for task in tasks
-        if getattr(task, "status", None) != TASK_ROLLED_BACK_STATUS
+        if _is_effective_item_status(getattr(task, "status", None))
         and (
             not raw_item_ids_by_task.get(_coerce_uuid(task.id), [])
             or linked_items(task)
@@ -2102,17 +2235,25 @@ async def _item_stage_tasks_completed(
     item_ids_by_task = {
         task_id: [
             linked_item_id for linked_item_id in linked_item_ids
-            if link_statuses.get((task_id, linked_item_id), getattr(
-                next((task for task in tasks if _coerce_uuid(task.id) == task_id), None),
-                "status",
-                None,
-            )) != TASK_ROLLED_BACK_STATUS
+            if _is_effective_item_status(
+                link_statuses.get(
+                    (task_id, linked_item_id),
+                    getattr(
+                        next(
+                            (task for task in tasks if _coerce_uuid(task.id) == task_id),
+                            None,
+                        ),
+                        "status",
+                        None,
+                    ),
+                )
+            )
         ]
         for task_id, linked_item_ids in raw_item_ids_by_task.items()
     }
     tasks = [
         task for task in tasks
-        if getattr(task, "status", None) != TASK_ROLLED_BACK_STATUS
+        if _is_effective_item_status(getattr(task, "status", None))
         and item_id in item_ids_by_task.get(_coerce_uuid(task.id), [])
     ]
     return bool(tasks) and all(
@@ -2155,28 +2296,24 @@ async def _create_production_task_for_item(
             select(ProductionTask)
             .where(
                 ProductionTask.document_id == task.document_id,
-                ProductionTask.status.not_in(
-                    [TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS]
-                ),
+                ProductionTask.status != TASK_CANCELLED_STATUS,
             )
             .order_by(ProductionTask.created_at.asc(), ProductionTask.id.asc())
         )
         existing_tasks = list(existing_result.scalars().all())
-        existing_item_ids = await _task_item_ids_by_task(
+        (
+            target,
+            reused_terminal_task,
+            reopen_item,
+            already_linked,
+        ) = await _select_stage_entry_target(
             db,
             "production",
             existing_tasks,
+            current_item_id,
         )
-        if any(
-            current_item_id in linked_ids
-            for linked_ids in existing_item_ids.values()
-        ):
+        if already_linked:
             continue
-
-        target, reused_terminal_task = _select_reusable_stage_task(
-            existing_tasks,
-            "production",
-        )
         if target is None:
             target = ProductionTask(
                 production_no=await generate_production_no(db),
@@ -2201,6 +2338,8 @@ async def _create_production_task_for_item(
             if reused_terminal_task
             else {}
         )
+        if reopen_item:
+            sync_kwargs["reopen_item_ids"] = {current_item_id}
         await _sync_task_order_item_links(
             db,
             "production",
@@ -2238,28 +2377,24 @@ async def _create_installation_task_for_item(
             select(InstallationTask)
             .where(
                 InstallationTask.document_id == task.document_id,
-                InstallationTask.status.not_in(
-                    [TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS]
-                ),
+                InstallationTask.status != TASK_CANCELLED_STATUS,
             )
             .order_by(InstallationTask.created_at.asc(), InstallationTask.id.asc())
         )
         existing_tasks = list(existing_result.scalars().all())
-        existing_item_ids = await _task_item_ids_by_task(
+        (
+            target,
+            reused_terminal_task,
+            reopen_item,
+            already_linked,
+        ) = await _select_stage_entry_target(
             db,
             "installation",
             existing_tasks,
+            current_item_id,
         )
-        if any(
-            current_item_id in linked_ids
-            for linked_ids in existing_item_ids.values()
-        ):
+        if already_linked:
             continue
-
-        target, reused_terminal_task = _select_reusable_stage_task(
-            existing_tasks,
-            "installation",
-        )
         if target is None:
             target = InstallationTask(
                 installation_no=await generate_installation_no(db),
@@ -2281,6 +2416,8 @@ async def _create_installation_task_for_item(
             if reused_terminal_task
             else {}
         )
+        if reopen_item:
+            sync_kwargs["reopen_item_ids"] = {current_item_id}
         await _sync_task_order_item_links(
             db,
             "installation",
@@ -2379,7 +2516,7 @@ async def _refresh_task_aggregate(
     effective_states = {
         item_id: state
         for item_id, state in states.items()
-        if state[0] != TASK_ROLLED_BACK_STATUS
+        if _is_effective_item_status(state[0])
     }
     task.status = _aggregate_task_status(
         task_type,
@@ -2918,7 +3055,7 @@ async def _apply_task_item_status_change(
     effective_states = {
         item_id: state
         for item_id, state in states.items()
-        if state[0] != TASK_ROLLED_BACK_STATUS
+        if _is_effective_item_status(state[0])
     }
     aggregate_progress = round(
         sum(item_progress for _, item_progress in effective_states.values())
@@ -2931,7 +3068,7 @@ async def _apply_task_item_status_change(
         for status, _ in effective_states.values()
     ) and effective_states:
         task.completed_at = _utc_now()
-    elif aggregate_status not in {TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS}:
+    else:
         task.completed_at = None
     await db.flush()
     return selected_ids, states

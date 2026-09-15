@@ -696,19 +696,27 @@ class BusinessDocumentService:
 
     async def _linked_task_item_ids(self, task_type: str, tasks) -> set[UUID]:
         """Include both legacy single links and the new multi-link rows."""
+        from app.services.task_service import NON_ACTIVE_ITEM_LINK_STATUSES
+
         item_ids = {
             task.order_item_id
             for task in tasks
             if task.order_item_id is not None
-            and task.status not in {"cancelled", "rolled_back"}
+            and task.status not in NON_ACTIVE_ITEM_LINK_STATUSES
         }
-        task_ids = [task.id for task in tasks if task.status not in {"cancelled", "rolled_back"}]
+        task_ids = [
+            task.id
+            for task in tasks
+            if task.status not in NON_ACTIVE_ITEM_LINK_STATUSES
+        ]
         if task_ids:
             result = await self.db.execute(
                 select(TaskOrderItemLink.order_item_id).where(
                     TaskOrderItemLink.task_type == task_type,
                     TaskOrderItemLink.task_id.in_(task_ids),
-                    TaskOrderItemLink.item_status != "rolled_back",
+                    TaskOrderItemLink.item_status.not_in(
+                        ["cancelled", "rolled_back"]
+                    ),
                 )
             )
             item_ids.update(result.scalars().all())
@@ -765,7 +773,7 @@ class BusinessDocumentService:
             select(model)
             .where(
                 model.document_id == doc.id,
-                model.status.not_in(["cancelled", "rolled_back"]),
+                model.status != "cancelled",
             )
             .order_by(model.created_at.asc(), model.id.asc())
         )
@@ -847,7 +855,6 @@ class BusinessDocumentService:
                 select(TaskOrderItemLink.order_item_id).where(
                     TaskOrderItemLink.task_type == task_type,
                     TaskOrderItemLink.task_id == task_id,
-                    TaskOrderItemLink.item_status != "rolled_back",
                 )
             )
             target_item_ids.extend(

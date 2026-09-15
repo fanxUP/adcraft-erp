@@ -1,0 +1,71 @@
+version: 1
+name: task-stage-reentry
+mode: STRICT
+status: implemented_pending_deploy
+objective: >-
+  统一修复设计、制作、安装任务的订单明细阶段重入逻辑：回退关联不再阻断再次进入下一阶段，
+  只重置当前明细，不重复创建任务卡，历史取消不自动恢复，并保持任务与订单混合进度正确。
+non_goals:
+  - order_level_cancel_and_recycle_restore
+  - historical_cancelled_data_bulk_migration
+  - completed_item_force_rollback_workflow
+  - notification_channels
+  - new_role_permission_codes
+nodes:
+  - id: SR-P01
+    title: 冻结三阶段状态和关联分类
+    status: implemented
+    acceptance: A-SR-01
+    depends_on: []
+  - id: SR-P02
+    title: 实现统一的有效明细关联查询
+    status: implemented
+    acceptance: A-SR-02
+    depends_on: [SR-P01]
+  - id: SR-P03
+    title: 实现逐项阶段重入服务
+    status: implemented
+    acceptance: A-SR-03
+    depends_on: [SR-P01, SR-P02]
+  - id: SR-P04
+    title: 修复设计到制作的阶段进入
+    status: implemented
+    acceptance: A-SR-04
+    depends_on: [SR-P03]
+  - id: SR-P05
+    title: 修复制作到安装的阶段进入
+    status: implemented
+    acceptance: A-SR-05
+    depends_on: [SR-P03]
+  - id: SR-P06
+    title: 校准回退后的再次进入闭环
+    status: implemented
+    acceptance: A-SR-06
+    depends_on: [SR-P04, SR-P05]
+  - id: SR-P07
+    title: 校准任务看板和订单汇总
+    status: implemented
+    acceptance: A-SR-07
+    depends_on: [SR-P03, SR-P04, SR-P05]
+  - id: SR-P08
+    title: 历史异常数据盘点与定向修复门禁
+    status: gated_not_run
+    acceptance: A-SR-08
+    depends_on: [SR-P06, SR-P07]
+  - id: SR-P09
+    title: 校准权限接口和页面契约
+    status: implemented
+    acceptance: A-SR-09
+    depends_on: [SR-P03, SR-P06]
+  - id: SR-P10
+    title: 完整验证提交和部署
+    status: in_progress
+    acceptance: A-SR-10
+    depends_on: [SR-P06, SR-P07, SR-P08, SR-P09]
+backlog:
+  - title: 已完成明细的经理强制回退
+    reason: 需要独立权限、强确认和更高审计等级。
+  - title: 回退操作撤销
+    reason: 需要反向状态机，不与本轮阶段重入混合。
+  - title: 历史 cancelled 全量业务迁移
+    reason: 容易误恢复有意取消的数据，暂不建议。

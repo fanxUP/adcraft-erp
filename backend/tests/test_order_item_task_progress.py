@@ -1,6 +1,7 @@
 """第七阶段：订单明细级并行进度契约测试。"""
 
 from pathlib import Path
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
@@ -31,6 +32,7 @@ from app.services.task_service import (
     _materialize_legacy_task_scope,
     _resolve_order_item_stage,
     _rollback_task_items,
+    _sync_task_order_item_links,
     _task_item_actions,
     _task_order_item_option_map,
     _validate_order_item_id,
@@ -498,6 +500,82 @@ def test_rolled_back_item_is_not_counted_as_completed_work():
     assert _aggregate_task_status("production", ["completed", "rolled_back"]) == "completed"
     assert _aggregate_task_status("production", ["in_progress", "rolled_back"]) == "in_progress"
     assert _aggregate_task_status("production", ["rolled_back"]) == "rolled_back"
+    assert _aggregate_task_status("production", ["completed", "cancelled"]) == "completed"
+    assert _aggregate_task_status("production", ["cancelled"]) == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_stage_reentry_resets_only_the_reopened_item():
+    """重入任务卡时不能把同卡其他明细一起清零或清除执行人。"""
+    task_id = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
+    existing_first = TaskOrderItemLink(
+        task_type="production",
+        task_id=task_id,
+        order_item_id=ITEM_UUID,
+        position=0,
+        item_status="completed",
+        item_progress_pct=100,
+        item_completed_at=datetime(2026, 9, 10, 10),
+        assignee_user_id=UUID("11111111-1111-1111-1111-111111111111"),
+    )
+    existing_second = TaskOrderItemLink(
+        task_type="production",
+        task_id=task_id,
+        order_item_id=SECOND_ITEM_UUID,
+        position=1,
+        item_status="rolled_back",
+        item_progress_pct=0,
+        item_completed_at=None,
+        assignee_user_id=UUID("22222222-2222-2222-2222-222222222222"),
+    )
+    reopened_first = TaskOrderItemLink(
+        task_type="production",
+        task_id=task_id,
+        order_item_id=ITEM_UUID,
+        position=0,
+        item_status="completed",
+        item_progress_pct=100,
+        item_completed_at=existing_first.item_completed_at,
+        assignee_user_id=existing_first.assignee_user_id,
+    )
+    reopened_second = TaskOrderItemLink(
+        task_type="production",
+        task_id=task_id,
+        order_item_id=SECOND_ITEM_UUID,
+        position=1,
+        item_status="pending",
+        item_progress_pct=0,
+        item_completed_at=None,
+        assignee_user_id=None,
+    )
+    task = MagicMock(id=task_id, status="pending", progress_pct=50, order_item_id=None)
+    db = AsyncMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[existing_first, existing_second])))),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[ITEM_UUID, SECOND_ITEM_UUID])))),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[reopened_first, reopened_second])))),
+        ]
+    )
+
+    await _sync_task_order_item_links(
+        db,
+        "production",
+        task,
+        [ITEM_UUID, SECOND_ITEM_UUID],
+        previous_legacy_item_id=ITEM_UUID,
+        reopen_item_ids={SECOND_ITEM_UUID},
+    )
+
+    insert_payload = db.execute.await_args_list[2].args[1]
+    assert insert_payload[0]["item_status"] == "completed"
+    assert insert_payload[0]["item_progress_pct"] == 100
+    assert insert_payload[0]["assignee_user_id"] == existing_first.assignee_user_id
+    assert insert_payload[1]["item_status"] == "pending"
+    assert insert_payload[1]["item_progress_pct"] == 0
+    assert insert_payload[1]["assignee_user_id"] is None
 
 
 def test_order_item_stage_resolver_supports_parallel_delivery_progress():
