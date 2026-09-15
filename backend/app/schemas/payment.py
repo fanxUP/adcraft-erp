@@ -6,13 +6,21 @@ from decimal import Decimal
 
 
 class PaymentCreate(BaseModel):
-    order_id: UUID
+    # New writes are contract-scoped. order_id remains optional for old
+    # clients; the service resolves it to the unique active contract.
+    contract_id: UUID | None = None
+    order_id: UUID | None = None
     customer_id: UUID
     amount: float
     payment_method: str | None = None
     paid_at: str | None = None
     remark: str | None = None
     receipt_url: str | None = None
+
+    @field_validator("contract_id", "order_id", mode="before")
+    @classmethod
+    def empty_ids_to_none(cls, value):
+        return value or None
 
     @field_validator("amount")
     @classmethod
@@ -22,11 +30,26 @@ class PaymentCreate(BaseModel):
         return v
 
 
+class PaymentAllocationResponse(CoercedModel):
+    id: str
+    contract_id: str
+    document_id: str | None = None
+    order_id: str | None = None
+    amount: float
+    allocation_type: str
+
+
 class PaymentResponse(CoercedModel):
     id: str
     payment_no: str
-    order_id: str
+    document_id: str | None = None
+    order_id: str | None = None
+    contract_id: str | None = None
+    contract_no: str | None = None
     customer_id: str
+    customer_name: str | None = None
+    project_name: str | None = None
+    department: str | None = None
     amount: float
     payment_method: str | None = None
     paid_at: str | None = None
@@ -38,6 +61,9 @@ class PaymentResponse(CoercedModel):
     receipt_url: str | None = None
     created_at: str | None = None
     created_by: str | None = None
+    allocation_status: str = "待分配"
+    allocation_total: float = 0
+    allocations: list[PaymentAllocationResponse] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 

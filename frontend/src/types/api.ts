@@ -889,11 +889,15 @@ export interface ProcessResponse {
 export interface PaymentResponse {
   id: string
   payment_no: string
-  order_id: string
+  document_id?: string | null
+  order_id?: string | null
+  contract_id?: string | null
+  contract_no?: string | null
   order_no?: string
   customer_id: string
   customer_name?: string
   project_name?: string
+  department?: string
   amount: number
   payment_method?: string
   paid_at?: string
@@ -905,6 +909,18 @@ export interface PaymentResponse {
   receipt_url?: string
   created_at?: string
   created_by?: string
+  allocation_status?: string
+  allocation_total?: number
+  allocations?: PaymentAllocationResponse[]
+}
+
+export interface PaymentAllocationResponse {
+  id: string
+  contract_id: string
+  document_id?: string | null
+  order_id?: string | null
+  amount: number
+  allocation_type: string
 }
 
 export interface StatementResponse {

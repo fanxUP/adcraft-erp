@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 import pytest
 
@@ -12,7 +13,12 @@ import app.models.user  # noqa: F401
 import app.models.notification  # noqa: F401
 import app.models.vehicle  # noqa: F401
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
+from app.schemas.payment import PaymentCreate
+from app.models.contract import Contract
+from app.models.business_document import BusinessDocument
 from tests.conftest import SAMPLE_USER_ID, SAMPLE_ORDER_ID, SAMPLE_CUSTOMER_ID
+
+SAMPLE_CONTRACT_ID = UUID("66666666-6666-6666-6666-666666666666")
 
 
 def make_mock_payment(**kwargs):
@@ -33,6 +39,19 @@ def make_mock_payment(**kwargs):
     p.created_by = kwargs.get("created_by", SAMPLE_USER_ID)
     p.created_at = kwargs.get("created_at", datetime.now(timezone.utc))
     return p
+
+
+def make_mock_contract(**kwargs):
+    contract = MagicMock()
+    contract.id = kwargs.get("id", SAMPLE_CONTRACT_ID)
+    contract.contract_no = kwargs.get("contract_no", "C20260629-0001")
+    contract.customer_id = kwargs.get("customer_id", SAMPLE_CUSTOMER_ID)
+    contract.customer_name = kwargs.get("customer_name", "测试客户")
+    contract.project_name = kwargs.get("project_name", "测试项目")
+    contract.contract_type = kwargs.get("contract_type", "制作合同")
+    contract.total_amount = kwargs.get("total_amount", 5000.0)
+    contract.deleted_at = kwargs.get("deleted_at")
+    return contract
 
 
 def make_mock_statement(**kwargs):
@@ -66,6 +85,17 @@ def make_mock_expense(**kwargs):
     return e
 
 
+def test_payment_create_can_be_contract_scoped_without_order():
+    payload = PaymentCreate(
+        contract_id="66666666-6666-6666-6666-666666666666",
+        customer_id=SAMPLE_CUSTOMER_ID,
+        amount=1000,
+    )
+
+    assert str(payload.contract_id) == "66666666-6666-6666-6666-666666666666"
+    assert payload.order_id is None
+
+
 # ══════════════════════════════════════════════════════
 # PaymentService Tests
 # ══════════════════════════════════════════════════════
@@ -78,6 +108,9 @@ def mock_payment_repo():
     repo.create = AsyncMock()
     repo.void = AsyncMock()
     repo.get_document_paid_sum = AsyncMock(return_value=0.0)
+    repo.get_contract_ids_for_document = AsyncMock(return_value=[])
+    repo.get_contract_order_ids = AsyncMock(return_value=[])
+    repo.get_contract_paid_sum = AsyncMock(return_value=0.0)
     return repo
 
 
@@ -148,11 +181,14 @@ async def test_create_payment(payment_service):
     order.sales_user_id = None
     order.doc_no = "O20260629-0001"
     order.project_name = "测试项目"
-    db.get.return_value = order
+    contract = make_mock_contract(total_amount=5000.0)
+    svc.repo.get_contract_ids_for_document.return_value = [contract.id]
+    svc.repo.get_contract_order_ids.return_value = [SAMPLE_ORDER_ID]
+    db.get.side_effect = [order, contract, order]
 
     p = make_mock_payment()
     svc.repo.create.return_value = p
-    svc.repo.get_document_paid_sum.return_value = 0.0
+    svc.repo.get_document_paid_sum.side_effect = [0.0, 500.0]
 
     with patch("app.services.payment_service.generate_payment_no", AsyncMock(return_value="PAY20260629-0002")):
         result = await svc.create_payment({
@@ -166,8 +202,13 @@ async def test_create_payment(payment_service):
     assert result["amount"] == 500.0
     assert order.paid_amount == 500.0
     assert order.unpaid_amount == 4500.0
-    db.get.assert_awaited_once_with(
-        app.models.business_document.BusinessDocument,
+    db.get.assert_any_await(
+        Contract,
+        contract.id,
+        with_for_update=True,
+    )
+    db.get.assert_any_await(
+        BusinessDocument,
         SAMPLE_ORDER_ID,
         with_for_update=True,
     )
@@ -178,7 +219,7 @@ async def test_create_payment_order_not_found(payment_service):
     svc, db = payment_service
     db.get.return_value = None
 
-    with pytest.raises(ValueError, match="单据不存在"):
+    with pytest.raises(ValueError, match="订单不存在"):
         await svc.create_payment({"order_id": SAMPLE_ORDER_ID, "customer_id": SAMPLE_CUSTOMER_ID, "amount": 500.0}, SAMPLE_USER_ID)
 
 
@@ -192,9 +233,11 @@ async def test_create_payment_rejects_customer_mismatch(payment_service):
         total_amount=5000.0,
         deleted_at=None,
     )
+    contract = make_mock_contract()
+    svc.repo.get_contract_ids_for_document.return_value = [contract.id]
     db.get.return_value = order
 
-    with pytest.raises(ValueError, match="客户与订单不一致"):
+    with pytest.raises(ValueError, match="收款客户与订单不一致"):
         await svc.create_payment(
             {
                 "order_id": SAMPLE_ORDER_ID,
@@ -217,7 +260,11 @@ async def test_create_payment_rejects_amount_above_remaining(payment_service):
         total_amount=1000.0,
         deleted_at=None,
     )
-    db.get.return_value = order
+    contract = make_mock_contract(total_amount=1000.0)
+    svc.repo.get_contract_ids_for_document.return_value = [contract.id]
+    svc.repo.get_contract_order_ids.return_value = [SAMPLE_ORDER_ID]
+    db.get.side_effect = [order, contract, order]
+    svc.repo.get_contract_paid_sum.return_value = 0.0
     svc.repo.get_document_paid_sum.return_value = 800.0
 
     with pytest.raises(ValueError, match="超过订单未收金额 200.00 元"):
@@ -231,6 +278,133 @@ async def test_create_payment_rejects_amount_above_remaining(payment_service):
         )
 
     svc.repo.create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_contract_payment_auto_allocates_orders_and_keeps_remainder_on_contract(payment_service):
+    svc, db = payment_service
+    contract = make_mock_contract(total_amount=4000.0)
+    order_one = MagicMock(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        total_amount=2000.0,
+        customer_id=SAMPLE_CUSTOMER_ID,
+        doc_type="order",
+        status="confirmed",
+        deleted_at=None,
+        sales_user_id=None,
+    )
+    order_two = MagicMock(
+        id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        total_amount=1000.0,
+        customer_id=SAMPLE_CUSTOMER_ID,
+        doc_type="order",
+        status="confirmed",
+        deleted_at=None,
+        sales_user_id=None,
+    )
+    svc.repo.get_contract_order_ids.return_value = [order_one.id, order_two.id]
+    svc.repo.get_contract_paid_sum.return_value = 0.0
+    svc.repo.get_document_paid_sum.side_effect = [100.0, 200.0, 100.0, 200.0]
+    db.get.side_effect = [contract, order_one, order_two]
+
+    with patch(
+        "app.services.payment_service.generate_payment_no",
+        AsyncMock(return_value="PAY20260629-0003"),
+    ):
+        result = await svc.create_payment(
+            {
+                "contract_id": contract.id,
+                "customer_id": SAMPLE_CUSTOMER_ID,
+                "amount": 3500.0,
+            },
+            SAMPLE_USER_ID,
+        )
+
+    assert result["amount"] == 3500.0
+    assert result["allocation_status"] == "已分配"
+    assert [allocation["document_id"] for allocation in result["allocations"]] == [
+        str(order_one.id),
+        str(order_two.id),
+        None,
+    ]
+    assert [allocation["amount"] for allocation in result["allocations"]] == [
+        1900.0,
+        800.0,
+        800.0,
+    ]
+    assert contract.paid_amount == 3500.0
+    assert contract.unpaid_amount == 500.0
+
+
+@pytest.mark.asyncio
+async def test_contract_payment_rejects_order_outside_selected_contract(payment_service):
+    svc, db = payment_service
+    contract = make_mock_contract()
+    outside_order = MagicMock(
+        id=UUID("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+        customer_id=SAMPLE_CUSTOMER_ID,
+        doc_type="order",
+        status="confirmed",
+        deleted_at=None,
+    )
+    svc.repo.get_contract_order_ids.return_value = [SAMPLE_ORDER_ID]
+    db.get.side_effect = [outside_order, contract]
+
+    with pytest.raises(ValueError, match="不属于所选合同"):
+        await svc.create_payment(
+            {
+                "contract_id": contract.id,
+                "order_id": UUID("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+                "customer_id": SAMPLE_CUSTOMER_ID,
+                "amount": 100.0,
+            },
+            SAMPLE_USER_ID,
+        )
+
+    svc.repo.create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_void_allocated_payment_recomputes_each_order_and_contract(payment_service):
+    svc, db = payment_service
+    payment_id = UUID("dddddddd-dddd-dddd-dddd-dddddddddddd")
+    contract = make_mock_contract(id=SAMPLE_CONTRACT_ID, total_amount=1000.0)
+    order = MagicMock(
+        id=SAMPLE_ORDER_ID,
+        total_amount=1000.0,
+        paid_amount=250.0,
+        unpaid_amount=750.0,
+    )
+    allocation = MagicMock(
+        id=UUID("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+        contract_id=contract.id,
+        document_id=order.id,
+        allocated_amount=250.0,
+        allocation_type="order",
+        contract=contract,
+    )
+    payment = make_mock_payment(
+        id=payment_id,
+        order_id=None,
+        amount=250.0,
+        document=None,
+    )
+    payment.document_id = None
+    payment.allocations = [allocation]
+    svc.repo.get_by_id.return_value = payment
+    svc.repo.get_document_paid_sum.return_value = 0.0
+    svc.repo.get_contract_paid_sum.return_value = 0.0
+    db.get.side_effect = [order, contract]
+
+    result = await svc.void_payment(payment_id, "客户要求撤销")
+
+    assert result["allocation_status"] == "已分配"
+    assert order.paid_amount == 0
+    assert order.unpaid_amount == 1000
+    assert contract.paid_amount == 0
+    assert contract.unpaid_amount == 1000
+    svc.repo.get_document_paid_sum.assert_awaited_once_with(order.id)
+    svc.repo.get_contract_paid_sum.assert_awaited_once_with(contract.id)
 
 
 @pytest.mark.asyncio

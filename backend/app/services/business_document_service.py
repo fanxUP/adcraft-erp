@@ -1621,14 +1621,37 @@ class BusinessDocumentService:
         return self._to_decimal(result.scalar())
 
     async def _get_nonvoided_payment_total(self, doc_id: UUID) -> Decimal:
-        from app.models.payment import Payment
+        from sqlalchemy import exists
+        from app.models.payment import Payment, PaymentAllocation
 
-        return await self._sum_decimal(
-            select(func.coalesce(func.sum(Payment.amount), 0)).where(
-                Payment.document_id == doc_id,
+        # A new receipt may be split across several orders. Sum only the
+        # allocation assigned to this order; retain a legacy fallback for a
+        # Payment row that has not been backfilled yet.
+        allocated_total = (
+            select(func.coalesce(func.sum(PaymentAllocation.allocated_amount), 0))
+            .select_from(PaymentAllocation)
+            .join(Payment, Payment.id == PaymentAllocation.payment_id)
+            .where(
+                PaymentAllocation.document_id == doc_id,
                 Payment.is_voided.is_(False),
             )
+            .scalar_subquery()
         )
+        legacy_total = (
+            select(func.coalesce(func.sum(Payment.amount), 0))
+            .select_from(Payment)
+            .where(
+                Payment.document_id == doc_id,
+                Payment.is_voided.is_(False),
+                ~exists(
+                    select(PaymentAllocation.id).where(
+                        PaymentAllocation.payment_id == Payment.id
+                    )
+                ),
+            )
+            .scalar_subquery()
+        )
+        return await self._sum_decimal(select(allocated_total + legacy_total))
 
     @staticmethod
     def _relation_action(module: str, status: str | None) -> dict:
@@ -1947,7 +1970,8 @@ class BusinessDocumentService:
         )
         from app.models.inventory import StockRecord
         from app.models.outsource import OutsourceTask
-        from app.models.payment import CustomerStatement, Payment
+        from sqlalchemy import exists
+        from app.models.payment import CustomerStatement, Payment, PaymentAllocation
         from app.models.project_cost import ProjectCost
         from app.models.task import DesignTask, InstallationTask, ProductionTask
         from app.models.vehicle import (
@@ -2178,9 +2202,27 @@ class BusinessDocumentService:
             (Payment, "payments", "收款记录", "payment_no", None),
         )
         for model, module, label, no_field, status_field in simple_models:
-            query = select(model).where(model.document_id == doc.id)
             if model is Payment:
-                query = query.where(Payment.is_voided.is_(False))
+                payment_has_order_allocation = exists(
+                    select(PaymentAllocation.id).where(
+                        PaymentAllocation.payment_id == Payment.id,
+                        PaymentAllocation.document_id == doc.id,
+                    )
+                )
+                payment_has_no_allocation = ~exists(
+                    select(PaymentAllocation.id).where(
+                        PaymentAllocation.payment_id == Payment.id,
+                    )
+                )
+                query = select(model).where(
+                    Payment.is_voided.is_(False),
+                    or_(
+                        payment_has_order_allocation,
+                        (Payment.document_id == doc.id) & payment_has_no_allocation,
+                    ),
+                )
+            else:
+                query = select(model).where(model.document_id == doc.id)
             result = await self.db.execute(query.order_by(model.updated_at.desc()))
             for record in result.scalars().all():
                 status = (
@@ -2357,7 +2399,8 @@ class BusinessDocumentService:
         from app.models.framework_contract import FrameworkContractProjectDocument
         from app.models.inventory import StockRecord
         from app.models.outsource import OutsourceTask
-        from app.models.payment import CustomerStatement, Payment
+        from sqlalchemy import exists
+        from app.models.payment import CustomerStatement, Payment, PaymentAllocation
         from app.models.project_cost import ProjectCost
         from app.models.task import DesignTask, InstallationTask, ProductionTask
         from app.models.vehicle import (
@@ -2427,11 +2470,25 @@ class BusinessDocumentService:
             )
         task_counts["total"] = sum(task_counts.values())
 
+        payment_has_order_allocation = exists(
+            select(PaymentAllocation.id).where(
+                PaymentAllocation.payment_id == Payment.id,
+                PaymentAllocation.document_id == doc.id,
+            )
+        )
+        payment_has_no_allocation = ~exists(
+            select(PaymentAllocation.id).where(
+                PaymentAllocation.payment_id == Payment.id,
+            )
+        )
         relations = {
             "payments": await self._count(
                 select(func.count(Payment.id)).where(
-                    Payment.document_id == doc.id,
                     Payment.is_voided.is_(False),
+                    or_(
+                        payment_has_order_allocation,
+                        (Payment.document_id == doc.id) & payment_has_no_allocation,
+                    ),
                 )
             ),
             "acceptance_forms": active_acceptance["forms"],
@@ -2760,7 +2817,8 @@ class BusinessDocumentService:
         )
         from app.models.inventory import StockRecord
         from app.models.outsource import OutsourceTask
-        from app.models.payment import CustomerStatement, Payment
+        from sqlalchemy import exists
+        from app.models.payment import CustomerStatement, Payment, PaymentAllocation
         from app.models.project_cost import ProjectCost
         from app.models.task import DesignTask, InstallationTask, ProductionTask
         from app.models.vehicle import (
@@ -2787,10 +2845,24 @@ class BusinessDocumentService:
             Decimal("0"),
         ).quantize(MONEY_QUANTUM)
         payment_total = await self._get_nonvoided_payment_total(doc.id)
+        payment_has_order_allocation = exists(
+            select(PaymentAllocation.id).where(
+                PaymentAllocation.payment_id == Payment.id,
+                PaymentAllocation.document_id == doc.id,
+            )
+        )
+        payment_has_no_allocation = ~exists(
+            select(PaymentAllocation.id).where(
+                PaymentAllocation.payment_id == Payment.id,
+            )
+        )
         payment_count = await self._count(
             select(func.count(Payment.id)).where(
-                Payment.document_id == doc.id,
                 Payment.is_voided.is_(False),
+                or_(
+                    payment_has_order_allocation,
+                    (Payment.document_id == doc.id) & payment_has_no_allocation,
+                ),
             )
         )
 

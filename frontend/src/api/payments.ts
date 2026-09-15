@@ -1,7 +1,7 @@
 import { get, post, put, del } from './index'
 import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, ProjectCostItemSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse, TaskCompletionDetailsResponse, TaskCompletionKind, TaskCompletionPeriod, TaskCompletionSummary, TaskCompletionType } from '@/types/api'
 
-export function getPayments(params?: { page?: number; page_size?: number; order_id?: string; customer_id?: string; status?: string }) { return get<PaginatedData<PaymentResponse>>('/payments/', { params }) }
+export function getPayments(params?: { page?: number; page_size?: number; order_id?: string; contract_id?: string; customer_id?: string; status?: string }) { return get<PaginatedData<PaymentResponse>>('/payments/', { params }) }
 export function getPayment(id: string) { return get<PaymentResponse>(`/payments/${id}`) }
 export function createPayment(data: Omit<Partial<PaymentResponse>, 'id' | 'payment_no' | 'created_at' | 'created_by'>) { return post<PaymentResponse>('/payments/', data) }
 export function voidPayment(id: string, data: { void_reason: string }) { return post<SuccessResponse>(`/payments/${id}/void`, data) }

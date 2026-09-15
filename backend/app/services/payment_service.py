@@ -2,10 +2,13 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.business_document import BusinessDocument
-from app.models.payment import CustomerStatement, Expense, Payment
+from app.models.contract import Contract
+from app.models.framework_contract import FrameworkContractProject
+from app.models.payment import CustomerStatement, Expense, Payment, PaymentAllocation
 from app.repositories.payment_repo import (
     ExpenseRepository,
     PaymentRepository,
@@ -26,53 +29,172 @@ def _utc_now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+def _uuid_or_none(value) -> UUID | None:
+    """Normalize UUID input without treating mock/dynamic attributes as IDs."""
+    if isinstance(value, UUID):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return UUID(value)
+        except ValueError:
+            return None
+    return None
+
+
 class PaymentService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = PaymentRepository(db)
 
-    async def list_payments(self, page: int, page_size: int, order_id: UUID | None = None,
-                            customer_id: UUID | None = None, is_voided: bool | None = None) -> tuple[list, int]:
+    async def list_payments(
+        self,
+        page: int,
+        page_size: int,
+        order_id: UUID | None = None,
+        customer_id: UUID | None = None,
+        is_voided: bool | None = None,
+        contract_id: UUID | None = None,
+    ) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        payments, total = await self.repo.list_payments(skip, page_size, order_id, customer_id, is_voided)
+        payments, total = await self.repo.list_payments(
+            skip,
+            page_size,
+            order_id,
+            customer_id,
+            is_voided,
+            contract_id,
+        )
         return [self._to_dict(p) for p in payments], total
 
     async def get_payment(self, payment_id: UUID) -> dict | None:
         p = await self.repo.get_by_id(payment_id)
         return self._to_dict(p) if p else None
 
-    async def create_payment(self, data: dict, created_by: UUID) -> dict:
-        # Support backward-compat: accept order_id from schema, map to document_id
-        document_id = data.get("order_id") or data.get("document_id")
-        if not document_id:
-            raise ValueError("缺少关联单据ID")
+    async def _get_contract_total(self, contract: Contract) -> Decimal:
+        """Return the effective receivable total for a contract."""
+        if contract.contract_type == "框架合同":
+            result = await self.db.execute(
+                select(func.coalesce(func.sum(FrameworkContractProject.project_amount), 0))
+                .where(
+                    FrameworkContractProject.contract_id == contract.id,
+                    FrameworkContractProject.deleted_at.is_(None),
+                )
+            )
+            project_total = Decimal(str(result.scalar() or 0))
+            if project_total > 0:
+                return project_total
+        return Decimal(str(contract.total_amount or 0))
 
-        doc = await self.db.get(
-            BusinessDocument,
-            document_id,
-            with_for_update=True,
-        )
-        if not doc:
-            raise ValueError("单据不存在")
-        if doc.doc_type != "order":
-            raise ValueError("仅订单可以登记收款")
-        if doc.status in ("pending_confirm", "cancelled") or doc.deleted_at is not None:
+    async def _resolve_contract_for_order(self, order_id: UUID) -> UUID:
+        contract_ids = await self.repo.get_contract_ids_for_document(order_id)
+        if len(contract_ids) == 1:
+            return contract_ids[0]
+        if len(contract_ids) > 1:
+            raise ValueError("该订单关联了多个合同，请先明确收款合同")
+        raise ValueError("该订单尚未关联合同，请先关联合同后再登记收款")
+
+    @staticmethod
+    def _validate_order_for_payment(order: BusinessDocument | None) -> None:
+        if not order:
+            raise ValueError("订单不存在")
+        if order.doc_type != "order":
+            raise ValueError("收款只能分配到订单")
+        if order.status in ("pending_confirm", "cancelled") or order.deleted_at is not None:
             raise ValueError("当前订单状态不允许登记收款")
-        if doc.customer_id != data["customer_id"]:
-            raise ValueError("收款客户与订单不一致")
 
-        amount = Decimal(str(data["amount"]))
-        total_amount = Decimal(str(doc.total_amount or 0))
-        existing_paid = Decimal(str(await self.repo.get_document_paid_sum(document_id)))
+    async def create_payment(self, data: dict, created_by: UUID) -> dict:
+        """Create a contract-based receipt and immutable allocations.
+
+        ``order_id`` is retained for old clients. It resolves to the unique
+        contract and therefore cannot bypass the new contract requirement.
+        Without an explicit order, the amount is automatically spread across
+        the contract's unpaid orders in stable order; any remainder stays
+        contract-level instead of being fabricated as an order payment.
+        """
+        contract_id = _uuid_or_none(data.get("contract_id"))
+        document_id = _uuid_or_none(data.get("order_id") or data.get("document_id"))
+        customer_id = _uuid_or_none(data.get("customer_id"))
+        if not customer_id:
+            raise ValueError("请选择收款客户")
+
+        # Validate the explicit order before resolving the legacy order →
+        # contract relation. This keeps errors actionable for old clients:
+        # a missing/invalid order must not be reported as a missing contract.
+        if document_id:
+            candidate_order = await self.db.get(BusinessDocument, document_id)
+            self._validate_order_for_payment(candidate_order)
+            if candidate_order.customer_id != customer_id:
+                raise ValueError("收款客户与订单不一致")
+
+        if not contract_id:
+            if not document_id:
+                raise ValueError("请选择收款合同")
+            contract_id = await self._resolve_contract_for_order(document_id)
+
+        contract = await self.db.get(Contract, contract_id, with_for_update=True)
+        if not contract or contract.deleted_at is not None:
+            raise ValueError("合同不存在或已删除")
+        if contract.customer_id != customer_id:
+            raise ValueError("收款客户与合同不一致")
+
+        amount = Decimal(str(data["amount"])).quantize(Decimal("0.01"))
+        if amount <= 0:
+            raise ValueError("收款金额必须大于0")
+        total_amount = await self._get_contract_total(contract)
+        existing_paid = Decimal(str(await self.repo.get_contract_paid_sum(contract.id)))
         remaining = max(Decimal("0"), total_amount - existing_paid)
         if amount > remaining:
-            raise ValueError(f"收款金额超过订单未收金额 {remaining:.2f} 元")
-        await self.db.refresh(doc, ["customer"])
+            raise ValueError(f"收款金额超过合同未收金额 {remaining:.2f} 元")
+
+        contract_order_ids = await self.repo.get_contract_order_ids(contract.id)
+        locked_orders: dict[UUID, BusinessDocument] = {}
+        allocations_spec: list[tuple[UUID | None, Decimal]] = []
+
+        if document_id:
+            if document_id not in contract_order_ids:
+                raise ValueError("该订单不属于所选合同，不能分配收款")
+            doc = await self.db.get(BusinessDocument, document_id, with_for_update=True)
+            self._validate_order_for_payment(doc)
+            if doc.customer_id != customer_id:
+                raise ValueError("收款客户与订单不一致")
+            order_paid = Decimal(str(await self.repo.get_document_paid_sum(doc.id)))
+            order_remaining = max(Decimal("0"), Decimal(str(doc.total_amount or 0)) - order_paid)
+            if amount > order_remaining:
+                raise ValueError(f"收款金额超过订单未收金额 {order_remaining:.2f} 元")
+            locked_orders[doc.id] = doc
+            allocations_spec.append((doc.id, amount))
+        else:
+            pending = amount
+            for order_id in contract_order_ids:
+                if pending <= 0:
+                    break
+                order = await self.db.get(BusinessDocument, order_id, with_for_update=True)
+                self._validate_order_for_payment(order)
+                if order.customer_id != customer_id:
+                    raise ValueError("合同关联订单与合同客户不一致，无法自动分配")
+                locked_orders[order.id] = order
+                order_paid = Decimal(str(await self.repo.get_document_paid_sum(order.id)))
+                order_remaining = max(
+                    Decimal("0"), Decimal(str(order.total_amount or 0)) - order_paid
+                )
+                if order_remaining <= 0:
+                    continue
+                allocated = min(pending, order_remaining)
+                allocations_spec.append((order.id, allocated))
+                pending -= allocated
+            if pending > 0:
+                allocations_spec.append((None, pending))
+
+        compatibility_document_id = document_id
+        if compatibility_document_id is None:
+            order_ids = [oid for oid, _ in allocations_spec if oid is not None]
+            if len(order_ids) == 1:
+                compatibility_document_id = order_ids[0]
 
         payment = Payment(
             payment_no=await generate_payment_no(self.db),
-            document_id=document_id,
-            customer_id=data["customer_id"],
+            document_id=compatibility_document_id,
+            customer_id=customer_id,
             amount=amount,
             payment_method=data.get("payment_method"),
             paid_at=datetime.fromisoformat(data["paid_at"]) if data.get("paid_at") else None,
@@ -80,25 +202,50 @@ class PaymentService:
             receipt_url=data.get("receipt_url"),
             created_by=created_by,
         )
-        payment.document = doc
+        if compatibility_document_id:
+            payment.document = locked_orders.get(compatibility_document_id)
         await self.repo.create(payment)
 
-        # Notify admin/finance about payment
+        allocations = []
+        for order_id, allocated_amount in allocations_spec:
+            allocation = PaymentAllocation(
+                payment_id=payment.id,
+                contract_id=contract.id,
+                document_id=order_id,
+                allocated_amount=allocated_amount,
+                allocation_type="order" if order_id else "contract",
+                created_by=created_by,
+            )
+            allocation.contract = contract
+            allocation.document = locked_orders.get(order_id) if order_id else None
+            self.db.add(allocation)
+            allocations.append(allocation)
+        payment.allocations = allocations
+        await self.db.flush()
+
+        for order in locked_orders.values():
+            paid = Decimal(str(await self.repo.get_document_paid_sum(order.id)))
+            order.paid_amount = paid
+            order.unpaid_amount = max(Decimal("0"), Decimal(str(order.total_amount or 0)) - paid)
+        contract_paid = existing_paid + amount
+        contract.paid_amount = contract_paid
+        contract.unpaid_amount = max(Decimal("0"), total_amount - contract_paid)
+
+        # Notify the sales owner(s) of affected orders. Contract-only receipts
+        # intentionally do not invent a notification target.
         from app.services.notification_service import NotificationService
         notif_svc = NotificationService(self.db)
-        if doc.sales_user_id:
-            await notif_svc.create_system_notification(
-                user_id=doc.sales_user_id,
-                type_="payment_received",
-                title=f"收款到账: {payment.payment_no}",
-                content=f"单据 {doc.doc_no} 收到 {data['amount']} 元",
-                link="/receivables",
-            )
-
-        paid = existing_paid + amount
-        unpaid = total_amount - paid
-        doc.paid_amount = paid
-        doc.unpaid_amount = unpaid
+        notified_users = set()
+        for order in locked_orders.values():
+            if order.sales_user_id and order.sales_user_id not in notified_users:
+                await notif_svc.create_system_notification(
+                    user_id=order.sales_user_id,
+                    type_="payment_received",
+                    title=f"收款到账: {payment.payment_no}",
+                    content=f"合同 {contract.contract_no} 收到 {amount:.2f} 元",
+                    link="/receivables",
+                )
+                notified_users.add(order.sales_user_id)
         await self.db.flush()
 
         return self._to_dict(payment)
@@ -116,29 +263,89 @@ class PaymentService:
 
         await self.repo.void(p, reason)
 
-        doc = await self.db.get(BusinessDocument, p.document_id)
-        if doc:
-            paid = Decimal(str(await self.repo.get_document_paid_sum(p.document_id)))
-            unpaid = max(Decimal("0"), Decimal(str(doc.total_amount or 0)) - paid)
-            doc.paid_amount = paid
-            doc.unpaid_amount = unpaid
-            await self.db.flush()
+        raw_allocations = getattr(p, "allocations", None)
+        allocations = (
+            list(raw_allocations)
+            if isinstance(raw_allocations, (list, tuple, set))
+            else []
+        )
+        order_ids = {
+            order_id
+            for order_id in (_uuid_or_none(getattr(a, "document_id", None)) for a in allocations)
+            if order_id
+        }
+        legacy_order_id = _uuid_or_none(getattr(p, "document_id", None))
+        if legacy_order_id:
+            order_ids.add(legacy_order_id)
+        for order_id in order_ids:
+            doc = await self.db.get(BusinessDocument, order_id)
+            if doc:
+                paid = Decimal(str(await self.repo.get_document_paid_sum(order_id)))
+                doc.paid_amount = paid
+                doc.unpaid_amount = max(Decimal("0"), Decimal(str(doc.total_amount or 0)) - paid)
+
+        contract_ids = {
+            contract_id
+            for contract_id in (_uuid_or_none(getattr(a, "contract_id", None)) for a in allocations)
+            if contract_id
+        }
+        if legacy_order_id and not contract_ids:
+            contract_ids.update(
+                await self.repo.get_contract_ids_for_document(legacy_order_id)
+            )
+        for contract_id in contract_ids:
+            contract = await self.db.get(Contract, contract_id, with_for_update=True)
+            if contract and contract.deleted_at is None:
+                paid = Decimal(str(await self.repo.get_contract_paid_sum(contract.id)))
+                total = await self._get_contract_total(contract)
+                contract.paid_amount = paid
+                contract.unpaid_amount = max(Decimal("0"), total - paid)
+        await self.db.flush()
 
         return self._to_dict(p)
 
     def _to_dict(self, p: Payment) -> dict:
-        doc = p.document
+        doc = getattr(p, "document", None)
+        raw_allocations = getattr(p, "allocations", None)
+        allocations = (
+            list(raw_allocations)
+            if isinstance(raw_allocations, (list, tuple, set))
+            else []
+        )
+        contract = next(
+            (getattr(allocation, "contract", None) for allocation in allocations if getattr(allocation, "contract", None)),
+            None,
+        )
+        document_id = _uuid_or_none(getattr(p, "document_id", None)) or _uuid_or_none(
+            getattr(p, "order_id", None)
+        )
+        customer = getattr(doc, "customer", None) if doc else None
+        customer_name = getattr(customer, "name", None) if customer else None
+        if not customer_name and contract:
+            customer_name = getattr(contract, "customer_name", None)
+        allocation_total = sum(
+            (Decimal(str(getattr(allocation, "allocated_amount", 0) or 0)) for allocation in allocations),
+            Decimal("0"),
+        )
+        if not allocations:
+            allocation_status = "待分配"
+        elif allocation_total < Decimal(str(p.amount or 0)):
+            allocation_status = "部分分配"
+        else:
+            allocation_status = "已分配"
         return {
-            "id": str(p.id),
+            "id": str(p.id) if p.id else None,
             "payment_no": p.payment_no,
-            "document_id": str(p.document_id),
-            "order_id": str(p.document_id),  # backward-compat alias
+            "document_id": str(document_id) if document_id else None,
+            "order_id": str(document_id) if document_id else None,  # backward-compat alias
             "doc_no": doc.doc_no if doc else None,
             "order_no": doc.doc_no if doc else None,  # backward-compat alias
-            "customer_id": str(p.customer_id),
-            "customer_name": doc.customer.name if doc and doc.customer else None,
+            "customer_id": str(p.customer_id) if p.customer_id else None,
+            "customer_name": customer_name,
             "project_name": doc.project_name if doc else None,
             "department": doc.department if doc else None,
+            "contract_id": str(contract.id) if contract else None,
+            "contract_no": contract.contract_no if contract else None,
             "amount": float(p.amount),
             "payment_method": p.payment_method,
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
@@ -150,6 +357,19 @@ class PaymentService:
             "receipt_url": p.receipt_url,
             "created_at": p.created_at.isoformat() if p.created_at else None,
             "created_by": str(p.created_by) if p.created_by else None,
+            "allocation_status": allocation_status,
+            "allocation_total": float(allocation_total),
+            "allocations": [
+                {
+                    "id": str(allocation.id) if allocation.id else None,
+                    "contract_id": str(allocation.contract_id),
+                    "document_id": str(allocation.document_id) if allocation.document_id else None,
+                    "order_id": str(allocation.document_id) if allocation.document_id else None,
+                    "amount": float(allocation.allocated_amount),
+                    "allocation_type": allocation.allocation_type,
+                }
+                for allocation in allocations
+            ],
         }
 
 

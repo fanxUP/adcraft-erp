@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import PERM_ORDER_VIEW_PRICE, user_has_permission
 from app.models.user import User
+from app.models.framework_contract import FrameworkContractProject
 from app.repositories.framework_contract_repo import FrameworkContractProjectRepository
 from app.services.business_document_service import BusinessDocumentService
 
@@ -100,26 +101,63 @@ class FrameworkContractService:
         return [self._redact_financial_fields(item) for item in result], total
 
     async def _batch_project_paid_amounts(self, project_ids: list[UUID]) -> dict[UUID, float]:
-        """批量计算框架合同项目的已收金额（来自关联单据的收款）"""
+        """批量计算框架合同项目的已收金额（分配事实优先）。
+
+        新收款通过 ``payment_allocations`` 归属合同/订单；没有分配记录
+        的旧收款才按项目关联订单兜底。作废收款始终排除。
+        """
         if not project_ids:
             return {}
-        from sqlalchemy import select, func
-        from app.models.payment import Payment
+        from sqlalchemy import exists, func, select, union_all
         from app.models.framework_contract import FrameworkContractProjectDocument
+        from app.models.payment import Payment, PaymentAllocation
 
-        result = await self.db.execute(
+        allocation_rows = (
             select(
-                FrameworkContractProjectDocument.project_id,
-                func.coalesce(func.sum(Payment.amount), 0),
+                FrameworkContractProjectDocument.project_id.label("project_id"),
+                PaymentAllocation.allocated_amount.label("amount"),
             )
-            .select_from(Payment)
-            .join(FrameworkContractProjectDocument,
-                  FrameworkContractProjectDocument.document_id == Payment.document_id)
+            .select_from(FrameworkContractProjectDocument)
+            .join(
+                PaymentAllocation,
+                PaymentAllocation.document_id == FrameworkContractProjectDocument.document_id,
+            )
+            .join(Payment, Payment.id == PaymentAllocation.payment_id)
+            .join(
+                FrameworkContractProject,
+                FrameworkContractProject.id == FrameworkContractProjectDocument.project_id,
+            )
             .where(
                 FrameworkContractProjectDocument.project_id.in_(project_ids),
-                Payment.is_voided == False,
+                PaymentAllocation.contract_id == FrameworkContractProject.contract_id,
+                Payment.is_voided.is_(False),
             )
-            .group_by(FrameworkContractProjectDocument.project_id)
+        )
+        allocation_exists = ~exists(
+            select(PaymentAllocation.id).where(
+                PaymentAllocation.payment_id == Payment.id
+            )
+        )
+        legacy_rows = (
+            select(
+                FrameworkContractProjectDocument.project_id.label("project_id"),
+                Payment.amount.label("amount"),
+            )
+            .select_from(FrameworkContractProjectDocument)
+            .join(Payment, Payment.document_id == FrameworkContractProjectDocument.document_id)
+            .where(
+                FrameworkContractProjectDocument.project_id.in_(project_ids),
+                Payment.is_voided.is_(False),
+                allocation_exists,
+            )
+        )
+        source_rows = union_all(allocation_rows, legacy_rows).subquery()
+        result = await self.db.execute(
+            select(
+                source_rows.c.project_id,
+                func.coalesce(func.sum(source_rows.c.amount), 0),
+            )
+            .group_by(source_rows.c.project_id)
         )
         return {row[0]: float(row[1]) for row in result.all()}
 

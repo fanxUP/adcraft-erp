@@ -9,7 +9,8 @@ from app.core.permissions import PERM_REPORT_READ, PERM_REPORT_VIEW_FINANCIAL, u
 from app.models.business_document import BusinessDocument
 from app.models.contract import Contract, ContractDocument
 from app.models.customer import Customer
-from app.models.payment import Payment
+from app.models.payment import Payment, PaymentAllocation
+from app.repositories.payment_repo import active_unambiguous_contract_links
 from app.models.task import DesignTask, InstallationTask, ProductionTask
 from app.services.business_document_service import BusinessDocumentService
 from app.services.vehicle_dashboard_service import VehicleDashboardService
@@ -241,43 +242,102 @@ class ReportService:
             for contract_id, doc_id in fcpd_result.all():
                 fw_doc_ids_by_contract.setdefault(contract_id, set()).add(doc_id)
 
-        # Batch-fetch paid_amount per contract from actual payments on linked orders
+        # Batch-fetch paid_amount per contract. New receipts use allocations;
+        # rows without allocations are historical order-level receipts.
         contract_ids = all_contract_ids
         paid_map: dict[UUID, float] = {}
         if contract_ids:
-            paid_result = await self.db.execute(
+            from sqlalchemy import exists, union_all
+
+            allocation_exists = ~exists(
+                select(PaymentAllocation.id).where(
+                    PaymentAllocation.payment_id == Payment.id
+                )
+            )
+            regular_allocation_rows = (
                 select(
-                    ContractDocument.contract_id,
-                    func.coalesce(func.sum(Payment.amount), 0),
+                    PaymentAllocation.contract_id.label("contract_id"),
+                    PaymentAllocation.allocated_amount.label("amount"),
+                )
+                .select_from(PaymentAllocation)
+                .join(Payment, Payment.id == PaymentAllocation.payment_id)
+                .join(Contract, Contract.id == PaymentAllocation.contract_id)
+                .where(
+                    PaymentAllocation.contract_id.in_(contract_ids),
+                    Contract.contract_type != "框架合同",
+                    Payment.is_voided.is_(False),
+                )
+            )
+            unique_links = active_unambiguous_contract_links()
+            regular_legacy_rows = (
+                select(
+                    unique_links.c.contract_id,
+                    Payment.amount.label("amount"),
                 )
                 .select_from(Payment)
-                .join(ContractDocument, ContractDocument.document_id == Payment.document_id)
+                .join(unique_links, unique_links.c.document_id == Payment.document_id)
+                .join(Contract, Contract.id == unique_links.c.contract_id)
                 .where(
-                    ContractDocument.contract_id.in_(contract_ids),
-                    Payment.is_voided == False,
+                    unique_links.c.contract_id.in_(contract_ids),
+                    Contract.contract_type != "框架合同",
+                    Payment.is_voided.is_(False),
+                    allocation_exists,
                 )
-                .group_by(ContractDocument.contract_id)
+            )
+            regular_source = union_all(
+                regular_allocation_rows,
+                regular_legacy_rows,
+            ).subquery()
+            paid_result = await self.db.execute(
+                select(
+                    regular_source.c.contract_id,
+                    func.coalesce(func.sum(regular_source.c.amount), 0),
+                )
+                .group_by(regular_source.c.contract_id)
             )
             paid_map = {row[0]: float(row[1]) for row in paid_result.all()}
-            # 框架合同：通过项目关联计算已收金额
+            # 框架合同：通过合同分配及项目关联订单计算已收金额
             fw_contract_ids_paid = [ct.id for ct in all_contracts if ct.contract_type == "框架合同"]
             if fw_contract_ids_paid:
-                fw_paid_result = await self.db.execute(
+                fw_allocation_rows = (
                     select(
-                        FrameworkContractProject.contract_id,
-                        func.coalesce(func.sum(Payment.amount), 0),
+                        PaymentAllocation.contract_id.label("contract_id"),
+                        PaymentAllocation.allocated_amount.label("amount"),
+                    )
+                    .select_from(PaymentAllocation)
+                    .join(Payment, Payment.id == PaymentAllocation.payment_id)
+                    .join(Contract, Contract.id == PaymentAllocation.contract_id)
+                    .where(
+                        PaymentAllocation.contract_id.in_(fw_contract_ids_paid),
+                        Contract.contract_type == "框架合同",
+                        Payment.is_voided.is_(False),
+                    )
+                )
+                fw_legacy_rows = (
+                    select(
+                        unique_links.c.contract_id,
+                        Payment.amount.label("amount"),
                     )
                     .select_from(Payment)
-                    .join(FCPD, FCPD.document_id == Payment.document_id)
-                    .join(FrameworkContractProject, FCPD.project_id == FrameworkContractProject.id)
+                    .join(unique_links, unique_links.c.document_id == Payment.document_id)
+                    .join(Contract, Contract.id == unique_links.c.contract_id)
                     .where(
-                        FrameworkContractProject.contract_id.in_(fw_contract_ids_paid),
-                        Payment.is_voided == False,
+                        unique_links.c.contract_id.in_(fw_contract_ids_paid),
+                        Contract.contract_type == "框架合同",
+                        Payment.is_voided.is_(False),
+                        allocation_exists,
                     )
-                    .group_by(FrameworkContractProject.contract_id)
+                )
+                fw_source = union_all(fw_allocation_rows, fw_legacy_rows).subquery()
+                fw_paid_result = await self.db.execute(
+                    select(
+                        fw_source.c.contract_id,
+                        func.coalesce(func.sum(fw_source.c.amount), 0),
+                    )
+                    .group_by(fw_source.c.contract_id)
                 )
                 for row in fw_paid_result.all():
-                    paid_map[row[0]] = paid_map.get(row[0], 0.0) + float(row[1])
+                    paid_map[row[0]] = float(row[1])
 
         # Batch-fetch framework contract project totals (框架合同金额 = 子项目合计)
         from app.models.framework_contract import FrameworkContractProject

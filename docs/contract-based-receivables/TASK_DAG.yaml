@@ -1,0 +1,27 @@
+version: 1
+name: contract-based-receivables
+tasks:
+  P1:
+    title: 建立收款分配模型和迁移
+    acceptance: A1
+    depends_on: []
+  P2:
+    title: 改造收款服务和金额校验
+    acceptance: A2
+    depends_on: [P1]
+  P3:
+    title: 统一合同、框架项目和报表核算
+    acceptance: A3
+    depends_on: [P2]
+  P4:
+    title: 改造应收管理页面
+    acceptance: A4
+    depends_on: [P3]
+  P5:
+    title: 历史兼容与迁移检查
+    acceptance: A5
+    depends_on: [P1, P2]
+  P6:
+    title: 回归验证和发布门禁
+    acceptance: A6
+    depends_on: [P4, P5]

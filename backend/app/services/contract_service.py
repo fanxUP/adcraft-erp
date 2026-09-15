@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.permissions import PERM_ORDER_VIEW_PRICE, user_has_permission
 from app.models.user import User
 from app.repositories.contract_repo import ContractRepository
+from app.repositories.payment_repo import active_unambiguous_contract_links
 from app.schemas.contract import ContractListResponse, ContractDetailResponse
 from app.services.number_generator import generate_contract_no
 from app.services.business_document_service import BusinessDocumentService
@@ -41,42 +42,99 @@ class ContractService:
         }
 
     async def _calc_paid_amount(self, contract_id: UUID) -> float:
-        """计算合同已收金额 = 关联单据的收款总和（不含已作废）"""
-        from sqlalchemy import select, func
-        from app.models.payment import Payment
-        from app.models.contract import ContractDocument
+        """计算合同已收金额，并兼容历史订单级收款。
 
-        result = await self.db.execute(
+        新收款以 ``payment_allocations`` 为准；没有分配记录的历史 Payment
+        才通过合同-订单关系兜底计算。这样订单重新关联合同时不会把已经
+        归属明确的收款重复计入，也不会让历史数据在迁移前消失。
+        """
+        from sqlalchemy import exists, func, select
+        from app.models.payment import Payment, PaymentAllocation
+
+        allocation_total = (
+            select(func.coalesce(func.sum(PaymentAllocation.allocated_amount), 0))
+            .select_from(PaymentAllocation)
+            .join(Payment, Payment.id == PaymentAllocation.payment_id)
+            .where(
+                PaymentAllocation.contract_id == contract_id,
+                Payment.is_voided.is_(False),
+            )
+            .scalar_subquery()
+        )
+        unique_links = active_unambiguous_contract_links()
+        legacy_total = (
             select(func.coalesce(func.sum(Payment.amount), 0))
             .select_from(Payment)
-            .join(ContractDocument, ContractDocument.document_id == Payment.document_id)
-            .where(
-                ContractDocument.contract_id == contract_id,
-                Payment.is_voided == False,
+            .join(
+                unique_links,
+                unique_links.c.document_id == Payment.document_id,
             )
+            .where(
+                Payment.is_voided.is_(False),
+                ~exists(
+                    select(PaymentAllocation.id).where(
+                        PaymentAllocation.payment_id == Payment.id
+                    )
+                ),
+                unique_links.c.contract_id == contract_id,
+            )
+            .scalar_subquery()
         )
-        return float(result.scalar())
+        result = await self.db.execute(select(allocation_total + legacy_total))
+        return float(result.scalar() or 0)
 
     async def _batch_paid_amounts(self, contract_ids: list[UUID]) -> dict[UUID, float]:
         """批量计算多个合同的已收金额"""
         if not contract_ids:
             return {}
-        from sqlalchemy import select, func
-        from app.models.payment import Payment
-        from app.models.contract import ContractDocument
+        from sqlalchemy import exists, func, select, union_all
+        from app.models.payment import Payment, PaymentAllocation
 
-        result = await self.db.execute(
+        allocation_rows = (
             select(
-                ContractDocument.contract_id,
-                func.coalesce(func.sum(Payment.amount), 0),
+                PaymentAllocation.contract_id.label("contract_id"),
+                PaymentAllocation.allocated_amount.label("amount"),
+            )
+            .select_from(PaymentAllocation)
+            .join(Payment, Payment.id == PaymentAllocation.payment_id)
+            .where(
+                PaymentAllocation.contract_id.in_(contract_ids),
+                Payment.is_voided.is_(False),
+            )
+        )
+        allocation_exists = ~exists(
+            select(PaymentAllocation.id).where(
+                PaymentAllocation.payment_id == Payment.id
+            )
+        )
+        unique_links = active_unambiguous_contract_links()
+        legacy_rows = (
+            select(
+                unique_links.c.contract_id,
+                Payment.id.label("payment_id"),
+                Payment.amount.label("amount"),
             )
             .select_from(Payment)
-            .join(ContractDocument, ContractDocument.document_id == Payment.document_id)
+            .join(unique_links, unique_links.c.document_id == Payment.document_id)
             .where(
-                ContractDocument.contract_id.in_(contract_ids),
-                Payment.is_voided == False,
+                unique_links.c.contract_id.in_(contract_ids),
+                Payment.is_voided.is_(False),
+                allocation_exists,
             )
-            .group_by(ContractDocument.contract_id)
+        )
+        source_rows = union_all(
+            allocation_rows,
+            select(
+                legacy_rows.c.contract_id,
+                legacy_rows.c.amount,
+            ),
+        ).subquery()
+        result = await self.db.execute(
+            select(
+                source_rows.c.contract_id,
+                func.coalesce(func.sum(source_rows.c.amount), 0),
+            )
+            .group_by(source_rows.c.contract_id)
         )
         return {row[0]: float(row[1]) for row in result.all()}
 

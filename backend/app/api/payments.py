@@ -43,6 +43,7 @@ async def list_payments(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     order_id: str | None = None,
+    contract_id: str | None = None,
     customer_id: str | None = None,
     is_voided: bool | None = None,
     db: AsyncSession = Depends(get_db),
@@ -50,8 +51,16 @@ async def list_payments(
 ):
     service = PaymentService(db)
     oid = UUID(order_id) if order_id else None
+    contract_uuid = UUID(contract_id) if contract_id else None
     cid = UUID(customer_id) if customer_id else None
-    payments, total = await service.list_payments(page, page_size, oid, cid, is_voided)
+    payments, total = await service.list_payments(
+        page,
+        page_size,
+        oid,
+        cid,
+        is_voided,
+        contract_uuid,
+    )
     return success_paginated(payments, total, page, page_size)
 
 
