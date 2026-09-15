@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -21,6 +21,7 @@ from app.services.number_generator import (
     generate_payment_no,
     generate_statement_no,
 )
+from app.services.payable_service import PayableService, validate_payable_amount
 from app.domain.presentation import make_action_capability, make_payment_status_view, make_statement_status_view
 
 
@@ -39,6 +40,15 @@ def _uuid_or_none(value) -> UUID | None:
         except ValueError:
             return None
     return None
+
+
+def _decimal_or_zero(value) -> Decimal:
+    """读取兼容字段时，把旧对象或空值安全转换为金额。"""
+
+    try:
+        return Decimal(str(value or 0))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal("0")
 
 
 class PaymentService:
@@ -480,10 +490,17 @@ class ExpenseService:
         return self._to_dict(e) if e else None
 
     async def create_expense(self, data: dict, created_by: UUID) -> dict:
+        amount = Decimal(str(data["amount"]))
+        payable_amount = validate_payable_amount(
+            amount,
+            Decimal(str(data.get("payable_amount", 0))),
+        )
         expense = Expense(
             expense_no=await generate_expense_no(self.db),
             category=data.get("category"),
-            amount=data["amount"],
+            amount=amount,
+            payee_name=data.get("payee_name"),
+            payable_amount=payable_amount,
             description=data.get("description"),
             expense_date=datetime.fromisoformat(data["expense_date"]) if data.get("expense_date") else None,
             receipt_url=data.get("receipt_url"),
@@ -496,19 +513,40 @@ class ExpenseService:
         e = await self.repo.get_by_id(expense_id)
         if not e:
             raise ValueError("支出记录不存在")
-        await self.repo.update(e, data)
+        amount = Decimal(str(data.get("amount", e.amount)))
+        current_payable_amount = _decimal_or_zero(getattr(e, "payable_amount", 0))
+        payable_amount = validate_payable_amount(
+            amount,
+            _decimal_or_zero(data.get("payable_amount", current_payable_amount)),
+        )
+        normalized = dict(data)
+        normalized["amount"] = amount
+        normalized["payable_amount"] = payable_amount
+        if payable_amount > 0 or current_payable_amount > 0:
+            await PayableService(self.db).validate_source_update(
+                "expense",
+                e.id,
+                payable_amount,
+            )
+        await self.repo.update(e, normalized)
         return self._to_dict(e)
 
     async def delete_expense(self, expense_id: UUID) -> None:
         e = await self.repo.get_by_id(expense_id)
         if not e:
             raise ValueError("支出记录不存在")
+        payable_amount = _decimal_or_zero(getattr(e, "payable_amount", 0))
+        if payable_amount > 0:
+            await PayableService(self.db).assert_source_can_be_deleted("expense", e.id)
         await self.repo.soft_delete(e)
 
     def _to_dict(self, e: Expense) -> dict:
+        payable_amount = getattr(e, "payable_amount", 0) or 0
         return {
             "id": str(e.id), "expense_no": e.expense_no,
             "category": e.category, "amount": float(e.amount),
+            "payee_name": getattr(e, "payee_name", None),
+            "payable_amount": float(payable_amount),
             "description": e.description,
             "expense_date": e.expense_date.isoformat() if e.expense_date else None,
             "receipt_url": e.receipt_url,

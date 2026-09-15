@@ -112,6 +112,12 @@ class Expense(Base, TimestampMixin, SoftDeleteMixin):
     expense_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    payee_name: Mapped[str | None] = mapped_column(
+        String(200), nullable=True, comment="应付对象"
+    )
+    payable_amount: Mapped[Decimal] = mapped_column(
+        Numeric(14, 2), nullable=False, default=0, comment="待付款金额"
+    )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     expense_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)

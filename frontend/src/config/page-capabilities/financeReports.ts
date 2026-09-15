@@ -45,10 +45,10 @@ export const financeReportCapabilities: PageCapabilityMap = {
     availableActions: ['查看预计成本', '检查利润率', '返回报价'],
   },
   cost_debt_list: {
-    title: '成本欠款列表',
-    purpose: '查看项目相关供应商和外协未付款项',
+    title: '应付管理',
+    purpose: '统一查看项目成本和经营支出的应付余额与付款流水',
     workflowStage: 'payables',
-    availableActions: ['查询未付款', '筛选供应商', '查看关联项目'],
+    availableActions: ['查询应付来源', '筛选付款状态', '登记付款', '查看付款流水'],
   },
   outsource_payments: {
     title: '外协付款',

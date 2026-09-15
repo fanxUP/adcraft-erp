@@ -1,5 +1,5 @@
 import { get, post, put, del } from './index'
-import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, ProjectCostItemSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse, TaskCompletionDetailsResponse, TaskCompletionKind, TaskCompletionPeriod, TaskCompletionSummary, TaskCompletionType } from '@/types/api'
+import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, ProjectCostItemSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse, TaskCompletionDetailsResponse, TaskCompletionKind, TaskCompletionPeriod, TaskCompletionSummary, TaskCompletionType, PayableResponse } from '@/types/api'
 
 export function getPayments(params?: { page?: number; page_size?: number; order_id?: string; contract_id?: string; customer_id?: string; status?: string }) { return get<PaginatedData<PaymentResponse>>('/payments/', { params }) }
 export function getPayment(id: string) { return get<PaymentResponse>(`/payments/${id}`) }
@@ -23,6 +23,48 @@ export function getExpense(id: string) { return get<ExpenseResponse>(`/expenses/
 export function createExpense(data: Omit<Partial<ExpenseResponse>, 'id' | 'expense_no' | 'created_by' | 'created_at'>) { return post<ExpenseResponse>('/expenses/', data) }
 export function updateExpense(id: string, data: Partial<Omit<ExpenseResponse, 'id' | 'expense_no' | 'created_by' | 'created_at'>>) { return put<ExpenseResponse>(`/expenses/${id}`, data) }
 export function deleteExpense(id: string) { return del<SuccessResponse>(`/expenses/${id}`) }
+
+// ── Payables ──
+
+export function getPayables(params?: {
+  page?: number
+  page_size?: number
+  keyword?: string
+  status?: string
+  source_type?: string
+}) {
+  return get<PaginatedData<PayableResponse>>('/payables/', { params })
+}
+
+export function getPayable(sourceType: string, sourceId: string) {
+  return get<PayableResponse>(`/payables/${sourceType}/${sourceId}`)
+}
+
+export function createPayablePayment(
+  sourceType: string,
+  sourceId: string,
+  data: {
+    amount: number
+    payment_method: string
+    paid_at?: string
+    remark?: string
+    receipt_url?: string
+  },
+) {
+  return post<PayableResponse>(`/payables/${sourceType}/${sourceId}/payments`, data)
+}
+
+export function voidPayablePayment(
+  sourceType: string,
+  sourceId: string,
+  paymentId: string,
+  data: { void_reason: string },
+) {
+  return post<PayableResponse>(
+    `/payables/${sourceType}/${sourceId}/payments/${paymentId}/void`,
+    data,
+  )
+}
 
 export function getDashboard() { return get<DashboardData>('/reports/dashboard') }
 export function getDailyReport(date?: string) { return get<DailyReportData>('/reports/daily', { params: { date } }) }

@@ -16,6 +16,7 @@ from app.repositories.task_repo import AttachmentRepository
 
 from app.schemas.payment import ProjectCostResponse
 from app.services.number_generator import generate_project_cost_no
+from app.services.payable_service import PayableService, validate_payable_amount
 
 
 class ProjectCostService:
@@ -260,6 +261,12 @@ class ProjectCostService:
             debt_amount = float(debt_amount)
         else:
             debt_amount = 0
+        debt_amount = float(
+            validate_payable_amount(
+                Decimal(str(data["amount"])),
+                Decimal(str(debt_amount)),
+            )
+        )
 
         cost = ProjectCost(
             cost_no=await generate_project_cost_no(self.db),
@@ -373,6 +380,19 @@ class ProjectCostService:
 
         if "cost_date" in normalized and normalized["cost_date"] is not None:
             normalized["cost_date"] = datetime.fromisoformat(normalized["cost_date"])
+        if "amount" in normalized or "debt_amount" in normalized:
+            new_amount = Decimal(str(normalized.get("amount", c.amount)))
+            new_debt = Decimal(
+                str(normalized.get("debt_amount", getattr(c, "debt_amount", 0)) or 0)
+            )
+            new_debt = validate_payable_amount(new_amount, new_debt)
+            normalized["debt_amount"] = new_debt
+            normalized["is_debt"] = new_debt > 0
+            await PayableService(self.db).validate_source_update(
+                "project_cost",
+                c.id,
+                new_debt,
+            )
         allow_null_fields = (
             {"document_item_id"}
             if "document_item_id" in normalized and normalized["document_item_id"] is None
@@ -392,6 +412,11 @@ class ProjectCostService:
         c = await self.repo.get_by_id(cost_id)
         if not c:
             raise ValueError("项目成本记录不存在")
+        debt_amount = Decimal(str(getattr(c, "debt_amount", 0) or 0))
+        if debt_amount > 0:
+            await PayableService(self.db).assert_source_can_be_deleted(
+                "project_cost", c.id
+            )
         document_id = c.document_id
         await self.repo.soft_delete(c)
         if document_id:
@@ -402,10 +427,17 @@ class ProjectCostService:
         from sqlalchemy import select
         # Collect document_ids before deletion for cost sync
         result = await self.db.execute(
-            select(ProjectCost.document_id)
+            select(ProjectCost)
             .where(ProjectCost.id.in_(cost_ids), ProjectCost.deleted_at.is_(None))
         )
-        document_ids = {row[0] for row in result.all() if row[0]}
+        costs = list(result.scalars().all())
+        for cost in costs:
+            debt_amount = Decimal(str(getattr(cost, "debt_amount", 0) or 0))
+            if debt_amount > 0:
+                await PayableService(self.db).assert_source_can_be_deleted(
+                    "project_cost", cost.id
+                )
+        document_ids = {cost.document_id for cost in costs if cost.document_id}
         deleted = await self.repo.batch_soft_delete(cost_ids)
         for did in document_ids:
             await self._sync_document_cost(did)

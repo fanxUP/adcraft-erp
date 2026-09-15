@@ -133,6 +133,8 @@ class StatementPaymentItem(CoercedModel):
 class ExpenseCreate(BaseModel):
     category: str | None = None
     amount: float
+    payee_name: str | None = None
+    payable_amount: float = 0
     description: str | None = None
     expense_date: str | None = None
     receipt_url: str | None = None
@@ -144,10 +146,19 @@ class ExpenseCreate(BaseModel):
             raise ValueError("支出金额必须大于0")
         return v
 
+    @field_validator("payable_amount")
+    @classmethod
+    def payable_non_negative(cls, value: float) -> float:
+        if value < 0:
+            raise ValueError("待付款金额不能小于0")
+        return value
+
 
 class ExpenseUpdate(BaseModel):
     category: str | None = None
     amount: float | None = None
+    payee_name: str | None = None
+    payable_amount: float | None = None
     description: str | None = None
     expense_date: str | None = None
     receipt_url: str | None = None
@@ -159,12 +170,21 @@ class ExpenseUpdate(BaseModel):
             raise ValueError("支出金额必须大于0")
         return value
 
+    @field_validator("payable_amount")
+    @classmethod
+    def payable_non_negative(cls, value: float | None) -> float | None:
+        if value is not None and value < 0:
+            raise ValueError("待付款金额不能小于0")
+        return value
+
 
 class ExpenseResponse(CoercedModel):
     id: str
     expense_no: str
     category: str | None = None
     amount: float
+    payee_name: str | None = None
+    payable_amount: float = 0
     description: str | None = None
     expense_date: str | None = None
     receipt_url: str | None = None
@@ -177,6 +197,87 @@ class ExpenseResponse(CoercedModel):
     document_item_id: str | None = None
     document_item_name: str | None = None
     attachment_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class PayablePaymentCreate(BaseModel):
+    amount: float
+    payment_method: str = "转账支付"
+    paid_at: str | None = None
+    remark: str | None = None
+    receipt_url: str | None = None
+
+    @field_validator("amount")
+    @classmethod
+    def amount_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("付款金额必须大于0")
+        return value
+
+    @field_validator("payment_method")
+    @classmethod
+    def payment_method_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("付款方式不能为空")
+        return value
+
+
+class PayablePaymentVoid(BaseModel):
+    void_reason: str
+
+    @field_validator("void_reason")
+    @classmethod
+    def reason_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("撤销原因不能为空")
+        return value
+
+
+class PayablePaymentResponse(CoercedModel):
+    id: str
+    payment_no: str
+    source_type: str
+    source_id: str
+    amount: float
+    payment_method: str
+    paid_at: str | None = None
+    remark: str | None = None
+    receipt_url: str | None = None
+    is_voided: bool = False
+    void_reason: str | None = None
+    voided_at: str | None = None
+    created_at: str | None = None
+    created_by: str | None = None
+
+
+class PayableResponse(CoercedModel):
+    id: str
+    source_type: str
+    source_id: str
+    source_label: str
+    source_no: str
+    source_total_amount: float
+    payable_total_amount: float
+    paid_amount: float
+    remaining_amount: float
+    payee_name: str | None = None
+    status: str
+    status_view: StatusView | None = None
+    capabilities: dict[str, ActionCapability] = {}
+    order_no: str | None = None
+    quote_no: str | None = None
+    project_name: str | None = None
+    customer_name: str | None = None
+    document_item_name: str | None = None
+    category: str | None = None
+    description: str | None = None
+    remark: str | None = None
+    payment_method: str | None = None
+    source_date: str | None = None
+    payments: list[PayablePaymentResponse] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 

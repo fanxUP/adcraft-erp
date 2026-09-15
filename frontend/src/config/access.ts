@@ -191,7 +191,9 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement
   expense: ['expense:read'],
   statement: ['statement:read'],
   projectCost: { anyOf: ['expense:read', 'finance:view_cost'] },
-  costDebt: { anyOf: ['expense:read', 'finance:view_cost'] },
+  // 应付管理会同时读取经营支出和项目成本，必须具备财务支出读取能力；
+  // finance:view_cost 只代表成本字段可见，不能单独打开包含经营支出的应付台账。
+  costDebt: ['expense:read'],
   outsourcePayment: ['outsource_payment:read'],
   reports: { anyOf: ['report:read', 'report:view_financial'] },
   system: ['system:super_admin'],
@@ -359,7 +361,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   ProjectCostList: '项目成本',
   ProjectCostDetail: '项目成本详情',
   QuoteCostDetail: '报价成本详情',
-  CostDebtList: '成本欠款',
+  CostDebtList: '应付管理',
   DailyReport: '销售日报',
   MonthlyReport: '销售月报',
   AnomalyDashboard: '异常提醒',

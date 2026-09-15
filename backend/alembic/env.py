@@ -28,6 +28,7 @@ from app.models.task import DesignTask, ProductionTask, InstallationTask, Attach
 from app.models.task_order_item_link import TaskOrderItemLink
 from app.models.task_item_status_log import TaskItemStatusLog
 from app.models.payment import Payment, PaymentAllocation, CustomerStatement, Expense
+from app.models.payable import PayablePayment
 from app.models.outsource import OutsourceVendor, OutsourceTask, OutsourcePayment
 from app.models.inventory import InventoryItem, StockRecord
 from app.models.project_cost import ProjectCost, ProjectCostItemLink

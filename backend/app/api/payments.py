@@ -27,6 +27,7 @@ from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, Exp
 from app.schemas.common import success, success_paginated
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
 from app.services.project_cost_service import ProjectCostService
+from app.services.payable_service import PayableService
 from app.services.task_service import AttachmentService
 from app.services.operation_log_service import log_operation, OBJ_PAYMENT, OBJ_EXPENSE, OBJ_PROJECT_COST, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
 
@@ -236,7 +237,10 @@ async def create_expense(
     current_user: User = Depends(require_permission(PERM_EXPENSE_CREATE)),
 ):
     service = ExpenseService(db)
-    expense = await service.create_expense(data.model_dump(), current_user.id)
+    try:
+        expense = await service.create_expense(data.model_dump(), current_user.id)
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_EXPENSE, UUID(expense["id"]), ACTION_CREATE,
                         ip_address=request.client.host if request.client else None,
@@ -254,7 +258,10 @@ async def update_expense(
 ):
     service = ExpenseService(db)
     eid = UUID(expense_id)
-    expense = await service.update_expense(eid, data.model_dump(exclude_none=True))
+    try:
+        expense = await service.update_expense(eid, data.model_dump(exclude_none=True))
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_EXPENSE, eid, ACTION_UPDATE,
                         ip_address=request.client.host if request.client else None)
@@ -476,10 +483,19 @@ async def settle_cost_debt(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_EXPENSE_UPDATE)),
 ):
-    """冲红：结算成本欠款"""
-    service = ProjectCostService(db)
+    """兼容旧客户端：将一次性结清转换为应付付款流水。"""
+    service = PayableService(db)
     try:
-        cost = await service.settle_debt(UUID(cost_id), data.model_dump())
+        cost = await service.register_payment(
+            "project_cost",
+            UUID(cost_id),
+            {
+                "amount": data.settle_amount,
+                "payment_method": data.payment_method,
+                "remark": data.remark,
+            },
+            current_user.id,
+        )
     except ValueError as e:
         return {"code": 40001, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,

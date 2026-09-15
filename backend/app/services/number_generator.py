@@ -49,6 +49,13 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
         result = await db.execute(
             select(Expense.expense_no).where(Expense.expense_no.like(pattern)).order_by(Expense.expense_no.desc()).limit(1)
         )
+    elif prefix == "APP":
+        from app.models.payable import PayablePayment
+        result = await db.execute(
+            select(PayablePayment.payment_no).where(
+                PayablePayment.payment_no.like(pattern)
+            ).order_by(PayablePayment.payment_no.desc()).limit(1)
+        )
     elif prefix == "Q":
         from app.models.business_document import BusinessDocument
         result = await db.execute(
@@ -164,6 +171,10 @@ async def generate_statement_no(db: AsyncSession) -> str:
 
 async def generate_expense_no(db: AsyncSession) -> str:
     return await _generate_no(db, "EXP")
+
+
+async def generate_payable_payment_no(db: AsyncSession) -> str:
+    return await _generate_no(db, "APP")
 
 
 async def generate_vendor_no(db: AsyncSession) -> str:

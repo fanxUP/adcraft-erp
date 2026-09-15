@@ -151,3 +151,20 @@ def test_outsource_order_item_migration_adds_safe_fk_index_and_decimal_quantity(
     assert 'sa.Numeric(14, 3)' in source
     assert 'postgresql_using="quantity::numeric"' in source
     assert 'quantity != trunc(quantity)' in source
+
+
+def test_unified_payable_ledger_migration_is_additive_and_protected():
+    versions_dir = Path(__file__).parents[1] / "alembic" / "versions"
+    source = next(
+        path.read_text(encoding="utf-8")
+        for path in versions_dir.glob("*.py")
+        if path.name.startswith("cpa01_")
+    )
+
+    assert 'revision: str = "cpa01_payable_ledger"' in source
+    assert 'down_revision: Union[str, None] = "cbr01_payment_allocations"' in source
+    assert '"payable_payments"' in source
+    assert '"payable_amount"' in source
+    assert '"ck_payable_payments_source_type"' in source
+    assert '"ck_payable_payments_amount_positive"' in source
+    assert "不能回滚应付付款流水" in source

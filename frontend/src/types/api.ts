@@ -970,11 +970,57 @@ export interface ExpenseResponse {
   expense_no: string
   category?: string
   amount: number
+  payee_name?: string
+  payable_amount: number
   description?: string
   expense_date?: string
   receipt_url?: string
   created_by?: string
   created_at?: string
+}
+
+export interface PayablePaymentResponse {
+  id: string
+  payment_no: string
+  source_type: 'expense' | 'project_cost' | string
+  source_id: string
+  amount: number
+  payment_method: string
+  paid_at?: string
+  remark?: string
+  receipt_url?: string
+  is_voided: boolean
+  void_reason?: string
+  voided_at?: string
+  created_at?: string
+  created_by?: string
+}
+
+export interface PayableResponse {
+  id: string
+  source_type: 'expense' | 'project_cost' | string
+  source_id: string
+  source_label: string
+  source_no: string
+  source_total_amount: number
+  payable_total_amount: number
+  paid_amount: number
+  remaining_amount: number
+  payee_name?: string
+  status: string
+  status_view?: StatusView | null
+  capabilities?: Record<string, ActionCapability>
+  order_no?: string
+  quote_no?: string
+  project_name?: string
+  customer_name?: string
+  document_item_name?: string
+  category?: string
+  description?: string
+  remark?: string
+  payment_method?: string
+  source_date?: string
+  payments?: PayablePaymentResponse[]
 }
 
 export interface ProjectCostResponse {

@@ -4,7 +4,7 @@ import inspect
 
 import pytest
 
-from app.api import orders, payments
+from app.api import orders, payments, payables
 
 
 def _route_permission(router, method: str, path: str) -> str | None:
@@ -170,3 +170,20 @@ def test_project_cost_mutations_keep_operation_log_contract():
         source = inspect.getsource(handler)
         assert "log_operation" in source
         assert "OBJ_PROJECT_COST" in source
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "permission"),
+    [
+        ("GET", "/payables/", "expense:read"),
+        ("GET", "/payables/{source_type}/{source_id}", "expense:read"),
+        ("POST", "/payables/{source_type}/{source_id}/payments", "expense:update"),
+        (
+            "POST",
+            "/payables/{source_type}/{source_id}/payments/{payment_id}/void",
+            "expense:update",
+        ),
+    ],
+)
+def test_payable_routes_require_expense_permissions(method, path, permission):
+    assert _route_permission(payables.router, method, path) == permission
