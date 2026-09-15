@@ -97,6 +97,17 @@ export interface SystemSettings {
   AI_MODEL: string
   AI_API_KEY: string
   AI_API_BASE_URL: string
+  BRANDING?: BrandingMetadata
+}
+
+export interface BrandingMetadata {
+  app_name: string
+  logo_url: string | null
+  logo_version: number
+  has_custom_logo: boolean
+  logo_filename?: string | null
+  logo_content_type?: string | null
+  logo_size?: number | null
 }
 
 export function getSystemSettings() {
@@ -109,4 +120,16 @@ export function forceRelogin() {
 
 export function updateSystemSettings(data: Record<string, unknown>) {
   return put<{ updated: Record<string, string>; message: string }>('/admin/settings', data)
+}
+
+export function uploadSystemLogo(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  return post<{ branding: BrandingMetadata; message: string }>('/admin/settings/logo', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function restoreDefaultSystemLogo() {
+  return del<{ branding: BrandingMetadata; message: string }>('/admin/settings/logo')
 }

@@ -54,6 +54,7 @@ from app.api import (
     outsource,
     payments,
     products,
+    public,
     quotes,
     reports,
     salaries,
@@ -346,6 +347,7 @@ app.include_router(inventory.router, prefix="/api/v1")
 app.include_router(operation_logs.router, prefix="/api/v1")
 app.include_router(backup.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
+app.include_router(public.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(conversations.router, prefix="/api/v1")
 app.include_router(acceptances.router, prefix="/api/v1")

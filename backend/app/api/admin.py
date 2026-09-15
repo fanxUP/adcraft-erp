@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,12 @@ from app.core.permissions import PERM_SYSTEM_SUPER_ADMIN, require_permission
 from app.models.user import User
 from app.schemas.admin import RoleCreate, RoleUpdate, RolePermissionUpdate, SettingsUpdate
 from app.schemas.common import success, error
+from app.services.branding_service import (
+    admin_branding_payload,
+    get_branding,
+    remove_logo,
+    replace_logo,
+)
 from app.services.role_service import RoleService
 from app.services.operation_log_service import (
     log_operation,
@@ -272,10 +278,12 @@ async def force_relogin(
 
 @router.get("/settings")
 async def get_settings(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
     api_key = settings.AI_API_KEY
     masked_key = api_key[:8] + "****" + api_key[-4:] if api_key and len(api_key) > 12 else "未配置"
+    branding = admin_branding_payload(settings.APP_NAME, await get_branding(db))
     return success({
         "APP_NAME": settings.APP_NAME,
         "COMPANY_NAME": settings.COMPANY_NAME,
@@ -288,7 +296,65 @@ async def get_settings(
         "AI_MODEL": settings.AI_MODEL,
         "AI_API_KEY": masked_key,
         "AI_API_BASE_URL": settings.AI_API_BASE_URL,
+        "BRANDING": branding,
     })
+
+
+@router.post("/settings/logo")
+async def upload_system_logo(
+    request: Request,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
+):
+    try:
+        branding = await replace_logo(db, file, current_user.id, settings.APP_NAME)
+    except ValueError as exc:
+        await db.rollback()
+        return error(40001, str(exc))
+
+    try:
+        await log_operation(
+            db,
+            current_user.id,
+            current_user.real_name or current_user.username,
+            OBJ_SETTINGS,
+            None,
+            ACTION_UPDATE,
+            ip_address=request.client.host if request.client else None,
+            after_data={
+                "logo_filename": branding["logo_filename"],
+                "logo_content_type": branding["logo_content_type"],
+                "logo_size": branding["logo_size"],
+                "logo_version": branding["logo_version"],
+            },
+        )
+    except Exception:
+        logger.warning("Failed to log upload_system_logo operation", exc_info=True)
+    return success({"branding": branding, "message": "logo 已更新"})
+
+
+@router.delete("/settings/logo")
+async def delete_system_logo(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
+):
+    branding = await remove_logo(db, current_user.id, settings.APP_NAME)
+    try:
+        await log_operation(
+            db,
+            current_user.id,
+            current_user.real_name or current_user.username,
+            OBJ_SETTINGS,
+            None,
+            ACTION_UPDATE,
+            ip_address=request.client.host if request.client else None,
+            after_data={"logo_version": branding["logo_version"], "restored_default": True},
+        )
+    except Exception:
+        logger.warning("Failed to log delete_system_logo operation", exc_info=True)
+    return success({"branding": branding, "message": "logo 已恢复默认"})
 
 
 @router.put("/settings")

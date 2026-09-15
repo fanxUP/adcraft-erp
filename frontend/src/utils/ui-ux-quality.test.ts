@@ -64,6 +64,20 @@ describe('P08 UI/UX quality guardrails', () => {
     expect(source).not.toMatch(/-----BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY-----/)
   })
 
+  it('uses the shared runtime brand on authenticated, login and mobile surfaces', () => {
+    const layout = readSource('layouts/DefaultLayout.vue')
+    const login = readSource('views/login/LoginView.vue')
+    const mobileProfile = readSource('views/mobile/MobileProfile.vue')
+    const brandLogo = readSource('components/BrandLogo.vue')
+
+    for (const source of [layout, login, mobileProfile]) {
+      expect(source).toContain('useBrandingStore')
+      expect(source).not.toContain('AdCraft ERP')
+    }
+    expect(brandLogo).toContain('logoUrl')
+    expect(brandLogo).toContain('appName')
+  })
+
   it('removes legacy page-header and search-bar CSS after shell migration', () => {
     for (const relativePath of [
       'views/ai/AIQuoteAssistant.vue',

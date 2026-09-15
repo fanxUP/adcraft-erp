@@ -57,7 +57,7 @@
 
     <!-- App info -->
     <div class="app-info">
-      <span>AdCraft ERP v1.0</span>
+      <span>{{ brandingStore.appName }} v1.0</span>
       <span>广告制作安装工程管理系统</span>
     </div>
   </div>
@@ -69,9 +69,11 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
 import PersonalSettingsCard from '@/components/profile/PersonalSettingsCard.vue'
+import { useBrandingStore } from '@/stores/branding'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const brandingStore = useBrandingStore()
 
 const initials = computed(() => {
   const name = authStore.user?.real_name || authStore.user?.username || 'U'

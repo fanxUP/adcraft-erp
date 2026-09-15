@@ -23,10 +23,44 @@
 
     <el-card v-loading="loading" shadow="never">
       <el-form :model="form" label-width="140px" style="max-width: 600px">
-        <el-divider content-position="left">基本设置</el-divider>
+        <el-divider content-position="left">品牌设置</el-divider>
         <el-form-item label="系统名称">
-          <el-input v-model="form.APP_NAME" />
+          <el-input v-model="form.APP_NAME" maxlength="120" show-word-limit />
+          <div class="form-tip">保存后会同步更新侧边栏、登录页、浏览器标题和移动端个人中心。</div>
         </el-form-item>
+        <el-form-item label="系统 Logo">
+          <div class="branding-editor">
+            <div class="branding-preview" :title="brandingStore.appName">
+              <BrandLogo :size="72" />
+            </div>
+            <div class="branding-actions">
+              <div class="branding-action-row">
+                <el-upload
+                  :show-file-list="false"
+                  :auto-upload="false"
+                  accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                  :on-change="handleLogoChange"
+                  :disabled="logoUploading"
+                >
+                  <el-button type="primary" :loading="logoUploading">
+                    {{ logoUploading ? '上传中…' : '选择并上传 Logo' }}
+                  </el-button>
+                </el-upload>
+                <el-button
+                  v-if="form.BRANDING?.has_custom_logo"
+                  :loading="logoRestoring"
+                  @click="handleRestoreLogo"
+                >恢复默认</el-button>
+              </div>
+              <div class="form-tip">仅支持 JPG、PNG、WEBP，大小不超过 2MB。</div>
+              <div v-if="form.BRANDING?.logo_filename" class="form-tip">
+                当前文件：{{ form.BRANDING.logo_filename }}（{{ formatFileSize(form.BRANDING.logo_size) }}）
+              </div>
+            </div>
+          </div>
+        </el-form-item>
+
+        <el-divider content-position="left">基本设置</el-divider>
         <el-form-item label="公司名称（乙方）">
           <el-input v-model="form.COMPANY_NAME" placeholder="用于打印验收单等处乙方名称" />
         </el-form-item>
@@ -78,14 +112,27 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { getSystemSettings, updateSystemSettings, type SystemSettings } from '@/api/admin'
+import type { UploadFile } from 'element-plus'
+import {
+  getSystemSettings,
+  updateSystemSettings,
+  uploadSystemLogo,
+  restoreDefaultSystemLogo,
+  type BrandingMetadata,
+  type SystemSettings,
+} from '@/api/admin'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { AppPage, PageHeader } from '@/components/ui'
+import BrandLogo from '@/components/BrandLogo.vue'
+import { useBrandingStore } from '@/stores/branding'
 
 const loading = ref(false)
 const saving = ref(false)
 const bumping = ref(false)
+const logoUploading = ref(false)
+const logoRestoring = ref(false)
 const settings = ref<SystemSettings | null>(null)
+const brandingStore = useBrandingStore()
 
 const form = reactive({
   APP_NAME: '',
@@ -99,7 +146,23 @@ const form = reactive({
   AI_MODEL: '',
   AI_API_KEY: '',
   AI_API_BASE_URL: '',
+  BRANDING: null as BrandingMetadata | null,
 })
+
+function fallbackBranding(appName: string): BrandingMetadata {
+  return {
+    app_name: appName,
+    logo_url: null,
+    logo_version: 0,
+    has_custom_logo: false,
+  }
+}
+
+function syncBranding(data: SystemSettings) {
+  const branding = data.BRANDING || fallbackBranding(data.APP_NAME)
+  form.BRANDING = branding
+  brandingStore.setBranding(branding)
+}
 
 async function fetchSettings() {
   loading.value = true
@@ -118,8 +181,65 @@ async function fetchSettings() {
       AI_MODEL: data.AI_MODEL,
       AI_API_KEY: '',
       AI_API_BASE_URL: data.AI_API_BASE_URL,
+      BRANDING: data.BRANDING || null,
     })
+    syncBranding(data)
   } finally { loading.value = false }
+}
+
+function formatFileSize(size: number | null | undefined): string {
+  if (!size) return '未知大小'
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(2)} MB`
+}
+
+async function handleLogoChange(uploadFile: UploadFile) {
+  const file = uploadFile.raw
+  if (!file || logoUploading.value) return
+  const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+  if (!['.jpg', '.jpeg', '.png', '.webp'].includes(extension)) {
+    ElMessage.warning('Logo 仅支持 JPG、PNG、WEBP 格式')
+    return
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    ElMessage.warning('Logo 文件不能超过 2MB')
+    return
+  }
+
+  logoUploading.value = true
+  try {
+    const result = await uploadSystemLogo(file)
+    form.BRANDING = result.branding
+    brandingStore.setBranding(result.branding)
+    ElMessage.success(result.message || 'Logo 已更新')
+  } catch {
+    // handled by the shared API interceptor
+  } finally {
+    logoUploading.value = false
+  }
+}
+
+async function handleRestoreLogo() {
+  try {
+    await ElMessageBox.confirm(
+      '恢复默认 Logo 后，系统将使用内置的字母标志。确定继续吗？',
+      '恢复默认 Logo',
+      { confirmButtonText: '恢复默认', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch { return }
+
+  logoRestoring.value = true
+  try {
+    const result = await restoreDefaultSystemLogo()
+    form.BRANDING = result.branding
+    brandingStore.setBranding(result.branding)
+    ElMessage.success(result.message || 'Logo 已恢复默认')
+  } catch {
+    // handled by the shared API interceptor
+  } finally {
+    logoRestoring.value = false
+  }
 }
 
 async function handleBumpToken() {
@@ -157,9 +277,60 @@ async function handleSave() {
     }
     const result = await updateSystemSettings(payload)
     ElMessage.success(result.message || '设置已保存')
-    fetchSettings()
+    await fetchSettings()
   } catch { /* handled */ } finally { saving.value = false }
 }
 
 onMounted(fetchSettings)
 </script>
+
+<style scoped>
+.form-tip {
+  margin-top: 4px;
+  color: var(--ad-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.branding-editor {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.branding-preview {
+  display: flex;
+  width: 96px;
+  height: 96px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface-subtle);
+}
+
+.branding-actions {
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.branding-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .branding-editor {
+    align-items: center;
+    flex-direction: column;
+  }
+
+  .branding-actions {
+    width: 100%;
+    padding-top: 0;
+  }
+}
+</style>

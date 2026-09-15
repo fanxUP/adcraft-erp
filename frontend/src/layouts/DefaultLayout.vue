@@ -2,9 +2,9 @@
   <div class="default-layout">
     <el-container>
       <el-aside :width="navigationCollapsed ? '64px' : '220px'" class="sidebar">
-        <div class="logo">
-          <span class="logo-mark">A</span>
-          <span v-if="!navigationCollapsed" class="logo-text">AdCraft ERP</span>
+        <div class="logo" :title="brandingStore.appName">
+          <BrandLogo :size="32" />
+          <span v-if="!navigationCollapsed" class="logo-text">{{ brandingStore.appName }}</span>
         </div>
         <div class="sidebar-menu-wrap">
           <AppSidebarMenu
@@ -85,9 +85,11 @@ import { useAiAssistantStore } from '@/stores/aiAssistantStore'
 import NotificationBell from '@/components/NotificationBell.vue'
 import AiAssistantButton from '@/components/ai-assistant/AiAssistantButton.vue'
 import AiAssistantDrawer from '@/components/ai-assistant/AiAssistantDrawer.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
 import AppSidebarMenu from '@/components/navigation/AppSidebarMenu.vue'
 import { filterSmartTools, getRouteTitle } from '@/config/access'
 import { resolvePageContext } from '@/config/pageContext'
+import { useBrandingStore } from '@/stores/branding'
 
 const route = useRoute()
 const router = useRouter()
@@ -95,6 +97,7 @@ const authStore = useAuthStore()
 const appStore = useAppStore()
 const chatStore = useChatStore()
 const aiStore = useAiAssistantStore()
+const brandingStore = useBrandingStore()
 
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const narrowViewport = ref(false)
@@ -224,20 +227,6 @@ onUnmounted(() => {
   color: var(--ui-text);
   font-weight: 700;
   border-bottom: 1px solid var(--ui-border);
-}
-
-.logo-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--ui-brand), var(--ui-brand-hover));
-  color: #fff;
-  font-size: 18px;
-  font-weight: 800;
-  flex-shrink: 0;
 }
 
 .logo-text {

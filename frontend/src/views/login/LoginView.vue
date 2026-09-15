@@ -2,9 +2,9 @@
   <div class="login-container">
     <div class="login-card">
       <div class="login-brand">
-        <span class="logo-mark">A</span>
+        <BrandLogo :size="52" />
       </div>
-      <h1 class="login-title">AdCraft ERP</h1>
+      <h1 class="login-title">{{ brandingStore.appName }}</h1>
       <p class="login-subtitle">广告制作安装工程管理系统</p>
       <el-form ref="formRef" :model="form" :rules="rules" @keyup.enter="handleLogin">
         <el-form-item prop="username">
@@ -27,10 +27,13 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import BrandLogo from '@/components/BrandLogo.vue'
+import { useBrandingStore } from '@/stores/branding'
 
 
 const router = useRouter()
 const authStore = useAuthStore()
+const brandingStore = useBrandingStore()
 const loading = ref(false)
 const form = reactive({ username: '', password: '' })
 const rules = {
@@ -72,25 +75,13 @@ async function handleLogin() {
   margin-bottom: 16px;
 }
 
-.logo-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  color: #fff;
-  font-size: 28px;
-  font-weight: 800;
-}
-
 .login-title {
   text-align: center;
   color: var(--ad-text);
   font-size: 24px;
   margin: 0 0 6px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .login-subtitle {
