@@ -80,6 +80,28 @@ async def test_task_order_enrichment_omits_order_total_without_permission():
 
 
 @pytest.mark.asyncio
+async def test_task_order_enrichment_uses_related_customer_when_snapshot_is_empty():
+    db = AsyncMock()
+    query_result = MagicMock()
+    query_result.fetchone.return_value = (
+        "O20260910-0001",
+        "新疆知味居经营管理有限公司",
+        "第二十六中学",
+        "王老师",
+        "13800138000",
+    )
+    db.execute = AsyncMock(return_value=query_result)
+    payload = {"document_id": str(ORDER_ID)}
+
+    result = await _enrich_task_order(db, payload, viewer=_viewer())
+
+    query = str(db.execute.await_args.args[0])
+    assert "LEFT JOIN customers" in query
+    assert "COALESCE" in query
+    assert result["customer_name"] == "新疆知味居经营管理有限公司"
+
+
+@pytest.mark.asyncio
 async def test_task_order_enrichment_keeps_order_total_for_explicit_permission():
     db = AsyncMock()
     query_result = MagicMock()

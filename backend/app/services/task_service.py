@@ -1839,11 +1839,21 @@ async def _enrich_task_order(
     )
     if not can_view_order_price:
         task_dict.pop("total_amount", None)
-    order_columns = "doc_no, customer_name, department, contact_person, contact_phone"
+    order_columns = (
+        "d.doc_no, "
+        "COALESCE(NULLIF(BTRIM(d.customer_name), ''), "
+        "NULLIF(BTRIM(c.name), '')) AS customer_name, "
+        "d.department, d.contact_person, d.contact_phone"
+    )
     if can_view_order_price:
-        order_columns += ", total_amount"
+        order_columns += ", d.total_amount"
     row = (await db.execute(
-        text(f"SELECT {order_columns} FROM business_documents WHERE id = :id"),
+        text(
+            f"SELECT {order_columns} "
+            "FROM business_documents d "
+            "LEFT JOIN customers c ON c.id = d.customer_id "
+            "WHERE d.id = :id"
+        ),
         {"id": doc_id},
     )).fetchone()
     if row:
