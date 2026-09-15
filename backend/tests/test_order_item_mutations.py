@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 
 from app.schemas.order import OrderItemCreate, OrderItemMutationPreview
+from app.models.task_order_item_link import TaskOrderItemLink
 from app.services.business_document_service import (
     BusinessDocumentService,
     OrderItemMutationConflict,
@@ -193,6 +194,23 @@ def test_completed_order_remains_blocked_even_with_confirmation():
     assert decision["decision"] == "BLOCK"
     assert decision["can_apply"] is False
     assert any(reason["code"] == "STATUS_LOCKED" for reason in decision["lock_reasons"])
+
+
+def test_deleting_order_item_always_requires_explicit_confirmation():
+    """Deletion must show its impact even when no relation was detected."""
+    order = make_order(status="pending_confirm")
+
+    decision = BusinessDocumentService._order_item_mutation_decision(
+        order,
+        empty_relations(),
+        operation="delete",
+        after_total=Decimal("0.00"),
+        paid_amount=Decimal("0.00"),
+    )
+
+    assert decision["decision"] == "CONFIRM_AND_REFRESH"
+    assert decision["can_apply"] is True
+    assert decision["requires_confirmation"] is True
 
 
 def test_associated_edit_feature_flag_can_block_without_touching_data():
@@ -673,6 +691,148 @@ def test_order_item_request_requires_reason_and_version():
         expected_updated_at="2026-09-02T10:00:00",
     )
     assert request.operation == "delete"
+
+
+@pytest.mark.asyncio
+async def test_deleting_the_last_order_item_is_previewable_as_auto_recycle():
+    """最后一条明细删除不是普通阻断，而是可确认的回收站动作。"""
+    db = MagicMock()
+    service = BusinessDocumentService(db, doc_type="order")
+    item = make_item()
+    order = make_order(item=item)
+    service.repo.get_by_id = AsyncMock(return_value=order)
+    service.repo.get_items = AsyncMock(return_value=[item])
+    service.repo.get_item = AsyncMock(return_value=item)
+    service._collect_order_item_relations = AsyncMock(return_value=empty_relations())
+    service._get_nonvoided_payment_total = AsyncMock(return_value=Decimal("0"))
+
+    result = await service.preview_order_item_mutation(
+        order.id,
+        "delete",
+        item_id=item.id,
+        reason="客户确认删除最后一条明细",
+        expected_updated_at="2026-09-02T10:00:00",
+    )
+
+    assert result["can_apply"] is True
+    assert result["after"]["line_count"] == 0
+    assert result["auto_recycle"] is True
+
+
+@pytest.mark.asyncio
+async def test_restore_auto_recycled_order_item_restores_task_link_and_scope():
+    """Recycle-bin restore must undo the item/link/scope changes as one unit."""
+    service = BusinessDocumentService(MagicMock(), doc_type="order")
+    item_id = uuid4()
+    task_id = uuid4()
+    link_id = uuid4()
+    item = SimpleNamespace(
+        id=item_id,
+        sort_order=0,
+        lifecycle_status="voided",
+        voided_at=datetime(2026, 9, 12, 10, 0, 0),
+        void_reason="订单明细已删除，订单自动移入回收站",
+        superseded_by_item_id=None,
+    )
+    task = SimpleNamespace(
+        id=task_id,
+        status="pending",
+        progress_pct=0,
+        completed_at=None,
+        order_item_id=None,
+        scope_status="empty_after_item_delete",
+        scope_closed_at=datetime(2026, 9, 12, 10, 0, 0),
+        scope_closed_reason="订单明细已删除",
+    )
+    link = SimpleNamespace(
+        id=link_id,
+        order_item_id=item_id,
+        link_status="removed",
+        removed_at=datetime(2026, 9, 12, 10, 0, 0),
+        removed_by=uuid4(),
+        removed_reason="订单明细已删除",
+        position=9,
+        assignee_user_id=None,
+        item_status="pending",
+        item_progress_pct=0,
+        item_completed_at=None,
+    )
+    task_snapshot = {
+        "task_type": "design",
+        "task_id": str(task_id),
+        "task_no": "D-TEST-0001",
+        "link_id": str(link_id),
+        "order_item_id": str(item_id),
+        "task_order_item_id": str(item_id),
+        "task_status": "designing",
+        "task_progress_pct": 50,
+        "task_completed_at": None,
+        "task_scope_status": "active",
+        "task_scope_closed_at": None,
+        "task_scope_closed_reason": None,
+        "position": 1,
+        "assignee_user_id": None,
+        "item_status": "designing",
+        "item_progress_pct": 50,
+        "item_completed_at": None,
+    }
+    version = SimpleNamespace(
+        version_no=2,
+        created_at=datetime(2026, 9, 12, 10, 0, 1),
+        snapshot={
+            "auto_recycled": True,
+            "deleted_item_snapshots": [{"id": str(item_id)}],
+            "task_link_snapshots": [task_snapshot],
+        },
+    )
+    doc = SimpleNamespace(
+        id=uuid4(),
+        doc_type="order",
+        versions=[version],
+        items=[],
+        design_tasks=[task],
+        production_tasks=[],
+        installation_tasks=[],
+    )
+
+    item_result = SimpleNamespace(
+        scalars=lambda: SimpleNamespace(all=lambda: [item]),
+    )
+    service.db.execute = AsyncMock(return_value=item_result)
+    service.db.get = AsyncMock(return_value=link)
+    service.db.flush = AsyncMock()
+
+    restored = await service._restore_order_item_delete_snapshot(doc)
+
+    assert restored is True
+    assert item.lifecycle_status == "active"
+    assert item.voided_at is None
+    assert item.void_reason is None
+    assert doc.items == [item]
+    assert link.link_status == "active"
+    assert link.removed_at is None
+    assert link.removed_by is None
+    assert link.removed_reason is None
+    assert link.position == 1
+    assert link.item_status == "designing"
+    assert link.item_progress_pct == 50
+    assert task.order_item_id == item_id
+    assert task.status == "designing"
+    assert task.progress_pct == 50
+    assert task.scope_status == "active"
+    assert task.scope_closed_at is None
+    assert task.scope_closed_reason is None
+
+
+def test_order_item_task_scope_contract_has_removal_and_empty_scope_fields():
+    from app.models.task import DesignTask, InstallationTask, ProductionTask
+
+    link_columns = set(TaskOrderItemLink.__table__.columns.keys())
+    assert {"link_status", "removed_at", "removed_by", "removed_reason"} <= link_columns
+    for task_model in (DesignTask, ProductionTask, InstallationTask):
+        assert {"scope_status", "scope_closed_at", "scope_closed_reason"} <= set(
+            task_model.__table__.columns.keys()
+        )
 
 
 def test_order_to_quote_route_and_service_are_removed():

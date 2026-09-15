@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, insert, select, text, update
+from sqlalchemy import delete, insert, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.workflows import (
@@ -110,6 +110,8 @@ INSTALLATION_IN_PROGRESS_STATUSES = {
 INSTALLATION_COMPLETED_STATUSES = {"completed"}
 TASK_CANCELLED_STATUS = "cancelled"
 TASK_ROLLED_BACK_STATUS = "rolled_back"
+ACTIVE_TASK_LINK_STATUS = "active"
+REMOVED_TASK_LINK_STATUS = "removed"
 NON_ACTIVE_ITEM_LINK_STATUSES = frozenset(
     {TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS}
 )
@@ -118,6 +120,19 @@ TASK_RELEASE_STATUSES = {
     "production": {"pending"},
     "installation": {"pending"},
 }
+
+
+def _active_task_link_clause():
+    """Include pre-migration NULLs as active, but never expose removed rows."""
+    return or_(
+        TaskOrderItemLink.link_status == ACTIVE_TASK_LINK_STATUS,
+        TaskOrderItemLink.link_status.is_(None),
+    )
+
+
+def _task_link_is_active(link) -> bool:
+    """Python equivalent of the database active-link predicate."""
+    return getattr(link, "link_status", None) in (None, ACTIVE_TASK_LINK_STATUS)
 
 
 def _utc_now() -> datetime:
@@ -625,9 +640,15 @@ async def _linked_order_item_ids(
 ) -> list[UUID]:
     result = await db.execute(
         select(TaskOrderItemLink.order_item_id)
+        .join(
+            BusinessDocumentItem,
+            BusinessDocumentItem.id == TaskOrderItemLink.order_item_id,
+        )
         .where(
             TaskOrderItemLink.task_type == task_type,
             TaskOrderItemLink.task_id == task_id,
+            _active_task_link_clause(),
+            BusinessDocumentItem.lifecycle_status == "active",
         )
         .order_by(TaskOrderItemLink.position, TaskOrderItemLink.order_item_id)
     )
@@ -656,12 +677,28 @@ async def _task_order_item_link_rows(
     db: AsyncSession,
     task_type: str,
     task_id: UUID,
+    *,
+    include_removed: bool = False,
 ) -> list[TaskOrderItemLink]:
+    conditions = [
+        TaskOrderItemLink.task_type == task_type,
+        TaskOrderItemLink.task_id == task_id,
+    ]
+    if not include_removed:
+        conditions.append(_active_task_link_clause())
+    query = select(TaskOrderItemLink)
+    if include_removed:
+        query = query.where(*conditions)
+    else:
+        query = query.join(
+            BusinessDocumentItem,
+            BusinessDocumentItem.id == TaskOrderItemLink.order_item_id,
+        ).where(
+            *conditions,
+            BusinessDocumentItem.lifecycle_status == "active",
+        )
     result = await db.execute(
-        select(TaskOrderItemLink).where(
-            TaskOrderItemLink.task_type == task_type,
-            TaskOrderItemLink.task_id == task_id,
-        ).order_by(TaskOrderItemLink.position, TaskOrderItemLink.order_item_id)
+        query.order_by(TaskOrderItemLink.position, TaskOrderItemLink.order_item_id)
     )
     try:
         scalars = result.scalars()
@@ -670,9 +707,14 @@ async def _task_order_item_link_rows(
         rows = scalars.all()
         if inspect.isawaitable(rows):
             rows = await rows
-    except AttributeError:
+    except (AttributeError, TypeError):
         rows = []
-    return [row for row in rows if isinstance(row, TaskOrderItemLink)]
+    return [
+        row
+        for row in rows
+        if isinstance(row, TaskOrderItemLink)
+        and (include_removed or _task_link_is_active(row))
+    ]
 
 
 async def _task_link_assignee_names(
@@ -875,7 +917,9 @@ def _select_reusable_stage_task(
         (
             candidate
             for candidate in tasks
-            if not _is_terminal_task_status(task_type, candidate)
+            if getattr(candidate, "scope_status", ACTIVE_TASK_LINK_STATUS)
+            != "empty_after_item_delete"
+            and not _is_terminal_task_status(task_type, candidate)
         ),
         None,
     )
@@ -886,6 +930,8 @@ def _select_reusable_stage_task(
         (
             candidate
             for candidate in tasks
+            if getattr(candidate, "scope_status", ACTIVE_TASK_LINK_STATUS)
+            != "empty_after_item_delete"
             if _task_order_item_id(candidate) is None
             and _is_terminal_task_status(task_type, candidate)
         ),
@@ -953,6 +999,8 @@ async def _select_stage_entry_target(
     target_candidates = [
         candidate
         for candidate in existing_tasks
+        if getattr(candidate, "scope_status", ACTIVE_TASK_LINK_STATUS)
+        != "empty_after_item_delete"
         if _coerce_uuid(getattr(candidate, "id", None)) not in blocked_task_ids
     ]
     target, reused_terminal_task = _select_reusable_stage_task(
@@ -1132,26 +1180,63 @@ async def _ensure_task_order_item_links(
     item_ids: list[UUID],
 ) -> None:
     """Add selected item links without unlinking existing work units."""
-    existing_ids = set(await _linked_order_item_ids(db, task_type, task.id))
-    new_ids = [item_id for item_id in item_ids if item_id not in existing_ids]
-    if not new_ids:
-        return
+    active_ids = set(await _linked_order_item_ids(db, task_type, task.id))
+    existing_rows = await _task_order_item_link_rows(
+        db,
+        task_type,
+        task.id,
+        include_removed=True,
+    )
+    existing_by_item = {
+        item_id: row
+        for row in existing_rows
+        if (item_id := _coerce_uuid(getattr(row, "order_item_id", None))) is not None
+    }
     status, progress = _new_unstarted_item_state(task_type, task)
-    await db.execute(
-        insert(TaskOrderItemLink.__table__),
-        [
+    new_payload: list[dict] = []
+    active_count = sum(
+        1 for row in existing_rows if _task_link_is_active(row)
+    )
+    seen_ids: set[UUID] = set()
+    for item_id in item_ids:
+        if item_id in seen_ids:
+            continue
+        seen_ids.add(item_id)
+        existing = existing_by_item.get(item_id)
+        if existing is not None:
+            if not _task_link_is_active(existing):
+                # Re-adding a previously removed row must reuse the unique
+                # (task_type, task_id, order_item_id) key and retain its audit
+                # identity instead of inserting a duplicate row.
+                existing.link_status = ACTIVE_TASK_LINK_STATUS
+                existing.removed_at = None
+                existing.removed_by = None
+                existing.removed_reason = None
+                existing.item_status = status
+                existing.item_progress_pct = progress
+                existing.item_completed_at = (
+                    _utc_now() if _is_completed_item_status(task_type, status) else None
+                )
+            continue
+        if item_id in active_ids:
+            # Compatibility with callers/tests that can resolve active IDs
+            # without materializing ORM link rows. The real database path has
+            # the row in ``existing_by_item`` and takes the branch above.
+            continue
+        new_payload.append(
             {
                 "task_type": task_type,
                 "task_id": task.id,
                 "order_item_id": item_id,
-                "position": len(existing_ids) + position,
+                "link_status": ACTIVE_TASK_LINK_STATUS,
+                "position": active_count + len(new_payload),
                 "item_status": status,
                 "item_progress_pct": progress,
                 "item_completed_at": _utc_now() if _is_completed_item_status(task_type, status) else None,
             }
-            for position, item_id in enumerate(new_ids)
-        ],
-    )
+        )
+    if new_payload:
+        await db.execute(insert(TaskOrderItemLink.__table__), new_payload)
     await db.flush()
 
 
@@ -1224,9 +1309,15 @@ async def _task_item_ids_by_task(
                 TaskOrderItemLink.order_item_id,
                 TaskOrderItemLink.item_status,
             )
+            .join(
+                BusinessDocumentItem,
+                BusinessDocumentItem.id == TaskOrderItemLink.order_item_id,
+            )
             .where(
                 TaskOrderItemLink.task_type == task_type,
                 TaskOrderItemLink.task_id.in_(task_ids),
+                _active_task_link_clause(),
+                BusinessDocumentItem.lifecycle_status == "active",
             )
             .order_by(TaskOrderItemLink.position, TaskOrderItemLink.order_item_id)
         )
@@ -1364,7 +1455,12 @@ async def _task_stage_states_by_item(
         result = await db.execute(
             select(model).where(model.document_id == document_id)
         )
-        tasks = list(result.scalars().all())
+        tasks = [
+            task
+            for task in result.scalars().all()
+            if getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS)
+            != "empty_after_item_delete"
+        ]
         item_ids_by_task = await _task_item_ids_by_task(db, task_type, tasks)
         link_state_by_item: dict[tuple[UUID, UUID], str] = {}
         task_ids = [
@@ -1376,6 +1472,7 @@ async def _task_stage_states_by_item(
                 select(TaskOrderItemLink).where(
                     TaskOrderItemLink.task_type == task_type,
                     TaskOrderItemLink.task_id.in_(task_ids),
+                    _active_task_link_clause(),
                 )
             )
             try:
@@ -1699,6 +1796,8 @@ async def _sync_task_order_item_links(
     new_item_state: tuple[str, int] | None = None,
     reset_existing: bool = False,
     reopen_item_ids: Collection[UUID] | None = None,
+    operated_by: UUID | None = None,
+    removal_reason: str | None = None,
 ) -> None:
     """Replace one task's links atomically inside the current transaction.
 
@@ -1717,32 +1816,52 @@ async def _sync_task_order_item_links(
         if legacy_scope_ids:
             item_ids = list(dict.fromkeys([*legacy_scope_ids, *item_ids]))
 
-    existing_rows = await _task_order_item_link_rows(db, task_type, task.id)
+    existing_rows = await _task_order_item_link_rows(
+        db,
+        task_type,
+        task.id,
+        include_removed=True,
+    )
     existing_by_item = {
         item_id: row
         for row in existing_rows
         if (item_id := _coerce_uuid(row.order_item_id)) is not None
     }
-    await db.execute(
-        delete(TaskOrderItemLink).where(
-            TaskOrderItemLink.task_type == task_type,
-            TaskOrderItemLink.task_id == task.id,
-        )
+    desired_ids = list(dict.fromkeys(item_ids))
+    new_status, new_progress = (
+        new_item_state
+        if new_item_state is not None
+        else _new_unstarted_item_state(task_type, task)
     )
-    if item_ids:
-        new_status, new_progress = (
-            new_item_state
-            if new_item_state is not None
-            else _new_unstarted_item_state(task_type, task)
-        )
-        link_payload = []
-        for position, item_id in enumerate(item_ids):
-            existing = existing_by_item.get(item_id)
-            should_reopen = reset_existing or item_id in reopen_ids
-            if should_reopen and existing is not None:
+    now = _utc_now()
+    reason_text = (removal_reason or "任务关联范围已同步调整").strip()
+
+    # Replacing the current set no longer destroys historical link rows. Rows
+    # omitted from the desired set leave the current scope as ``removed``;
+    # rows selected again reuse their original primary key and become active.
+    for existing in existing_rows:
+        existing_item_id = _coerce_uuid(getattr(existing, "order_item_id", None))
+        if existing_item_id in desired_ids or not _task_link_is_active(existing):
+            continue
+        existing.link_status = REMOVED_TASK_LINK_STATUS
+        existing.removed_at = now
+        existing.removed_by = operated_by
+        existing.removed_reason = reason_text
+
+    link_payload: list[dict] = []
+    for position, item_id in enumerate(desired_ids):
+        existing = existing_by_item.get(item_id)
+        should_reopen = reset_existing or item_id in reopen_ids
+        if existing is not None:
+            existing.link_status = ACTIVE_TASK_LINK_STATUS
+            existing.removed_at = None
+            existing.removed_by = None
+            existing.removed_reason = None
+            if should_reopen:
                 item_status = new_status
                 item_progress = new_progress
                 item_completed_at = None
+                assignee_user_id = None
             else:
                 item_status = getattr(existing, "item_status", None) or new_status
                 item_progress = getattr(existing, "item_progress_pct", None)
@@ -1751,31 +1870,30 @@ async def _sync_task_order_item_links(
                 item_completed_at = getattr(existing, "item_completed_at", None)
                 if item_completed_at is None and _is_completed_item_status(task_type, item_status):
                     item_completed_at = _utc_now()
-            link_payload.append(
-                {
-                    "task_type": task_type,
-                    "task_id": task.id,
-                    "order_item_id": item_id,
-                    "assignee_user_id": (
-                        None
-                        if should_reopen
-                        else (
-                            _coerce_uuid(getattr(existing, "assignee_user_id", None))
-                            if existing is not None
-                            else None
-                        )
-                    ),
-                    "position": position,
-                    "item_status": item_status,
-                    "item_progress_pct": item_progress,
-                    "item_completed_at": item_completed_at,
-                }
-            )
-        await db.execute(
-            insert(TaskOrderItemLink.__table__),
-            link_payload,
+                assignee_user_id = _coerce_uuid(getattr(existing, "assignee_user_id", None))
+            existing.position = position
+            existing.item_status = item_status
+            existing.item_progress_pct = item_progress
+            existing.item_completed_at = item_completed_at
+            existing.assignee_user_id = assignee_user_id
+            continue
+
+        link_payload.append(
+            {
+                "task_type": task_type,
+                "task_id": task.id,
+                "order_item_id": item_id,
+                "link_status": ACTIVE_TASK_LINK_STATUS,
+                "assignee_user_id": None,
+                "position": position,
+                "item_status": new_status,
+                "item_progress_pct": new_progress,
+                "item_completed_at": None,
+            }
         )
-    setattr(task, "_linked_order_item_ids", list(item_ids))
+    if link_payload:
+        await db.execute(insert(TaskOrderItemLink.__table__), link_payload)
+    setattr(task, "_linked_order_item_ids", desired_ids)
     await db.flush()
 
     states = await _task_item_state_map(db, task_type, task)
@@ -1892,7 +2010,8 @@ async def _enrich_task_order(
     if linked_ids:
         item_result = await db.execute(
             select(BusinessDocumentItem.id, BusinessDocumentItem.item_name).where(
-                BusinessDocumentItem.id.in_(linked_ids)
+                BusinessDocumentItem.id.in_(linked_ids),
+                BusinessDocumentItem.lifecycle_status == "active",
             )
         )
         item_rows = item_result.all()
@@ -1902,15 +2021,29 @@ async def _enrich_task_order(
             str(row[0]): row[1]
             for row in item_rows
         }
-        names = [
-            item_names_by_id[str(item_id)]
-            for item_id in linked_ids
+        linked_ids = [
+            item_id for item_id in linked_ids
             if str(item_id) in item_names_by_id
         ]
-        task_dict["order_item_ids"] = [str(item_id) for item_id in linked_ids]
-        task_dict["item_names"] = names
-        task_dict["order_item_id"] = str(linked_ids[0])
-        task_dict["item_name"] = "、".join(names) if names else task_dict.get("item_name")
+        if not linked_ids:
+            # A historical task may still point at an item that was voided by
+            # an order edit.  Do not index an empty list or leak that stale
+            # pointer back to the task API.
+            task_dict["order_item_id"] = None
+            task_dict["order_item_ids"] = []
+            task_dict["item_names"] = []
+            task_dict["item_name"] = None
+            linked_ids = []
+        else:
+            names = [
+                item_names_by_id[str(item_id)]
+                for item_id in linked_ids
+                if str(item_id) in item_names_by_id
+            ]
+            task_dict["order_item_ids"] = [str(item_id) for item_id in linked_ids]
+            task_dict["item_names"] = names
+            task_dict["order_item_id"] = str(linked_ids[0])
+            task_dict["item_name"] = "、".join(names) if names else task_dict.get("item_name")
     else:
         task_dict["order_item_ids"] = []
         task_dict["item_names"] = []
@@ -2110,7 +2243,12 @@ async def _all_stage_tasks_completed(
     )
     active_items = list(item_result.scalars().all())
     task_result = await db.execute(select(model).where(model.document_id == doc_id))
-    tasks = list(task_result.scalars().all())
+    tasks = [
+        task
+        for task in task_result.scalars().all()
+        if getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS)
+        != "empty_after_item_delete"
+    ]
     task_type = _task_type_for_model(model)
     raw_item_ids_by_task = await _task_item_ids_by_task(db, task_type, tasks)
     link_statuses: dict[tuple[UUID, UUID], str] = {}
@@ -2123,6 +2261,7 @@ async def _all_stage_tasks_completed(
             select(TaskOrderItemLink).where(
                 TaskOrderItemLink.task_type == task_type,
                 TaskOrderItemLink.task_id.in_(task_ids),
+                _active_task_link_clause(),
             )
         )
         try:
@@ -2214,7 +2353,12 @@ async def _item_stage_tasks_completed(
     terminal_statuses: set[str],
 ) -> bool:
     result = await db.execute(select(model).where(model.document_id == doc_id))
-    tasks = list(result.scalars().all())
+    tasks = [
+        task
+        for task in result.scalars().all()
+        if getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS)
+        != "empty_after_item_delete"
+    ]
     task_type = _task_type_for_model(model)
     raw_item_ids_by_task = await _task_item_ids_by_task(
         db,
@@ -2231,6 +2375,7 @@ async def _item_stage_tasks_completed(
             select(TaskOrderItemLink).where(
                 TaskOrderItemLink.task_type == task_type,
                 TaskOrderItemLink.task_id.in_(task_ids),
+                _active_task_link_clause(),
             )
         )
         try:
@@ -2307,6 +2452,10 @@ async def _create_production_task_for_item(
             .where(
                 ProductionTask.document_id == task.document_id,
                 ProductionTask.status != TASK_CANCELLED_STATUS,
+                or_(
+                    ProductionTask.scope_status == ACTIVE_TASK_LINK_STATUS,
+                    ProductionTask.scope_status.is_(None),
+                ),
             )
             .order_by(ProductionTask.created_at.asc(), ProductionTask.id.asc())
         )
@@ -2388,6 +2537,10 @@ async def _create_installation_task_for_item(
             .where(
                 InstallationTask.document_id == task.document_id,
                 InstallationTask.status != TASK_CANCELLED_STATUS,
+                or_(
+                    InstallationTask.scope_status == ACTIVE_TASK_LINK_STATUS,
+                    InstallationTask.scope_status.is_(None),
+                ),
             )
             .order_by(InstallationTask.created_at.asc(), InstallationTask.id.asc())
         )
@@ -2520,6 +2673,8 @@ async def _refresh_task_aggregate(
     db: AsyncSession,
     task_type: str,
     task,
+    *,
+    empty_reason: str | None = None,
 ) -> None:
     """Recalculate one task card while ignoring links that left the stage."""
     states = await _task_item_state_map(db, task_type, task)
@@ -2528,6 +2683,36 @@ async def _refresh_task_aggregate(
         for item_id, state in states.items()
         if _is_effective_item_status(state[0])
     }
+
+    all_links = []
+    if empty_reason or not effective_states:
+        all_links = await _task_order_item_link_rows(
+            db,
+            task_type,
+            task.id,
+            include_removed=True,
+        )
+    has_removed_link = any(
+        getattr(link, "link_status", None) == REMOVED_TASK_LINK_STATUS
+        for link in all_links
+    )
+    if not effective_states and (empty_reason or has_removed_link):
+        task.scope_status = "empty_after_item_delete"
+        task.scope_closed_at = getattr(task, "scope_closed_at", None) or _utc_now()
+        task.scope_closed_reason = empty_reason or getattr(
+            task,
+            "scope_closed_reason",
+            None,
+        ) or "订单明细已删除，任务当前无有效明细"
+        task.status = "pending"
+        task.progress_pct = 0
+        task.completed_at = None
+        await db.flush()
+        return
+
+    task.scope_status = ACTIVE_TASK_LINK_STATUS
+    task.scope_closed_at = None
+    task.scope_closed_reason = None
     task.status = _aggregate_task_status(
         task_type,
         [status for status, _ in states.values()],
@@ -2574,6 +2759,10 @@ async def _get_or_create_rollback_target_task(
         .where(
             target_model.document_id == source_task.document_id,
             target_model.status != TASK_CANCELLED_STATUS,
+            or_(
+                target_model.scope_status == ACTIVE_TASK_LINK_STATUS,
+                target_model.scope_status.is_(None),
+            ),
         )
         .order_by(target_model.created_at.asc(), target_model.id.asc())
     )
@@ -2613,6 +2802,8 @@ async def _get_or_create_rollback_target_task(
             (
                 candidate for candidate in target_tasks
                 if _coerce_uuid(getattr(candidate, "id", None)) not in blocked_task_ids
+                and getattr(candidate, "scope_status", ACTIVE_TASK_LINK_STATUS)
+                != "empty_after_item_delete"
                 and _task_order_item_id(candidate) is None
                 and not _is_terminal_task_status(target_type, candidate)
             ),
@@ -2623,6 +2814,8 @@ async def _get_or_create_rollback_target_task(
             (
                 candidate for candidate in target_tasks
                 if _coerce_uuid(getattr(candidate, "id", None)) not in blocked_task_ids
+                and getattr(candidate, "scope_status", ACTIVE_TASK_LINK_STATUS)
+                != "empty_after_item_delete"
                 and _task_order_item_id(candidate) is None
                 and getattr(candidate, "status", None) == TASK_ROLLED_BACK_STATUS
             ),

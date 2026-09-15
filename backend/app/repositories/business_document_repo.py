@@ -57,6 +57,7 @@ class BusinessDocumentRepository:
             selectinload(BusinessDocument.design_tasks),
             selectinload(BusinessDocument.production_tasks),
             selectinload(BusinessDocument.installation_tasks),
+            selectinload(BusinessDocument.versions),
         ).where(
             BusinessDocument.id == doc_id,
             BusinessDocument.deleted_at.isnot(None),

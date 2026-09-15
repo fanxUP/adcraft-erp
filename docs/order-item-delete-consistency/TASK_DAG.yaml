@@ -1,0 +1,107 @@
+version: 1
+name: order-item-delete-consistency
+mode: STRICT
+status: verification
+objective: >-
+  删除订单明细时，统一清理设计、制作、安装三类任务的当前有效关联，
+  重新计算任务进度和订单汇总；订单没有有效明细时自动进入回收站，
+  并通过预检、确认、事务、审计和可恢复快照保证数据一致性。
+non_goals:
+  - order_level_manual_cancel_semantics
+  - quote_hard_delete
+  - physical_delete_of_financial_or_audit_facts
+  - deleting_order_stage_attachments_by_filename_guess
+  - force_delete_paid_or_settled_facts
+  - selective_restore_of_one_deleted_item
+nodes:
+  - id: OID-P01
+    title: 现状契约、数据盘点和失败用例冻结
+    status: planned
+    acceptance: A-OID-01
+    depends_on: []
+  - id: OID-P02
+    title: 任务关联生命周期和任务范围模型
+    status: planned
+    acceptance: A-OID-02
+    depends_on: [OID-P01]
+  - id: OID-P03
+    title: 删除影响预检和确认契约
+    status: planned
+    acceptance: A-OID-03
+    depends_on: [OID-P01, OID-P02]
+  - id: OID-P04
+    title: 实现统一订单明细删除事务
+    status: planned
+    acceptance: A-OID-04
+    depends_on: [OID-P02, OID-P03]
+  - id: OID-P05
+    title: 三阶段任务和订单聚合重算
+    status: planned
+    acceptance: A-OID-05
+    depends_on: [OID-P02, OID-P04]
+  - id: OID-P06
+    title: 回收站恢复和关联数据安全适配
+    status: planned
+    acceptance: A-OID-06
+    depends_on: [OID-P04, OID-P05]
+  - id: OID-P07
+    title: 订单详情删除确认和三阶段显示
+    status: planned
+    acceptance: A-OID-07
+    depends_on: [OID-P03, OID-P04, OID-P05, OID-P06]
+  - id: OID-P08
+    title: 测试、迁移门禁和发布准备
+    status: planned
+    acceptance: A-OID-08
+    depends_on: [OID-P04, OID-P05, OID-P06, OID-P07]
+edges:
+  - from: OID-P01
+    to: OID-P02
+  - from: OID-P01
+    to: OID-P03
+  - from: OID-P02
+    to: OID-P03
+  - from: OID-P02
+    to: OID-P04
+  - from: OID-P03
+    to: OID-P04
+  - from: OID-P02
+    to: OID-P05
+  - from: OID-P04
+    to: OID-P05
+  - from: OID-P04
+    to: OID-P06
+  - from: OID-P05
+    to: OID-P06
+  - from: OID-P03
+    to: OID-P07
+  - from: OID-P04
+    to: OID-P07
+  - from: OID-P05
+    to: OID-P07
+  - from: OID-P06
+    to: OID-P07
+  - from: OID-P04
+    to: OID-P08
+  - from: OID-P05
+    to: OID-P08
+  - from: OID-P06
+    to: OID-P08
+  - from: OID-P07
+    to: OID-P08
+backlog:
+  - id: OID-B01
+    title: 回收站选择性恢复单条已删除明细
+    priority: P1
+  - id: OID-B02
+    title: 已付款已验收已结算明细的高风险强制处理
+    priority: P1
+  - id: OID-B03
+    title: 订单阶段附件增加可选明细归属
+    priority: P2
+  - id: OID-B04
+    title: 稳定后删除三张任务表旧兼容字段
+    priority: P2
+  - id: OID-B05
+    title: 订单明细删除批次独立审计页面和导出
+    priority: P2

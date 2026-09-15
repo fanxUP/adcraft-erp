@@ -342,6 +342,8 @@ export interface OrderEditImpactResponse {
   association_count: number
   lock_reasons: Array<{ code: string; message: string }>
   can_apply: boolean
+  auto_recycle?: boolean
+  recycle_reason?: string | null
   association_catalog: OrderItemRelationCatalogEntry[]
   refresh_plan?: OrderItemRelationCatalogEntry[]
   relations: Record<string, unknown>
@@ -375,6 +377,7 @@ export interface OrderItemFinancialSnapshot {
   cost_amount: number
   gross_profit: number
   line_count: number
+  active_item_count?: number
 }
 
 export interface OrderItemEditabilityResponse {
@@ -468,6 +471,8 @@ export interface OrderItemMutationImpactResponse {
   association_count: number
   lock_reasons: Array<{ code: string; message: string }>
   can_apply: boolean
+  auto_recycle?: boolean
+  recycle_reason?: string | null
   preview_id: string
   preview_expires_at: string
   plan_hash: string
@@ -521,6 +526,7 @@ export interface OrderDetailResponse {
     status_history?: string[]
     verification_status?: string
     idempotent_replay?: boolean
+    auto_recycled?: boolean
     refresh_result?: OrderItemRefreshResult
   }
   cost_amount?: number

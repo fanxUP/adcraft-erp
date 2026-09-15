@@ -11,6 +11,14 @@ from app.models.user import User
 from app.services.order_task_assignment_service import task_visibility_clause
 
 
+def _active_task_link_clause():
+    """Treat NULL as active for rows created before the lifecycle migration."""
+    return or_(
+        TaskOrderItemLink.link_status == "active",
+        TaskOrderItemLink.link_status.is_(None),
+    )
+
+
 def _item_assignee_filter(task_model, task_type: str, assigned_to: str):
     """Filter a task by an explicitly claimed order item.
 
@@ -23,6 +31,7 @@ def _item_assignee_filter(task_model, task_type: str, assigned_to: str):
         TaskOrderItemLink.task_type == task_type,
         TaskOrderItemLink.task_id == task_model.id,
         TaskOrderItemLink.assignee_user_id == UUID(assigned_to),
+        _active_task_link_clause(),
     )
 
 
@@ -59,6 +68,7 @@ class DesignTaskRepository:
                 TaskOrderItemLink.task_type == "design",
                 TaskOrderItemLink.task_id == DesignTask.id,
                 TaskOrderItemLink.order_item_id == item_id,
+                _active_task_link_clause(),
             )
             q = q.where(or_(DesignTask.order_item_id == item_id, linked))
         if assigned_to:
@@ -121,6 +131,7 @@ class ProductionTaskRepository:
                 TaskOrderItemLink.task_type == "production",
                 TaskOrderItemLink.task_id == ProductionTask.id,
                 TaskOrderItemLink.order_item_id == item_id,
+                _active_task_link_clause(),
             )
             q = q.where(or_(ProductionTask.order_item_id == item_id, linked))
         if assigned_to:
@@ -187,6 +198,7 @@ class InstallationTaskRepository:
                 TaskOrderItemLink.task_type == "installation",
                 TaskOrderItemLink.task_id == InstallationTask.id,
                 TaskOrderItemLink.order_item_id == item_id,
+                _active_task_link_clause(),
             )
             q = q.where(or_(InstallationTask.order_item_id == item_id, linked))
         if assigned_to:

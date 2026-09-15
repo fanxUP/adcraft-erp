@@ -1,13 +1,26 @@
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, model_validator
 
 from app.schemas.attachment import AttachmentResponse
 from app.schemas.common import ActionCapability, CoercedModel, StatusView
 from app.schemas.order import OrderItemResponse
 
 TaskType = Literal["design", "production", "installation"]
+
+
+def _coerce_task_scope_status(value: object) -> str:
+    """Keep responses compatible with rows/fixtures created before the migration."""
+    if isinstance(value, str) and value in {"active", "empty_after_item_delete"}:
+        return value
+    return "active"
+
+
+TaskScopeStatus = Annotated[
+    Literal["active", "empty_after_item_delete"],
+    BeforeValidator(_coerce_task_scope_status),
+]
 
 
 def _comparable_datetime(value: datetime) -> datetime:
@@ -80,6 +93,7 @@ class DesignTaskResponse(CoercedModel):
     item_names: list[str] = Field(default_factory=list)
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    scope_status: TaskScopeStatus = "active"
     planned_start_at: str | None = None
     planned_end_at: str | None = None
     is_overdue: bool = False
@@ -151,6 +165,7 @@ class ProductionTaskResponse(CoercedModel):
     item_names: list[str] = Field(default_factory=list)
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    scope_status: TaskScopeStatus = "active"
     planned_start_at: str | None = None
     planned_end_at: str | None = None
     is_overdue: bool = False
@@ -222,6 +237,7 @@ class InstallationTaskResponse(CoercedModel):
     item_names: list[str] = Field(default_factory=list)
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    scope_status: TaskScopeStatus = "active"
     planned_start_at: str | None = None
     planned_end_at: str | None = None
     is_overdue: bool = False
@@ -354,6 +370,7 @@ class TaskQueueItem(CoercedModel):
     item_names: list[str] = Field(default_factory=list)
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
+    scope_status: TaskScopeStatus = "active"
     total_amount: float | None = None
     status_view: StatusView | None = None
     capabilities: dict[str, ActionCapability] = Field(default_factory=dict)

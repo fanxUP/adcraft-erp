@@ -37,6 +37,7 @@ from app.services.task_service import (
     _task_order_item_option_map,
     _validate_order_item_id,
     _validate_order_item_ids,
+    _refresh_task_aggregate,
 )
 from app.services.task_history_service import task_history_snapshot
 from tests.conftest import make_mock_design_task, make_mock_installation_task
@@ -505,6 +506,34 @@ def test_rolled_back_item_is_not_counted_as_completed_work():
 
 
 @pytest.mark.asyncio
+async def test_removed_task_links_make_an_empty_task_scope_non_current():
+    task = SimpleNamespace(
+        id=UUID("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+        status="completed",
+        progress_pct=100,
+        completed_at=datetime(2026, 9, 10, 10),
+    )
+    db = AsyncMock()
+
+    with (
+        patch(
+            "app.services.task_service._task_item_state_map",
+            new=AsyncMock(return_value={}),
+        ),
+        patch(
+            "app.services.task_service._task_order_item_link_rows",
+            new=AsyncMock(return_value=[SimpleNamespace(link_status="removed")]),
+        ),
+    ):
+        await _refresh_task_aggregate(db, "production", task)
+
+    assert task.scope_status == "empty_after_item_delete"
+    assert task.progress_pct == 0
+    assert task.status == "pending"
+    assert task.completed_at is None
+
+
+@pytest.mark.asyncio
 async def test_stage_reentry_resets_only_the_reopened_item():
     """重入任务卡时不能把同卡其他明细一起清零或清除执行人。"""
     task_id = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
@@ -528,54 +557,92 @@ async def test_stage_reentry_resets_only_the_reopened_item():
         item_completed_at=None,
         assignee_user_id=UUID("22222222-2222-2222-2222-222222222222"),
     )
-    reopened_first = TaskOrderItemLink(
+    task = MagicMock(id=task_id, status="pending", progress_pct=50, order_item_id=None)
+    db = AsyncMock()
+    result = MagicMock(
+        scalars=MagicMock(
+            return_value=MagicMock(all=MagicMock(return_value=[existing_first, existing_second]))
+        )
+    )
+    db.execute = AsyncMock(return_value=result)
+
+    with patch(
+        "app.services.task_service._task_item_state_map",
+        new=AsyncMock(
+            return_value={
+                ITEM_UUID: ("completed", 100),
+                SECOND_ITEM_UUID: ("pending", 0),
+            }
+        ),
+    ):
+        await _sync_task_order_item_links(
+            db,
+            "production",
+            task,
+            [ITEM_UUID, SECOND_ITEM_UUID],
+            previous_legacy_item_id=ITEM_UUID,
+            reopen_item_ids={SECOND_ITEM_UUID},
+        )
+
+    assert existing_first.link_status == "active"
+    assert existing_first.item_status == "completed"
+    assert existing_first.item_progress_pct == 100
+    assert existing_first.assignee_user_id == UUID("11111111-1111-1111-1111-111111111111")
+    assert existing_second.link_status == "active"
+    assert existing_second.item_status == "pending"
+    assert existing_second.item_progress_pct == 0
+    assert existing_second.assignee_user_id is None
+    assert db.execute.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_sync_reuses_removed_link_without_physical_delete():
+    """Re-linking a detail keeps the original historical link row."""
+    task_id = UUID("dddddddd-dddd-dddd-dddd-dddddddddddd")
+    removed_link = TaskOrderItemLink(
         task_type="production",
         task_id=task_id,
         order_item_id=ITEM_UUID,
-        position=0,
-        item_status="completed",
-        item_progress_pct=100,
-        item_completed_at=existing_first.item_completed_at,
-        assignee_user_id=existing_first.assignee_user_id,
+        position=4,
+        item_status="in_progress",
+        item_progress_pct=50,
+        assignee_user_id=UUID("11111111-1111-1111-1111-111111111111"),
     )
-    reopened_second = TaskOrderItemLink(
-        task_type="production",
-        task_id=task_id,
-        order_item_id=SECOND_ITEM_UUID,
-        position=1,
-        item_status="pending",
-        item_progress_pct=0,
-        item_completed_at=None,
-        assignee_user_id=None,
+    removed_link.link_status = "removed"
+    removed_link.removed_at = datetime(2026, 9, 10, 10)
+    removed_link.removed_reason = "订单明细已删除"
+    task = SimpleNamespace(
+        id=task_id,
+        status="pending",
+        progress_pct=0,
+        order_item_id=None,
+        completed_at=None,
     )
-    task = MagicMock(id=task_id, status="pending", progress_pct=50, order_item_id=None)
+    result = MagicMock(
+        scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[removed_link])))
+    )
     db = AsyncMock()
-    db.execute = AsyncMock(
-        side_effect=[
-            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[existing_first, existing_second])))),
-            MagicMock(),
-            MagicMock(),
-            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[ITEM_UUID, SECOND_ITEM_UUID])))),
-            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[reopened_first, reopened_second])))),
-        ]
-    )
+    db.execute = AsyncMock(return_value=result)
 
-    await _sync_task_order_item_links(
-        db,
-        "production",
-        task,
-        [ITEM_UUID, SECOND_ITEM_UUID],
-        previous_legacy_item_id=ITEM_UUID,
-        reopen_item_ids={SECOND_ITEM_UUID},
-    )
+    with patch(
+        "app.services.task_service._task_item_state_map",
+        new=AsyncMock(return_value={ITEM_UUID: ("in_progress", 50)}),
+    ):
+        await _sync_task_order_item_links(
+            db,
+            "production",
+            task,
+            [ITEM_UUID],
+            previous_legacy_item_id=ITEM_UUID,
+        )
 
-    insert_payload = db.execute.await_args_list[2].args[1]
-    assert insert_payload[0]["item_status"] == "completed"
-    assert insert_payload[0]["item_progress_pct"] == 100
-    assert insert_payload[0]["assignee_user_id"] == existing_first.assignee_user_id
-    assert insert_payload[1]["item_status"] == "pending"
-    assert insert_payload[1]["item_progress_pct"] == 0
-    assert insert_payload[1]["assignee_user_id"] is None
+    assert removed_link.link_status == "active"
+    assert removed_link.removed_at is None
+    assert removed_link.removed_reason is None
+    assert removed_link.position == 0
+    assert removed_link.item_status == "in_progress"
+    assert removed_link.assignee_user_id == UUID("11111111-1111-1111-1111-111111111111")
+    assert db.execute.await_count == 1
 
 
 def test_order_item_stage_resolver_supports_parallel_delivery_progress():

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,6 +21,8 @@ class TaskOrderItemLink(Base):
         ),
         Index("ix_task_order_item_link_task", "task_type", "task_id"),
         Index("ix_task_order_item_link_item", "order_item_id"),
+        Index("ix_task_order_item_link_task_status", "task_type", "task_id", "link_status"),
+        Index("ix_task_order_item_link_item_status", "order_item_id", "link_status"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -45,3 +47,15 @@ class TaskOrderItemLink(Base):
     item_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     item_progress_pct: Mapped[int | None] = mapped_column(Integer, nullable=True)
     item_completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # 关联行本身有生命周期。删除订单明细时只移除当前关联，保留这行及其
+    # 执行人/状态快照，供审计和回收站恢复使用。
+    link_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    removed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    removed_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

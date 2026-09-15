@@ -687,6 +687,11 @@ class BusinessDocumentService:
             select(model).where(model.document_id == doc_id)
         )
         tasks = r.scalars().all()
+        tasks = [
+            task
+            for task in tasks
+            if getattr(task, "scope_status", "active") != "empty_after_item_delete"
+        ]
         if not tasks:
             raise ValueError(f"请先创建{label}任务，再继续流转")
         for t in tasks:
@@ -714,6 +719,10 @@ class BusinessDocumentService:
                 select(TaskOrderItemLink.order_item_id).where(
                     TaskOrderItemLink.task_type == task_type,
                     TaskOrderItemLink.task_id.in_(task_ids),
+                    or_(
+                        TaskOrderItemLink.link_status == "active",
+                        TaskOrderItemLink.link_status.is_(None),
+                    ),
                     TaskOrderItemLink.item_status.not_in(
                         ["cancelled", "rolled_back"]
                     ),
@@ -774,6 +783,10 @@ class BusinessDocumentService:
             .where(
                 model.document_id == doc.id,
                 model.status != "cancelled",
+                or_(
+                    model.scope_status == "active",
+                    model.scope_status.is_(None),
+                ),
             )
             .order_by(model.created_at.asc(), model.id.asc())
         )
@@ -855,6 +868,10 @@ class BusinessDocumentService:
                 select(TaskOrderItemLink.order_item_id).where(
                     TaskOrderItemLink.task_type == task_type,
                     TaskOrderItemLink.task_id == task_id,
+                    or_(
+                        TaskOrderItemLink.link_status == "active",
+                        TaskOrderItemLink.link_status.is_(None),
+                    ),
                 )
             )
             target_item_ids.extend(
@@ -1215,6 +1232,7 @@ class BusinessDocumentService:
         # 订单取消会连带取消下游任务、软删验收单，恢复时一并还原，避免交付链卡死
         if doc.doc_type == "order":
             await self._restore_delivery_chain(doc_id)
+            await self._restore_order_item_delete_snapshot(doc)
         restored_status = await self._pre_cancel_status(doc)
         restored_status = await self._reconcile_restored_order_status(
             doc_id,
@@ -1298,6 +1316,249 @@ class BusinessDocumentService:
         for form in result.scalars().all():
             form.deleted_at = None
         await self.db.flush()
+
+    @staticmethod
+    def _restore_snapshot_uuid(value) -> UUID | None:
+        if not value:
+            return None
+        if isinstance(value, UUID):
+            return value
+        try:
+            return UUID(str(value))
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _restore_snapshot_datetime(value):
+        if value is None or isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+        return None
+
+    async def _restore_order_item_delete_snapshot(self, doc) -> bool:
+        """Restore the latest all-items-delete batch, including task scopes.
+
+        Order-item deletion is intentionally reversible.  The business document
+        version is the source of truth for the exact item/link/task facts that
+        existed immediately before the automatic recycle-bin move.  Missing
+        historical rows are skipped instead of being recreated from a partial
+        snapshot, which keeps restore auditable and idempotent.
+        """
+        if getattr(doc, "doc_type", None) != "order":
+            return False
+        versions = getattr(doc, "versions", None)
+        # MagicMock-based unit tests and old deployments may not eager-load
+        # versions.  Do not issue a surprise async query in that compatibility
+        # path; the normal recycle-bin repository explicitly loads this list.
+        if not isinstance(versions, (list, tuple)):
+            return False
+
+        candidates = []
+        for version in versions:
+            snapshot = getattr(version, "snapshot", None)
+            if not isinstance(snapshot, dict) or not snapshot.get("auto_recycled"):
+                continue
+            deleted_items = snapshot.get("deleted_item_snapshots")
+            if not isinstance(deleted_items, list) or not deleted_items:
+                continue
+            candidates.append((version, snapshot))
+        if not candidates:
+            return False
+
+        def version_key(pair):
+            version, _ = pair
+            created_at = getattr(version, "created_at", None)
+            return (
+                int(getattr(version, "version_no", 0) or 0),
+                created_at.isoformat() if isinstance(created_at, datetime) else "",
+            )
+
+        _, snapshot = max(candidates, key=version_key)
+        from app.models.business_document import BusinessDocumentItem
+
+        deleted_item_ids = {
+            item_id
+            for item_id in (
+                self._restore_snapshot_uuid(item.get("id"))
+                for item in snapshot.get("deleted_item_snapshots") or []
+                if isinstance(item, dict)
+            )
+            if item_id is not None
+        }
+        if not deleted_item_ids:
+            return False
+
+        item_result = await self.db.execute(
+            select(BusinessDocumentItem).where(
+                BusinessDocumentItem.document_id == doc.id,
+                BusinessDocumentItem.id.in_(deleted_item_ids),
+            )
+        )
+        restored_items = list(item_result.scalars().all())
+        restored_item_ids: set[UUID] = set()
+        for item in restored_items:
+            item.lifecycle_status = "active"
+            item.voided_at = None
+            item.void_reason = None
+            item.superseded_by_item_id = None
+            restored_item_ids.add(item.id)
+
+        # get_deleted_by_id() loads the active-only item relationship.  Add the
+        # restored rows back to that in-memory collection so the same response
+        # immediately contains the recovered order details without a second
+        # relationship refresh.
+        loaded_items = getattr(doc, "items", None)
+        if restored_items and hasattr(loaded_items, "append"):
+            loaded_item_ids = {
+                getattr(item, "id", None)
+                for item in (loaded_items or [])
+            }
+            for item in sorted(restored_items, key=lambda row: (row.sort_order or 0, row.id)):
+                if item.id not in loaded_item_ids:
+                    loaded_items.append(item)
+                    loaded_item_ids.add(item.id)
+
+        task_specs = {
+            "design": (DesignTask, "design_tasks"),
+            "production": (ProductionTask, "production_tasks"),
+            "installation": (InstallationTask, "installation_tasks"),
+        }
+        loaded_tasks: dict[tuple[str, UUID], object] = {}
+        for task_type, (_, relationship_name) in task_specs.items():
+            task_rows = getattr(doc, relationship_name, None)
+            if not isinstance(task_rows, (list, tuple)):
+                continue
+            for task in task_rows:
+                task_id = self._restore_snapshot_uuid(getattr(task, "id", None))
+                if task_id is not None:
+                    loaded_tasks[(task_type, task_id)] = task
+
+        async def get_task(task_type: str, task_id: UUID | None):
+            if task_id is None or task_type not in task_specs:
+                return None
+            task = loaded_tasks.get((task_type, task_id))
+            if task is not None:
+                return task
+            task = await self.db.get(task_specs[task_type][0], task_id)
+            if task is not None:
+                loaded_tasks[(task_type, task_id)] = task
+            return task
+
+        link_snapshots: list[dict] = []
+        refresh_snapshot = snapshot.get("refresh_result")
+        if isinstance(refresh_snapshot, dict):
+            link_snapshots.extend(refresh_snapshot.get("task_link_snapshots") or [])
+        link_snapshots.extend(snapshot.get("task_link_snapshots") or [])
+        unique_links: list[dict] = []
+        seen_link_keys: set[tuple[str, str, str]] = set()
+        for link_snapshot in link_snapshots:
+            if not isinstance(link_snapshot, dict):
+                continue
+            key = (
+                str(link_snapshot.get("link_id") or ""),
+                str(link_snapshot.get("task_id") or ""),
+                str(link_snapshot.get("order_item_id") or ""),
+            )
+            if key in seen_link_keys:
+                continue
+            seen_link_keys.add(key)
+            unique_links.append(link_snapshot)
+
+        restored_links = 0
+        restored_tasks: dict[tuple[str, UUID], object] = {}
+        for link_snapshot in unique_links:
+            task_type = str(link_snapshot.get("task_type") or "")
+            task_id = self._restore_snapshot_uuid(link_snapshot.get("task_id"))
+            item_id = self._restore_snapshot_uuid(link_snapshot.get("order_item_id"))
+            if task_type not in task_specs or task_id is None or item_id not in deleted_item_ids:
+                continue
+            task = await get_task(task_type, task_id)
+            if task is None:
+                continue
+            restored_tasks[(task_type, task_id)] = task
+
+            link_id = self._restore_snapshot_uuid(link_snapshot.get("link_id"))
+            if link_id is not None:
+                from app.models.task_order_item_link import TaskOrderItemLink
+
+                link = await self.db.get(TaskOrderItemLink, link_id)
+                if link is None or link.order_item_id != item_id:
+                    continue
+                link.link_status = "active"
+                link.removed_at = None
+                link.removed_by = None
+                link.removed_reason = None
+                if "position" in link_snapshot:
+                    link.position = link_snapshot.get("position")
+                if "assignee_user_id" in link_snapshot:
+                    link.assignee_user_id = self._restore_snapshot_uuid(
+                        link_snapshot.get("assignee_user_id")
+                    )
+                if "item_status" in link_snapshot:
+                    link.item_status = link_snapshot.get("item_status")
+                if "item_progress_pct" in link_snapshot:
+                    link.item_progress_pct = link_snapshot.get("item_progress_pct")
+                if "item_completed_at" in link_snapshot:
+                    link.item_completed_at = self._restore_snapshot_datetime(
+                        link_snapshot.get("item_completed_at")
+                    )
+                restored_links += 1
+
+            # The legacy single-item pointer may coexist with the link table.
+            # The snapshot records it explicitly so restoring a mixed old/new
+            # task does not silently lose that pointer.
+            if "task_order_item_id" in link_snapshot:
+                task.order_item_id = self._restore_snapshot_uuid(
+                    link_snapshot.get("task_order_item_id")
+                )
+
+            for field, value in (
+                ("status", link_snapshot.get("task_status")),
+                ("progress_pct", link_snapshot.get("task_progress_pct")),
+                ("completed_at", self._restore_snapshot_datetime(link_snapshot.get("task_completed_at"))),
+                ("scope_status", link_snapshot.get("task_scope_status") or "active"),
+                ("scope_closed_at", self._restore_snapshot_datetime(link_snapshot.get("task_scope_closed_at"))),
+                ("scope_closed_reason", link_snapshot.get("task_scope_closed_reason")),
+            ):
+                if value is not None or field in {"completed_at", "scope_closed_at", "scope_closed_reason"}:
+                    setattr(task, field, value)
+
+        scope_snapshots: list[dict] = []
+        if isinstance(refresh_snapshot, dict):
+            scope_snapshots.extend(refresh_snapshot.get("task_scope_snapshots") or [])
+        scope_snapshots.extend(snapshot.get("task_scope_snapshots") or [])
+        seen_scope_keys: set[tuple[str, str]] = set()
+        for scope_snapshot in scope_snapshots:
+            if not isinstance(scope_snapshot, dict):
+                continue
+            task_type = str(scope_snapshot.get("task_type") or "")
+            task_id = self._restore_snapshot_uuid(scope_snapshot.get("task_id"))
+            key = (task_type, str(task_id) if task_id else "")
+            if key in seen_scope_keys or task_type not in task_specs or task_id is None:
+                continue
+            seen_scope_keys.add(key)
+            task = await get_task(task_type, task_id)
+            if task is None:
+                continue
+            restored_tasks[(task_type, task_id)] = task
+            for field, value in (
+                ("status", scope_snapshot.get("task_status")),
+                ("progress_pct", scope_snapshot.get("task_progress_pct")),
+                ("completed_at", self._restore_snapshot_datetime(scope_snapshot.get("task_completed_at"))),
+                ("scope_status", scope_snapshot.get("task_scope_status") or "active"),
+                ("scope_closed_at", self._restore_snapshot_datetime(scope_snapshot.get("task_scope_closed_at"))),
+                ("scope_closed_reason", scope_snapshot.get("task_scope_closed_reason")),
+                ("order_item_id", self._restore_snapshot_uuid(scope_snapshot.get("task_order_item_id"))),
+            ):
+                if value is not None or field in {"completed_at", "scope_closed_at", "scope_closed_reason", "order_item_id"}:
+                    setattr(task, field, value)
+
+        await self.db.flush()
+        return bool(restored_items or restored_links or restored_tasks)
 
     # ═══════════════════════════════════════════
     # 明细
@@ -1407,6 +1668,17 @@ class BusinessDocumentService:
                 "risk": "high",
                 "fields": [],
                 "note": "该明细被其他明细作为来源引用，变更后必须人工核对引用快照",
+            }
+        if module in {
+            "design_task_links",
+            "production_task_links",
+            "installation_task_links",
+        }:
+            return {
+                "action": "remove_task_link",
+                "risk": "medium",
+                "fields": ["item_status", "item_progress_pct", "assignee_user_id"],
+                "note": "明细删除后解除当前任务关联，保留任务历史并按剩余明细重算进度",
             }
         if module == "acceptance_forms":
             return {
@@ -1523,6 +1795,10 @@ class BusinessDocumentService:
             })
         if lock_reasons:
             decision = "BLOCK"
+        elif operation == "delete":
+            # 删除明细即使当前没有可识别的关联，也必须经过一次明确确认：
+            # 这一步可能让订单进入回收站，且会触发三阶段任务范围重算。
+            decision = "CONFIRM_AND_REFRESH"
         elif not has_associations:
             decision = "DIRECT_APPLY"
         elif high_risk:
@@ -1705,25 +1981,98 @@ class BusinessDocumentService:
             })
 
         task_models = (
-            (DesignTask, "design_tasks", "设计任务", "design_no"),
-            (ProductionTask, "production_tasks", "生产任务", "production_no"),
-            (InstallationTask, "installation_tasks", "安装任务", "installation_no"),
+            ("design", DesignTask, "design_tasks", "设计任务", "design_no"),
+            ("production", ProductionTask, "production_tasks", "生产任务", "production_no"),
+            ("installation", InstallationTask, "installation_tasks", "安装任务", "installation_no"),
         )
-        for model, module, label, no_field in task_models:
-            result = await self.db.execute(
-                select(model)
-                .where(model.document_id == doc.id)
-                .order_by(model.updated_at.desc())
-            )
-            for record in result.scalars().all():
-                add_entry(
-                    module,
-                    label,
-                    record,
-                    record_no=getattr(record, no_field, None),
-                    status=record.status,
-                    relation_type="document",
+        for task_type, model, module, label, no_field in task_models:
+            if item_id:
+                # 明细删除只处理这条明细在任务中的当前关联；不能因为订单有
+                # 一张任务卡，就把同订单的其他明细误报成这次删除的影响对象。
+                result = await self.db.execute(
+                    select(model, TaskOrderItemLink)
+                    .join(
+                        TaskOrderItemLink,
+                        (
+                            (TaskOrderItemLink.task_type == task_type)
+                            & (TaskOrderItemLink.task_id == model.id)
+                            & (TaskOrderItemLink.order_item_id == item_id)
+                        ),
+                    )
+                    .where(
+                model.document_id == doc.id,
+                or_(
+                    TaskOrderItemLink.link_status == "active",
+                    TaskOrderItemLink.link_status.is_(None),
+                ),
+                or_(
+                    model.scope_status == "active",
+                    model.scope_status.is_(None),
+                ),
+                    )
+                    .order_by(model.updated_at.desc(), TaskOrderItemLink.position),
                 )
+                for record, link in result.all():
+                    add_entry(
+                        f"{module[:-1]}_links",
+                        label,
+                        link,
+                        record_no=getattr(record, no_field, None),
+                        status=getattr(link, "item_status", None) or record.status,
+                        relation_type="item",
+                    )
+
+                # 兼容早期未写入多明细关联表的任务。它仍然是这条明细的
+                # 稳定关系，但记录 ID 使用任务 ID，执行时会清空旧字段。
+                linked_task_ids = await self.db.execute(
+                    select(TaskOrderItemLink.task_id).where(
+                        TaskOrderItemLink.task_type == task_type,
+                        TaskOrderItemLink.order_item_id == item_id,
+                        or_(
+                            TaskOrderItemLink.link_status == "active",
+                            TaskOrderItemLink.link_status.is_(None),
+                        ),
+                    )
+                )
+                linked_ids = {
+                    value for value in linked_task_ids.scalars().all()
+                }
+                direct_result = await self.db.execute(
+                    select(model).where(
+                        model.document_id == doc.id,
+                        model.order_item_id == item_id,
+                        or_(
+                            model.scope_status == "active",
+                            model.scope_status.is_(None),
+                        ),
+                    )
+                )
+                for record in direct_result.scalars().all():
+                    if record.id in linked_ids:
+                        continue
+                    add_entry(
+                        f"{module[:-1]}_links",
+                        label,
+                        record,
+                        record_no=getattr(record, no_field, None),
+                        status=record.status,
+                        relation_type="item",
+                    )
+            else:
+                result = await self.db.execute(
+                    select(model)
+                    .where(model.document_id == doc.id)
+                    .order_by(model.updated_at.desc())
+                )
+                for record in result.scalars().all():
+                    add_entry(
+                        module,
+                        label,
+                        record,
+                        record_no=getattr(record, no_field, None),
+                        status=record.status,
+                        relation_type="document",
+                    )
 
         form_result = await self.db.execute(
             select(AcceptanceForm)
@@ -2048,26 +2397,34 @@ class BusinessDocumentService:
             ),
         }
 
-        task_counts = {
-            "design": await self._count(
-                select(func.count(DesignTask.id)).where(
-                    DesignTask.document_id == doc.id,
-                    DesignTask.status != "cancelled",
+        task_counts: dict[str, int] = {}
+        task_count_specs = (
+            ("design", DesignTask),
+            ("production", ProductionTask),
+            ("installation", InstallationTask),
+        )
+        for task_type, model in task_count_specs:
+            conditions = [
+                model.document_id == doc.id,
+                model.status != "cancelled",
+                model.scope_status != "empty_after_item_delete",
+            ]
+            if item_id:
+                linked = select(TaskOrderItemLink.task_id).where(
+                    TaskOrderItemLink.task_type == task_type,
+                    TaskOrderItemLink.task_id == model.id,
+                    TaskOrderItemLink.order_item_id == item_id,
+                    or_(
+                        TaskOrderItemLink.link_status == "active",
+                        TaskOrderItemLink.link_status.is_(None),
+                    ),
                 )
-            ),
-            "production": await self._count(
-                select(func.count(ProductionTask.id)).where(
-                    ProductionTask.document_id == doc.id,
-                    ProductionTask.status != "cancelled",
+                conditions.append(
+                    or_(model.order_item_id == item_id, model.id.in_(linked))
                 )
-            ),
-            "installation": await self._count(
-                select(func.count(InstallationTask.id)).where(
-                    InstallationTask.document_id == doc.id,
-                    InstallationTask.status != "cancelled",
-                )
-            ),
-        }
+            task_counts[task_type] = await self._count(
+                select(func.count(model.id)).where(*conditions)
+            )
         task_counts["total"] = sum(task_counts.values())
 
         relations = {
@@ -2826,13 +3183,7 @@ class BusinessDocumentService:
             after_total=after_total,
             paid_amount=paid_amount,
         )
-        if operation == "delete" and len(items) <= 1:
-            decision["lock_reasons"].append({
-                "code": "LAST_ITEM",
-                "message": "订单至少需要保留一条明细",
-            })
-            decision["can_apply"] = False
-            decision["decision"] = "BLOCK"
+        auto_recycle = operation == "delete" and not projected_items
 
         before_unpaid = (before_total - paid_amount).quantize(MONEY_QUANTUM)
         before_financials = {
@@ -2842,6 +3193,7 @@ class BusinessDocumentService:
             "cost_amount": cost_amount,
             "gross_profit": (before_total - cost_amount).quantize(MONEY_QUANTUM),
             "line_count": len(items),
+            "active_item_count": len(items),
         }
         after_financials = {
             "total_amount": after_total,
@@ -2850,6 +3202,7 @@ class BusinessDocumentService:
             "cost_amount": cost_amount,
             "gross_profit": (after_total - cost_amount).quantize(MONEY_QUANTUM),
             "line_count": len(projected_items),
+            "active_item_count": len(projected_items),
         }
         projected_item = None
         if operation == "add":
@@ -2876,6 +3229,12 @@ class BusinessDocumentService:
             "association_count": decision["association_count"],
             "lock_reasons": decision["lock_reasons"],
             "can_apply": decision["can_apply"],
+            "auto_recycle": auto_recycle,
+            "recycle_reason": (
+                "订单有效明细已全部删除，确认后订单将移入回收站"
+                if auto_recycle
+                else None
+            ),
             "association_catalog": self._json_safe(relations.get("association_catalog") or []),
             "refresh_plan": self._json_safe(relations.get("association_catalog") or []),
             "relations": self._json_safe(relations),
@@ -2947,6 +3306,264 @@ class BusinessDocumentService:
         doc.updated_at = datetime.now()
         await self.db.flush()
 
+    async def _remove_order_item_task_links(
+        self,
+        doc,
+        *,
+        item_id: UUID,
+        reason: str,
+        operated_by: UUID | None,
+    ) -> dict:
+        """Remove one order item from all three current task scopes.
+
+        The link row is a historical fact, so deletion means changing its
+        lifecycle to ``removed`` rather than issuing a physical DELETE.  The
+        task aggregate is then recalculated from the remaining active rows.
+        """
+        from app.services.task_service import (
+            _refresh_task_aggregate,
+            _task_order_item_link_rows,
+        )
+
+        task_specs = (
+            ("design", DesignTask, "设计任务", "design_no"),
+            ("production", ProductionTask, "制作任务", "production_no"),
+            ("installation", InstallationTask, "安装任务", "installation_no"),
+        )
+        affected: dict[tuple[str, UUID], object] = {}
+        snapshots: list[dict] = []
+        seen_link_ids: set[UUID] = set()
+        now = datetime.now()
+
+        def task_snapshot(task, task_type: str, link=None) -> dict:
+            return {
+                "task_type": task_type,
+                "task_id": str(task.id),
+                "task_no": getattr(
+                    task,
+                    {
+                        "design": "design_no",
+                        "production": "production_no",
+                        "installation": "installation_no",
+                    }[task_type],
+                    None,
+                ),
+                "link_id": str(link.id) if link is not None and link.id else None,
+                "order_item_id": str(item_id),
+                "link_status": getattr(link, "link_status", None) if link is not None else None,
+                "position": getattr(link, "position", None) if link is not None else None,
+                "assignee_user_id": (
+                    str(link.assignee_user_id)
+                    if link is not None and link.assignee_user_id
+                    else None
+                ),
+                "item_status": getattr(link, "item_status", None) if link is not None else None,
+                "item_progress_pct": getattr(link, "item_progress_pct", None) if link is not None else None,
+                "item_completed_at": getattr(link, "item_completed_at", None) if link is not None else None,
+                "task_status": getattr(task, "status", None),
+                "task_progress_pct": getattr(task, "progress_pct", None),
+                "task_completed_at": getattr(task, "completed_at", None),
+                "task_order_item_id": (
+                    str(task.order_item_id)
+                    if getattr(task, "order_item_id", None)
+                    else None
+                ),
+                "task_scope_status": getattr(task, "scope_status", None),
+                "task_scope_closed_at": getattr(task, "scope_closed_at", None),
+                "task_scope_closed_reason": getattr(task, "scope_closed_reason", None),
+            }
+
+        for task_type, model, label, no_field in task_specs:
+            linked_result = await self.db.execute(
+                select(model, TaskOrderItemLink)
+                .join(
+                    TaskOrderItemLink,
+                    (
+                        (TaskOrderItemLink.task_type == task_type)
+                        & (TaskOrderItemLink.task_id == model.id)
+                        & (TaskOrderItemLink.order_item_id == item_id)
+                    ),
+                )
+                .where(
+                    model.document_id == doc.id,
+                    or_(
+                        TaskOrderItemLink.link_status == "active",
+                        TaskOrderItemLink.link_status.is_(None),
+                    ),
+                )
+            )
+            for task, link in linked_result.all():
+                link_id = getattr(link, "id", None)
+                if link_id is not None and link_id in seen_link_ids:
+                    continue
+                if link_id is not None:
+                    seen_link_ids.add(link_id)
+                snapshots.append(task_snapshot(task, task_type, link))
+                link.link_status = "removed"
+                link.removed_at = now
+                link.removed_by = operated_by
+                link.removed_reason = reason
+                affected[(task_type, task.id)] = task
+                if getattr(task, "order_item_id", None) == item_id:
+                    task.order_item_id = None
+
+            # 兼容最早只有 task.order_item_id 的任务。迁移后通常已有 link
+            # 行，但这里仍处理历史脏数据，避免作废明细继续被旧字段引用。
+            direct_result = await self.db.execute(
+                select(model).where(
+                    model.document_id == doc.id,
+                    model.order_item_id == item_id,
+                )
+            )
+            for task in direct_result.scalars().all():
+                if (task_type, task.id) not in affected:
+                    snapshots.append(task_snapshot(task, task_type))
+                    affected[(task_type, task.id)] = task
+                task.order_item_id = None
+
+        await self.db.flush()
+        scope_updates: list[dict] = []
+        auto_refreshed: list[dict] = []
+        for task_type, task_id in affected:
+            task = affected[(task_type, task_id)]
+            active_links = await _task_order_item_link_rows(
+                self.db,
+                task_type,
+                task.id,
+            )
+            has_legacy_link = getattr(task, "order_item_id", None) is not None
+            is_empty = not active_links and not has_legacy_link
+            await _refresh_task_aggregate(
+                self.db,
+                task_type,
+                task,
+                empty_reason=reason if is_empty else None,
+            )
+            scope_updates.append({
+                "task_type": task_type,
+                "task_id": str(task.id),
+                "task_no": getattr(
+                    task,
+                    {
+                        "design": "design_no",
+                        "production": "production_no",
+                        "installation": "installation_no",
+                    }[task_type],
+                    None,
+                ),
+                "scope_status": getattr(task, "scope_status", "active"),
+                "progress_pct": getattr(task, "progress_pct", 0),
+            })
+            for snapshot in snapshots:
+                if snapshot["task_type"] != task_type or snapshot["task_id"] != str(task.id):
+                    continue
+                auto_refreshed.append({
+                    "module": f"{task_type}_task_links",
+                    "label": {
+                        "design": "设计任务",
+                        "production": "制作任务",
+                        "installation": "安装任务",
+                    }.get(task_type, "任务"),
+                    "record_id": snapshot["link_id"] or snapshot["task_id"],
+                    "record_no": snapshot["task_no"],
+                    "status": snapshot["item_status"] or snapshot["task_status"],
+                    "action": "remove_task_link",
+                    "detail": "订单明细已删除，当前任务解除该明细关联；任务历史保留，进度已按剩余明细重算",
+                })
+        return {
+            "task_link_snapshots": snapshots,
+            "scope_updates": scope_updates,
+            "auto_refreshed": auto_refreshed,
+        }
+
+    async def _close_empty_order_task_scopes(
+        self,
+        doc,
+        *,
+        reason: str,
+        operated_by: UUID | None,
+    ) -> dict:
+        """Close legacy/order-wide task scopes when the order has no items."""
+        from app.services.task_service import (
+            _refresh_task_aggregate,
+            _task_order_item_link_rows,
+        )
+
+        task_specs = (
+            ("design", DesignTask, "design_no"),
+            ("production", ProductionTask, "production_no"),
+            ("installation", InstallationTask, "installation_no"),
+        )
+        link_snapshots: list[dict] = []
+        scope_snapshots: list[dict] = []
+        now = datetime.now()
+        for task_type, model, no_field in task_specs:
+            task_result = await self.db.execute(
+                select(model).where(model.document_id == doc.id)
+            )
+            for task in task_result.scalars().all():
+                if getattr(task, "scope_status", "active") == "empty_after_item_delete":
+                    continue
+                scope_snapshots.append({
+                    "task_type": task_type,
+                    "task_id": str(task.id),
+                    "task_no": getattr(task, no_field, None),
+                    "task_status": getattr(task, "status", None),
+                    "task_progress_pct": getattr(task, "progress_pct", None),
+                    "task_completed_at": getattr(task, "completed_at", None),
+                    "task_order_item_id": (
+                        str(task.order_item_id)
+                        if getattr(task, "order_item_id", None)
+                        else None
+                    ),
+                    "task_scope_status": getattr(task, "scope_status", None),
+                    "task_scope_closed_at": getattr(task, "scope_closed_at", None),
+                    "task_scope_closed_reason": getattr(task, "scope_closed_reason", None),
+                })
+                for link in await _task_order_item_link_rows(
+                    self.db,
+                    task_type,
+                    task.id,
+                ):
+                    link_snapshots.append({
+                        "task_type": task_type,
+                        "task_id": str(task.id),
+                        "task_no": getattr(task, no_field, None),
+                        "link_id": str(link.id) if link.id else None,
+                        "order_item_id": str(link.order_item_id),
+                        "link_status": getattr(link, "link_status", None),
+                        "position": getattr(link, "position", None),
+                        "assignee_user_id": (
+                            str(link.assignee_user_id)
+                            if link.assignee_user_id
+                            else None
+                        ),
+                        "item_status": getattr(link, "item_status", None),
+                        "item_progress_pct": getattr(link, "item_progress_pct", None),
+                        "item_completed_at": getattr(link, "item_completed_at", None),
+                        "task_order_item_id": (
+                            str(task.order_item_id)
+                            if getattr(task, "order_item_id", None)
+                            else None
+                        ),
+                    })
+                    link.link_status = "removed"
+                    link.removed_at = now
+                    link.removed_by = operated_by
+                    link.removed_reason = reason
+                task.order_item_id = None
+                await _refresh_task_aggregate(
+                    self.db,
+                    task_type,
+                    task,
+                    empty_reason=reason,
+                )
+        await self.db.flush()
+        return {
+            "task_link_snapshots": link_snapshots,
+            "task_scope_snapshots": scope_snapshots,
+        }
+
     async def _apply_order_item_refresh(
         self,
         doc,
@@ -2956,6 +3573,8 @@ class BusinessDocumentService:
         projected_item: dict | None,
         relation_catalog: list[dict],
         change_batch_id: str,
+        operated_by: UUID | None = None,
+        reason: str | None = None,
     ) -> dict:
         """Apply only stable, reversible downstream refreshes.
 
@@ -2974,6 +3593,9 @@ class BusinessDocumentService:
             "pending_review": [],
             "adjustments": [],
             "blocked": [],
+            "task_link_snapshots": [],
+            "scope_updates": [],
+            "task_scope_snapshots": [],
         }
 
         def append(bucket: str, entry: dict, detail: str) -> None:
@@ -2986,6 +3608,17 @@ class BusinessDocumentService:
                 "action": entry.get("action"),
                 "detail": detail,
             })
+
+        if operation == "delete" and item_id:
+            task_refresh = await self._remove_order_item_task_links(
+                doc,
+                item_id=item_id,
+                reason=(reason or "订单明细删除").strip(),
+                operated_by=operated_by,
+            )
+            result["task_link_snapshots"] = task_refresh["task_link_snapshots"]
+            result["scope_updates"] = task_refresh["scope_updates"]
+            result["auto_refreshed"].extend(task_refresh["auto_refreshed"])
 
         acceptance_item_ids = [
             UUID(entry["record_id"])
@@ -3177,6 +3810,18 @@ class BusinessDocumentService:
         for entry in relation_catalog:
             module = entry.get("module")
             if module in {"acceptance_items", "outsource_tasks"}:
+                continue
+            if module in {
+                "design_task_links",
+                "production_task_links",
+                "installation_task_links",
+            }:
+                if operation == "update":
+                    append(
+                        "auto_refreshed",
+                        entry,
+                        "任务保留该明细关联，任务界面读取订单最新明细；进度不因订单描述修改而重置",
+                    )
                 continue
             action = entry.get("action")
             if action in {"preserve_fact_and_reconcile", "preserve_fact_and_adjust"}:
@@ -3513,13 +4158,11 @@ class BusinessDocumentService:
             after_total=after_total,
             paid_amount=paid_amount,
         )
-        if not normalized_items:
-            decision["lock_reasons"].append({
-                "code": "LAST_ITEM",
-                "message": "订单至少需要保留一条明细",
-            })
-            decision["can_apply"] = False
-            decision["decision"] = "BLOCK"
+        auto_recycle = bool(
+            operations
+            and not normalized_items
+            and all(operation["operation"] == "delete" for operation in operations)
+        )
 
         before_unpaid = (before_total - paid_amount).quantize(MONEY_QUANTUM)
         after_unpaid = (after_total - paid_amount).quantize(MONEY_QUANTUM)
@@ -3562,6 +4205,7 @@ class BusinessDocumentService:
                 "cost_amount": cost_amount,
                 "gross_profit": (before_total - cost_amount).quantize(MONEY_QUANTUM),
                 "line_count": len(current_items),
+                "active_item_count": len(current_items),
             },
             "after": {
                 "total_amount": after_total,
@@ -3570,6 +4214,7 @@ class BusinessDocumentService:
                 "cost_amount": cost_amount,
                 "gross_profit": (after_total - cost_amount).quantize(MONEY_QUANTUM),
                 "line_count": len(normalized_items),
+                "active_item_count": len(normalized_items),
             },
             "delta": after_total - before_total,
             "decision": decision["decision"],
@@ -3579,6 +4224,12 @@ class BusinessDocumentService:
             "association_count": decision["association_count"],
             "lock_reasons": decision["lock_reasons"],
             "can_apply": decision["can_apply"],
+            "auto_recycle": auto_recycle,
+            "recycle_reason": (
+                "订单有效明细已全部删除，确认后订单将移入回收站"
+                if auto_recycle
+                else None
+            ),
             "association_catalog": relations.get("association_catalog") or [],
             "refresh_plan": relations.get("association_catalog") or [],
             "relations": relations,
@@ -3694,6 +4345,9 @@ class BusinessDocumentService:
             "pending_review": [],
             "adjustments": [],
             "blocked": [],
+            "task_link_snapshots": [],
+            "scope_updates": [],
+            "task_scope_snapshots": [],
         }
         for result in results:
             if result.get("status") == "BLOCKED":
@@ -3706,6 +4360,9 @@ class BusinessDocumentService:
                 "pending_review",
                 "adjustments",
                 "blocked",
+                "task_link_snapshots",
+                "scope_updates",
+                "task_scope_snapshots",
             ):
                 merged[bucket].extend(result.get(bucket) or [])
         merged["counts"] = {
@@ -3796,6 +4453,7 @@ class BusinessDocumentService:
         active_items = {item.id: item for item in await self.repo.get_items(doc.id)}
         refresh_results = []
         change_batch_id = preview_id or str(uuid4())
+        deleted_item_snapshots: list[dict] = []
 
         for operation in context["operations"]:
             operation_type = operation["operation"]
@@ -3819,6 +4477,7 @@ class BusinessDocumentService:
                 item = active_items.get(operation["item_id"])
                 if not item:
                     raise ValueError("订单明细不存在或已被其他操作作废")
+                deleted_item_snapshots.append(self._item_snapshot(item))
                 item.lifecycle_status = "voided"
                 item.voided_at = datetime.now()
                 item.void_reason = reason.strip()
@@ -3837,6 +4496,8 @@ class BusinessDocumentService:
                         ),
                         relation_catalog=(operation.get("_relation_context") or {}).get("association_catalog") or [],
                         change_batch_id=change_batch_id,
+                        operated_by=operated_by,
+                        reason=reason,
                     )
                 )
 
@@ -3859,6 +4520,8 @@ class BusinessDocumentService:
                     projected_item=None,
                     relation_catalog=context["association_catalog"],
                     change_batch_id=change_batch_id,
+                    operated_by=operated_by,
+                    reason=reason,
                 )
             )
 
@@ -3874,20 +4537,54 @@ class BusinessDocumentService:
         if any(field in context["header"] for field in ("project_name", "department")):
             await self._sync_framework_contract_projects(doc)
 
+        auto_recycled = bool(context.get("auto_recycle") and not await self.repo.get_items(doc.id))
+        task_scope_snapshots: list[dict] = []
+        if auto_recycled:
+            recycle_result = await self._close_empty_order_task_scopes(
+                doc,
+                reason=reason.strip(),
+                operated_by=operated_by,
+            )
+            refresh_results.append({
+                "status": "VERIFIED",
+                "change_batch_id": change_batch_id,
+                "auto_refreshed": [],
+                "preserved_facts": [],
+                "pending_review": [],
+                "adjustments": [],
+                "blocked": [],
+                **recycle_result,
+            })
+            previous_status = doc.status
+            doc.status = "cancelled"
+            doc.deleted_at = datetime.now()
+            await self.repo.create_status_log(
+                doc.id,
+                previous_status,
+                "cancelled",
+                "订单有效明细已全部删除，系统自动移入回收站",
+                operated_by,
+            )
+            task_scope_snapshots = recycle_result["task_scope_snapshots"]
+
         refresh_result = self._merge_order_edit_refresh_results(refresh_results, change_batch_id)
-        updated = await self.repo.get_by_id(doc.id)
-        await self.db.refresh(
-            updated,
-            [
-                "customer",
-                "items",
-                "groups",
-                "status_logs",
-                "design_tasks",
-                "production_tasks",
-                "installation_tasks",
-            ],
-        )
+        if auto_recycled:
+            updated = doc
+            await self.db.refresh(updated, attribute_names=["updated_at"])
+        else:
+            updated = await self.repo.get_by_id(doc.id)
+            await self.db.refresh(
+                updated,
+                [
+                    "customer",
+                    "items",
+                    "groups",
+                    "status_logs",
+                    "design_tasks",
+                    "production_tasks",
+                    "installation_tasks",
+                ],
+            )
         after_snapshot = self._to_detail(updated)
         final_change_status = refresh_result.get("status", "VERIFIED")
         audit_snapshot = {
@@ -3904,6 +4601,14 @@ class BusinessDocumentService:
             "before": before_snapshot,
             "after": after_snapshot,
             "refresh_result": refresh_result,
+            "auto_recycled": auto_recycled,
+            "recycle_reason": (
+                "订单有效明细已全部删除，系统自动移入回收站"
+                if auto_recycled
+                else None
+            ),
+            "deleted_item_snapshots": deleted_item_snapshots,
+            "task_scope_snapshots": task_scope_snapshots,
             "impact": {
                 "decision": context["decision"],
                 "association_catalog": context["association_catalog"],
@@ -3938,6 +4643,7 @@ class BusinessDocumentService:
             "verification_status": "VERIFIED" if final_change_status == "VERIFIED" else final_change_status,
             "refresh_result": refresh_result,
             "idempotent_replay": False,
+            "auto_recycled": auto_recycled,
         }
         return after_snapshot
 
@@ -4012,6 +4718,7 @@ class BusinessDocumentService:
 
         before_snapshot = self._to_detail(doc)
         normalized = context["normalized"]
+        deleted_item_snapshots: list[dict] = []
         if operation == "add":
             await self.repo.add_items(doc.id, [dict(normalized or {})])
         elif operation == "update":
@@ -4028,6 +4735,7 @@ class BusinessDocumentService:
             item = await self.repo.get_item(item_id, document_id=doc.id)
             if not item:
                 raise ValueError("订单明细不存在或不属于当前订单")
+            deleted_item_snapshots.append(self._item_snapshot(item))
             item.lifecycle_status = "voided"
             item.voided_at = datetime.now()
             item.void_reason = reason.strip()
@@ -4044,20 +4752,56 @@ class BusinessDocumentService:
             projected_item=context.get("projected_item"),
             relation_catalog=context.get("association_catalog") or [],
             change_batch_id=change_batch_id,
+            operated_by=operated_by,
+            reason=reason,
         )
-        updated = await self.repo.get_by_id(doc.id)
-        await self.db.refresh(
-            updated,
-            [
-                "customer",
-                "items",
-                "groups",
-                "status_logs",
-                "design_tasks",
-                "production_tasks",
-                "installation_tasks",
-            ],
+        auto_recycled = bool(
+            operation == "delete"
+            and not await self.repo.get_items(doc.id)
         )
+        task_scope_snapshots: list[dict] = []
+        if auto_recycled:
+            recycle_result = await self._close_empty_order_task_scopes(
+                doc,
+                reason=reason.strip(),
+                operated_by=operated_by,
+            )
+            refresh_result.setdefault("task_link_snapshots", []).extend(
+                recycle_result["task_link_snapshots"]
+            )
+            refresh_result.setdefault("task_scope_snapshots", []).extend(
+                recycle_result["task_scope_snapshots"]
+            )
+            task_scope_snapshots = recycle_result["task_scope_snapshots"]
+            previous_status = doc.status
+            doc.status = "cancelled"
+            doc.deleted_at = datetime.now()
+            await self.repo.create_status_log(
+                doc.id,
+                previous_status,
+                "cancelled",
+                "订单有效明细已全部删除，系统自动移入回收站",
+                operated_by,
+            )
+            await self.db.flush()
+
+        if auto_recycled:
+            updated = doc
+            await self.db.refresh(updated, attribute_names=["updated_at"])
+        else:
+            updated = await self.repo.get_by_id(doc.id)
+            await self.db.refresh(
+                updated,
+                [
+                    "customer",
+                    "items",
+                    "groups",
+                    "status_logs",
+                    "design_tasks",
+                    "production_tasks",
+                    "installation_tasks",
+                ],
+            )
         after_snapshot = self._to_detail(updated)
         final_change_status = refresh_result.get("status", "VERIFIED")
         audit_snapshot = {
@@ -4075,6 +4819,14 @@ class BusinessDocumentService:
             "before": before_snapshot,
             "after": after_snapshot,
             "refresh_result": refresh_result,
+            "auto_recycled": auto_recycled,
+            "recycle_reason": (
+                "订单有效明细已全部删除，系统自动移入回收站"
+                if auto_recycled
+                else None
+            ),
+            "deleted_item_snapshots": deleted_item_snapshots,
+            "task_scope_snapshots": task_scope_snapshots,
             "impact": {
                 key: value
                 for key, value in context.items()
@@ -4122,6 +4874,7 @@ class BusinessDocumentService:
             ),
             "refresh_result": refresh_result,
             "idempotent_replay": False,
+            "auto_recycled": auto_recycled,
         }
         return after_snapshot
 

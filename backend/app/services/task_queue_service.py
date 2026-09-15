@@ -80,6 +80,10 @@ async def list_task_queue(
                 TaskOrderItemLink.task_id == model.id,
                 TaskOrderItemLink.order_item_id == order_item_uuid,
                 TaskOrderItemLink.item_status != "rolled_back",
+                or_(
+                    TaskOrderItemLink.link_status == "active",
+                    TaskOrderItemLink.link_status.is_(None),
+                ),
             )
             query = query.where(or_(model.order_item_id == order_item_uuid, linked))
         if statuses:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from uuid import UUID
 
-from sqlalchemy import exists, or_, select, true
+from sqlalchemy import and_, exists, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.access_policy import AuthorizationPolicy
@@ -58,8 +58,14 @@ def order_task_visibility_clause(model, viewer: User | None):
     permission or the separate read-only all-scope permission bypass the row
     filter; only the former may maintain assignments.
     """
+    scope_status = getattr(model, "scope_status", None)
+    scope_clause = (
+        or_(scope_status == "active", scope_status.is_(None))
+        if scope_status is not None
+        else true()
+    )
     if can_view_all_task_scope(viewer):
-        return true()
+        return scope_clause
 
     task_table = getattr(model, "__table__", model)
     assignee_table = OrderTaskAssignee.__table__
@@ -81,7 +87,10 @@ def order_task_visibility_clause(model, viewer: User | None):
             employee_table.c.deleted_at.is_(None),
         )
     )
-    return or_(~assignment_exists, viewer_assignment_exists)
+    return and_(
+        scope_clause,
+        or_(~assignment_exists, viewer_assignment_exists),
+    )
 
 
 def task_visibility_clause(model, viewer: User | None):

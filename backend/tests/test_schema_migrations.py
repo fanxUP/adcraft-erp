@@ -108,6 +108,31 @@ def test_order_item_lifecycle_migration_is_additive_and_reversible():
     assert 'op.drop_column("business_document_items", "lifecycle_status")' in source
 
 
+def test_order_item_delete_consistency_migration_adds_reversible_scope_fields():
+    versions_dir = Path(__file__).parents[1] / "alembic" / "versions"
+    source = next(
+        path.read_text(encoding="utf-8")
+        for path in versions_dir.glob("*.py")
+        if path.name.startswith("oid01_")
+    )
+
+    assert 'revision: str = "oid01_order_item_delete_consistency"' in source
+    assert 'down_revision: Union[str, None] = "branding01_system_branding"' in source
+    assert '"link_status"' in source
+    assert '"removed_at"' in source
+    assert '"removed_by"' in source
+    assert '"removed_reason"' in source
+    assert '"scope_status"' in source
+    assert '"scope_closed_at"' in source
+    assert '"scope_closed_reason"' in source
+    assert 'op.create_foreign_key(' in source
+    assert 'op.create_index(' in source
+    assert 'op.create_check_constraint(' in source
+    assert 'op.drop_column("task_order_item_links", "link_status")' in source
+    assert 'for table_name in reversed(_TASK_TABLES):' in source
+    assert 'op.drop_column(table_name, "scope_status")' in source
+
+
 def test_outsource_order_item_migration_adds_safe_fk_index_and_decimal_quantity():
     versions_dir = Path(__file__).parents[1] / "alembic" / "versions"
     source = next(

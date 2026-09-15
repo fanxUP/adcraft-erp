@@ -313,9 +313,10 @@
       destroy-on-close
     >
       <template v-if="preview">
-        <el-alert :type="preview.requires_high_risk_ack ? 'warning' : 'info'" :closable="false" style="margin-bottom: 14px">
-          <template #title>{{ mutationDecisionLabel(preview.decision) }}</template>
+        <el-alert :type="preview.auto_recycle || preview.requires_high_risk_ack ? 'warning' : 'info'" :closable="false" style="margin-bottom: 14px">
+          <template #title>{{ preview.auto_recycle ? '确认删除全部明细并移入回收站' : mutationDecisionLabel(preview.decision) }}</template>
           本次保存将一次性应用 {{ preview.diff.added }} 条新增、{{ preview.diff.updated }} 条修改、{{ preview.diff.deleted }} 条作废，以及 {{ preview.diff.header_changed }} 个订单头字段变更。已发生事实只保留并核对差额。
+          <span v-if="preview.auto_recycle">删除后订单将没有有效明细，系统会将订单移入回收站；设计、制作、安装任务的当前明细关联会一并移除，任务进度按剩余明细重新计算。</span>
         </el-alert>
 
         <el-descriptions :column="3" border size="small" style="margin-bottom: 14px">
@@ -361,7 +362,7 @@
       <template #footer>
         <el-button @click="cancelImpactConfirmation">返回修改</el-button>
         <el-button type="primary" :loading="saving" :disabled="Boolean(preview?.requires_high_risk_ack && !highRiskAcknowledged)" @click="confirmImpactAndApply">
-          确认修改并刷新关联数据
+          {{ preview?.auto_recycle ? '确认删除并移入回收站' : '确认修改并刷新关联数据' }}
         </el-button>
       </template>
     </el-dialog>
@@ -866,7 +867,6 @@ async function handleSave() {
   if (!canEdit.value) return
   if (!form.customer_id.trim()) { ElMessage.warning('请先选择或填写客户'); return }
   if (!form.project_name.trim()) { ElMessage.warning('请填写项目名称'); return }
-  if (!items.value.length) { ElMessage.warning('订单至少需要保留一条明细'); return }
   if (items.value.some(item => !item.item_name.trim())) { ElMessage.warning('请填写所有明细的项目内容'); return }
   if (!reason.value.trim()) { ElMessage.warning('请填写订单变更原因'); return }
   const diff = buildOrderBatchItemDiff(originalItems.value, items.value)
@@ -928,6 +928,11 @@ async function applyOrderEdit(impact: OrderEditImpactResponse, payload: ReturnTy
   pendingPayload.value = null
   highRiskAcknowledged.value = false
   await fetchItemEditability()
+  if (impact.auto_recycle || result.change_batch?.auto_recycled) {
+    ElMessage.success('订单有效明细已全部删除，订单已移入回收站')
+    await router.push('/orders/recycle')
+    return
+  }
   ElMessage.success(result.change_batch?.status === 'PENDING_ADJUSTMENT' ? '订单已保存，部分关联事实已进入待复核' : '订单保存成功')
 }
 
@@ -1000,7 +1005,7 @@ function displayValue(value: unknown) { return value === null || value === undef
 function amountFromDiff(value: Record<string, unknown> | null | undefined) { return value?.subtotal_amount == null ? '-' : `¥${Number(value.subtotal_amount).toFixed(2)}` }
 function relationTypeLabel(type: string) { return ({ document: '订单级', item: '明细级', snapshot: '快照', source: '来源引用' } as Record<string, string>)[type] || type }
 function relationStatusLabel(status?: string | null) { return ({ draft: '草稿', pending: '待处理', confirmed: '已确认', accepted: '已验收', completed: '已完成', settled: '已结算', active: '有效', cancelled: '已取消', in_progress: '进行中', rejected: '已驳回', approved: '已审批' } as Record<string, string>)[status || ''] || status || '-' }
-function relationActionLabel(action: string) { return ({ refresh_plan: '自动刷新执行计划', refresh_draft: '自动刷新草稿快照', refresh_plan_or_review: '刷新计划或标记复核', preserve_fact_and_reconcile: '保留事实并重新核对', preserve_fact_and_adjust: '保留事实并生成差异调整', preserve_fact_and_review: '保留事实并待复核', review_required: '必须人工复核' } as Record<string, string>)[action] || action }
+function relationActionLabel(action: string) { return ({ remove_task_link: '移除当前任务关联', refresh_plan: '自动刷新执行计划', refresh_draft: '自动刷新草稿快照', refresh_plan_or_review: '刷新计划或标记复核', preserve_fact_and_reconcile: '保留事实并重新核对', preserve_fact_and_adjust: '保留事实并生成差异调整', preserve_fact_and_review: '保留事实并待复核', review_required: '必须人工复核' } as Record<string, string>)[action] || action }
 function riskLabel(risk: string) { return risk === 'high' ? '高' : risk === 'medium' ? '中' : '低' }
 function riskTagType(risk: string) { return (risk === 'high' ? 'danger' : risk === 'medium' ? 'warning' : 'success') as 'success' | 'warning' | 'danger' }
 

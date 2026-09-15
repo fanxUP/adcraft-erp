@@ -146,11 +146,13 @@ async def _list_overdue_tasks(
             columns.planned_end_at.is_not(None),
             columns.planned_end_at < now,
             columns.status.not_in(TERMINAL_STATUSES),
+            or_(columns.scope_status == "active", columns.scope_status.is_(None)),
             link_columns.assignee_user_id.is_not(None),
             or_(
                 link_columns.item_status.is_(None),
                 link_columns.item_status.not_in(TERMINAL_STATUSES),
             ),
+            or_(link_columns.link_status == "active", link_columns.link_status.is_(None)),
         )
     )
     result = await db.execute(

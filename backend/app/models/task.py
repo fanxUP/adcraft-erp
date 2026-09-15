@@ -25,6 +25,11 @@ class DesignTask(Base, TimestampMixin):
     project_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(64), default="pending")
     progress_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    scope_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active", server_default="active"
+    )
+    scope_closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    scope_closed_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     planned_start_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     planned_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
@@ -55,6 +60,11 @@ class ProductionTask(Base, TimestampMixin):
     project_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(64), default="pending")
     progress_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    scope_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active", server_default="active"
+    )
+    scope_closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    scope_closed_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     planned_start_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     planned_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
@@ -90,6 +100,11 @@ class InstallationTask(Base, TimestampMixin):
     project_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(64), default="pending")
     progress_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    scope_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active", server_default="active"
+    )
+    scope_closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    scope_closed_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     planned_start_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     planned_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
