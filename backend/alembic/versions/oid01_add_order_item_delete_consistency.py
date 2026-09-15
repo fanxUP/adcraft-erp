@@ -7,7 +7,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
-revision: str = "oid01_order_item_delete_consistency"
+revision: str = "oid01_item_delete_consistency"
 down_revision: Union[str, None] = "branding01_system_branding"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

@@ -116,7 +116,7 @@ def test_order_item_delete_consistency_migration_adds_reversible_scope_fields():
         if path.name.startswith("oid01_")
     )
 
-    assert 'revision: str = "oid01_order_item_delete_consistency"' in source
+    assert 'revision: str = "oid01_item_delete_consistency"' in source
     assert 'down_revision: Union[str, None] = "branding01_system_branding"' in source
     assert '"link_status"' in source
     assert '"removed_at"' in source
