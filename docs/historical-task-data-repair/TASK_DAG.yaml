@@ -1,0 +1,111 @@
+version: 1
+name: historical-task-data-repair
+title: 设计制作安装历史异常数据修复
+mode: STRICT
+status: partially_applied
+objective: >-
+  在不猜测历史业务事实、不批量恢复 cancelled、不删除审计日志的前提下，
+  盘点并定向修复设计、制作、安装任务链中的历史异常数据。
+scope:
+  - design_tasks
+  - production_tasks
+  - installation_tasks
+  - task_order_item_links
+  - task_item_status_logs
+  - business_documents.status
+  - business_document_status_logs
+non_goals:
+  - 批量恢复历史 cancelled
+  - 删除状态日志或操作日志
+  - 猜测旧整单任务的逐条执行人和进度
+  - 修改财务、权限、员工和上传文件实体
+  - 新增数据库迁移或第三方依赖
+nodes:
+  - id: HTR-P01
+    title: 冻结范围和状态不变量
+    acceptance: A-HTR-01
+    depends_on: []
+  - id: HTR-P02
+    title: 建立只读历史审计器
+    acceptance: A-HTR-02
+    depends_on: [HTR-P01]
+  - id: HTR-P03
+    title: 生成并审阅候选干跑
+    acceptance: A-HTR-03
+    depends_on: [HTR-P02]
+  - id: HTR-P04
+    title: 执行确定性阶段重入修复
+    acceptance: A-HTR-04
+    depends_on: [HTR-P03]
+  - id: HTR-P05
+    title: 处理订单状态同步候选
+    acceptance: A-HTR-05
+    depends_on: [HTR-P03]
+  - id: HTR-P06
+    title: 重复任务卡专项复核
+    acceptance: A-HTR-06
+    depends_on: [HTR-P03]
+  - id: HTR-P07
+    title: 修复后验证和回滚准备
+    acceptance: A-HTR-07
+    depends_on: [HTR-P04, HTR-P05, HTR-P06]
+gates:
+  production_write:
+    requires:
+      - 只读审计完成
+      - 候选干跑完成
+      - 新数据库备份引用
+      - 明确订单/明细范围
+      - 管理员显式授权
+    default: blocked
+  historical_cancelled_restore:
+    default: blocked
+    reason: 历史取消不是普通回退，必须单独确认业务意图
+  duplicate_card_delete:
+    default: blocked
+    reason: 先完成引用转移和合并计划，禁止按卡片数量直接删除
+execution:
+  applied_candidates:
+    - id: H-001
+      status: applied_and_verified
+      backup_reference: /opt/adcraft/backups/backup_20260915_051057.tar.gz
+      target: production_link
+      resulting_task_progress_pct: 25
+  pending_candidates:
+    - H-002
+    - H-003
+    - H-004
+    - H-005
+    - H-006
+    - H-006b
+    - H-007
+initial_candidates:
+  - id: H-001
+    document_no: O20260910-0005
+    item_name: 宣传栏换色
+    classification: candidate_reopen
+    target_stage: production
+    proposed_state: pending
+  - id: H-002
+    document_no: O20260910-0005
+    item_name: 公示栏（新做）
+    classification: manual_review
+  - id: H-003
+    document_no: O20260910-0005
+    item_name: 宣传栏（文化长廊处）
+    classification: manual_review
+  - id: H-004
+    document_no: O20260813-0001
+    classification: duplicate_card_review
+  - id: H-005
+    document_no: O20260813-0001
+    classification: historical_cancelled_preserve
+  - id: H-006
+    document_no: O20260813-0001
+    classification: order_status_review
+  - id: H-006b
+    document_no: O20260817-0001
+    classification: order_status_review
+  - id: H-007
+    document_no: O20260819-0001
+    classification: historical_reset_manual_review
