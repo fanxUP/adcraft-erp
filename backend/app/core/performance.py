@@ -28,7 +28,13 @@ def _log_path() -> str | None:
     """Return a file path for the performance log, or None if not configured."""
     if PERF_LOG_DIR:
         d = Path(PERF_LOG_DIR)
-        d.mkdir(parents=True, exist_ok=True)
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            if not os.access(d, os.W_OK | os.X_OK):
+                raise PermissionError(f"性能日志目录不可写: {d}")
+        except OSError as exc:
+            logger.warning("File performance logging disabled: %s", exc)
+            return None
         return str(d / "performance.log")
     return None
 
@@ -38,13 +44,17 @@ _PERF_LOG = _log_path()
 
 def _write_log(line: str) -> None:
     """Write to the performance log file (if configured) and also log."""
+    global _PERF_LOG
     logger.info(line.rstrip())
     if _PERF_LOG:
         try:
             with open(_PERF_LOG, "a") as f:
                 f.write(line)
-        except OSError:
-            pass
+        except OSError as exc:
+            # Keep journal logging available, but stop retrying a path that is
+            # blocked by service permissions or a read-only sandbox.
+            logger.warning("File performance logging disabled: %s", exc)
+            _PERF_LOG = None
 
 
 # ── 1. SQLAlchemy slow-query listener ───────────────────────────────────

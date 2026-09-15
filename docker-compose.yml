@@ -42,10 +42,14 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-adcraft}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-adcraft_erp}
       DATABASE_URL_SYNC: postgresql+psycopg2://${POSTGRES_USER:-adcraft}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-adcraft_erp}
       REDIS_URL: redis://redis:6379/0
+      ADCRAFT_ENV_FILE: /app/.env
     volumes:
       - ./uploads:/app/uploads
       - ./logs:/app/logs
-      - ./.env:/app/.env:ro
+      # System settings are saved by the authenticated admin API.  Keep the
+      # host .env as the persistent source for both compose restarts and the
+      # backend process instead of mounting it read-only.
+      - ./.env:/app/.env:rw
     depends_on:
       postgres:
         condition: service_healthy

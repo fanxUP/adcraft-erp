@@ -253,6 +253,54 @@ deploy_compose() {
   fi
 }
 
+configure_native_runtime_paths() {
+  local service_user service_group env_file dropin_dir dropin_path perf_dir
+
+  service_user="$(systemctl show "$SERVICE_NAME" -p User --value)"
+  service_group="$(systemctl show "$SERVICE_NAME" -p Group --value)"
+  service_group="${service_group:-$service_user}"
+  env_file="$(systemctl show "$SERVICE_NAME" -p EnvironmentFiles --value | awk '{print $1}' | sed 's/^-//')"
+
+  if [ -z "$service_user" ] || [ -z "$env_file" ] || [[ "$env_file" != /* ]] || [[ "$env_file" =~ [[:space:]] ]]; then
+    echo "无法确定原生服务用户或 EnvironmentFile，拒绝自动修改运行时写入策略。" >&2
+    return 1
+  fi
+  if [ ! -f "$env_file" ]; then
+    echo "原生服务 EnvironmentFile 不存在：$env_file" >&2
+    return 1
+  fi
+  if ! id "$service_user" >/dev/null 2>&1 || ! getent group "$service_group" >/dev/null 2>&1; then
+    echo "原生服务账号或用户组不存在：$service_user:$service_group" >&2
+    return 1
+  fi
+
+  # The service must be able to persist settings, while keeping the secret
+  # configuration private to the service account.
+  chown "$service_user:$service_group" "$env_file"
+  chmod 600 "$env_file"
+
+  # Performance logs are inside the already-approved logs boundary.  Repair
+  # only this exact directory/file rather than broadening permissions.
+  perf_dir="$PROJECT_DIR/backend/logs/perf"
+  install -d -o "$service_user" -g "$service_group" -m 0750 "$perf_dir"
+  if [ -f "$perf_dir/performance.log" ]; then
+    chown "$service_user:$service_group" "$perf_dir/performance.log"
+    chmod 0640 "$perf_dir/performance.log"
+  fi
+
+  # Persist the path decision in a systemd drop-in so the service sandbox and
+  # the API use the same configuration file on future deployments.
+  dropin_dir="/etc/systemd/system/${SERVICE_NAME}.service.d"
+  dropin_path="$dropin_dir/runtime-writable.conf"
+  install -d -m 0755 "$dropin_dir"
+  printf '%s\n' \
+    '[Service]' \
+    "Environment=ADCRAFT_ENV_FILE=$env_file" \
+    "ReadWritePaths=$env_file" > "$dropin_path"
+  chmod 0644 "$dropin_path"
+  systemctl daemon-reload
+}
+
 deploy_native() {
   local backend_changes frontend_changes nginx_changes
 
@@ -300,6 +348,7 @@ deploy_native() {
     systemctl reload nginx
   fi
 
+  configure_native_runtime_paths
   echo "重启原生服务：$SERVICE_NAME"
   systemctl restart "$SERVICE_NAME"
   echo "等待应用和数据库健康检查..."

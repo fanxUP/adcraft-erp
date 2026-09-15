@@ -2,6 +2,7 @@
 
 import logging
 import os
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
@@ -24,12 +25,46 @@ from app.services.operation_log_service import (
 logger = logging.getLogger(__name__)
 
 
+def _resolve_settings_env_path() -> str:
+    """Resolve the configuration file used by the current runtime.
+
+    Native systemd and Docker both keep the deployment .env at the project
+    root.  The old upward search stopped at ``backend/.env`` when that stale
+    compatibility file happened to exist, which made the save endpoint write
+    to a protected source directory instead of the file actually loaded by
+    the service.  An explicit override keeps packaged/custom deployments
+    deterministic; the ordered fallbacks preserve local development support.
+    """
+    configured_path = os.environ.get("ADCRAFT_ENV_FILE", "").strip()
+    if configured_path:
+        return os.path.abspath(os.path.expanduser(configured_path))
+
+    module_path = Path(__file__).resolve()
+    project_root = module_path.parents[3]
+    project_env = project_root / ".env"
+    candidates = (
+        project_env,
+        Path("/app/.env"),
+        Path.cwd() / ".env",
+        module_path.parents[2] / ".env",
+    )
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized = str(candidate)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        if candidate.exists():
+            return normalized
+    return str(project_env)
+
+
 def _rewrite_env_file(env_path: str, env_lines: dict) -> None:
     """Rewrite a .env file, preserving comments/order, overriding keys in env_lines."""
-    try:
+    if os.path.exists(env_path):
         with open(env_path, "r") as f:
             lines = f.readlines()
-    except OSError:
+    else:
         lines = []
     with open(env_path, "w") as f:
         written = set()
@@ -263,35 +298,26 @@ async def update_settings(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
-    # 向上查找现有 .env 文件（兼容 Docker /app 与本地 /opt/adcraft/backend 两种部署），
-    # 避免固定层数上溯算错路径导致设置写入无效位置
-    _file_dir = os.path.dirname(os.path.abspath(__file__))
-    _candidate = _file_dir
-    env_path = None
-    while _candidate and _candidate != "/":
-        potential = os.path.join(_candidate, ".env")
-        if os.path.exists(potential):
-            env_path = potential
-            break
-        _candidate = os.path.dirname(_candidate)
-    if not env_path:
-        # 都找不到时回退 Docker 默认路径
-        env_path = "/app/.env"
+    env_path = _resolve_settings_env_path()
 
     # In Docker, the .env file may not exist (env vars come from compose).
     # If missing, create from current settings so it can be managed going forward.
-    if not os.path.exists(env_path):
-        lines = []
-        env_lines = {}
-    else:
-        with open(env_path, "r") as f:
-            lines = f.readlines()
-        env_lines = {}
-        for line in lines:
-            stripped = line.strip()
-            if stripped and not stripped.startswith("#") and "=" in stripped:
-                key = stripped.split("=", 1)[0]
-                env_lines[key] = line
+    try:
+        if not os.path.exists(env_path):
+            lines = []
+            env_lines = {}
+        else:
+            with open(env_path, "r") as f:
+                lines = f.readlines()
+            env_lines = {}
+            for line in lines:
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#") and "=" in stripped:
+                    key = stripped.split("=", 1)[0]
+                    env_lines[key] = line
+    except OSError:
+        logger.exception("Failed to read system settings from %s", env_path)
+        return error(50002, "系统设置保存失败，请联系管理员检查配置文件权限")
 
     allowed_keys = {"APP_NAME", "COMPANY_NAME", "COMPANY_PHONE", "JWT_EXPIRE_MINUTES", "AI_ENABLED", "AI_PROVIDER", "AI_MODEL", "AI_API_KEY", "AI_API_BASE_URL"}
     updated = {}
@@ -300,37 +326,42 @@ async def update_settings(
         if key not in allowed_keys:
             continue
         str_val = str(value)
-        env_lines[key] = f'{key}="{str_val}"\n' if " " in str_val else f"{key}={str_val}\n"
+        escaped_val = str_val.replace("\\", "\\\\").replace('"', '\\"')
+        env_lines[key] = f'{key}="{escaped_val}"\n'
         updated[key] = str_val
 
     if not updated:
         return error(40001, "没有有效的配置项可更新")
 
-    # Log first — if this fails, don't write the file
+    # Write first.  A failed persistence must not leave an operation log that
+    # claims the setting changed when the file was never updated.
     try:
-        await log_operation(
-            db, current_user.id, current_user.real_name or current_user.username,
-            OBJ_SETTINGS, None, ACTION_UPDATE,
-            ip_address=request.client.host if request.client else None,
-            after_data=updated,
-        )
-    except Exception:
-        logger.warning("Failed to log update_settings operation", exc_info=True)
-
-    # Rewrite .env preserving comments and order
-    _rewrite_env_file(env_path, env_lines)
-
-    # 同步写入 systemd EnvironmentFile 指向的 .env（如 /opt/adcraft/.env，位于 .env 的上一级），
-    # 否则重启后环境变量仍取旧值，设置不会持久生效
-    _parent_env = os.path.join(os.path.dirname(os.path.dirname(env_path)), ".env")
-    if _parent_env != env_path and os.path.exists(_parent_env):
-        sync_lines = {k: env_lines[k] for k in updated if k in env_lines}
-        if sync_lines:
-            _rewrite_env_file(_parent_env, sync_lines)
+        _rewrite_env_file(env_path, env_lines)
+    except OSError:
+        logger.exception("Failed to persist system settings to %s", env_path)
+        return error(50002, "系统设置保存失败，请联系管理员检查配置文件权限")
 
     # Also update in-memory settings so changes take effect immediately
     for key, value in data.model_dump(exclude_none=True).items():
         if key in allowed_keys and hasattr(settings, key):
             setattr(settings, key, value)
 
-    return success({"updated": updated, "message": "配置已更新"})
+    # Never place an API key in the operation log.  The log records the fact
+    # that it changed while the secret remains only in the protected config.
+    audit_data = dict(updated)
+    if "AI_API_KEY" in audit_data:
+        audit_data["AI_API_KEY"] = "***已更新***"
+    try:
+        await log_operation(
+            db, current_user.id, current_user.real_name or current_user.username,
+            OBJ_SETTINGS, None, ACTION_UPDATE,
+            ip_address=request.client.host if request.client else None,
+            after_data=audit_data,
+        )
+    except Exception:
+        logger.warning("Failed to log update_settings operation", exc_info=True)
+
+    response_updated = dict(updated)
+    if "AI_API_KEY" in response_updated:
+        response_updated["AI_API_KEY"] = "***已更新***"
+    return success({"updated": response_updated, "message": "配置已更新"})

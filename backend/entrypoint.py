@@ -50,10 +50,14 @@ def _patch_config():
     os.environ.setdefault("LOCAL_UPLOAD_DIR", str(uploads_dir))
     os.environ.setdefault("FRONTEND_DIR", str(EXE_DIR / "frontend"))
 
-    # Ensure a .env exists
-    env_file = EXE_DIR / ".env"
-    if not env_file.exists():
+    # Native systemd and Docker provide the project-root .env themselves.
+    # Only a frozen standalone bundle should generate a missing file; source
+    # deployments must not try to write into the protected backend directory.
+    env_file = _resolve_runtime_env_file()
+    if not env_file.exists() and getattr(sys, "frozen", False):
         _generate_env(env_file)
+    elif not env_file.exists():
+        print(f"⚠ .env 未找到: {env_file}；将使用进程环境变量和默认值")
 
     # Override DATABASE_URL to use local PostgreSQL (relative paths)
     _apply_db_defaults()
@@ -78,6 +82,20 @@ def _generate_env(env_file: Path):
         f"AI_ENABLED=false\n"
     )
     print(f"✅ Generated .env with random SECRET_KEY: {env_file}")
+
+
+def _resolve_runtime_env_file() -> Path:
+    """Return the deployment configuration path without writing source code dirs."""
+    configured_path = os.environ.get("ADCRAFT_ENV_FILE", "").strip()
+    if configured_path:
+        return Path(os.path.expanduser(configured_path)).resolve()
+    if getattr(sys, "frozen", False):
+        return EXE_DIR / ".env"
+
+    project_env = EXE_DIR.parent / ".env" if EXE_DIR.name == "backend" else EXE_DIR / ".env"
+    if project_env.exists():
+        return project_env
+    return EXE_DIR / ".env"
 
 
 def _apply_db_defaults():
