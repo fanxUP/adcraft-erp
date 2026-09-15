@@ -36,6 +36,30 @@ export interface TaskStatusChangeInput {
   order_item_ids: string[]
 }
 
+/** Complete exactly one order item and optionally attach its completion materials. */
+export function completeTaskItem(
+  taskType: TaskType,
+  taskId: string,
+  orderItemId: string,
+  files: File[] = [],
+  skipMaterials = false,
+  reason = '',
+) {
+  const form = new FormData()
+  form.append('task_type', taskType)
+  form.append('task_id', taskId)
+  form.append('order_item_id', orderItemId)
+  form.append('skip_materials', String(skipMaterials))
+  if (reason.trim()) form.append('reason', reason.trim())
+  files.forEach(file => form.append('files', file))
+
+  return post<DesignTaskResponse | ProductionTaskResponse | InstallationTaskResponse>(
+    '/task-queue/complete-item',
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+}
+
 export interface TaskItemRollbackInput {
   order_item_ids: string[]
   reason?: string

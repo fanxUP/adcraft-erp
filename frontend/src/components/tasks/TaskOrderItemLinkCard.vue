@@ -231,6 +231,14 @@
       </div>
     </section>
   </el-card>
+
+  <TaskCompletionAttachmentDialog
+    v-model="completionDialogVisible"
+    :task-type="props.taskType"
+    :item-label="completionItem ? itemLabel(completionItem) : ''"
+    :loading="props.changing"
+    @submit="handleCompletionSubmit"
+  />
 </template>
 
 <script setup lang="ts">
@@ -248,6 +256,7 @@ import {
 } from '@/api/tasks'
 import type { TaskAssigneeOption, TaskItemAction, TaskOrderItemOption, TaskType } from '@/types/api'
 import { StatusTag } from '@/components/ui'
+import TaskCompletionAttachmentDialog from '@/components/tasks/TaskCompletionAttachmentDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { getTaskItemActions, isTaskOrderItemSelectable } from '@/utils/taskItemActions'
 import { formatMoney } from '@/utils/format'
@@ -274,6 +283,7 @@ const emit = defineEmits<{
   linked: []
   change: [status: string, orderItemIds: string[], reason?: string]
   rollback: [targetStage: 'design' | 'production', orderItemIds: string[], reason?: string]
+  complete: [orderItemId: string, files: File[], skipped: boolean]
 }>()
 
 const items = ref<TaskOrderItemOption[]>([])
@@ -286,6 +296,8 @@ const assigneeOptionsLoading = ref(false)
 const assigneeTargetUserId = ref<string | null>(null)
 const reassigning = ref(false)
 const actionLoadingId = ref<string | null>(null)
+const completionDialogVisible = ref(false)
+const completionItem = ref<TaskOrderItemOption | null>(null)
 
 const terminalStatuses: Record<TaskType, string[]> = {
   design: ['confirmed', 'cancelled', 'rolled_back'],
@@ -406,6 +418,13 @@ async function handleItemAction(item: TaskOrderItemOption, action: TaskItemActio
     return
   }
 
+  if (action.to_status === 'confirmed' || action.to_status === 'completed') {
+    completionItem.value = item
+    completionDialogVisible.value = true
+    actionLoadingId.value = item.id
+    return
+  }
+
   actionLoadingId.value = item.id
   if (action.operation === 'rollback') {
     const targetStage = action.target_stage
@@ -418,6 +437,11 @@ async function handleItemAction(item: TaskOrderItemOption, action: TaskItemActio
     return
   }
   emit('change', action.to_status, [item.id], reason)
+}
+
+function handleCompletionSubmit(files: File[], skipped: boolean) {
+  if (!completionItem.value) return
+  emit('complete', completionItem.value.id, files, skipped)
 }
 
 async function loadItems() {
@@ -551,7 +575,16 @@ watch(
   () => void loadItems(),
 )
 watch(() => props.changing, value => {
-  if (!value) actionLoadingId.value = null
+  if (!value) {
+    actionLoadingId.value = null
+    if (completionDialogVisible.value) completionDialogVisible.value = false
+  }
+})
+watch(completionDialogVisible, value => {
+  if (!value) {
+    completionItem.value = null
+    actionLoadingId.value = null
+  }
 })
 onMounted(loadItems)
 </script>

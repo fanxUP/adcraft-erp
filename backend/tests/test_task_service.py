@@ -7,7 +7,9 @@ from uuid import UUID
 import pytest
 
 from app.services.task_service import (
+    DesignTaskService,
     InstallationTaskService,
+    ProductionTaskService,
     can_view_outsource_tasks,
     visible_outsource_fields,
 )
@@ -148,6 +150,95 @@ async def test_unassigned_task_cannot_change_status(service, mock_repo):
             SAMPLE_USER_ID,
             order_item_ids=[str(task.order_item_id)],
         )
+
+
+@pytest.mark.asyncio
+async def test_complete_item_requires_upload_or_explicit_skip(service):
+    service.change_status = AsyncMock()
+
+    with pytest.raises(ValueError, match="上传至少一个资料，或选择跳过资料"):
+        await service.complete_item(
+            SAMPLE_TASK_ID,
+            str(SAMPLE_TASK_ID),
+            [],
+            skip_materials=False,
+            operated_by=SAMPLE_USER_ID,
+        )
+
+    service.change_status.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_complete_item_binds_uploaded_materials_to_clicked_item(service):
+    item_id = "66666666-6666-6666-6666-666666666666"
+    service.change_status = AsyncMock(return_value={"status": "completed"})
+    material_service = MagicMock()
+    material_service.upload_many_for_item = AsyncMock(
+        return_value=([{"id": "attachment-1"}], ["/tmp/attachment-1"])
+    )
+
+    with patch(
+        "app.services.order_task_attachment_service.OrderTaskAttachmentService",
+        return_value=material_service,
+    ):
+        result = await service.complete_item(
+            SAMPLE_TASK_ID,
+            item_id,
+            [MagicMock(name="现场.jpg")],
+            skip_materials=False,
+            operated_by=SAMPLE_USER_ID,
+        )
+
+    assert result == {"status": "completed"}
+    service.change_status.assert_awaited_once_with(
+        SAMPLE_TASK_ID,
+        "completed",
+        SAMPLE_USER_ID,
+        "",
+        [item_id],
+    )
+    material_service.upload_many_for_item.assert_awaited_once()
+    upload_kwargs = material_service.upload_many_for_item.await_args.kwargs
+    assert upload_kwargs["order_item_id"] == item_id
+    assert upload_kwargs["stage"] == "installation"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("service_class", "task_type", "terminal_status"),
+    [
+        (DesignTaskService, "design", "confirmed"),
+        (ProductionTaskService, "production", "completed"),
+        (InstallationTaskService, "installation", "completed"),
+    ],
+)
+async def test_all_stage_services_expose_single_item_completion(service_class, task_type, terminal_status):
+    service = service_class(AsyncMock())
+    service.change_status = AsyncMock(return_value={"status": terminal_status})
+
+    with patch(
+        "app.services.order_task_attachment_service.OrderTaskAttachmentService"
+    ) as attachment_class:
+        attachment_class.return_value.upload_many_for_item = AsyncMock(
+            return_value=([], [])
+        )
+        result = await service.complete_item(
+            SAMPLE_TASK_ID,
+            str(SAMPLE_TASK_ID),
+            [],
+            skip_materials=True,
+            operated_by=SAMPLE_USER_ID,
+        )
+
+    assert result["status"] == terminal_status
+    service.change_status.assert_awaited_once_with(
+        SAMPLE_TASK_ID,
+        terminal_status,
+        SAMPLE_USER_ID,
+        "完成时跳过资料上传",
+        [str(SAMPLE_TASK_ID)],
+    )
+    attachment_class.return_value.upload_many_for_item.assert_not_awaited()
 
 
 # --- Get Task Tests ---

@@ -73,6 +73,27 @@ describe('任务详情页界面收敛', () => {
     expect(source).not.toContain('getOrder(props.orderId)')
   })
 
+  it('任务详情只展示订单资料，完成动作统一进入单条资料上传或跳过流程', () => {
+    const attachmentSource = readSource('components/orders/OrderTaskAttachments.vue')
+    expect(attachmentSource).toContain('allowUpload')
+    expect(attachmentSource).toContain('groupAttachmentsByItemAndDate')
+
+    for (const relativePath of [
+      'views/tasks/DesignTaskDetail.vue',
+      'views/tasks/ProductionTaskDetail.vue',
+      'views/tasks/InstallationTaskDetail.vue',
+    ]) {
+      const source = readSource(relativePath)
+      expect(source).toContain(':allow-upload="false"')
+      expect(source).toContain('@complete="handleItemCompletion"')
+    }
+
+    expect(readSource('components/tasks/TaskOrderItemLinkCard.vue')).toContain('TaskCompletionAttachmentDialog')
+    expect(readSource('components/tasks/TaskOrderItemLinkCard.vue')).toContain(':loading="props.changing"')
+    expect(readSource('components/tasks/TaskOrderItemLinkCard.vue')).not.toContain('actionLoadingId === completionItem?.id')
+    expect(readSource('components/tasks/TaskCompletionAttachmentDialog.vue')).toContain('跳过资料并完成')
+  })
+
   it('任务处理明细按数量、金额、小计、任务进度顺序展示金额信息', () => {
     const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
     const quantityHeader = source.indexOf('>数量</span>')

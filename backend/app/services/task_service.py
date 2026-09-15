@@ -1,6 +1,7 @@
 import inspect
 from collections.abc import Collection
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -3378,6 +3379,81 @@ async def _notify_task_assignee(
     )
 
 
+async def _complete_task_item_with_materials(
+    service,
+    task_type: str,
+    task_id: UUID,
+    order_item_id: str | UUID,
+    files: Collection,
+    *,
+    skip_materials: bool = False,
+    reason: str | None = None,
+    operated_by: UUID | None = None,
+) -> dict:
+    """Complete exactly one item and atomically attach its completion files.
+
+    Status mutation remains delegated to each stage's existing workflow
+    implementation.  This helper only adds the common completion gate and
+    binds uploaded files to the same explicit item id.
+    """
+
+    item_id = str(order_item_id or "").strip()
+    if not item_id:
+        raise ValueError("请先选择要完成的订单明细")
+
+    selected_files = list(files or [])
+    if skip_materials and selected_files:
+        raise ValueError("已选择跳过资料，不能同时上传文件")
+    if not skip_materials and not selected_files:
+        raise ValueError("请上传至少一个资料，或选择跳过资料")
+
+    terminal_status = "confirmed" if task_type == "design" else "completed"
+    status_reason = (reason or "").strip()
+    if skip_materials and not status_reason:
+        status_reason = "完成时跳过资料上传"
+
+    stored_paths: list[str] = []
+    try:
+        task_payload = await service.change_status(
+            task_id,
+            terminal_status,
+            operated_by,
+            status_reason,
+            [item_id],
+        )
+        if skip_materials:
+            return task_payload
+
+        from app.services.order_task_attachment_service import OrderTaskAttachmentService
+
+        order_id = task_payload.get("order_id") or task_payload.get("document_id")
+        material_service = OrderTaskAttachmentService(service.db)
+        _, stored_paths = await material_service.upload_many_for_item(
+            order_id=order_id,
+            stage=task_type,
+            task_id=task_id,
+            order_item_id=item_id,
+            files=selected_files,
+            uploaded_by=operated_by,
+            uploaded_by_name=(
+                getattr(service.viewer, "real_name", None)
+                or getattr(service.viewer, "username", None)
+                if service.viewer is not None
+                else None
+            ),
+            viewer=service.viewer,
+            authorization_permission=TASK_CHANGE_PERMISSION_BY_TYPE[task_type],
+        )
+        return task_payload
+    except Exception:
+        await service.db.rollback()
+        for stored_path in stored_paths:
+            path = Path(stored_path)
+            if path.is_file():
+                path.unlink()
+        raise
+
+
 class DesignTaskService:
     def __init__(self, db: AsyncSession, viewer: User | None = None):
         self.db = db
@@ -3411,6 +3487,27 @@ class DesignTaskService:
     async def get_task(self, task_id: UUID) -> dict | None:
         task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         return await self._to_dict(task) if task else None
+
+    async def complete_item(
+        self,
+        task_id: UUID,
+        order_item_id: str | UUID,
+        files: Collection,
+        *,
+        skip_materials: bool = False,
+        reason: str | None = None,
+        operated_by: UUID | None = None,
+    ) -> dict:
+        return await _complete_task_item_with_materials(
+            self,
+            "design",
+            task_id,
+            order_item_id,
+            files,
+            skip_materials=skip_materials,
+            reason=reason,
+            operated_by=operated_by,
+        )
 
     async def create_task(self, data: dict, operated_by: UUID | None = None) -> dict:
         _reject_legacy_task_assignee_input(data, "design", self.viewer)
@@ -3749,6 +3846,27 @@ class ProductionTaskService:
     async def get_task(self, task_id: UUID) -> dict | None:
         task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         return await self._to_dict(task) if task else None
+
+    async def complete_item(
+        self,
+        task_id: UUID,
+        order_item_id: str | UUID,
+        files: Collection,
+        *,
+        skip_materials: bool = False,
+        reason: str | None = None,
+        operated_by: UUID | None = None,
+    ) -> dict:
+        return await _complete_task_item_with_materials(
+            self,
+            "production",
+            task_id,
+            order_item_id,
+            files,
+            skip_materials=skip_materials,
+            reason=reason,
+            operated_by=operated_by,
+        )
 
     async def create_task(self, data: dict, operated_by: UUID | None = None) -> dict:
         _reject_legacy_task_assignee_input(data, "production", self.viewer)
@@ -4119,6 +4237,27 @@ class InstallationTaskService:
     async def get_task(self, task_id: UUID) -> dict | None:
         task = await self.repo.get_by_id(task_id, viewer=self.viewer)
         return await self._to_dict(task) if task else None
+
+    async def complete_item(
+        self,
+        task_id: UUID,
+        order_item_id: str | UUID,
+        files: Collection,
+        *,
+        skip_materials: bool = False,
+        reason: str | None = None,
+        operated_by: UUID | None = None,
+    ) -> dict:
+        return await _complete_task_item_with_materials(
+            self,
+            "installation",
+            task_id,
+            order_item_id,
+            files,
+            skip_materials=skip_materials,
+            reason=reason,
+            operated_by=operated_by,
+        )
 
     async def create_task(self, data: dict, operated_by: UUID | None = None) -> dict:
         _reject_legacy_task_assignee_input(data, "installation", self.viewer)

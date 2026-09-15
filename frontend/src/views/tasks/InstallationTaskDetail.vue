@@ -38,12 +38,15 @@
         @linked="fetchTask"
         @change="handleWorkflowChange"
         @rollback="handleRollback"
+        @complete="handleItemCompletion"
       />
 
       <OrderTaskAttachments
         :order-id="task.order_id"
         stage="installation"
         :task-id="task.id"
+        :refresh-key="task.updated_at"
+        :allow-upload="false"
         compact
       />
 
@@ -74,7 +77,7 @@ import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { TaskOverviewCard } from '@/components/ui'
-import { getInstallationTask, changeInstallationTaskStatus, rollbackInstallationTaskItems } from '@/api/tasks'
+import { getInstallationTask, changeInstallationTaskStatus, rollbackInstallationTaskItems, completeTaskItem } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { InstallationTaskResponse } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
@@ -104,6 +107,16 @@ const INST_WORKFLOW: Record<string, string[]> = {
 
 async function handleWorkflowChange(to_status: string, orderItemIds: string[], reason = '') {
   await doChangeStatus(to_status, reason, orderItemIds)
+}
+
+async function handleItemCompletion(orderItemId: string, files: File[], skipped: boolean) {
+  changing.value = true
+  try {
+    await completeTaskItem('installation', route.params.id as string, orderItemId, files, skipped)
+    ElMessage.success(skipped ? '安装已完成（已跳过资料上传）' : '安装已完成，现场资料已归档')
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
+  } catch { /* handled */ } finally { changing.value = false }
 }
 
 async function handleRollback(targetStage: 'design' | 'production', orderItemIds: string[], reason = '') {

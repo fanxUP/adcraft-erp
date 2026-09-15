@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -37,6 +37,7 @@ from app.core.permissions import (
     PERM_TASK_COMPLETION_READ,
     PERM_TASK_QUEUE_READ,
     require_permission,
+    require_any_permission,
     user_has_permission as _user_has_permission,
 )
 from app.models.user import User
@@ -429,6 +430,61 @@ _TASK_LABELS = {
     "production": "制作",
     "installation": "安装",
 }
+
+_TASK_CHANGE_STATUS_PERMISSIONS = {
+    "design": PERM_DESIGN_TASK_CHANGE_STATUS,
+    "production": PERM_PRODUCTION_TASK_CHANGE_STATUS,
+    "installation": PERM_INSTALLATION_TASK_CHANGE_STATUS,
+}
+
+
+@queue_router.post("/complete-item")
+async def complete_task_item(
+    task_type: TaskType = Form(...),
+    task_id: str = Form(...),
+    order_item_id: str = Form(...),
+    skip_materials: bool = Form(False),
+    reason: str | None = Form(None),
+    files: list[UploadFile] = File(default=[]),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_any_permission(
+            PERM_DESIGN_TASK_CHANGE_STATUS,
+            PERM_PRODUCTION_TASK_CHANGE_STATUS,
+            PERM_INSTALLATION_TASK_CHANGE_STATUS,
+        )
+    ),
+):
+    """Complete one item and optionally store its completion materials.
+
+    The stage-specific service still performs all ownership, workflow,
+    outsource, and downstream-task checks.  This route only normalizes the
+    multipart command shared by the three task types.
+    """
+
+    required_permission = _TASK_CHANGE_STATUS_PERMISSIONS[task_type]
+    if not _user_has_permission(current_user, required_permission):
+        raise HTTPException(status_code=403, detail=f"当前账号没有{_TASK_LABELS[task_type]}任务状态变更权限")
+
+    service_class = {
+        "design": DesignTaskService,
+        "production": ProductionTaskService,
+        "installation": InstallationTaskService,
+    }[task_type]
+    service = service_class(db, current_user)
+    try:
+        task = await service.complete_item(
+            _ensure_uuid(task_id),
+            order_item_id,
+            files or [],
+            skip_materials=skip_materials,
+            reason=reason,
+            operated_by=current_user.id,
+        )
+        return success(task)
+    except ValueError as exc:
+        await db.rollback()
+        return {"code": 40001, "message": str(exc), "data": None}
 
 
 @queue_router.get("/assignee-options")

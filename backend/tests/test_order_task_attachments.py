@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -6,7 +7,11 @@ from uuid import uuid4
 import pytest
 from fastapi import UploadFile
 
-from app.services.order_task_attachment_service import OrderTaskAttachmentService
+from app.api import tasks as task_api
+from app.services.order_task_attachment_service import (
+    OrderTaskAttachmentService,
+    serialize_order_task_attachment,
+)
 
 
 class _Result:
@@ -66,12 +71,13 @@ def _task(task_id, order_id, *, task_type="design", status="pending"):
     )
 
 
-def _attachment(attachment_id, order_id, *, stage="design"):
+def _attachment(attachment_id, order_id, *, stage="design", order_item_id=None):
     return SimpleNamespace(
         id=attachment_id,
         related_type="order_stage",
         related_id=order_id,
         order_id=order_id,
+        order_item_id=order_item_id,
         stage=stage,
         filename="设计说明.pdf",
         file_path="202609/private.pdf",
@@ -82,6 +88,24 @@ def _attachment(attachment_id, order_id, *, stage="design"):
         remark=None,
         created_at=None,
     )
+
+
+def test_attachment_serializer_exposes_item_context_without_storage_path():
+    order_id = uuid4()
+    item_id = uuid4()
+    payload = serialize_order_task_attachment(
+        _attachment(uuid4(), order_id, order_item_id=item_id),
+        uploaded_by_name="设计员",
+        order_item_name="标志",
+        order_item_sort_order=2,
+        order_item_label="标志（明细第3条）",
+    )
+
+    assert payload["order_item_id"] == str(item_id)
+    assert payload["order_item_name"] == "标志"
+    assert payload["order_item_sort_order"] == 2
+    assert payload["order_item_label"] == "标志（明细第3条）"
+    assert "file_path" not in payload
 
 
 @pytest.mark.asyncio
@@ -187,6 +211,118 @@ async def test_upload_returns_metadata_and_keeps_physical_path_private(tmp_path,
     assert payload["stage"] == "design"
     assert "file_path" not in payload
     assert list(tmp_path.rglob("*.pdf"))
+
+
+@pytest.mark.asyncio
+async def test_completion_upload_binds_every_file_to_the_clicked_order_item(tmp_path, monkeypatch):
+    order_id = uuid4()
+    task_id = uuid4()
+    item_id = uuid4()
+    uploader_id = uuid4()
+    monkeypatch.setattr("app.services.order_task_attachment_service.settings.LOCAL_UPLOAD_DIR", str(tmp_path))
+    db = _Db(
+        _Result(scalar=_order(order_id)),
+        _Result(scalar=_task(task_id, order_id)),
+    )
+    db.get = AsyncMock(return_value=SimpleNamespace(
+        id=item_id,
+        document_id=order_id,
+        lifecycle_status="active",
+    ))
+    file = UploadFile(
+        filename="现场.jpg",
+        file=BytesIO(b"\xff\xd8\xffphoto-data"),
+        headers={"content-type": "image/jpeg"},
+    )
+
+    from unittest.mock import patch
+
+    with patch("app.services.order_task_attachment_service.log_operation", new=AsyncMock()):
+        payloads, stored_paths = await OrderTaskAttachmentService(db).upload_many_for_item(
+            order_id,
+            "installation",
+            task_id,
+            item_id,
+            [file],
+            uploader_id,
+            "安装员",
+        )
+
+    assert payloads[0]["order_item_id"] == str(item_id)
+    assert stored_paths and Path(stored_paths[0]).is_file()
+    saved_attachment = db.add.call_args.args[0]
+    assert saved_attachment.order_item_id == item_id
+
+
+@pytest.mark.asyncio
+async def test_list_includes_order_item_context_for_album_grouping():
+    order_id = uuid4()
+    item_id = uuid4()
+    attachment = _attachment(uuid4(), order_id, order_item_id=item_id)
+    db = _Db(
+        _Result(scalar=_order(order_id)),
+        _Result(rows=[(attachment, "设计员", "designer")]),
+        _Result(rows=[(item_id, "标志", 4)]),
+    )
+
+    payload = await OrderTaskAttachmentService(db).list_for_order(
+        order_id,
+        stage="design",
+    )
+
+    listed = payload["groups"][0]["attachments"][0]
+    assert listed["order_item_id"] == str(item_id)
+    assert listed["order_item_name"] == "标志"
+    assert listed["order_item_sort_order"] == 4
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("task_type", "service_name", "permission"),
+    [
+        ("design", "DesignTaskService", task_api.PERM_DESIGN_TASK_CHANGE_STATUS),
+        ("production", "ProductionTaskService", task_api.PERM_PRODUCTION_TASK_CHANGE_STATUS),
+        ("installation", "InstallationTaskService", task_api.PERM_INSTALLATION_TASK_CHANGE_STATUS),
+    ],
+)
+async def test_completion_route_dispatches_one_item_command_per_stage(
+    task_type,
+    service_name,
+    permission,
+    monkeypatch,
+):
+    task_id = uuid4()
+    item_id = uuid4()
+    viewer = SimpleNamespace(id=uuid4(), real_name="执行人", username="executor")
+    db = MagicMock()
+    service = MagicMock()
+    service.complete_item = AsyncMock(return_value={"id": str(task_id)})
+    monkeypatch.setattr(task_api, "_user_has_permission", lambda _user, code: code == permission)
+
+    from unittest.mock import patch
+
+    with patch.object(task_api, service_name, return_value=service):
+        result = await task_api.complete_task_item(
+            task_type=task_type,
+            task_id=str(task_id),
+            order_item_id=str(item_id),
+            skip_materials=True,
+            reason="本次不需要资料",
+            files=[],
+            db=db,
+            current_user=viewer,
+        )
+
+    assert result["code"] == 0
+    assert result["data"] == {"id": str(task_id)}
+    service.complete_item.assert_awaited_once_with(
+        task_id,
+        str(item_id),
+        [],
+        skip_materials=True,
+        reason="本次不需要资料",
+        operated_by=viewer.id,
+    )
 
 
 @pytest.mark.asyncio

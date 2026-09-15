@@ -29,7 +29,7 @@ from app.core.permissions import (
     PERM_TASK_COMPLETION_VIEW_ALL,
     user_has_permission,
 )
-from app.models.business_document import BusinessDocument
+from app.models.business_document import BusinessDocument, BusinessDocumentItem
 from app.models.task import Attachment, DesignTask, InstallationTask, ProductionTask
 from app.models.task_item_status_log import TaskItemStatusLog
 from app.models.user import User
@@ -101,15 +101,23 @@ def serialize_order_task_attachment(
     attachment: Attachment,
     *,
     uploaded_by_name: str | None = None,
+    order_item_name: str | None = None,
+    order_item_sort_order: int | None = None,
+    order_item_label: str | None = None,
 ) -> dict:
     """Expose metadata only; never expose the server storage path."""
 
     order_id = getattr(attachment, "order_id", None)
+    order_item_id = getattr(attachment, "order_item_id", None)
     return {
         "id": str(attachment.id),
         "related_type": attachment.related_type,
         "related_id": str(attachment.related_id),
         "order_id": str(order_id) if order_id else None,
+        "order_item_id": str(order_item_id) if order_item_id else None,
+        "order_item_name": order_item_name,
+        "order_item_sort_order": order_item_sort_order,
+        "order_item_label": order_item_label or order_item_name,
         "stage": getattr(attachment, "stage", None),
         "filename": attachment.filename,
         "file_size": attachment.file_size,
@@ -214,12 +222,15 @@ class OrderTaskAttachmentService:
         operation: str,
         task_id: UUID | None = None,
         order: BusinessDocument | None = None,
+        required_permission: str | None = None,
     ) -> BusinessDocument:
         config = _stage_config(stage)
         order_access = self._has_permission(viewer, PERM_ORDER_READ)
 
         if not order_access:
-            required = config["read_permission"] if operation == "read" else config["write_permission"]
+            required = required_permission or (
+                config["read_permission"] if operation == "read" else config["write_permission"]
+            )
             if not self._has_permission(viewer, required):
                 action = "查看" if operation == "read" else "操作"
                 raise OrderTaskAttachmentPermissionError(
@@ -279,6 +290,35 @@ class OrderTaskAttachmentService:
         )
         return list(result.all())
 
+    async def _attachment_item_metadata(
+        self,
+        attachments: list[Attachment],
+        order_id: UUID,
+    ) -> dict[UUID, tuple[str | None, int | None]]:
+        item_ids = {
+            item_id
+            for attachment in attachments
+            if (item_id := getattr(attachment, "order_item_id", None)) is not None
+        }
+        if not item_ids:
+            return {}
+
+        result = await self.db.execute(
+            select(
+                BusinessDocumentItem.id,
+                BusinessDocumentItem.item_name,
+                BusinessDocumentItem.sort_order,
+            ).where(
+                BusinessDocumentItem.id.in_(item_ids),
+                BusinessDocumentItem.document_id == order_id,
+            )
+        )
+        metadata: dict[UUID, tuple[str | None, int | None]] = {}
+        for row in result.all():
+            item_id = row[0]
+            metadata[item_id] = (row[1], row[2])
+        return metadata
+
     async def list_for_order(
         self,
         order_id: UUID,
@@ -310,10 +350,20 @@ class OrderTaskAttachmentService:
         for current_stage in requested_stages:
             config = _stage_config(current_stage)
             rows = await self._attachment_rows(order_id, current_stage)
+            row_attachments = [row[0] for row in rows]
+            item_metadata = await self._attachment_item_metadata(row_attachments, order_id)
             attachments = [
                 serialize_order_task_attachment(
                     attachment,
                     uploaded_by_name=real_name or username,
+                    order_item_name=item_metadata.get(
+                        getattr(attachment, "order_item_id", None),
+                        (None, None),
+                    )[0],
+                    order_item_sort_order=item_metadata.get(
+                        getattr(attachment, "order_item_id", None),
+                        (None, None),
+                    )[1],
                 )
                 for attachment, real_name, username in rows
             ]
@@ -348,6 +398,7 @@ class OrderTaskAttachmentService:
         uploaded_by_name: str | None = None,
         *,
         viewer: User | None = None,
+        order_item_id: UUID | None = None,
     ) -> dict:
         """Create an order-stage attachment; ``task_id`` is optional context."""
 
@@ -360,10 +411,27 @@ class OrderTaskAttachmentService:
             task_id=task_id,
         )
 
-        contents = await file.read()
+        contents, safe_extension, category = await self._validate_file(task_type, file)
+        payload, _ = await self._store_attachment(
+            order_id,
+            task_type,
+            task_id,
+            file,
+            contents,
+            safe_extension,
+            category,
+            uploaded_by,
+            uploaded_by_name,
+            order_item_id=order_item_id,
+        )
+        return payload
+
+    async def _validate_file(self, task_type: str, file) -> tuple[bytes, str | None, str | None]:
         # Reuse the established magic-byte and extension policy so the order
         # entry and task-entry adapters cannot drift apart.
         from app.api.tasks import validate_installation_media, validate_task_attachment
+
+        contents = await file.read()
 
         if task_type == "installation":
             message, safe_extension, category = validate_installation_media(
@@ -378,6 +446,22 @@ class OrderTaskAttachmentService:
             )
         if message:
             raise ValueError(message)
+        return contents, safe_extension, category
+
+    async def _store_attachment(
+        self,
+        order_id: UUID,
+        task_type: str,
+        task_id: UUID | None,
+        file,
+        contents: bytes,
+        safe_extension: str | None,
+        category: str | None,
+        uploaded_by: UUID,
+        uploaded_by_name: str | None,
+        *,
+        order_item_id: UUID | None = None,
+    ) -> tuple[dict, str]:
 
         date_dir = datetime.now(timezone.utc).strftime("%Y%m")
         dest_dir = Path(settings.LOCAL_UPLOAD_DIR) / date_dir
@@ -398,6 +482,7 @@ class OrderTaskAttachmentService:
                 related_type="order_stage",
                 related_id=order_id,
                 order_id=order_id,
+                order_item_id=order_item_id,
                 stage=task_type,
                 filename=display_name or unique_name,
                 file_path=relative_path,
@@ -420,6 +505,7 @@ class OrderTaskAttachmentService:
                 after_data={
                     "attachment_id": str(attachment.id),
                     "stage": task_type,
+                    "order_item_id": str(order_item_id) if order_item_id else None,
                     "entry_task_id": str(task_id) if task_id else None,
                     "filename": attachment.filename,
                     "file_size": attachment.file_size,
@@ -435,7 +521,78 @@ class OrderTaskAttachmentService:
         return serialize_order_task_attachment(
             attachment,
             uploaded_by_name=uploaded_by_name,
+        ), str(stored_path)
+
+    async def upload_many_for_item(
+        self,
+        order_id: UUID,
+        stage: str,
+        task_id: UUID,
+        order_item_id: UUID | str,
+        files: list,
+        uploaded_by: UUID,
+        uploaded_by_name: str | None = None,
+        *,
+        viewer: User | None = None,
+        authorization_permission: str | None = None,
+    ) -> tuple[list[dict], list[str]]:
+        """Upload completion materials and bind every file to one item.
+
+        The caller owns the surrounding transaction.  Physical files are
+        removed if any file in the batch fails so a failed completion cannot
+        leave orphaned files on disk.
+        """
+
+        _stage_config(stage)
+        order = await self._authorize(
+            order_id,
+            stage,
+            viewer,
+            operation="write",
+            task_id=task_id,
+            required_permission=authorization_permission,
         )
+        try:
+            item_uuid = UUID(str(order_item_id))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("订单明细编号无效") from exc
+
+        item = await self.db.get(BusinessDocumentItem, item_uuid)
+        if (
+            item is None
+            or item.document_id != order.id
+            or getattr(item, "lifecycle_status", "active") != "active"
+        ):
+            raise ValueError("订单明细不存在或已失效")
+        if not files:
+            raise ValueError("请至少选择一个资料")
+
+        payloads: list[dict] = []
+        stored_paths: list[str] = []
+        try:
+            for file in files:
+                contents, safe_extension, category = await self._validate_file(stage, file)
+                payload, stored_path = await self._store_attachment(
+                    order_id,
+                    stage,
+                    task_id,
+                    file,
+                    contents,
+                    safe_extension,
+                    category,
+                    uploaded_by,
+                    uploaded_by_name,
+                    order_item_id=item_uuid,
+                )
+                payloads.append(payload)
+                stored_paths.append(stored_path)
+        except Exception:
+            for stored_path in stored_paths:
+                path = Path(stored_path)
+                if path.is_file():
+                    path.unlink()
+            raise
+        return payloads, stored_paths
 
     async def _get_order_attachment(
         self,

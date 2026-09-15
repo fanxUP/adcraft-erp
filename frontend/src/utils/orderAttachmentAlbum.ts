@@ -5,11 +5,26 @@ export interface AttachmentWithCreatedAt {
   created_at?: string | null
 }
 
+export interface AttachmentWithItem extends AttachmentWithCreatedAt {
+  order_item_id?: string | null
+  order_item_name?: string | null
+  order_item_label?: string | null
+  order_item_sort_order?: number | null
+}
+
 export interface AttachmentAlbumGroup<T extends AttachmentWithCreatedAt> {
   key: string
   label: string
   isUnknown: boolean
   attachments: T[]
+}
+
+export interface AttachmentItemAlbumGroup<T extends AttachmentWithItem> {
+  key: string
+  label: string
+  orderItemId: string | null
+  sortOrder: number | null
+  dates: AttachmentAlbumGroup<T>[]
 }
 
 function parseCreatedAt(value?: string | null) {
@@ -55,4 +70,61 @@ export function groupAttachmentsByDate<T extends AttachmentWithCreatedAt>(
     })
   }
   return Array.from(groups.values())
+}
+
+/**
+ * Group order-owned materials by project content and then by upload date.
+ * The item id, rather than its display name, is the identity so two rows with
+ * the same name never leak materials into one another.
+ */
+export function groupAttachmentsByItemAndDate<T extends AttachmentWithItem>(
+  attachments: readonly T[],
+  options?: { itemLabel?: (attachment: T) => string },
+): AttachmentItemAlbumGroup<T>[] {
+  const groups = new Map<string, {
+    firstIndex: number
+    label: string
+    orderItemId: string | null
+    sortOrder: number | null
+    attachments: T[]
+  }>()
+
+  attachments.forEach((attachment, index) => {
+    const orderItemId = attachment.order_item_id || null
+    const key = orderItemId || 'unscoped'
+    const current = groups.get(key)
+    if (current) {
+      current.attachments.push(attachment)
+      return
+    }
+
+    groups.set(key, {
+      firstIndex: index,
+      label: orderItemId
+        ? options?.itemLabel?.(attachment)
+          || attachment.order_item_label
+          || attachment.order_item_name
+          || '未命名项目内容'
+        : '未关联项目内容',
+      orderItemId,
+      sortOrder: attachment.order_item_sort_order ?? null,
+      attachments: [attachment],
+    })
+  })
+
+  return Array.from(groups.values())
+    .sort((left, right) => {
+      if (left.orderItemId === null && right.orderItemId !== null) return 1
+      if (left.orderItemId !== null && right.orderItemId === null) return -1
+      const leftSort = left.sortOrder ?? Number.POSITIVE_INFINITY
+      const rightSort = right.sortOrder ?? Number.POSITIVE_INFINITY
+      return leftSort - rightSort || left.firstIndex - right.firstIndex
+    })
+    .map(group => ({
+      key: group.orderItemId || 'unscoped',
+      label: group.label,
+      orderItemId: group.orderItemId,
+      sortOrder: group.sortOrder,
+      dates: groupAttachmentsByDate(group.attachments),
+    }))
 }

@@ -569,6 +569,10 @@ export interface OrderTaskAttachmentResponse {
   related_type: 'order_stage' | 'design_task' | 'production_task' | 'installation_task'
   related_id: string
   order_id?: string | null
+  order_item_id?: string | null
+  order_item_name?: string | null
+  order_item_label?: string | null
+  order_item_sort_order?: number | null
   stage?: TaskType | null
   filename: string
   file_size?: number | null

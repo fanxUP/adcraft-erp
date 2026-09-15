@@ -131,6 +131,13 @@ class Attachment(Base, TimestampMixin):
             "stage",
             "created_at",
         ),
+        Index(
+            "ix_attachments_order_stage_item_created_at",
+            "order_id",
+            "stage",
+            "order_item_id",
+            "created_at",
+        ),
         CheckConstraint(
             "stage IS NULL OR stage IN ('design', 'production', 'installation')",
             name="ck_attachments_order_stage",
@@ -146,6 +153,11 @@ class Attachment(Base, TimestampMixin):
     order_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("business_documents.id"),
+        nullable=True,
+    )
+    order_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("business_document_items.id", ondelete="SET NULL"),
         nullable=True,
     )
     stage: Mapped[str | None] = mapped_column(String(32), nullable=True)

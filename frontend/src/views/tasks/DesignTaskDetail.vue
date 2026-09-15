@@ -36,12 +36,15 @@
         :changing="changing"
         @linked="fetchTask"
         @change="handleWorkflowChange"
+        @complete="handleItemCompletion"
       />
 
       <OrderTaskAttachments
         :order-id="task.order_id"
         stage="design"
         :task-id="task.id"
+        :refresh-key="task.updated_at"
+        :allow-upload="false"
         compact
       />
 
@@ -68,7 +71,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getDesignTask, changeDesignTaskStatus } from '@/api/tasks'
+import { getDesignTask, changeDesignTaskStatus, completeTaskItem } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DesignTaskResponse } from '@/types/api'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
@@ -98,6 +101,16 @@ const DESIGN_WORKFLOW: Record<string, string[]> = {
 
 async function handleWorkflowChange(to_status: string, orderItemIds: string[], reason = '') {
   await doChangeStatus(to_status, reason, orderItemIds)
+}
+
+async function handleItemCompletion(orderItemId: string, files: File[], skipped: boolean) {
+  changing.value = true
+  try {
+    await completeTaskItem('design', route.params.id as string, orderItemId, files, skipped)
+    ElMessage.success(skipped ? '设计已完成（已跳过资料上传）' : '设计已完成，资料已归档')
+    await fetchTask()
+    await aiStore.notifyBusinessMutation()
+  } catch { /* handled */ } finally { changing.value = false }
 }
 
 async function doChangeStatus(to_status: string, reason: string, orderItemIds: string[]) {

@@ -18,7 +18,7 @@ import {
   validateInstallationMedia,
   validateInstallationPhoto,
 } from './taskPhotoUpload'
-import { groupAttachmentsByDate } from './orderAttachmentAlbum'
+import { groupAttachmentsByDate, groupAttachmentsByItemAndDate } from './orderAttachmentAlbum'
 
 describe('task photo upload helpers', () => {
   it('uses a gentle wheel zoom step for site photo previews', () => {
@@ -106,5 +106,19 @@ describe('task photo upload helpers', () => {
       'newer',
     ])
     expect(groups[2].isUnknown).toBe(true)
+  })
+
+  it('groups materials by order item first and then by upload date', () => {
+    const groups = groupAttachmentsByItemAndDate([
+      { id: 'item-a-old', order_item_id: 'item-a', order_item_name: '标志', order_item_sort_order: 0, created_at: '2026-09-13T08:00:00+08:00' },
+      { id: 'item-b-new', order_item_id: 'item-b', order_item_name: '发光字', order_item_sort_order: 1, created_at: '2026-09-14T16:20:00+08:00' },
+      { id: 'item-a-new', order_item_id: 'item-a', order_item_name: '标志', order_item_sort_order: 0, created_at: '2026-09-14T18:20:00+08:00' },
+      { id: 'unscoped', order_item_id: null, created_at: null },
+    ])
+
+    expect(groups.map(group => group.label)).toEqual(['标志', '发光字', '未关联项目内容'])
+    expect(groups[0].dates.map(date => date.label)).toEqual(['2026-09-14', '2026-09-13'])
+    expect(groups[0].dates[0].attachments.map(item => item.id)).toEqual(['item-a-new'])
+    expect(groups[2].orderItemId).toBeNull()
   })
 })

@@ -130,6 +130,8 @@
           :order-id="currentTask.order_id"
           stage="installation"
           :task-id="currentTask.id"
+          :refresh-key="currentTask.updated_at"
+          :allow-upload="false"
           compact
           capture
         />
@@ -177,6 +179,14 @@
             </div>
           </div>
         </div>
+
+        <TaskCompletionAttachmentDialog
+          v-model="completionDialogVisible"
+          task-type="installation"
+          :item-label="completionItem ? itemLabel(completionItem) : ''"
+          :loading="completionBusy"
+          @submit="handleCompletionSubmit"
+        />
       </div>
     </el-drawer>
 
@@ -193,8 +203,10 @@ import {
   changeInstallationTaskStatus,
   rollbackInstallationTaskItems,
   getTaskOrderItemOptions,
+  completeTaskItem,
 } from '@/api/tasks'
 import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
+import TaskCompletionAttachmentDialog from '@/components/tasks/TaskCompletionAttachmentDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { InstallationTaskResponse, TaskItemAction, TaskOrderItemOption } from '@/types/api'
@@ -217,6 +229,9 @@ const currentItemOptions = ref<TaskOrderItemOption[]>([])
 const itemOptionsLoading = ref(false)
 const itemOptionsError = ref('')
 const actionBusyItemId = ref<string | null>(null)
+const completionDialogVisible = ref(false)
+const completionBusy = ref(false)
+const completionItem = ref<TaskOrderItemOption | null>(null)
 let touchStartY = 0
 
 // --- Status config ---
@@ -369,6 +384,12 @@ function itemStatusLabel(item: TaskOrderItemOption) {
   return item.task_status_label || item.task_status || '未关联'
 }
 
+function itemLabel(item: TaskOrderItemOption) {
+  return item.material_process
+    ? `${item.item_name} · ${item.material_process}`
+    : item.item_name
+}
+
 // --- Per-item status change ---
 async function handleItemAction(item: TaskOrderItemOption, action: TaskItemAction) {
   if (!currentTask.value) return
@@ -402,6 +423,13 @@ async function handleItemAction(item: TaskOrderItemOption, action: TaskItemActio
     return
   }
 
+  if (action.to_status === 'completed') {
+    completionItem.value = item
+    actionBusyItemId.value = item.id
+    completionDialogVisible.value = true
+    return
+  }
+
   actionBusyItemId.value = item.id
   try {
     if (action.operation === 'rollback') {
@@ -431,6 +459,32 @@ async function handleItemAction(item: TaskOrderItemOption, action: TaskItemActio
   }
 }
 
+async function handleCompletionSubmit(files: File[], skipped: boolean) {
+  if (!currentTask.value || !completionItem.value) return
+  completionBusy.value = true
+  try {
+    await completeTaskItem(
+      'installation',
+      currentTask.value.id,
+      completionItem.value.id,
+      files,
+      skipped,
+    )
+    ElMessage.success(skipped ? '安装已完成（已跳过资料上传）' : '安装已完成，现场资料已归档')
+    completionDialogVisible.value = false
+    currentTask.value = await getInstallationTask(currentTask.value.id)
+    await Promise.all([loadCurrentItemOptions(), fetchTasks()])
+  } catch (e: unknown) {
+    ElMessage.error(getErrorMessage(e, '完成明细失败'))
+  } finally {
+    completionBusy.value = false
+    if (!completionDialogVisible.value) {
+      completionItem.value = null
+      actionBusyItemId.value = null
+    }
+  }
+}
+
 // --- Lifecycle ---
 onMounted(() => {
   fetchTasks()
@@ -452,6 +506,13 @@ onMounted(() => {
 watch(() => document.visibilityState, (state) => {
   if (state === 'visible' && allTasks.value.length > 0) {
     fetchTasks(true)
+  }
+})
+
+watch(completionDialogVisible, value => {
+  if (!value && !completionBusy.value) {
+    completionItem.value = null
+    actionBusyItemId.value = null
   }
 })
 </script>
