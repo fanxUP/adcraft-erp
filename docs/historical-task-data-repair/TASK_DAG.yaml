@@ -71,8 +71,12 @@ execution:
       backup_reference: /opt/adcraft/backups/backup_20260915_051057.tar.gz
       target: production_link
       resulting_task_progress_pct: 25
+    - id: H-002
+      status: applied_and_verified
+      backup_reference: /opt/adcraft/backups/backup_20260915_055333.tar.gz
+      target: design_link
+      resulting_task_progress_pct: 67
   pending_candidates:
-    - H-002
     - H-003
     - H-004
     - H-005
