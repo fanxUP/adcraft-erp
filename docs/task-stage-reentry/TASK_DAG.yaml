@@ -1,7 +1,7 @@
 version: 1
 name: task-stage-reentry
 mode: STRICT
-status: implemented_pending_deploy
+status: deployed
 objective: >-
   统一修复设计、制作、安装任务的订单明细阶段重入逻辑：回退关联不再阻断再次进入下一阶段，
   只重置当前明细，不重复创建任务卡，历史取消不自动恢复，并保持任务与订单混合进度正确。
@@ -59,7 +59,7 @@ nodes:
     depends_on: [SR-P03, SR-P06]
   - id: SR-P10
     title: 完整验证提交和部署
-    status: in_progress
+    status: completed
     acceptance: A-SR-10
     depends_on: [SR-P06, SR-P07, SR-P08, SR-P09]
 backlog:
