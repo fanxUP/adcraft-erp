@@ -95,7 +95,8 @@ def upgrade() -> None:
                 JOIN contracts c ON c.id = fcp.contract_id
                 WHERE fcp.deleted_at IS NULL AND c.deleted_at IS NULL
             ), unique_links AS (
-                SELECT document_id, min(contract_id) AS contract_id
+                SELECT document_id,
+                       (array_agg(contract_id ORDER BY contract_id))[1] AS contract_id
                 FROM linked
                 GROUP BY document_id
                 HAVING count(DISTINCT contract_id) = 1
