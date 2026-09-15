@@ -35,5 +35,7 @@ fi
 grep -q 'https://github.com/fanxUP/adcraft-erp.git' "$ROOT_DIR/deploy.sh"
 grep -q 'docker compose -f "\$COMPOSE_FILE" up -d --build' "$ROOT_DIR/deploy.sh"
 grep -q 'git clone --origin origin --branch' "$ROOT_DIR/install-ubuntu.sh"
+grep -q 'install -d -o "\$service_user" -g "\$service_group" -m 0750 "\$upload_dir"' "$ROOT_DIR/deploy.sh"
+grep -q 'find "\$upload_dir" -xdev -type f' "$ROOT_DIR/deploy.sh"
 
 echo "simple deployment tests passed"

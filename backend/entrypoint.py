@@ -117,8 +117,7 @@ def _run_alembic():
     """Run Alembic migrations."""
     alembic_dir = INTERNAL_DIR / "alembic"
     if not alembic_dir.exists():
-        print("⚠  Alembic directory not found — skipping migrations")
-        return
+        raise RuntimeError(f"数据库迁移目录不存在，服务未启动：{alembic_dir}")
 
     print("🔄 Running database migrations...")
     try:
@@ -136,7 +135,8 @@ def _run_alembic():
         command.upgrade(alembic_cfg, "head")
         print("✅ Migrations complete")
     except Exception as exc:
-        print(f"⚠  Migration warning: {exc}")
+        print(f"❌ 数据库迁移失败，服务未启动：{exc}", file=sys.stderr)
+        raise RuntimeError("数据库迁移失败，服务未启动") from exc
 
 
 def _seed_data():

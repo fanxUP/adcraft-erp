@@ -526,6 +526,7 @@ import { getDesignTasks, getProductionTasks, getInstallationTasks } from '@/api/
 import { ProgressBar, StatusTag } from '@/components/ui'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { escapePrintText } from '@/utils/printSafety'
 import type {
   DesignTaskResponse,
   InstallationTaskResponse,
@@ -980,16 +981,16 @@ async function handlePrintOrder() {
   wrapper.className = 'print-a4-wrapper'
 
   let html = '<div class="print-company" style="text-align:center;margin-bottom:8px;">'
-  html += '<div style="font-size:20px;font-weight:700;">' + (companyName || '广告制作公司') + '</div>'
-  html += '<div style="font-size:13px;color:#666;">联系电话: ' + (companyPhone || '__________') + '</div>'
+  html += '<div style="font-size:20px;font-weight:700;">' + escapePrintText(companyName, '广告制作公司') + '</div>'
+  html += '<div style="font-size:13px;color:#666;">联系电话: ' + escapePrintText(companyPhone, '__________') + '</div>'
   html += '</div>'
-  html += '<div class="print-title">订单 ' + o.order_no + '</div>'
+  html += '<div class="print-title">订单 ' + escapePrintText(o.order_no) + '</div>'
   html += '<div class="print-info">'
-  html += '<div class="print-info-row"><span><strong>订单编号:</strong> ' + (o.order_no || '-') + '</span><span><strong>项目名称:</strong> ' + (o.project_name || '-') + '</span></div>'
-  html += '<div class="print-info-row"><span><strong>联系人:</strong> ' + (o.contact_person || '-') + '</span><span><strong>联系电话:</strong> ' + (o.contact_phone || '-') + '</span></div>'
-  html += '<div class="print-info-row"><span><strong>安装地址:</strong> ' + (o.installation_address || '-') + '</span><span><strong>总金额:</strong> ¥' + (o.total_amount || 0).toFixed(2) + '</span></div>'
+  html += '<div class="print-info-row"><span><strong>订单编号:</strong> ' + escapePrintText(o.order_no) + '</span><span><strong>项目名称:</strong> ' + escapePrintText(o.project_name) + '</span></div>'
+  html += '<div class="print-info-row"><span><strong>联系人:</strong> ' + escapePrintText(o.contact_person) + '</span><span><strong>联系电话:</strong> ' + escapePrintText(o.contact_phone) + '</span></div>'
+  html += '<div class="print-info-row"><span><strong>安装地址:</strong> ' + escapePrintText(o.installation_address) + '</span><span><strong>总金额:</strong> ¥' + (o.total_amount || 0).toFixed(2) + '</span></div>'
   html += '<div class="print-info-row"><span><strong>已收金额:</strong> ¥' + (o.paid_amount || 0).toFixed(2) + '</span><span><strong>未收金额:</strong> ¥' + (o.unpaid_amount || 0).toFixed(2) + '</span></div>'
-  if (o.remark) html += '<div class="print-info-row"><span><strong>备注:</strong> ' + o.remark + '</span></div>'
+  if (o.remark) html += '<div class="print-info-row"><span><strong>备注:</strong> ' + escapePrintText(o.remark) + '</span></div>'
   html += '</div>'
   
   // Items table
@@ -1001,14 +1002,14 @@ async function handlePrintOrder() {
     items.forEach((item, i) => {
       html += '<tr>'
       html += '<td class="center">' + (i + 1) + '</td>'
-      html += '<td>' + (item.item_name || '') + '</td>'
-      html += '<td>' + (item.material_process) + '</td>'
-      html += '<td>' + (item.specification || '-') + '</td>'
-      html += '<td class="numeric">' + (item.quantity != null ? item.quantity : '') + '</td>'
-      html += '<td class="center">' + (item.unit || '-') + '</td>'
+      html += '<td>' + escapePrintText(item.item_name, '') + '</td>'
+      html += '<td>' + escapePrintText(item.material_process) + '</td>'
+      html += '<td>' + escapePrintText(item.specification) + '</td>'
+      html += '<td class="numeric">' + escapePrintText(item.quantity, '') + '</td>'
+      html += '<td class="center">' + escapePrintText(item.unit) + '</td>'
       html += '<td class="numeric">' + (item.unit_price != null ? item.unit_price.toFixed(2) : '-') + '</td>'
       html += '<td class="numeric">' + (item.subtotal_amount != null ? item.subtotal_amount.toFixed(2) : '-') + '</td>'
-      html += '<td>' + (item.remark || '') + '</td>'
+      html += '<td>' + escapePrintText(item.remark, '') + '</td>'
       html += '</tr>'
     })
   }

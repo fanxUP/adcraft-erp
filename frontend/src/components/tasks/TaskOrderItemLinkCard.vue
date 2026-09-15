@@ -30,7 +30,7 @@
         </el-button>
       </div>
 
-      <div v-if="canManageTaskItems" class="item-assignee-toolbar">
+      <div v-if="canManageTaskItems" class="item-assignee-toolbar" data-ai-target="task-item-assignee">
         <div class="item-assignee-toolbar-main">
           <span class="item-assignee-toolbar-label">明细改派</span>
           <el-select

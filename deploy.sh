@@ -254,7 +254,7 @@ deploy_compose() {
 }
 
 configure_native_runtime_paths() {
-  local service_user service_group env_file dropin_dir dropin_path perf_dir
+  local service_user service_group env_file dropin_dir dropin_path perf_dir upload_dir
 
   service_user="$(systemctl show "$SERVICE_NAME" -p User --value)"
   service_group="$(systemctl show "$SERVICE_NAME" -p Group --value)"
@@ -273,6 +273,18 @@ configure_native_runtime_paths() {
     echo "原生服务账号或用户组不存在：$service_user:$service_group" >&2
     return 1
   fi
+
+  # Uploaded business files are persistent data, but the native service must
+  # be able to read and write them.  Repair only this exact application-owned
+  # boundary; never broaden it to 777 or change unrelated project paths.
+  upload_dir="$PROJECT_DIR/uploads"
+  if [ -L "$upload_dir" ]; then
+    echo "上传目录不能是符号链接：$upload_dir" >&2
+    return 1
+  fi
+  install -d -o "$service_user" -g "$service_group" -m 0750 "$upload_dir"
+  find "$upload_dir" -xdev -type d -exec chown "$service_user:$service_group" {} + -exec chmod 0750 {} +
+  find "$upload_dir" -xdev -type f -exec chown "$service_user:$service_group" {} + -exec chmod 0640 {} +
 
   # The service must be able to persist settings, while keeping the secret
   # configuration private to the service account.
