@@ -1,6 +1,7 @@
 """Tests for PaymentService, StatementService, ExpenseService."""
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
@@ -13,7 +14,7 @@ import app.models.user  # noqa: F401
 import app.models.notification  # noqa: F401
 import app.models.vehicle  # noqa: F401
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
-from app.schemas.payment import PaymentCreate
+from app.schemas.payment import ExpenseCreate, PaymentCreate
 from app.models.contract import Contract
 from app.models.business_document import BusinessDocument
 from tests.conftest import SAMPLE_USER_ID, SAMPLE_ORDER_ID, SAMPLE_CUSTOMER_ID
@@ -674,6 +675,32 @@ async def test_create_expense(expense_service):
 
     assert result["expense_no"] == "EXP20260629-0002"
     assert result["amount"] == 500.0
+
+
+def test_expense_create_accepts_payable_amount_as_total_when_amount_is_empty():
+    payload = ExpenseCreate(amount=0, payable_amount=500)
+
+    assert payload.amount == 0
+    assert payload.payable_amount == 500
+
+
+@pytest.mark.asyncio
+async def test_create_expense_uses_payable_amount_as_total_when_amount_is_empty(expense_service):
+    svc = expense_service
+
+    with patch("app.services.payment_service.generate_expense_no", AsyncMock(return_value="EXP20260629-0003")):
+        result = await svc.create_expense({
+            "category": "材料采购",
+            "amount": 0,
+            "payable_amount": 800,
+            "description": "暂未付款的材料采购",
+        }, SAMPLE_USER_ID)
+
+    created = svc.repo.create.await_args.args[0]
+    assert created.amount == Decimal("800")
+    assert created.payable_amount == Decimal("800.00")
+    assert result["amount"] == 800.0
+    assert result["payable_amount"] == 800.0
 
 
 @pytest.mark.asyncio

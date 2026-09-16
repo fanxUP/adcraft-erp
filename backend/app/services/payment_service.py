@@ -491,10 +491,18 @@ class ExpenseService:
         return self._to_dict(e) if e else None
 
     async def create_expense(self, data: dict, created_by: UUID) -> dict:
-        amount = Decimal(str(data["amount"]))
+        amount = _decimal_or_zero(data.get("amount"))
+        requested_payable_amount = _decimal_or_zero(data.get("payable_amount"))
+        if amount < 0:
+            raise ValueError("支出金额不能小于0")
+        # A new expense may be entered from the payable side first. In that
+        # case the payable amount is also the source total; the persisted
+        # record still has one consistent total for later payment tracking.
+        if amount == 0 and requested_payable_amount > 0:
+            amount = requested_payable_amount
         payable_amount = validate_payable_amount(
             amount,
-            Decimal(str(data.get("payable_amount", 0))),
+            requested_payable_amount,
         )
         supplier = await SupplierService(self.db).resolve_active_supplier(data.get("supplier_id"))
         expense = Expense(

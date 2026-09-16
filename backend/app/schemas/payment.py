@@ -132,7 +132,9 @@ class StatementPaymentItem(CoercedModel):
 
 class ExpenseCreate(BaseModel):
     category: str | None = None
-    amount: float
+    # A payable-only entry is allowed; the service normalizes it to a source
+    # expense total before persistence.
+    amount: float = 0
     payee_name: str | None = None
     supplier_id: str | None = None
     payable_amount: float = 0
@@ -143,8 +145,8 @@ class ExpenseCreate(BaseModel):
     @field_validator("amount")
     @classmethod
     def amount_positive(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError("支出金额必须大于0")
+        if v < 0:
+            raise ValueError("支出金额不能小于0")
         return v
 
     @field_validator("payable_amount")

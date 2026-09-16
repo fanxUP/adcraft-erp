@@ -77,7 +77,8 @@
           </el-select>
         </el-form-item>
         <el-form-item label="金额">
-          <el-input-number v-model="form.amount" :min="0.01" :precision="2" style="width: 100%" />
+          <el-input-number v-model="form.amount" :min="isEditing ? 0.01 : 0" :precision="2" style="width: 100%" />
+          <div class="form-tip">可以先填写待付款金额；如果金额留空，系统会按待付款金额作为支出总额。</div>
         </el-form-item>
         <el-form-item v-if="canUseSupplier" label="供应商">
           <el-select
@@ -96,8 +97,8 @@
           <el-input v-model="form.payee_name" placeholder="供应商、房东或其他收款对象" />
         </el-form-item>
         <el-form-item label="待付款金额">
-          <el-input-number v-model="form.payable_amount" :min="0" :max="form.amount || 0" :precision="2" style="width: 100%" />
-          <div class="form-tip">不需要形成应付时填 0；待付款金额不能超过支出金额。</div>
+          <el-input-number v-model="form.payable_amount" :min="0" :precision="2" style="width: 100%" />
+          <div class="form-tip">不需要形成应付时填 0；同时填写金额时，待付款金额不能超过支出总额。</div>
         </el-form-item>
         <el-form-item label="日期">
           <el-date-picker v-model="form.expense_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
@@ -123,6 +124,7 @@ import { getSuppliers } from '@/api/suppliers'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ExpenseResponse, SupplierResponse } from '@/types/api'
+import { normalizeExpenseAmounts, type ExpenseAmountResult } from '@/utils/expenseAmount'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const authStore = useAuthStore()
@@ -210,6 +212,16 @@ async function fetchData() {
 }
 
 async function handleSave() {
+  let normalizedAmounts: ExpenseAmountResult | undefined
+  if (!isEditing.value) {
+    try {
+      normalizedAmounts = normalizeExpenseAmounts(form.amount, form.payable_amount)
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : '请填写有效的支出金额')
+      return
+    }
+  }
+
   saving.value = true
   try {
     if (isEditing.value) {
@@ -225,7 +237,12 @@ async function handleSave() {
       await updateExpense(editingId.value, payload)
       ElMessage.success('支出已更新')
     } else {
-      await createExpense({ ...form, supplier_id: form.supplier_id || undefined })
+      await createExpense({
+        ...form,
+        amount: normalizedAmounts!.amount,
+        payable_amount: normalizedAmounts!.payable_amount,
+        supplier_id: form.supplier_id || undefined,
+      })
       ElMessage.success('支出登记成功')
     }
     showDialog.value = false
