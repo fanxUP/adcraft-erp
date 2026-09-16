@@ -513,6 +513,7 @@ class OutsourceService:
         return self._vendor_to_dict(vendor)
 
     async def create_vendor(self, data: dict) -> dict:
+        data.setdefault("supplier_type", "outsource")
         data["vendor_no"] = await generate_vendor_no(self.db)
         vendor = await self.vendor_repo.create(data)
         return self._vendor_to_dict(vendor)
@@ -528,6 +529,10 @@ class OutsourceService:
         vendor = await self.vendor_repo.get_by_id(vendor_id)
         if not vendor:
             return False
+        # Preserve the legacy external-vendor deletion contract.  The row is
+        # soft-deleted so existing task/payment history remains addressable;
+        # the unified supplier module exposes a separate recoverable
+        # deactivation action for normal lifecycle management.
         await self.vendor_repo.soft_delete(vendor)
         return True
 
@@ -1138,6 +1143,12 @@ class OutsourceService:
             "name": v.name, "contact_person": v.contact_person,
             "phone": v.phone, "address": v.address,
             "service_type": v.service_type, "coop_rating": v.coop_rating,
+            "supplier_type": getattr(v, "supplier_type", "outsource"),
+            "short_name": getattr(v, "short_name", None),
+            "tax_id": getattr(v, "tax_id", None),
+            "email": getattr(v, "email", None),
+            "settlement_method": getattr(v, "settlement_method", None),
+            "settlement_days": getattr(v, "settlement_days", None),
             "remark": v.remark, "is_active": v.is_active,
             "created_at": v.created_at.isoformat() if v.created_at else None,
         }

@@ -37,6 +37,15 @@ class VendorResponse(BaseModel):
     address: str | None = None
     service_type: str | None = None
     coop_rating: str | None = None
+    supplier_type: str = "outsource"
+    short_name: str | None = None
+    tax_id: str | None = None
+    email: str | None = None
+    bank_name: str | None = None
+    bank_account: str | None = None
+    tax_rate: float | None = None
+    settlement_method: str | None = None
+    settlement_days: int | None = None
     remark: str | None = None
     is_active: bool = True
     created_at: str | None = None

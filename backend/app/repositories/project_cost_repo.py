@@ -30,6 +30,7 @@ class ProjectCostRepository:
                     ProjectCostItemLink.document_item
                 ),
                 selectinload(ProjectCost.customer),
+                selectinload(ProjectCost.supplier),
             )
             .where(ProjectCost.id == cost_id, ProjectCost.deleted_at.is_(None))
         )
@@ -57,6 +58,7 @@ class ProjectCostRepository:
                 ProjectCostItemLink.document_item
             ),
             selectinload(ProjectCost.customer),
+            selectinload(ProjectCost.supplier),
         ).where(ProjectCost.deleted_at.is_(None))
 
         if source_type:

@@ -32,6 +32,7 @@ export function getPayables(params?: {
   keyword?: string
   status?: string
   source_type?: string
+  supplier_id?: string
 }) {
   return get<PaginatedData<PayableResponse>>('/payables/', { params })
 }

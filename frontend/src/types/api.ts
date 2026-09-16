@@ -971,6 +971,8 @@ export interface ExpenseResponse {
   category?: string
   amount: number
   payee_name?: string
+  supplier_id?: string | null
+  supplier_name?: string | null
   payable_amount: number
   description?: string
   expense_date?: string
@@ -1007,6 +1009,8 @@ export interface PayableResponse {
   paid_amount: number
   remaining_amount: number
   payee_name?: string
+  supplier_id?: string | null
+  supplier_name?: string | null
   status: string
   status_view?: StatusView | null
   capabilities?: Record<string, ActionCapability>
@@ -1052,6 +1056,8 @@ export interface ProjectCostResponse {
   unit_price?: number
   payment_method?: string
   payee_company_name?: string
+  supplier_id?: string | null
+  supplier_name?: string | null
   debt_amount?: number
   is_debt: boolean
   is_settled: boolean
@@ -1176,14 +1182,42 @@ export interface VendorResponse {
   id: string
   vendor_no: string
   name: string
+  short_name?: string | null
+  supplier_type?: string
+  supplier_type_label?: string | null
   contact_person?: string
   phone?: string
+  email?: string | null
   address?: string
+  tax_id?: string | null
+  bank_name?: string | null
+  bank_account?: string | null
+  tax_rate?: number | null
+  settlement_method?: string | null
+  settlement_days?: number | null
   service_type?: string
   coop_rating?: string
   remark?: string
   is_active: boolean
   created_at?: string
+}
+
+export interface SupplierStats {
+  project_cost_count: number
+  project_cost_amount: number
+  project_cost_payable: number
+  expense_count: number
+  expense_amount: number
+  expense_payable: number
+  outsource_task_count: number
+  outsource_task_amount: number
+  outsource_task_unpaid: number
+}
+
+export interface SupplierResponse extends VendorResponse {
+  supplier_type: string
+  supplier_type_label?: string | null
+  stats?: SupplierStats | null
 }
 
 export interface OutsourceTaskResponse {

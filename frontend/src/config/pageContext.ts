@@ -47,6 +47,7 @@ const pageContexts: Record<string, PageContext> = {
   ProjectCostList: { page: 'project_cost_list', business_type: 'finance' },
   ProjectCostDetail: { page: 'project_cost_detail', business_type: 'finance' },
   QuoteCostDetail: { page: 'quote_cost_detail', business_type: 'finance' },
+  SupplierList: { page: 'suppliers', business_type: 'finance' },
   CostDebtList: { page: 'cost_debt_list', business_type: 'finance' },
   OutsourceVendorList: { page: 'outsource_vendors', business_type: 'outsource' },
   OutsourceTaskList: { page: 'outsource_tasks', business_type: 'outsource' },

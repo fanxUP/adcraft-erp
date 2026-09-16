@@ -28,7 +28,12 @@ class OutsourceVendorRepository:
 
     async def list_vendors(self, skip: int = 0, limit: int = 20, keyword: str | None = None,
                            service_type: str | None = None) -> tuple[list[OutsourceVendor], int]:
-        q = select(OutsourceVendor).where(OutsourceVendor.deleted_at.is_(None))
+        # Legacy 外协商页面 is a compatibility view over the unified master;
+        # keep it limited to the external-service supplier type.
+        q = select(OutsourceVendor).where(
+            OutsourceVendor.deleted_at.is_(None),
+            OutsourceVendor.supplier_type == "outsource",
+        )
         if keyword:
             q = q.where(OutsourceVendor.name.ilike(f"%{keyword}%"))
         if service_type:

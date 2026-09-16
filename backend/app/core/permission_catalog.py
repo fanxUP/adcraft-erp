@@ -91,6 +91,18 @@ PERMISSION_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "outsource_task:update": ("outsource_center:read", "outsource_task:read"),
     "outsource_task:change_status": ("outsource_center:read", "outsource_task:read"),
     "outsource_task:delete": ("outsource_center:read", "outsource_task:read"),
+    # Supplier master data is shared by external work, project costs and
+    # expenses, but ledger and bank fields stay separately guarded.
+    "supplier:read": ("supplier_center:read",),
+    "supplier:create": ("supplier_center:read", "supplier:read"),
+    "supplier:update": ("supplier_center:read", "supplier:read"),
+    "supplier:ledger:read": ("supplier_center:read", "supplier:read"),
+    "supplier:bank:view": ("supplier_center:read", "supplier:read"),
+    "supplier:bank:edit": (
+        "supplier_center:read",
+        "supplier:read",
+        "supplier:bank:view",
+    ),
     # Completion metrics are non-financial, but organization-wide visibility
     # must always include the personal read capability.
     "task_completion:view_all": ("task_completion:read",),
@@ -156,6 +168,9 @@ SENSITIVE_PERMISSIONS = frozenset({
     "expense:delete",
     "outsource_payment:read",
     "outsource_payment:create",
+    "supplier:ledger:read",
+    "supplier:bank:view",
+    "supplier:bank:edit",
     # AI business tools may expose pricing, financial summaries or anomaly
     # details; treat their entry capabilities as sensitive as the data they
     # return, so a custom execution role cannot add them accidentally.
@@ -250,6 +265,17 @@ PERMISSION_PACKS: tuple[PermissionPackDefinition, ...] = (
         ),
     ),
     PermissionPackDefinition(
+        code="supplier_manager",
+        name="供应商主数据管理",
+        description="维护统一供应商档案；不包含供应商账务和银行信息",
+        permissions=(
+            "supplier_center:read",
+            "supplier:read",
+            "supplier:create",
+            "supplier:update",
+        ),
+    ),
+    PermissionPackDefinition(
         code="resource_vehicle_manager",
         name="车辆资源管理",
         description="进入资源中心并管理公司车辆",
@@ -338,7 +364,7 @@ def _build_definition(code: str) -> PermissionDefinition:
         or code in {"ai_report:read", "ai_anomaly:read"}
     ):
         sensitivity = "financial"
-    elif module.startswith("outsource"):
+    elif module.startswith("outsource") or module == "supplier":
         sensitivity = "external"
     elif module == "system" or module in {"backup", "user"}:
         sensitivity = "security"

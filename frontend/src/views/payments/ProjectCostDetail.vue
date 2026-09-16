@@ -151,8 +151,8 @@
       <el-table-column label="付款方式" width="120">
         <template #default="{ row }">{{ row.payment_method || '-' }}</template>
       </el-table-column>
-      <el-table-column label="收款公司" min-width="160" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.payee_company_name || '-' }}</template>
+      <el-table-column label="供应商/收款公司" min-width="180" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.supplier_name || row.payee_company_name || '-' }}</template>
       </el-table-column>
       <el-table-column label="凭证" width="80" align="center">
         <template #default="{ row }">
@@ -324,6 +324,19 @@
             <el-option v-for="pm in PAYMENT_METHODS" :key="pm" :label="pm" :value="pm" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="canUseSupplier" label="供应商">
+          <el-select
+            v-model="form.supplier_id"
+            clearable
+            filterable
+            placeholder="选择供应商（可选）"
+            style="width: 100%"
+            @change="handleSupplierChange"
+          >
+            <el-option v-for="supplier in suppliers" :key="supplier.id" :label="supplier.name" :value="supplier.id" />
+          </el-select>
+          <div class="form-tip">选择后会同步记录供应商；下方名称用于兼容历史文本或非供应商收款对象。</div>
+        </el-form-item>
         <el-form-item label="收款公司">
           <el-input v-model="form.payee_company_name" placeholder="输入对方收款公司名称" clearable />
           <div style="font-size: 12px; color: var(--ad-text-secondary); margin-top: 2px">对方收款公司名称（可选）</div>
@@ -474,11 +487,12 @@ import {
   getProjectCostAttachments, uploadProjectCostAttachment, deleteProjectCostAttachment, getOrderProjectCostItemSummary,
 } from '@/api/payments'
 import { getOrder } from '@/api/orders'
+import { getSuppliers } from '@/api/suppliers'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { ArrowLeft, Delete, Download, UploadFilled } from '@element-plus/icons-vue'
-import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, QuoteDetailResponse, AttachmentResponse, ProjectCostItemSummaryResponse } from '@/types/api'
+import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, QuoteDetailResponse, AttachmentResponse, ProjectCostItemSummaryResponse, SupplierResponse } from '@/types/api'
 import { StatusTag } from '@/components/ui'
 import { buildProjectCostScopeOptions, getProjectCostScopeIds, type ProjectCostScopeOption } from '@/utils/projectCostScope'
 import {
@@ -492,6 +506,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const canUseSupplier = computed(() => authStore.can('supplier:read'))
 
 const CATEGORIES = ['人工/工时费', '材料费', '租赁费', '运输/物流费', '安装杂费', '办公费', '餐费/交通费', '差旅费', '其他']
 const PAYMENT_METHODS = ['现金支付', '微信支付', '支付宝转账', '转账支付', '对公支付', '其它支付']
@@ -511,6 +526,7 @@ const isEditing = ref(false)
 const editingId = ref('')
 const order = ref<OrderDetailResponse | QuoteDetailResponse | null>(null)
 const costSummary = ref<ProjectCostItemSummaryResponse | null>(null)
+const suppliers = ref<SupplierResponse[]>([])
 const selectedFile = ref<File | null>(null)
 const importResult = ref<ProjectCostImportResponse | null>(null)
 const dialogAttachments = ref<AttachmentResponse[]>([])
@@ -600,6 +616,7 @@ const form = reactive({
   unit_price: 0,
   amount: 0,
   payment_method: '',
+  supplier_id: '',
   payee_company_name: '',
   debt_amount: 0,
   cost_date: '',
@@ -644,7 +661,7 @@ async function handleBatchDelete() {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, payment_method: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', group_name: '', order_item_id: '', order_item_ids: [], quote_item_id: '', quantity: 0, specification: '', unit: '', unit_price: 0 })
+  Object.assign(form, { category: '', amount: 0, payment_method: '', supplier_id: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', group_name: '', order_item_id: '', order_item_ids: [], quote_item_id: '', quantity: 0, specification: '', unit: '', unit_price: 0 })
   isEditing.value = false
   editingId.value = ''
   editingScopeSnapshots.value = []
@@ -667,6 +684,7 @@ function openEdit(row: ProjectCostResponse) {
   form.category = row.category
   form.amount = row.amount
   form.payment_method = row.payment_method || ''
+  form.supplier_id = row.supplier_id || ''
   form.payee_company_name = row.payee_company_name || ''
   form.debt_amount = row.debt_amount || 0
   form.cost_date = formatDate(row.cost_date) || ''
@@ -694,6 +712,21 @@ function openEdit(row: ProjectCostResponse) {
   attachmentUploadQueue.value = []
   showDialog.value = true
   loadAttachments(row.id)
+}
+
+function handleSupplierChange(supplierId: string | undefined) {
+  const supplier = suppliers.value.find(item => item.id === supplierId)
+  if (supplier) form.payee_company_name = supplier.name
+}
+
+async function fetchSuppliers() {
+  if (!canUseSupplier.value) return
+  try {
+    const data = await getSuppliers({ page: 1, page_size: 200, is_active: true })
+    suppliers.value = data.items
+  } catch {
+    // Manual payee-company text remains available for roles without directory access.
+  }
 }
 
 function openImport() {
@@ -860,6 +893,7 @@ async function handleSave() {
       if (form.category) payload.category = form.category
       if (form.amount > 0) payload.amount = form.amount
       if (form.payment_method) payload.payment_method = form.payment_method
+      payload.supplier_id = form.supplier_id || null
       if (form.payee_company_name) payload.payee_company_name = form.payee_company_name
       if (form.quantity > 0) payload.quantity = form.quantity
       if (form.specification) payload.specification = form.specification
@@ -893,6 +927,7 @@ async function handleSave() {
           quote_item_id: form.quote_item_id || undefined,
           group_name: form.group_name || undefined,
           payment_method: form.payment_method || undefined,
+          supplier_id: form.supplier_id || undefined,
           payee_company_name: form.payee_company_name || undefined,
           quantity: form.quantity > 0 ? form.quantity : undefined,
           specification: form.specification || undefined,
@@ -913,6 +948,7 @@ async function handleSave() {
           order_item_ids: form.order_item_ids.length ? [...form.order_item_ids] : undefined,
           group_name: form.group_name || undefined,
           payment_method: form.payment_method || undefined,
+          supplier_id: form.supplier_id || undefined,
           payee_company_name: form.payee_company_name || undefined,
           quantity: form.quantity > 0 ? form.quantity : undefined,
           specification: form.specification || undefined,
@@ -1146,6 +1182,7 @@ onMounted(() => {
   void fetchOrder()
   void fetchData()
   void fetchCostSummary()
+  void fetchSuppliers()
   startAutoRefresh()
 })
 onActivated(startAutoRefresh)

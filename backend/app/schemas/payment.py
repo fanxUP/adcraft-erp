@@ -134,6 +134,7 @@ class ExpenseCreate(BaseModel):
     category: str | None = None
     amount: float
     payee_name: str | None = None
+    supplier_id: str | None = None
     payable_amount: float = 0
     description: str | None = None
     expense_date: str | None = None
@@ -158,6 +159,7 @@ class ExpenseUpdate(BaseModel):
     category: str | None = None
     amount: float | None = None
     payee_name: str | None = None
+    supplier_id: str | None = None
     payable_amount: float | None = None
     description: str | None = None
     expense_date: str | None = None
@@ -184,6 +186,8 @@ class ExpenseResponse(CoercedModel):
     category: str | None = None
     amount: float
     payee_name: str | None = None
+    supplier_id: str | None = None
+    supplier_name: str | None = None
     payable_amount: float = 0
     description: str | None = None
     expense_date: str | None = None
@@ -264,6 +268,8 @@ class PayableResponse(CoercedModel):
     paid_amount: float
     remaining_amount: float
     payee_name: str | None = None
+    supplier_id: str | None = None
+    supplier_name: str | None = None
     status: str
     status_view: StatusView | None = None
     capabilities: dict[str, ActionCapability] = {}
@@ -300,6 +306,7 @@ class ProjectCostCreate(BaseModel):
     group_name: str | None = None
     payment_method: str | None = None
     payee_company_name: str | None = None
+    supplier_id: str | None = None
     debt_amount: float | None = None
     quantity: float | None = None
     specification: str | None = None
@@ -336,6 +343,7 @@ class ProjectCostUpdate(BaseModel):
     group_name: str | None = None
     payment_method: str | None = None
     payee_company_name: str | None = None
+    supplier_id: str | None = None
     source_type: str | None = None
     quote_id: str | None = None
     debt_amount: float | None = None
@@ -372,6 +380,8 @@ class ProjectCostResponse(CoercedModel):
     amount: float
     payment_method: str | None = None
     payee_company_name: str | None = None
+    supplier_id: str | None = None
+    supplier_name: str | None = None
     debt_amount: float | None = None
     quantity: float | None = None
     specification: str | None = None
@@ -434,6 +444,8 @@ class DebtResponse(CoercedModel):
     unit_price: float | None = None
     payment_method: str | None = None
     payee_company_name: str | None = None
+    supplier_id: str | None = None
+    supplier_name: str | None = None
     debt_amount: float
     is_settled: bool = False
     status_view: StatusView | None = None

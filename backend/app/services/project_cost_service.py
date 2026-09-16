@@ -17,6 +17,7 @@ from app.repositories.task_repo import AttachmentRepository
 from app.schemas.payment import ProjectCostResponse
 from app.services.number_generator import generate_project_cost_no
 from app.services.payable_service import PayableService, validate_payable_amount
+from app.services.supplier_service import SupplierService
 
 
 class ProjectCostService:
@@ -268,6 +269,16 @@ class ProjectCostService:
             )
         )
 
+        supplier_service = SupplierService(self.db)
+        supplier = await supplier_service.resolve_active_supplier(data.get("supplier_id"))
+        if supplier is None and data.get("payee_company_name"):
+            supplier = await supplier_service.find_unique_active_supplier(
+                data.get("payee_company_name")
+            )
+        payee_company_name = data.get("payee_company_name") or (
+            supplier.name if supplier else None
+        )
+
         cost = ProjectCost(
             cost_no=await generate_project_cost_no(self.db),
             document_id=document_id,
@@ -285,7 +296,8 @@ class ProjectCostService:
             remark=data.get("remark"),
             document_item_id=item_ids[0] if len(item_ids) == 1 else None,
             payment_method=data.get("payment_method"),
-            payee_company_name=data.get("payee_company_name"),
+            payee_company_name=payee_company_name,
+            supplier_id=supplier.id if supplier else None,
             debt_amount=debt_amount,
             is_debt=debt_amount > 0,
             is_settled=False,
@@ -331,6 +343,8 @@ class ProjectCostService:
             "unit_price": float(cost.unit_price) if cost.unit_price else None,
             "payment_method": cost.payment_method,
             "payee_company_name": cost.payee_company_name,
+            "supplier_id": str(cost.supplier_id) if cost.supplier_id else None,
+            "supplier_name": supplier.name if supplier else None,
             "debt_amount": float(cost.debt_amount) if cost.debt_amount else None,
             "is_debt": cost.is_debt,
             "is_settled": cost.is_settled,
@@ -350,6 +364,11 @@ class ProjectCostService:
             raise ValueError("项目成本记录不存在")
 
         normalized = dict(data)
+        allow_null_fields: set[str] = set()
+        if "supplier_id" in normalized:
+            supplier = await SupplierService(self.db).resolve_active_supplier(normalized["supplier_id"])
+            normalized["supplier_id"] = supplier.id if supplier else None
+            allow_null_fields.add("supplier_id")
         item_fields_present = any(
             key in normalized
             for key in ("document_item_id", "order_item_id", "order_item_ids", "quote_item_id")
@@ -393,16 +412,16 @@ class ProjectCostService:
                 c.id,
                 new_debt,
             )
-        allow_null_fields = (
-            {"document_item_id"}
-            if "document_item_id" in normalized and normalized["document_item_id"] is None
-            else set()
-        )
-        await self.repo.update(
-            c,
-            normalized,
-            allow_null_fields=allow_null_fields,
-        )
+        if "document_item_id" in normalized and normalized["document_item_id"] is None:
+            allow_null_fields.add("document_item_id")
+        if allow_null_fields:
+            await self.repo.update(
+                c,
+                normalized,
+                allow_null_fields=allow_null_fields,
+            )
+        else:
+            await self.repo.update(c, normalized)
         await self._sync_document_cost(c.document_id)
         # Re-fetch with relationships loaded for response
         c = await self.repo.get_by_id(cost_id)
@@ -497,6 +516,7 @@ class ProjectCostService:
                 ProjectCostItemLink.document_item
             ),
             selectinload(ProjectCost.customer),
+            selectinload(ProjectCost.supplier),
         ).where(
             ProjectCost.deleted_at.is_(None),
             ProjectCost.is_debt == True,
@@ -778,6 +798,8 @@ class ProjectCostService:
         d["source_type"] = doc_type or "order"
         d["project_name"] = doc.project_name if doc else None
         d["customer_name"] = c.customer.name if c.customer else None
+        d["supplier_id"] = str(c.supplier_id) if c.supplier_id else None
+        d["supplier_name"] = getattr(getattr(c, "supplier", None), "name", None)
 
         # 从多值归属关系取字段；旧单值字段仅作为迁移窗口的兼容回退。
         item_scopes = []

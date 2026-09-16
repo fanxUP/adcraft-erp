@@ -151,6 +151,17 @@ PERM_EXPENSE_CREATE = "expense:create"
 PERM_EXPENSE_UPDATE = "expense:update"
 PERM_EXPENSE_DELETE = "expense:delete"
 
+# Supplier master data. The module gate, ledger visibility and bank fields
+# remain independently composable so an external-task manager can maintain
+# supplier contacts without seeing financial or banking data.
+PERM_SUPPLIER_CENTER_READ = "supplier_center:read"
+PERM_SUPPLIER_READ = "supplier:read"
+PERM_SUPPLIER_CREATE = "supplier:create"
+PERM_SUPPLIER_UPDATE = "supplier:update"
+PERM_SUPPLIER_LEDGER_READ = "supplier:ledger:read"
+PERM_SUPPLIER_BANK_READ = "supplier:bank:view"
+PERM_SUPPLIER_BANK_UPDATE = "supplier:bank:edit"
+
 # Resource center / Inventory
 PERM_RESOURCE_CENTER_READ = "resource_center:read"
 PERM_INVENTORY_READ = "inventory:read"

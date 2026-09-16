@@ -160,6 +160,14 @@ describe('page access matrix', () => {
     expect(canAccess('outsourceTask', ['designer'], [])).toBe(false)
   })
 
+  it('keeps unified supplier access separate from task execution roles', () => {
+    expect(ROUTE_ACCESS.SupplierList).toBe('supplier')
+    expect(canAccess('supplier', ['finance'], ['supplier_center:read', 'supplier:read'])).toBe(true)
+    expect(canAccess('supplier', ['outsource_manager'], ['supplier_center:read', 'supplier:read'])).toBe(true)
+    expect(canAccess('supplier', ['designer'], [])).toBe(false)
+    expect(canAccess('supplier', ['custom'], ['supplier:read'])).toBe(false)
+  })
+
   it('keeps AI pages aligned with their exact backend permission contracts', () => {
     const custom = ['custom-ai']
 

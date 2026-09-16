@@ -22,6 +22,7 @@ from app.services.number_generator import (
     generate_statement_no,
 )
 from app.services.payable_service import PayableService, validate_payable_amount
+from app.services.supplier_service import SupplierService
 from app.domain.presentation import make_action_capability, make_payment_status_view, make_statement_status_view
 
 
@@ -495,12 +496,14 @@ class ExpenseService:
             amount,
             Decimal(str(data.get("payable_amount", 0))),
         )
+        supplier = await SupplierService(self.db).resolve_active_supplier(data.get("supplier_id"))
         expense = Expense(
             expense_no=await generate_expense_no(self.db),
             category=data.get("category"),
             amount=amount,
-            payee_name=data.get("payee_name"),
+            payee_name=data.get("payee_name") or (supplier.name if supplier else None),
             payable_amount=payable_amount,
+            supplier_id=supplier.id if supplier else None,
             description=data.get("description"),
             expense_date=datetime.fromisoformat(data["expense_date"]) if data.get("expense_date") else None,
             receipt_url=data.get("receipt_url"),
@@ -522,13 +525,23 @@ class ExpenseService:
         normalized = dict(data)
         normalized["amount"] = amount
         normalized["payable_amount"] = payable_amount
+        allow_null_fields: set[str] = set()
+        if "supplier_id" in normalized:
+            supplier = await SupplierService(self.db).resolve_active_supplier(normalized["supplier_id"])
+            normalized["supplier_id"] = supplier.id if supplier else None
+            allow_null_fields.add("supplier_id")
         if payable_amount > 0 or current_payable_amount > 0:
             await PayableService(self.db).validate_source_update(
                 "expense",
                 e.id,
                 payable_amount,
             )
-        await self.repo.update(e, normalized)
+        if allow_null_fields:
+            await self.repo.update(e, normalized, allow_null_fields=allow_null_fields)
+        else:
+            # Preserve the legacy repository call shape when no nullable
+            # supplier field needs special handling.
+            await self.repo.update(e, normalized)
         return self._to_dict(e)
 
     async def delete_expense(self, expense_id: UUID) -> None:
@@ -546,6 +559,8 @@ class ExpenseService:
             "id": str(e.id), "expense_no": e.expense_no,
             "category": e.category, "amount": float(e.amount),
             "payee_name": getattr(e, "payee_name", None),
+            "supplier_id": str(getattr(e, "supplier_id", None)) if getattr(e, "supplier_id", None) else None,
+            "supplier_name": getattr(getattr(e, "supplier", None), "name", None),
             "payable_amount": float(payable_amount),
             "description": e.description,
             "expense_date": e.expense_date.isoformat() if e.expense_date else None,

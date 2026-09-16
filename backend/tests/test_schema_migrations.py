@@ -168,3 +168,19 @@ def test_unified_payable_ledger_migration_is_additive_and_protected():
     assert '"ck_payable_payments_source_type"' in source
     assert '"ck_payable_payments_amount_positive"' in source
     assert "不能回滚应付付款流水" in source
+
+
+def test_supplier_master_migration_is_additive_and_backfills_only_exact_unique_names():
+    migration_files = list(
+        (Path(__file__).resolve().parents[1] / "alembic" / "versions").glob("sup01_*.py")
+    )
+    assert len(migration_files) == 1
+    source = migration_files[0].read_text()
+    assert 'sup01_supplier_master' in source
+    assert 'cpa01_payable_ledger' in source
+    assert '"project_costs"' in source
+    assert '"expenses"' in source
+    assert 'supplier_id' in source
+    assert "btrim(pc.payee_company_name) = btrim(ov.name)" in source
+    assert "count(*)" in source
+    assert "def downgrade()" in source

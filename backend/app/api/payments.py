@@ -259,7 +259,7 @@ async def update_expense(
     service = ExpenseService(db)
     eid = UUID(expense_id)
     try:
-        expense = await service.update_expense(eid, data.model_dump(exclude_none=True))
+        expense = await service.update_expense(eid, data.model_dump(exclude_unset=True))
     except ValueError as e:
         return {"code": 40001, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,

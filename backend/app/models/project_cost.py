@@ -30,6 +30,10 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
     unit_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True, comment="单价")
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="付款方式：现金支付/微信支付/转账支付/对公支付/其它支付")
     payee_company_name: Mapped[str | None] = mapped_column(String(200), nullable=True, comment="对方收款公司名称")
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("outsource_vendors.id", ondelete="SET NULL"), nullable=True,
+        comment="统一供应商主数据ID",
+    )
     debt_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True, default=0, comment="欠款金额")
     is_debt: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否为欠款")
     is_settled: Mapped[bool] = mapped_column(Boolean, default=False, comment="欠款是否已结清")
@@ -49,6 +53,9 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
         lazy="selectin",
     )
     customer: Mapped["Customer"] = relationship(lazy="selectin")
+    supplier: Mapped["OutsourceVendor | None"] = relationship(
+        "OutsourceVendor", foreign_keys=[supplier_id], lazy="selectin"
+    )
 
 
 class ProjectCostItemLink(Base, TimestampMixin):

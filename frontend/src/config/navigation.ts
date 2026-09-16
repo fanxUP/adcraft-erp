@@ -47,6 +47,7 @@ export const navigationItems: NavigationItem[] = [
       { label: '应收管理', path: '/receivables', accessKey: 'payment' },
       { label: '支出管理', path: '/expenses', accessKey: 'expense' },
       { label: '项目成本', path: '/project-costs', accessKey: 'projectCost' },
+      { label: '供应商管理', path: '/suppliers', accessKey: 'supplier' },
       { label: '应付管理', path: '/cost-debts', accessKey: 'costDebt' },
       { label: '外协付款', path: '/outsource/payments', accessKey: 'outsourcePayment' },
       { label: '客户对账', path: '/statements', accessKey: 'statement' },

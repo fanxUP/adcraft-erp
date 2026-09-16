@@ -31,6 +31,7 @@ async def list_payables(
     keyword: str | None = None,
     status: str | None = None,
     source_type: str | None = None,
+    supplier_id: UUID | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
@@ -41,6 +42,7 @@ async def list_payables(
             keyword,
             status,
             source_type,
+            supplier_id,
         )
     except ValueError as exc:
         return {"code": 40001, "message": str(exc), "data": None}

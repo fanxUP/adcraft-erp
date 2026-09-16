@@ -130,6 +130,14 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "expense:create", "name": "创建支出", "description": "创建支出记录"},
     {"code": "expense:update", "name": "编辑支出", "description": "编辑支出信息"},
     {"code": "expense:delete", "name": "删除支出", "description": "删除支出"},
+    # Supplier master data
+    {"code": "supplier_center:read", "name": "进入供应商中心", "description": "进入统一供应商主数据模块"},
+    {"code": "supplier:read", "name": "查看供应商", "description": "查看统一供应商档案"},
+    {"code": "supplier:create", "name": "创建供应商", "description": "新增供应商档案"},
+    {"code": "supplier:update", "name": "编辑供应商", "description": "编辑供应商档案和启用状态"},
+    {"code": "supplier:ledger:read", "name": "查看供应商账务", "description": "查看供应商关联成本、支出和应付统计"},
+    {"code": "supplier:bank:view", "name": "查看供应商银行信息", "description": "查看供应商开户行和银行账号"},
+    {"code": "supplier:bank:edit", "name": "编辑供应商银行信息", "description": "维护供应商开户行和银行账号"},
     # Chat
     {"code": "chat:read", "name": "查看会话", "description": "查看会话和消息"},
     {"code": "chat:create", "name": "发送消息", "description": "创建会话和发送消息"},
@@ -266,6 +274,8 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "payment:read", "payment:create", "payment:void",
         "statement:read", "statement:create", "statement:confirm",
         "expense:read", "expense:create", "expense:update", "expense:delete",
+        "supplier_center:read", "supplier:read", "supplier:create", "supplier:update",
+        "supplier:ledger:read", "supplier:bank:view", "supplier:bank:edit",
         "outsource_center:read", "outsource_vendor:read", "outsource_task:read",
         "outsource_payment:read", "outsource_payment:create",
         "report:read",
@@ -281,6 +291,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "aerial:finance", "aerial:wage", "finance:review",
     ],
     "outsource_manager": [
+        "supplier_center:read", "supplier:read", "supplier:create", "supplier:update",
         "outsource_center:read",
         "outsource_vendor:read", "outsource_vendor:create", "outsource_vendor:update", "outsource_vendor:delete",
         "outsource_task:read", "outsource_task:create", "outsource_task:update",
@@ -302,7 +313,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
 
 # ── Roles referenced by the init-db.sh script ──────────────────────────────
 ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance", "resource_manager", "outsource_manager", "manager"]
-PERMISSION_SEED_VERSION = 2
+PERMISSION_SEED_VERSION = 3
 
 
 def builtin_role_permission_codes(role_name: str) -> list[str] | None:

@@ -38,7 +38,9 @@
       <el-table-column label="金额" width="120">
         <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
       </el-table-column>
-      <el-table-column prop="payee_name" label="应付对象" min-width="150" show-overflow-tooltip />
+      <el-table-column label="供应商/应付对象" min-width="180" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.supplier_name || row.payee_name || '-' }}</template>
+      </el-table-column>
       <el-table-column label="待付款" width="120" align="right">
         <template #default="{ row }">
           <span :class="{ 'text-warning': row.payable_amount > 0 }">{{ formatMoney(row.payable_amount) }}</span>
@@ -77,6 +79,19 @@
         <el-form-item label="金额">
           <el-input-number v-model="form.amount" :min="0.01" :precision="2" style="width: 100%" />
         </el-form-item>
+        <el-form-item v-if="canUseSupplier" label="供应商">
+          <el-select
+            v-model="form.supplier_id"
+            clearable
+            filterable
+            placeholder="选择供应商（可选）"
+            style="width: 100%"
+            @change="handleSupplierChange"
+          >
+            <el-option v-for="supplier in suppliers" :key="supplier.id" :label="supplier.name" :value="supplier.id" />
+          </el-select>
+          <div class="form-tip">选择后会自动带入应付对象；非供应商支出仍可直接填写下方文本。</div>
+        </el-form-item>
         <el-form-item label="应付对象">
           <el-input v-model="form.payee_name" placeholder="供应商、房东或其他收款对象" />
         </el-form-item>
@@ -104,12 +119,14 @@ import { formatDate } from '@/utils/datetime'
 import { formatMoney } from '@/utils/format'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/api/payments'
+import { getSuppliers } from '@/api/suppliers'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { ExpenseResponse } from '@/types/api'
+import type { ExpenseResponse, SupplierResponse } from '@/types/api'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
 const authStore = useAuthStore()
+const canUseSupplier = computed(() => authStore.can('supplier:read'))
 
 const CATEGORIES = ['房租', '水电', '材料采购', '外协加工', '运输', '办公', '工资', '税费', '其他']
 
@@ -122,10 +139,11 @@ const pageSize = ref(20)
 const loadError = ref(false)
 const filterCategory = ref('')
 const dateRange = ref<string[] | null>(null)
+const suppliers = ref<SupplierResponse[]>([])
 const showDialog = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
-const form = reactive({ category: '', amount: 0, payee_name: '', payable_amount: 0, expense_date: '', description: '' })
+const form = reactive({ category: '', amount: 0, supplier_id: '', payee_name: '', payable_amount: 0, expense_date: '', description: '' })
 
 const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
   if (loadError.value) return 'error'
@@ -134,7 +152,7 @@ const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
 })
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, payee_name: '', payable_amount: 0, expense_date: '', description: '' })
+  Object.assign(form, { category: '', amount: 0, supplier_id: '', payee_name: '', payable_amount: 0, expense_date: '', description: '' })
   isEditing.value = false
   editingId.value = ''
 }
@@ -149,11 +167,27 @@ function openEdit(row: ExpenseResponse) {
   editingId.value = row.id
   form.category = row.category || ''
   form.amount = row.amount
+  form.supplier_id = row.supplier_id || ''
   form.payee_name = row.payee_name || ''
   form.payable_amount = row.payable_amount || 0
   form.expense_date = formatDate(row.expense_date) || ''
   form.description = row.description || ''
   showDialog.value = true
+}
+
+function handleSupplierChange(supplierId: string | undefined) {
+  const supplier = suppliers.value.find(item => item.id === supplierId)
+  if (supplier) form.payee_name = supplier.name
+}
+
+async function fetchSuppliers() {
+  if (!canUseSupplier.value) return
+  try {
+    const data = await getSuppliers({ page: 1, page_size: 200, is_active: true })
+    suppliers.value = data.items
+  } catch {
+    // The legacy free-text payee field remains available when the directory is unavailable.
+  }
 }
 
 async function fetchData() {
@@ -182,6 +216,7 @@ async function handleSave() {
       const payload = {
         ...(form.category ? { category: form.category } : {}),
         ...(form.amount > 0 ? { amount: form.amount } : {}),
+        supplier_id: form.supplier_id || null,
         payee_name: form.payee_name,
         payable_amount: form.payable_amount,
         ...(form.expense_date ? { expense_date: form.expense_date } : {}),
@@ -190,7 +225,7 @@ async function handleSave() {
       await updateExpense(editingId.value, payload)
       ElMessage.success('支出已更新')
     } else {
-      await createExpense({ ...form })
+      await createExpense({ ...form, supplier_id: form.supplier_id || undefined })
       ElMessage.success('支出登记成功')
     }
     showDialog.value = false
@@ -214,7 +249,10 @@ async function handleDelete(row: ExpenseResponse) {
   }
 }
 
-onMounted(fetchData)
+onMounted(() => {
+  void fetchData()
+  void fetchSuppliers()
+})
 </script>
 
 <style scoped>

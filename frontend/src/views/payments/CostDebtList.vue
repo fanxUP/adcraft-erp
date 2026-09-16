@@ -31,6 +31,11 @@
               <el-option label="经营支出" value="expense" />
             </el-select>
           </el-form-item>
+          <el-form-item v-if="canUseSupplier" label="供应商">
+            <el-select v-model="filters.supplier_id" clearable filterable placeholder="全部供应商" style="width: 180px" @change="handleSearch">
+              <el-option v-for="supplier in suppliers" :key="supplier.id" :label="supplier.name" :value="supplier.id" />
+            </el-select>
+          </el-form-item>
           <el-form-item label="状态">
             <el-select v-model="filters.status" clearable placeholder="全部状态" style="width: 140px" @change="handleSearch">
               <el-option label="待付款" value="unpaid" />
@@ -60,7 +65,9 @@
         <el-table-column prop="order_no" label="订单编号" width="180" show-overflow-tooltip />
         <el-table-column prop="project_name" label="项目名称" min-width="190" show-overflow-tooltip />
         <el-table-column prop="customer_name" label="客户" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="payee_name" label="应付对象" min-width="150" show-overflow-tooltip />
+        <el-table-column label="供应商/应付对象" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.supplier_name || row.payee_name || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="category" label="支出类别" width="120" show-overflow-tooltip />
         <el-table-column label="支出总额" width="125" align="right">
           <template #default="{ row }">{{ formatMoney(row.source_total_amount) }}</template>
@@ -185,7 +192,9 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel, StatusTag } from '@/components/ui'
 import { createPayablePayment, getPayable, getPayables, voidPayablePayment } from '@/api/payments'
-import type { PayablePaymentResponse, PayableResponse } from '@/types/api'
+import { getSuppliers } from '@/api/suppliers'
+import { useAuthStore } from '@/stores/auth'
+import type { PayablePaymentResponse, PayableResponse, SupplierResponse } from '@/types/api'
 import { formatDate } from '@/utils/datetime'
 import { formatMoney } from '@/utils/format'
 
@@ -204,10 +213,14 @@ const showHistory = ref(false)
 const paymentTarget = ref<PayableResponse | null>(null)
 const historyTarget = ref<PayableResponse | null>(null)
 const historyRows = ref<PayablePaymentResponse[]>([])
+const authStore = useAuthStore()
+const canUseSupplier = computed(() => authStore.can('supplier:read'))
+const suppliers = ref<SupplierResponse[]>([])
 
 const filters = reactive({
   keyword: '',
   source_type: undefined as string | undefined,
+  supplier_id: undefined as string | undefined,
   status: undefined as string | undefined,
 })
 
@@ -234,6 +247,7 @@ async function fetchData() {
       page_size: pageSize.value,
       ...(filters.keyword ? { keyword: filters.keyword } : {}),
       ...(filters.source_type ? { source_type: filters.source_type } : {}),
+      ...(filters.supplier_id ? { supplier_id: filters.supplier_id } : {}),
       ...(filters.status ? { status: filters.status } : {}),
     })
     list.value = data.items
@@ -253,6 +267,7 @@ function handleSearch() {
 function handleReset() {
   filters.keyword = ''
   filters.source_type = undefined
+  filters.supplier_id = undefined
   filters.status = undefined
   page.value = 1
   fetchData()
@@ -326,7 +341,20 @@ async function handleVoid(paymentId: string) {
   }
 }
 
-onMounted(fetchData)
+async function fetchSuppliers() {
+  if (!canUseSupplier.value) return
+  try {
+    const data = await getSuppliers({ page: 1, page_size: 200, is_active: true })
+    suppliers.value = data.items
+  } catch {
+    // Filtering by supplier is optional; the payable list remains available.
+  }
+}
+
+onMounted(() => {
+  void fetchData()
+  void fetchSuppliers()
+})
 </script>
 
 <style scoped>

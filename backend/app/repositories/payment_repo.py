@@ -488,13 +488,15 @@ class ExpenseRepository:
 
     async def get_by_id(self, expense_id: UUID) -> Expense | None:
         result = await self.db.execute(
-            select(Expense).where(Expense.id == expense_id, Expense.deleted_at.is_(None))
+            select(Expense)
+            .options(selectinload(Expense.supplier))
+            .where(Expense.id == expense_id, Expense.deleted_at.is_(None))
         )
         return result.scalar_one_or_none()
 
     async def list_expenses(self, skip: int = 0, limit: int = 20, category: str | None = None,
                             start_date: str | None = None, end_date: str | None = None) -> tuple[list[Expense], int]:
-        q = select(Expense).where(Expense.deleted_at.is_(None))
+        q = select(Expense).options(selectinload(Expense.supplier)).where(Expense.deleted_at.is_(None))
         if category:
             q = q.where(Expense.category == category)
         if start_date:
@@ -512,9 +514,16 @@ class ExpenseRepository:
         await self.db.flush()
         return expense
 
-    async def update(self, expense: Expense, data: dict) -> Expense:
+    async def update(
+        self,
+        expense: Expense,
+        data: dict,
+        *,
+        allow_null_fields: set[str] | None = None,
+    ) -> Expense:
+        allow_null_fields = allow_null_fields or set()
         for k, v in data.items():
-            if v is not None:
+            if v is not None or k in allow_null_fields:
                 setattr(expense, k, v)
         await self.db.flush()
         return expense

@@ -118,7 +118,14 @@ class Expense(Base, TimestampMixin, SoftDeleteMixin):
     payable_amount: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), nullable=False, default=0, comment="待付款金额"
     )
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("outsource_vendors.id", ondelete="SET NULL"), nullable=True
+    )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     expense_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     receipt_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    supplier: Mapped["OutsourceVendor | None"] = relationship(
+        "OutsourceVendor", foreign_keys=[supplier_id], lazy="selectin"
+    )

@@ -60,6 +60,7 @@ from app.api import (
     reports,
     salaries,
     salary_rules,
+    suppliers,
     tasks,
     users,
     vehicle_agent,
@@ -343,6 +344,7 @@ app.include_router(payments.stmt_router, prefix="/api/v1")
 app.include_router(payments.exp_router, prefix="/api/v1")
 app.include_router(payments.cost_router, prefix="/api/v1")
 app.include_router(payables.router, prefix="/api/v1")
+app.include_router(suppliers.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(outsource.router, prefix="/api/v1")
 app.include_router(inventory.router, prefix="/api/v1")

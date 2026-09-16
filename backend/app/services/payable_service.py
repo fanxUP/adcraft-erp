@@ -125,6 +125,7 @@ class PayableService:
                 ProjectCostItemLink.document_item
             ),
             selectinload(ProjectCost.customer),
+            selectinload(ProjectCost.supplier),
         )
 
     async def _load_sources(self) -> list[tuple[str, object]]:
@@ -137,7 +138,7 @@ class PayableService:
             )
         )
         expense_result = await self.db.execute(
-            select(Expense).where(
+            select(Expense).options(selectinload(Expense.supplier)).where(
                 Expense.deleted_at.is_(None),
                 func.coalesce(Expense.payable_amount, 0) > 0,
             )
@@ -166,7 +167,7 @@ class PayableService:
                 )
             )
         else:
-            query = select(Expense).where(
+            query = select(Expense).options(selectinload(Expense.supplier)).where(
                 Expense.id == source_id,
                 Expense.deleted_at.is_(None),
             )
@@ -280,7 +281,10 @@ class PayableService:
                 )
             source_no = source.cost_no
             project_name = getattr(document, "project_name", None)
-            payee_name = getattr(source, "payee_company_name", None)
+            supplier = getattr(source, "supplier", None)
+            supplier_id = getattr(source, "supplier_id", None)
+            supplier_name = getattr(supplier, "name", None)
+            payee_name = supplier_name or getattr(source, "payee_company_name", None)
             source_date = getattr(source, "cost_date", None) or getattr(
                 source, "created_at", None
             )
@@ -295,7 +299,10 @@ class PayableService:
             source_no = source.expense_no
             project_name = None
             customer_name = None
-            payee_name = getattr(source, "payee_name", None)
+            supplier = getattr(source, "supplier", None)
+            supplier_id = getattr(source, "supplier_id", None)
+            supplier_name = getattr(supplier, "name", None)
+            payee_name = supplier_name or getattr(source, "payee_name", None)
             source_date = getattr(source, "expense_date", None) or getattr(
                 source, "created_at", None
             )
@@ -316,6 +323,8 @@ class PayableService:
             "paid_amount": float(paid),
             "remaining_amount": float(remaining),
             "payee_name": payee_name,
+            "supplier_id": str(supplier_id) if supplier_id else None,
+            "supplier_name": supplier_name,
             "status": status,
             "status_view": PayableService._status_view(status),
             "capabilities": {
@@ -364,6 +373,7 @@ class PayableService:
         keyword: str | None = None,
         status: str | None = None,
         source_type: str | None = None,
+        supplier_id: UUID | None = None,
     ) -> tuple[list[dict], int]:
         if status and status not in PAYABLE_STATUS_LABELS:
             raise ValueError("不支持的应付状态")
@@ -371,6 +381,11 @@ class PayableService:
         sources = await self._load_sources()
         if normalized_type:
             sources = [item for item in sources if item[0] == normalized_type]
+        if supplier_id:
+            sources = [
+                item for item in sources
+                if getattr(item[1], "supplier_id", None) == supplier_id
+            ]
 
         summary = await self._payment_summary(
             [(source_type_value, source.id) for source_type_value, source in sources]
@@ -481,7 +496,7 @@ class PayableService:
             raise ValueError("应付来源不存在或已删除")
         _, payable_total = self._source_amounts(normalized_type, source)
         payment_map = await self._payment_summary([(normalized_type, source.id)])
-        paid, _ = payment_map.get((normalized_type, source.id), (Decimal("0"), 0))
+        paid, count = payment_map.get((normalized_type, source.id), (Decimal("0"), 0))
         paid = self._legacy_paid_amount(normalized_type, source, count, paid)
         remaining = max(Decimal("0"), payable_total - paid)
         amount = _money(data.get("amount"))
