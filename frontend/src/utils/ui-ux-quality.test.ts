@@ -109,9 +109,10 @@ describe('P08 UI/UX quality guardrails', () => {
     const fieldLabels = [
       'label="日期"',
       'label="供应商"',
-      'label="已支付金额"',
+      'label="支付金额"',
       'label="欠款金额"',
       'label="分类"',
+      'label="付款方式"',
       'label="支出总额"',
       'label="说明"',
       'label="凭证"',
@@ -120,9 +121,37 @@ describe('P08 UI/UX quality guardrails', () => {
 
     expect(positions.every(position => position >= 0)).toBe(true)
     expect(positions).toEqual([...positions].sort((left, right) => left - right))
+    expect(formSource).toContain('v-model="form.payment_method"')
+    expect(formSource).toContain('v-for="pm in PAYMENT_METHODS"')
     expect(source).not.toContain('label="应付对象"')
     expect(source).toContain('class="expense-attachment-dropzone"')
     expect(source).toContain('@drop.prevent="handleExpenseAttachmentDrop"')
     expect(source).toContain('getExpenseAttachments')
+  })
+
+  it('keeps project-cost entry and list on the simplified financial fields', () => {
+    const source = readSource('views/payments/ProjectCostDetail.vue')
+    const formSource = source.slice(source.indexOf('<el-form'))
+    const fieldLabels = [
+      'label="日期"',
+      'label="供应商"',
+      'label="支付金额"',
+      'label="欠款金额"',
+      'label="分类"',
+      'label="付款方式"',
+      'label="支出总额"',
+      'label="说明"',
+      'label="凭证"',
+    ]
+    const positions = fieldLabels.map(label => formSource.indexOf(label))
+
+    expect(positions.every(position => position >= 0)).toBe(true)
+    expect(positions).toEqual([...positions].sort((left, right) => left - right))
+    for (const legacyBinding of ['form.summary', 'form.quantity', 'form.specification', 'form.unit', 'form.unit_price', 'form.payee_company_name']) {
+      expect(source).not.toContain(legacyBinding)
+    }
+    expect(source).toContain('label="支付金额"')
+    expect(source).toContain('支出总额 = 支付金额 + 欠款金额')
+    expect(source).toContain('row.supplier_name || row.payee_company_name')
   })
 })

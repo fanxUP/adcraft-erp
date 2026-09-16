@@ -1,5 +1,5 @@
-from datetime import datetime
-from decimal import Decimal
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from io import BytesIO
 from uuid import UUID
 
@@ -18,6 +18,29 @@ from app.schemas.payment import ProjectCostResponse
 from app.services.number_generator import generate_project_cost_no
 from app.services.payable_service import PayableService, validate_payable_amount
 from app.services.supplier_service import SupplierService
+
+
+_MONEY_QUANTUM = Decimal("0.01")
+
+
+def project_cost_payment_amount(
+    amount: Decimal | int | float | str | None,
+    debt_amount: Decimal | int | float | str | None,
+) -> Decimal:
+    """Return the amount paid when a project cost was registered.
+
+    Project costs persist the source total in ``amount`` and the portion that
+    enters the payable ledger in ``debt_amount``.  Keep this compatibility
+    calculation in one place for list/detail responses.  Invalid historical
+    rows are kept readable and never expose a negative paid amount.
+    """
+
+    total = Decimal(str(amount or 0)).quantize(_MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+    debt = Decimal(str(debt_amount or 0)).quantize(_MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+    return max(Decimal("0.00"), total - debt).quantize(
+        _MONEY_QUANTUM,
+        rounding=ROUND_HALF_UP,
+    )
 
 
 class ProjectCostService:
@@ -337,6 +360,7 @@ class ProjectCostService:
             "project_name": project_name_val,
             "category": cost.category,
             "amount": float(cost.amount),
+            "payment_amount": float(project_cost_payment_amount(cost.amount, cost.debt_amount)),
             "quantity": float(cost.quantity) if cost.quantity else None,
             "specification": cost.specification,
             "unit": cost.unit,
@@ -369,6 +393,9 @@ class ProjectCostService:
             supplier = await SupplierService(self.db).resolve_active_supplier(normalized["supplier_id"])
             normalized["supplier_id"] = supplier.id if supplier else None
             allow_null_fields.add("supplier_id")
+        for field_name in ("payment_method", "cost_date", "remark", "group_name"):
+            if field_name in normalized:
+                allow_null_fields.add(field_name)
         item_fields_present = any(
             key in normalized
             for key in ("document_item_id", "order_item_id", "order_item_ids", "quote_item_id")
@@ -574,10 +601,13 @@ class ProjectCostService:
         return self._to_dict(c)
 
     async def import_from_excel(self, file: BytesIO, created_by: UUID, order_id: UUID | None = None, quote_id: UUID | None = None, source_type: str = "order") -> dict:
-        """Parse Excel file and create ProjectCost records.
-        When order_id or quote_id is provided, all rows are assigned to that entity and the
-        Excel only needs columns: 成本类别, 金额, 描述(可选), 成本日期(可选), 备注(可选).
-        When neither is provided, the Excel must include column: 订单编号/报价单编号, 成本类别, 金额, ...
+        """Parse an old or current project-cost workbook.
+
+        The current format is based on the financial fields shown by the UI:
+        日期、供应商、支付金额、欠款金额、分类、付款方式、支出总额、说明。
+        ``amount`` remains the persisted total and ``debt_amount`` remains the
+        amount entering the payable ledger.  The former template is accepted
+        during the compatibility window so historical workbooks do not break.
         """
         import openpyxl
 
@@ -594,134 +624,158 @@ class ProjectCostService:
             name = str(h).strip()
             col_map[name] = col_idx
 
-        rows = list(ws.iter_rows(min_row=2, values_only=True))
-
         created = 0
         synced_doc_ids = set()
         errors = []
 
-        def get(col_name: str, default=None):
-            """Get value from row by column name."""
-            idx = col_map.get(col_name)
-            if idx is None:
-                return default
-            return row[idx] if idx < len(row) else default
+        def get_value(row_values, *aliases):
+            for alias in aliases:
+                idx = col_map.get(alias)
+                if idx is not None and idx < len(row_values):
+                    return row_values[idx]
+            return None
 
-        for i, row in enumerate(rows, start=2):
-            if not row:
+        def text_value(value) -> str:
+            return "" if value is None else str(value).strip()
+
+        def number_value(value, label: str) -> Decimal | None:
+            if value is None or (isinstance(value, str) and not value.strip()):
+                return None
+            raw = str(value).replace(",", "").replace("¥", "").strip()
+            try:
+                return Decimal(raw).quantize(_MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+            except (InvalidOperation, ValueError) as exc:
+                raise ValueError(f"{label}必须是数字") from exc
+
+        def parse_date(value) -> str | None:
+            if value is None or (isinstance(value, str) and not value.strip()):
+                return None
+            if isinstance(value, datetime):
+                return value.isoformat()
+            if isinstance(value, date):
+                return datetime.combine(value, datetime.min.time()).isoformat()
+            raw = str(value).strip().replace("/", "-")
+            try:
+                return datetime.fromisoformat(raw).isoformat()
+            except ValueError as exc:
+                raise ValueError("日期格式不正确，请使用 YYYY-MM-DD") from exc
+
+        is_current_format = any(
+            name in col_map for name in ("支付金额", "支出总额", "供应商", "日期", "分类")
+        )
+
+        def parse_row(row_values, require_doc_no: bool) -> dict:
+            doc_no = text_value(get_value(row_values, "订单编号", "报价单编号"))
+            if require_doc_no and not doc_no:
+                raise ValueError("单据编号不能为空")
+
+            category = text_value(get_value(row_values, "分类", "成本类别"))
+            payment_method = text_value(get_value(row_values, "付款方式")) or None
+            supplier_name = text_value(get_value(row_values, "供应商")) or None
+            payee_company_name = text_value(get_value(row_values, "收款公司")) or None
+            debt_amount = number_value(get_value(row_values, "欠款金额"), "欠款金额") or Decimal("0.00")
+            payment_amount = number_value(get_value(row_values, "支付金额"), "支付金额")
+            total_amount = number_value(get_value(row_values, "支出总额"), "支出总额")
+            legacy_amount = number_value(get_value(row_values, "金额"), "金额")
+
+            if is_current_format:
+                # If a workbook only supplies total + debt, infer the paid
+                # portion.  Otherwise the two entered components are the
+                # source of truth and total is checked rather than trusted.
+                if payment_amount is None and total_amount is not None:
+                    payment_amount = total_amount - debt_amount
+                elif payment_amount is None and legacy_amount is not None:
+                    payment_amount = legacy_amount - debt_amount
+                elif payment_amount is None:
+                    payment_amount = Decimal("0.00")
+                derived_total = payment_amount + debt_amount
+                if total_amount is not None and payment_amount is not None and total_amount != derived_total:
+                    raise ValueError("支付金额加欠款金额必须等于支出总额")
+                total_amount = derived_total
+                legacy_fields = {}
+            else:
+                total_amount = legacy_amount or Decimal("0.00")
+                payment_amount = total_amount - debt_amount
+                legacy_fields = {
+                    "quantity": number_value(get_value(row_values, "数量"), "数量"),
+                    "specification": text_value(get_value(row_values, "规格尺寸")) or None,
+                    "unit": text_value(get_value(row_values, "单位")) or None,
+                    "unit_price": number_value(get_value(row_values, "单价"), "单价"),
+                }
+
+            if not category or total_amount <= 0:
+                raise ValueError("分类和支出总额(>0)为必填项")
+            if payment_amount < 0:
+                raise ValueError("支付金额不能小于0")
+            debt_amount = validate_payable_amount(total_amount, debt_amount)
+
+            return {
+                "doc_no": doc_no,
+                "category": category,
+                "amount": float(total_amount),
+                "debt_amount": float(debt_amount),
+                "payment_method": payment_method,
+                "supplier_name": supplier_name,
+                "payee_company_name": payee_company_name,
+                "cost_date": parse_date(get_value(row_values, "日期", "成本日期")),
+                "group_name": text_value(get_value(row_values, "分项")) or None,
+                "description": text_value(get_value(row_values, "描述")) or None,
+                "summary": text_value(get_value(row_values, "成本摘要")) or None,
+                "remark": text_value(get_value(row_values, "说明")) or text_value(get_value(row_values, "备注")) or None,
+                "legacy_fields": {
+                    key: float(value) if isinstance(value, Decimal) else value
+                    for key, value in legacy_fields.items()
+                },
+            }
+
+        for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            if not row or not any(value is not None and str(value).strip() for value in row):
                 continue
             try:
+                parsed = parse_row(row, require_doc_no=not (order_id or quote_id))
+                doc_obj = None
                 if order_id or quote_id:
-                    # Import within document context — document_id pre-set
-                    category = str(get("成本类别") or "").strip()
-                    payment_method = str(get("付款方式") or "").strip() or None
-                    payee_company_name = str(get("收款公司") or "").strip() or None
-                    quantity_val = get("数量")
-                    quantity = float(quantity_val) if quantity_val else None
-                    specification = str(get("规格尺寸") or "").strip() or None
-                    unit = str(get("单位") or "").strip() or None
-                    unit_price_val = get("单价")
-                    unit_price = float(unit_price_val) if unit_price_val else None
-                    amount_val = get("金额")
-                    amount = float(amount_val) if amount_val else 0
-                    debt_val = get("欠款金额")
-                    debt_amount = float(debt_val) if debt_val else 0
-                    cost_date_str = str(get("成本日期") or "").strip() or None
-                    description = str(get("说明") or "").strip() or None
-                    summary = str(get("成本摘要") or "").strip() or None
-                    remark = str(get("备注") or "").strip() or None
-
-                    if not category or amount <= 0:
-                        errors.append({"row": i, "error": "成本类别和金额(>0)为必填项"})
-                        continue
-
-                    cost_date = None
-                    if cost_date_str:
-                        try:
-                            cost_date = datetime.fromisoformat(cost_date_str)
-                        except ValueError:
-                            cost_date = datetime.strptime(cost_date_str, "%Y-%m-%d")
-
-                    await self.create_cost({
+                    target_data = {
                         "source_type": source_type,
                         "order_id": str(order_id) if order_id else None,
                         "quote_id": str(quote_id) if quote_id else None,
-                        "category": category,
-                        "amount": amount,
-                        "payment_method": payment_method,
-                        "payee_company_name": payee_company_name,
-                        "quantity": quantity,
-                        "specification": specification,
-                        "unit": unit,
-                        "unit_price": unit_price,
-                        "debt_amount": debt_amount,
-                        "description": description,
-                        "summary": summary,
-                        "cost_date": cost_date.isoformat() if cost_date else None,
-                        "remark": remark,
-                    }, created_by, skip_sync=True)
+                    }
                     synced_doc_ids.add(order_id or quote_id)
                 else:
-                    # Standalone import — Excel must include order_no/报价单编号
-                    doc_no = str(get("订单编号") or get("报价单编号") or "").strip()
-                    if not doc_no:
-                        continue
-                    category = str(get("成本类别") or "").strip()
-                    payment_method = str(get("付款方式") or "").strip() or None
-                    payee_company_name = str(get("收款公司") or "").strip() or None
-                    quantity_val = get("数量")
-                    quantity = float(quantity_val) if quantity_val else None
-                    specification = str(get("规格尺寸") or "").strip() or None
-                    unit = str(get("单位") or "").strip() or None
-                    unit_price_val = get("单价")
-                    unit_price = float(unit_price_val) if unit_price_val else None
-                    amount_val = get("金额")
-                    amount = float(amount_val) if amount_val else 0
-                    debt_val = get("欠款金额")
-                    debt_amount = float(debt_val) if debt_val else 0
-                    cost_date_str = str(get("成本日期") or "").strip() or None
-                    description = str(get("说明") or "").strip() or None
-                    summary = str(get("成本摘要") or "").strip() or None
-                    remark = str(get("备注") or "").strip() or None
-
-                    if not doc_no or not category or amount <= 0:
-                        errors.append({"row": i, "error": "单据编号、成本类别和金额(>0)为必填项"})
-                        continue
-
-                    # Look up document by doc_no
                     doc_result = await self.db.execute(
-                        select(BusinessDocument).where(BusinessDocument.doc_no == doc_no)
+                        select(BusinessDocument).where(BusinessDocument.doc_no == parsed["doc_no"])
                     )
                     doc_obj = doc_result.scalar_one_or_none()
                     if not doc_obj:
-                        errors.append({"row": i, "error": f"单据编号「{doc_no}」不存在"})
-                        continue
-
-                    cost_date = None
-                    if cost_date_str:
-                        try:
-                            cost_date = datetime.fromisoformat(cost_date_str)
-                        except ValueError:
-                            cost_date = datetime.strptime(cost_date_str, "%Y-%m-%d")
-
-                    await self.create_cost({
+                        raise ValueError(f"单据编号「{parsed['doc_no']}」不存在")
+                    target_data = {
                         "source_type": doc_obj.doc_type,
-                        "order_id": str(doc_obj.id),
-                        "category": category,
-                        "amount": amount,
-                        "payment_method": payment_method,
-                        "payee_company_name": payee_company_name,
-                        "quantity": quantity,
-                        "specification": specification,
-                        "unit": unit,
-                        "unit_price": unit_price,
-                        "debt_amount": debt_amount,
-                        "description": description,
-                        "summary": summary,
-                        "cost_date": cost_date.isoformat() if cost_date else None,
-                        "remark": remark,
-                    }, created_by, skip_sync=True)
+                        "order_id": str(doc_obj.id) if doc_obj.doc_type == "order" else None,
+                        "quote_id": str(doc_obj.id) if doc_obj.doc_type == "quote" else None,
+                    }
                     synced_doc_ids.add(doc_obj.id)
+
+                supplier = None
+                if parsed["supplier_name"]:
+                    supplier = await SupplierService(self.db).find_unique_active_supplier(parsed["supplier_name"])
+                    if supplier is None:
+                        raise ValueError(f"供应商「{parsed['supplier_name']}」不存在，请先在供应商管理中建立")
+
+                target_data.update({
+                    "category": parsed["category"],
+                    "amount": parsed["amount"],
+                    "debt_amount": parsed["debt_amount"],
+                    "payment_method": parsed["payment_method"],
+                    "supplier_id": supplier.id if supplier else None,
+                    "payee_company_name": parsed["payee_company_name"],
+                    "cost_date": parsed["cost_date"],
+                    "group_name": parsed["group_name"],
+                    "description": parsed["description"],
+                    "summary": parsed["summary"],
+                    "remark": parsed["remark"],
+                    **parsed["legacy_fields"],
+                })
+                await self.create_cost(target_data, created_by, skip_sync=True)
                 created += 1
             except Exception as e:
                 errors.append({"row": i, "error": str(e)})
@@ -789,6 +843,7 @@ class ProjectCostService:
     def _to_dict(self, c: ProjectCost) -> dict:
         """Pydantic model_validate + 手动补充关系派生字段和向后兼容别名。"""
         d = ProjectCostResponse.model_validate(c).model_dump(mode="json")
+        d["payment_amount"] = float(project_cost_payment_amount(c.amount, c.debt_amount))
 
         # 从 document 关系取字段
         doc = c.document

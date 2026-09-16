@@ -21,7 +21,7 @@ export function confirmStatement(id: string) { return post<StatementResponse>(`/
 export function getExpenses(params?: { page?: number; page_size?: number; category?: string; start_date?: string; end_date?: string }) { return get<PaginatedData<ExpenseResponse>>('/expenses/', { params }) }
 export function getExpense(id: string) { return get<ExpenseResponse>(`/expenses/${id}`) }
 export type ExpenseWritePayload = Partial<Omit<ExpenseResponse, 'id' | 'expense_no' | 'created_by' | 'created_at'>> & {
-  /** 登记时已支付金额；总金额由它与 payable_amount 相加得到。 */
+  /** 登记时支付金额；总金额由它与 payable_amount 相加得到。 */
   paid_amount?: number
 }
 

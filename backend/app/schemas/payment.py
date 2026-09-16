@@ -132,6 +132,7 @@ class StatementPaymentItem(CoercedModel):
 
 class ExpenseCreate(BaseModel):
     category: str | None = None
+    payment_method: str | None = None
     # Legacy clients may continue to send amount as the source total. New
     # clients should send paid_amount + payable_amount; the service derives
     # amount from that breakdown before persistence.
@@ -155,7 +156,7 @@ class ExpenseCreate(BaseModel):
     @classmethod
     def paid_non_negative(cls, value: float | None) -> float | None:
         if value is not None and value < 0:
-            raise ValueError("已支付金额不能小于0")
+            raise ValueError("支付金额不能小于0")
         return value
 
     @field_validator("payable_amount")
@@ -168,6 +169,7 @@ class ExpenseCreate(BaseModel):
 
 class ExpenseUpdate(BaseModel):
     category: str | None = None
+    payment_method: str | None = None
     amount: float | None = None
     paid_amount: float | None = None
     payee_name: str | None = None
@@ -188,7 +190,7 @@ class ExpenseUpdate(BaseModel):
     @classmethod
     def paid_non_negative(cls, value: float | None) -> float | None:
         if value is not None and value < 0:
-            raise ValueError("已支付金额不能小于0")
+            raise ValueError("支付金额不能小于0")
         return value
 
     @field_validator("payable_amount")
@@ -203,6 +205,7 @@ class ExpenseResponse(CoercedModel):
     id: str
     expense_no: str
     category: str | None = None
+    payment_method: str | None = None
     amount: float
     payee_name: str | None = None
     supplier_id: str | None = None
@@ -343,7 +346,7 @@ class ProjectCostCreate(BaseModel):
     @classmethod
     def amount_positive(cls, v: float) -> float:
         if v <= 0:
-            raise ValueError("成本金额必须大于0")
+            raise ValueError("支出总额必须大于0")
         return v
 
     @field_validator("order_id", "quote_id")
@@ -403,6 +406,7 @@ class ProjectCostResponse(CoercedModel):
     project_name: str | None = None
     category: str
     amount: float
+    payment_amount: float = 0
     payment_method: str | None = None
     payee_company_name: str | None = None
     supplier_id: str | None = None

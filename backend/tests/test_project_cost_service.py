@@ -6,10 +6,11 @@ import pytest
 
 from app.schemas.payment import DebtSettleCreate, ExpenseUpdate, ProjectCostCreate, ProjectCostUpdate
 from app.models.customer import Customer
+from app.models.contract import Contract  # noqa: F401 - register payment allocation relationships
 from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.repositories.project_cost_repo import ProjectCostRepository
-from app.services.project_cost_service import ProjectCostService
+from app.services.project_cost_service import ProjectCostService, project_cost_payment_amount
 
 
 @pytest.mark.asyncio
@@ -393,6 +394,15 @@ def test_project_cost_payload_rejects_more_than_100_item_scopes():
         )
 
 
+def test_project_cost_payment_amount_is_derived_from_total_and_debt():
+    assert project_cost_payment_amount(Decimal("130.00"), Decimal("30.00")) == Decimal("100.00")
+    assert project_cost_payment_amount(Decimal("100.00"), None) == Decimal("100.00")
+
+
+def test_project_cost_payment_amount_does_not_expose_negative_historical_value():
+    assert project_cost_payment_amount(Decimal("100.00"), Decimal("130.00")) == Decimal("0.00")
+
+
 @pytest.mark.asyncio
 async def test_list_costs_passes_order_item_filter_to_repository():
     order_id = uuid4()
@@ -505,3 +515,57 @@ async def test_repository_summary_counts_shared_cost_once_but_lists_each_linked_
         row["document_item_id"] for row in summary["items"]
     } == set(item_ids)
     assert all(row["amount"] == Decimal("200.00") for row in summary["items"])
+
+
+def _project_cost_workbook_bytes(headers, values):
+    from io import BytesIO
+
+    import openpyxl
+
+    workbook = openpyxl.Workbook()
+    worksheet = workbook.active
+    worksheet.append(headers)
+    worksheet.append(values)
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    return output
+
+
+@pytest.mark.asyncio
+async def test_import_current_project_cost_format_uses_paid_plus_debt():
+    order_id = uuid4()
+    service = ProjectCostService(MagicMock())
+    service.create_cost = AsyncMock(return_value={})
+    service._sync_document_cost = AsyncMock()
+
+    workbook = _project_cost_workbook_bytes(
+        ["分项", "日期", "供应商", "支付金额", "欠款金额", "分类", "付款方式", "支出总额", "说明"],
+        ["灯箱制作", "2026-09-17", None, 100, 30, "材料费", "转账支付", 130, "现场材料"],
+    )
+    result = await service.import_from_excel(workbook, uuid4(), order_id=order_id)
+
+    assert result == {"created": 1, "errors": []}
+    payload = service.create_cost.await_args.args[0]
+    assert payload["amount"] == 130.0
+    assert payload["debt_amount"] == 30.0
+    assert payload["payment_method"] == "转账支付"
+    assert payload["remark"] == "现场材料"
+    assert "quantity" not in payload
+    service._sync_document_cost.assert_awaited_once_with(order_id)
+
+
+@pytest.mark.asyncio
+async def test_import_current_project_cost_format_rejects_total_mismatch():
+    service = ProjectCostService(MagicMock())
+    service.create_cost = AsyncMock(return_value={})
+
+    workbook = _project_cost_workbook_bytes(
+        ["日期", "支付金额", "欠款金额", "分类", "支出总额"],
+        ["2026-09-17", 100, 30, "材料费", 140],
+    )
+    result = await service.import_from_excel(workbook, uuid4(), order_id=uuid4())
+
+    assert result["created"] == 0
+    assert result["errors"] == [{"row": 2, "error": "支付金额加欠款金额必须等于支出总额"}]
+    service.create_cost.assert_not_awaited()

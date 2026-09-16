@@ -1,0 +1,38 @@
+version: 1
+mode: STRICT
+tasks:
+  P01:
+    title: 金额归一化与测试
+    depends_on: []
+    paths:
+      - frontend/src/utils/projectCostAmount.ts
+      - frontend/src/utils/projectCostAmount.test.ts
+      - backend/app/services/project_cost_service.py
+      - backend/app/schemas/payment.py
+      - backend/tests/test_project_cost_service.py
+  P02:
+    title: 项目成本登记编辑表单
+    depends_on: [P01]
+    paths:
+      - frontend/src/views/payments/ProjectCostDetail.vue
+  P03:
+    title: 项目成本列表类型与接口
+    depends_on: [P01]
+    paths:
+      - frontend/src/types/api.ts
+      - frontend/src/api/payments.ts
+      - backend/app/services/project_cost_service.py
+  P04:
+    title: Excel 模板和旧导入兼容
+    depends_on: [P01]
+    paths:
+      - backend/app/services/project_cost_service.py
+      - backend/app/api/payments.py
+      - frontend/src/views/payments/ProjectCostDetail.vue
+  P05:
+    title: 验证提交部署
+    depends_on: [P02, P03, P04]
+    paths:
+      - .vibe/CHANGE_BUDGET.yaml
+      - .vibe/SCOPE_LOCK.yaml
+      - docs/project-cost-field-simplification/**

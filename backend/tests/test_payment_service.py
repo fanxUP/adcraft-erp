@@ -79,6 +79,7 @@ def make_mock_expense(**kwargs):
     e.category = kwargs.get("category", "办公")
     e.amount = kwargs.get("amount", 1000.0)
     e.payable_amount = kwargs.get("payable_amount", 0.0)
+    e.payment_method = kwargs.get("payment_method", None)
     e.payee_name = kwargs.get("payee_name", None)
     e.supplier_id = kwargs.get("supplier_id", None)
     e.supplier = kwargs.get("supplier", None)
@@ -460,7 +461,7 @@ def mock_statement_repo():
     repo.list_statements = AsyncMock(return_value=([], 0))
     repo.create = AsyncMock()
 
-    async def update_side_effect(model_obj, data):
+    async def update_side_effect(model_obj, data, *, allow_null_fields=None):
         for key, value in data.items():
             setattr(model_obj, key, value)
         return model_obj
@@ -615,7 +616,7 @@ def mock_expense_repo():
     repo.list_expenses = AsyncMock(return_value=([], 0))
     repo.create = AsyncMock()
 
-    async def update_side_effect(model_obj, data):
+    async def update_side_effect(model_obj, data, *, allow_null_fields=None):
         for key, value in data.items():
             setattr(model_obj, key, value)
         return model_obj
@@ -652,12 +653,13 @@ async def test_list_expenses_empty(expense_service):
 @pytest.mark.asyncio
 async def test_get_expense_found(expense_service):
     svc = expense_service
-    e = make_mock_expense()
+    e = make_mock_expense(payment_method="转账支付")
     svc.repo.get_by_id.return_value = e
     result = await svc.get_expense(SAMPLE_ORDER_ID)
     assert result is not None
     assert result["expense_no"] == "EXP20260629-0001"
     assert result["category"] == "办公"
+    assert result["payment_method"] == "转账支付"
 
 
 @pytest.mark.asyncio
@@ -697,12 +699,16 @@ async def test_create_expense(expense_service):
         result = await svc.create_expense({
             "category": "水电",
             "amount": 500.0,
+            "payment_method": "微信支付",
             "description": "电费",
             "expense_date": "2026-06-15T00:00:00",
         }, SAMPLE_USER_ID)
 
     assert result["expense_no"] == "EXP20260629-0002"
     assert result["amount"] == 500.0
+    created = svc.repo.create.await_args.args[0]
+    assert created.payment_method == "微信支付"
+    assert result["payment_method"] == "微信支付"
 
 
 def test_expense_create_accepts_payable_amount_as_total_when_amount_is_empty():
@@ -794,6 +800,23 @@ async def test_update_expense_recalculates_total_from_paid_and_payable(expense_s
     assert e.payable_amount == Decimal("800.00")
     assert result["amount"] == 1500.0
     assert result["initial_paid_amount"] == 700.0
+
+
+@pytest.mark.asyncio
+async def test_update_expense_can_set_and_clear_payment_method(expense_service):
+    svc = expense_service
+    e = make_mock_expense(payment_method="现金支付")
+    svc.repo.get_by_id.return_value = e
+
+    result = await svc.update_expense(SAMPLE_ORDER_ID, {"payment_method": "微信支付"})
+
+    assert e.payment_method == "微信支付"
+    assert result["payment_method"] == "微信支付"
+
+    result = await svc.update_expense(SAMPLE_ORDER_ID, {"payment_method": None})
+
+    assert e.payment_method is None
+    assert result["payment_method"] is None
 
 
 @pytest.mark.asyncio

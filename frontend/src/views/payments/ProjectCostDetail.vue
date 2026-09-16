@@ -118,32 +118,23 @@
           {{ formatDate(row.cost_date) || '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="summary" label="成本摘要" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="description" label="产品/材质/工艺" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="specification" label="规格尺寸" width="120" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.specification || '-' }}</template>
+      <el-table-column label="供应商" min-width="180" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.supplier_name || row.payee_company_name || '-' }}</template>
       </el-table-column>
-      <el-table-column prop="quantity" label="数量" width="100" align="right" sortable>
-        <template #default="{ row }">{{ row.quantity ?? '-' }}</template>
+      <el-table-column prop="payment_amount" label="支付金额" width="140" align="right" sortable>
+        <template #default="{ row }">¥ {{ getCostPaymentAmount(row as ProjectCostResponse).toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column label="单位" width="80" align="center">
-        <template #default="{ row }">{{ row.unit || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="unit_price" label="单价" width="120" align="right" sortable>
-        <template #default="{ row }">¥ {{ row.unit_price?.toFixed(2) ?? '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="amount" label="金额" width="140" align="right" sortable>
-        <template #default="{ row }">¥ {{ row.amount?.toFixed(2) }}</template>
-      </el-table-column>
-      <el-table-column label="欠款" width="90" align="center">
+      <el-table-column prop="debt_amount" label="欠款金额" width="140" align="right" sortable>
         <template #default="{ row }">
-          <StatusTag v-if="row.status_view" :status="row.status_view" size="sm" />
-          <el-tag v-else-if="row.is_debt && !row.is_settled" type="danger" size="small">欠款</el-tag>
-          <el-tag v-else-if="row.is_debt && row.is_settled" type="success" size="small">已结清</el-tag>
-          <span v-else></span>
+          <span :class="{ 'cost-debt-value': Number(row.debt_amount || 0) > 0 }">
+            ¥ {{ Number(row.debt_amount || 0).toFixed(2) }}
+          </span>
+          <div v-if="row.status_view" class="cost-status-inline">
+            <StatusTag :status="row.status_view" size="sm" />
+          </div>
         </template>
       </el-table-column>
-      <el-table-column label="成本类别" width="120">
+      <el-table-column label="分类" width="120">
         <template #default="{ row }">
           <el-tag size="small">{{ row.category || '-' }}</el-tag>
         </template>
@@ -151,8 +142,11 @@
       <el-table-column label="付款方式" width="120">
         <template #default="{ row }">{{ row.payment_method || '-' }}</template>
       </el-table-column>
-      <el-table-column label="供应商/收款公司" min-width="180" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.supplier_name || row.payee_company_name || '-' }}</template>
+      <el-table-column prop="amount" label="支出总额" width="140" align="right" sortable>
+        <template #default="{ row }">¥ {{ Number(row.amount || 0).toFixed(2) }}</template>
+      </el-table-column>
+      <el-table-column prop="remark" label="说明" min-width="180" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.remark || '-' }}</template>
       </el-table-column>
       <el-table-column label="凭证" width="80" align="center">
         <template #default="{ row }">
@@ -160,7 +154,6 @@
           <span v-else></span>
         </template>
       </el-table-column>
-      <el-table-column prop="remark" label="备注" min-width="140" show-overflow-tooltip />
       <el-table-column label="操作" width="160" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" size="small" @click="openEdit(row as ProjectCostResponse)">编辑</el-button>
@@ -282,32 +275,26 @@
             style="width: 100%"
           />
         </el-form-item>
-        <el-form-item label="成本摘要">
-          <el-input v-model="form.summary" type="textarea" :rows="2" placeholder="成本摘要说明…" />
+        <el-form-item v-if="canUseSupplier" label="供应商">
+          <el-select
+            v-model="form.supplier_id"
+            clearable
+            filterable
+            placeholder="选择供应商（可选）"
+            style="width: 100%"
+          >
+            <el-option v-for="supplier in suppliers" :key="supplier.id" :label="supplier.name" :value="supplier.id" />
+          </el-select>
+          <div class="form-tip">选择后将这笔成本关联到供应商；不选择时按无供应商支出记录。</div>
         </el-form-item>
-        <el-form-item label="产品/材质/工艺">
-          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="产品/材质/工艺说明…" />
-        </el-form-item>
-        <el-form-item label="规格尺寸">
-          <el-input v-model="form.specification" placeholder="规格尺寸（如 1200×2400mm）" clearable />
-        </el-form-item>
-        <el-form-item label="数量">
-          <el-input-number v-model="form.quantity" :min="0" :precision="2" style="width: 100%" placeholder="成本数量" />
-        </el-form-item>
-        <el-form-item label="单位">
-          <el-input v-model="form.unit" placeholder="单位（个/米/平方米/套…）" clearable />
-        </el-form-item>
-        <el-form-item label="单价">
-          <el-input-number v-model="form.unit_price" :min="0" :precision="2" style="width: 100%" placeholder="成本单价" />
-        </el-form-item>
-        <el-form-item label="金额" required>
-          <el-input-number v-model="form.amount" :min="0.01" :precision="2" style="width: 100%" />
+        <el-form-item label="支付金额" required>
+          <el-input-number v-model="form.payment_amount" :min="0" :precision="2" style="width: 100%" placeholder="已实际支付的金额" />
         </el-form-item>
         <el-form-item label="欠款金额">
           <el-input-number v-model="form.debt_amount" :min="0" :precision="2" style="width: 100%" placeholder="0 表示无欠款" />
-          <div style="font-size: 12px; color: var(--ad-text-secondary); margin-top: 4px">大于0时自动记为欠款</div>
+          <div class="form-tip">大于 0 时进入应付管理。</div>
         </el-form-item>
-        <el-form-item label="成本类别" required>
+        <el-form-item label="分类" required>
           <el-select
             v-model="form.category"
             placeholder="选择类别"
@@ -324,25 +311,12 @@
             <el-option v-for="pm in PAYMENT_METHODS" :key="pm" :label="pm" :value="pm" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="canUseSupplier" label="供应商">
-          <el-select
-            v-model="form.supplier_id"
-            clearable
-            filterable
-            placeholder="选择供应商（可选）"
-            style="width: 100%"
-            @change="handleSupplierChange"
-          >
-            <el-option v-for="supplier in suppliers" :key="supplier.id" :label="supplier.name" :value="supplier.id" />
-          </el-select>
-          <div class="form-tip">选择后会同步记录供应商；下方名称用于兼容历史文本或非供应商收款对象。</div>
+        <el-form-item label="支出总额" required>
+          <div class="cost-form-total">¥ {{ formTotalAmount.toFixed(2) }}</div>
+          <div class="form-tip">支出总额 = 支付金额 + 欠款金额，此项自动计算。</div>
         </el-form-item>
-        <el-form-item label="收款公司">
-          <el-input v-model="form.payee_company_name" placeholder="输入对方收款公司名称" clearable />
-          <div style="font-size: 12px; color: var(--ad-text-secondary); margin-top: 2px">对方收款公司名称（可选）</div>
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="备注…" />
+        <el-form-item label="说明">
+          <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="填写这笔支出的说明…" />
         </el-form-item>
         <el-form-item label="凭证">
           <div
@@ -434,10 +408,11 @@
     <el-dialog v-model="showImport" title="导入Excel" width="480px" :close-on-click-modal="false">
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary)">
         Excel 需包含以下列：<br />
-        <b>分项、成本类别、付款方式、收款公司、规格尺寸、数量、单位、单价、金额、欠款金额、成本日期、产品/材质/工艺、成本摘要、备注</b>
+        <b>日期、供应商、支付金额、欠款金额、分类、付款方式、支出总额、说明</b>
       </p>
       <p style="margin-bottom: 12px; color: var(--ad-text-secondary); font-size: 13px">
         导入的成本将自动关联到 <b>{{ isQuote ? (order?.quote_no || '报价单') : (order?.order_no || '订单') }}</b>
+        ，凭证请在成本记录保存后通过拖拽上传。
       </p>
       <div style="margin-bottom: 12px;">
         <el-button size="small" @click="downloadTemplate">
@@ -495,6 +470,7 @@ import { ArrowLeft, Delete, Download, UploadFilled } from '@element-plus/icons-v
 import type { ProjectCostResponse, ProjectCostImportResponse, OrderDetailResponse, QuoteDetailResponse, AttachmentResponse, ProjectCostItemSummaryResponse, SupplierResponse } from '@/types/api'
 import { StatusTag } from '@/components/ui'
 import { buildProjectCostScopeOptions, getProjectCostScopeIds, type ProjectCostScopeOption } from '@/utils/projectCostScope'
+import { getProjectCostPaymentAmount, normalizeProjectCostAmounts } from '@/utils/projectCostAmount'
 import {
   PROJECT_COST_ATTACHMENT_ACCEPT,
   PROJECT_COST_ATTACHMENT_PREVIEW_ZOOM_RATE,
@@ -610,23 +586,24 @@ const scopeTableRows = computed<ProjectCostScopeTableRow[]>(() => [
 
 const form = reactive({
   category: '',
-  quantity: 0,
-  specification: '',
-  unit: "",
-  unit_price: 0,
-  amount: 0,
+  payment_amount: 0,
   payment_method: '',
   supplier_id: '',
-  payee_company_name: '',
   debt_amount: 0,
   cost_date: '',
-  description: '',
   remark: '',
-  summary: '',
   group_name: '',
   order_item_id: '',
   order_item_ids: [] as string[],
   quote_item_id: '',
+})
+
+const formTotalAmount = computed(() => {
+  try {
+    return normalizeProjectCostAmounts(form.payment_amount, form.debt_amount).totalAmount
+  } catch {
+    return 0
+  }
 })
 
 const scopeMode = computed<'document' | 'items'>({
@@ -661,7 +638,7 @@ async function handleBatchDelete() {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, payment_method: '', supplier_id: '', payee_company_name: '', debt_amount: 0, cost_date: '', description: '', summary: '', remark: '', group_name: '', order_item_id: '', order_item_ids: [], quote_item_id: '', quantity: 0, specification: '', unit: '', unit_price: 0 })
+  Object.assign(form, { category: '', payment_amount: 0, payment_method: '', supplier_id: '', debt_amount: 0, cost_date: '', remark: '', group_name: '', order_item_id: '', order_item_ids: [], quote_item_id: '' })
   isEditing.value = false
   editingId.value = ''
   editingScopeSnapshots.value = []
@@ -682,19 +659,12 @@ function openEdit(row: ProjectCostResponse) {
   isEditing.value = true
   editingId.value = row.id
   form.category = row.category
-  form.amount = row.amount
+  form.payment_amount = row.payment_amount ?? getProjectCostPaymentAmount(row.amount, row.debt_amount)
   form.payment_method = row.payment_method || ''
   form.supplier_id = row.supplier_id || ''
-  form.payee_company_name = row.payee_company_name || ''
   form.debt_amount = row.debt_amount || 0
   form.cost_date = formatDate(row.cost_date) || ''
-  form.description = row.description || ''
   form.remark = row.remark || ''
-  form.summary = row.summary || ''
-  form.quantity = row.quantity || 0
-  form.specification = row.specification || ''
-  form.unit = row.unit || ''
-  form.unit_price = row.unit_price || 0
   form.group_name = row.group_name || ''
   form.order_item_id = row.order_item_id || ''
   form.quote_item_id = row.quote_item_id || ''
@@ -714,18 +684,13 @@ function openEdit(row: ProjectCostResponse) {
   loadAttachments(row.id)
 }
 
-function handleSupplierChange(supplierId: string | undefined) {
-  const supplier = suppliers.value.find(item => item.id === supplierId)
-  if (supplier) form.payee_company_name = supplier.name
-}
-
 async function fetchSuppliers() {
   if (!canUseSupplier.value) return
   try {
     const data = await getSuppliers({ page: 1, page_size: 200, is_active: true })
     suppliers.value = data.items
   } catch {
-    // Manual payee-company text remains available for roles without directory access.
+    // 供应商为可选字段，目录读取失败不阻断成本表单。
   }
 }
 
@@ -778,6 +743,10 @@ function formatScopeArea(row: ProjectCostScopeTableRow) {
 
 function formatScopeMoney(value: number | null) {
   return value == null ? '-' : `¥ ${value.toFixed(2)}`
+}
+
+function getCostPaymentAmount(row: ProjectCostResponse) {
+  return row.payment_amount ?? getProjectCostPaymentAmount(row.amount, row.debt_amount)
 }
 
 function costScopeLabel(row: ProjectCostResponse) {
@@ -886,31 +855,38 @@ async function fetchData() {
 }
 
 async function handleSave() {
+  const category = form.category.trim()
+  if (!category) {
+    ElMessage.warning('请选择分类')
+    return
+  }
+
+  let amounts
+  try {
+    amounts = normalizeProjectCostAmounts(form.payment_amount, form.debt_amount)
+  } catch (error) {
+    ElMessage.warning(error instanceof Error ? error.message : '请检查支付金额和欠款金额')
+    return
+  }
+
   saving.value = true
   try {
     if (isEditing.value) {
-      const payload: Record<string, unknown> = {}
-      if (form.category) payload.category = form.category
-      if (form.amount > 0) payload.amount = form.amount
-      if (form.payment_method) payload.payment_method = form.payment_method
-      payload.supplier_id = form.supplier_id || null
-      if (form.payee_company_name) payload.payee_company_name = form.payee_company_name
-      if (form.quantity > 0) payload.quantity = form.quantity
-      if (form.specification) payload.specification = form.specification
-      if (form.unit) payload.unit = form.unit
-      if (form.unit_price > 0) payload.unit_price = form.unit_price
-      if (form.debt_amount > 0) payload.debt_amount = form.debt_amount
-      else payload.debt_amount = 0
-      if (form.cost_date) payload.cost_date = form.cost_date
-      if (form.description) payload.description = form.description
-      payload.summary = form.summary
-      if (form.remark) payload.remark = form.remark
+      const payload: Record<string, unknown> = {
+        category,
+        amount: amounts.totalAmount,
+        debt_amount: amounts.debtAmount,
+        cost_date: form.cost_date || null,
+        payment_method: form.payment_method || null,
+        supplier_id: form.supplier_id || null,
+        remark: form.remark.trim() || null,
+        group_name: form.group_name.trim() || null,
+      }
       if (isQuote.value) {
-        if (form.quote_item_id) payload.quote_item_id = form.quote_item_id
+        payload.quote_item_id = form.quote_item_id || null
       } else {
         payload.order_item_ids = [...form.order_item_ids]
       }
-      if (form.group_name) payload.group_name = form.group_name
       await updateProjectCost(editingId.value, payload)
       ElMessage.success('成本已更新')
     } else {
@@ -918,43 +894,29 @@ async function handleSave() {
         await createProjectCost({
           source_type: 'quote',
           quote_id: sourceId.value,
-          category: form.category,
-          amount: form.amount,
+          category,
+          amount: amounts.totalAmount,
+          debt_amount: amounts.debtAmount,
           cost_date: form.cost_date || undefined,
-          description: form.description || undefined,
-          summary: form.summary || undefined,
           remark: form.remark || undefined,
           quote_item_id: form.quote_item_id || undefined,
           group_name: form.group_name || undefined,
           payment_method: form.payment_method || undefined,
           supplier_id: form.supplier_id || undefined,
-          payee_company_name: form.payee_company_name || undefined,
-          quantity: form.quantity > 0 ? form.quantity : undefined,
-          specification: form.specification || undefined,
-          unit: form.unit || undefined,
-          unit_price: form.unit_price > 0 ? form.unit_price : undefined,
-          debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,
         })
       } else {
         await createProjectCost({
           source_type: 'order',
           order_id: sourceId.value,
-          category: form.category,
-          amount: form.amount,
+          category,
+          amount: amounts.totalAmount,
+          debt_amount: amounts.debtAmount,
           cost_date: form.cost_date || undefined,
-          description: form.description || undefined,
-          summary: form.summary || undefined,
           remark: form.remark || undefined,
           order_item_ids: form.order_item_ids.length ? [...form.order_item_ids] : undefined,
           group_name: form.group_name || undefined,
           payment_method: form.payment_method || undefined,
           supplier_id: form.supplier_id || undefined,
-          payee_company_name: form.payee_company_name || undefined,
-          quantity: form.quantity > 0 ? form.quantity : undefined,
-          specification: form.specification || undefined,
-          unit: form.unit || undefined,
-          unit_price: form.unit_price > 0 ? form.unit_price : undefined,
-          debt_amount: form.debt_amount > 0 ? form.debt_amount : undefined,
         })
       }
       ElMessage.success('成本登记成功')
@@ -1323,6 +1285,20 @@ onUnmounted(stopAutoRefresh)
   color: var(--ad-text-secondary, #888);
   font-size: 12px;
   line-height: 1.5;
+}
+.cost-form-total {
+  min-height: 32px;
+  color: var(--el-color-warning);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 32px;
+}
+.cost-debt-value {
+  color: var(--el-color-danger);
+  font-weight: 600;
+}
+.cost-status-inline {
+  margin-top: 4px;
 }
 @media (max-width: 760px) {
   .cost-scope-mode-row {

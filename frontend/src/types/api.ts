@@ -969,6 +969,7 @@ export interface ExpenseResponse {
   id: string
   expense_no: string
   category?: string
+  payment_method?: string | null
   amount: number
   payee_name?: string
   supplier_id?: string | null
@@ -1055,6 +1056,7 @@ export interface ProjectCostResponse {
   project_name?: string
   category: string
   amount: number
+  payment_amount?: number
   status_view?: StatusView | null
   capabilities?: Record<string, ActionCapability>
   quantity?: number

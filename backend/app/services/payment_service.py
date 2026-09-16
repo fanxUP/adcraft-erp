@@ -543,7 +543,7 @@ class ExpenseService:
         if "paid_amount" in data and data.get("paid_amount") is not None:
             initial_paid_amount = _money_or_zero(data.get("paid_amount"))
             if initial_paid_amount < 0:
-                raise ValueError("已支付金额不能小于0")
+                raise ValueError("支付金额不能小于0")
             amount = _money_or_zero(initial_paid_amount + requested_payable_amount)
         else:
             # Legacy clients sent the source total as ``amount``. Keep that
@@ -566,6 +566,7 @@ class ExpenseService:
         expense = Expense(
             expense_no=await generate_expense_no(self.db),
             category=data.get("category"),
+            payment_method=data.get("payment_method"),
             amount=amount,
             payee_name=data.get("payee_name") or (supplier.name if supplier else None),
             payable_amount=payable_amount,
@@ -591,7 +592,7 @@ class ExpenseService:
         if "paid_amount" in data and data.get("paid_amount") is not None:
             initial_paid_amount = _money_or_zero(data.get("paid_amount"))
             if initial_paid_amount < 0:
-                raise ValueError("已支付金额不能小于0")
+                raise ValueError("支付金额不能小于0")
             amount = _money_or_zero(initial_paid_amount + requested_payable_amount)
         else:
             # Preserve the legacy update contract where amount means total.
@@ -614,6 +615,8 @@ class ExpenseService:
             supplier = await SupplierService(self.db).resolve_active_supplier(normalized["supplier_id"])
             normalized["supplier_id"] = supplier.id if supplier else None
             allow_null_fields.add("supplier_id")
+        if "payment_method" in normalized:
+            allow_null_fields.add("payment_method")
         if payable_amount > 0 or current_payable_amount > 0:
             await PayableService(self.db).validate_source_update(
                 "expense",
@@ -657,6 +660,7 @@ class ExpenseService:
         return {
             "id": str(e.id), "expense_no": e.expense_no,
             "category": e.category, "amount": float(amount),
+            "payment_method": getattr(e, "payment_method", None),
             "payee_name": getattr(e, "payee_name", None),
             "supplier_id": str(getattr(e, "supplier_id", None)) if getattr(e, "supplier_id", None) else None,
             "supplier_name": getattr(getattr(e, "supplier", None), "name", None),

@@ -104,7 +104,7 @@
           </el-select>
           <div class="form-tip">可选；选择后将这笔支出关联到供应商。</div>
         </el-form-item>
-        <el-form-item label="已支付金额">
+        <el-form-item label="支付金额">
           <el-input-number v-model="form.paid_amount" :min="0" :precision="2" style="width: 100%" />
           <div class="form-tip">登记这笔支出时已经支付的金额，不会进入应付管理。</div>
         </el-form-item>
@@ -117,9 +117,14 @@
             <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
           </el-select>
         </el-form-item>
+        <el-form-item label="付款方式">
+          <el-select v-model="form.payment_method" placeholder="选择付款方式（可选）" clearable style="width: 100%">
+            <el-option v-for="pm in PAYMENT_METHODS" :key="pm" :label="pm" :value="pm" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="支出总额">
           <span class="form-total">{{ formatMoney(totalAmount) }}</span>
-          <div class="form-tip">支出总额 = 已支付金额 + 欠款金额。</div>
+          <div class="form-tip">支出总额 = 支付金额 + 欠款金额。</div>
         </el-form-item>
         <el-form-item label="说明">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="支出说明…" />
@@ -243,6 +248,7 @@ const authStore = useAuthStore()
 const canUseSupplier = computed(() => authStore.can('supplier:read'))
 
 const CATEGORIES = ['房租', '水电', '材料采购', '外协加工', '运输', '办公', '工资', '税费', '其他']
+const PAYMENT_METHODS = ['现金支付', '微信支付', '支付宝转账', '转账支付', '对公支付', '其它支付']
 
 const loading = ref(false)
 const saving = ref(false)
@@ -257,7 +263,7 @@ const suppliers = ref<SupplierResponse[]>([])
 const showDialog = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
-const form = reactive({ category: '', paid_amount: 0, supplier_id: '', payable_amount: 0, expense_date: '', description: '' })
+const form = reactive({ category: '', payment_method: '', paid_amount: 0, supplier_id: '', payable_amount: 0, expense_date: '', description: '' })
 
 const EXPENSE_ATTACHMENT_ACCEPT = 'image/jpeg,image/png,image/webp,.pdf'
 const EXPENSE_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024
@@ -300,7 +306,7 @@ const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
 
 function resetForm() {
   clearExpenseAttachmentState()
-  Object.assign(form, { category: '', paid_amount: 0, supplier_id: '', payable_amount: 0, expense_date: '', description: '' })
+  Object.assign(form, { category: '', payment_method: '', paid_amount: 0, supplier_id: '', payable_amount: 0, expense_date: '', description: '' })
   isEditing.value = false
   editingId.value = ''
 }
@@ -315,6 +321,7 @@ function openEdit(row: ExpenseResponse) {
   isEditing.value = true
   editingId.value = row.id
   form.category = row.category || ''
+  form.payment_method = row.payment_method || ''
   form.paid_amount = row.initial_paid_amount ?? Math.max(0, row.amount - (row.payable_amount || 0))
   form.supplier_id = row.supplier_id || ''
   form.payable_amount = row.payable_amount || 0
@@ -614,6 +621,7 @@ async function handleSave() {
     if (isEditing.value) {
       const payload = {
         ...(form.category ? { category: form.category } : {}),
+        payment_method: form.payment_method || null,
         amount: normalizedAmounts.amount,
         paid_amount: form.paid_amount,
         supplier_id: form.supplier_id || null,
@@ -629,6 +637,7 @@ async function handleSave() {
         paid_amount: form.paid_amount,
         payable_amount: normalizedAmounts.payable_amount,
         category: form.category || undefined,
+        payment_method: form.payment_method || undefined,
         supplier_id: form.supplier_id || undefined,
         expense_date: form.expense_date || undefined,
         description: form.description || undefined,

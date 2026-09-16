@@ -170,6 +170,21 @@ def test_unified_payable_ledger_migration_is_additive_and_protected():
     assert "不能回滚应付付款流水" in source
 
 
+def test_expense_payment_method_migration_adds_nullable_column():
+    versions_dir = Path(__file__).parents[1] / "alembic" / "versions"
+    source = next(
+        path.read_text(encoding="utf-8")
+        for path in versions_dir.glob("epm01_*.py")
+    )
+
+    assert 'revision: str = "epm01_expense_payment_method"' in source
+    assert 'down_revision: Union[str, None] = "sup01_supplier_master"' in source
+    assert 'op.add_column(' in source
+    assert '"expenses"' in source
+    assert 'sa.Column("payment_method", sa.String(length=32), nullable=True' in source
+    assert 'op.drop_column("expenses", "payment_method")' in source
+
+
 def test_supplier_master_migration_is_additive_and_backfills_only_exact_unique_names():
     migration_files = list(
         (Path(__file__).resolve().parents[1] / "alembic" / "versions").glob("sup01_*.py")
