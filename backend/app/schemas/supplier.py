@@ -71,9 +71,13 @@ class SupplierStats(CoercedModel):
     project_cost_count: int = 0
     project_cost_amount: float = 0
     project_cost_payable: float = 0
+    project_cost_paid: float = 0
+    project_cost_remaining: float = 0
     expense_count: int = 0
     expense_amount: float = 0
     expense_payable: float = 0
+    expense_paid: float = 0
+    expense_remaining: float = 0
     outsource_task_count: int = 0
     outsource_task_amount: float = 0
     outsource_task_unpaid: float = 0

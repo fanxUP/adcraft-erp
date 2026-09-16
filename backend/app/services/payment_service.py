@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -21,7 +21,11 @@ from app.services.number_generator import (
     generate_payment_no,
     generate_statement_no,
 )
-from app.services.payable_service import PayableService, validate_payable_amount
+from app.services.payable_service import (
+    PayableService,
+    calculate_payable_status,
+    validate_payable_amount,
+)
 from app.services.supplier_service import SupplierService
 from app.domain.presentation import make_action_capability, make_payment_status_view, make_statement_status_view
 
@@ -50,6 +54,12 @@ def _decimal_or_zero(value) -> Decimal:
         return Decimal(str(value or 0))
     except (InvalidOperation, TypeError, ValueError):
         return Decimal("0")
+
+
+def _money_or_zero(value) -> Decimal:
+    """Normalize a money value without allowing float residue."""
+
+    return _decimal_or_zero(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 class PaymentService:
@@ -484,22 +494,70 @@ class ExpenseService:
                             start_date: str | None = None, end_date: str | None = None) -> tuple[list, int]:
         skip = (page - 1) * page_size
         expenses, total = await self.repo.list_expenses(skip, page_size, category, start_date, end_date)
-        return [self._to_dict(e) for e in expenses], total
+        payment_summaries = await self._get_payable_payment_summaries(expenses)
+        rows = []
+        for expense in expenses:
+            payable_paid_amount, payment_count = payment_summaries.get(
+                ("expense", expense.id), (Decimal("0"), 0)
+            )
+            rows.append(
+                self._to_dict(
+                    expense,
+                    payable_paid_amount=payable_paid_amount,
+                    payment_count=payment_count,
+                )
+            )
+        return rows, total
 
     async def get_expense(self, expense_id: UUID) -> dict | None:
         e = await self.repo.get_by_id(expense_id)
-        return self._to_dict(e) if e else None
+        if not e:
+            return None
+        payment_summaries = await self._get_payable_payment_summaries([e])
+        payable_paid_amount, payment_count = payment_summaries.get(
+            ("expense", e.id), (Decimal("0"), 0)
+        )
+        return self._to_dict(
+            e,
+            payable_paid_amount=payable_paid_amount,
+            payment_count=payment_count,
+        )
+
+    async def _get_payable_payment_summaries(
+        self,
+        expenses: list[Expense],
+    ) -> dict[tuple[str, UUID], tuple[Decimal, int]]:
+        if not expenses:
+            return {}
+        source_pairs = [
+            ("expense", expense.id)
+            for expense in expenses
+            if _money_or_zero(getattr(expense, "payable_amount", 0)) > 0
+        ]
+        return await PayableService(self.db).get_payment_summaries(source_pairs)
 
     async def create_expense(self, data: dict, created_by: UUID) -> dict:
-        amount = _decimal_or_zero(data.get("amount"))
-        requested_payable_amount = _decimal_or_zero(data.get("payable_amount"))
-        if amount < 0:
-            raise ValueError("支出金额不能小于0")
-        # A new expense may be entered from the payable side first. In that
-        # case the payable amount is also the source total; the persisted
-        # record still has one consistent total for later payment tracking.
-        if amount == 0 and requested_payable_amount > 0:
-            amount = requested_payable_amount
+        requested_payable_amount = _money_or_zero(data.get("payable_amount"))
+        if requested_payable_amount < 0:
+            raise ValueError("欠款金额不能小于0")
+        if "paid_amount" in data and data.get("paid_amount") is not None:
+            initial_paid_amount = _money_or_zero(data.get("paid_amount"))
+            if initial_paid_amount < 0:
+                raise ValueError("已支付金额不能小于0")
+            amount = _money_or_zero(initial_paid_amount + requested_payable_amount)
+        else:
+            # Legacy clients sent the source total as ``amount``. Keep that
+            # contract working while deriving the historical upfront-paid
+            # portion from total minus payable.
+            amount = _money_or_zero(data.get("amount"))
+            if amount < 0:
+                raise ValueError("支出总金额不能小于0")
+            # A payable-only legacy entry has no upfront payment; its payable
+            # amount is therefore also the source total.
+            if amount == 0 and requested_payable_amount > 0:
+                amount = requested_payable_amount
+        if amount <= 0:
+            raise ValueError("支出总金额必须大于0")
         payable_amount = validate_payable_amount(
             amount,
             requested_payable_amount,
@@ -524,15 +582,33 @@ class ExpenseService:
         e = await self.repo.get_by_id(expense_id)
         if not e:
             raise ValueError("支出记录不存在")
-        amount = Decimal(str(data.get("amount", e.amount)))
-        current_payable_amount = _decimal_or_zero(getattr(e, "payable_amount", 0))
+        current_payable_amount = _money_or_zero(getattr(e, "payable_amount", 0))
+        requested_payable_amount = _money_or_zero(
+            data.get("payable_amount", current_payable_amount)
+        )
+        if requested_payable_amount < 0:
+            raise ValueError("欠款金额不能小于0")
+        if "paid_amount" in data and data.get("paid_amount") is not None:
+            initial_paid_amount = _money_or_zero(data.get("paid_amount"))
+            if initial_paid_amount < 0:
+                raise ValueError("已支付金额不能小于0")
+            amount = _money_or_zero(initial_paid_amount + requested_payable_amount)
+        else:
+            # Preserve the legacy update contract where amount means total.
+            amount_value = data.get("amount", e.amount)
+            amount = _money_or_zero(e.amount) if amount_value is None else _money_or_zero(amount_value)
+        if amount <= 0:
+            raise ValueError("支出总金额必须大于0")
         payable_amount = validate_payable_amount(
             amount,
-            _decimal_or_zero(data.get("payable_amount", current_payable_amount)),
+            requested_payable_amount,
         )
         normalized = dict(data)
         normalized["amount"] = amount
         normalized["payable_amount"] = payable_amount
+        # ``paid_amount`` is a derived input convenience field, not a second
+        # database column.  Persist total amount and payable total only.
+        normalized.pop("paid_amount", None)
         allow_null_fields: set[str] = set()
         if "supplier_id" in normalized:
             supplier = await SupplierService(self.db).resolve_active_supplier(normalized["supplier_id"])
@@ -561,15 +637,40 @@ class ExpenseService:
             await PayableService(self.db).assert_source_can_be_deleted("expense", e.id)
         await self.repo.soft_delete(e)
 
-    def _to_dict(self, e: Expense) -> dict:
-        payable_amount = getattr(e, "payable_amount", 0) or 0
+    def _to_dict(
+        self,
+        e: Expense,
+        *,
+        payable_paid_amount: Decimal = Decimal("0"),
+        payment_count: int = 0,
+    ) -> dict:
+        amount = _money_or_zero(e.amount)
+        payable_amount = _money_or_zero(getattr(e, "payable_amount", 0))
+        initial_paid_amount = max(Decimal("0"), amount - payable_amount)
+        payable_paid_amount = max(
+            Decimal("0"), min(_money_or_zero(payable_paid_amount), payable_amount)
+        )
+        remaining_payable_amount = max(
+            Decimal("0"), payable_amount - payable_paid_amount
+        )
+        total_paid_amount = initial_paid_amount + payable_paid_amount
         return {
             "id": str(e.id), "expense_no": e.expense_no,
-            "category": e.category, "amount": float(e.amount),
+            "category": e.category, "amount": float(amount),
             "payee_name": getattr(e, "payee_name", None),
             "supplier_id": str(getattr(e, "supplier_id", None)) if getattr(e, "supplier_id", None) else None,
             "supplier_name": getattr(getattr(e, "supplier", None), "name", None),
+            # Compatibility field: this remains the original payable total,
+            # not the residual balance after later payments.
             "payable_amount": float(payable_amount),
+            "initial_paid_amount": float(initial_paid_amount),
+            "payable_paid_amount": float(payable_paid_amount),
+            "total_paid_amount": float(total_paid_amount),
+            "remaining_payable_amount": float(remaining_payable_amount),
+            "payable_status": calculate_payable_status(
+                payable_amount, payable_paid_amount
+            ),
+            "payable_payment_count": payment_count,
             "description": e.description,
             "expense_date": e.expense_date.isoformat() if e.expense_date else None,
             "receipt_url": e.receipt_url,

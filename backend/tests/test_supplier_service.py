@@ -1,11 +1,18 @@
 """统一供应商主数据的纯业务规则测试。"""
 
 from datetime import datetime
+from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from uuid import UUID
 
 import pytest
 
-from app.services.supplier_service import SupplierService, normalize_supplier_type
+from app.services.supplier_service import (
+    SupplierService,
+    _summarize_ledger_sources,
+    normalize_supplier_type,
+)
 
 
 def test_supplier_type_is_normalized_and_validated():
@@ -68,3 +75,72 @@ def test_supplier_bank_write_requires_explicit_permission():
         ),
     )
     privileged._assert_bank_write_allowed({"bank_account": "6222"})
+
+
+def test_supplier_stats_use_the_same_paid_and_remaining_ledger_totals():
+    source_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    expense = SimpleNamespace(
+        id=source_id,
+        amount=Decimal("3000.00"),
+        payable_amount=Decimal("2000.00"),
+    )
+
+    stats = _summarize_ledger_sources(
+        "expense",
+        [expense],
+        {("expense", source_id): (Decimal("1500.00"), 2)},
+    )
+
+    assert stats == {
+        "count": 1,
+        "amount": Decimal("3000.00"),
+        "payable": Decimal("2000.00"),
+        "initial_paid": Decimal("1000.00"),
+        "paid": Decimal("2500.00"),
+        "remaining": Decimal("500.00"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_supplier_detail_stats_read_payable_payments_for_expenses():
+    supplier_id = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+    expense_id = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
+    expense = SimpleNamespace(
+        id=expense_id,
+        amount=Decimal("3000.00"),
+        payable_amount=Decimal("2000.00"),
+    )
+
+    class FakeResult:
+        def __init__(self, rows=None, one_value=None):
+            self.rows = rows or []
+            self.one_value = one_value
+
+        def scalars(self):
+            return self
+
+        def all(self):
+            return self.rows
+
+        def one(self):
+            return self.one_value
+
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                FakeResult(rows=[]),
+                FakeResult(rows=[expense]),
+                FakeResult(rows=[("expense", expense_id, Decimal("1500.00"), 2)]),
+                FakeResult(one_value=(0, Decimal("0"), Decimal("0"))),
+            ]
+        )
+    )
+
+    stats = await SupplierService(db)._stats(supplier_id)
+
+    assert stats["expense_count"] == 1
+    assert stats["expense_amount"] == 3000.0
+    assert stats["expense_payable"] == 2000.0
+    assert stats["expense_paid"] == 2500.0
+    assert stats["expense_remaining"] == 500.0
+    assert db.execute.await_count == 4

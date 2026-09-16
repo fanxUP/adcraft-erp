@@ -974,6 +974,12 @@ export interface ExpenseResponse {
   supplier_id?: string | null
   supplier_name?: string | null
   payable_amount: number
+  initial_paid_amount?: number
+  payable_paid_amount?: number
+  total_paid_amount?: number
+  remaining_payable_amount?: number
+  payable_status?: string
+  payable_payment_count?: number
   description?: string
   expense_date?: string
   receipt_url?: string
@@ -1206,9 +1212,13 @@ export interface SupplierStats {
   project_cost_count: number
   project_cost_amount: number
   project_cost_payable: number
+  project_cost_paid: number
+  project_cost_remaining: number
   expense_count: number
   expense_amount: number
   expense_payable: number
+  expense_paid: number
+  expense_remaining: number
   outsource_task_count: number
   outsource_task_amount: number
   outsource_task_unpaid: number

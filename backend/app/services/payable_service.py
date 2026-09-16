@@ -207,6 +207,19 @@ class PayableService:
             for source_type, source_id, amount, count in result.all()
         }
 
+    async def get_payment_summaries(
+        self,
+        source_pairs: list[tuple[str, UUID]],
+    ) -> dict[tuple[str, UUID], tuple[Decimal, int]]:
+        """Return active payment totals for source records.
+
+        Expense and project-cost pages must use the same payment ledger as the
+        payable page.  Keep the query behind this public service method so
+        callers do not duplicate the source-type/source-id aggregation rules.
+        """
+
+        return await self._payment_summary(source_pairs)
+
     async def _payments_for_source(
         self,
         source_type: str,

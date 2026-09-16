@@ -78,6 +78,10 @@ def make_mock_expense(**kwargs):
     e.expense_no = kwargs.get("expense_no", "EXP20260629-0001")
     e.category = kwargs.get("category", "办公")
     e.amount = kwargs.get("amount", 1000.0)
+    e.payable_amount = kwargs.get("payable_amount", 0.0)
+    e.payee_name = kwargs.get("payee_name", None)
+    e.supplier_id = kwargs.get("supplier_id", None)
+    e.supplier = kwargs.get("supplier", None)
     e.description = kwargs.get("description", "测试支出")
     e.expense_date = kwargs.get("expense_date", datetime.now(timezone.utc))
     e.receipt_url = kwargs.get("receipt_url")
@@ -624,11 +628,16 @@ def mock_expense_repo():
 @pytest.fixture
 def expense_service(mock_expense_repo):
     with patch("app.services.payment_service.ExpenseRepository") as MockRepoClass:
-        MockRepoClass.return_value = mock_expense_repo
-        db = AsyncMock()
-        svc = ExpenseService(db)
-        svc.repo = mock_expense_repo
-        yield svc
+        with patch("app.services.payment_service.PayableService") as MockPayableClass:
+            MockRepoClass.return_value = mock_expense_repo
+            payable_service = MockPayableClass.return_value
+            payable_service.get_payment_summaries = AsyncMock(return_value={})
+            payable_service.validate_source_update = AsyncMock()
+            payable_service.assert_source_can_be_deleted = AsyncMock()
+            db = AsyncMock()
+            svc = ExpenseService(db)
+            svc.repo = mock_expense_repo
+            yield svc
 
 
 @pytest.mark.asyncio
@@ -649,6 +658,25 @@ async def test_get_expense_found(expense_service):
     assert result is not None
     assert result["expense_no"] == "EXP20260629-0001"
     assert result["category"] == "办公"
+
+
+@pytest.mark.asyncio
+async def test_get_expense_includes_payable_ledger_totals(expense_service):
+    svc = expense_service
+    e = make_mock_expense(amount=3000.0, payable_amount=2000.0)
+    svc.repo.get_by_id.return_value = e
+    svc._get_payable_payment_summaries = AsyncMock(
+        return_value={("expense", e.id): (Decimal("2000.00"), 2)}
+    )
+
+    result = await svc.get_expense(e.id)
+
+    assert result["initial_paid_amount"] == 1000.0
+    assert result["payable_paid_amount"] == 2000.0
+    assert result["total_paid_amount"] == 3000.0
+    assert result["remaining_payable_amount"] == 0.0
+    assert result["payable_status"] == "paid"
+    assert result["payable_payment_count"] == 2
 
 
 @pytest.mark.asyncio
@@ -684,6 +712,34 @@ def test_expense_create_accepts_payable_amount_as_total_when_amount_is_empty():
     assert payload.payable_amount == 500
 
 
+def test_expense_create_accepts_paid_and_payable_breakdown():
+    payload = ExpenseCreate(paid_amount=1000, payable_amount=2000)
+
+    assert payload.paid_amount == 1000
+    assert payload.payable_amount == 2000
+
+
+@pytest.mark.asyncio
+async def test_create_expense_calculates_total_from_paid_and_payable(expense_service):
+    svc = expense_service
+
+    with patch("app.services.payment_service.generate_expense_no", AsyncMock(return_value="EXP20260629-0004")):
+        result = await svc.create_expense({
+            "category": "运输",
+            "paid_amount": 1000,
+            "payable_amount": 2000,
+            "description": "部分现付、部分欠款",
+        }, SAMPLE_USER_ID)
+
+    created = svc.repo.create.await_args.args[0]
+    assert created.amount == Decimal("3000.00")
+    assert created.payable_amount == Decimal("2000.00")
+    assert result["amount"] == 3000.0
+    assert result["initial_paid_amount"] == 1000.0
+    assert result["total_paid_amount"] == 1000.0
+    assert result["remaining_payable_amount"] == 2000.0
+
+
 @pytest.mark.asyncio
 async def test_create_expense_uses_payable_amount_as_total_when_amount_is_empty(expense_service):
     svc = expense_service
@@ -701,6 +757,43 @@ async def test_create_expense_uses_payable_amount_as_total_when_amount_is_empty(
     assert created.payable_amount == Decimal("800.00")
     assert result["amount"] == 800.0
     assert result["payable_amount"] == 800.0
+
+
+@pytest.mark.asyncio
+async def test_expense_list_includes_payable_ledger_totals(expense_service):
+    svc = expense_service
+    e = make_mock_expense(amount=3000.0, payable_amount=2000.0)
+    svc.repo.list_expenses.return_value = ([e], 1)
+    svc._get_payable_payment_summaries = AsyncMock(
+        return_value={("expense", e.id): (Decimal("1500.00"), 2)}
+    )
+
+    items, total = await svc.list_expenses(page=1, page_size=20)
+
+    assert total == 1
+    assert items[0]["initial_paid_amount"] == 1000.0
+    assert items[0]["payable_paid_amount"] == 1500.0
+    assert items[0]["total_paid_amount"] == 2500.0
+    assert items[0]["remaining_payable_amount"] == 500.0
+    assert items[0]["payable_status"] == "partial"
+    assert items[0]["payable_payment_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_update_expense_recalculates_total_from_paid_and_payable(expense_service):
+    svc = expense_service
+    e = make_mock_expense(amount=1000.0, payable_amount=500.0)
+    svc.repo.get_by_id.return_value = e
+
+    result = await svc.update_expense(
+        SAMPLE_ORDER_ID,
+        {"paid_amount": 700.0, "payable_amount": 800.0},
+    )
+
+    assert e.amount == Decimal("1500.00")
+    assert e.payable_amount == Decimal("800.00")
+    assert result["amount"] == 1500.0
+    assert result["initial_paid_amount"] == 700.0
 
 
 @pytest.mark.asyncio

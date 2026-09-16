@@ -35,15 +35,27 @@
           <span v-else class="muted">-</span>
         </template>
       </el-table-column>
-      <el-table-column label="金额" width="120">
+      <el-table-column label="总金额" width="120" align="right">
         <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
       </el-table-column>
       <el-table-column label="供应商/应付对象" min-width="180" show-overflow-tooltip>
         <template #default="{ row }">{{ row.supplier_name || row.payee_name || '-' }}</template>
       </el-table-column>
-      <el-table-column label="待付款" width="120" align="right">
+      <el-table-column label="已支付" width="120" align="right">
         <template #default="{ row }">
-          <span :class="{ 'text-warning': row.payable_amount > 0 }">{{ formatMoney(row.payable_amount) }}</span>
+          <span :class="{ 'text-success': expensePaidAmount(row) > 0 }">{{ formatMoney(expensePaidAmount(row)) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="剩余欠款" width="120" align="right">
+        <template #default="{ row }">
+          <span :class="{ 'text-warning': expenseRemainingAmount(row) > 0 }">{{ formatMoney(expenseRemainingAmount(row)) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="状态" width="105" align="center">
+        <template #default="{ row }">
+          <el-tag size="small" :type="payableStatusType(expensePayableStatus(row))">
+            {{ payableStatusLabel(expensePayableStatus(row)) }}
+          </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="日期" width="120">
@@ -76,9 +88,9 @@
             <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
           </el-select>
         </el-form-item>
-        <el-form-item label="金额">
-          <el-input-number v-model="form.amount" :min="isEditing ? 0.01 : 0" :precision="2" style="width: 100%" />
-          <div class="form-tip">可以先填写待付款金额；如果金额留空，系统会按待付款金额作为支出总额。</div>
+        <el-form-item label="已支付金额">
+          <el-input-number v-model="form.paid_amount" :min="0" :precision="2" style="width: 100%" />
+          <div class="form-tip">登记这笔支出时已经支付的金额，不会进入应付管理。</div>
         </el-form-item>
         <el-form-item v-if="canUseSupplier" label="供应商">
           <el-select
@@ -96,9 +108,13 @@
         <el-form-item label="应付对象">
           <el-input v-model="form.payee_name" placeholder="供应商、房东或其他收款对象" />
         </el-form-item>
-        <el-form-item label="待付款金额">
+        <el-form-item label="欠款金额">
           <el-input-number v-model="form.payable_amount" :min="0" :precision="2" style="width: 100%" />
-          <div class="form-tip">不需要形成应付时填 0；同时填写金额时，待付款金额不能超过支出总额。</div>
+          <div class="form-tip">这部分会进入应付管理，后续付款在应付管理中登记。</div>
+        </el-form-item>
+        <el-form-item label="支出总额">
+          <span class="form-total">{{ formatMoney(totalAmount) }}</span>
+          <div class="form-tip">支出总额 = 已支付金额 + 欠款金额。</div>
         </el-form-item>
         <el-form-item label="日期">
           <el-date-picker v-model="form.expense_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
@@ -145,7 +161,9 @@ const suppliers = ref<SupplierResponse[]>([])
 const showDialog = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
-const form = reactive({ category: '', amount: 0, supplier_id: '', payee_name: '', payable_amount: 0, expense_date: '', description: '' })
+const form = reactive({ category: '', paid_amount: 0, supplier_id: '', payee_name: '', payable_amount: 0, expense_date: '', description: '' })
+
+const totalAmount = computed(() => roundMoney(Number(form.paid_amount || 0) + Number(form.payable_amount || 0)))
 
 const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
   if (loadError.value) return 'error'
@@ -154,7 +172,7 @@ const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
 })
 
 function resetForm() {
-  Object.assign(form, { category: '', amount: 0, supplier_id: '', payee_name: '', payable_amount: 0, expense_date: '', description: '' })
+  Object.assign(form, { category: '', paid_amount: 0, supplier_id: '', payee_name: '', payable_amount: 0, expense_date: '', description: '' })
   isEditing.value = false
   editingId.value = ''
 }
@@ -168,7 +186,7 @@ function openEdit(row: ExpenseResponse) {
   isEditing.value = true
   editingId.value = row.id
   form.category = row.category || ''
-  form.amount = row.amount
+  form.paid_amount = row.initial_paid_amount ?? Math.max(0, row.amount - (row.payable_amount || 0))
   form.supplier_id = row.supplier_id || ''
   form.payee_name = row.payee_name || ''
   form.payable_amount = row.payable_amount || 0
@@ -211,15 +229,38 @@ async function fetchData() {
   }
 }
 
+function roundMoney(value: number) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100
+}
+
+function expensePaidAmount(row: ExpenseResponse) {
+  return row.total_paid_amount ?? row.initial_paid_amount ?? Math.max(0, row.amount - (row.payable_amount || 0))
+}
+
+function expenseRemainingAmount(row: ExpenseResponse) {
+  return row.remaining_payable_amount ?? row.payable_amount ?? 0
+}
+
+function expensePayableStatus(row: ExpenseResponse) {
+  if (row.payable_status) return row.payable_status
+  return expenseRemainingAmount(row) > 0 ? 'unpaid' : 'paid'
+}
+
+function payableStatusLabel(status: string) {
+  return ({ unpaid: '待付款', partial: '部分付款', paid: '已付款' } as Record<string, string>)[status] || status
+}
+
+function payableStatusType(status: string) {
+  return ({ unpaid: 'warning', partial: 'warning', paid: 'success' } as Record<string, string>)[status] || 'info'
+}
+
 async function handleSave() {
-  let normalizedAmounts: ExpenseAmountResult | undefined
-  if (!isEditing.value) {
-    try {
-      normalizedAmounts = normalizeExpenseAmounts(form.amount, form.payable_amount)
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '请填写有效的支出金额')
-      return
-    }
+  let normalizedAmounts: ExpenseAmountResult
+  try {
+    normalizedAmounts = normalizeExpenseAmounts(totalAmount.value, form.payable_amount)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '请填写有效的支出金额')
+    return
   }
 
   saving.value = true
@@ -227,10 +268,11 @@ async function handleSave() {
     if (isEditing.value) {
       const payload = {
         ...(form.category ? { category: form.category } : {}),
-        ...(form.amount > 0 ? { amount: form.amount } : {}),
+        amount: normalizedAmounts.amount,
+        paid_amount: form.paid_amount,
         supplier_id: form.supplier_id || null,
         payee_name: form.payee_name,
-        payable_amount: form.payable_amount,
+        payable_amount: normalizedAmounts.payable_amount,
         ...(form.expense_date ? { expense_date: form.expense_date } : {}),
         ...(form.description ? { description: form.description } : {}),
       }
@@ -238,10 +280,14 @@ async function handleSave() {
       ElMessage.success('支出已更新')
     } else {
       await createExpense({
-        ...form,
         amount: normalizedAmounts!.amount,
+        paid_amount: form.paid_amount,
         payable_amount: normalizedAmounts!.payable_amount,
+        category: form.category || undefined,
+        payee_name: form.payee_name || undefined,
         supplier_id: form.supplier_id || undefined,
+        expense_date: form.expense_date || undefined,
+        description: form.description || undefined,
       })
       ElMessage.success('支出登记成功')
     }
@@ -275,5 +321,7 @@ onMounted(() => {
 <style scoped>
 .muted { color: var(--ad-text-secondary, #888); }
 .text-warning { color: var(--el-color-warning); font-weight: 600; }
+.text-success { color: var(--el-color-success); font-weight: 600; }
 .form-tip { color: var(--ad-text-secondary, #888); font-size: 12px; line-height: 1.5; }
+.form-total { color: var(--ad-text); font-size: 18px; font-weight: 700; }
 </style>

@@ -25,6 +25,7 @@ from app.models.payment import Expense
 from app.models.project_cost import ProjectCost
 from app.models.user import User
 from app.services.number_generator import generate_vendor_no
+from app.services.payable_service import PayableService
 
 
 SUPPLIER_TYPE_LABELS = {
@@ -46,6 +47,52 @@ def normalize_supplier_type(value: str | None) -> str:
 
 def _decimal_or_zero(value) -> Decimal:
     return Decimal(str(value or 0))
+
+
+def _summarize_ledger_sources(
+    source_type: str,
+    sources: list[object],
+    payment_summaries: dict[tuple[str, UUID], tuple[Decimal, int]],
+) -> dict[str, Decimal | int]:
+    """Aggregate source totals with the same ledger rules as 应付管理."""
+
+    total_amount = Decimal("0")
+    payable_total = Decimal("0")
+    payable_paid = Decimal("0")
+    source_count = 0
+
+    payable_field = "debt_amount" if source_type == "project_cost" else "payable_amount"
+    for source in sources:
+        source_count += 1
+        source_total = _decimal_or_zero(getattr(source, "amount", 0))
+        source_payable = max(
+            Decimal("0"),
+            min(_decimal_or_zero(getattr(source, payable_field, 0)), source_total),
+        )
+        paid, payment_count = payment_summaries.get(
+            (source_type, source.id), (Decimal("0"), 0)
+        )
+        paid = _decimal_or_zero(paid)
+        if (
+            source_type == "project_cost"
+            and bool(getattr(source, "is_settled", False))
+            and payment_count == 0
+        ):
+            paid = source_payable
+        payable_paid += max(Decimal("0"), min(paid, source_payable))
+        total_amount += source_total
+        payable_total += source_payable
+
+    remaining = max(Decimal("0"), payable_total - payable_paid)
+    initial_paid = max(Decimal("0"), total_amount - payable_total)
+    return {
+        "count": source_count,
+        "amount": total_amount,
+        "payable": payable_total,
+        "initial_paid": initial_paid,
+        "paid": initial_paid + payable_paid,
+        "remaining": remaining,
+    }
 
 
 class SupplierService:
@@ -152,28 +199,33 @@ class SupplierService:
 
     async def _stats(self, supplier_id: UUID) -> dict:
         cost_result = await self.db.execute(
-            select(
-                func.count(ProjectCost.id),
-                func.coalesce(func.sum(ProjectCost.amount), 0),
-                func.coalesce(func.sum(ProjectCost.debt_amount), 0),
-            ).where(
+            select(ProjectCost).where(
                 ProjectCost.supplier_id == supplier_id,
                 ProjectCost.deleted_at.is_(None),
             )
         )
-        cost_count, cost_amount, cost_payable = cost_result.one()
+        cost_sources = list(cost_result.scalars().all())
 
         expense_result = await self.db.execute(
-            select(
-                func.count(Expense.id),
-                func.coalesce(func.sum(Expense.amount), 0),
-                func.coalesce(func.sum(Expense.payable_amount), 0),
-            ).where(
+            select(Expense).where(
                 Expense.supplier_id == supplier_id,
                 Expense.deleted_at.is_(None),
             )
         )
-        expense_count, expense_amount, expense_payable = expense_result.one()
+        expense_sources = list(expense_result.scalars().all())
+
+        source_pairs = [
+            ("project_cost", source.id) for source in cost_sources
+        ] + [
+            ("expense", source.id) for source in expense_sources
+        ]
+        payment_summaries = await PayableService(self.db).get_payment_summaries(source_pairs)
+        cost_stats = _summarize_ledger_sources(
+            "project_cost", cost_sources, payment_summaries
+        )
+        expense_stats = _summarize_ledger_sources(
+            "expense", expense_sources, payment_summaries
+        )
 
         task_result = await self.db.execute(
             select(
@@ -187,12 +239,16 @@ class SupplierService:
         )
         task_count, task_amount, task_unpaid = task_result.one()
         return {
-            "project_cost_count": int(cost_count or 0),
-            "project_cost_amount": float(_decimal_or_zero(cost_amount)),
-            "project_cost_payable": float(_decimal_or_zero(cost_payable)),
-            "expense_count": int(expense_count or 0),
-            "expense_amount": float(_decimal_or_zero(expense_amount)),
-            "expense_payable": float(_decimal_or_zero(expense_payable)),
+            "project_cost_count": int(cost_stats["count"]),
+            "project_cost_amount": float(cost_stats["amount"]),
+            "project_cost_payable": float(cost_stats["payable"]),
+            "project_cost_paid": float(cost_stats["paid"]),
+            "project_cost_remaining": float(cost_stats["remaining"]),
+            "expense_count": int(expense_stats["count"]),
+            "expense_amount": float(expense_stats["amount"]),
+            "expense_payable": float(expense_stats["payable"]),
+            "expense_paid": float(expense_stats["paid"]),
+            "expense_remaining": float(expense_stats["remaining"]),
             "outsource_task_count": int(task_count or 0),
             "outsource_task_amount": float(_decimal_or_zero(task_amount)),
             "outsource_task_unpaid": float(_decimal_or_zero(task_unpaid)),

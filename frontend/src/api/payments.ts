@@ -20,8 +20,13 @@ export function confirmStatement(id: string) { return post<StatementResponse>(`/
 
 export function getExpenses(params?: { page?: number; page_size?: number; category?: string }) { return get<PaginatedData<ExpenseResponse>>('/expenses/', { params }) }
 export function getExpense(id: string) { return get<ExpenseResponse>(`/expenses/${id}`) }
-export function createExpense(data: Omit<Partial<ExpenseResponse>, 'id' | 'expense_no' | 'created_by' | 'created_at'>) { return post<ExpenseResponse>('/expenses/', data) }
-export function updateExpense(id: string, data: Partial<Omit<ExpenseResponse, 'id' | 'expense_no' | 'created_by' | 'created_at'>>) { return put<ExpenseResponse>(`/expenses/${id}`, data) }
+export type ExpenseWritePayload = Partial<Omit<ExpenseResponse, 'id' | 'expense_no' | 'created_by' | 'created_at'>> & {
+  /** 登记时已支付金额；总金额由它与 payable_amount 相加得到。 */
+  paid_amount?: number
+}
+
+export function createExpense(data: ExpenseWritePayload) { return post<ExpenseResponse>('/expenses/', data) }
+export function updateExpense(id: string, data: ExpenseWritePayload) { return put<ExpenseResponse>(`/expenses/${id}`, data) }
 export function deleteExpense(id: string) { return del<SuccessResponse>(`/expenses/${id}`) }
 
 // ── Payables ──

@@ -178,8 +178,8 @@
           <div v-if="canLedgerRead && detail.stats" class="stats-panel">
             <div class="stats-panel-title">业务与应付统计</div>
             <div class="stats-grid">
-              <div><span>项目成本</span><strong>{{ formatMoney(detail.stats.project_cost_amount) }}</strong><small>{{ detail.stats.project_cost_count }} 笔 · 应付 {{ formatMoney(detail.stats.project_cost_payable) }}</small></div>
-              <div><span>经营支出</span><strong>{{ formatMoney(detail.stats.expense_amount) }}</strong><small>{{ detail.stats.expense_count }} 笔 · 应付 {{ formatMoney(detail.stats.expense_payable) }}</small></div>
+              <div><span>项目成本</span><strong>{{ formatMoney(detail.stats.project_cost_amount) }}</strong><small>{{ detail.stats.project_cost_count }} 笔 · 应付总额 {{ formatMoney(detail.stats.project_cost_payable) }} · 已付 {{ formatMoney(detail.stats.project_cost_paid) }} · 待付 {{ formatMoney(detail.stats.project_cost_remaining) }}</small></div>
+              <div><span>经营支出</span><strong>{{ formatMoney(detail.stats.expense_amount) }}</strong><small>{{ detail.stats.expense_count }} 笔 · 应付总额 {{ formatMoney(detail.stats.expense_payable) }} · 已付 {{ formatMoney(detail.stats.expense_paid) }} · 待付 {{ formatMoney(detail.stats.expense_remaining) }}</small></div>
               <div><span>外协任务</span><strong>{{ formatMoney(detail.stats.outsource_task_amount) }}</strong><small>{{ detail.stats.outsource_task_count }} 笔 · 未付 {{ formatMoney(detail.stats.outsource_task_unpaid) }}</small></div>
             </div>
           </div>

@@ -132,9 +132,11 @@ class StatementPaymentItem(CoercedModel):
 
 class ExpenseCreate(BaseModel):
     category: str | None = None
-    # A payable-only entry is allowed; the service normalizes it to a source
-    # expense total before persistence.
+    # Legacy clients may continue to send amount as the source total. New
+    # clients should send paid_amount + payable_amount; the service derives
+    # amount from that breakdown before persistence.
     amount: float = 0
+    paid_amount: float | None = None
     payee_name: str | None = None
     supplier_id: str | None = None
     payable_amount: float = 0
@@ -149,6 +151,13 @@ class ExpenseCreate(BaseModel):
             raise ValueError("支出金额不能小于0")
         return v
 
+    @field_validator("paid_amount")
+    @classmethod
+    def paid_non_negative(cls, value: float | None) -> float | None:
+        if value is not None and value < 0:
+            raise ValueError("已支付金额不能小于0")
+        return value
+
     @field_validator("payable_amount")
     @classmethod
     def payable_non_negative(cls, value: float) -> float:
@@ -160,6 +169,7 @@ class ExpenseCreate(BaseModel):
 class ExpenseUpdate(BaseModel):
     category: str | None = None
     amount: float | None = None
+    paid_amount: float | None = None
     payee_name: str | None = None
     supplier_id: str | None = None
     payable_amount: float | None = None
@@ -172,6 +182,13 @@ class ExpenseUpdate(BaseModel):
     def amount_positive(cls, value: float | None) -> float | None:
         if value is not None and value <= 0:
             raise ValueError("支出金额必须大于0")
+        return value
+
+    @field_validator("paid_amount")
+    @classmethod
+    def paid_non_negative(cls, value: float | None) -> float | None:
+        if value is not None and value < 0:
+            raise ValueError("已支付金额不能小于0")
         return value
 
     @field_validator("payable_amount")
@@ -191,6 +208,12 @@ class ExpenseResponse(CoercedModel):
     supplier_id: str | None = None
     supplier_name: str | None = None
     payable_amount: float = 0
+    initial_paid_amount: float = 0
+    payable_paid_amount: float = 0
+    total_paid_amount: float = 0
+    remaining_payable_amount: float = 0
+    payable_status: str = "paid"
+    payable_payment_count: int = 0
     description: str | None = None
     expense_date: str | None = None
     receipt_url: str | None = None
