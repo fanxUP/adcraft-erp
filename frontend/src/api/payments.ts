@@ -1,4 +1,4 @@
-import { get, post, put, del } from './index'
+import { apiClient, get, post, put, del } from './index'
 import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, ProjectCostItemSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse, TaskCompletionDetailsResponse, TaskCompletionKind, TaskCompletionPeriod, TaskCompletionSummary, TaskCompletionType, PayableResponse } from '@/types/api'
 
 export function getPayments(params?: { page?: number; page_size?: number; order_id?: string; contract_id?: string; customer_id?: string; status?: string }) { return get<PaginatedData<PaymentResponse>>('/payments/', { params }) }
@@ -18,7 +18,7 @@ export function getStatement(id: string) { return get<StatementDetailResponse>(`
 export function createStatement(data: Omit<Partial<StatementResponse>, 'id' | 'statement_no' | 'created_at'>) { return post<StatementResponse>('/statements/', data) }
 export function confirmStatement(id: string) { return post<StatementResponse>(`/statements/${id}/confirm`) }
 
-export function getExpenses(params?: { page?: number; page_size?: number; category?: string }) { return get<PaginatedData<ExpenseResponse>>('/expenses/', { params }) }
+export function getExpenses(params?: { page?: number; page_size?: number; category?: string; start_date?: string; end_date?: string }) { return get<PaginatedData<ExpenseResponse>>('/expenses/', { params }) }
 export function getExpense(id: string) { return get<ExpenseResponse>(`/expenses/${id}`) }
 export type ExpenseWritePayload = Partial<Omit<ExpenseResponse, 'id' | 'expense_no' | 'created_by' | 'created_at'>> & {
   /** 登记时已支付金额；总金额由它与 payable_amount 相加得到。 */
@@ -28,6 +28,34 @@ export type ExpenseWritePayload = Partial<Omit<ExpenseResponse, 'id' | 'expense_
 export function createExpense(data: ExpenseWritePayload) { return post<ExpenseResponse>('/expenses/', data) }
 export function updateExpense(id: string, data: ExpenseWritePayload) { return put<ExpenseResponse>(`/expenses/${id}`, data) }
 export function deleteExpense(id: string) { return del<SuccessResponse>(`/expenses/${id}`) }
+
+export function getExpenseAttachments(expenseId: string) {
+  return get<AttachmentResponse[]>(`/expenses/${expenseId}/attachments`)
+}
+
+export function uploadExpenseAttachment(expenseId: string, file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  return post<AttachmentResponse>(`/expenses/${expenseId}/attachments`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export async function downloadExpenseAttachment(
+  expenseId: string,
+  attachmentId: string,
+  download = false,
+): Promise<Blob> {
+  const response = await apiClient.get(`/expenses/${expenseId}/attachments/${attachmentId}/file`, {
+    params: { download },
+    responseType: 'blob',
+  })
+  return response.data as Blob
+}
+
+export function deleteExpenseAttachment(expenseId: string, attachmentId: string) {
+  return del<SuccessResponse>(`/expenses/${expenseId}/attachments/${attachmentId}`)
+}
 
 // ── Payables ──
 

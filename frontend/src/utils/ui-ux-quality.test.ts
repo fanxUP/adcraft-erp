@@ -102,4 +102,27 @@ describe('P08 UI/UX quality guardrails', () => {
       expect(source).not.toContain('.search-bar')
     }
   })
+
+  it('keeps expense entry ordered around the paid-plus-debt workflow', () => {
+    const source = readSource('views/payments/ExpenseList.vue')
+    const formSource = source.slice(source.indexOf('<el-form'))
+    const fieldLabels = [
+      'label="日期"',
+      'label="供应商"',
+      'label="已支付金额"',
+      'label="欠款金额"',
+      'label="分类"',
+      'label="支出总额"',
+      'label="说明"',
+      'label="凭证"',
+    ]
+    const positions = fieldLabels.map(label => formSource.indexOf(label))
+
+    expect(positions.every(position => position >= 0)).toBe(true)
+    expect(positions).toEqual([...positions].sort((left, right) => left - right))
+    expect(source).not.toContain('label="应付对象"')
+    expect(source).toContain('class="expense-attachment-dropzone"')
+    expect(source).toContain('@drop.prevent="handleExpenseAttachmentDrop"')
+    expect(source).toContain('getExpenseAttachments')
+  })
 })

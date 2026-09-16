@@ -2,13 +2,15 @@ import os
 import uuid as _uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query, Request, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from io import BytesIO
 from uuid import UUID
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.file_security import confined_path, safe_upload_name
 from app.core.permissions import (
     PERM_EXPENSE_CREATE,
     PERM_EXPENSE_DELETE,
@@ -22,6 +24,8 @@ from app.core.permissions import (
     PERM_STATEMENT_READ,
     require_permission,
 )
+from app.models.payment import Expense
+from app.models.task import Attachment
 from app.models.user import User
 from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate, ProjectCostCreate, ProjectCostUpdate, DebtSettleCreate
 from app.schemas.common import success, success_paginated
@@ -35,6 +39,42 @@ pay_router = APIRouter(prefix="/payments", tags=["Payments"])
 stmt_router = APIRouter(prefix="/statements", tags=["Statements"])
 exp_router = APIRouter(prefix="/expenses", tags=["Expenses"])
 cost_router = APIRouter(prefix="/project-costs", tags=["Project Costs"])
+
+
+EXPENSE_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024
+_EXPENSE_ATTACHMENT_RULES = {
+    ".jpg": {"extension": ".jpg", "mime": "image/jpeg", "signature": b"\xff\xd8\xff"},
+    ".jpeg": {"extension": ".jpg", "mime": "image/jpeg", "signature": b"\xff\xd8\xff"},
+    ".png": {"extension": ".png", "mime": "image/png", "signature": b"\x89PNG\r\n\x1a\n"},
+    ".webp": {"extension": ".webp", "mime": "image/webp", "signature": b"RIFF"},
+    ".pdf": {"extension": ".pdf", "mime": "application/pdf", "signature": b"%PDF"},
+}
+
+
+def _validate_expense_attachment(
+    filename: str | None,
+    content_type: str | None,
+    contents: bytes,
+) -> tuple[str, str] | None:
+    """Validate a voucher file and return its canonical extension/MIME pair."""
+    from pathlib import Path
+
+    suffix = Path(filename or "").suffix.lower()
+    rule = _EXPENSE_ATTACHMENT_RULES.get(suffix)
+    if rule is None:
+        return None
+    if not contents:
+        return None
+    declared_type = (content_type or "").split(";", 1)[0].strip().lower()
+    if declared_type and declared_type not in {rule["mime"], "application/octet-stream"}:
+        return None
+    signature = rule["signature"]
+    if suffix == ".webp":
+        if len(contents) < 12 or contents[:4] != signature or contents[8:12] != b"WEBP":
+            return None
+    elif not contents.startswith(signature):
+        return None
+    return rule["extension"], rule["mime"]
 
 
 # ── Payments ────────────────────────────────────────────────────────────────
@@ -214,6 +254,179 @@ async def list_expenses(
     service = ExpenseService(db)
     expenses, total = await service.list_expenses(page, page_size, category, start_date, end_date)
     return success_paginated(expenses, total, page, page_size)
+
+
+@exp_router.get("/{expense_id}/attachments")
+async def list_expense_attachments(
+    expense_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
+):
+    try:
+        expense_uuid = UUID(expense_id)
+    except ValueError:
+        return {"code": 40001, "message": "支出编号无效", "data": None}
+    expense = await db.get(Expense, expense_uuid)
+    if expense is None or expense.deleted_at is not None:
+        return {"code": 40401, "message": "支出记录不存在", "data": None}
+    attachments = await AttachmentService(db).list_attachments("expense", expense_uuid)
+    return success(attachments)
+
+
+@exp_router.post("/{expense_id}/attachments")
+async def upload_expense_attachment(
+    expense_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_UPDATE)),
+):
+    try:
+        expense_uuid = UUID(expense_id)
+    except ValueError:
+        return {"code": 40001, "message": "支出编号无效", "data": None}
+    expense = await db.get(Expense, expense_uuid)
+    if expense is None or expense.deleted_at is not None:
+        return {"code": 40401, "message": "支出记录不存在", "data": None}
+
+    original_filename = file.filename
+    declared_content_type = file.content_type
+    contents = await file.read(EXPENSE_ATTACHMENT_MAX_BYTES + 1)
+    await file.close()
+    if len(contents) > EXPENSE_ATTACHMENT_MAX_BYTES:
+        return {"code": 41301, "message": "凭证文件不能超过20MB", "data": None}
+    validated = _validate_expense_attachment(original_filename, declared_content_type, contents)
+    if validated is None:
+        return {"code": 40001, "message": "凭证仅支持有效的 JPG、PNG、WEBP 或 PDF 文件", "data": None}
+
+    extension, canonical_type = validated
+    date_dir = datetime.now(timezone.utc).strftime("%Y%m")
+    dest_dir = os.path.join(settings.LOCAL_UPLOAD_DIR, date_dir)
+    os.makedirs(dest_dir, mode=0o750, exist_ok=True)
+    os.chmod(dest_dir, 0o750)
+    stored_name = f"{_uuid.uuid4().hex}{extension}"
+    stored_path = os.path.join(dest_dir, stored_name)
+    relative_path = f"{date_dir}/{stored_name}"
+    _, display_name = safe_upload_name(original_filename, "expense_receipt")
+
+    try:
+        with open(stored_path, "wb") as output:
+            output.write(contents)
+        os.chmod(stored_path, 0o640)
+        attachment = await AttachmentService(db).add_attachment(
+            related_type="expense",
+            related_id=expense_uuid,
+            data={
+                "filename": display_name,
+                "file_path": relative_path,
+                "file_size": len(contents),
+                "file_type": canonical_type,
+                "category": "receipt",
+            },
+            uploaded_by=current_user.id,
+        )
+        await log_operation(
+            db,
+            current_user.id,
+            current_user.real_name or current_user.username,
+            OBJ_EXPENSE,
+            expense_uuid,
+            ACTION_CREATE,
+            after_data={
+                "attachment_id": attachment["id"],
+                "filename": display_name,
+                "file_size": len(contents),
+                "category": "receipt",
+            },
+        )
+        return success(attachment)
+    except Exception:
+        if os.path.isfile(stored_path):
+            os.remove(stored_path)
+        raise
+
+
+@exp_router.get("/{expense_id}/attachments/{attachment_id}/file")
+async def read_expense_attachment_file(
+    expense_id: str,
+    attachment_id: str,
+    download: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
+):
+    del current_user
+    try:
+        expense_uuid = UUID(expense_id)
+        attachment_uuid = UUID(attachment_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="支出凭证不存在")
+    expense = await db.get(Expense, expense_uuid)
+    attachment = await db.get(Attachment, attachment_uuid)
+    if (
+        expense is None
+        or expense.deleted_at is not None
+        or attachment is None
+        or attachment.related_type != "expense"
+        or attachment.related_id != expense_uuid
+    ):
+        raise HTTPException(status_code=404, detail="支出凭证不存在")
+    try:
+        stored_path = confined_path(settings.LOCAL_UPLOAD_DIR, attachment.file_path)
+    except HTTPException:
+        raise HTTPException(status_code=404, detail="支出凭证不存在")
+    if not os.path.isfile(stored_path):
+        raise HTTPException(status_code=404, detail="凭证文件不存在")
+    media_type = (attachment.file_type or "application/octet-stream").split(";", 1)[0]
+    return FileResponse(
+        stored_path,
+        media_type=media_type,
+        filename=attachment.filename,
+        content_disposition_type="attachment" if download else "inline",
+    )
+
+
+@exp_router.delete("/{expense_id}/attachments/{attachment_id}")
+async def delete_expense_attachment(
+    expense_id: str,
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_DELETE)),
+):
+    try:
+        expense_uuid = UUID(expense_id)
+        attachment_uuid = UUID(attachment_id)
+    except ValueError:
+        return {"code": 40001, "message": "支出凭证编号无效", "data": None}
+    expense = await db.get(Expense, expense_uuid)
+    attachment = await db.get(Attachment, attachment_uuid)
+    if (
+        expense is None
+        or expense.deleted_at is not None
+        or attachment is None
+        or attachment.related_type != "expense"
+        or attachment.related_id != expense_uuid
+    ):
+        return {"code": 40401, "message": "支出凭证不存在", "data": None}
+
+    relative_path = attachment.file_path
+    filename = attachment.filename
+    await db.delete(attachment)
+    await db.flush()
+    try:
+        stored_path = confined_path(settings.LOCAL_UPLOAD_DIR, relative_path)
+        if os.path.isfile(stored_path):
+            os.remove(stored_path)
+    except HTTPException:
+        pass
+    await log_operation(
+        db,
+        current_user.id,
+        current_user.real_name or current_user.username,
+        OBJ_EXPENSE,
+        expense_uuid,
+        ACTION_DELETE,
+        after_data={"attachment_id": attachment_id, "filename": filename},
+    )
+    return success(None)
 
 
 @exp_router.get("/{expense_id}")

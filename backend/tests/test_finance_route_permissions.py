@@ -5,6 +5,7 @@ import inspect
 import pytest
 
 from app.api import orders, payments, payables
+from app.api.payments import _validate_expense_attachment
 
 
 def _route_permission(router, method: str, path: str) -> str | None:
@@ -122,13 +123,33 @@ def test_canonical_order_material_routes_have_stage_aware_permissions(method, pa
     [
         ("GET", "/expenses/", "expense:read"),
         ("GET", "/expenses/{expense_id}", "expense:read"),
+        ("GET", "/expenses/{expense_id}/attachments", "expense:read"),
+        ("GET", "/expenses/{expense_id}/attachments/{attachment_id}/file", "expense:read"),
         ("POST", "/expenses/", "expense:create"),
+        ("POST", "/expenses/{expense_id}/attachments", "expense:update"),
         ("PUT", "/expenses/{expense_id}", "expense:update"),
+        ("DELETE", "/expenses/{expense_id}/attachments/{attachment_id}", "expense:delete"),
         ("DELETE", "/expenses/{expense_id}", "expense:delete"),
     ],
 )
 def test_expense_routes_require_business_permissions(method, path, permission):
     assert _route_permission(payments.exp_router, method, path) == permission
+
+
+@pytest.mark.parametrize(
+    ("filename", "content_type", "contents", "expected"),
+    [
+        ("voucher.jpg", "image/jpeg", b"\xff\xd8\xff\xe0", (".jpg", "image/jpeg")),
+        ("voucher.png", "image/png", b"\x89PNG\r\n\x1a\n", (".png", "image/png")),
+        ("voucher.webp", "image/webp", b"RIFF\x00\x00\x00\x00WEBP", (".webp", "image/webp")),
+        ("voucher.pdf", "application/pdf", b"%PDF-1.7", (".pdf", "application/pdf")),
+        ("voucher.exe", "application/octet-stream", b"MZ", None),
+        ("voucher.jpg", "image/png", b"\xff\xd8\xff\xe0", None),
+        ("voucher.pdf", "application/pdf", b"not-a-pdf", None),
+    ],
+)
+def test_expense_voucher_file_policy(filename, content_type, contents, expected):
+    assert _validate_expense_attachment(filename, content_type, contents) == expected
 
 
 @pytest.mark.parametrize(
