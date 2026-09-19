@@ -7,6 +7,7 @@ import pytest
 from app.schemas.payment import DebtSettleCreate, ExpenseUpdate, ProjectCostCreate, ProjectCostUpdate
 from app.models.customer import Customer
 from app.models.contract import Contract  # noqa: F401 - register payment allocation relationships
+from app.models.project_cost import ProjectCost, ProjectCostItemLink
 from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.repositories.project_cost_repo import ProjectCostRepository
@@ -163,6 +164,16 @@ def _cost_payload(order_id, item_id=None):
         "amount": 100,
         "order_item_id": str(item_id) if item_id else None,
     }
+
+
+def test_set_item_links_reuses_existing_rows_when_scope_is_unchanged():
+    item_id = uuid4()
+    existing_link = ProjectCostItemLink(document_item_id=item_id)
+    cost = ProjectCost(item_links=[existing_link])
+
+    ProjectCostService._set_item_links(cost, [item_id])
+
+    assert cost.item_links == [existing_link]
 
 
 @pytest.mark.asyncio

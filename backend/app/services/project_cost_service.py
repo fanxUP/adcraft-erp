@@ -177,7 +177,15 @@ class ProjectCostService:
     def _set_item_links(cost: ProjectCost, item_ids: list[UUID]) -> None:
         """Replace associations while keeping the old one-item column compatible."""
         cost.document_item_id = item_ids[0] if len(item_ids) == 1 else None
-        cost.item_links = [ProjectCostItemLink(document_item_id=item_id) for item_id in item_ids]
+        existing_links = {
+            link.document_item_id: link
+            for link in (getattr(cost, "item_links", None) or [])
+            if link.document_item_id
+        }
+        cost.item_links = [
+            existing_links.get(item_id) or ProjectCostItemLink(document_item_id=item_id)
+            for item_id in item_ids
+        ]
 
     async def _resolve_document_item_ids(
         self,
