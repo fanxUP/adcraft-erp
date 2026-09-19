@@ -7,6 +7,7 @@ import pytest
 from app.schemas.auth import LoginRequest
 from app.services.auth_service import AuthService
 from tests.conftest import SAMPLE_USER_ID
+from app.models.employee import Employee
 
 
 def make_mock_user(**kwargs):
@@ -16,6 +17,9 @@ def make_mock_user(**kwargs):
     u.username = kwargs.get("username", "testuser")
     u.password_hash = kwargs.get("password_hash", "hashed_pwd")
     u.is_active = kwargs.get("is_active", True)
+    u.deleted_at = kwargs.get("deleted_at", None)
+    u.token_version = kwargs.get("token_version", 1)
+    u.must_change_password = kwargs.get("must_change_password", False)
     u.real_name = kwargs.get("real_name", "测试用户")
     u.phone = kwargs.get("phone", "13800138000")
     u.email = kwargs.get("email", "test@example.com")
@@ -74,6 +78,34 @@ async def test_authenticate_inactive_user(service):
     service.db.execute = AsyncMock(return_value=result)
 
     outcome = await service.authenticate(LoginRequest(username="inactive", password="pass"))
+    assert outcome is None
+
+
+@pytest.mark.asyncio
+async def test_authenticate_deleted_user(service):
+    user = make_mock_user(deleted_at="deleted")
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = user
+    service.db.execute = AsyncMock(return_value=result)
+
+    outcome = await service.authenticate(LoginRequest(username="deleted", password="pass"))
+
+    assert outcome is None
+
+
+@pytest.mark.asyncio
+async def test_authenticate_rejects_inactive_linked_employee(service):
+    user = make_mock_user()
+    employee = Employee(employee_no="001", name="离职员工", employment_status="resigned", is_active=True)
+    user_result = MagicMock()
+    user_result.scalar_one_or_none.return_value = user
+    employee_result = MagicMock()
+    employee_result.scalar_one_or_none.return_value = employee
+    service.db.execute = AsyncMock(side_effect=[user_result, employee_result])
+
+    with patch("app.services.auth_service.verify_password", return_value=True):
+        outcome = await service.authenticate(LoginRequest(username="001", password="pass"))
+
     assert outcome is None
 
 

@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from app.models.user import User
+from app.models.employee import Employee
 from app.models.user_preferences import UserPreference
 from app.core.permissions import get_user_capabilities, get_user_permission_codes
 from app.core.password_policy import MAX_PASSWORD_LENGTH, validate_new_password
@@ -22,9 +23,21 @@ class AuthService:
         self.db = db
 
     async def authenticate(self, data: LoginRequest) -> tuple[User, str] | None:
-        result = await self.db.execute(select(User).where(User.username == data.username))
+        result = await self.db.execute(
+            select(User).where(
+                User.username == data.username,
+                User.deleted_at.is_(None),
+            )
+        )
         user = result.scalar_one_or_none()
-        if not user or not user.is_active:
+        if not user or not user.is_active or getattr(user, "deleted_at", None) is not None:
+            return None
+        employee = await self._linked_employee(user.id)
+        if employee is not None and (
+            employee.deleted_at is not None
+            or employee.employment_status != "active"
+            or employee.is_active is not True
+        ):
             return None
         if not verify_password(data.password, user.password_hash):
             return None
@@ -32,7 +45,9 @@ class AuthService:
         return user, token
 
     async def get_profile(self, user_id: UUID) -> dict:
-        result = await self.db.execute(select(User).where(User.id == user_id))
+        result = await self.db.execute(
+            select(User).where(User.id == user_id, User.deleted_at.is_(None))
+        )
         user = result.scalar_one_or_none()
         if not user:
             return None
@@ -156,7 +171,9 @@ class AuthService:
         validate_new_password(new_password)
         if old_password == new_password:
             raise ValueError("新密码不能与原密码相同")
-        result = await self.db.execute(select(User).where(User.id == user_id))
+        result = await self.db.execute(
+            select(User).where(User.id == user_id, User.deleted_at.is_(None))
+        )
         user = result.scalar_one_or_none()
         if not user:
             return False
@@ -166,3 +183,13 @@ class AuthService:
         user.must_change_password = False
         await self.db.flush()
         return True
+
+    async def _linked_employee(self, user_id: UUID):
+        result = await self.db.execute(
+            select(Employee)
+            .where(Employee.user_id == user_id)
+            .order_by(Employee.deleted_at.is_not(None), Employee.created_at.desc())
+            .limit(1)
+        )
+        employee = result.scalar_one_or_none()
+        return employee if isinstance(employee, Employee) else None

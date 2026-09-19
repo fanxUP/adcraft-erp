@@ -1,7 +1,8 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import exists, func, or_, select
 
+from app.models.employee import Employee
 from app.models.user import User, Role
 
 
@@ -13,14 +14,34 @@ class UserRepository:
         result = await self.db.execute(select(User).where(User.id == user_id, User.deleted_at.is_(None)))
         return result.scalar_one_or_none()
 
-    async def get_by_username(self, username: str) -> User | None:
-        result = await self.db.execute(select(User).where(User.username == username, User.deleted_at.is_(None)))
+    async def get_by_username(self, username: str, *, include_deleted: bool = False) -> User | None:
+        query = select(User).where(User.username == username)
+        if not include_deleted:
+            query = query.where(User.deleted_at.is_(None))
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def list_users(self, skip: int = 0, limit: int = 20, keyword: str | None = None) -> tuple[list[User], int]:
         q = select(User).where(User.deleted_at.is_(None))
         if keyword:
-            q = q.where(User.username.ilike(f"%{keyword}%") | User.real_name.ilike(f"%{keyword}%"))
+            pattern = f"%{keyword}%"
+            employee_match = exists(
+                select(Employee.id).where(
+                    Employee.user_id == User.id,
+                    Employee.deleted_at.is_(None),
+                    or_(
+                        Employee.employee_no.ilike(pattern),
+                        Employee.name.ilike(pattern),
+                    ),
+                )
+            )
+            q = q.where(
+                or_(
+                    User.username.ilike(pattern),
+                    User.real_name.ilike(pattern),
+                    employee_match,
+                )
+            )
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
 
@@ -60,7 +81,7 @@ class UserRepository:
 
     async def get_all_active_users(self, exclude_user_id: UUID | None = None) -> list[User]:
         """获取所有活跃用户（会话列表用）"""
-        q = select(User).where(User.deleted_at.is_(None))
+        q = select(User).where(User.deleted_at.is_(None), User.is_active.is_(True))
         if exclude_user_id:
             q = q.where(User.id != exclude_user_id)
         q = q.order_by(User.username)

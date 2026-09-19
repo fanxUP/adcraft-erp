@@ -1,3 +1,4 @@
+import secrets
 from inspect import isawaitable
 from uuid import UUID
 from sqlalchemy import select
@@ -53,6 +54,7 @@ class UserService:
                 "phone": u.phone,
                 "email": u.email,
                 "is_active": u.is_active,
+                "must_change_password": getattr(u, "must_change_password", False),
                 "created_at": u.created_at.isoformat() if u.created_at else None,
                 "roles": [r.name for r in u.roles],
                 "linked_employee": employee_map.get(u.id),
@@ -71,6 +73,7 @@ class UserService:
             "phone": user.phone,
             "email": user.email,
             "is_active": user.is_active,
+            "must_change_password": getattr(user, "must_change_password", False),
             "created_at": user.created_at.isoformat() if user.created_at else None,
             "roles": [r.name for r in user.roles],
             "linked_employee": employee_map.get(user.id),
@@ -123,10 +126,99 @@ class UserService:
 
         return await self.get_user(user.id)
 
+    @staticmethod
+    def _generate_initial_password() -> str:
+        """Generate a one-time password without using employee identity data."""
+        return secrets.token_urlsafe(12)
+
+    @staticmethod
+    def _validate_initial_password(
+        password: str,
+        *,
+        employee_no: str,
+        phone: str | None,
+        id_card: str | None,
+    ) -> None:
+        validate_new_password(password)
+        identity_values = {
+            value.strip()
+            for value in (employee_no, phone, id_card)
+            if isinstance(value, str) and value.strip()
+        }
+        if password in identity_values:
+            raise ValueError("初始密码不能使用工号、手机号或身份证号")
+
+    async def provision_employee_user(
+        self,
+        *,
+        employee_no: str,
+        real_name: str,
+        phone: str | None,
+        role_ids: list[str] | None,
+        initial_password: str | None,
+        is_active: bool,
+        id_card: str | None = None,
+    ) -> dict:
+        """Create the login side of an employee creation transaction.
+
+        The caller creates the employee row in the same AsyncSession after
+        this method returns.  No plaintext password is persisted or logged;
+        the value is returned once so the employee administrator can hand it
+        to the employee and require a first-login change.
+        """
+        employee_no = str(employee_no).strip()
+        existing = await self.repo.get_by_username(employee_no, include_deleted=True)
+        if existing:
+            raise ValueError("工号已被现有账号占用，请先处理历史账号")
+
+        role_ids = list(role_ids or [])
+        try:
+            role_ids_uuid = [UUID(role_id) for role_id in role_ids]
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ValueError("角色编号格式不正确") from exc
+        roles = await self.repo.get_roles(role_ids_uuid) if role_ids_uuid else []
+        self._validate_roles(role_ids, roles)
+
+        password = initial_password or self._generate_initial_password()
+        self._validate_initial_password(
+            password,
+            employee_no=employee_no,
+            phone=phone,
+            id_card=id_card,
+        )
+        user = await self.repo.create({
+            "username": employee_no,
+            "password_hash": hash_password(password),
+            "real_name": real_name,
+            "phone": phone,
+            "is_active": bool(is_active),
+            "must_change_password": True,
+        })
+        preference = UserPreference(user_id=user.id)
+        added = self.db.add(preference)
+        if isawaitable(added):
+            await added
+        await self.db.flush()
+        if roles:
+            await self.repo.set_roles(user, roles)
+        return {"user": user, "initial_password": password}
+
     async def update_user(self, user_id: UUID, data: dict) -> dict:
         user = await self.repo.get_by_id(user_id)
         if not user:
             raise ValueError("用户不存在")
+
+        data = dict(data)
+        requested_active = data.get("is_active")
+        if requested_active is True and user.is_active is not True:
+            linked_employee = await self._linked_employee(user.id)
+            if linked_employee is not None and (
+                getattr(linked_employee, "deleted_at", None) is not None
+                or getattr(linked_employee, "employment_status", None) != "active"
+                or getattr(linked_employee, "is_active", False) is not True
+            ):
+                raise ValueError("员工未在职或档案已停用，不能启用账号")
+        should_disable = requested_active is False and user.is_active is True
 
         role_ids = data.pop("role_ids", None)
         roles = None
@@ -137,6 +229,10 @@ class UserService:
                 raise ValueError("角色编号格式不正确")
             roles = await self.repo.get_roles(role_ids_uuid)
             self._validate_roles(role_ids, roles)
+
+        if should_disable:
+            user.is_active = False
+            user.token_version = (getattr(user, "token_version", 1) or 1) + 1
 
         # Validate the complete role set before changing any user fields.  A
         # rejected combination must not leave a partially mutated user in a
@@ -151,6 +247,10 @@ class UserService:
         user = await self.repo.get_by_id(user_id)
         if not user:
             return False
+        if await self._linked_employee(user.id) is not None:
+            raise ValueError("员工账号由员工档案管理，不能删除，请先停用员工或账号")
+        user.is_active = False
+        user.token_version = (getattr(user, "token_version", 1) or 1) + 1
         await self.repo.soft_delete(user)
         return True
 
@@ -161,5 +261,15 @@ class UserService:
             return False
         user.password_hash = hash_password(new_password)
         user.must_change_password = True
+        user.token_version = (getattr(user, "token_version", 1) or 1) + 1
         await self.repo.update(user, {})
         return True
+
+    async def _linked_employee(self, user_id: UUID):
+        result = await self.db.execute(
+            select(Employee)
+            .where(Employee.user_id == user_id)
+            .order_by(Employee.deleted_at.is_not(None), Employee.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()

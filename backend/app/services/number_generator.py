@@ -1,6 +1,9 @@
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
+
+
+EMPLOYEE_NUMBER_LOCK_ID = 9_240_321_991
 
 
 async def _generate_no(db: AsyncSession, prefix: str) -> str:
@@ -113,6 +116,13 @@ async def _generate_no(db: AsyncSession, prefix: str) -> str:
     elif prefix == "EMP":
         # 员工工号：纯数字序列（现有格式 001/002/...），取最大值 +1
         from app.models.employee import Employee
+        # The max-plus-one query is serialized inside the transaction.  The
+        # unique constraint remains the final guard, while this prevents two
+        # concurrent employee creates from normally selecting the same number.
+        await db.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_id)"),
+            {"lock_id": EMPLOYEE_NUMBER_LOCK_ID},
+        )
         result = await db.execute(
             select(Employee.employee_no).order_by(Employee.employee_no.desc()).limit(1)
         )

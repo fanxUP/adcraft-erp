@@ -1,6 +1,6 @@
 <template>
   <AppPage>
-    <PageHeader title="员工管理" description="统一维护员工档案、任职状态、证件和附件。">
+    <PageHeader title="员工管理" description="统一维护员工档案、任职状态、证件和附件；新建员工时自动生成登录账号。">
       <template #actions><el-button @click="openCreate" type="primary">新建员工</el-button></template>
     </PageHeader>
     <PageToolbar aria-label="员工筛选">
@@ -17,13 +17,13 @@
       <el-table :data="list" v-loading="loading" stripe style="width:100%">
       <el-table-column prop="employee_no" label="工号" width="120" />
       <el-table-column prop="name" label="姓名" width="180" />
-      <el-table-column label="登录账号" width="190">
+      <el-table-column label="登录工号" width="190">
         <template #default="{row}">
           <template v-if="row.user_username">
             <span>{{ row.user_username }}</span>
-            <span v-if="row.user_real_name" class="linked-account-name">（{{ row.user_real_name }}）</span>
+            <el-tag v-if="row.user_is_active === false" type="warning" size="small" style="margin-left: 6px">已停用</el-tag>
           </template>
-          <el-tag v-else type="warning" size="small">未绑定</el-tag>
+          <el-tag v-else type="warning" size="small">待迁移</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="phone" label="手机号" width="130" />
@@ -54,13 +54,23 @@
         <el-form-item label="聘用类型"><el-select v-model="form.employment_type" clearable style="width:100%"><el-option label="全职" value="full_time" /><el-option label="兼职" value="part_time" /><el-option label="合同" value="contract" /><el-option label="实习" value="intern" /></el-select></el-form-item>
         <el-form-item label="学历"><el-select v-model="form.education" clearable style="width:100%"><el-option label="初中" value="middle_school" /><el-option label="高中" value="high_school" /><el-option label="中专" value="vocational" /><el-option label="大专" value="college" /><el-option label="本科" value="bachelor" /><el-option label="硕士" value="master" /><el-option label="博士" value="phd" /></el-select></el-form-item>
         <el-form-item label="在职状态"><el-select v-model="form.employment_status" style="width:100%"><el-option label="在职" value="active" /><el-option label="离职" value="resigned" /><el-option label="停职" value="suspended" /></el-select></el-form-item>
-        <el-divider content-position="left" style="grid-column:1/3;margin:8px 0 4px">账号关联</el-divider>
-        <el-form-item label="登录账号" style="grid-column:1/3">
-          <el-select v-if="isEditing" v-model="bindingUserId" clearable filterable style="width:100%" placeholder="选择要绑定的登录账号">
-            <el-option v-for="account in accountOptions" :key="account.id" :label="`${account.username}${account.real_name ? `（${account.real_name}）` : ''}`" :value="account.id" />
+        <el-divider content-position="left" style="grid-column:1/3;margin:8px 0 4px">登录账号</el-divider>
+        <el-form-item v-if="!isEditing" label="系统角色" required>
+          <el-select v-model="form.role_ids" multiple filterable style="width:100%" placeholder="选择账号角色">
+            <el-option v-for="role in roleOptions" :key="role.id" :label="roleLabel(role.name)" :value="role.id" />
           </el-select>
-          <div v-else class="binding-after-save">保存员工档案后即可绑定登录账号</div>
-          <div class="binding-tip">绑定只建立身份对应关系，不会自动改变用户角色和系统权限；清空后表示解除绑定。</div>
+        </el-form-item>
+        <el-form-item v-if="!isEditing" label="初始密码">
+          <el-input v-model="form.initial_password" type="password" show-password maxlength="128" placeholder="留空则自动生成一次性密码" />
+          <div class="binding-tip">初始密码只显示一次，首次登录必须修改；不能使用工号、手机号或身份证号。</div>
+        </el-form-item>
+        <el-form-item label="登录工号" style="grid-column:1/3">
+          <div v-if="isEditing && form.user_username" class="account-readonly">
+            <el-tag type="success">{{ form.user_username }}</el-tag>
+            <span>{{ form.user_is_active === false ? '账号已停用' : '账号已自动生成' }}</span>
+          </div>
+          <div v-else-if="isEditing" class="binding-after-save">该历史员工尚未完成账号迁移，请联系管理员处理。</div>
+          <div v-else class="binding-after-save">保存员工后将自动生成与工号相同的登录账号。</div>
         </el-form-item>
         <el-divider content-position="left" style="grid-column:1/3;margin:8px 0 4px">证件信息</el-divider>
         <el-form-item label="身份证号"><el-input v-model="form.id_card" /></el-form-item>
@@ -130,8 +140,9 @@
 </template>
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue"
-import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttachments, uploadEmployeeAttachment, deleteEmployeeAttachment, uploadEmployeeImage, getEmployeeAccountOptions, bindEmployeeAccount, type EmployeeResponse, type EmployeeAccountOption } from "@/api/employees"
+import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttachments, uploadEmployeeAttachment, deleteEmployeeAttachment, uploadEmployeeImage, type EmployeeResponse } from "@/api/employees"
 import type { AttachmentResponse } from "@/types/api"
+import { getRoles, type RoleItem } from "@/api/admin"
 import { ElMessage, ElMessageBox } from "element-plus"
 import type { UploadRequestOptions } from "element-plus"
 import { GENDER_OPTIONS, ETHNICITY_OPTIONS } from "@/config/ethnicity"
@@ -142,20 +153,23 @@ const DEPTS = [{value:"design",label:"设计部"},{value:"production",label:"生
 const list=ref<EmployeeResponse[]>([]); const loading=ref(false); const loadError=ref(false); const page=ref(1); const pageSize=ref(20); const total=ref(0); const keyword=ref(""); const filterDept=ref(""); const filterStatus=ref("")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const attachments=ref<AttachmentResponse[]>([]); const attCategory=ref("other")
-const bindingUserId=ref(""); const initialBindingUserId=ref(""); const accountOptions=ref<EmployeeAccountOption[]>([])
-const initForm={name:"",phone:"",gender:"",ethnicity:"",birth_date:null,department:"",position:"",employment_type:"",education:"",id_card:"",license_no:"",license_type:"",license_expire_date:null,id_card_front_url:"",id_card_back_url:"",hire_date:null,resignation_date:null,employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],bank_name:"",bank_account:"",address:"",remark:""}
+const roleOptions=ref<RoleItem[]>([])
+const initForm={name:"",phone:"",gender:"",ethnicity:"",birth_date:null,department:"",position:"",employment_type:"",education:"",id_card:"",license_no:"",license_type:"",license_expire_date:null,id_card_front_url:"",id_card_back_url:"",hire_date:null,resignation_date:null,employment_status:"active",emergency_contact:"",emergency_phone:"",skills:[],bank_name:"",bank_account:"",address:"",remark:"",role_ids:[],initial_password:""}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const form=ref<any>({...initForm})
 const DATE_FIELDS = ["birth_date", "hire_date", "resignation_date", "license_expire_date"] as const
 function getEmployeePayload(){
   const payload={...form.value}
   delete payload.user_id
+  if(isEditing.value){ delete payload.role_ids; delete payload.initial_password }
   for(const field of DATE_FIELDS){
     if(payload[field]==="") payload[field]=null
   }
   return payload
 }
 const deptLabel=(v:string)=>DEPTS.find(d=>d.value===v)?.label||v
+const ROLE_MAP: Record<string,string> = { admin:"管理员", sales:"销售", designer:"设计师", production:"制作", installer:"安装", finance:"财务", resource_manager:"资源管理员", outsource_manager:"外协管理员", manager:"经理" }
+const roleLabel=(name:string)=>ROLE_MAP[name]||name
 const typeLabel=(v:string)=>({full_time:"全职",part_time:"兼职",contract:"合同",intern:"实习"})[v]||v||"-"
 const statusLabel=(s:string)=>({active:"在职",resigned:"离职",suspended:"停职"})[s]||s
 const statusColor=(s:string)=>({active:"success",resigned:"info",suspended:"warning"})[s]||"info"
@@ -163,21 +177,22 @@ const tableState = computed(() => loadError.value ? 'error' as const : loading.v
 
 async function fetchData(){loading.value=true;loadError.value=false;try{const r=await getEmployees({page:page.value,page_size:pageSize.value,keyword:keyword.value||undefined,department:filterDept.value||undefined,employment_status:filterStatus.value||undefined});list.value=r?.items||[];total.value=r?.total||0}catch(e:unknown){loadError.value=true;ElMessage.error((e as {message?:string})?.message||'员工列表加载失败')}finally{loading.value=false}}
 async function loadAttachments(){attachments.value=(await getEmployeeAttachments(editId.value))||[]}
-function openCreate(){isEditing.value=false;editId.value="";attachments.value=[];bindingUserId.value="";initialBindingUserId.value="";accountOptions.value=[];form.value={...initForm};showDialog.value=true}
-async function loadAccountOptions(){if(!isEditing.value)return;try{accountOptions.value=await getEmployeeAccountOptions(editId.value)}catch{accountOptions.value=[]}}
-function openEdit(r:EmployeeResponse){isEditing.value=true;editId.value=r.id;bindingUserId.value=r.user_id||"";initialBindingUserId.value=bindingUserId.value;form.value={...r,skills:r.skills||[]};showDialog.value=true;loadAttachments();loadAccountOptions()}
-async function handleSave(){saving.value=true;try{const payload=getEmployeePayload();if(isEditing.value){await updateEmployee(editId.value,payload);if(bindingUserId.value!==initialBindingUserId.value){await bindEmployeeAccount(editId.value,bindingUserId.value||null);initialBindingUserId.value=bindingUserId.value}ElMessage.success("已更新");showDialog.value=false;await fetchData()}else{const r=await createEmployee(payload);isEditing.value=true;editId.value=r.id;bindingUserId.value=r.user_id||"";initialBindingUserId.value=bindingUserId.value;form.value={...r,skills:r.skills||[]};ElMessage.success("已创建，可继续绑定登录账号和上传附件");await loadAttachments();await loadAccountOptions()}}finally{saving.value=false}}
+function openCreate(){isEditing.value=false;editId.value="";attachments.value=[];form.value={...initForm};showDialog.value=true}
+function openEdit(r:EmployeeResponse){isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[]};showDialog.value=true;loadAttachments()}
+async function loadRoles(){try{roleOptions.value=await getRoles()}catch{roleOptions.value=[]}}
+async function handleSave(){saving.value=true;try{const payload=getEmployeePayload();if(isEditing.value){await updateEmployee(editId.value,payload);ElMessage.success("已更新");showDialog.value=false;await fetchData()}else{const r=await createEmployee(payload);const initialPassword=r.initial_password;isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[],initial_password:""};ElMessage.success("员工已创建，登录账号已自动生成");if(initialPassword){await ElMessageBox.alert(`工号：${r.employee_no}\n一次性初始密码：${initialPassword}\n请立即记录并交给员工，关闭后将不再显示。`,"账号已自动创建",{confirmButtonText:"我已记录",closeOnClickModal:false})}await loadAttachments()}}finally{saving.value=false}}
 async function handleDelete(r:EmployeeResponse){await ElMessageBox.confirm("确定删除？","提示",{type:"warning"});await deleteEmployee(r.id);ElMessage.success("已删除");await fetchData()}
 async function handleUploadAttachment(options: UploadRequestOptions){try{await uploadEmployeeAttachment(editId.value,options.file,attCategory.value);ElMessage.success("上传成功");await loadAttachments()}catch{ElMessage.error("上传失败")}}
 async function handleUploadIdCard(options: UploadRequestOptions, slot:'front'|'back'){try{const res=await uploadEmployeeImage(options.file);if(slot==='front')form.value.id_card_front_url=res.file_url;else form.value.id_card_back_url=res.file_url;ElMessage.success("照片已上传")}catch{ElMessage.error("上传失败")}}
 async function handleDeleteAttachment(aid:string){await ElMessageBox.confirm("确定删除此附件？","提示",{type:"warning"});await deleteEmployeeAttachment(aid);ElMessage.success("已删除");await loadAttachments()}
-onMounted(fetchData)
+onMounted(()=>{fetchData();loadRoles()})
 </script>
 <style scoped>
 .idcard-slot { display:flex; align-items:center; gap:10px; width:100%; }
 .idcard-preview { width:70px; height:46px; border-radius:4px; border:1px solid #e4e7ed; }
 .idcard-tip { color:#c0c4cc; font-size:13px; }
 .linked-account-name { color:var(--el-text-color-secondary); font-size:12px; }
-.binding-after-save, .binding-tip { color:var(--el-text-color-secondary); font-size:13px; line-height:1.6; }
+.binding-after-save, .binding-tip, .account-readonly { color:var(--el-text-color-secondary); font-size:13px; line-height:1.6; }
+.account-readonly { display:flex; align-items:center; gap:10px; }
 .binding-tip { margin-top:6px; }
 </style>

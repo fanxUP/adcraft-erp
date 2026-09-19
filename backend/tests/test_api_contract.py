@@ -11,6 +11,7 @@ from app.schemas.order import OrderDetailResponse, OrderListResponse
 from app.schemas.task import TaskOrderItemOption, TaskQueueItem
 from app.services.project_cost_service import ProjectCostService
 from app.services.task_service import add_task_contract_fields
+from app.api.users import router as users_router
 
 
 def test_status_and_action_contracts_are_typed_and_terminal_aware():
@@ -57,6 +58,16 @@ def test_pagination_envelope_has_one_stable_inner_shape():
             "page_size": 20,
         },
     }
+
+
+def test_user_creation_endpoint_is_closed_in_favor_of_employee_creation():
+    route = next(
+        route for route in users_router.routes
+        if route.path == "/users/" and "POST" in route.methods
+    )
+
+    assert route.include_in_schema is False
+    assert route.endpoint.__name__ == "create_user_disabled"
 
 
 def test_task_and_outsource_payloads_expose_canonical_contract_fields():

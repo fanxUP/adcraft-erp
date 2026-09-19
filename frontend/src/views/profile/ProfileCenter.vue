@@ -5,7 +5,7 @@
     <el-card class="info-card" shadow="never">
       <template #header>账号信息</template>
       <el-descriptions :column="1" border>
-        <el-descriptions-item label="用户名">{{ authStore.user?.username }}</el-descriptions-item>
+        <el-descriptions-item label="工号">{{ authStore.user?.username }}</el-descriptions-item>
         <el-descriptions-item label="姓名">{{ authStore.user?.real_name || '-' }}</el-descriptions-item>
         <el-descriptions-item label="角色">{{ roleLabel }}</el-descriptions-item>
         <el-descriptions-item label="电话">{{ authStore.user?.phone || '-' }}</el-descriptions-item>

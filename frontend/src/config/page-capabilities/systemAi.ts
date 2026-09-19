@@ -17,7 +17,7 @@ export const systemAiCapabilities: PageCapabilityMap = {
     title: '用户管理',
     purpose: '维护系统账号、状态和角色分配',
     workflowStage: 'administration',
-    availableActions: ['查询用户', '新增用户', '分配角色'],
+    availableActions: ['查询用户', '维护账号状态', '分配角色', '重置密码'],
   },
   admin_roles: {
     title: '角色权限',

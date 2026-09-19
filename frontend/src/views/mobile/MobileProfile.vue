@@ -15,7 +15,7 @@
       <div class="info-title">账号信息</div>
       <div class="info-card">
         <div class="info-row">
-          <span class="info-label">用户名</span>
+          <span class="info-label">工号</span>
           <span class="info-value">{{ authStore.user?.username }}</span>
         </div>
         <div class="info-row" v-if="authStore.user?.real_name">

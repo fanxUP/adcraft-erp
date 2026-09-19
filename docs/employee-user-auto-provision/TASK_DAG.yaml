@@ -1,0 +1,52 @@
+version: 1
+mode: STRICT
+status: implemented_pending_release
+objective: >-
+  让员工建档成为普通登录账号的唯一创建入口，使用工号作为员工账号的登录名，
+  移除用户管理的新增用户入口，并保持角色权限、任务执行、历史引用和系统管理员账号安全。
+non_goals:
+  - 合并 employees 与 users 表
+  - 根据部门自动授予角色
+  - 未经确认批量创建历史账号或重置现有密码
+  - 修改订单、任务、工资、考勤和财务业务规则
+nodes:
+  - id: P01
+    name: 现状盘点与迁移干跑
+    acceptance: A01
+    depends_on: []
+    status: pending_production_audit
+  - id: P02
+    name: 账号开通服务与事务边界
+    acceptance: A02
+    depends_on: [P01]
+    status: complete
+  - id: P03
+    name: 登录、停用和删除安全边界
+    acceptance: A03
+    depends_on: [P02]
+    status: complete
+  - id: P04
+    name: 关闭普通用户创建接口
+    acceptance: A04
+    depends_on: [P02]
+    status: complete
+  - id: P05
+    name: 员工与用户管理页面调整
+    acceptance: A05
+    depends_on: [P02, P03, P04]
+    status: complete
+  - id: P06
+    name: 历史账号迁移与补建账号
+    acceptance: A06
+    depends_on: [P01, P02, P03]
+    status: implemented_pending_production_dry_run
+  - id: P07
+    name: 后端、前端和业务回归验证
+    acceptance: A07
+    depends_on: [P03, P04, P05, P06]
+    status: complete
+  - id: P08
+    name: 发布、备份、回滚和上线后检查
+    acceptance: A08
+    depends_on: [P07]
+    status: pending_release

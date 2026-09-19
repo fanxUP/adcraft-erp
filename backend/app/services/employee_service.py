@@ -5,6 +5,7 @@ from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.employee_repo import EmployeeRepository
 from app.services.number_generator import generate_employee_no
+from app.services.user_service import UserService
 from app.models.employee import Employee
 from app.models.user import User
 
@@ -25,35 +26,61 @@ class EmployeeService:
         return [self._d(e) for e in emps], total
     async def get_employee(self, eid): e = await self.repo.get_by_id(eid); return self._d(e) if e else None
     async def create_employee(self, data):
-        raw_user_id = data.get("user_id")
-        binding_user = None
+        data = dict(data)
+        raw_user_id = data.pop("user_id", None)
         if raw_user_id not in (None, ""):
-            binding_user_id = self._coerce_user_id(raw_user_id)
-            if data.get("employment_status", "active") != "active" or data.get("is_active", True) is not True:
-                raise ValueError("只有在职且启用的员工档案可以绑定登录账号")
-            binding_user = await self._load_bindable_user(binding_user_id)
-            await self._ensure_user_not_bound(binding_user_id)
-            data["user_id"] = binding_user_id
-        else:
-            data["user_id"] = None
+            raise ValueError("员工账号由员工档案自动生成，不能手工指定")
+        role_ids = data.pop("role_ids", [])
+        initial_password = data.pop("initial_password", None)
         if not data.get("employee_no"):
             data["employee_no"] = await generate_employee_no(self.db)
+        data["employee_no"] = str(data["employee_no"]).strip()
+        if not data["employee_no"]:
+            raise ValueError("工号不能为空")
+        if await self.repo.get_by_employee_no(data["employee_no"]):
+            raise ValueError("工号已存在，请重新输入")
+
+        employee_status_active = (
+            data.get("employment_status", "active") == "active"
+            and data.get("is_active", True) is True
+        )
+        account = await UserService(self.db).provision_employee_user(
+            employee_no=data["employee_no"],
+            real_name=data["name"],
+            phone=data.get("phone"),
+            role_ids=role_ids,
+            initial_password=initial_password,
+            is_active=employee_status_active,
+            id_card=data.get("id_card"),
+        )
+        binding_user = account["user"]
+        data["user_id"] = binding_user.id
         _convert_license_expire_date(data)
         employee = await self.repo.create(data)
+        # Make the just-created relationship available to the response even
+        # before SQLAlchemy performs a refresh/commit.
+        employee.user = binding_user
         result = self._d(employee)
-        if binding_user is not None:
-            result.update({
-                "user_username": binding_user.username,
-                "user_real_name": binding_user.real_name,
-            })
+        result.update({
+            "user_username": binding_user.username,
+            "user_real_name": binding_user.real_name,
+            "user_is_active": binding_user.is_active,
+            "initial_password": account["initial_password"],
+        })
         return result
     async def update_employee(self, eid, data):
         e = await self.repo.get_by_id(eid)
         if not e: raise ValueError("员工不存在")
+        data = dict(data)
         if "user_id" in data:
             raise ValueError("请在“登录账号”绑定操作中修改账号关系")
+        was_active = e.employment_status == "active" and e.is_active is True
         _convert_license_expire_date(data)
-        return self._d(await self.repo.update(e, data))
+        employee = await self.repo.update(e, data)
+        is_active = employee.employment_status == "active" and employee.is_active is True
+        if was_active and not is_active:
+            await self._disable_linked_user(employee)
+        return self._d(employee)
 
     @staticmethod
     def _coerce_user_id(raw_user_id) -> UUID:
@@ -140,7 +167,23 @@ class EmployeeService:
     async def delete_employee(self, eid):
         e = await self.repo.get_by_id(eid)
         if not e: return False
-        await self.repo.soft_delete(e); return True
+        await self.repo.soft_delete(e)
+        await self._disable_linked_user(e)
+        return True
+
+    async def _disable_linked_user(self, employee) -> None:
+        linked_user = getattr(employee, "user", None)
+        if linked_user is None and getattr(employee, "user_id", None):
+            result = await self.db.execute(
+                select(User).where(User.id == employee.user_id, User.deleted_at.is_(None))
+            )
+            linked_user = result.scalar_one_or_none()
+        if linked_user is None:
+            return
+        if getattr(linked_user, "is_active", False):
+            linked_user.is_active = False
+            linked_user.token_version = (getattr(linked_user, "token_version", 1) or 1) + 1
+            await self.db.flush()
     def _d(self, e):
         linked_user = getattr(e, "user", None)
         if not isinstance(linked_user, User):
@@ -162,5 +205,6 @@ class EmployeeService:
             "user_id": str(e.user_id) if e.user_id else None,
             "user_username": linked_user.username if linked_user else None,
             "user_real_name": linked_user.real_name if linked_user else None,
+            "user_is_active": linked_user.is_active if linked_user else None,
             "remark": e.remark, "is_active": e.is_active,
             "created_at": e.created_at.isoformat() if e.created_at else None}

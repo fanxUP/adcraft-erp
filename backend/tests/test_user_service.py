@@ -19,7 +19,10 @@ def make_mock_user(**kwargs):
     u.phone = kwargs.get("phone", "13800138000")
     u.email = kwargs.get("email", "test@example.com")
     u.is_active = kwargs.get("is_active", True)
+    u.deleted_at = kwargs.get("deleted_at", None)
     u.password_hash = kwargs.get("password_hash", "hashed_pwd")
+    u.token_version = kwargs.get("token_version", 1)
+    u.must_change_password = kwargs.get("must_change_password", False)
     u.created_at = kwargs.get("created_at", now)
 
     role_names = kwargs.get("role_names", ["admin"])
@@ -132,6 +135,69 @@ async def test_create_user_duplicate_username(service, mock_repo):
 
     with pytest.raises(ValueError, match="用户名已存在"):
         await service.create_user({"username": "existing", "password": "Pass123!"})
+
+
+@pytest.mark.asyncio
+async def test_provision_employee_user_uses_work_number_and_forces_password_change(service, mock_repo):
+    created_user = make_mock_user(username="001", real_name="新员工", role_names=[])
+    mock_repo.create.return_value = created_user
+    mock_repo.get_by_id.return_value = created_user
+
+    with patch("app.services.user_service.hash_password", return_value="hashed_temp"):
+        result = await service.provision_employee_user(
+            employee_no="001",
+            real_name="新员工",
+            phone="13800000000",
+            role_ids=[],
+            initial_password=None,
+            is_active=True,
+        )
+
+    payload = mock_repo.create.await_args.args[0]
+    assert payload["username"] == "001"
+    assert payload["password_hash"] == "hashed_temp"
+    assert payload["must_change_password"] is True
+    assert payload["is_active"] is True
+    assert result["user"] is created_user
+    assert result["initial_password"]
+    assert result["initial_password"] != "001"
+
+
+@pytest.mark.asyncio
+async def test_update_user_invalidates_tokens_when_disabled(service, mock_repo):
+    user = make_mock_user(is_active=True, token_version=4)
+    mock_repo.get_by_id.return_value = user
+    mock_repo.update.return_value = user
+
+    await service.update_user(SAMPLE_USER_ID, {"is_active": False})
+
+    assert user.is_active is False
+    assert user.token_version == 5
+
+
+@pytest.mark.asyncio
+async def test_reset_password_invalidates_existing_tokens(service, mock_repo):
+    user = make_mock_user(token_version=2)
+    mock_repo.get_by_id.return_value = user
+
+    with patch("app.services.user_service.hash_password", return_value="hashed_reset"):
+        assert await service.reset_password(SAMPLE_USER_ID, "ResetPass123!") is True
+
+    assert user.token_version == 3
+    assert user.must_change_password is True
+
+
+@pytest.mark.asyncio
+async def test_delete_linked_user_is_blocked(service, mock_repo):
+    user = make_mock_user()
+    linked_employee = MagicMock()
+    mock_repo.get_by_id.return_value = user
+    service.db.execute.return_value = MockResult(scalar_return=linked_employee)
+
+    with pytest.raises(ValueError, match="员工账号由员工档案管理"):
+        await service.delete_user(SAMPLE_USER_ID)
+
+    mock_repo.soft_delete.assert_not_awaited()
 
 
 # --- Update Tests ---

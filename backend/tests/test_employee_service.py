@@ -2,12 +2,14 @@
 
 from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 import pytest
 
 from app.services.employee_service import EmployeeService
 
 SAMPLE_EMPLOYEE_ID = "11111111-1111-1111-1111-111111111111"
+SAMPLE_USER_ID = UUID("22222222-2222-2222-2222-222222222222")
 
 
 def make_mock_employee(**kwargs):
@@ -52,10 +54,14 @@ def service():
     repo = MagicMock()
     repo.list = AsyncMock(return_value=([], 0))
     repo.get_by_id = AsyncMock()
+    repo.get_by_employee_no = AsyncMock(return_value=None)
     repo.create = AsyncMock()
     repo.update = AsyncMock()
     repo.soft_delete = AsyncMock()
-    with patch("app.services.employee_service.EmployeeRepository") as MockRepoClass:
+    provisioned_user = MagicMock(id=SAMPLE_USER_ID, username="EMP100", real_name="王小明")
+    provision = {"user": provisioned_user, "initial_password": "SafeTemp123"}
+    with patch("app.services.employee_service.EmployeeRepository") as MockRepoClass, \
+         patch("app.services.employee_service.UserService.provision_employee_user", new=AsyncMock(return_value=provision)):
         MockRepoClass.return_value = repo
         svc = EmployeeService(AsyncMock())
         svc.repo = repo
@@ -101,6 +107,58 @@ async def test_create_employee_auto_generates_employee_no(service):
         gen.assert_awaited_once()
     args, _ = service.repo.create.call_args
     assert args[0]["employee_no"] == "EMP100"
+
+
+@pytest.mark.asyncio
+async def test_create_employee_provisions_account_with_employee_no(service):
+    created = make_mock_employee(employee_no="EMP100", user_id=SAMPLE_USER_ID)
+    service.repo.create.return_value = created
+    provisioned_user = MagicMock(id=SAMPLE_USER_ID, username="EMP100", real_name="王小明")
+    provision = {"user": provisioned_user, "initial_password": "SafeTemp123"}
+
+    with patch("app.services.employee_service.generate_employee_no", new=AsyncMock(return_value="EMP100")), \
+         patch("app.services.employee_service.UserService.provision_employee_user", new=AsyncMock(return_value=provision)) as provision_user:
+        result = await service.create_employee({"name": "王小明", "role_ids": []})
+
+    provision_user.assert_awaited_once()
+    kwargs = provision_user.await_args.kwargs
+    assert kwargs["employee_no"] == "EMP100"
+    assert kwargs["real_name"] == "王小明"
+    assert kwargs["role_ids"] == []
+    assert result["user_id"] == str(SAMPLE_USER_ID)
+    assert result["initial_password"] == "SafeTemp123"
+
+
+@pytest.mark.asyncio
+async def test_update_employee_disables_linked_account_when_employee_leaves(service):
+    employee = make_mock_employee(user_id=SAMPLE_USER_ID, employment_status="active", is_active=True)
+    linked_user = MagicMock(is_active=True, token_version=3)
+    employee.user = linked_user
+    service.repo.get_by_id.return_value = employee
+
+    async def update_side_effect(obj, data):
+        for key, value in data.items():
+            setattr(obj, key, value)
+        return obj
+
+    service.repo.update.side_effect = update_side_effect
+    result = await service.update_employee(SAMPLE_EMPLOYEE_ID, {"employment_status": "resigned"})
+
+    assert result["employment_status"] == "resigned"
+    assert linked_user.is_active is False
+    assert linked_user.token_version == 4
+
+
+@pytest.mark.asyncio
+async def test_delete_employee_disables_linked_account(service):
+    employee = make_mock_employee(user_id=SAMPLE_USER_ID)
+    linked_user = MagicMock(is_active=True, token_version=7)
+    employee.user = linked_user
+    service.repo.get_by_id.return_value = employee
+
+    assert await service.delete_employee(SAMPLE_EMPLOYEE_ID) is True
+    assert linked_user.is_active is False
+    assert linked_user.token_version == 8
 
 
 # ── update ──────────────────────────────────────────────────────────────────

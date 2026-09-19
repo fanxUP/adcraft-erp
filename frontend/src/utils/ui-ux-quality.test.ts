@@ -58,6 +58,19 @@ describe('P08 UI/UX quality guardrails', () => {
     expect(includesAny(mobileInstallation, ['capture', 'OrderTaskAttachments'])).toBe(true)
   })
 
+  it('uses employee numbers as the only employee login entry point', () => {
+    const employee = readSource('views/employee/EmployeeList.vue')
+    const users = readSource('views/admin/UserManage.vue')
+    const login = readSource('views/login/LoginView.vue')
+    expect(employee).toContain('自动生成登录账号')
+    expect(employee).toContain('initial_password')
+    expect(users).not.toContain('新增用户')
+    expect(users).not.toContain('createUser')
+    expect(users).toContain('label="工号"')
+    expect(login).toContain('placeholder="工号"')
+    expect(login).toContain('请输入工号')
+  })
+
   it('does not introduce obvious credentials into UI source', () => {
     const source = readSource('views/admin/SystemSettings.vue')
     expect(source).not.toMatch(/sk-[A-Za-z0-9]{20,}/)

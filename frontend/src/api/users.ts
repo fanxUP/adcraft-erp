@@ -1,15 +1,6 @@
 import { get, post, put, del } from './index'
 import type { PaginatedData, UserResponse, SuccessResponse } from '@/types/api'
 
-export interface UserCreateInput {
-  username: string
-  password: string
-  real_name?: string | null
-  phone?: string | null
-  email?: string | null
-  role_ids?: string[]
-}
-
 export interface UserUpdateInput {
   real_name?: string | null
   phone?: string | null
@@ -20,10 +11,6 @@ export interface UserUpdateInput {
 
 export function getUsers(params: { page?: number; page_size?: number; keyword?: string }) {
   return get<PaginatedData<UserResponse>>('/users/', { params })
-}
-
-export function createUser(data: UserCreateInput) {
-  return post<UserResponse>('/users/', data)
 }
 
 export function getUser(id: string) {

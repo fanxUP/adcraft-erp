@@ -26,6 +26,10 @@ class EmployeeCreate(BaseModel):
     emergency_contact: Optional[str] = None; emergency_phone: Optional[str] = None
     skills: Optional[list[str]] = None
     bank_name: Optional[str] = None; bank_account: Optional[str] = None; address: Optional[str] = None
+    # Accounts are provisioned from the employee record.  These fields are
+    # request-only and are never stored on the employee table.
+    role_ids: list[str] = []
+    initial_password: Optional[str] = None
     user_id: Optional[str] = None; remark: Optional[str] = None; is_active: bool = True
 
     @field_validator("birth_date", "hire_date", "resignation_date", mode="before")
@@ -62,5 +66,6 @@ class EmployeeResponse(BaseModel):
     bank_name: Optional[str] = None; bank_account: Optional[str] = None; address: Optional[str] = None
     user_id: Optional[str] = None; remark: Optional[str] = None; is_active: bool
     user_username: Optional[str] = None; user_real_name: Optional[str] = None
+    user_is_active: Optional[bool] = None
     created_at: Optional[datetime] = None
     model_config = {"from_attributes": True}

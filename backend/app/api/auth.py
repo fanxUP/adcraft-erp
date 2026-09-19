@@ -16,7 +16,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     service = AuthService(db)
     result = await service.authenticate(data)
     if not result:
-        raise HTTPException(status_code=401, detail="用户名或密码错误")
+        raise HTTPException(status_code=401, detail="工号或密码错误")
     user, token = result
     return success({
         "token": token,

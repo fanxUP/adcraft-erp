@@ -6,6 +6,7 @@ from uuid import UUID
 
 from app.core.database import get_db
 from app.models.user import User
+from app.models.employee import Employee
 from app.utils.security import decode_access_token
 
 security_scheme = HTTPBearer(auto_error=False)
@@ -33,12 +34,31 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户不存在或已禁用",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    employee_result = await db.execute(
+        select(Employee)
+        .where(Employee.user_id == user.id)
+        .order_by(Employee.deleted_at.is_not(None), Employee.created_at.desc())
+        .limit(1)
+    )
+    employee = employee_result.scalar_one_or_none()
+    if isinstance(employee, Employee) and (
+        employee.deleted_at is not None
+        or employee.employment_status != "active"
+        or employee.is_active is not True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="员工已离职、停职或停用",
             headers={"WWW-Authenticate": "Bearer"},
         )
     # 校验 token 版本号，如果用户 token_version 已升级则强制重新登录

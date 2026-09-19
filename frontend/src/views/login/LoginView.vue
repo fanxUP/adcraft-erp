@@ -8,7 +8,7 @@
       <p class="login-subtitle">广告制作安装工程管理系统</p>
       <el-form ref="formRef" :model="form" :rules="rules" @keyup.enter="handleLogin">
         <el-form-item prop="username">
-          <el-input v-model="form.username" placeholder="用户名" prefix-icon="User" size="large" />
+          <el-input v-model="form.username" placeholder="工号" prefix-icon="User" size="large" />
         </el-form-item>
         <el-form-item prop="password">
           <el-input v-model="form.password" type="password" placeholder="密码" prefix-icon="Lock" size="large" show-password />
@@ -37,7 +37,7 @@ const brandingStore = useBrandingStore()
 const loading = ref(false)
 const form = reactive({ username: '', password: '' })
 const rules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  username: [{ required: true, message: '请输入工号', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 

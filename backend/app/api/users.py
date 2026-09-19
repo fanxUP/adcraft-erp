@@ -6,13 +6,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.permissions import require_permission, PERM_USER_READ, PERM_USER_CREATE, PERM_USER_UPDATE, PERM_USER_DELETE
+from app.core.permissions import (
+    require_permission,
+    PERM_SYSTEM_SUPER_ADMIN,
+    PERM_USER_READ,
+    PERM_USER_UPDATE,
+    PERM_USER_DELETE,
+)
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import UserUpdate
 from app.core.password_policy import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
 from app.schemas.common import success, success_paginated
 from app.services.user_service import UserService
-from app.services.operation_log_service import OBJ_USER, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, log_operation
+from app.services.operation_log_service import OBJ_USER, ACTION_UPDATE, ACTION_DELETE, log_operation
 
 
 class ResetPasswordRequest(BaseModel):
@@ -52,22 +58,15 @@ async def list_users(
     return success_paginated(users, total, page, page_size)
 
 
-@router.post("/")
-async def create_user(
-    data: UserCreate,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_USER_CREATE)),
+@router.post("/", include_in_schema=False)
+async def create_user_disabled(
+    current_user: User = Depends(require_permission(PERM_SYSTEM_SUPER_ADMIN)),
 ):
-    service = UserService(db)
-    user = await service.create_user(data.model_dump())
-    await log_operation(
-        db, current_user.id, current_user.real_name or current_user.username,
-        OBJ_USER, UUID(user["id"]), ACTION_CREATE,
-        ip_address=request.client.host if request.client else None,
-        after_data={"username": user["username"], "roles": user.get("roles", [])},
+    """Keep a clear server-side guard for old clients that still post here."""
+    raise HTTPException(
+        status_code=410,
+        detail="用户账号只能在员工管理中新建",
     )
-    return success(user)
 
 
 @router.get("/{user_id}")

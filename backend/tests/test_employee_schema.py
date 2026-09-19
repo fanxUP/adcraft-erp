@@ -28,3 +28,14 @@ def test_employee_update_keeps_valid_dates_and_normalizes_blank_dates():
     assert employee.birth_date == date(1990, 1, 1)
     assert employee.hire_date is None
     assert employee.resignation_date is None
+
+
+def test_employee_create_accepts_account_provisioning_options():
+    employee = EmployeeCreate(
+        name="新员工",
+        role_ids=["role-1"],
+        initial_password="TempPass123!",
+    )
+
+    assert employee.role_ids == ["role-1"]
+    assert employee.initial_password == "TempPass123!"

@@ -9,6 +9,9 @@ class EmployeeRepository:
     async def get_by_id(self, eid: UUID):
         r = await self.db.execute(select(Employee).where(Employee.id == eid, Employee.deleted_at.is_(None)))
         return r.scalar_one_or_none()
+    async def get_by_employee_no(self, employee_no: str):
+        r = await self.db.execute(select(Employee).where(Employee.employee_no == employee_no))
+        return r.scalar_one_or_none()
     async def list(self, skip=0, limit=20, keyword=None, department=None, employment_status=None):
         q = select(Employee).where(Employee.deleted_at.is_(None))
         if keyword: p = f"%{keyword}%"; q = q.where(or_(Employee.employee_no.ilike(p), Employee.name.ilike(p), Employee.phone.ilike(p)))

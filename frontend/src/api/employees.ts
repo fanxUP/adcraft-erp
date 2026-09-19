@@ -13,6 +13,7 @@ export interface EmployeeResponse {
   bank_name?: string | null; bank_account?: string | null
   address?: string | null; user_id?: string | null; remark?: string | null
   user_username?: string | null; user_real_name?: string | null
+  user_is_active?: boolean | null; initial_password?: string | null
   is_active: boolean; created_at?: string | null
 }
 
@@ -22,7 +23,7 @@ export interface EmployeeAccountOption {
   real_name?: string | null
 }
 
-export interface EmployeeCreateInput { name: string; phone?: string | null; gender?: string | null; ethnicity?: string | null; birth_date?: string | null; department?: string | null; position?: string | null; employment_type?: string | null; hire_date?: string | null; resignation_date?: string | null; employment_status?: string; id_card?: string | null; education?: string | null; license_no?: string | null; license_type?: string | null; license_expire_date?: string | null; id_card_front_url?: string | null; id_card_back_url?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; skills?: string[]; bank_name?: string | null; bank_account?: string | null; address?: string | null; user_id?: string | null; remark?: string | null; is_active?: boolean }
+export interface EmployeeCreateInput { name: string; phone?: string | null; gender?: string | null; ethnicity?: string | null; birth_date?: string | null; department?: string | null; position?: string | null; employment_type?: string | null; hire_date?: string | null; resignation_date?: string | null; employment_status?: string; id_card?: string | null; education?: string | null; license_no?: string | null; license_type?: string | null; license_expire_date?: string | null; id_card_front_url?: string | null; id_card_back_url?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; skills?: string[]; bank_name?: string | null; bank_account?: string | null; address?: string | null; role_ids?: string[]; initial_password?: string | null; remark?: string | null; is_active?: boolean }
 
 export interface EmployeeUpdateInput { name?: string | null; phone?: string | null; gender?: string | null; ethnicity?: string | null; birth_date?: string | null; department?: string | null; position?: string | null; employment_type?: string | null; hire_date?: string | null; resignation_date?: string | null; employment_status?: string | null; id_card?: string | null; education?: string | null; license_no?: string | null; license_type?: string | null; license_expire_date?: string | null; id_card_front_url?: string | null; id_card_back_url?: string | null; emergency_contact?: string | null; emergency_phone?: string | null; skills?: string[]; bank_name?: string | null; bank_account?: string | null; address?: string | null; user_id?: string | null; remark?: string | null; is_active?: boolean | null }
 

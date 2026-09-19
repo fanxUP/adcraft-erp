@@ -44,7 +44,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       // 登录接口失败（密码错误等）：显示后端真实原因，不当作“会话过期”处理
       if (error.config?.url?.includes('/auth/login')) {
-        ElMessage.error(formatApiError(normalized, '用户名或密码错误'))
+        ElMessage.error(formatApiError(normalized, '工号或密码错误'))
         return Promise.reject(normalized)
       }
       ElMessage.error('登录已过期，请重新登录')
