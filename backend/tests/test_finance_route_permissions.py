@@ -1,7 +1,12 @@
 """订单与财务路由的细粒度权限契约。"""
 
+from io import BytesIO
 import inspect
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
+from fastapi import UploadFile
 import pytest
 
 from app.api import orders, payments, payables
@@ -150,6 +155,64 @@ def test_expense_routes_require_business_permissions(method, path, permission):
 )
 def test_expense_voucher_file_policy(filename, content_type, contents, expected):
     assert _validate_expense_attachment(filename, content_type, contents) == expected
+
+
+@pytest.mark.asyncio
+async def test_project_cost_voucher_upload_validates_and_stores_safe_file(tmp_path, monkeypatch):
+    """项目成本凭证应校验文件签名，并以受限权限写入应用上传目录。"""
+    monkeypatch.setattr(payments.settings, "LOCAL_UPLOAD_DIR", str(tmp_path))
+    cost_id = uuid4()
+    db = MagicMock()
+    db.get = AsyncMock(return_value=SimpleNamespace(deleted_at=None))
+    current_user = SimpleNamespace(id=uuid4())
+    attachment = {"id": str(uuid4()), "filename": "凭证.png"}
+
+    with patch.object(payments, "AttachmentService") as service_class:
+        service_class.return_value.add_attachment = AsyncMock(return_value=attachment)
+        result = await payments.upload_project_cost_attachment(
+            cost_id=str(cost_id),
+            file=UploadFile(
+                filename="../../凭证.png",
+                file=BytesIO(b"\x89PNG\r\n\x1a\nvalid-png"),
+                headers={"content-type": "image/png"},
+            ),
+            db=db,
+            current_user=current_user,
+        )
+
+    assert result["code"] == 0
+    payload = service_class.return_value.add_attachment.await_args.kwargs
+    assert payload["related_id"] == cost_id
+    assert payload["data"]["filename"] == "凭证.png"
+    assert payload["data"]["file_type"] == "image/png"
+    stored_files = list(tmp_path.rglob("*.png"))
+    assert len(stored_files) == 1
+    assert stored_files[0].stat().st_mode & 0o777 == 0o640
+    assert stored_files[0].parent.stat().st_mode & 0o777 == 0o750
+
+
+@pytest.mark.asyncio
+async def test_project_cost_voucher_upload_rejects_invalid_file_before_persisting(tmp_path, monkeypatch):
+    monkeypatch.setattr(payments.settings, "LOCAL_UPLOAD_DIR", str(tmp_path))
+    db = MagicMock()
+    db.get = AsyncMock(return_value=SimpleNamespace(deleted_at=None))
+
+    with patch.object(payments, "AttachmentService") as service_class:
+        service_class.return_value.add_attachment = AsyncMock()
+        result = await payments.upload_project_cost_attachment(
+            cost_id=str(uuid4()),
+            file=UploadFile(
+                filename="凭证.exe",
+                file=BytesIO(b"MZ-not-a-voucher"),
+                headers={"content-type": "application/octet-stream"},
+            ),
+            db=db,
+            current_user=SimpleNamespace(id=uuid4()),
+        )
+
+    assert result["code"] == 40001
+    service_class.return_value.add_attachment.assert_not_awaited()
+    assert not list(tmp_path.rglob("*"))
 
 
 @pytest.mark.parametrize(

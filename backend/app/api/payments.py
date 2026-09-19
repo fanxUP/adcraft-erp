@@ -25,6 +25,7 @@ from app.core.permissions import (
     require_permission,
 )
 from app.models.payment import Expense
+from app.models.project_cost import ProjectCost
 from app.models.task import Attachment
 from app.models.user import User
 from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate, ProjectCostCreate, ProjectCostUpdate, DebtSettleCreate
@@ -890,29 +891,62 @@ async def upload_project_cost_attachment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_EXPENSE_UPDATE)),
 ):
-    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "bin"
+    try:
+        cost_uuid = UUID(cost_id)
+    except ValueError:
+        return {"code": 40001, "message": "成本编号无效", "data": None}
+
+    cost = await db.get(ProjectCost, cost_uuid)
+    if cost is None or cost.deleted_at is not None:
+        return {"code": 40401, "message": "项目成本记录不存在", "data": None}
+
+    original_filename = file.filename
+    declared_content_type = file.content_type
+    contents = await file.read(EXPENSE_ATTACHMENT_MAX_BYTES + 1)
+    await file.close()
+    if len(contents) > EXPENSE_ATTACHMENT_MAX_BYTES:
+        return {"code": 41301, "message": "凭证文件不能超过20MB", "data": None}
+
+    validated = _validate_expense_attachment(
+        original_filename,
+        declared_content_type,
+        contents,
+    )
+    if validated is None:
+        return {"code": 40001, "message": "凭证仅支持有效的 JPG、PNG、WEBP 或 PDF 文件", "data": None}
+
+    extension, canonical_type = validated
     date_dir = datetime.now(timezone.utc).strftime("%Y%m")
     dest_dir = os.path.join(settings.LOCAL_UPLOAD_DIR, date_dir)
-    os.makedirs(dest_dir, exist_ok=True)
-    stored_name = f"{_uuid.uuid4().hex}.{ext}"
+    os.makedirs(dest_dir, mode=0o750, exist_ok=True)
+    os.chmod(dest_dir, 0o750)
+    stored_name = f"{_uuid.uuid4().hex}{extension}"
     file_path = os.path.join(dest_dir, stored_name)
-    contents = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(contents)
+    _, display_name = safe_upload_name(original_filename, "project_cost_voucher")
 
-    service = AttachmentService(db)
-    att = await service.add_attachment(
-        related_type="project_cost",
-        related_id=UUID(cost_id),
-        data={
-            "filename": file.filename or stored_name,
-            "file_path": f"{date_dir}/{stored_name}",
-            "file_size": len(contents),
-            "file_type": file.content_type,
-        },
-        uploaded_by=current_user.id,
-    )
-    return success(att)
+    try:
+        with open(file_path, "wb") as output:
+            output.write(contents)
+        os.chmod(file_path, 0o640)
+
+        service = AttachmentService(db)
+        att = await service.add_attachment(
+            related_type="project_cost",
+            related_id=cost_uuid,
+            data={
+                "filename": display_name,
+                "file_path": f"{date_dir}/{stored_name}",
+                "file_size": len(contents),
+                "file_type": canonical_type,
+                "category": "receipt",
+            },
+            uploaded_by=current_user.id,
+        )
+        return success(att)
+    except Exception:
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+        raise
 
 
 @cost_router.delete("/attachments/{attachment_id}")

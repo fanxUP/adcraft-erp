@@ -321,7 +321,7 @@
         <el-form-item label="凭证">
           <div
             class="cost-attachment-dropzone"
-            :class="{ 'is-disabled': !isEditing, 'is-dragover': costAttachmentDragActive }"
+            :class="{ 'is-dragover': costAttachmentDragActive }"
             role="button"
             tabindex="0"
             @click="openCostAttachmentPicker"
@@ -338,20 +338,19 @@
               type="file"
               multiple
               :accept="PROJECT_COST_ATTACHMENT_ACCEPT"
-              :disabled="!isEditing"
               @click.stop
               @change="handleCostAttachmentInputChange"
             />
             <el-icon class="cost-attachment-drop-icon"><UploadFilled /></el-icon>
             <div class="cost-attachment-drop-title">将凭证拖到这里上传</div>
             <div class="cost-attachment-drop-subtitle">或点击选择文件，支持批量上传</div>
-            <div class="cost-attachment-drop-hint">支持 JPG、PNG、WEBP、PDF；请先保存成本记录后上传凭证</div>
+            <div class="cost-attachment-drop-hint">支持 JPG、PNG、WEBP、PDF；{{ isEditing ? '上传后立即保存到这笔成本' : '保存成本后自动上传' }}</div>
           </div>
 
           <div v-if="attachmentUploadQueue.length" class="cost-attachment-upload-queue">
             <div v-for="item in attachmentUploadQueue" :key="item.id" class="cost-attachment-upload-row">
               <span class="cost-attachment-upload-name" :title="item.name">{{ item.name }}</span>
-              <el-tag v-if="item.status === 'queued'" size="small" type="info">等待上传</el-tag>
+              <el-tag v-if="item.status === 'queued'" size="small" type="info">{{ isEditing ? '等待上传' : '待保存' }}</el-tag>
               <el-tag v-else-if="item.status === 'uploading'" size="small" type="warning">上传中</el-tag>
               <template v-else>
                 <el-tag size="small" type="danger">{{ item.error || '上传失败' }}</el-tag>
@@ -871,6 +870,7 @@ async function handleSave() {
 
   saving.value = true
   try {
+    let savedCost: ProjectCostResponse
     if (isEditing.value) {
       const payload: Record<string, unknown> = {
         category,
@@ -887,11 +887,11 @@ async function handleSave() {
       } else {
         payload.order_item_ids = [...form.order_item_ids]
       }
-      await updateProjectCost(editingId.value, payload)
+      savedCost = await updateProjectCost(editingId.value, payload)
       ElMessage.success('成本已更新')
     } else {
       if (isQuote.value) {
-        await createProjectCost({
+        savedCost = await createProjectCost({
           source_type: 'quote',
           quote_id: sourceId.value,
           category,
@@ -905,7 +905,7 @@ async function handleSave() {
           supplier_id: form.supplier_id || undefined,
         })
       } else {
-        await createProjectCost({
+        savedCost = await createProjectCost({
           source_type: 'order',
           order_id: sourceId.value,
           category,
@@ -919,8 +919,21 @@ async function handleSave() {
           supplier_id: form.supplier_id || undefined,
         })
       }
+      isEditing.value = true
+      editingId.value = savedCost.id
       ElMessage.success('成本登记成功')
     }
+
+    // New costs have no server id until the main record is saved. Upload any
+    // files queued in the dialog immediately after the record is created.
+    await startCostAttachmentUploadQueue()
+    if (attachmentUploadQueue.value.some(item => item.status === 'error')) {
+      ElMessage.warning('成本已保存，部分凭证上传失败，请重试')
+      void fetchData()
+      void fetchCostSummary()
+      return
+    }
+
     showDialog.value = false
     resetForm()
     fetchData()
@@ -983,17 +996,16 @@ async function loadAttachments(costId: string) {
 }
 
 function openCostAttachmentPicker() {
-  if (isEditing.value) costAttachmentInput.value?.click()
+  costAttachmentInput.value?.click()
 }
 
 function handleCostAttachmentDragEnter() {
-  if (!isEditing.value) return
   costAttachmentDragDepth += 1
   costAttachmentDragActive.value = true
 }
 
 function handleCostAttachmentDragOver() {
-  if (isEditing.value) costAttachmentDragActive.value = true
+  costAttachmentDragActive.value = true
 }
 
 function handleCostAttachmentDragLeave() {
@@ -1004,7 +1016,6 @@ function handleCostAttachmentDragLeave() {
 function handleCostAttachmentDrop(event: DragEvent) {
   costAttachmentDragDepth = 0
   costAttachmentDragActive.value = false
-  if (!isEditing.value) return
   enqueueCostAttachments(Array.from(event.dataTransfer?.files || []))
 }
 
@@ -1016,7 +1027,7 @@ function handleCostAttachmentInputChange(event: Event) {
 }
 
 function enqueueCostAttachments(files: File[]) {
-  if (!isEditing.value || !editingId.value || !files.length) return
+  if (!files.length) return
 
   const accepted: File[] = []
   let rejectedCount = 0
@@ -1031,27 +1042,31 @@ function enqueueCostAttachments(files: File[]) {
 
   const costId = editingId.value
   attachmentUploadQueue.value.push(...accepted.map(file => ({
-    id: `${costId}-${Date.now()}-${costAttachmentSequence++}`,
+    id: `${costId || 'new'}-${Date.now()}-${costAttachmentSequence++}`,
     costId,
     file,
     name: file.name,
     status: 'queued' as const,
   })))
-  void startCostAttachmentUploadQueue()
+  if (costId) void startCostAttachmentUploadQueue()
 }
 
 async function startCostAttachmentUploadQueue() {
-  if (costAttachmentQueueRunning) return
+  if (costAttachmentQueueRunning || !editingId.value) return
+  const costId = editingId.value
   costAttachmentQueueRunning = true
   uploadingAtt.value = true
   try {
     while (true) {
-      const next = attachmentUploadQueue.value.find(item => item.status === 'queued')
+      const next = attachmentUploadQueue.value.find(item =>
+        item.status === 'queued' && (!item.costId || item.costId === costId),
+      )
       if (!next) break
+      next.costId = costId
       next.status = 'uploading'
       try {
-        const att = await uploadProjectCostAttachment(next.costId, next.file)
-        if (showDialog.value && isEditing.value && editingId.value === next.costId) {
+        const att = await uploadProjectCostAttachment(costId, next.file)
+        if (showDialog.value && isEditing.value && editingId.value === costId) {
           dialogAttachments.value.unshift(att)
         }
         attachmentUploadQueue.value = attachmentUploadQueue.value.filter(item => item.id !== next.id)

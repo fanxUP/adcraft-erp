@@ -491,6 +491,18 @@ async def test_set_order_cost(service):
 
 
 @pytest.mark.asyncio
+async def test_set_order_cost_refreshes_server_updated_at_before_serialization(service):
+    """成本回算更新订单后必须刷新数据库生成的时间戳，避免异步懒加载 500。"""
+    order_service, repository, db = service
+    order = make_order(total_amount=Decimal("5000"))
+    repository.get_by_id.return_value = order
+
+    await order_service.set_cost(SAMPLE_ORDER_ID, 3000)
+
+    db.refresh.assert_awaited_once_with(order, attribute_names=["updated_at"])
+
+
+@pytest.mark.asyncio
 async def test_set_cost_rejects_quote(service):
     order_service, repository, _ = service
     repository.get_by_id.return_value = make_order(doc_type="quote")

@@ -161,9 +161,8 @@ export function getProjectCostAttachments(costId: string) {
 export function uploadProjectCostAttachment(costId: string, file: File) {
   const form = new FormData()
   form.append('file', file)
-  return post<AttachmentResponse>(`/project-costs/${costId}/upload`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
+  // Let the browser/Axios add the multipart boundary automatically.
+  return post<AttachmentResponse>(`/project-costs/${costId}/upload`, form)
 }
 
 export function deleteProjectCostAttachment(attachmentId: string) {

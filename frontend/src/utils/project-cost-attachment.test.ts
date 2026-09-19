@@ -44,4 +44,14 @@ describe('登记成本凭证上传交互', () => {
     expect(getProjectCostAttachmentKind({ filename: 'a.pdf', file_type: 'application/pdf' })).toBe('pdf')
     expect(getProjectCostAttachmentKind({ filename: 'a.bin', file_type: 'application/octet-stream' })).toBe('file')
   })
+
+  it('新登记成本可以先排队凭证，保存成本后自动上传', () => {
+    const source = readSource('views/payments/ProjectCostDetail.vue')
+
+    expect(source).toContain("保存成本后自动上传")
+    expect(source).toContain("const costId = editingId.value")
+    expect(source).toContain("item.status === 'queued' && (!item.costId || item.costId === costId)")
+    expect(source).toContain('let savedCost: ProjectCostResponse')
+    expect(source).toContain('await startCostAttachmentUploadQueue()')
+  })
 })
