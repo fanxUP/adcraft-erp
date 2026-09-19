@@ -112,8 +112,11 @@ node node_modules/vite/bin/vite.js --host 0.0.0.0 --port 5173
 ### 连接地址
 
 ```
-ws://localhost:8000/ws/chat?token={JWT_TOKEN}
+ws://localhost:8000/ws/chat
 ```
+
+连接时通过 `Sec-WebSocket-Protocol` 发送两个子协议值：
+`adcraft-auth` 和 `{JWT_TOKEN}`。令牌不再拼接到 URL；旧客户端的查询参数仍在兼容期内接受，但网关不会记录 `/ws/` 访问日志。
 
 ### 客户端 -> 服务端
 

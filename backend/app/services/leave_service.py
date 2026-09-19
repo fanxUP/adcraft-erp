@@ -66,6 +66,7 @@ class LeaveRequestService:
         if remark:
             l.remark = remark
         await self.db.flush()
+        await self.db.refresh(l)
         return self._d(l)
 
     async def delete_request(self, lid: UUID):

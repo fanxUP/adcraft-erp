@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import (
+    authenticate_websocket_token,
+    extract_websocket_token,
+    get_current_user,
+)
 from app.models.user import User
 from app.schemas.common import success, success_paginated
 from app.schemas.notification import SendMessageRequest
@@ -119,25 +123,24 @@ async def send_message(
 
 
 # WebSocket endpoint for real-time notifications
-async def websocket_notifications(websocket: WebSocket, token: str = Query(...)):
+async def websocket_notifications(websocket: WebSocket, token: Optional[str] = Query(None)):
     """WebSocket endpoint for real-time notification push."""
-    from app.core.config import settings
     from app.core.database import AsyncSessionLocal
-    from jose import JWTError, jwt
 
-    # Validate token
+    token, subprotocol = extract_websocket_token(websocket, token)
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-        user_id_str = payload.get("sub")
-        if not user_id_str:
-            await websocket.close(code=4001, reason="Invalid token")
-            return
-        user_id = uuid.UUID(user_id_str)
-    except (JWTError, ValueError):
-        await websocket.close(code=4001, reason="Invalid token")
+        async with AsyncSessionLocal() as db:
+            user = await authenticate_websocket_token(db, token)
+    except Exception:
+        logger.warning("WebSocket notification authentication failed", exc_info=True)
+        await websocket.close(code=1011, reason="服务暂时不可用")
         return
+    if not user:
+        await websocket.close(code=4001, reason="认证失败")
+        return
+    user_id = user.id
 
-    await websocket.accept()
+    await websocket.accept(subprotocol=subprotocol)
     register_ws(user_id, websocket)
 
     # Send current unread count on connect

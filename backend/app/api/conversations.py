@@ -6,12 +6,14 @@ from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, WebSocket, WebSocketDisconnect
-from jose import JWTError, jwt
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
-from app.core.deps import get_current_user
+from app.core.deps import (
+    authenticate_websocket_token,
+    extract_websocket_token,
+    get_current_user,
+)
 from app.core.permissions import (
     ORDER_ITEM_PRICE_FIELDS,
     ORDER_PRICE_FIELDS,
@@ -1127,23 +1129,29 @@ async def batch_share_cards(
 
 async def websocket_chat(websocket: WebSocket):
     """WebSocket endpoint for chat"""
-    token = websocket.query_params.get("token")
+    from app.core.database import AsyncSessionLocal
+
+    token, subprotocol = extract_websocket_token(websocket)
     if not token:
-        await websocket.close(code=4001, reason="Missing token")
+        await websocket.close(code=4001, reason="认证失败")
         return
 
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-        user_id = uuid.UUID(payload.get("sub"))
-    except (JWTError, ValueError):
-        await websocket.close(code=4001, reason="Invalid token")
+        async with AsyncSessionLocal() as db:
+            user = await authenticate_websocket_token(db, token)
+    except Exception:
+        logger.warning("WebSocket chat authentication failed", exc_info=True)
+        await websocket.close(code=1011, reason="服务暂时不可用")
         return
+    if not user:
+        await websocket.close(code=4001, reason="认证失败")
+        return
+    user_id = user.id
 
-    await websocket.accept()
+    await websocket.accept(subprotocol=subprotocol)
     register_chat_ws(user_id, websocket)
 
     # 更新在线状态
-    from app.core.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         service = ChatService(db)
         await service.update_presence(user_id, "online")

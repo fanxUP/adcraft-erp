@@ -3,12 +3,14 @@ mode: STRICT
 status: implemented_pending_release
 objective: >-
   让员工建档成为普通登录账号的唯一创建入口，使用工号作为员工账号的登录名，
-  移除用户管理的新增用户入口，并保持角色权限、任务执行、历史引用和系统管理员账号安全。
+  移除用户管理的新增用户入口，并保持角色权限、任务执行、历史引用和系统管理员账号安全；
+  同时修复审计发现的异步 ORM 序列化 500 和 WebSocket 鉴权边界问题。
 non_goals:
   - 合并 employees 与 users 表
   - 根据部门自动授予角色
   - 未经确认批量创建历史账号或重置现有密码
   - 修改订单、任务、工资、考勤和财务业务规则
+  - 修改上述模块的业务口径；本次只补齐提交后对象刷新和实时连接鉴权，不做数据迁移
 nodes:
   - id: P01
     name: 现状盘点与迁移干跑
@@ -49,4 +51,14 @@ nodes:
     name: 发布、备份、回滚和上线后检查
     acceptance: A08
     depends_on: [P07]
+    status: pending_release
+  - id: P09
+    name: 异步序列化与 WebSocket 鉴权修复
+    acceptance: A09
+    depends_on: [P07]
+    status: in_progress
+  - id: P10
+    name: 修复发布与生产关键路径复验
+    acceptance: A10
+    depends_on: [P09]
     status: pending_release

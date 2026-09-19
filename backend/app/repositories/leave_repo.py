@@ -37,6 +37,7 @@ class LeaveRequestRepository:
             if v is not None:
                 setattr(l, k, v)
         await self.db.flush()
+        await self.db.refresh(l)
         return l
 
     async def delete(self, l):

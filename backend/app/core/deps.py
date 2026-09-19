@@ -10,6 +10,67 @@ from app.models.employee import Employee
 from app.utils.security import decode_access_token
 
 security_scheme = HTTPBearer(auto_error=False)
+WEBSOCKET_AUTH_SUBPROTOCOL = "adcraft-auth"
+
+
+def extract_websocket_token(websocket, query_token: str | None = None) -> tuple[str | None, str | None]:
+    """Read a WebSocket token without putting the preferred token in the URL.
+
+    ``Sec-WebSocket-Protocol`` is visible to the server during the handshake but
+    is not normally included in reverse-proxy access logs. The query-string
+    fallback keeps already deployed clients working during the frontend rollout;
+    the WebSocket Nginx location disables access logging for that compatibility
+    path.
+    """
+    protocol_header = websocket.headers.get("sec-websocket-protocol", "")
+    protocols = [item.strip() for item in protocol_header.split(",") if item.strip()]
+    if len(protocols) >= 2 and protocols[0] == WEBSOCKET_AUTH_SUBPROTOCOL:
+        return protocols[1], WEBSOCKET_AUTH_SUBPROTOCOL
+
+    token = query_token
+    if token is None:
+        token = websocket.query_params.get("token")
+    return token, None
+
+
+async def authenticate_websocket_token(db: AsyncSession, token: str | None) -> User | None:
+    """Apply the same account lifecycle checks to realtime connections as HTTP."""
+    if not token:
+        return None
+
+    try:
+        payload = decode_access_token(token)
+        user_id = UUID(payload["sub"])
+        token_version = int(payload.get("token_version", 1))
+    except (ValueError, KeyError, TypeError):
+        return None
+
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        return None
+
+    employee_result = await db.execute(
+        select(Employee)
+        .where(Employee.user_id == user.id)
+        .order_by(Employee.deleted_at.is_not(None), Employee.created_at.desc())
+        .limit(1)
+    )
+    employee = employee_result.scalar_one_or_none()
+    if employee is not None and (
+        employee.deleted_at is not None
+        or employee.employment_status != "active"
+        or employee.is_active is not True
+    ):
+        return None
+
+    if token_version < int(getattr(user, "token_version", 1)):
+        return None
+    if getattr(user, "must_change_password", False):
+        return None
+    return user
 
 
 async def get_current_user(

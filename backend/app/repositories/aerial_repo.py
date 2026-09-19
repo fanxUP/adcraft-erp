@@ -84,6 +84,7 @@ class AerialRepository:
     async def soft_delete_vehicle(self, obj: AerialVehicle) -> AerialVehicle:
         obj.deleted_at = datetime.now()
         await self.db.flush()
+        await self.db.refresh(obj)
         return obj
 
     # ── 人员 ──────────────────────────────────────────────────────────────
@@ -118,6 +119,7 @@ class AerialRepository:
     async def soft_delete_personnel(self, obj: AerialPersonnel) -> AerialPersonnel:
         obj.deleted_at = datetime.now()
         await self.db.flush()
+        await self.db.refresh(obj)
         return obj
 
     async def update_personnel(self, obj: AerialPersonnel, data: dict):

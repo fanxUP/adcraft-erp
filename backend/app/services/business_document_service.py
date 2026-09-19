@@ -291,6 +291,12 @@ class BusinessDocumentService:
         if updated.doc_type == "order":
             await self._sync_framework_contract_projects(updated)
 
+        # Re-query after flush: server-managed updated_at is expired by
+        # SQLAlchemy and implicit lazy reloads fail under AsyncSession with
+        # MissingGreenlet during response serialization.
+        updated = await self.repo.get_by_id(doc_id)
+        if not updated:
+            raise ValueError("单据不存在")
         return self._to_detail(updated)
 
     async def _sync_framework_contract_projects(self, doc) -> None:
@@ -983,6 +989,11 @@ class BusinessDocumentService:
             "contact_person": contact_person,
             "contact_phone": contact_phone,
         })
+        # The contact sync may flush the document. Reload all serializer fields
+        # before reading server-managed timestamps and relationships.
+        doc = await self.repo.get_by_id(doc_id)
+        if not doc:
+            raise ValueError("单据不存在")
         return self._to_detail(doc)
 
     # ═══════════════════════════════════════════

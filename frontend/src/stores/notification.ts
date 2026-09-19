@@ -30,10 +30,11 @@ export const useNotificationStore = defineStore('notification', () => {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const url = `${protocol}//${host}/ws/notifications?token=${token}`
+    const url = `${protocol}//${host}/ws/notifications`
 
     try {
-      const socket = new WebSocket(url)
+      // Keep JWT out of the URL so reverse-proxy access logs cannot capture it.
+      const socket = new WebSocket(url, ['adcraft-auth', token])
       ws.value = socket
 
       socket.onopen = () => {

@@ -44,6 +44,7 @@ class DepartmentRepository:
             if v is not None:
                 setattr(d, k, v)
         await self.db.flush()
+        await self.db.refresh(d)
         return d
 
     async def soft_delete(self, d):

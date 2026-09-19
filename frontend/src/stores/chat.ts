@@ -40,9 +40,10 @@ export const useChatStore = defineStore('chat', () => {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const url = `${protocol}//${host}/ws/chat?token=${token}`
+    const url = `${protocol}//${host}/ws/chat`
 
-    ws = new WebSocket(url)
+    // Keep JWT out of the URL so reverse-proxy access logs cannot capture it.
+    ws = new WebSocket(url, ['adcraft-auth', token])
 
     ws.onopen = () => {
       wsConnected.value = true

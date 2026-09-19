@@ -44,6 +44,7 @@ class SalaryRecordRepository:
             if v is not None:
                 setattr(s, k, v)
         await self.db.flush()
+        await self.db.refresh(s)
         return s
 
     async def delete(self, s):

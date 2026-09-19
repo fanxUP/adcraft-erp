@@ -10,7 +10,7 @@ class AttendanceRuleRepository:
     async def update(self, o, d):
         for k,v in d.items():
             if v is not None: setattr(o,k,v)
-        await self.db.flush(); return o
+        await self.db.flush(); await self.db.refresh(o); return o
     async def delete(self, o): await self.db.delete(o); await self.db.flush()
 
 class AttendanceRecordRepository:
