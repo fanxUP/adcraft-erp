@@ -315,7 +315,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
 
 # ── Roles referenced by the init-db.sh script ──────────────────────────────
 ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance", "resource_manager", "outsource_manager", "manager"]
-PERMISSION_SEED_VERSION = 3
+PERMISSION_SEED_VERSION = 4
 
 
 def builtin_role_permission_codes(role_name: str) -> list[str] | None:
@@ -328,6 +328,16 @@ def builtin_role_permission_codes(role_name: str) -> list[str] | None:
 def replace_role_permissions(role: Role, permissions: list[Permission]) -> None:
     """交给 ORM 统一计算关联表差异，避免手工清空后只补回新增权限。"""
     role.permissions = list(permissions)
+
+
+def merge_role_permissions(role: Role, permissions: list[Permission]) -> int:
+    """Add newly declared defaults while preserving existing custom grants."""
+    existing = list(getattr(role, "permissions", ()) or ())
+    existing_codes = {permission.code for permission in existing}
+    additions = [permission for permission in permissions if permission.code not in existing_codes]
+    if additions:
+        role.permissions = [*existing, *additions]
+    return len(additions)
 
 
 async def seed_permissions():
@@ -381,17 +391,16 @@ async def seed_permissions():
         else:
             print("✓ All permissions already exist.")
 
-        # 3. Initialize built-in roles once.  Existing role associations are
-        # intentionally preserved so a deployment cannot erase a custom
-        # combination.  Future default changes must use an explicit migration
-        # and a new seed version rather than silently overwriting roles.
+        # 3. Apply built-in defaults by version.  Existing role associations
+        # are intentionally preserved so a deployment cannot erase a custom
+        # combination; a new seed version only adds newly declared defaults.
         for role_name, role in existing_roles.items():
             codes = builtin_role_permission_codes(role_name) or []
             if getattr(role, "permission_seed_version", 0) < PERMISSION_SEED_VERSION:
                 target_perms = [existing_perms[c] for c in codes if c in existing_perms]
-                replace_role_permissions(role, target_perms)
+                added_count = merge_role_permissions(role, target_perms)
                 role.permission_seed_version = PERMISSION_SEED_VERSION
-                print(f"  → {role_name}: initialized {len(target_perms)} permissions")
+                print(f"  → {role_name}: added {added_count} default permissions; preserved existing grants")
             else:
                 print(f"  ↷ {role_name}: existing permission combination preserved ({len(role.permissions)} permissions)")
 

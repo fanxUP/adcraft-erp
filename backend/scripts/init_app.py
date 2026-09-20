@@ -117,7 +117,7 @@ async def init_app():
             PERMISSION_SEED_VERSION,
             ROLE_NAMES,
             builtin_role_permission_codes,
-            replace_role_permissions,
+            merge_role_permissions,
         )
 
         # Upsert permissions
@@ -156,9 +156,9 @@ async def init_app():
             codes = builtin_role_permission_codes(role_name)
             if getattr(role, "permission_seed_version", 0) < PERMISSION_SEED_VERSION:
                 target_perms = [existing_perms[c] for c in codes if c in existing_perms]
-                replace_role_permissions(role, target_perms)
+                added_count = merge_role_permissions(role, target_perms)
                 role.permission_seed_version = PERMISSION_SEED_VERSION
-                print(f"  → Initialized {role_name}: {len(target_perms)} permissions")
+                print(f"  → Updated {role_name}: added {added_count} default permissions; preserved existing grants")
             else:
                 print(f"  ↷ Existing {role_name} permission combination preserved ({len(role.permissions)} permissions)")
 

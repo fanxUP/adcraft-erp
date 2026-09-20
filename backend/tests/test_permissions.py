@@ -268,6 +268,23 @@ async def test_role_permission_refresh_replaces_the_complete_collection():
     ]
 
 
+async def test_role_permission_seed_refresh_adds_defaults_without_removing_custom_grants():
+    from scripts.seed_permissions import merge_role_permissions
+
+    role = MagicMock()
+    role.permissions = [_make_perm("custom:grant"), _make_perm("order:read")]
+    target = [_make_perm("order:read"), _make_perm("order:change_date")]
+
+    added = merge_role_permissions(role, target)
+
+    assert added == 1
+    assert [permission.code for permission in role.permissions] == [
+        "custom:grant",
+        "order:read",
+        "order:change_date",
+    ]
+
+
 async def test_sensitive_price_permissions_are_seeded_and_mapped_only_to_privileged_roles():
     from scripts.seed_permissions import ALL_PERMISSIONS, ROLE_PERMISSION_MAP
 
