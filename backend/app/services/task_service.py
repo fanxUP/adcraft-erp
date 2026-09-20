@@ -26,11 +26,14 @@ from app.models.vehicle import Vehicle  # noqa: F401  # register Attachment.vehi
 from app.core.permissions import (
     ORDER_ITEM_PRICE_FIELDS,
     PERM_DESIGN_TASK_CHANGE_STATUS,
+    PERM_DESIGN_TASK_UPDATE,
     PERM_INSTALLATION_TASK_CHANGE_STATUS,
+    PERM_INSTALLATION_TASK_UPDATE,
     PERM_ORDER_ITEM_VIEW_PRICE,
     PERM_ORDER_VIEW_PRICE,
     PERM_OUTSOURCE_TASK_READ,
     PERM_PRODUCTION_TASK_CHANGE_STATUS,
+    PERM_PRODUCTION_TASK_UPDATE,
     user_has_permission,
 )
 from app.repositories.task_repo import (
@@ -96,6 +99,16 @@ TASK_CHANGE_PERMISSION_BY_TYPE = {
     "design": PERM_DESIGN_TASK_CHANGE_STATUS,
     "production": PERM_PRODUCTION_TASK_CHANGE_STATUS,
     "installation": PERM_INSTALLATION_TASK_CHANGE_STATUS,
+}
+TASK_UPDATE_PERMISSION_BY_TYPE = {
+    "design": PERM_DESIGN_TASK_UPDATE,
+    "production": PERM_PRODUCTION_TASK_UPDATE,
+    "installation": PERM_INSTALLATION_TASK_UPDATE,
+}
+TASK_OBJECT_TYPE_BY_TYPE = {
+    "design": OBJ_DESIGN_TASK,
+    "production": OBJ_PRODUCTION_TASK,
+    "installation": OBJ_INSTALLATION_TASK,
 }
 
 DESIGN_IN_PROGRESS_STATUSES = {
@@ -431,6 +444,10 @@ TASK_COMPLETED_STATUSES = {
 
 TASK_TERMINAL_STATUSES = {
     task_type: statuses | {TASK_CANCELLED_STATUS, TASK_ROLLED_BACK_STATUS}
+    for task_type, statuses in TASK_COMPLETED_STATUSES.items()
+}
+TASK_HISTORICAL_BACKFILL_STATUSES = {
+    task_type: statuses | {TASK_ROLLED_BACK_STATUS}
     for task_type, statuses in TASK_COMPLETED_STATUSES.items()
 }
 
@@ -824,6 +841,80 @@ async def _validate_order_item_ids(
                     or f"订单明细当前处于{option['stage_label']}，不能关联此任务"
                 )
     return item_ids
+
+
+async def _validate_historical_order_item_ids(
+    db: AsyncSession,
+    document_id: UUID,
+    task_type: str,
+    task,
+    raw_item_ids,
+) -> list[UUID]:
+    """Validate an explicit backfill for a terminal, unscoped legacy task.
+
+    Historical whole-order tasks predate item-level links. Their current order
+    stage is not evidence that the old task was unrelated to the order item,
+    so this path deliberately validates ownership/lifecycle only. It is kept
+    separate from normal task updates so a terminal task can never be reopened
+    or have its aggregate state recalculated by accident.
+    """
+    if getattr(task, "status", None) not in TASK_HISTORICAL_BACKFILL_STATUSES.get(
+        task_type,
+        set(),
+    ):
+        raise ValueError("仅可为已结束的历史任务补录订单明细")
+    if _task_order_item_id(task) is not None:
+        raise ValueError("当前任务已有旧版订单明细关联，不能使用历史补录入口")
+    if getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS) == "empty_after_item_delete":
+        raise ValueError("当前任务已因订单明细删除而关闭，不能补录明细")
+    if await _linked_order_item_ids(db, task_type, task.id):
+        raise ValueError("当前任务已经关联订单明细，请刷新后再操作")
+    if not isinstance(raw_item_ids, (list, tuple)) or not raw_item_ids:
+        raise ValueError("请至少选择一条订单明细")
+
+    item_ids: list[UUID] = []
+    seen: set[UUID] = set()
+    for raw_item_id in raw_item_ids:
+        item_id = _coerce_uuid(raw_item_id)
+        if item_id is None:
+            raise ValueError("订单明细编号格式不正确")
+        if item_id in seen:
+            raise ValueError("订单明细不能重复")
+        seen.add(item_id)
+        item_ids.append(item_id)
+
+    for item_id in item_ids:
+        item = await db.get(BusinessDocumentItem, item_id)
+        if not item or item.document_id != document_id:
+            raise ValueError("订单明细不存在或不属于当前订单")
+        if getattr(item, "lifecycle_status", "active") != "active":
+            raise ValueError("已作废的订单明细不能补录到历史任务")
+    return item_ids
+
+
+async def _ensure_terminal_unlinked_task_uses_historical_link_path(
+    db: AsyncSession,
+    task_type: str,
+    task,
+    data: dict,
+) -> None:
+    """Keep generic task edits from reopening an unscoped terminal task."""
+    has_link_input = any(
+        key in data and data[key] not in (None, "", [])
+        for key in ("order_item_id", "order_item_ids")
+    )
+    if not has_link_input:
+        return
+    if getattr(task, "status", None) not in TASK_HISTORICAL_BACKFILL_STATUSES.get(
+        task_type,
+        set(),
+    ):
+        return
+    if _task_order_item_id(task) is not None:
+        return
+    if await _linked_order_item_ids(db, task_type, task.id):
+        return
+    raise ValueError("已结束的历史任务请使用“补录历史明细”入口，不能通过普通编辑重新关联")
 
 
 async def _validate_order_item_id(
@@ -1727,8 +1818,14 @@ async def _task_order_item_option_map(
     task_id: UUID | None = None,
     viewer: User | None = None,
     task_scope_status: str | None = None,
+    historical_backfill: bool = False,
 ) -> dict[UUID, dict]:
-    """Build the authoritative order-item option catalog for one task type."""
+    """Build the authoritative order-item option catalog for one task type.
+
+    ``historical_backfill`` is an explicit read-path mode for a completed,
+    unscoped legacy task. It makes active order details selectable for manual
+    historical mapping without changing the normal stage eligibility rules.
+    """
     if task_type not in TASK_TYPE_STAGES:
         raise ValueError("不支持的任务类型")
 
@@ -1767,6 +1864,10 @@ async def _task_order_item_option_map(
     can_change_stage = viewer is None or user_has_permission(
         viewer,
         TASK_CHANGE_PERMISSION_BY_TYPE[task_type],
+    )
+    can_backfill_historical = viewer is None or user_has_permission(
+        viewer,
+        TASK_UPDATE_PERMISSION_BY_TYPE[task_type],
     )
     current_employee_user_id: UUID | None = None
     if viewer is not None and not can_manage_items:
@@ -1863,38 +1964,45 @@ async def _task_order_item_option_map(
             else:
                 disabled_reason = "该明细当前不能继续操作"
         else:
-            can_select = can_change_stage and stage == expected_stage and not outsource["outsource_blocked"]
-            if (
-                can_select
-                and viewer is not None
-                and not can_manage_items
-                and current_employee_user_id is None
-            ):
-                can_select = False
-                disabled_reason = "当前账号未绑定在职员工，不能领取明细"
-            elif not can_change_stage:
-                disabled_reason = f"当前账号只能查看{TASK_TYPE_LABELS[task_type]}流程，不能变更状态"
-            elif outsource["outsource_blocked"] and can_view_outsource:
-                disabled_reason = (
-                    f"{outsource['outsource_status_label']}，完成后才能关联"
-                    f"{TASK_TYPE_LABELS[task_type]}任务"
-                )
-            elif outsource["outsource_blocked"]:
-                disabled_reason = (
-                    f"当前明细有未完成的前置事项，完成后才能关联"
-                    f"{TASK_TYPE_LABELS[task_type]}任务"
-                )
-            elif can_select:
-                disabled_reason = None
-            elif stage == "completed":
-                disabled_reason = "该明细已完成，不能再次关联任务"
-            elif stage == "not_ready":
-                disabled_reason = "当前进度无法确认，暂不可关联"
+            if historical_backfill:
+                can_select = can_backfill_historical
+                if can_select:
+                    disabled_reason = None
+                else:
+                    disabled_reason = "当前账号没有历史任务补录权限"
             else:
-                disabled_reason = (
-                    f"当前处于{ORDER_ITEM_STAGE_LABELS[stage]}，不能关联"
-                    f"{TASK_TYPE_LABELS[task_type]}任务"
-                )
+                can_select = can_change_stage and stage == expected_stage and not outsource["outsource_blocked"]
+                if (
+                    can_select
+                    and viewer is not None
+                    and not can_manage_items
+                    and current_employee_user_id is None
+                ):
+                    can_select = False
+                    disabled_reason = "当前账号未绑定在职员工，不能领取明细"
+                elif not can_change_stage:
+                    disabled_reason = f"当前账号只能查看{TASK_TYPE_LABELS[task_type]}流程，不能变更状态"
+                elif outsource["outsource_blocked"] and can_view_outsource:
+                    disabled_reason = (
+                        f"{outsource['outsource_status_label']}，完成后才能关联"
+                        f"{TASK_TYPE_LABELS[task_type]}任务"
+                    )
+                elif outsource["outsource_blocked"]:
+                    disabled_reason = (
+                        f"当前明细有未完成的前置事项，完成后才能关联"
+                        f"{TASK_TYPE_LABELS[task_type]}任务"
+                    )
+                elif can_select:
+                    disabled_reason = None
+                elif stage == "completed":
+                    disabled_reason = "该明细已完成，不能再次关联任务"
+                elif stage == "not_ready":
+                    disabled_reason = "当前进度无法确认，暂不可关联"
+                else:
+                    disabled_reason = (
+                        f"当前处于{ORDER_ITEM_STAGE_LABELS[stage]}，不能关联"
+                        f"{TASK_TYPE_LABELS[task_type]}任务"
+                    )
 
         can_view_item_price = viewer is not None and user_has_permission(
             viewer,
@@ -1991,6 +2099,14 @@ async def get_task_order_item_options(
     task = await get_visible_task(db, model, task_id, viewer)
     if not task:
         raise ValueError("任务不存在或当前账号无权查看")
+    historical_backfill = (
+        getattr(task, "status", None)
+        in TASK_HISTORICAL_BACKFILL_STATUSES.get(task_type, set())
+        and _task_order_item_id(task) is None
+        and getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS)
+        != "empty_after_item_delete"
+        and not await _linked_order_item_ids(db, task_type, task.id)
+    )
     options = await _task_order_item_option_map(
         db,
         task.document_id,
@@ -1998,8 +2114,113 @@ async def get_task_order_item_options(
         task_id=task_id,
         viewer=viewer,
         task_scope_status=getattr(task, "status", None),
+        historical_backfill=historical_backfill,
     )
     return list(options.values())
+
+
+async def _link_historical_task_items(
+    db: AsyncSession,
+    task_type: str,
+    task,
+    raw_item_ids,
+    *,
+    operated_by: UUID | None = None,
+    operated_by_name: str | None = None,
+) -> list[UUID]:
+    """Create terminal link snapshots for an explicitly mapped legacy task.
+
+    This function intentionally does not call ``_sync_task_order_item_links``:
+    that helper recalculates the aggregate task and would reopen a completed
+    task when a new item is added. Historical backfill only records the mapping
+    and leaves the original task execution state untouched.
+    """
+    item_ids = await _validate_historical_order_item_ids(
+        db,
+        task.document_id,
+        task_type,
+        task,
+        raw_item_ids,
+    )
+    existing_rows = await _task_order_item_link_rows(
+        db,
+        task_type,
+        task.id,
+        include_removed=True,
+    )
+    active_existing = [row for row in existing_rows if _task_link_is_active(row)]
+    if active_existing:
+        raise ValueError("当前任务已经关联订单明细，请刷新后再操作")
+    existing_by_item = {
+        item_id: row
+        for row in existing_rows
+        if (item_id := _coerce_uuid(getattr(row, "order_item_id", None))) is not None
+    }
+
+    status = getattr(task, "status", None)
+    progress = 100 if _is_completed_item_status(task_type, status) else max(
+        0,
+        min(100, int(getattr(task, "progress_pct", 0) or 0)),
+    )
+    completed_at = getattr(task, "completed_at", None) if _is_completed_item_status(task_type, status) else None
+    completed_at_log = (
+        completed_at.isoformat()
+        if hasattr(completed_at, "isoformat")
+        else completed_at
+    )
+    link_payload: list[dict] = []
+    for position, item_id in enumerate(item_ids):
+        existing = existing_by_item.get(item_id)
+        if existing is not None:
+            existing.link_status = ACTIVE_TASK_LINK_STATUS
+            existing.removed_at = None
+            existing.removed_by = None
+            existing.removed_reason = None
+            existing.position = position
+            existing.item_status = status
+            existing.item_progress_pct = progress
+            existing.item_completed_at = completed_at
+            continue
+        link_payload.append(
+            {
+                "task_type": task_type,
+                "task_id": task.id,
+                "order_item_id": item_id,
+                "link_status": ACTIVE_TASK_LINK_STATUS,
+                "assignee_user_id": None,
+                "position": position,
+                "item_status": status,
+                "item_progress_pct": progress,
+                "item_completed_at": completed_at,
+            }
+        )
+    if link_payload:
+        await db.execute(insert(TaskOrderItemLink.__table__), link_payload)
+    await db.flush()
+
+    await log_operation(
+        db,
+        operated_by,
+        operated_by_name,
+        TASK_OBJECT_TYPE_BY_TYPE[task_type],
+        task.id,
+        ACTION_UPDATE,
+        before_data={
+            "status": status,
+            "progress_pct": getattr(task, "progress_pct", 0),
+            "completed_at": completed_at_log,
+            "order_item_ids": [],
+        },
+        after_data={
+            "status": status,
+            "progress_pct": getattr(task, "progress_pct", 0),
+            "completed_at": completed_at_log,
+            "order_item_ids": [str(item_id) for item_id in item_ids],
+            "action": "historical_order_item_backfill",
+        },
+    )
+    setattr(task, "_linked_order_item_ids", item_ids)
+    return item_ids
 
 
 async def _sync_task_order_item_links(
@@ -3783,6 +4004,12 @@ class DesignTaskService:
         if not task:
             raise ValueError("设计任务不存在")
         _reject_legacy_task_assignee_input(data, "design", self.viewer)
+        await _ensure_terminal_unlinked_task_uses_historical_link_path(
+            self.db,
+            "design",
+            task,
+            data,
+        )
         if "assigned_to" in data:
             if not can_assign_task("design", self.viewer):
                 raise ValueError("当前账号没有任务分配权限，不能修改任务负责人")
@@ -3853,6 +4080,31 @@ class DesignTaskService:
                 content=f"您被分配了设计任务 {task.project_name}",
                 link=f"/design-tasks/{task.id}",
             )
+        await _refresh_task_for_response(self.db, task)
+        return await self._to_dict(task)
+
+    async def link_historical_items(
+        self,
+        task_id: UUID,
+        order_item_ids: list[str],
+        operated_by: UUID | None = None,
+    ) -> dict:
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
+        if not task:
+            raise ValueError("设计任务不存在")
+        await _link_historical_task_items(
+            self.db,
+            "design",
+            task,
+            order_item_ids,
+            operated_by=operated_by,
+            operated_by_name=(
+                getattr(self.viewer, "real_name", None)
+                or getattr(self.viewer, "username", None)
+                if self.viewer is not None
+                else None
+            ),
+        )
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
@@ -4143,6 +4395,12 @@ class ProductionTaskService:
         if not task:
             raise ValueError("制作任务不存在")
         _reject_legacy_task_assignee_input(data, "production", self.viewer)
+        await _ensure_terminal_unlinked_task_uses_historical_link_path(
+            self.db,
+            "production",
+            task,
+            data,
+        )
         if "assigned_to" in data:
             if not can_assign_task("production", self.viewer):
                 raise ValueError("当前账号没有任务分配权限，不能修改任务负责人")
@@ -4213,6 +4471,31 @@ class ProductionTaskService:
                 content=f"您被分配了制作任务 {task.project_name}",
                 link=f"/production-tasks/{task.id}",
             )
+        await _refresh_task_for_response(self.db, task)
+        return await self._to_dict(task)
+
+    async def link_historical_items(
+        self,
+        task_id: UUID,
+        order_item_ids: list[str],
+        operated_by: UUID | None = None,
+    ) -> dict:
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
+        if not task:
+            raise ValueError("制作任务不存在")
+        await _link_historical_task_items(
+            self.db,
+            "production",
+            task,
+            order_item_ids,
+            operated_by=operated_by,
+            operated_by_name=(
+                getattr(self.viewer, "real_name", None)
+                or getattr(self.viewer, "username", None)
+                if self.viewer is not None
+                else None
+            ),
+        )
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 
@@ -4535,6 +4818,12 @@ class InstallationTaskService:
         if not task:
             raise ValueError("安装任务不存在")
         _reject_legacy_task_assignee_input(data, "installation", self.viewer)
+        await _ensure_terminal_unlinked_task_uses_historical_link_path(
+            self.db,
+            "installation",
+            task,
+            data,
+        )
         if "assigned_to" in data:
             if not can_assign_task("installation", self.viewer):
                 raise ValueError("当前账号没有任务分配权限，不能修改任务负责人")
@@ -4605,6 +4894,31 @@ class InstallationTaskService:
                 content=f"您被分配了安装任务 {task.project_name}",
                 link=f"/installation-tasks/{task.id}",
             )
+        await _refresh_task_for_response(self.db, task)
+        return await self._to_dict(task)
+
+    async def link_historical_items(
+        self,
+        task_id: UUID,
+        order_item_ids: list[str],
+        operated_by: UUID | None = None,
+    ) -> dict:
+        task = await self.repo.get_by_id(task_id, viewer=self.viewer)
+        if not task:
+            raise ValueError("安装任务不存在")
+        await _link_historical_task_items(
+            self.db,
+            "installation",
+            task,
+            order_item_ids,
+            operated_by=operated_by,
+            operated_by_name=(
+                getattr(self.viewer, "real_name", None)
+                or getattr(self.viewer, "username", None)
+                if self.viewer is not None
+                else None
+            ),
+        )
         await _refresh_task_for_response(self.db, task)
         return await self._to_dict(task)
 

@@ -288,6 +288,12 @@ class TaskItemAssigneeUpdate(BaseModel):
     assignee_user_id: str | None = None
 
 
+class TaskHistoricalLinkRequest(BaseModel):
+    """Explicitly map active order details onto a completed legacy task."""
+
+    order_item_ids: list[str] = Field(min_length=1, max_length=100)
+
+
 class TaskStatusChange(BaseModel):
     to_status: str
     reason: str | None = None

@@ -74,6 +74,7 @@ export function getDesignTasks(params?: { page?: number; page_size?: number; sta
 export function getDesignTask(id: string) { return get<DesignTaskResponse>(`/design-tasks/${id}`) }
 export function createDesignTask(data: Omit<Partial<DesignTaskResponse>, 'id' | 'design_no' | 'created_at' | 'updated_at' | 'attachments'>) { return post<DesignTaskResponse>('/design-tasks/', data) }
 export function updateDesignTask(id: string, data: DesignTaskUpdateInput) { return put<DesignTaskResponse>(`/design-tasks/${id}`, data) }
+export function linkHistoricalDesignTaskItems(id: string, data: { order_item_ids: string[] }) { return post<DesignTaskResponse>(`/design-tasks/${id}/historical-order-item-links`, data) }
 export function assignDesignTask(id: string, assignedTo: string | null) { return put<DesignTaskResponse>(`/design-tasks/${id}/assignee`, { assigned_to: assignedTo }) }
 export function reassignDesignTaskItems(id: string, data: TaskItemAssigneeUpdateInput) { return put<DesignTaskResponse>(`/design-tasks/${id}/order-item-assignees`, data) }
 export function changeDesignTaskStatus(id: string, data: TaskStatusChangeInput) { return post<DesignTaskResponse>(`/design-tasks/${id}/change-status`, data) }
@@ -82,6 +83,7 @@ export function getProductionTasks(params?: { page?: number; page_size?: number;
 export function getProductionTask(id: string) { return get<ProductionTaskResponse>(`/production-tasks/${id}`) }
 export function createProductionTask(data: Omit<Partial<ProductionTaskResponse>, 'id' | 'production_no' | 'created_at' | 'updated_at' | 'attachments'>) { return post<ProductionTaskResponse>('/production-tasks/', data) }
 export function updateProductionTask(id: string, data: ProductionTaskUpdateInput) { return put<ProductionTaskResponse>(`/production-tasks/${id}`, data) }
+export function linkHistoricalProductionTaskItems(id: string, data: { order_item_ids: string[] }) { return post<ProductionTaskResponse>(`/production-tasks/${id}/historical-order-item-links`, data) }
 export function assignProductionTask(id: string, assignedTo: string | null) { return put<ProductionTaskResponse>(`/production-tasks/${id}/assignee`, { assigned_to: assignedTo }) }
 export function reassignProductionTaskItems(id: string, data: TaskItemAssigneeUpdateInput) { return put<ProductionTaskResponse>(`/production-tasks/${id}/order-item-assignees`, data) }
 export function changeProductionTaskStatus(id: string, data: TaskStatusChangeInput) { return post<ProductionTaskResponse>(`/production-tasks/${id}/change-status`, data) }
@@ -91,6 +93,7 @@ export function getInstallationTasks(params?: { page?: number; page_size?: numbe
 export function getInstallationTask(id: string) { return get<InstallationTaskResponse>(`/installation-tasks/${id}`) }
 export function createInstallationTask(data: Omit<Partial<InstallationTaskResponse>, 'id' | 'installation_no' | 'created_at' | 'updated_at' | 'attachments'>) { return post<InstallationTaskResponse>('/installation-tasks/', data) }
 export function updateInstallationTask(id: string, data: InstallationTaskUpdateInput) { return put<InstallationTaskResponse>(`/installation-tasks/${id}`, data) }
+export function linkHistoricalInstallationTaskItems(id: string, data: { order_item_ids: string[] }) { return post<InstallationTaskResponse>(`/installation-tasks/${id}/historical-order-item-links`, data) }
 export function assignInstallationTask(id: string, assignedTo: string | null) { return put<InstallationTaskResponse>(`/installation-tasks/${id}/assignee`, { assigned_to: assignedTo }) }
 export function reassignInstallationTaskItems(id: string, data: TaskItemAssigneeUpdateInput) { return put<InstallationTaskResponse>(`/installation-tasks/${id}/order-item-assignees`, data) }
 export function changeInstallationTaskStatus(id: string, data: TaskStatusChangeInput) { return post<InstallationTaskResponse>(`/installation-tasks/${id}/change-status`, data) }

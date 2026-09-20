@@ -29,6 +29,7 @@ from app.services.task_service import (
     _blocking_outsource_map,
     _ensure_task_order_item_links,
     _get_or_create_rollback_target_task,
+    _link_historical_task_items,
     _materialize_legacy_task_scope,
     _resolve_order_item_stage,
     _rollback_task_items,
@@ -38,6 +39,7 @@ from app.services.task_service import (
     _validate_order_item_id,
     _validate_order_item_ids,
     _refresh_task_aggregate,
+    get_task_order_item_options,
 )
 from app.services.task_history_service import task_history_snapshot
 from tests.conftest import make_mock_design_task, make_mock_installation_task
@@ -1424,3 +1426,139 @@ async def test_historical_task_can_be_manually_linked_to_multiple_items():
     assert task.order_item_id == ITEM_UUID
     assert result["order_item_ids"] == [ITEM_ID, SECOND_ITEM_ID]
     assert db.execute.await_count >= 2
+
+
+@pytest.mark.asyncio
+async def test_historical_backfill_keeps_terminal_task_state_and_marks_links_terminal():
+    db = AsyncMock()
+    task = make_mock_design_task(status="confirmed", progress_pct=100)
+    task.order_item_id = None
+    task.scope_status = "active"
+    completed_at = task.completed_at
+
+    with (
+        patch(
+            "app.services.task_service._validate_historical_order_item_ids",
+            new=AsyncMock(return_value=[ITEM_UUID, SECOND_ITEM_UUID]),
+        ),
+        patch(
+            "app.services.task_service._task_order_item_link_rows",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch("app.services.task_service.log_operation", new=AsyncMock()) as log_operation,
+    ):
+        await _link_historical_task_items(
+            db,
+            "design",
+            task,
+            [ITEM_ID, SECOND_ITEM_ID],
+            operated_by=UUID("11111111-1111-1111-1111-111111111111"),
+        )
+
+    insert_payload = db.execute.await_args.args[1]
+    assert [row["order_item_id"] for row in insert_payload] == [ITEM_UUID, SECOND_ITEM_UUID]
+    assert {row["item_status"] for row in insert_payload} == {"confirmed"}
+    assert {row["item_progress_pct"] for row in insert_payload} == {100}
+    assert {row["item_completed_at"] for row in insert_payload} == {completed_at}
+    assert task.status == "confirmed"
+    assert task.progress_pct == 100
+    assert task.completed_at == completed_at
+    log_operation.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_cannot_reopen_unscoped_completed_historical_task():
+    db = AsyncMock()
+    task = make_mock_design_task(status="confirmed", progress_pct=100)
+    task.order_item_id = None
+    service = DesignTaskService(db)
+    service.repo = MagicMock()
+    service.repo.get_by_id = AsyncMock(return_value=task)
+
+    with patch(
+        "app.services.task_service._linked_order_item_ids",
+        new=AsyncMock(return_value=[]),
+    ):
+        with pytest.raises(ValueError, match="补录历史明细"):
+            await service.update_task(task.id, {"order_item_ids": [ITEM_ID]})
+
+
+@pytest.mark.asyncio
+async def test_historical_backfill_options_allow_completed_order_details():
+    db = AsyncMock()
+    db.get = AsyncMock(
+        return_value=SimpleNamespace(doc_type="order", deleted_at=None, status="completed")
+    )
+
+    with (
+        patch(
+            "app.services.task_service._task_stage_states_by_item",
+            new=AsyncMock(
+                return_value=(
+                    {},
+                    {
+                        "designing": ["confirmed"],
+                        "in_production": ["completed"],
+                        "in_installation": ["completed"],
+                    },
+                )
+            ),
+        ),
+        patch(
+            "app.services.task_service._task_order_item_link_rows",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.task_service._blocking_outsource_map",
+            new=AsyncMock(return_value={}),
+        ),
+    ):
+        db.execute = AsyncMock(return_value=_mock_result([_mock_order_item()]))
+        normal = await _task_order_item_option_map(
+            db,
+            UUID(ORDER_ID),
+            "design",
+            task_id=UUID("22222222-2222-2222-2222-222222222222"),
+            task_scope_status="confirmed",
+        )
+        historical = await _task_order_item_option_map(
+            db,
+            UUID(ORDER_ID),
+            "design",
+            task_id=UUID("22222222-2222-2222-2222-222222222222"),
+            task_scope_status="confirmed",
+            historical_backfill=True,
+        )
+
+    assert normal[ITEM_UUID]["can_select"] is False
+    assert normal[ITEM_UUID]["disabled_reason"] == "该明细已完成，不能再次关联任务"
+    assert historical[ITEM_UUID]["can_select"] is True
+    assert historical[ITEM_UUID].get("disabled_reason") is None
+
+
+@pytest.mark.asyncio
+async def test_task_options_enable_historical_backfill_only_for_completed_unscoped_task():
+    db = AsyncMock()
+    task = make_mock_design_task(status="confirmed", progress_pct=100)
+    task.order_item_id = None
+    task.scope_status = "active"
+
+    with (
+        patch("app.services.task_service.get_visible_task", new=AsyncMock(return_value=task)),
+        patch(
+            "app.services.task_service._linked_order_item_ids",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.task_service._task_order_item_option_map",
+            new=AsyncMock(return_value={}),
+        ) as option_map,
+    ):
+        result = await get_task_order_item_options(
+            db,
+            "design",
+            task.id,
+        )
+
+    assert result == []
+    assert option_map.await_args.kwargs["historical_backfill"] is True

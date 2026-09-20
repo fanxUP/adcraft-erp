@@ -52,6 +52,7 @@ from app.schemas.task import (
     ProductionTaskUpdate,
     TaskAssigneeUpdate,
     TaskItemAssigneeUpdate,
+    TaskHistoricalLinkRequest,
     TaskItemRollbackRequest,
     TaskStatusChange,
     TaskType,
@@ -599,6 +600,22 @@ async def update_design_task(
     return success(task)
 
 
+@design_router.post("/{task_id}/historical-order-item-links")
+async def link_historical_design_task_items(
+    task_id: str,
+    data: TaskHistoricalLinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_DESIGN_TASK_UPDATE)),
+):
+    service = DesignTaskService(db, current_user)
+    task = await service.link_historical_items(
+        _ensure_uuid(task_id),
+        data.order_item_ids,
+        current_user.id,
+    )
+    return success(task)
+
+
 @design_router.put("/{task_id}/assignee")
 async def assign_design_task(
     task_id: str,
@@ -716,6 +733,22 @@ async def update_production_task(
 ):
     service = ProductionTaskService(db, current_user)
     task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
+    return success(task)
+
+
+@prod_router.post("/{task_id}/historical-order-item-links")
+async def link_historical_production_task_items(
+    task_id: str,
+    data: TaskHistoricalLinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_UPDATE)),
+):
+    service = ProductionTaskService(db, current_user)
+    task = await service.link_historical_items(
+        _ensure_uuid(task_id),
+        data.order_item_ids,
+        current_user.id,
+    )
     return success(task)
 
 
@@ -857,6 +890,22 @@ async def update_installation_task(
 ):
     service = InstallationTaskService(db, current_user)
     task = await service.update_task(_ensure_uuid(task_id), data.model_dump(exclude_unset=True), current_user.id)
+    return success(task)
+
+
+@inst_router.post("/{task_id}/historical-order-item-links")
+async def link_historical_installation_task_items(
+    task_id: str,
+    data: TaskHistoricalLinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_UPDATE)),
+):
+    service = InstallationTaskService(db, current_user)
+    task = await service.link_historical_items(
+        _ensure_uuid(task_id),
+        data.order_item_ids,
+        current_user.id,
+    )
     return success(task)
 
 

@@ -71,8 +71,8 @@
         </div>
       </div>
 
-      <div v-if="canManageTaskItems && items.length" class="selection-context-note">
-        <span>勾选仅用于批量改派，不用于变更状态。</span>
+      <div v-if="selectionEnabled && items.length" class="selection-context-note">
+        <span>{{ canBackfillHistoricalItems ? '勾选用于补录历史明细关联。' : '勾选仅用于批量改派，不用于变更状态。' }}</span>
         <span v-if="selectedItemIds.length">已选 {{ selectedItemIds.length }} 条</span>
       </div>
 
@@ -124,7 +124,7 @@
                 type="checkbox"
                 :value="item.id"
                 :disabled="changing || reassigning || !canSelect(item)"
-                :aria-label="`选择订单明细 ${item.item_name} 用于改派`"
+                :aria-label="`选择订单明细 ${item.item_name} ${canBackfillHistoricalItems ? '用于补录历史关联' : '用于改派'}`"
                 @click.stop
               />
             </span>
@@ -216,7 +216,7 @@
           当前订单没有可关联的有效明细。
         </div>
 
-        <div v-if="isHistoricalReadOnly" class="link-actions">
+        <div v-if="canBackfillHistoricalItems" class="link-actions">
           <el-button
             type="primary"
             plain
@@ -247,12 +247,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getTaskAssigneeOptions,
   getTaskOrderItemOptions,
+  linkHistoricalDesignTaskItems,
+  linkHistoricalInstallationTaskItems,
+  linkHistoricalProductionTaskItems,
   reassignDesignTaskItems,
   reassignInstallationTaskItems,
   reassignProductionTaskItems,
-  updateDesignTask,
-  updateInstallationTask,
-  updateProductionTask,
 } from '@/api/tasks'
 import type { TaskAssigneeOption, TaskItemAction, TaskOrderItemOption, TaskType } from '@/types/api'
 import { StatusTag } from '@/components/ui'
@@ -304,6 +304,11 @@ const terminalStatuses: Record<TaskType, string[]> = {
   production: ['completed', 'cancelled', 'rolled_back'],
   installation: ['completed', 'cancelled', 'rolled_back'],
 }
+const historicalBackfillStatuses: Record<TaskType, string[]> = {
+  design: ['confirmed', 'completed', 'rolled_back'],
+  production: ['completed', 'rolled_back'],
+  installation: ['completed', 'rolled_back'],
+}
 
 const canViewItemPrice = computed(() => authStore.hasPermission('order_item:view_price'))
 const canViewOutsourceTask = computed(() => authStore.hasPermission('outsource_task:read'))
@@ -316,7 +321,12 @@ const isHistoricalReadOnly = computed(() => {
   if (linkedItemIds.value.length) return false
   return terminalStatuses[props.taskType]?.includes(props.currentStatus) ?? false
 })
-const selectionEnabled = computed(() => canManageTaskItems.value || isHistoricalReadOnly.value)
+const canBackfillHistoricalItems = computed(() => (
+  isHistoricalReadOnly.value
+  && historicalBackfillStatuses[props.taskType]?.includes(props.currentStatus)
+  && authStore.hasPermission(`${props.taskType}_task:update`)
+))
+const selectionEnabled = computed(() => canManageTaskItems.value || canBackfillHistoricalItems.value)
 
 function itemLabel(item: TaskOrderItemOption) {
   return item.material_process
@@ -474,10 +484,11 @@ async function loadAssigneeOptions() {
   }
 }
 
-async function updateTaskItems(itemIds: string[]) {
-  if (props.taskType === 'design') return updateDesignTask(props.taskId, { order_item_ids: itemIds })
-  if (props.taskType === 'production') return updateProductionTask(props.taskId, { order_item_ids: itemIds })
-  return updateInstallationTask(props.taskId, { order_item_ids: itemIds })
+async function linkHistoricalTaskItems(itemIds: string[]) {
+  const payload = { order_item_ids: itemIds }
+  if (props.taskType === 'design') return linkHistoricalDesignTaskItems(props.taskId, payload)
+  if (props.taskType === 'production') return linkHistoricalProductionTaskItems(props.taskId, payload)
+  return linkHistoricalInstallationTaskItems(props.taskId, payload)
 }
 
 async function handleAddHistoricalItems() {
@@ -497,9 +508,7 @@ async function handleAddHistoricalItems() {
 
   linking.value = true
   try {
-    const allLinkedIds = items.value.filter(item => item.is_linked).map(item => item.id)
-    const itemIds = Array.from(new Set([...allLinkedIds, ...selected.map(item => item.id)]))
-    await updateTaskItems(itemIds)
+    await linkHistoricalTaskItems(selected.map(item => item.id))
     ElMessage.success(`已添加 ${selected.length} 条明细到本任务`)
     emit('linked')
   } catch {
