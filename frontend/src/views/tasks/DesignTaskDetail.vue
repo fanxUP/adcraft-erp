@@ -22,6 +22,11 @@
         :department="task.department"
         :contact-name="task.contact_name"
         :contact-phone="task.contact_phone"
+        :review-required="task.review_required"
+        :review-reason="task.review_reason"
+        :can-acknowledge-review="authStore.hasPermission('design_task:change_status')"
+        :acknowledging-review="acknowledgingReview"
+        @acknowledge-review="handleAcknowledgeReview"
       />
 
       <TaskOrderItemLinkCard
@@ -71,7 +76,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getDesignTask, changeDesignTaskStatus, completeTaskItem } from '@/api/tasks'
+import { acknowledgeTaskOrderReview, getDesignTask, changeDesignTaskStatus, completeTaskItem } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DesignTaskResponse } from '@/types/api'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
@@ -89,6 +94,7 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const changing = ref(false)
 const deleting = ref(false)
+const acknowledgingReview = ref(false)
 const task = ref<DesignTaskResponse | null>(null)
 const DESIGN_WORKFLOW: Record<string, string[]> = {
   pending: ['designing'],
@@ -97,6 +103,18 @@ const DESIGN_WORKFLOW: Record<string, string[]> = {
   revision: ['designing', 'pending_review'],
   confirmed: [],
   cancelled: [],
+}
+
+async function handleAcknowledgeReview() {
+  if (!task.value) return
+  acknowledgingReview.value = true
+  try {
+    task.value = await acknowledgeTaskOrderReview('design', task.value.id) as DesignTaskResponse
+    ElMessage.success('订单变更已确认，任务可以继续完成')
+    await aiStore.notifyBusinessMutation()
+  } finally {
+    acknowledgingReview.value = false
+  }
 }
 
 async function handleWorkflowChange(to_status: string, orderItemIds: string[], reason = '') {

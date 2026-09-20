@@ -21,6 +21,8 @@ from app.schemas.task import (
 from app.services.task_service import (
     _attach_outsource_flags,
     _enrich_task_order,
+    task_order_review_reason,
+    task_order_review_required,
     add_task_contract_fields,
 )
 from app.services.task_schedule_service import enrich_task_dict_with_schedule_state
@@ -98,6 +100,8 @@ async def list_task_queue(
             item["stage"] = task_type
             item["task_no"] = item[no_field]
             item["_task_type"] = task_type
+            item["review_required"] = task_order_review_required(task)
+            item["review_reason"] = task_order_review_reason(task)
             item = await _enrich_task_order(db, item, viewer=viewer) if viewer else await _enrich_task_order(db, item)
             item = enrich_task_dict_with_schedule_state(item)
             item = add_task_contract_fields(item, task_type)

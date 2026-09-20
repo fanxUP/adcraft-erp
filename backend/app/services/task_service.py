@@ -18,6 +18,7 @@ from app.core.access_policy import AuthorizationPolicy
 from app.domain.presentation import make_action_capability, make_status_view
 from app.models.business_document import BusinessDocument, BusinessDocumentItem
 from app.models.customer import Customer  # noqa: F401  # register BusinessDocument.customer
+from app.models.task import DesignTask, InstallationTask, ProductionTask
 from app.models.task_item_status_log import TaskItemStatusLog
 from app.models.task_order_item_link import TaskOrderItemLink
 from app.models.user import User
@@ -55,6 +56,10 @@ from app.services.operation_log_service import (
     ACTION_CREATE,
     ACTION_STATUS_CHANGE,
     ACTION_UPDATE,
+    OBJ_DESIGN_TASK,
+    OBJ_INSTALLATION_TASK,
+    OBJ_PRODUCTION_TASK,
+    log_operation,
 )
 from app.services.task_history_service import record_task_event, task_history_snapshot
 from app.services.task_schedule_service import (
@@ -121,6 +126,216 @@ TASK_RELEASE_STATUSES = {
     "production": {"pending"},
     "installation": {"pending"},
 }
+
+# Order edits deliberately do not overwrite task execution snapshots.  The
+# existing scope_closed_reason text column is reused as a durable review note
+# so this safeguard does not require a schema migration.  The task remains in
+# its normal active scope; only completion is blocked until the review is
+# acknowledged.
+TASK_ORDER_REVIEW_PREFIX = "订单变更待复核："
+TASK_ORDER_REVIEW_FIELD_LABELS = {
+    "customer_id": "客户",
+    "customer_name": "客户",
+    "project_name": "项目名称",
+    "department": "部门",
+    "contact_person": "联系人",
+    "contact_phone": "联系电话",
+    "installation_address": "安装地址",
+    "product_id": "产品",
+    "material_id": "材料",
+    "process_id": "工艺",
+    "material_process": "材料/工艺组合",
+    "item_name": "明细名称",
+    "length": "长度",
+    "length_unit": "长度单位",
+    "width": "宽度",
+    "width_unit": "宽度单位",
+    "height": "高度",
+    "height_unit": "高度单位",
+    "quantity": "数量",
+    "unit": "计价单位",
+    "pieces": "片数",
+    "use_area": "面积计算方式",
+    "quantity_mode": "数量模式",
+}
+
+
+def task_order_review_required(task) -> bool:
+    """Return whether a task has an outstanding order-edit review."""
+    if getattr(task, "scope_status", ACTIVE_TASK_LINK_STATUS) == "empty_after_item_delete":
+        return False
+    reason = getattr(task, "scope_closed_reason", None)
+    return isinstance(reason, str) and reason.startswith(TASK_ORDER_REVIEW_PREFIX)
+
+
+def task_order_review_reason(task) -> str | None:
+    """Expose the human-readable part of the durable review note."""
+    if not task_order_review_required(task):
+        return None
+    reason = getattr(task, "scope_closed_reason", "")
+    return reason[len(TASK_ORDER_REVIEW_PREFIX):].lstrip()
+
+
+def _task_order_review_reason(
+    *,
+    changed_fields: Collection[str],
+    change_batch_id: str,
+    reason: str | None,
+) -> str:
+    labels = []
+    for field in changed_fields:
+        label = TASK_ORDER_REVIEW_FIELD_LABELS.get(field, field)
+        if label not in labels:
+            labels.append(label)
+    field_text = "、".join(labels) or "订单执行参数"
+    detail = f"批次 {change_batch_id}，需复核：{field_text}"
+    if reason and reason.strip():
+        detail = f"{detail}；变更原因：{reason.strip()}"
+    return f"{TASK_ORDER_REVIEW_PREFIX}{detail}"
+
+
+def _merge_task_order_review_reason(task, new_reason: str) -> None:
+    current = getattr(task, "scope_closed_reason", None)
+    if isinstance(current, str) and current.startswith(TASK_ORDER_REVIEW_PREFIX):
+        existing_detail = current[len(TASK_ORDER_REVIEW_PREFIX):].strip()
+        new_detail = new_reason[len(TASK_ORDER_REVIEW_PREFIX):].strip()
+        if new_detail and new_detail not in existing_detail:
+            task.scope_closed_reason = (
+                f"{TASK_ORDER_REVIEW_PREFIX}{existing_detail}；{new_detail}"
+            )
+        return
+    task.scope_closed_reason = new_reason
+
+
+async def mark_tasks_for_order_review(
+    db: AsyncSession,
+    document_id: UUID,
+    *,
+    order_item_id: UUID | None = None,
+    changed_fields: Collection[str],
+    change_batch_id: str,
+    reason: str | None = None,
+    task_types: Collection[str] | None = None,
+) -> list[dict]:
+    """Persist a review marker on tasks affected by an order edit.
+
+    The marker is intentionally task-level: a task may contain several order
+    items, and its copied execution fields cannot be safely rewritten from one
+    line without changing the meaning of the whole task card.  The active task
+    links, progress, assignees, and history remain untouched.
+    """
+    normalized_fields = list(dict.fromkeys(field for field in changed_fields if field))
+    if not normalized_fields:
+        return []
+
+    requested_types = set(task_types or TASK_TYPE_LABELS)
+    task_specs = (
+        ("design", DesignTask, "设计任务", "design_no"),
+        ("production", ProductionTask, "制作任务", "production_no"),
+        ("installation", InstallationTask, "安装任务", "installation_no"),
+    )
+    review_reason = _task_order_review_reason(
+        changed_fields=normalized_fields,
+        change_batch_id=change_batch_id,
+        reason=reason,
+    )
+    affected: list[dict] = []
+
+    for task_type, model, label, number_field in task_specs:
+        if task_type not in requested_types:
+            continue
+        conditions = [
+            model.document_id == document_id,
+            model.status != TASK_CANCELLED_STATUS,
+            or_(
+                model.scope_status != "empty_after_item_delete",
+                model.scope_status.is_(None),
+            ),
+        ]
+        if order_item_id is not None:
+            linked = select(TaskOrderItemLink.task_id).where(
+                TaskOrderItemLink.task_type == task_type,
+                TaskOrderItemLink.task_id == model.id,
+                TaskOrderItemLink.order_item_id == order_item_id,
+                _active_task_link_clause(),
+                or_(
+                    TaskOrderItemLink.item_status.is_(None),
+                    TaskOrderItemLink.item_status.not_in(NON_ACTIVE_ITEM_LINK_STATUSES),
+                ),
+            )
+            conditions.append(
+                or_(model.order_item_id == order_item_id, model.id.in_(linked))
+            )
+
+        result = await db.execute(select(model).where(*conditions))
+        for task in result.scalars().all():
+            _merge_task_order_review_reason(task, review_reason)
+            affected.append({
+                "task_type": task_type,
+                "module": f"{task_type}_tasks",
+                "label": label,
+                "record_id": str(task.id),
+                "record_no": getattr(task, number_field, None),
+                "status": getattr(task, "status", None),
+                "action": "task_review_required",
+                "changed_fields": normalized_fields,
+            })
+
+    if affected:
+        await db.flush()
+    return affected
+
+
+TASK_MODEL_BY_TYPE = {
+    "design": (DesignTask, OBJ_DESIGN_TASK),
+    "production": (ProductionTask, OBJ_PRODUCTION_TASK),
+    "installation": (InstallationTask, OBJ_INSTALLATION_TASK),
+}
+
+
+async def acknowledge_task_order_review(
+    db: AsyncSession,
+    task_type: str,
+    task_id: UUID,
+    *,
+    operated_by: UUID | None = None,
+    operated_by_name: str | None = None,
+    viewer: User | None = None,
+):
+    """Clear an order-edit review marker after an operator acknowledges it."""
+    task_spec = TASK_MODEL_BY_TYPE.get(task_type)
+    if task_spec is None:
+        raise ValueError(f"不支持的任务类型: {task_type}")
+    model, object_type = task_spec
+    task = await get_visible_task(db, model, task_id, viewer)
+    if task is None:
+        raise ValueError("任务不存在或当前账号无权查看")
+
+    previous_reason = task_order_review_reason(task)
+    if previous_reason is None:
+        return task
+
+    task.scope_closed_reason = None
+    await db.flush()
+    await log_operation(
+        db,
+        operated_by,
+        operated_by_name,
+        object_type,
+        task.id,
+        ACTION_UPDATE,
+        before_data={
+            "review_required": True,
+            "review_reason": previous_reason,
+        },
+        after_data={
+            "review_required": False,
+            "review_reason": None,
+            "action": "acknowledge_order_edit_review",
+        },
+    )
+    await db.flush()
+    return task
 
 
 def _active_task_link_clause():
@@ -2097,6 +2312,13 @@ async def _refresh_task_for_response(db: AsyncSession, task) -> None:
     await db.refresh(task, ["attachments"])
 
 
+def _add_task_order_review_fields(task, payload: dict) -> dict:
+    """Add the durable order-edit review state to task responses."""
+    payload["review_required"] = task_order_review_required(task)
+    payload["review_reason"] = task_order_review_reason(task)
+    return payload
+
+
 async def _prepare_task_create_data(
     db: AsyncSession,
     data: dict,
@@ -2713,7 +2935,8 @@ async def _refresh_task_aggregate(
 
     task.scope_status = ACTIVE_TASK_LINK_STATUS
     task.scope_closed_at = None
-    task.scope_closed_reason = None
+    if not task_order_review_required(task):
+        task.scope_closed_reason = None
     task.status = _aggregate_task_status(
         task_type,
         [status for status, _ in states.values()],
@@ -3124,6 +3347,8 @@ async def _apply_task_item_status_change(
 ) -> tuple[list[UUID], dict[UUID, tuple[str, int]]]:
     """Apply one status transition only to the checked item work units."""
     _ensure_task_stage_change_permission(task_type, viewer)
+    if _is_completed_item_status(task_type, to_status) and task_order_review_required(task):
+        raise ValueError("订单变更待复核，请先确认任务执行参数后再完成任务")
     if to_status == TASK_CANCELLED_STATUS:
         if task_type == "design":
             raise ValueError("设计明细不能单独取消，如需撤回请删除整张设计任务")
@@ -3462,6 +3687,7 @@ class DesignTaskService:
 
     async def _to_dict(self, task) -> dict:
         d = DesignTaskResponse.model_validate(task).model_dump(mode="json")
+        d = _add_task_order_review_fields(task, d)
         d["order_id"] = d["document_id"]  # backward-compat alias
         d["_task_type"] = "design"
         d = await _enrich_task_order(self.db, d, viewer=self.viewer) if self.viewer else await _enrich_task_order(self.db, d)
@@ -3821,6 +4047,7 @@ class ProductionTaskService:
 
     async def _to_dict(self, task) -> dict:
         d = ProductionTaskResponse.model_validate(task).model_dump(mode="json")
+        d = _add_task_order_review_fields(task, d)
         d["order_id"] = d["document_id"]  # backward-compat alias
         d["_task_type"] = "production"
         d = await _enrich_task_order(self.db, d, viewer=self.viewer) if self.viewer else await _enrich_task_order(self.db, d)
@@ -4212,6 +4439,7 @@ class InstallationTaskService:
 
     async def _to_dict(self, task) -> dict:
         d = InstallationTaskResponse.model_validate(task).model_dump(mode="json")
+        d = _add_task_order_review_fields(task, d)
         d["order_id"] = d["document_id"]  # backward-compat alias
         d["_task_type"] = "installation"
         d = await _enrich_task_order(self.db, d, viewer=self.viewer) if self.viewer else await _enrich_task_order(self.db, d)

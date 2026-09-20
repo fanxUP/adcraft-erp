@@ -17,10 +17,22 @@ def _coerce_task_scope_status(value: object) -> str:
     return "active"
 
 
+def _coerce_review_required(value: object) -> bool:
+    """Treat missing/legacy ORM attributes as the safe default."""
+    return value if isinstance(value, bool) else False
+
+
+def _coerce_review_reason(value: object) -> str | None:
+    """Avoid serializing dynamic legacy fixture attributes as strings."""
+    return value if isinstance(value, str) else None
+
+
 TaskScopeStatus = Annotated[
     Literal["active", "empty_after_item_delete"],
     BeforeValidator(_coerce_task_scope_status),
 ]
+TaskReviewRequired = Annotated[bool, BeforeValidator(_coerce_review_required)]
+TaskReviewReason = Annotated[str | None, BeforeValidator(_coerce_review_reason)]
 
 
 def _comparable_datetime(value: datetime) -> datetime:
@@ -94,6 +106,8 @@ class DesignTaskResponse(CoercedModel):
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
     scope_status: TaskScopeStatus = "active"
+    review_required: TaskReviewRequired = False
+    review_reason: TaskReviewReason = None
     planned_start_at: str | None = None
     planned_end_at: str | None = None
     is_overdue: bool = False
@@ -166,6 +180,8 @@ class ProductionTaskResponse(CoercedModel):
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
     scope_status: TaskScopeStatus = "active"
+    review_required: TaskReviewRequired = False
+    review_reason: TaskReviewReason = None
     planned_start_at: str | None = None
     planned_end_at: str | None = None
     is_overdue: bool = False
@@ -238,6 +254,8 @@ class InstallationTaskResponse(CoercedModel):
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
     scope_status: TaskScopeStatus = "active"
+    review_required: TaskReviewRequired = False
+    review_reason: TaskReviewReason = None
     planned_start_at: str | None = None
     planned_end_at: str | None = None
     is_overdue: bool = False
@@ -371,6 +389,8 @@ class TaskQueueItem(CoercedModel):
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
     scope_status: TaskScopeStatus = "active"
+    review_required: TaskReviewRequired = False
+    review_reason: TaskReviewReason = None
     total_amount: float | None = None
     status_view: StatusView | None = None
     capabilities: dict[str, ActionCapability] = Field(default_factory=dict)

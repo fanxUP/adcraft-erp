@@ -154,7 +154,7 @@
                 </div>
                 <template v-else>
                   {{ order.contact_phone || '-' }}
-                  <el-button v-if="order.status !== 'cancelled'" size="small" text type="primary" style="margin-left: 8px" @click="startContactEdit">编辑</el-button>
+                  <el-button v-if="canEditOrderData" size="small" text type="primary" style="margin-left: 8px" @click="startContactEdit">编辑</el-button>
                 </template>
               </el-descriptions-item>
               <el-descriptions-item label="总金额">¥ {{ order.total_amount?.toFixed(2) }}</el-descriptions-item>
@@ -169,10 +169,11 @@
             <template #header>
               <div class="card-header">
                 <span>成本与利润</span>
-                <div>
+                <div v-if="canEditOrderData">
                   <el-button size="small" @click="handleAutoCost" :loading="autoCostLoading">自动核算</el-button>
                   <el-button size="small" @click="$router.push(`/project-costs/${order.id}`)">登记成本</el-button>
                 </div>
+                <el-tag v-else type="info" size="small">当前状态已锁定</el-tag>
               </div>
             </template>
             <el-descriptions :column="3">
@@ -558,6 +559,20 @@ const contactSaving = ref(false)
 const contactDraft = reactive({ person: '', phone: '' })
 const itemEditability = ref<OrderItemEditabilityResponse | null>(null)
 const canEditItems = computed(() => itemEditability.value?.can_edit_items === true)
+const ORDER_DATA_MUTABLE_STATUSES = new Set([
+  'pending_confirm',
+  'confirmed',
+  'designing',
+  'in_production',
+  'in_installation',
+])
+const canEditOrderData = computed(() => {
+  const status = order.value?.status
+  if (!status) return false
+  return itemEditability.value?.editable_statuses?.length
+    ? itemEditability.value.editable_statuses.includes(status)
+    : ORDER_DATA_MUTABLE_STATUSES.has(status)
+})
 const canManageTaskScope = computed(() => authStore.hasPermission('order:task_assign'))
 const taskAssigneeOptions = ref<TaskAssigneeOption[]>([])
 const orderTaskAssigneeIds = ref<string[]>([])

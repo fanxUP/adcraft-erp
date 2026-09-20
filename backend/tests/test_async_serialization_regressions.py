@@ -54,6 +54,7 @@ async def test_order_contact_update_reloads_row_before_serialization():
     document = MagicMock()
     document.id = uuid4()
     document.doc_type = "order"
+    document.status = "confirmed"
     document.customer_id = None
     repo.get_by_id = AsyncMock(side_effect=[document, document])
 

@@ -38,6 +38,7 @@ from app.schemas.order import (
 from app.schemas.common import success, success_paginated, error
 from app.services.business_document_service import (
     BusinessDocumentService,
+    OrderDataMutationLocked,
     OrderItemMutationConflict,
 )
 from app.services.operation_log_service import log_operation, OBJ_ORDER, ACTION_STATUS_CHANGE, ACTION_DELETE
@@ -735,6 +736,8 @@ async def set_order_cost(
     try:
         order = await service.set_cost(UUID(order_id), data.cost_amount)
         return success(order)
+    except OrderDataMutationLocked as e:
+        return error(40001, str(e))
     except ValueError as e:
         return error(40401, str(e))
 
@@ -749,6 +752,8 @@ async def auto_calculate_cost(
     try:
         order = await service.auto_calculate_cost(UUID(order_id))
         return success(order)
+    except OrderDataMutationLocked as e:
+        return error(40001, str(e))
     except ValueError as e:
         return error(40401, str(e))
 
@@ -826,5 +831,7 @@ async def update_order_contact(
             UUID(order_id), data.contact_person, data.contact_phone
         )
         return success(order)
+    except OrderDataMutationLocked as e:
+        return error(40001, str(e))
     except ValueError as e:
         return error(40401, str(e))

@@ -42,8 +42,9 @@
 
     <!-- Actions -->
     <div style="display: flex; gap: 8px; margin: 16px 0">
-      <el-button type="danger" @click="openCreate">登记成本</el-button>
-      <el-button @click="openImport">导入Excel</el-button>
+      <el-button v-if="canMutateOrderCost" type="danger" @click="openCreate">登记成本</el-button>
+      <el-button v-if="canMutateOrderCost" @click="openImport">导入Excel</el-button>
+      <el-tag v-else-if="!isQuote && order" type="info">当前订单状态已锁定成本变更</el-tag>
     </div>
 
     <!-- Filters -->
@@ -73,7 +74,7 @@
     <!-- Cost table -->
     <div style="display: flex; gap: 8px; margin: 16px 0; align-items: center;">
       <el-button
-        v-if="authStore.isAdmin && selectedIds.length > 0"
+        v-if="canMutateOrderCost && authStore.isAdmin && selectedIds.length > 0"
         @click="handleBatchDelete" type="danger">
         批量删除（{{ selectedIds.length }}）
       </el-button>
@@ -156,9 +157,9 @@
       </el-table-column>
       <el-table-column label="操作" width="160" fixed="right">
         <template #default="{ row }">
-          <el-button text type="primary" size="small" @click="openEdit(row as ProjectCostResponse)">编辑</el-button>
+          <el-button v-if="canMutateOrderCost" text type="primary" size="small" @click="openEdit(row as ProjectCostResponse)">编辑</el-button>
           <el-button
-            v-if="authStore.isAdmin"
+            v-if="canMutateOrderCost && authStore.isAdmin"
             text
             type="danger"
             size="small"
@@ -533,6 +534,18 @@ type ProjectCostScopeTableRow = ProjectCostScopeOption & { historical: boolean }
 
 // Detect source type: order or quote
 const isQuote = computed(() => route.path.includes('/quote-costs/'))
+const ORDER_COST_MUTABLE_STATUSES = new Set([
+  'pending_confirm',
+  'confirmed',
+  'designing',
+  'in_production',
+  'in_installation',
+])
+const canMutateOrderCost = computed(() => {
+  if (isQuote.value) return true
+  const currentStatus = (order.value as OrderDetailResponse | null)?.status
+  return typeof currentStatus === 'string' && ORDER_COST_MUTABLE_STATUSES.has(currentStatus)
+})
 const sourceId = computed(() => {
   if (isQuote.value) return route.params.quoteId as string
   return route.params.orderId as string
@@ -619,6 +632,10 @@ function onSelectionChange(rows: ProjectCostResponse[]) {
 }
 
 async function handleBatchDelete() {
+  if (!canMutateOrderCost.value) {
+    ElMessage.warning('当前订单状态已锁定成本变更')
+    return
+  }
   if (selectedIds.value.length === 0) return
   try {
     await ElMessageBox.confirm(`确定批量删除选中的 ${selectedIds.value.length} 条成本记录吗？`, '确认批量删除', {
@@ -646,6 +663,10 @@ function resetForm() {
 }
 
 function openCreate(orderItemId?: string) {
+  if (!canMutateOrderCost.value) {
+    ElMessage.warning('当前订单状态已锁定成本变更')
+    return
+  }
   resetForm()
   const requestedItemId = orderItemId || (typeof route.query.order_item_id === 'string' ? route.query.order_item_id : '')
   if (!isQuote.value && requestedItemId && activeOrderItemIds.value.has(requestedItemId)) {
@@ -655,6 +676,10 @@ function openCreate(orderItemId?: string) {
 }
 
 function openEdit(row: ProjectCostResponse) {
+  if (!canMutateOrderCost.value) {
+    ElMessage.warning('当前订单状态已锁定成本变更')
+    return
+  }
   isEditing.value = true
   editingId.value = row.id
   form.category = row.category
@@ -694,6 +719,10 @@ async function fetchSuppliers() {
 }
 
 function openImport() {
+  if (!canMutateOrderCost.value) {
+    ElMessage.warning('当前订单状态已锁定成本变更')
+    return
+  }
   showImport.value = true
   selectedFile.value = null
   importResult.value = null
@@ -854,6 +883,10 @@ async function fetchData() {
 }
 
 async function handleSave() {
+  if (!canMutateOrderCost.value) {
+    ElMessage.warning('当前订单状态已锁定成本变更')
+    return
+  }
   const category = form.category.trim()
   if (!category) {
     ElMessage.warning('请选择分类')
@@ -946,6 +979,10 @@ async function handleSave() {
 }
 
 async function handleDelete(row: ProjectCostResponse) {
+  if (!canMutateOrderCost.value) {
+    ElMessage.warning('当前订单状态已锁定成本变更')
+    return
+  }
   try {
     await ElMessageBox.confirm(`确定删除成本「${row.cost_no}」吗？`, '确认删除', {
       confirmButtonText: '删除',
@@ -970,6 +1007,10 @@ function goBack() {
 }
 
 async function handleImport() {
+  if (!canMutateOrderCost.value) {
+    ElMessage.warning('当前订单状态已锁定成本变更')
+    return
+  }
   if (!selectedFile.value) {
     ElMessage.warning('请选择Excel文件')
     return

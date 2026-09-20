@@ -110,6 +110,33 @@ ORDER_EDIT_HEADER_FIELDS = (
     "installation_address",
     "remark",
 )
+TASK_REVIEW_ITEM_FIELDS = frozenset({
+    "product_id",
+    "material_id",
+    "process_id",
+    "item_name",
+    "length",
+    "length_unit",
+    "width",
+    "width_unit",
+    "height",
+    "height_unit",
+    "quantity",
+    "unit",
+    "use_area",
+    "quantity_mode",
+    "pieces",
+    "material_process",
+})
+TASK_REVIEW_HEADER_FIELDS = frozenset({
+    "customer_id",
+    "customer_name",
+    "project_name",
+    "department",
+    "contact_person",
+    "contact_phone",
+    "installation_address",
+})
 MONEY_QUANTUM = Decimal("0.01")
 MUTATION_PREVIEW_TTL = timedelta(minutes=10)
 _PREVIEW_SIGNING_SECRET = (
@@ -119,6 +146,18 @@ _PREVIEW_SIGNING_SECRET = (
 
 class OrderItemMutationConflict(ValueError):
     """客户端提交的订单版本已经过期。"""
+
+
+class OrderDataMutationLocked(ValueError):
+    """订单已进入不可变更状态，独立数据接口也必须遵守状态锁。"""
+
+
+def assert_order_data_mutable(doc, label: str) -> None:
+    """Enforce the shared order data mutation boundary for every entry point."""
+    if doc.status not in ORDER_ITEM_MUTABLE_STATUSES:
+        raise OrderDataMutationLocked(
+            f"订单状态“{doc.status}”不允许修改{label}"
+        )
 
 
 def _business_today() -> date:
@@ -141,6 +180,10 @@ class BusinessDocumentService:
         self.quote_mode = quote_mode or ("regular" if doc_type == "quote" else None)
         self.viewer = viewer
         self.repo = BusinessDocumentRepository(db, doc_type, self.quote_mode)
+
+    @staticmethod
+    def _assert_order_data_mutable(doc, label: str) -> None:
+        assert_order_data_mutable(doc, label)
 
     # ═══════════════════════════════════════════
     # 查询
@@ -945,6 +988,7 @@ class BusinessDocumentService:
             raise ValueError("单据不存在")
         if doc.doc_type != "order":
             raise ValueError("仅订单可设置成本")
+        self._assert_order_data_mutable(doc, "成本")
         cost = Decimal(str(cost_amount))
         total = Decimal(str(doc.total_amount))
         gross_profit = total - cost
@@ -980,6 +1024,7 @@ class BusinessDocumentService:
             raise ValueError("单据不存在")
         if doc.doc_type != "order":
             raise ValueError("仅订单可设置联系人")
+        self._assert_order_data_mutable(doc, "联系人")
         contact_person = (contact_person or "").strip() or None
         contact_phone = (contact_phone or "").strip() or None
         doc.contact_person = contact_person
@@ -3292,6 +3337,7 @@ class BusinessDocumentService:
             "active_item_count": len(projected_items),
         }
         projected_item = None
+        changed_fields: list[str] = []
         if operation == "add":
             projected_item = projected_items[-1]
         elif current_item:
@@ -3299,6 +3345,15 @@ class BusinessDocumentService:
                 (item for item in projected_items if item["id"] == current_item.id),
                 self._item_snapshot(current_item),
             )
+            if operation == "update":
+                changed_fields = [
+                    field
+                    for field in ORDER_ITEM_FIELDS
+                    if not self._order_edit_values_equal(
+                        getattr(current_item, field, None),
+                        normalized.get(field) if normalized else None,
+                    )
+                ]
         if projected_item:
             projected_item["specification"] = _build_spec(projected_item)
 
@@ -3309,6 +3364,7 @@ class BusinessDocumentService:
             "after": self._json_safe(after_financials),
             "delta": float(after_total - before_total),
             "projected_item": self._json_safe(projected_item),
+            "changed_fields": changed_fields,
             "decision": decision["decision"],
             "associated_edit_enabled": settings.ORDER_ITEM_ASSOCIATED_EDIT_ENABLED,
             "requires_confirmation": decision["requires_confirmation"],
@@ -3662,6 +3718,7 @@ class BusinessDocumentService:
         change_batch_id: str,
         operated_by: UUID | None = None,
         reason: str | None = None,
+        changed_fields: list[str] | None = None,
     ) -> dict:
         """Apply only stable, reversible downstream refreshes.
 
@@ -3706,6 +3763,29 @@ class BusinessDocumentService:
             result["task_link_snapshots"] = task_refresh["task_link_snapshots"]
             result["scope_updates"] = task_refresh["scope_updates"]
             result["auto_refreshed"].extend(task_refresh["auto_refreshed"])
+
+        review_fields = [
+            field
+            for field in (changed_fields or [])
+            if field in TASK_REVIEW_ITEM_FIELDS
+        ]
+        if operation == "update" and review_fields:
+            from app.services.task_service import mark_tasks_for_order_review
+
+            task_reviews = await mark_tasks_for_order_review(
+                self.db,
+                doc.id,
+                order_item_id=item_id,
+                changed_fields=review_fields,
+                change_batch_id=change_batch_id,
+                reason=reason,
+            )
+            for entry in task_reviews:
+                append(
+                    "pending_review",
+                    entry,
+                    "订单关键执行字段已变更，任务保留进度和负责人，但完成前必须复核执行参数",
+                )
 
         acceptance_item_ids = [
             UUID(entry["record_id"])
@@ -4585,6 +4665,11 @@ class BusinessDocumentService:
                         change_batch_id=change_batch_id,
                         operated_by=operated_by,
                         reason=reason,
+                        changed_fields=(
+                            operation.get("changed_fields")
+                            if operation_type == "update"
+                            else None
+                        ),
                     )
                 )
 
@@ -4609,6 +4694,26 @@ class BusinessDocumentService:
                     change_batch_id=change_batch_id,
                     operated_by=operated_by,
                     reason=reason,
+                )
+            )
+
+        header_review_fields = [
+            diff["field"]
+            for diff in context["header_diff"]
+            if diff.get("field") in TASK_REVIEW_HEADER_FIELDS
+        ]
+        if header_review_fields:
+            refresh_results.append(
+                await self._apply_order_item_refresh(
+                    doc,
+                    operation="update",
+                    item_id=None,
+                    projected_item=None,
+                    relation_catalog=[],
+                    change_batch_id=change_batch_id,
+                    operated_by=operated_by,
+                    reason=reason,
+                    changed_fields=header_review_fields,
                 )
             )
 
@@ -4841,6 +4946,11 @@ class BusinessDocumentService:
             change_batch_id=change_batch_id,
             operated_by=operated_by,
             reason=reason,
+            changed_fields=(
+                context.get("changed_fields")
+                if operation == "update"
+                else None
+            ),
         )
         auto_recycled = bool(
             operation == "delete"

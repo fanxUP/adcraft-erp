@@ -139,6 +139,14 @@ export function getTaskOrderItemOptions(taskType: TaskType, taskId: string) {
   })
 }
 
+export function acknowledgeTaskOrderReview(taskType: TaskType, taskId: string) {
+  return post<DesignTaskResponse | ProductionTaskResponse | InstallationTaskResponse>(
+    '/task-queue/acknowledge-order-review',
+    undefined,
+    { params: { task_type: taskType, task_id: taskId } },
+  )
+}
+
 export function getTaskAssigneeOptions(taskType: TaskType) {
   return get<TaskAssigneeOption[]>('/task-queue/assignee-options', {
     params: { task_type: taskType },

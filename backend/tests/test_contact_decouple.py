@@ -99,6 +99,7 @@ async def test_update_order_contact_updates_and_syncs():
     doc = MagicMock()
     doc.id = uuid4()
     doc.doc_type = "order"
+    doc.status = "confirmed"
     doc.customer_id = uuid4()
 
     with patch("app.repositories.customer_repo.CustomerRepository") as repo_cls:
@@ -126,6 +127,7 @@ async def test_update_order_contact_clears_when_empty():
     doc = MagicMock()
     doc.id = uuid4()
     doc.doc_type = "order"
+    doc.status = "confirmed"
     doc.customer_id = uuid4()
     doc.contact_person = "张三"  # 原联系人，清空后应为 None
     doc.contact_phone = "13800138000"

@@ -22,6 +22,11 @@
         :department="task.department"
         :contact-name="task.contact_name"
         :contact-phone="task.contact_phone"
+        :review-required="task.review_required"
+        :review-reason="task.review_reason"
+        :can-acknowledge-review="authStore.hasPermission('installation_task:change_status')"
+        :acknowledging-review="acknowledgingReview"
+        @acknowledge-review="handleAcknowledgeReview"
         :extra-fields="installationOverviewFields"
       />
 
@@ -77,7 +82,7 @@ import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
 import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { TaskOverviewCard } from '@/components/ui'
-import { getInstallationTask, changeInstallationTaskStatus, rollbackInstallationTaskItems, completeTaskItem } from '@/api/tasks'
+import { acknowledgeTaskOrderReview, getInstallationTask, changeInstallationTaskStatus, rollbackInstallationTaskItems, completeTaskItem } from '@/api/tasks'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { InstallationTaskResponse } from '@/types/api'
 import { useAiAssistantStore } from '@/stores/aiAssistantStore'
@@ -91,11 +96,24 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const changing = ref(false)
 const deleting = ref(false)
+const acknowledgingReview = ref(false)
 const task = ref<InstallationTaskResponse | null>(null)
 const installationOverviewFields = computed(() => [
   { label: '安装地址', value: task.value?.address, wide: true },
   { label: '计划安装时间', value: formatDateTimeFull(task.value?.scheduled_at) },
 ])
+
+async function handleAcknowledgeReview() {
+  if (!task.value) return
+  acknowledgingReview.value = true
+  try {
+    task.value = await acknowledgeTaskOrderReview('installation', task.value.id) as InstallationTaskResponse
+    ElMessage.success('订单变更已确认，任务可以继续完成')
+    await aiStore.notifyBusinessMutation()
+  } finally {
+    acknowledgingReview.value = false
+  }
+}
 const INST_WORKFLOW: Record<string, string[]> = {
   pending: ['assigned', 'in_progress'],
   assigned: ['in_progress', 'pending'],

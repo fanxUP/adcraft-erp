@@ -18,6 +18,7 @@ from app.schemas.payment import ProjectCostResponse
 from app.services.number_generator import generate_project_cost_no
 from app.services.payable_service import PayableService, validate_payable_amount
 from app.services.supplier_service import SupplierService
+from app.services.business_document_service import assert_order_data_mutable
 
 
 _MONEY_QUANTUM = Decimal("0.01")
@@ -48,6 +49,18 @@ class ProjectCostService:
         self.db = db
         self.repo = ProjectCostRepository(db)
         self.attachment_repo = AttachmentRepository(db)
+
+    async def _assert_cost_document_mutable(self, cost: ProjectCost) -> BusinessDocument | None:
+        """Apply the order data lock to every financial-record mutation."""
+        document = getattr(cost, "document", None)
+        if document is None and getattr(cost, "document_id", None):
+            result = await self.db.execute(
+                select(BusinessDocument).where(BusinessDocument.id == cost.document_id)
+            )
+            document = result.scalar_one_or_none()
+        if document is not None and document.doc_type == "order":
+            assert_order_data_mutable(document, "成本")
+        return document
 
     async def _sync_document_cost(self, document_id: UUID | None) -> None:
         """Re-calculate order cost when the associated document is an order."""
@@ -276,6 +289,8 @@ class ProjectCostService:
             doc = result.scalar_one_or_none()
             if not doc:
                 raise ValueError("业务单据不存在")
+            if doc.doc_type == "order":
+                assert_order_data_mutable(doc, "成本")
             customer_id_val = doc.customer_id
             project_name_val = doc.project_name
             doc_no_val = doc.doc_no
@@ -394,6 +409,7 @@ class ProjectCostService:
         c = await self.repo.get_by_id(cost_id)
         if not c:
             raise ValueError("项目成本记录不存在")
+        await self._assert_cost_document_mutable(c)
 
         normalized = dict(data)
         allow_null_fields: set[str] = set()
@@ -466,6 +482,7 @@ class ProjectCostService:
         c = await self.repo.get_by_id(cost_id)
         if not c:
             raise ValueError("项目成本记录不存在")
+        await self._assert_cost_document_mutable(c)
         debt_amount = Decimal(str(getattr(c, "debt_amount", 0) or 0))
         if debt_amount > 0:
             await PayableService(self.db).assert_source_can_be_deleted(
@@ -486,6 +503,7 @@ class ProjectCostService:
         )
         costs = list(result.scalars().all())
         for cost in costs:
+            await self._assert_cost_document_mutable(cost)
             debt_amount = Decimal(str(getattr(cost, "debt_amount", 0) or 0))
             if debt_amount > 0:
                 await PayableService(self.db).assert_source_can_be_deleted(

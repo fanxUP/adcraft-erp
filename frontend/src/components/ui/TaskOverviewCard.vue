@@ -8,6 +8,29 @@
     </template>
 
     <div class="task-overview-content">
+      <el-alert
+        v-if="reviewRequired"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="task-review-alert"
+      >
+        <template #title>订单变更待复核</template>
+        <div class="task-review-content">
+          <span>{{ reviewReason || '订单关键执行字段已变更，请先复核任务执行参数。' }}</span>
+          <el-button
+            v-if="canAcknowledgeReview"
+            size="small"
+            type="warning"
+            plain
+            :loading="acknowledgingReview"
+            @click="emit('acknowledge-review')"
+          >
+            确认已复核
+          </el-button>
+        </div>
+      </el-alert>
+
       <div class="task-overview-identity">
         <span class="task-overview-label">任务编号</span>
         <span class="task-overview-value task-overview-number">{{ display(taskNo) }}</span>
@@ -100,6 +123,10 @@ const props = withDefaults(defineProps<{
   department?: string | null
   contactName?: string | null
   contactPhone?: string | null
+  reviewRequired?: boolean
+  reviewReason?: string | null
+  canAcknowledgeReview?: boolean
+  acknowledgingReview?: boolean
   extraFields?: TaskOverviewField[]
 }>(), {
   progressPct: 0,
@@ -112,8 +139,16 @@ const props = withDefaults(defineProps<{
   department: null,
   contactName: null,
   contactPhone: null,
+  reviewRequired: false,
+  reviewReason: null,
+  canAcknowledgeReview: false,
+  acknowledgingReview: false,
   extraFields: () => [],
 })
+
+const emit = defineEmits<{
+  'acknowledge-review': []
+}>()
 
 const plannedTime = computed(() => {
   const start = formatDateTimeFull(props.plannedStartAt) || '-'
@@ -169,6 +204,18 @@ function display(value: string | number | null | undefined) {
   flex-direction: column;
   gap: 18px;
   min-width: 0;
+}
+
+.task-review-alert {
+  margin-bottom: 2px;
+}
+
+.task-review-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  line-height: 1.5;
 }
 
 .task-overview-identity {
@@ -301,6 +348,11 @@ function display(value: string | number | null | undefined) {
     flex-direction: column;
     align-items: stretch;
     gap: 16px;
+  }
+
+  .task-review-content {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .task-overview-plan-block {

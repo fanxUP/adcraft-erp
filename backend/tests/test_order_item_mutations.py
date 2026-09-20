@@ -12,7 +12,15 @@ from app.schemas.order import OrderItemCreate, OrderItemMutationPreview
 from app.models.task_order_item_link import TaskOrderItemLink
 from app.services.business_document_service import (
     BusinessDocumentService,
+    OrderDataMutationLocked,
     OrderItemMutationConflict,
+)
+from app.services.task_service import (
+    TASK_ORDER_REVIEW_PREFIX,
+    _apply_task_item_status_change,
+    mark_tasks_for_order_review,
+    task_order_review_required,
+    task_order_review_reason,
 )
 
 
@@ -849,3 +857,78 @@ def test_order_item_change_batch_and_reconciliation_routes_are_registered():
     assert "/api/v1/orders/{order_id}/items/change-batches" in paths
     assert "/api/v1/orders/{order_id}/items/change-batches/{change_batch_id}" in paths
     assert "/api/v1/orders/{order_id}/items/reconciliation" in paths
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["completed", "cancelled"])
+async def test_terminal_order_blocks_cost_and_contact_mutations(status):
+    db = MagicMock()
+    db.flush = AsyncMock()
+    db.refresh = AsyncMock()
+    service = BusinessDocumentService(db, doc_type="order")
+    order = make_order(status=status)
+    service.repo.get_by_id = AsyncMock(return_value=order)
+
+    with pytest.raises(OrderDataMutationLocked, match="不允许修改成本"):
+        await service.set_cost(order.id, 123)
+    with pytest.raises(OrderDataMutationLocked, match="不允许修改联系人"):
+        await service.update_order_contact(order.id, "新联系人", "13900000000")
+
+    db.flush.assert_not_awaited()
+    db.refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_order_change_marks_linked_task_for_review_without_resetting_execution_state():
+    db = MagicMock()
+    db.flush = AsyncMock()
+    task = SimpleNamespace(
+        id=uuid4(),
+        document_id=uuid4(),
+        status="in_progress",
+        progress_pct=60,
+        assigned_to=uuid4(),
+        scope_status="active",
+        scope_closed_reason=None,
+        production_no="P-REVIEW-0001",
+    )
+    db.execute = AsyncMock(return_value=FakeExecuteResult(scalar_rows=[task]))
+
+    rows = await mark_tasks_for_order_review(
+        db,
+        task.document_id,
+        order_item_id=uuid4(),
+        changed_fields=["quantity", "width"],
+        change_batch_id="batch-review-1",
+        reason="客户确认调整数量",
+        task_types={"production"},
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["action"] == "task_review_required"
+    assert task_order_review_required(task) is True
+    assert "数量" in task_order_review_reason(task)
+    assert "宽度" in task_order_review_reason(task)
+    assert "batch-review-1" in task_order_review_reason(task)
+    assert task.status == "in_progress"
+    assert task.progress_pct == 60
+    assert task.assigned_to is not None
+    db.flush.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_task_completion_is_blocked_until_order_change_review_is_acknowledged():
+    task = SimpleNamespace(
+        status="in_progress",
+        scope_status="active",
+        scope_closed_reason=f"{TASK_ORDER_REVIEW_PREFIX}批次 batch-review-2，需复核：数量",
+    )
+
+    with pytest.raises(ValueError, match="订单变更待复核"):
+        await _apply_task_item_status_change(
+            MagicMock(),
+            "production",
+            task,
+            "completed",
+            [str(uuid4())],
+        )

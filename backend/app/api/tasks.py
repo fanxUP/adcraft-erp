@@ -65,6 +65,7 @@ from app.services.task_service import (
     DesignTaskService,
     InstallationTaskService,
     ProductionTaskService,
+    acknowledge_task_order_review,
     get_task_order_item_options,
 )
 from app.services.order_task_assignment_service import list_task_assignee_options, get_visible_task
@@ -436,6 +437,44 @@ _TASK_CHANGE_STATUS_PERMISSIONS = {
     "production": PERM_PRODUCTION_TASK_CHANGE_STATUS,
     "installation": PERM_INSTALLATION_TASK_CHANGE_STATUS,
 }
+
+
+@queue_router.post("/acknowledge-order-review")
+async def acknowledge_order_review(
+    task_type: TaskType = Query(...),
+    task_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_any_permission(
+            PERM_DESIGN_TASK_CHANGE_STATUS,
+            PERM_PRODUCTION_TASK_CHANGE_STATUS,
+            PERM_INSTALLATION_TASK_CHANGE_STATUS,
+        )
+    ),
+):
+    """确认订单关键字段变更已复核，解除任务完成阻断。"""
+    required_permission = _TASK_CHANGE_STATUS_PERMISSIONS[task_type]
+    if not _user_has_permission(current_user, required_permission):
+        raise HTTPException(status_code=403, detail=f"当前账号没有{_TASK_LABELS[task_type]}任务状态变更权限")
+
+    service_class = {
+        "design": DesignTaskService,
+        "production": ProductionTaskService,
+        "installation": InstallationTaskService,
+    }[task_type]
+    try:
+        task = await acknowledge_task_order_review(
+            db,
+            task_type,
+            _ensure_uuid(task_id),
+            operated_by=current_user.id,
+            operated_by_name=current_user.real_name or current_user.username,
+            viewer=current_user,
+        )
+        return success(await service_class(db, current_user).get_task(task.id))
+    except ValueError as exc:
+        await db.rollback()
+        return {"code": 40001, "message": str(exc), "data": None}
 
 
 @queue_router.post("/complete-item")

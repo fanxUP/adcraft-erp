@@ -32,6 +32,7 @@ from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, Exp
 from app.schemas.common import success, success_paginated
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
 from app.services.project_cost_service import ProjectCostService
+from app.services.business_document_service import OrderDataMutationLocked
 from app.services.payable_service import PayableService
 from app.services.task_service import AttachmentService
 from app.services.operation_log_service import log_operation, OBJ_PAYMENT, OBJ_EXPENSE, OBJ_PROJECT_COST, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
@@ -749,6 +750,8 @@ async def create_project_cost(
         return {"code": 40001, "message": "订单ID不能为空", "data": None}
     try:
         cost = await service.create_cost(payload, current_user.id)
+    except OrderDataMutationLocked as e:
+        return {"code": 40001, "message": str(e), "data": None}
     except ValueError as e:
         return {"code": 40001, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
@@ -786,6 +789,8 @@ async def update_project_cost(
         # exclude_unset preserves an explicit null so the service can clear
         # an existing item association back to whole-order scope.
         cost = await service.update_cost(cid, data.model_dump(exclude_unset=True))
+    except OrderDataMutationLocked as e:
+        return {"code": 40001, "message": str(e), "data": None}
     except ValueError as e:
         return {"code": 40401, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
@@ -814,7 +819,10 @@ async def batch_delete_project_costs(
     ids = [UUID(oid.strip()) for oid in cost_ids.split(",") if oid.strip()]
     if not ids:
         return {"code": 40001, "message": "请提供要删除的成本ID", "data": None}
-    deleted = await service.batch_delete_costs(ids)
+    try:
+        deleted = await service.batch_delete_costs(ids)
+    except OrderDataMutationLocked as e:
+        return {"code": 40001, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_PROJECT_COST, None, ACTION_DELETE,
                         ip_address=request.client.host if request.client else None,
@@ -833,6 +841,8 @@ async def delete_project_cost(
     cid = UUID(cost_id)
     try:
         await service.delete_cost(cid)
+    except OrderDataMutationLocked as e:
+        return {"code": 40001, "message": str(e), "data": None}
     except ValueError as e:
         return {"code": 40401, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,

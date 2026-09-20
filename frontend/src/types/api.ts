@@ -645,6 +645,8 @@ export interface DesignTaskResponse {
   item_names?: string[]
   status: string
   progress_pct: number
+  review_required?: boolean
+  review_reason?: string | null
   status_view?: StatusView | null
   capabilities?: Record<string, ActionCapability>
   planned_start_at?: string | null
@@ -683,6 +685,8 @@ export interface ProductionTaskResponse {
   item_names?: string[]
   status: string
   progress_pct: number
+  review_required?: boolean
+  review_reason?: string | null
   status_view?: StatusView | null
   capabilities?: Record<string, ActionCapability>
   planned_start_at?: string | null
@@ -724,6 +728,8 @@ export interface InstallationTaskResponse {
   item_names?: string[]
   status: string
   progress_pct: number
+  review_required?: boolean
+  review_reason?: string | null
   status_view?: StatusView | null
   capabilities?: Record<string, ActionCapability>
   planned_start_at?: string | null
@@ -761,6 +767,8 @@ export interface TaskQueueItem {
   item_names?: string[]
   status: string
   progress_pct: number
+  review_required?: boolean
+  review_reason?: string | null
   total_amount?: number | null
   status_view?: StatusView | null
   capabilities?: Record<string, ActionCapability>

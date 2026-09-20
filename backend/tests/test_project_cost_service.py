@@ -11,6 +11,7 @@ from app.models.project_cost import ProjectCost, ProjectCostItemLink
 from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.repositories.project_cost_repo import ProjectCostRepository
+from app.services.business_document_service import OrderDataMutationLocked
 from app.services.project_cost_service import ProjectCostService, project_cost_payment_amount
 
 
@@ -147,14 +148,69 @@ def _scalars_result(values):
     return result
 
 
-def _order_doc(document_id):
+def _order_doc(document_id, status="confirmed"):
     document = MagicMock()
     document.id = document_id
     document.doc_type = "order"
+    document.status = status
     document.customer_id = uuid4()
     document.project_name = "测试订单"
     document.doc_no = "O-TEST"
     return document
+
+
+@pytest.mark.asyncio
+async def test_create_cost_rejects_terminal_order_status():
+    order_id = uuid4()
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=_scalar_result(_order_doc(order_id, "completed")))
+    service = ProjectCostService(db)
+    service.repo.create = AsyncMock()
+
+    with pytest.raises(OrderDataMutationLocked, match="不允许修改成本"):
+        await service.create_cost(
+            _cost_payload(order_id), uuid4(), skip_sync=True
+        )
+
+    service.repo.create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_cost_rejects_terminal_order_status():
+    order_id = uuid4()
+    cost = MagicMock()
+    cost.id = uuid4()
+    cost.document_id = order_id
+    cost.document = _order_doc(order_id, "cancelled")
+
+    service = ProjectCostService(MagicMock())
+    service.repo = MagicMock()
+    service.repo.get_by_id = AsyncMock(return_value=cost)
+    service.repo.update = AsyncMock()
+
+    with pytest.raises(OrderDataMutationLocked, match="不允许修改成本"):
+        await service.update_cost(cost.id, {"amount": 200})
+
+    service.repo.update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_delete_cost_rejects_terminal_order_status():
+    order_id = uuid4()
+    cost = MagicMock()
+    cost.id = uuid4()
+    cost.document_id = order_id
+    cost.document = _order_doc(order_id, "completed")
+
+    service = ProjectCostService(MagicMock())
+    service.repo = MagicMock()
+    service.repo.get_by_id = AsyncMock(return_value=cost)
+    service.repo.soft_delete = AsyncMock()
+
+    with pytest.raises(OrderDataMutationLocked, match="不允许修改成本"):
+        await service.delete_cost(cost.id)
+
+    service.repo.soft_delete.assert_not_awaited()
 
 
 def _cost_payload(order_id, item_id=None):
