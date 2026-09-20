@@ -12,7 +12,7 @@
 ## 2. 数据与初始化
 
 - 在 `business_documents` 增加可空 `order_date DATE`；报价记录保持 `NULL`。
-- 迁移时仅对 `doc_type = 'order'` 的历史记录按现有 `created_at` 的业务日回填，并增加订单日期索引与订单非空约束。
+- 迁移时仅对 `doc_type = 'order'` 的历史记录按现有 `created_at` 的业务日回填；线上 `created_at` 为 UTC 存储的无时区时间，回填先转换为 `Asia/Shanghai` 再取自然日，并增加订单日期索引与订单非空约束。
 - 常规报价转订单、CDR 报价转订单和直接创建订单都显式初始化北京时间业务日。
 - 订单号仍是创建/转单时生成的编号，修改业务日期不重新编号。
 

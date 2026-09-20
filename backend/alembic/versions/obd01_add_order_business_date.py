@@ -17,13 +17,18 @@ def upgrade() -> None:
         "business_documents",
         sa.Column("order_date", sa.Date(), nullable=True, comment="订单业务下单日期；created_at 为系统写入时间，不可替代"),
     )
-    # Keep the historical displayed day stable.  The production migration
-    # gate must verify the database timezone/storage convention before apply.
+    # business_documents.created_at is a timestamp without time zone populated
+    # by PostgreSQL now() while the production database session timezone is
+    # UTC.  Convert that stored UTC wall-clock value to the system business
+    # timezone before taking the date, so orders created between 00:00 and
+    # 07:59 Beijing time are not backfilled to the previous business day.
     op.execute(
         sa.text(
             """
             UPDATE business_documents
-            SET order_date = created_at::date
+            SET order_date = (
+                created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai'
+            )::date
             WHERE doc_type = 'order'
               AND order_date IS NULL
               AND created_at IS NOT NULL

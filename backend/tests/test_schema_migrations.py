@@ -198,7 +198,7 @@ def test_order_business_date_migration_backfills_orders_and_is_reversible():
     assert '"business_documents"' in source
     assert 'sa.Column("order_date", sa.Date(), nullable=True' in source
     assert "doc_type = 'order'" in source
-    assert "created_at::date" in source
+    assert "created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai'" in source
     assert 'op.create_index(' in source
     assert 'op.create_check_constraint(' in source
     assert 'op.drop_column("business_documents", "order_date")' in source
