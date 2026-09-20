@@ -142,6 +142,7 @@ export interface OrderListResponse {
   paid_amount: number
   unpaid_amount: number
   department?: string
+  order_date?: string
   created_at?: string
 }
 
@@ -514,6 +515,7 @@ export interface OrderDetailResponse {
   department?: string
   contact_person?: string
   contact_phone?: string
+  order_date?: string
   created_at?: string
   updated_at?: string
   source_quote_id?: string

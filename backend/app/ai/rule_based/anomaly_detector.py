@@ -16,6 +16,7 @@ from app.models.customer import Customer
 from app.models.task import InstallationTask
 from app.models.outsource import OutsourceTask
 from app.models.inventory import InventoryItem
+from app.services.business_document_service import order_business_datetime
 
 # Terminal states — orders in these states are considered "closed"
 ORDER_TERMINAL_STATES = {"completed", "delivered", "cancelled", "returned"}
@@ -198,7 +199,8 @@ class AnomalyDetector:
         orders = result.scalars().all()
 
         for order in orders:
-            if not order.created_at or float(order.unpaid_amount) <= 0:
+            order_datetime = order_business_datetime(order)
+            if not order_datetime or float(order.unpaid_amount) <= 0:
                 continue
 
             customer_result = await self.db.execute(
@@ -211,7 +213,7 @@ class AnomalyDetector:
             if not customer or customer.default_payment_days <= 0:
                 continue
 
-            days_since = (now - order.created_at).days
+            days_since = (now - order_datetime).days
             if days_since > customer.default_payment_days:
                 days_past = days_since - customer.default_payment_days
                 alerts.append({

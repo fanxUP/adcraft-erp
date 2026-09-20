@@ -257,9 +257,9 @@ async def test_doc_info_quote_source_falls_back_to_created_at():
 
 
 @pytest.mark.asyncio
-async def test_doc_info_order_source_uses_created_at():
-    """订单来源验收单 order_date 仍取单据创建时间（回归保护）。"""
-    from datetime import datetime
+async def test_doc_info_order_source_uses_business_order_date():
+    """订单来源验收单使用业务下单日期，不回退到系统创建时间。"""
+    from datetime import date, datetime
 
     form = MagicMock()
     doc = MagicMock()
@@ -270,6 +270,7 @@ async def test_doc_info_order_source_uses_created_at():
     doc.project_name = "测试项目"
     doc.department = None
     doc.quote_date = None
+    doc.order_date = date(2026, 6, 15)
     doc.created_at = datetime(2026, 7, 1, 9, 30, 0)
     form.document = doc
     form.contact_person = "张三"
@@ -278,5 +279,4 @@ async def test_doc_info_order_source_uses_created_at():
     info = AcceptanceService._doc_info(form)
 
     assert info["source_type"] == "订单"
-    assert info["order_date"].startswith("2026-07-01")
-
+    assert info["order_date"] == "2026-06-15"

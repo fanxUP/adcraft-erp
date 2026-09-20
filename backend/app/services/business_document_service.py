@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from decimal import Decimal
 from uuid import UUID, uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
@@ -15,6 +15,7 @@ from app.core.permissions import (
     PERM_FINANCE_VIEW_COST,
     PERM_ORDER_ITEM_VIEW_PRICE,
     PERM_ORDER_VIEW_PRICE,
+    PERM_SYSTEM_SUPER_ADMIN,
     user_has_permission,
 )
 from app.domain.workflows import ORDER_WORKFLOW, QUOTE_WORKFLOW, allowed_targets
@@ -70,6 +71,7 @@ ORDER_ITEM_MUTABLE_STATUSES = frozenset({
     "in_production",
     "in_installation",
 })
+ORDER_DATE_ELEVATED_STATUSES = frozenset({"completed", "cancelled"})
 ORDER_ITEM_FIELDS = (
     "product_id",
     "material_id",
@@ -165,6 +167,41 @@ def _business_today() -> date:
     return datetime.now(_BUSINESS_TZ).date()
 
 
+def order_business_date(doc) -> date | None:
+    """Return the order's business date, with a pre-migration compatibility fallback."""
+    value = getattr(doc, "order_date", None)
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    created_at = getattr(doc, "created_at", None)
+    if isinstance(created_at, datetime):
+        return created_at.date()
+    return None
+
+
+def order_business_datetime(doc) -> datetime | None:
+    """Return a datetime suitable for legacy DateTime range comparisons."""
+    value = order_business_date(doc)
+    if value is not None:
+        return datetime.combine(value, datetime.min.time())
+    created_at = getattr(doc, "created_at", None)
+    return created_at if isinstance(created_at, datetime) else None
+
+
+def _coerce_order_date(value: date | datetime | str) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError("订单下单日期格式无效，应为 YYYY-MM-DD") from exc
+    raise ValueError("订单下单日期格式无效，应为 YYYY-MM-DD")
+
+
 class BusinessDocumentService:
     """统一业务单据服务 — 按 doc_type 处理订单/报价的 CRUD、转换、状态流转。"""
 
@@ -240,6 +277,9 @@ class BusinessDocumentService:
             data.setdefault("status", "pending_confirm")
             data["doc_type"] = "order"
             data.setdefault("total_amount", Decimal("0"))
+            data["order_date"] = _coerce_order_date(
+                data.get("order_date") or _business_today()
+            )
 
         if data.get("customer_id"):
             data["customer_id"] = UUID(data["customer_id"])
@@ -274,6 +314,8 @@ class BusinessDocumentService:
             raise ValueError("仅草稿报价可以编辑，请先撤回为草稿")
 
         data = dict(data)
+        if doc.doc_type == "order" and ("order_date" in data or "created_at" in data):
+            raise ValueError("订单下单日期请使用独立的预检确认接口，系统创建时间不可修改")
         if doc.doc_type == "quote" and data.get("items") is not None:
             data["items"] = [
                 normalize_quote_item_data(item)
@@ -1207,6 +1249,7 @@ class BusinessDocumentService:
             unpaid_amount=quote.total_amount,
             cost_amount=0,
             gross_profit=quote.total_amount,
+            order_date=_business_today(),
             source_quote_id=quote.id,
             remark=quote.remark,
         )
@@ -2356,13 +2399,14 @@ class BusinessDocumentService:
                     relation_type="document",
                 )
 
-        if doc.created_at and doc.customer_id:
+        order_datetime = order_business_datetime(doc)
+        if order_datetime and doc.customer_id:
             statement_result = await self.db.execute(
                 select(CustomerStatement).where(
                     CustomerStatement.customer_id == doc.customer_id,
                     CustomerStatement.status == "confirmed",
-                    CustomerStatement.start_date <= doc.created_at,
-                    CustomerStatement.end_date >= doc.created_at,
+                    CustomerStatement.start_date <= order_datetime,
+                    CustomerStatement.end_date >= order_datetime,
                 )
             )
             for record in statement_result.scalars().all():
@@ -2635,15 +2679,16 @@ class BusinessDocumentService:
                 select(func.count(model.id)).where(model.related_order_id == doc.id)
             )
 
-        # 对账单是区间快照，没有订单明细关联表，只能识别可能覆盖该订单创建时间的
+        # 对账单是区间快照，没有订单明细关联表，只能识别可能覆盖该订单业务日期的
         # 已确认对账单，并在预检结果中标记为需要人工复核。
-        if doc.created_at:
+        order_datetime = order_business_datetime(doc)
+        if order_datetime:
             relations["confirmed_statements"] = await self._count(
                 select(func.count(CustomerStatement.id)).where(
                     CustomerStatement.customer_id == doc.customer_id,
                     CustomerStatement.status == "confirmed",
-                    CustomerStatement.start_date <= doc.created_at,
-                    CustomerStatement.end_date >= doc.created_at,
+                    CustomerStatement.start_date <= order_datetime,
+                    CustomerStatement.end_date >= order_datetime,
                 )
             )
         if doc.source_quote_id:
@@ -2723,6 +2768,258 @@ class BusinessDocumentService:
         actual = cls._normalize_datetime(actual_value)
         if actual != expected:
             raise OrderItemMutationConflict("订单已被其他人修改，请刷新订单后重试")
+
+    async def _build_order_date_change_context(self, doc, target_date: date) -> dict:
+        """Build the signed impact directory for a business-date change."""
+        target_date = _coerce_order_date(target_date)
+        if target_date > _business_today():
+            raise ValueError("订单下单日期不能晚于今天")
+
+        current_date = order_business_date(doc)
+        if current_date is None:
+            raise ValueError("订单缺少当前下单日期，请先完成数据迁移")
+        if target_date == current_date:
+            raise ValueError("新的下单日期与当前日期相同，无需修改")
+
+        from app.models.payment import CustomerStatement
+
+        before_datetime = order_business_datetime(doc)
+        after_datetime = datetime.combine(target_date, datetime.min.time())
+        statement_rows = []
+        if doc.customer_id:
+            coverage_conditions = [
+                (
+                    CustomerStatement.start_date <= boundary,
+                    CustomerStatement.end_date >= boundary,
+                )
+                for boundary in (before_datetime, after_datetime)
+                if boundary is not None
+            ]
+            if coverage_conditions:
+                result = await self.db.execute(
+                    select(CustomerStatement).where(
+                        CustomerStatement.customer_id == doc.customer_id,
+                        CustomerStatement.status == "confirmed",
+                        or_(*(and_(*condition) for condition in coverage_conditions)),
+                    )
+                )
+                statement_rows = list(result.scalars().all())
+
+        association_catalog = [
+            {
+                "module": "customer_statements",
+                "label": "客户对账单",
+                "relation_type": "date_range",
+                "record_id": str(statement.id),
+                "record_no": statement.statement_no,
+                "status": statement.status,
+                "action": "preserve_fact_and_review",
+                "risk": "high",
+                "note": "对账单是已确认区间快照，日期变更不会重写对账单，需要人工核对是否仍覆盖订单",
+            }
+            for statement in statement_rows
+        ]
+
+        paid_amount = self._to_decimal(getattr(doc, "paid_amount", 0))
+        cost_amount = self._to_decimal(getattr(doc, "cost_amount", 0))
+        risk_reasons: list[str] = []
+        if paid_amount > 0:
+            risk_reasons.append("订单已有收款，日期变化会影响账期和经营报表口径，但不会修改收款发生日")
+        if cost_amount > 0:
+            risk_reasons.append("订单已有成本，日期变化不会修改成本登记日或成本流水")
+        if statement_rows:
+            risk_reasons.append("订单命中已确认客户对账单，需人工核对对账区间")
+        if doc.status in ORDER_DATE_ELEVATED_STATUSES:
+            risk_reasons.append(f"订单已处于“{doc.status}”状态，历史日期修正仅允许超级管理员")
+
+        requires_elevated_permission = doc.status in ORDER_DATE_ELEVATED_STATUSES
+        has_elevated_permission = self.viewer is None or user_has_permission(
+            self.viewer,
+            PERM_SYSTEM_SUPER_ADMIN,
+        )
+        lock_reasons = []
+        if requires_elevated_permission and not has_elevated_permission:
+            lock_reasons.append({
+                "code": "ORDER_DATE_ELEVATED_PERMISSION_REQUIRED",
+                "message": "已完成或已取消订单的下单日期修正仅允许超级管理员执行",
+            })
+
+        requires_high_risk_ack = bool(risk_reasons)
+        decision = "BLOCK" if lock_reasons else (
+            "APPROVAL_AND_ADJUSTMENT" if requires_high_risk_ack else "CONFIRM_AND_REFRESH"
+        )
+        return {
+            "decision": decision,
+            "can_apply": not lock_reasons,
+            "requires_confirmation": True,
+            "requires_high_risk_ack": requires_high_risk_ack,
+            "requires_elevated_permission": requires_elevated_permission,
+            "lock_reasons": lock_reasons,
+            "risk_reasons": risk_reasons,
+            "confirmed_statement_count": len(statement_rows),
+            "association_catalog": association_catalog,
+            "before_order_date": current_date.isoformat(),
+            "after_order_date": target_date.isoformat(),
+            "system_created_at": (
+                doc.created_at.isoformat()
+                if isinstance(getattr(doc, "created_at", None), datetime)
+                else None
+            ),
+            "order_no": doc.doc_no,
+            "status": doc.status,
+        }
+
+    async def preview_order_date_change(
+        self,
+        doc_id: UUID,
+        target_date: date,
+        *,
+        expected_updated_at: str | None,
+        reason: str | None,
+        operated_by: UUID | None = None,
+    ) -> dict:
+        """Preview a date-only order mutation without changing any data."""
+        if not reason or not reason.strip():
+            raise ValueError("请填写订单下单日期变更原因")
+        doc = await self.repo.get_by_id(doc_id)
+        if not doc or doc.doc_type != "order":
+            raise ValueError("订单不存在")
+        self._assert_expected_updated_at(doc, expected_updated_at)
+        target_date = _coerce_order_date(target_date)
+        context = await self._build_order_date_change_context(doc, target_date)
+        preview_id = str(uuid4())
+        preview_expires_at = (datetime.now() + MUTATION_PREVIEW_TTL).isoformat()
+        data = {"order_date": target_date.isoformat()}
+        plan_hash = self._make_preview_hash(
+            doc_id=doc.id,
+            operation="change_order_date",
+            item_id=None,
+            data=data,
+            reason=reason,
+            expected_updated_at=expected_updated_at,
+            preview_id=preview_id,
+            preview_expires_at=preview_expires_at,
+            context=context,
+            operated_by=operated_by,
+        )
+        return {
+            "order_id": str(doc.id),
+            "order_no": doc.doc_no,
+            "status": doc.status,
+            "updated_at": self._version_value(doc),
+            "preview_id": preview_id,
+            "preview_expires_at": preview_expires_at,
+            "plan_hash": plan_hash,
+            "change_status": "PREVIEWED",
+            "verification_status": "PENDING",
+            **self._json_safe(context),
+        }
+
+    async def apply_order_date_change(
+        self,
+        doc_id: UUID,
+        target_date: date,
+        *,
+        expected_updated_at: str | None,
+        reason: str | None,
+        operated_by: UUID | None = None,
+        operated_by_name: str | None = None,
+        ip_address: str | None = None,
+        preview_id: str | None = None,
+        plan_hash: str | None = None,
+        preview_expires_at: str | None = None,
+        confirm_high_risk: bool = False,
+    ) -> dict:
+        """Apply a date-only order mutation after rechecking the signed preview."""
+        if not reason or not reason.strip():
+            raise ValueError("请填写订单下单日期变更原因")
+        target_date = _coerce_order_date(target_date)
+        doc = await self._get_locked_order(doc_id)
+        if not doc:
+            raise ValueError("订单不存在")
+
+        already_applied = await self._find_applied_mutation(doc.id, preview_id)
+        if already_applied:
+            updated = await self.repo.get_by_id(doc.id)
+            response = self._to_detail(updated)
+            response["change_batch"] = {
+                "change_batch_id": preview_id,
+                "status": already_applied.get("change_status", "VERIFIED"),
+                "verification_status": already_applied.get("verification_status", "VERIFIED"),
+                "idempotent_replay": True,
+            }
+            return response
+
+        self._assert_expected_updated_at(doc, expected_updated_at)
+        context = await self._build_order_date_change_context(doc, target_date)
+        if not context["can_apply"]:
+            messages = "；".join(item["message"] for item in context["lock_reasons"])
+            raise ValueError(f"订单日期修改暂不可提交：{messages}")
+        self._assert_preview_confirmation(
+            preview_id=preview_id,
+            plan_hash=plan_hash,
+            preview_expires_at=preview_expires_at,
+            doc_id=doc.id,
+            operation="change_order_date",
+            item_id=None,
+            data={"order_date": target_date.isoformat()},
+            reason=reason,
+            expected_updated_at=expected_updated_at,
+            operated_by=operated_by,
+            context=context,
+        )
+        if context["requires_high_risk_ack"] and not confirm_high_risk:
+            raise ValueError("高风险订单日期变更需要明确确认后才能提交")
+
+        before_snapshot = self._to_detail(doc)
+        doc.order_date = target_date
+        await self.db.flush()
+        await self.db.refresh(doc, attribute_names=["order_date", "updated_at"])
+        updated = await self.repo.get_by_id(doc.id)
+        after_snapshot = self._to_detail(updated or doc)
+        change_batch_id = preview_id or str(uuid4())
+        audit_snapshot = {
+            "change_batch_id": change_batch_id,
+            "operator_id": str(operated_by) if operated_by else None,
+            "change_status": "VERIFIED",
+            "status_history": ["PREVIEWED", "VERIFYING", "VERIFIED"],
+            "verification_status": "VERIFIED",
+            "change_type": "order_date_change",
+            "reason": reason.strip(),
+            "before": before_snapshot,
+            "after": after_snapshot,
+            "impact": self._json_safe(context),
+            "system_created_at": context["system_created_at"],
+        }
+        version_no = await self.repo.get_next_version_no(doc.id)
+        await self.repo.create_version(
+            doc.id,
+            version_no,
+            self._json_safe(audit_snapshot),
+            operated_by,
+        )
+        from app.services.operation_log_service import ACTION_UPDATE, OBJ_ORDER, log_operation
+
+        await log_operation(
+            self.db,
+            operated_by,
+            operated_by_name,
+            OBJ_ORDER,
+            doc.id,
+            ACTION_UPDATE,
+            ip_address=ip_address,
+            before_data=self._json_safe(before_snapshot),
+            after_data=self._json_safe(audit_snapshot),
+        )
+        await self.db.flush()
+        after_snapshot["change_batch"] = {
+            "change_batch_id": change_batch_id,
+            "status": "VERIFIED",
+            "status_history": ["PREVIEWED", "VERIFYING", "VERIFIED"],
+            "verification_status": "VERIFIED",
+            "idempotent_replay": False,
+        }
+        return after_snapshot
 
     async def _get_locked_order(self, doc_id: UUID):
         result = await self.db.execute(
@@ -3041,13 +3338,14 @@ class BusinessDocumentService:
             )
 
         confirmed_statement_count = 0
-        if doc.created_at and doc.customer_id:
+        order_datetime = order_business_datetime(doc)
+        if order_datetime and doc.customer_id:
             confirmed_statement_count = await self._count(
                 select(func.count(CustomerStatement.id)).where(
                     CustomerStatement.customer_id == doc.customer_id,
                     CustomerStatement.status == "confirmed",
-                    CustomerStatement.start_date <= doc.created_at,
-                    CustomerStatement.end_date >= doc.created_at,
+                    CustomerStatement.start_date <= order_datetime,
+                    CustomerStatement.end_date >= order_datetime,
                 )
             )
 
@@ -5194,6 +5492,7 @@ class BusinessDocumentService:
             base["quote_mode"] = d.quote_mode
         if d.doc_type == "order":
             base["order_no"] = d.doc_no
+            base["order_date"] = order_business_date(d).isoformat() if order_business_date(d) else None
             if can_view_order_price:
                 base["paid_amount"] = float(d.paid_amount) if d.paid_amount else 0
                 base["unpaid_amount"] = float(d.unpaid_amount) if d.unpaid_amount else 0
@@ -5224,6 +5523,7 @@ class BusinessDocumentService:
         if d.doc_type == "order":
             base.update({
                 "order_no": d.doc_no,
+                "order_date": order_business_date(d).isoformat() if order_business_date(d) else None,
             })
             if self.can_view_order_price:
                 base.update({
@@ -5340,6 +5640,7 @@ class BusinessDocumentService:
         if d.doc_type == "order":
             base.update({
                 "order_no": d.doc_no,
+                "order_date": order_business_date(d).isoformat() if order_business_date(d) else None,
                 "source_quote_id": str(d.source_quote_id) if d.source_quote_id else None,
                 "delivery_deadline": d.delivery_deadline.isoformat() if d.delivery_deadline else None,
                 "installation_address": d.installation_address,

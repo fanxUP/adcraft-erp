@@ -449,10 +449,13 @@ class StatementRepository:
                     BusinessDocument.doc_type == "order",
                     BusinessDocument.status != "cancelled",
                     BusinessDocument.deleted_at.is_(None),
-                    BusinessDocument.created_at >= start,
-                    BusinessDocument.created_at <= end,
+                    BusinessDocument.order_date >= start.date(),
+                    BusinessDocument.order_date <= end.date(),
                 )
-            ).order_by(BusinessDocument.created_at.asc())
+            ).order_by(
+                BusinessDocument.order_date.asc().nullslast(),
+                BusinessDocument.created_at.asc(),
+            )
         )
         return list(result.scalars().all())
 
@@ -474,10 +477,14 @@ class StatementRepository:
             select(BusinessDocument).where(
                 and_(
                     BusinessDocument.customer_id == customer_id,
+                    BusinessDocument.doc_type == "order",
                     BusinessDocument.deleted_at.is_(None),
                     BusinessDocument.unpaid_amount > 0,
                 )
-            ).order_by(BusinessDocument.created_at.asc())
+            ).order_by(
+                BusinessDocument.order_date.asc().nullslast(),
+                BusinessDocument.created_at.asc(),
+            )
         )
         return list(result.scalars().all())
 

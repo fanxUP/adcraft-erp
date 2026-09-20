@@ -11,7 +11,11 @@ from app.domain.workflows import ACCEPTANCE_WORKFLOW, allowed_targets
 from app.repositories.acceptance_repo import AcceptanceRepository
 from app.services.number_generator import generate_acceptance_no
 from app.schemas.acceptance import AcceptanceItemResponse, AcceptanceListResponse, AcceptanceDetailResponse, AcceptanceAttachmentResponse
-from app.services.business_document_service import _build_spec, BusinessDocumentService
+from app.services.business_document_service import (
+    _build_spec,
+    BusinessDocumentService,
+    order_business_date,
+)
 
 
 
@@ -37,6 +41,7 @@ class AcceptanceService:
         result = []
         for d in items:
             item = BusinessDocumentService._to_ref(d)
+            item["order_date"] = order_business_date(d).isoformat() if order_business_date(d) else None
             item["created_at"] = d.created_at.isoformat() if d.created_at else None
             result.append(item)
         return result
@@ -47,6 +52,7 @@ class AcceptanceService:
         result = []
         for d in items:
             item = BusinessDocumentService._to_ref(d)
+            item["order_date"] = d.quote_date.isoformat() if d.quote_date else None
             item["created_at"] = d.created_at.isoformat() if d.created_at else None
             result.append(item)
         return result
@@ -308,8 +314,8 @@ class AcceptanceService:
             "project_name": d.project_name,
             "department": d.department,
             "order_date": (
-                d.created_at.isoformat()
-                if (is_order and d.created_at)
+                order_business_date(d).isoformat()
+                if is_order and order_business_date(d)
                 else (d.quote_date.isoformat() if d.quote_date else (d.created_at.isoformat() if d.created_at else None))
             ),
         }

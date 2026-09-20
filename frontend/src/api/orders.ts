@@ -37,6 +37,60 @@ export function getOrder(id: string) {
   return get<OrderDetailResponse>(`/orders/${id}`)
 }
 
+export type OrderDateChangePreview = {
+  order_id: string
+  order_no: string
+  status: string
+  updated_at?: string | null
+  preview_id: string
+  preview_expires_at: string
+  plan_hash: string
+  change_status: string
+  verification_status: string
+  decision: string
+  can_apply: boolean
+  requires_confirmation: boolean
+  requires_high_risk_ack: boolean
+  requires_elevated_permission: boolean
+  lock_reasons: Array<{ code: string; message: string }>
+  risk_reasons: string[]
+  confirmed_statement_count: number
+  association_catalog: Array<{
+    module: string
+    label: string
+    relation_type: string
+    record_id: string
+    record_no?: string | null
+    status?: string | null
+    action: string
+    risk: string
+    note: string
+  }>
+  before_order_date: string
+  after_order_date: string
+  system_created_at?: string | null
+}
+
+export function previewOrderDateChange(id: string, data: {
+  order_date: string
+  reason: string
+  expected_updated_at: string
+}) {
+  return post<OrderDateChangePreview>(`/orders/${id}/order-date/preview`, data)
+}
+
+export function applyOrderDateChange(id: string, data: {
+  order_date: string
+  reason: string
+  expected_updated_at: string
+  preview_id: string
+  plan_hash: string
+  preview_expires_at: string
+  confirm_high_risk?: boolean
+}) {
+  return patch<OrderDetailResponse>(`/orders/${id}/order-date`, data)
+}
+
 export function getOrderAttachments(
   orderId: string,
   params?: { stage?: 'design' | 'production' | 'installation'; task_id?: string },

@@ -12,6 +12,7 @@ from app.core.permissions import (
     PERM_DESIGN_TASK_READ,
     PERM_DESIGN_TASK_UPDATE,
     PERM_ORDER_CHANGE_STATUS,
+    PERM_ORDER_CHANGE_DATE,
     PERM_ORDER_DELETE,
     PERM_ORDER_READ,
     PERM_ORDER_TASK_ASSIGN,
@@ -31,6 +32,7 @@ from app.schemas.order import (
     OrderItemDelete,
     OrderEditRequest,
     OrderItemMutationPreview,
+    OrderDateMutationBase,
     OrderItemUpdate,
     OrderStatusChange,
     OrderTaskAssigneesUpdate,
@@ -435,6 +437,67 @@ async def get_order_item_editability(
         return success(await service.get_order_item_editability(UUID(order_id)))
     except ValueError as e:
         return error(40401, str(e))
+
+
+@router.post("/{order_id}/order-date/preview")
+async def preview_order_date_change(
+    order_id: str,
+    data: OrderDateMutationBase,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_CHANGE_DATE)),
+):
+    """预检订单业务下单日期变更，不修改系统创建时间或任何关联事实。"""
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
+    try:
+        return success(
+            await service.preview_order_date_change(
+                UUID(order_id),
+                data.order_date,
+                expected_updated_at=data.expected_updated_at,
+                reason=data.reason,
+                operated_by=current_user.id,
+            )
+        )
+    except OrderItemMutationConflict as exc:
+        await db.rollback()
+        return JSONResponse(status_code=409, content=error(40901, str(exc)))
+    except ValueError as exc:
+        await db.rollback()
+        return error(40001, str(exc))
+
+
+@router.patch("/{order_id}/order-date")
+async def apply_order_date_change(
+    order_id: str,
+    data: OrderDateMutationBase,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_CHANGE_DATE)),
+):
+    """确认修改订单业务下单日期；系统 created_at 始终只读。"""
+    service = BusinessDocumentService(db, doc_type="order", viewer=current_user)
+    try:
+        return success(
+            await service.apply_order_date_change(
+                UUID(order_id),
+                data.order_date,
+                expected_updated_at=data.expected_updated_at,
+                reason=data.reason,
+                operated_by=current_user.id,
+                operated_by_name=current_user.real_name or current_user.username,
+                ip_address=request.client.host if request.client else None,
+                preview_id=data.preview_id,
+                plan_hash=data.plan_hash,
+                preview_expires_at=data.preview_expires_at,
+                confirm_high_risk=data.confirm_high_risk,
+            )
+        )
+    except OrderItemMutationConflict as exc:
+        await db.rollback()
+        return JSONResponse(status_code=409, content=error(40901, str(exc)))
+    except ValueError as exc:
+        await db.rollback()
+        return error(40001, str(exc))
 
 @router.post("/{order_id}/items/preview")
 async def preview_order_item_mutation(

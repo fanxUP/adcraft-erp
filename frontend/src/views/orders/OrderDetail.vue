@@ -142,6 +142,27 @@
              <el-descriptions-item label="状态">
                 <StatusTag :status="order.status_view || order.status" size="sm" />
               </el-descriptions-item>
+              <el-descriptions-item label="下单日期">
+                <div v-if="orderDateEditing" class="order-date-editor">
+                  <el-date-picker
+                    v-model="orderDateDraft"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    :disabled-date="disableFutureOrderDate"
+                    :disabled="orderDateSaving"
+                    style="width: 150px"
+                  />
+                  <el-button size="small" type="primary" :loading="orderDateSaving" @click="handleSaveOrderDate">保存</el-button>
+                  <el-button size="small" :disabled="orderDateSaving" @click="cancelOrderDateEdit">取消</el-button>
+                </div>
+                <template v-else>
+                  {{ formatDate(order.order_date) }}
+                  <el-button v-if="canChangeOrderDate" size="small" text type="primary" style="margin-left: 8px" @click="startOrderDateEdit">编辑</el-button>
+                </template>
+              </el-descriptions-item>
+              <el-descriptions-item label="系统创建时间">
+                {{ formatDateTimeFull(order.created_at) }}
+              </el-descriptions-item>
               <el-descriptions-item label="联系人">
                 <el-input v-if="contactEditing" v-model="contactDraft.person" size="small" style="width: 140px" placeholder="联系人" />
                 <template v-else>{{ order.contact_person || '-' }}</template>
@@ -503,7 +524,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatDateTimeFull } from '@/utils/datetime'
+import { formatDate, formatDateTimeFull } from '@/utils/datetime'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Printer } from '@element-plus/icons-vue'
 import OrderWorkflow from './OrderWorkflow.vue'
@@ -517,7 +538,9 @@ import {
   getOrderItemEditability,
   reopenCompletedOrder,
   autoCalculateCost,
+  applyOrderDateChange,
   updateOrderContact,
+  previewOrderDateChange,
   getOrderTaskAssigneeOptions,
   getOrderTaskAssignees,
   updateOrderTaskAssignees,
@@ -557,6 +580,9 @@ const autoCostLoading = ref(false)
 const contactEditing = ref(false)
 const contactSaving = ref(false)
 const contactDraft = reactive({ person: '', phone: '' })
+const orderDateEditing = ref(false)
+const orderDateSaving = ref(false)
+const orderDateDraft = ref('')
 const itemEditability = ref<OrderItemEditabilityResponse | null>(null)
 const canEditItems = computed(() => itemEditability.value?.can_edit_items === true)
 const ORDER_DATA_MUTABLE_STATUSES = new Set([
@@ -572,6 +598,12 @@ const canEditOrderData = computed(() => {
   return itemEditability.value?.editable_statuses?.length
     ? itemEditability.value.editable_statuses.includes(status)
     : ORDER_DATA_MUTABLE_STATUSES.has(status)
+})
+const canChangeOrderDate = computed(() => {
+  if (!authStore.can('order:change_date')) return false
+  const status = order.value?.status
+  return !['completed', 'cancelled'].includes(status || '')
+    || authStore.can('system:super_admin')
 })
 const canManageTaskScope = computed(() => authStore.hasPermission('order:task_assign'))
 const taskAssigneeOptions = ref<TaskAssigneeOption[]>([])
@@ -606,6 +638,97 @@ function startContactEdit() {
 function cancelContactEdit() {
   contactEditing.value = false
 }
+
+function disableFutureOrderDate(value: Date) {
+  const today = new Date()
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  return value > todayStart
+}
+
+function startOrderDateEdit() {
+  orderDateDraft.value = order.value?.order_date || ''
+  orderDateEditing.value = true
+}
+
+function cancelOrderDateEdit() {
+  if (orderDateSaving.value) return
+  orderDateEditing.value = false
+  orderDateDraft.value = ''
+}
+
+async function handleSaveOrderDate() {
+  if (!order.value || !canChangeOrderDate.value || !orderDateDraft.value) {
+    ElMessage.warning('请选择下单日期')
+    return
+  }
+  if (orderDateDraft.value === order.value.order_date) {
+    ElMessage.info('下单日期未发生变化')
+    return
+  }
+
+  let reason = ''
+  try {
+    const promptResult = await ElMessageBox.prompt(
+      '修改业务下单日期会影响订单经营日期、账期和报表口径；系统创建时间、订单号以及付款/成本/任务事实不会被修改。请输入原因。',
+      '修改下单日期',
+      {
+        confirmButtonText: '继续预检',
+        cancelButtonText: '取消',
+        inputPlaceholder: '例如：客户合同确认的实际下单日期为……',
+        inputValidator: (value) => value.trim() ? true : '请输入修改原因',
+      },
+    )
+    reason = promptResult.value.trim()
+    const preview = await previewOrderDateChange(order.value.id, {
+      order_date: orderDateDraft.value,
+      reason,
+      expected_updated_at: order.value.updated_at || '',
+    })
+    if (!preview.can_apply) {
+      const lockMessage = preview.lock_reasons.map(item => item.message).join('；') || '当前订单不允许修改下单日期'
+      ElMessage.error(lockMessage)
+      return
+    }
+
+    const impactLines = [
+      `业务日期：${preview.before_order_date} → ${preview.after_order_date}`,
+      `系统创建时间保持不变：${formatDateTimeFull(preview.system_created_at)}`,
+      '订单号保持不变；设计、制作、安装任务不重置；付款、成本、验收和附件发生时间不修改。',
+    ]
+    if (preview.risk_reasons.length) {
+      impactLines.push(`高风险提示：${preview.risk_reasons.join('；')}`)
+    }
+    await ElMessageBox.confirm(
+      impactLines.join('\n'),
+      '确认提交下单日期变更',
+      {
+        confirmButtonText: '确认修改',
+        cancelButtonText: '返回',
+        type: preview.requires_high_risk_ack ? 'warning' : 'info',
+        distinguishCancelAndClose: true,
+      },
+    )
+
+    orderDateSaving.value = true
+    order.value = await applyOrderDateChange(order.value.id, {
+      order_date: orderDateDraft.value,
+      reason,
+      expected_updated_at: order.value.updated_at || '',
+      preview_id: preview.preview_id,
+      plan_hash: preview.plan_hash,
+      preview_expires_at: preview.preview_expires_at,
+      confirm_high_risk: preview.requires_high_risk_ack,
+    })
+    orderDateEditing.value = false
+    ElMessage.success('订单下单日期已更新，系统创建时间保持不变')
+  } catch (error: unknown) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(error instanceof Error ? error.message : '下单日期保存失败')
+  } finally {
+    orderDateSaving.value = false
+  }
+}
+
 async function handleSaveContact() {
   contactSaving.value = true
   try {
@@ -1002,6 +1125,7 @@ async function handlePrintOrder() {
   html += '<div class="print-title">订单 ' + escapePrintText(o.order_no) + '</div>'
   html += '<div class="print-info">'
   html += '<div class="print-info-row"><span><strong>订单编号:</strong> ' + escapePrintText(o.order_no) + '</span><span><strong>项目名称:</strong> ' + escapePrintText(o.project_name) + '</span></div>'
+  html += '<div class="print-info-row"><span><strong>下单日期:</strong> ' + escapePrintText(o.order_date, '') + '</span><span><strong>系统创建时间:</strong> ' + escapePrintText(formatDateTimeFull(o.created_at), '') + '</span></div>'
   html += '<div class="print-info-row"><span><strong>联系人:</strong> ' + escapePrintText(o.contact_person) + '</span><span><strong>联系电话:</strong> ' + escapePrintText(o.contact_phone) + '</span></div>'
   html += '<div class="print-info-row"><span><strong>安装地址:</strong> ' + escapePrintText(o.installation_address) + '</span><span><strong>总金额:</strong> ¥' + (o.total_amount || 0).toFixed(2) + '</span></div>'
   html += '<div class="print-info-row"><span><strong>已收金额:</strong> ¥' + (o.paid_amount || 0).toFixed(2) + '</span><span><strong>未收金额:</strong> ¥' + (o.unpaid_amount || 0).toFixed(2) + '</span></div>'
@@ -1047,6 +1171,7 @@ onMounted(() => { fetchOrder(); fetchTasks(); loadOrderTaskAssignees() })
 <style scoped>
 .page { padding: 0; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
+.order-date-editor { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .task-scope-card { margin-top: 16px; }
 .task-scope-row { display: flex; align-items: center; gap: 12px; }

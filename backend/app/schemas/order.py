@@ -1,7 +1,7 @@
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import date, datetime
 from app.schemas.common import StatusView
 
 
@@ -18,6 +18,7 @@ class OrderListResponse(BaseModel):
     department: str | None = None
     contact_person: str | None = None
     contact_phone: str | None = None
+    order_date: date | None = None
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
@@ -95,6 +96,7 @@ class OrderDetailResponse(BaseModel):
     department: str | None = None
     contact_person: str | None = None
     contact_phone: str | None = None
+    order_date: date | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     items: list[OrderItemResponse] = []
@@ -210,6 +212,18 @@ class OrderItemMutationPreview(OrderItemMutationBase):
     operation: Literal["add", "update", "delete"]
     item_id: str | None = None
     item: dict[str, Any] | None = None
+
+
+class OrderDateMutationBase(BaseModel):
+    """审计、并发和预检凭证字段 for order business date changes."""
+
+    order_date: date
+    reason: str = Field(..., min_length=1, max_length=500)
+    expected_updated_at: str = Field(..., min_length=1)
+    preview_id: str | None = None
+    plan_hash: str | None = None
+    preview_expires_at: str | None = None
+    confirm_high_risk: bool = False
 
 
 class OrderEditHeader(BaseModel):

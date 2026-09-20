@@ -85,6 +85,7 @@ PERM_ORDER_CREATE = "order:create"
 PERM_ORDER_UPDATE = "order:update"
 PERM_ORDER_DELETE = "order:delete"
 PERM_ORDER_CHANGE_STATUS = "order:change_status"
+PERM_ORDER_CHANGE_DATE = "order:change_date"
 PERM_ORDER_VIEW_PRICE = "order:view_price"
 PERM_ORDER_ITEM_VIEW_PRICE = "order_item:view_price"
 # 订单任务分配只管理“哪些员工能看到订单任务”，不授予订单价格或订单编辑权限。

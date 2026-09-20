@@ -17,6 +17,7 @@ from app.services.payment_service import PaymentService, StatementService, Expen
 from app.schemas.payment import ExpenseCreate, PaymentCreate
 from app.models.contract import Contract
 from app.models.business_document import BusinessDocument
+from app.repositories.payment_repo import StatementRepository
 from tests.conftest import SAMPLE_USER_ID, SAMPLE_ORDER_ID, SAMPLE_CUSTOMER_ID
 
 SAMPLE_CONTRACT_ID = UUID("66666666-6666-6666-6666-666666666666")
@@ -100,6 +101,22 @@ def test_payment_create_can_be_contract_scoped_without_order():
 
     assert str(payload.contract_id) == "66666666-6666-6666-6666-666666666666"
     assert payload.order_id is None
+
+
+@pytest.mark.asyncio
+async def test_statement_order_range_uses_business_order_date():
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: [])))
+
+    await StatementRepository(db).get_documents_in_range(
+        SAMPLE_CUSTOMER_ID,
+        datetime(2026, 6, 1, 0, 0, 0),
+        datetime(2026, 6, 30, 23, 59, 59),
+    )
+
+    statement = db.execute.await_args.args[0]
+    assert "business_documents.order_date" in str(statement)
+    assert "business_documents.created_at" in str(statement)
 
 
 # ══════════════════════════════════════════════════════

@@ -200,7 +200,10 @@ class ReportService:
             select(BusinessDocument)
             .where(BusinessDocument.deleted_at.is_(None), BusinessDocument.doc_type == "order",
                    BusinessDocument.customer_id.in_(customer_ids))
-            .order_by(BusinessDocument.created_at.desc())
+            .order_by(
+                BusinessDocument.order_date.desc().nullslast(),
+                BusinessDocument.created_at.desc(),
+            )
         )
         all_orders = orders_result.scalars().all()
 
@@ -448,7 +451,7 @@ class ReportService:
     async def _sum_orders(self, start: datetime, end: datetime) -> float:
         result = await self.db.execute(
             select(func.coalesce(func.sum(BusinessDocument.total_amount), 0))
-            .where(and_(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.created_at >= start, BusinessDocument.created_at <= end))
+            .where(and_(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.order_date >= start.date(), BusinessDocument.order_date <= end.date()))
         )
         return result.scalar() or 0
 
@@ -462,7 +465,7 @@ class ReportService:
     async def _calc_month_unpaid(self, start: datetime, end: datetime) -> float:
         result = await self.db.execute(
             select(func.coalesce(func.sum(BusinessDocument.unpaid_amount), 0))
-            .where(and_(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.created_at >= start, BusinessDocument.created_at <= end))
+            .where(and_(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.order_date >= start.date(), BusinessDocument.order_date <= end.date()))
         )
         return result.scalar() or 0
 
@@ -548,8 +551,11 @@ class ReportService:
     async def _list_orders_in_range(self, start: datetime, end: datetime) -> list[BusinessDocument]:
         result = await self.db.execute(
             select(BusinessDocument).where(
-                and_(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.created_at >= start, BusinessDocument.created_at <= end)
-            ).order_by(BusinessDocument.created_at.desc())
+                and_(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.order_date >= start.date(), BusinessDocument.order_date <= end.date())
+            ).order_by(
+                BusinessDocument.order_date.desc().nullslast(),
+                BusinessDocument.created_at.desc(),
+            )
         )
         return list(result.scalars().all())
 

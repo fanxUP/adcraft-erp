@@ -205,7 +205,8 @@ async def test_dashboard_amounts_use_order_date_and_payment_date(service):
 
     await svc._sum_orders(start, end)
     order_statement = db.execute.await_args.args[0]
-    assert "business_documents.created_at" in str(order_statement)
+    assert "business_documents.order_date" in str(order_statement)
+    assert "business_documents.created_at" not in str(order_statement)
 
     await svc._sum_payments(start, end)
     payment_statement = db.execute.await_args.args[0]

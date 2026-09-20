@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from datetime import date, datetime
-from sqlalchemy import Date, DateTime, Integer, Numeric, String, Text, ForeignKey
+from sqlalchemy import CheckConstraint, Date, DateTime, Integer, Numeric, String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,12 @@ class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
     doc_type 切换 = 订单↔报价转换，document_id 永远不变。
     """
     __tablename__ = "business_documents"
+    __table_args__ = (
+        CheckConstraint(
+            "doc_type <> 'order' OR order_date IS NOT NULL",
+            name="ck_business_documents_order_date_for_orders",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
@@ -54,6 +60,11 @@ class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
     unpaid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     cost_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     gross_profit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    order_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="订单业务下单日期；created_at 为系统写入时间，不可替代",
+    )
     delivery_deadline: Mapped[str | None] = mapped_column(DateTime, nullable=True)
     installation_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_quote_id: Mapped[uuid.UUID | None] = mapped_column(

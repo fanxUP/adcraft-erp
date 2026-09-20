@@ -10,6 +10,7 @@ from app.core.permissions import (
     PERM_CUSTOMER_READ,
     PERM_FINANCE_VIEW_COST,
     PERM_ORDER_ITEM_VIEW_PRICE,
+    PERM_ORDER_CHANGE_DATE,
     PERM_ORDER_VIEW_PRICE,
     PERM_REPORT_VIEW_FINANCIAL,
     PERM_PRODUCT_READ,
@@ -194,6 +195,17 @@ async def test_role_mappings_only_reference_seeded_permissions():
     }
 
     assert mapped <= seeded
+
+
+async def test_order_business_date_permission_requires_order_read_and_is_seeded_for_sales():
+    from app.core.permission_catalog import get_permission_dependencies
+    from scripts.seed_permissions import ALL_PERMISSIONS, ROLE_PERMISSION_MAP
+
+    seeded = {permission["code"] for permission in ALL_PERMISSIONS}
+    assert PERM_ORDER_CHANGE_DATE in seeded
+    assert PERM_ORDER_CHANGE_DATE in ROLE_PERMISSION_MAP["admin"]
+    assert PERM_ORDER_CHANGE_DATE in ROLE_PERMISSION_MAP["sales"]
+    assert get_permission_dependencies(PERM_ORDER_CHANGE_DATE) == ("order:read",)
 
 
 async def test_resource_center_parent_permission_is_explicit_and_execution_roles_are_isolated():

@@ -185,6 +185,25 @@ def test_expense_payment_method_migration_adds_nullable_column():
     assert 'op.drop_column("expenses", "payment_method")' in source
 
 
+def test_order_business_date_migration_backfills_orders_and_is_reversible():
+    versions_dir = Path(__file__).parents[1] / "alembic" / "versions"
+    source = next(
+        path.read_text(encoding="utf-8")
+        for path in versions_dir.glob("obd01_*.py")
+    )
+
+    assert 'revision: str = "obd01_order_business_date"' in source
+    assert 'down_revision: Union[str, None] = "epm01_expense_payment_method"' in source
+    assert 'op.add_column(' in source
+    assert '"business_documents"' in source
+    assert 'sa.Column("order_date", sa.Date(), nullable=True' in source
+    assert "doc_type = 'order'" in source
+    assert "created_at::date" in source
+    assert 'op.create_index(' in source
+    assert 'op.create_check_constraint(' in source
+    assert 'op.drop_column("business_documents", "order_date")' in source
+
+
 def test_supplier_master_migration_is_additive_and_backfills_only_exact_unique_names():
     migration_files = list(
         (Path(__file__).resolve().parents[1] / "alembic" / "versions").glob("sup01_*.py")

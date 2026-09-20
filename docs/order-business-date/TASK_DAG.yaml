@@ -1,0 +1,71 @@
+version: 1
+name: order-business-date
+mode: STRICT
+status: verification
+objective: >-
+  为订单增加可审计、可受控修改的业务下单日期，保留系统创建时间不可变，
+  并将订单经营日期消费者切换到该业务字段。
+non_goals:
+  - direct_update_of_created_at
+  - order_number_regeneration
+  - payment_cost_task_attachment_event_time_rewrite
+  - bulk_historical_date_correction
+nodes:
+  - id: OBD-P01
+    title: 规范、权限与数据模型
+    status: completed
+    acceptance: A-OBD-01
+    depends_on: []
+  - id: OBD-P02
+    title: 迁移与历史数据回填
+    status: completed
+    acceptance: A-OBD-02
+    depends_on: [OBD-P01]
+  - id: OBD-P03
+    title: 预检、确认、并发与审计
+    status: completed
+    acceptance: A-OBD-03
+    depends_on: [OBD-P01]
+  - id: OBD-P04
+    title: 业务消费者切换
+    status: completed
+    acceptance: A-OBD-04
+    depends_on: [OBD-P01, OBD-P02]
+  - id: OBD-P05
+    title: 前端入口与影响提示
+    status: completed
+    acceptance: A-OBD-05
+    depends_on: [OBD-P03, OBD-P04]
+  - id: OBD-P06
+    title: 测试、门禁和交付
+    status: in_progress
+    acceptance: A-OBD-06
+    depends_on: [OBD-P02, OBD-P03, OBD-P04, OBD-P05]
+edges:
+  - from: OBD-P01
+    to: OBD-P02
+  - from: OBD-P01
+    to: OBD-P03
+  - from: OBD-P01
+    to: OBD-P04
+  - from: OBD-P02
+    to: OBD-P04
+  - from: OBD-P03
+    to: OBD-P05
+  - from: OBD-P04
+    to: OBD-P05
+  - from: OBD-P02
+    to: OBD-P06
+  - from: OBD-P03
+    to: OBD-P06
+  - from: OBD-P04
+    to: OBD-P06
+  - from: OBD-P05
+    to: OBD-P06
+backlog:
+  - id: OBD-B01
+    title: 批量历史订单日期校正审批流
+    priority: P1
+  - id: OBD-B02
+    title: 独立订单日期变更审计查询页
+    priority: P2

@@ -66,6 +66,7 @@ PERMISSION_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "installation_task:delete": ("installation_task:read",),
     # Order task visibility management is still an order operation.
     "order:task_assign": ("order:read",),
+    "order:change_date": ("order:read",),
     # Price fields must never be readable without the corresponding object.
     "order:view_price": ("order:read",),
     "order_item:view_price": ("order:read",),
@@ -153,6 +154,7 @@ SENSITIVE_PERMISSIONS = frozenset({
     "cdr_customer_agreement:manage",
     "order:view_price",
     "order_item:view_price",
+    "order:change_date",
     "catalog:view_price",
     "finance:view_cost",
     "report:view_financial",

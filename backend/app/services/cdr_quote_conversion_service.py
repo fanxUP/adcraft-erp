@@ -29,6 +29,7 @@ class CdrQuoteConversionService(CdrQuoteServiceBase):
             BusinessDocument, BusinessDocumentItem, BusinessDocumentStatusLog,
         )
         from app.services.number_generator import generate_order_no
+        from app.services.business_document_service import _business_today
         from app.services.cdr_quote_line_adapter import to_business_document_item_data
 
         # 1. 获取报价 header
@@ -99,6 +100,7 @@ class CdrQuoteConversionService(CdrQuoteServiceBase):
             unpaid_amount=total_amount,
             cost_amount=Decimal("0"),
             gross_profit=total_amount,
+            order_date=_business_today(),
             source_quote_id=quote_id,
         )
         self.db.add(order_doc)

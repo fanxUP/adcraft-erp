@@ -105,7 +105,14 @@ class BusinessDocumentRepository:
 
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
-        q = q.order_by(BusinessDocument.created_at.desc()).offset(skip).limit(limit)
+        if self.doc_type == "order":
+            q = q.order_by(
+                BusinessDocument.order_date.desc().nullslast(),
+                BusinessDocument.created_at.desc(),
+            )
+        else:
+            q = q.order_by(BusinessDocument.created_at.desc())
+        q = q.offset(skip).limit(limit)
         result = await self.db.execute(q)
         return list(result.scalars().all()), total
 

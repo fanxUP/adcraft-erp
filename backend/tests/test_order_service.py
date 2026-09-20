@@ -1,6 +1,6 @@
 """统一业务单据服务的订单路径回归测试。"""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -38,6 +38,7 @@ def make_order(**overrides):
         "delivery_deadline": None,
         "installation_address": None,
         "remark": None,
+        "order_date": date(2026, 6, 29),
         "created_at": None,
         "updated_at": None,
         "deleted_at": None,
@@ -477,6 +478,124 @@ async def test_get_missing_order(service):
     repository.get_by_id.return_value = None
 
     assert await order_service.get_by_id(SAMPLE_ORDER_ID) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["order_date", "created_at"])
+async def test_order_update_cannot_bypass_date_mutation_flow(service, field):
+    order_service, repository, _ = service
+    repository.get_by_id.return_value = make_order()
+
+    with pytest.raises(ValueError, match="独立的预检确认接口"):
+        await order_service.update(SAMPLE_ORDER_ID, {field: "2026-06-15"})
+
+    repository.update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_order_business_date_preview_keeps_system_created_at_separate(service):
+    order_service, repository, db = service
+    created_at = datetime(2026, 6, 29, 2, 15, 0)
+    updated_at = datetime(2026, 9, 20, 9, 0, 0)
+    order = make_order(
+        order_date=date(2026, 6, 29),
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+    repository.get_by_id.return_value = order
+    empty_result = MagicMock()
+    empty_result.scalars.return_value.all.return_value = []
+    db.execute = AsyncMock(return_value=empty_result)
+
+    preview = await order_service.preview_order_date_change(
+        SAMPLE_ORDER_ID,
+        date(2026, 6, 15),
+        expected_updated_at=updated_at.isoformat(),
+        reason="补录客户实际下单日期",
+        operated_by=uuid4(),
+    )
+
+    assert preview["before_order_date"] == "2026-06-29"
+    assert preview["after_order_date"] == "2026-06-15"
+    assert preview["system_created_at"] == created_at.isoformat()
+    assert preview["requires_high_risk_ack"] is False
+    assert preview["plan_hash"]
+    assert order.created_at == created_at
+
+
+@pytest.mark.asyncio
+async def test_order_business_date_apply_requires_ack_and_preserves_system_fact(service):
+    order_service, repository, db = service
+    created_at = datetime(2026, 6, 29, 2, 15, 0)
+    updated_at = datetime(2026, 9, 20, 9, 0, 0)
+    order = make_order(
+        order_date=date(2026, 6, 29),
+        created_at=created_at,
+        updated_at=updated_at,
+        paid_amount=Decimal("100"),
+        unpaid_amount=Decimal("900"),
+    )
+    repository.get_by_id.return_value = order
+    repository.get_next_version_no = AsyncMock(return_value=1)
+    repository.create_version = AsyncMock()
+    db.execute = AsyncMock(return_value=MagicMock())
+    db.flush = AsyncMock()
+    db.refresh = AsyncMock()
+    order_service._find_applied_mutation = AsyncMock(return_value=None)
+    order_service._to_detail = MagicMock(
+        side_effect=lambda document: {
+            "id": str(document.id),
+            "order_date": document.order_date.isoformat(),
+            "created_at": document.created_at.isoformat(),
+            "updated_at": document.updated_at.isoformat(),
+        }
+    )
+    operator_id = uuid4()
+
+    preview = await order_service.preview_order_date_change(
+        SAMPLE_ORDER_ID,
+        date(2026, 6, 15),
+        expected_updated_at=updated_at.isoformat(),
+        reason="补录客户实际下单日期",
+        operated_by=operator_id,
+    )
+
+    with pytest.raises(ValueError, match="高风险"):
+        await order_service.apply_order_date_change(
+            SAMPLE_ORDER_ID,
+            date(2026, 6, 15),
+            expected_updated_at=updated_at.isoformat(),
+            reason="补录客户实际下单日期",
+            operated_by=operator_id,
+            operated_by_name="管理员",
+            preview_id=preview["preview_id"],
+            plan_hash=preview["plan_hash"],
+            preview_expires_at=preview["preview_expires_at"],
+            confirm_high_risk=False,
+        )
+
+    with patch(
+        "app.services.operation_log_service.log_operation",
+        new=AsyncMock(),
+    ) as log_operation:
+        result = await order_service.apply_order_date_change(
+            SAMPLE_ORDER_ID,
+            date(2026, 6, 15),
+            expected_updated_at=updated_at.isoformat(),
+            reason="补录客户实际下单日期",
+            operated_by=operator_id,
+            operated_by_name="管理员",
+            preview_id=preview["preview_id"],
+            plan_hash=preview["plan_hash"],
+            preview_expires_at=preview["preview_expires_at"],
+            confirm_high_risk=True,
+        )
+
+    assert result["order_date"] == "2026-06-15"
+    assert order.order_date == date(2026, 6, 15)
+    assert order.created_at == created_at
+    repository.create_version.assert_awaited_once()
+    log_operation.assert_awaited_once()
 
 
 @pytest.mark.asyncio
