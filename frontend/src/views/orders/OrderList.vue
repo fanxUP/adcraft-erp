@@ -59,10 +59,10 @@
       <el-table-column label="下单日期" width="120">
         <template #default="{ row }">{{ formatDate(row.order_date) }}</template>
       </el-table-column>
-      <el-table-column label="系统创建时间" width="160">
+      <el-table-column label="系统创建时间" width="160" fixed="right">
         <template #default="{ row }">{{ formatDateTimeFull(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="200">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <div style="display: flex; gap: 8px; justify-content: center;">
             <el-button text type="primary" @click="$router.push(`/orders/${row.id}`)">详情</el-button>
