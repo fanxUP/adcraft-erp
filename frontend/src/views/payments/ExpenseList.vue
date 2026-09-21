@@ -325,7 +325,8 @@ function openEdit(row: ExpenseResponse) {
   form.paid_amount = row.initial_paid_amount ?? Math.max(0, row.amount - (row.payable_amount || 0))
   form.supplier_id = row.supplier_id || ''
   form.payable_amount = row.payable_amount || 0
-  form.expense_date = formatDate(row.expense_date) || ''
+  const formattedExpenseDate = formatDate(row.expense_date)
+  form.expense_date = formattedExpenseDate === '-' ? '' : formattedExpenseDate
   form.description = row.description || ''
   showDialog.value = true
   void loadExpenseAttachments(row.id)

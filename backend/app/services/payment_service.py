@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from uuid import UUID
 
@@ -60,6 +60,31 @@ def _money_or_zero(value) -> Decimal:
     """Normalize a money value without allowing float residue."""
 
     return _decimal_or_zero(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _normalize_expense_date(value) -> datetime | None:
+    """Normalize expense dates before assigning them to the naive DB column."""
+
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        normalized = value
+    elif isinstance(value, date):
+        normalized = datetime.combine(value, datetime.min.time())
+    elif isinstance(value, str):
+        raw_value = value.strip()
+        if not raw_value or raw_value == "-":
+            return None
+        try:
+            normalized = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("支出日期格式无效，请使用 YYYY-MM-DD") from exc
+    else:
+        raise ValueError("支出日期格式无效，请使用 YYYY-MM-DD")
+
+    if normalized.tzinfo is not None:
+        normalized = normalized.astimezone(UTC).replace(tzinfo=None)
+    return normalized
 
 
 class PaymentService:
@@ -572,7 +597,7 @@ class ExpenseService:
             payable_amount=payable_amount,
             supplier_id=supplier.id if supplier else None,
             description=data.get("description"),
-            expense_date=datetime.fromisoformat(data["expense_date"]) if data.get("expense_date") else None,
+            expense_date=_normalize_expense_date(data.get("expense_date")),
             receipt_url=data.get("receipt_url"),
             created_by=created_by,
         )
@@ -607,10 +632,14 @@ class ExpenseService:
         normalized = dict(data)
         normalized["amount"] = amount
         normalized["payable_amount"] = payable_amount
+        if "expense_date" in normalized:
+            normalized["expense_date"] = _normalize_expense_date(normalized["expense_date"])
         # ``paid_amount`` is a derived input convenience field, not a second
         # database column.  Persist total amount and payable total only.
         normalized.pop("paid_amount", None)
         allow_null_fields: set[str] = set()
+        if "expense_date" in normalized:
+            allow_null_fields.add("expense_date")
         if "supplier_id" in normalized:
             supplier = await SupplierService(self.db).resolve_active_supplier(normalized["supplier_id"])
             normalized["supplier_id"] = supplier.id if supplier else None

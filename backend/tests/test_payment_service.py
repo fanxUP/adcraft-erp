@@ -850,6 +850,26 @@ async def test_update_expense(expense_service):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("raw_date", "expected_date"),
+    [
+        ("2026-09-04", datetime(2026, 9, 4)),
+        ("-", None),
+    ],
+)
+async def test_update_expense_normalizes_date_before_persistence(
+    expense_service, raw_date, expected_date
+):
+    svc = expense_service
+    e = make_mock_expense()
+    svc.repo.get_by_id.return_value = e
+
+    await svc.update_expense(SAMPLE_ORDER_ID, {"expense_date": raw_date})
+
+    assert e.expense_date == expected_date
+
+
+@pytest.mark.asyncio
 async def test_update_expense_not_found(expense_service):
     svc = expense_service
     svc.repo.get_by_id.return_value = None
