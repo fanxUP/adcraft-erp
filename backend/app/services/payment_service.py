@@ -672,6 +672,29 @@ class ExpenseService:
         await PayableService(self.db).assert_source_can_be_deleted("expense", e.id)
         await self.repo.soft_delete(e)
 
+    async def delete_expense_with_payments(
+        self,
+        expense_id: UUID,
+        *,
+        expected_payment_count: int,
+        expected_paid_amount: Decimal,
+    ) -> dict:
+        """撤销有效应付付款流水后，在同一事务中软删除支出。"""
+
+        e = await self.repo.get_by_id(expense_id)
+        if not e:
+            raise ValueError("支出记录不存在")
+
+        cleanup = await PayableService(self.db).void_active_payments_for_source(
+            "expense",
+            e.id,
+            "随支出删除自动撤销；用户已确认",
+            expected_payment_count=expected_payment_count,
+            expected_paid_amount=expected_paid_amount,
+        )
+        await self.repo.soft_delete(e)
+        return {"deleted": True, **cleanup}
+
     def _to_dict(
         self,
         e: Expense,

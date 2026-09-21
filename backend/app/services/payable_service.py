@@ -485,6 +485,80 @@ class PayableService:
         if paid > 0:
             raise ValueError("已有付款记录，不能删除该支出；请先撤销付款流水")
 
+    async def void_active_payments_for_source(
+        self,
+        source_type: str,
+        source_id: UUID,
+        reason: str,
+        *,
+        expected_payment_count: int | None = None,
+        expected_paid_amount: Decimal | float | str | None = None,
+    ) -> dict:
+        """在锁定来源后撤销其有效付款流水并返回处理摘要。
+
+        这是支出“确认联动删除”专用的原子步骤。付款流水不会被物理删除，
+        仍保留编号、金额和撤销原因；调用方负责在同一事务中软删除来源。
+        """
+
+        normalized_type = _normalize_source_type(source_type)
+        reason = (reason or "").strip()
+        if not reason:
+            raise ValueError("撤销原因不能为空")
+        if expected_payment_count is not None and expected_payment_count < 0:
+            raise ValueError("付款流水数量不能小于0")
+
+        source = await self._load_source(normalized_type, source_id, for_update=True)
+        if not source:
+            raise ValueError("应付来源不存在或已删除")
+
+        result = await self.db.execute(
+            select(PayablePayment)
+            .where(
+                PayablePayment.source_type == normalized_type,
+                PayablePayment.source_id == source.id,
+                PayablePayment.is_voided.is_(False),
+            )
+            .order_by(PayablePayment.paid_at.asc(), PayablePayment.created_at.asc())
+            .with_for_update()
+        )
+        payments = list(result.scalars().all())
+        paid_amount = _money(
+            sum((_money(payment.amount) for payment in payments), Decimal("0"))
+        )
+        payment_count = len(payments)
+        expected_amount = (
+            _money(expected_paid_amount)
+            if expected_paid_amount is not None
+            else None
+        )
+        if (
+            expected_payment_count is not None
+            and expected_payment_count != payment_count
+        ) or (
+            expected_amount is not None
+            and expected_amount != paid_amount
+        ):
+            raise ValueError("付款情况已发生变化，请刷新后重新确认")
+
+        voided_at = _utc_now()
+        for payment in payments:
+            payment.is_voided = True
+            payment.void_reason = reason
+            payment.voided_at = voided_at
+
+        if payments:
+            await self.db.flush()
+        if normalized_type == "project_cost":
+            source.is_settled = False
+            source.settled_at = None
+            await self.db.flush()
+
+        return {
+            "payment_ids": [str(payment.id) for payment in payments],
+            "payment_count": payment_count,
+            "paid_amount": float(paid_amount),
+        }
+
     @staticmethod
     def _parse_paid_at(value: str | None) -> datetime:
         if not value:

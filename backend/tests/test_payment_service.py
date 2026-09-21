@@ -902,6 +902,55 @@ async def test_delete_expense_always_checks_payments(expense_service):
 
 
 @pytest.mark.asyncio
+async def test_delete_expense_with_payments_voids_then_soft_deletes(expense_service):
+    svc = expense_service
+    e = make_mock_expense(payable_amount=2000.0)
+    svc.repo.get_by_id.return_value = e
+    svc.payable_service.void_active_payments_for_source = AsyncMock(
+        return_value={
+            "payment_ids": [str(SAMPLE_ORDER_ID)],
+            "payment_count": 1,
+            "paid_amount": 1000.0,
+        }
+    )
+
+    result = await svc.delete_expense_with_payments(
+        SAMPLE_ORDER_ID,
+        expected_payment_count=1,
+        expected_paid_amount=Decimal("1000.00"),
+    )
+
+    assert result["payment_count"] == 1
+    svc.payable_service.void_active_payments_for_source.assert_awaited_once_with(
+        "expense",
+        e.id,
+        "随支出删除自动撤销；用户已确认",
+        expected_payment_count=1,
+        expected_paid_amount=Decimal("1000.00"),
+    )
+    svc.repo.soft_delete.assert_awaited_once_with(e)
+
+
+@pytest.mark.asyncio
+async def test_delete_expense_with_payments_does_not_delete_after_cleanup_failure(expense_service):
+    svc = expense_service
+    e = make_mock_expense(payable_amount=2000.0)
+    svc.repo.get_by_id.return_value = e
+    svc.payable_service.void_active_payments_for_source = AsyncMock(
+        side_effect=ValueError("付款情况已发生变化，请刷新后重新确认")
+    )
+
+    with pytest.raises(ValueError, match="付款情况已发生变化"):
+        await svc.delete_expense_with_payments(
+            SAMPLE_ORDER_ID,
+            expected_payment_count=1,
+            expected_paid_amount=Decimal("1000.00"),
+        )
+
+    svc.repo.soft_delete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_delete_expense_not_found(expense_service):
     svc = expense_service
     svc.repo.get_by_id.return_value = None

@@ -998,6 +998,13 @@ export interface ExpenseResponse {
   created_at?: string
 }
 
+export interface ExpenseDeleteConfirmedResponse {
+  deleted: boolean
+  payment_ids: string[]
+  payment_count: number
+  paid_amount: number
+}
+
 export interface PayablePaymentResponse {
   id: string
   payment_no: string

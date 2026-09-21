@@ -1,5 +1,6 @@
 """应付台账的金额与状态规则测试。"""
 
+from datetime import datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -100,3 +101,73 @@ def test_project_cost_payload_keeps_legacy_settled_rows_as_paid():
     assert row["status"] == "paid"
     assert row["paid_amount"] == 120.0
     assert row["remaining_amount"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_void_active_payments_for_source_preserves_payment_facts():
+    source_id = uuid4()
+    payments = [
+        SimpleNamespace(
+            id=uuid4(), amount=Decimal("600.00"), is_voided=False,
+            void_reason=None, voided_at=None,
+        ),
+        SimpleNamespace(
+            id=uuid4(), amount=Decimal("400.00"), is_voided=False,
+            void_reason=None, voided_at=None,
+        ),
+    ]
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.flush = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = payments
+    db.execute.return_value = result
+
+    service = PayableService(db)
+    service._load_source = AsyncMock(return_value=SimpleNamespace(id=source_id))
+
+    summary = await service.void_active_payments_for_source(
+        "expense",
+        source_id,
+        "随支出删除自动撤销；用户已确认",
+        expected_payment_count=2,
+        expected_paid_amount=Decimal("1000.00"),
+    )
+
+    assert summary["payment_count"] == 2
+    assert summary["paid_amount"] == 1000.0
+    assert summary["payment_ids"] == [str(payment.id) for payment in payments]
+    assert all(payment.is_voided for payment in payments)
+    assert all(payment.void_reason == "随支出删除自动撤销；用户已确认" for payment in payments)
+    assert all(isinstance(payment.voided_at, datetime) for payment in payments)
+    db.flush.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_void_active_payments_rejects_stale_confirmation_snapshot():
+    source_id = uuid4()
+    payment = SimpleNamespace(
+        id=uuid4(), amount=Decimal("1000.00"), is_voided=False,
+        void_reason=None, voided_at=None,
+    )
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.flush = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = [payment]
+    db.execute.return_value = result
+
+    service = PayableService(db)
+    service._load_source = AsyncMock(return_value=SimpleNamespace(id=source_id))
+
+    with pytest.raises(ValueError, match="付款情况已发生变化"):
+        await service.void_active_payments_for_source(
+            "expense",
+            source_id,
+            "随支出删除自动撤销；用户已确认",
+            expected_payment_count=2,
+            expected_paid_amount=Decimal("2000.00"),
+        )
+
+    assert payment.is_voided is False
+    db.flush.assert_not_awaited()

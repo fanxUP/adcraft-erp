@@ -201,6 +201,13 @@ class ExpenseUpdate(BaseModel):
         return value
 
 
+class ExpenseDeleteConfirmed(BaseModel):
+    """确认撤销有效应付付款流水并删除经营支出时的快照。"""
+
+    expected_payment_count: int = Field(default=0, ge=0)
+    expected_paid_amount: Decimal = Field(default=Decimal("0"), ge=0)
+
+
 class ExpenseResponse(CoercedModel):
     id: str
     expense_no: str

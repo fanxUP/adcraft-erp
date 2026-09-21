@@ -230,6 +230,7 @@ import {
   deleteExpense,
   deleteExpenseAttachment,
   createExpense,
+  deleteExpenseConfirmed,
   downloadExpenseAttachment,
   getExpenseAttachments,
   getExpenses,
@@ -669,11 +670,30 @@ async function handleDelete(row: ExpenseResponse) {
     const payablePaymentCount = row.payable_payment_count ?? 0
     const payablePaidAmount = row.payable_paid_amount ?? 0
     if (payablePaymentCount > 0 || payablePaidAmount > 0) {
-      await ElMessageBox.alert(
-        `支出「${row.expense_no}」已有 ${payablePaymentCount} 条有效应付付款流水，共 ${formatMoney(payablePaidAmount)}。请先在应付管理中撤销付款流水，再删除支出。`,
-        '当前不能删除',
-        { confirmButtonText: '知道了', type: 'warning' },
+      if (!authStore.can('expense:update')) {
+        await ElMessageBox.alert(
+          '当前账号没有撤销应付付款流水的权限，请联系管理员处理。',
+          '无法执行联动删除',
+          { confirmButtonText: '知道了', type: 'warning' },
+        )
+        return
+      }
+      await ElMessageBox.confirm(
+        `支出「${row.expense_no}」在应付管理中有 ${payablePaymentCount} 条有效付款流水，共 ${formatMoney(payablePaidAmount)}。确认后系统将先撤销这些付款流水（保留付款编号和审计记录），再删除支出。此操作不可由普通用户恢复，是否继续？`,
+        '撤销应付并删除',
+        {
+          confirmButtonText: '撤销付款并删除',
+          cancelButtonText: '取消',
+          type: 'warning',
+          distinguishCancelAndClose: true,
+        },
       )
+      const result = await deleteExpenseConfirmed(row.id, {
+        expected_payment_count: payablePaymentCount,
+        expected_paid_amount: payablePaidAmount,
+      })
+      ElMessage.success(`已撤销 ${result.payment_count} 条应付付款流水并删除支出`)
+      await fetchData()
       return
     }
     await ElMessageBox.confirm(`确定删除支出「${row.expense_no}」吗？`, '确认删除', {

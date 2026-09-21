@@ -22,13 +22,24 @@ from app.core.permissions import (
     PERM_STATEMENT_CONFIRM,
     PERM_STATEMENT_CREATE,
     PERM_STATEMENT_READ,
+    require_all_permissions,
     require_permission,
 )
 from app.models.payment import Expense
 from app.models.project_cost import ProjectCost
 from app.models.task import Attachment
 from app.models.user import User
-from app.schemas.payment import PaymentCreate, PaymentVoid, StatementCreate, ExpenseCreate, ExpenseUpdate, ProjectCostCreate, ProjectCostUpdate, DebtSettleCreate
+from app.schemas.payment import (
+    DebtSettleCreate,
+    ExpenseCreate,
+    ExpenseDeleteConfirmed,
+    ExpenseUpdate,
+    PaymentCreate,
+    PaymentVoid,
+    ProjectCostCreate,
+    ProjectCostUpdate,
+    StatementCreate,
+)
 from app.schemas.common import success, success_paginated
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
 from app.services.project_cost_service import ProjectCostService
@@ -481,6 +492,45 @@ async def update_expense(
                         OBJ_EXPENSE, eid, ACTION_UPDATE,
                         ip_address=request.client.host if request.client else None)
     return success(expense)
+
+
+@exp_router.post("/{expense_id}/delete-confirmed")
+async def delete_expense_confirmed(
+    expense_id: str,
+    data: ExpenseDeleteConfirmed,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_all_permissions(PERM_EXPENSE_DELETE, PERM_EXPENSE_UPDATE)
+    ),
+):
+    service = ExpenseService(db)
+    try:
+        eid = UUID(expense_id)
+        result = await service.delete_expense_with_payments(
+            eid,
+            expected_payment_count=data.expected_payment_count,
+            expected_paid_amount=data.expected_paid_amount,
+        )
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
+    await log_operation(
+        db,
+        current_user.id,
+        current_user.real_name or current_user.username,
+        OBJ_EXPENSE,
+        eid,
+        ACTION_DELETE,
+        ip_address=request.client.host if request.client else None,
+        after_data={
+            "payable_cleanup_confirmed": True,
+            "voided_payment_ids": result["payment_ids"],
+            "voided_payment_count": result["payment_count"],
+            "voided_paid_amount": result["paid_amount"],
+            "void_reason": "随支出删除自动撤销；用户已确认",
+        },
+    )
+    return success(result)
 
 
 @exp_router.delete("/{expense_id}")

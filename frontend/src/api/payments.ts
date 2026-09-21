@@ -1,5 +1,5 @@
 import { apiClient, get, post, put, del } from './index'
-import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, ProjectCostItemSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse, TaskCompletionDetailsResponse, TaskCompletionKind, TaskCompletionPeriod, TaskCompletionSummary, TaskCompletionType, PayableResponse } from '@/types/api'
+import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, ExpenseDeleteConfirmedResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, ProjectCostItemSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse, TaskCompletionDetailsResponse, TaskCompletionKind, TaskCompletionPeriod, TaskCompletionSummary, TaskCompletionType, PayableResponse } from '@/types/api'
 
 export function getPayments(params?: { page?: number; page_size?: number; order_id?: string; contract_id?: string; customer_id?: string; status?: string }) { return get<PaginatedData<PaymentResponse>>('/payments/', { params }) }
 export function getPayment(id: string) { return get<PaymentResponse>(`/payments/${id}`) }
@@ -28,6 +28,12 @@ export type ExpenseWritePayload = Partial<Omit<ExpenseResponse, 'id' | 'expense_
 export function createExpense(data: ExpenseWritePayload) { return post<ExpenseResponse>('/expenses/', data) }
 export function updateExpense(id: string, data: ExpenseWritePayload) { return put<ExpenseResponse>(`/expenses/${id}`, data) }
 export function deleteExpense(id: string) { return del<SuccessResponse>(`/expenses/${id}`) }
+export function deleteExpenseConfirmed(
+  id: string,
+  data: { expected_payment_count: number; expected_paid_amount: number },
+) {
+  return post<ExpenseDeleteConfirmedResponse>(`/expenses/${id}/delete-confirmed`, data)
+}
 
 export function getExpenseAttachments(expenseId: string) {
   return get<AttachmentResponse[]>(`/expenses/${expenseId}/attachments`)

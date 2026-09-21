@@ -11,6 +11,7 @@ import pytest
 
 from app.api import orders, payments, payables
 from app.api.payments import _validate_expense_attachment
+from app.schemas.payment import ExpenseDeleteConfirmed
 
 
 def _route_permission(router, method: str, path: str) -> str | None:
@@ -141,6 +142,14 @@ def test_expense_routes_require_business_permissions(method, path, permission):
     assert _route_permission(payments.exp_router, method, path) == permission
 
 
+def test_confirmed_expense_delete_requires_delete_and_update_permissions():
+    assert _route_permission_tuple(
+        payments.exp_router,
+        "POST",
+        "/expenses/{expense_id}/delete-confirmed",
+    ) == ("expense:delete", "expense:update")
+
+
 @pytest.mark.asyncio
 async def test_delete_expense_returns_business_error_instead_of_server_error():
     current_user = SimpleNamespace(id=uuid4(), real_name="系统管理员", username="admin")
@@ -165,6 +174,40 @@ async def test_delete_expense_returns_business_error_instead_of_server_error():
         "data": None,
     }
     service_class.return_value.delete_expense.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_confirmed_expense_delete_returns_cleanup_summary():
+    current_user = SimpleNamespace(id=uuid4(), real_name="系统管理员", username="admin")
+    request = SimpleNamespace(client=None)
+    db = MagicMock()
+    data = ExpenseDeleteConfirmed(
+        expected_payment_count=1,
+        expected_paid_amount=1000,
+    )
+
+    with patch.object(payments, "ExpenseService") as service_class:
+        service_class.return_value.delete_expense_with_payments = AsyncMock(
+            return_value={
+                "deleted": True,
+                "payment_ids": [str(uuid4())],
+                "payment_count": 1,
+                "paid_amount": 1000.0,
+            }
+        )
+        with patch.object(payments, "log_operation", new_callable=AsyncMock):
+            result = await payments.delete_expense_confirmed(
+                str(uuid4()),
+                data=data,
+                request=request,
+                db=db,
+                current_user=current_user,
+            )
+
+    assert result["code"] == 0
+    assert result["data"]["deleted"] is True
+    assert result["data"]["payment_count"] == 1
+    service_class.return_value.delete_expense_with_payments.assert_awaited_once()
 
 
 @pytest.mark.parametrize(
