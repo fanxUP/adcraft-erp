@@ -655,6 +655,7 @@ def expense_service(mock_expense_repo):
             db = AsyncMock()
             svc = ExpenseService(db)
             svc.repo = mock_expense_repo
+            svc.payable_service = payable_service
             yield svc
 
 
@@ -883,6 +884,20 @@ async def test_delete_expense(expense_service):
     e = make_mock_expense()
     svc.repo.get_by_id.return_value = e
     await svc.delete_expense(SAMPLE_ORDER_ID)
+    svc.repo.soft_delete.assert_awaited_once_with(e)
+
+
+@pytest.mark.asyncio
+async def test_delete_expense_always_checks_payments(expense_service):
+    svc = expense_service
+    e = make_mock_expense(payable_amount=2000.0)
+    svc.repo.get_by_id.return_value = e
+
+    await svc.delete_expense(SAMPLE_ORDER_ID)
+
+    svc.payable_service.assert_source_can_be_deleted.assert_awaited_once_with(
+        "expense", e.id
+    )
     svc.repo.soft_delete.assert_awaited_once_with(e)
 
 

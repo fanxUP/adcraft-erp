@@ -664,9 +664,12 @@ class ExpenseService:
         e = await self.repo.get_by_id(expense_id)
         if not e:
             raise ValueError("支出记录不存在")
-        payable_amount = _decimal_or_zero(getattr(e, "payable_amount", 0))
-        if payable_amount > 0:
-            await PayableService(self.db).assert_source_can_be_deleted("expense", e.id)
+
+        # A source with any active payable payment must be reversed explicitly
+        # from the payable ledger before it can be deleted.  Keep this check
+        # independent of payable_amount so inconsistent legacy rows cannot
+        # leave orphaned payment facts.
+        await PayableService(self.db).assert_source_can_be_deleted("expense", e.id)
         await self.repo.soft_delete(e)
 
     def _to_dict(

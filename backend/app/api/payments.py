@@ -491,8 +491,11 @@ async def delete_expense(
     current_user: User = Depends(require_permission(PERM_EXPENSE_DELETE)),
 ):
     service = ExpenseService(db)
-    eid = UUID(expense_id)
-    await service.delete_expense(eid)
+    try:
+        eid = UUID(expense_id)
+        await service.delete_expense(eid)
+    except ValueError as e:
+        return {"code": 40001, "message": str(e), "data": None}
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_EXPENSE, eid, ACTION_DELETE,
                         ip_address=request.client.host if request.client else None)

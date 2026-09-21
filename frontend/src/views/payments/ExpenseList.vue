@@ -65,7 +65,7 @@
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" size="small" @click="openEdit(row as ExpenseResponse)">编辑</el-button>
-          <el-button v-if="authStore.isAdmin" text type="danger" size="small" @click="handleDelete(row as ExpenseResponse)">删除</el-button>
+          <el-button v-if="authStore.can('expense:delete')" text type="danger" size="small" @click="handleDelete(row as ExpenseResponse)">删除</el-button>
         </template>
       </el-table-column>
       </el-table>
@@ -666,12 +666,23 @@ async function handleSave() {
 
 async function handleDelete(row: ExpenseResponse) {
   try {
+    const payablePaymentCount = row.payable_payment_count ?? 0
+    const payablePaidAmount = row.payable_paid_amount ?? 0
+    if (payablePaymentCount > 0 || payablePaidAmount > 0) {
+      await ElMessageBox.alert(
+        `支出「${row.expense_no}」已有 ${payablePaymentCount} 条有效应付付款流水，共 ${formatMoney(payablePaidAmount)}。请先在应付管理中撤销付款流水，再删除支出。`,
+        '当前不能删除',
+        { confirmButtonText: '知道了', type: 'warning' },
+      )
+      return
+    }
     await ElMessageBox.confirm(`确定删除支出「${row.expense_no}」吗？`, '确认删除', {
-      confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消', type: 'warning',
     })
     await deleteExpense(row.id)
     ElMessage.success('已删除')
-    fetchData()
+    await fetchData()
   } catch {
     // User cancelled or API error (handled by interceptor)
   }

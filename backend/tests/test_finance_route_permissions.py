@@ -141,6 +141,32 @@ def test_expense_routes_require_business_permissions(method, path, permission):
     assert _route_permission(payments.exp_router, method, path) == permission
 
 
+@pytest.mark.asyncio
+async def test_delete_expense_returns_business_error_instead_of_server_error():
+    current_user = SimpleNamespace(id=uuid4(), real_name="系统管理员", username="admin")
+    request = SimpleNamespace(client=None)
+    db = MagicMock()
+
+    with patch.object(payments, "ExpenseService") as service_class:
+        service_class.return_value.delete_expense = AsyncMock(
+            side_effect=ValueError("已有付款记录，不能删除该支出；请先撤销付款流水")
+        )
+
+        result = await payments.delete_expense(
+            str(uuid4()),
+            request=request,
+            db=db,
+            current_user=current_user,
+        )
+
+    assert result == {
+        "code": 40001,
+        "message": "已有付款记录，不能删除该支出；请先撤销付款流水",
+        "data": None,
+    }
+    service_class.return_value.delete_expense.assert_awaited_once()
+
+
 @pytest.mark.parametrize(
     ("filename", "content_type", "contents", "expected"),
     [
