@@ -59,9 +59,6 @@
       <el-table-column label="下单日期" width="120">
         <template #default="{ row }">{{ formatDate(row.order_date) }}</template>
       </el-table-column>
-      <el-table-column label="系统创建时间" width="160" fixed="right">
-        <template #default="{ row }">{{ formatDateTimeFull(row.created_at) }}</template>
-      </el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <div style="display: flex; gap: 8px; justify-content: center;">
@@ -84,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate, formatDateTimeFull } from '@/utils/datetime'
+import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
 import { getOrders } from '@/api/orders'
 import { useAuthStore } from '@/stores/auth'

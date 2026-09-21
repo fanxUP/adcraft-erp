@@ -58,10 +58,10 @@ describe('P08 UI/UX quality guardrails', () => {
     expect(includesAny(mobileInstallation, ['capture', 'OrderTaskAttachments'])).toBe(true)
   })
 
-  it('keeps order creation time visible when the order table overflows horizontally', () => {
+  it('keeps system creation time out of the order list while retaining the right-side actions', () => {
     const orderList = readSource('views/orders/OrderList.vue')
 
-    expect(orderList).toContain('<el-table-column label="系统创建时间" width="160" fixed="right">')
+    expect(orderList).not.toContain('label="系统创建时间"')
     expect(orderList).toContain('<el-table-column label="操作" width="200" fixed="right">')
   })
 
