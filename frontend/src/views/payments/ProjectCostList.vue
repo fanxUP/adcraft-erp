@@ -35,7 +35,15 @@
     </el-card>
 
     <!-- Unified table -->
-    <el-table :data="combinedList" v-loading="loading" stripe style="margin-top: 16px" row-key="id">
+    <el-table
+      :data="combinedList"
+      v-loading="loading"
+      stripe
+      style="margin-top: 16px"
+      row-key="id"
+      :show-summary="combinedList.length > 0"
+      :summary-method="summaryMethod"
+    >
       <el-table-column label="来源" width="100" fixed>
         <template #default="{ row }">
           <el-tag v-if="row._type === 'order'" type="primary" size="small">订单</el-tag>
@@ -63,11 +71,8 @@
       </el-table-column>
       <el-table-column label="项目成本" width="120" align="right">
         <template #default="{ row }">
-          <span v-if="row._type === 'order'" :style="{ color: (costMap[row.id] || 0) > 0 ? 'var(--el-color-warning)' : '' }">
-            ¥ {{ (costMap[row.id] || 0).toFixed(2) }}
-          </span>
-          <span v-else :style="{ color: (row.cost_amount || 0) > 0 ? 'var(--el-color-warning)' : '' }">
-            ¥ {{ (row.cost_amount || 0).toFixed(2) }}
+          <span :style="{ color: getRowProjectCost(row) > 0 ? 'var(--el-color-warning)' : '' }">
+            ¥ {{ getRowProjectCost(row).toFixed(2) }}
           </span>
         </template>
       </el-table-column>
@@ -102,6 +107,7 @@ import { getOrders } from '@/api/orders'
 import { getProjectCostSummary, getQuotesForCost } from '@/api/payments'
 import type { OrderListResponse, QuoteCostResponse } from '@/types/api'
 import { StatusTag } from '@/components/ui'
+import { getProjectCostPageRowAmount, sumCurrentPageProjectCosts } from '@/utils/projectCostPageSummary'
 
 const loading = ref(false)
 const keyword = ref('')
@@ -111,10 +117,9 @@ const page = ref(1)
 const pageSize = ref(20)
 
 // Internal storage
-type CombinedRow = (OrderListResponse | QuoteCostResponse) & {
-  _type: 'order' | 'quote'
-  _sortKey: string
-}
+type CombinedRow =
+  | (OrderListResponse & { _type: 'order'; _sortKey: string })
+  | (QuoteCostResponse & { _type: 'quote'; _sortKey: string })
 
 const allRows = ref<CombinedRow[]>([])
 
@@ -172,6 +177,24 @@ const combinedList = computed(() => {
   const start = (page.value - 1) * pageSize.value
   return sorted.slice(start, start + pageSize.value)
 })
+
+const currentPageProjectCostTotal = computed(() =>
+  sumCurrentPageProjectCosts(combinedList.value, costMap.value),
+)
+
+type SummaryColumn = { label?: string }
+
+function summaryMethod({ columns }: { columns: SummaryColumn[] }) {
+  return columns.map((column, index) => {
+    if (index === 0) return `本页合计（${combinedList.value.length}条）`
+    if (column.label === '项目成本') return `¥ ${currentPageProjectCostTotal.value.toFixed(2)}`
+    return ''
+  })
+}
+
+function getRowProjectCost(row: CombinedRow) {
+  return getProjectCostPageRowAmount(row, costMap.value)
+}
 
 async function fetchData() {
   const requestId = ++fetchRequestId
