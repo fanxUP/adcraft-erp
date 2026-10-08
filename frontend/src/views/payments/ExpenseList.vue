@@ -1,13 +1,18 @@
 <template>
   <AppPage>
     <template #header>
-      <PageHeader title="支出管理" description="统一登记和维护经营支出，金额与日期格式保持一致。">
-        <template #actions><el-button @click="openCreate" type="danger">登记支出</el-button></template>
+      <PageHeader title="支出管理" description="统一查看经营支出、项目实际费用与外协付款；原始业务只登记一次。">
+        <template #actions><el-button v-if="authStore.can('expense:create')" @click="openCreate" type="primary">登记经营支出</el-button></template>
       </PageHeader>
     </template>
 
     <template #toolbar>
-      <PageToolbar aria-label="支出筛选">
+      <el-tabs v-model="activeView" aria-label="支出查看方式">
+        <el-tab-pane label="统一台账" name="ledger" />
+        <el-tab-pane label="付款流水" name="disbursements" />
+        <el-tab-pane label="经营支出维护" name="expense" />
+      </el-tabs>
+      <PageToolbar v-if="activeView === 'expense'" aria-label="支出筛选">
       <el-select v-model="filterCategory" placeholder="支出分类" clearable style="width: 160px" @change="fetchData">
         <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
       </el-select>
@@ -25,7 +30,8 @@
       </PageToolbar>
     </template>
 
-    <DataTableShell :state="tableState" aria-label="支出列表">
+    <ExpenditureTable v-if="activeView !== 'expense'" :view="activeView" @manage-expense="openExpenseSource" />
+    <DataTableShell v-else :state="tableState" aria-label="支出列表">
       <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
       <el-table :data="list" stripe>
       <el-table-column prop="expense_no" label="编号" width="180" />
@@ -64,7 +70,7 @@
       <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button text type="primary" size="small" @click="openEdit(row as ExpenseResponse)">编辑</el-button>
+          <el-button text type="primary" size="small" @click="openEdit(row as ExpenseResponse)">{{ authStore.can('expense:update') ? '编辑' : '查看' }}</el-button>
           <el-button v-if="authStore.can('expense:delete')" text type="danger" size="small" @click="handleDelete(row as ExpenseResponse)">删除</el-button>
         </template>
       </el-table-column>
@@ -83,12 +89,12 @@
 
     <el-dialog
       v-model="showDialog"
-      :title="isEditing ? '编辑支出' : '登记支出'"
+      :title="isEditing ? (authStore.can('expense:update') ? '编辑支出' : '查看支出') : '登记支出'"
       width="min(94vw, 620px)"
       :close-on-click-modal="false"
       @closed="handleExpenseDialogClosed"
     >
-      <el-form :model="form" label-width="100px">
+      <el-form :model="form" label-width="100px" :disabled="isEditing && !authStore.can('expense:update')">
         <el-form-item label="日期">
           <el-date-picker v-model="form.expense_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
@@ -131,6 +137,7 @@
         </el-form-item>
         <el-form-item label="凭证">
           <div
+            v-if="isEditing ? authStore.can('expense:update') : authStore.can('expense:create')"
             class="expense-attachment-dropzone"
             :class="{ 'is-dragover': expenseAttachmentDragActive }"
             role="button"
@@ -214,7 +221,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
-        <el-button :loading="saving" :disabled="expenseAttachmentUploading" @click="handleSave" type="primary">
+        <el-button v-if="isEditing ? authStore.can('expense:update') : authStore.can('expense:create')" :loading="saving" :disabled="expenseAttachmentUploading" @click="handleSave" type="primary">
           {{ isEditing ? '保存' : '登记' }}
         </el-button>
       </template>
@@ -233,6 +240,7 @@ import {
   deleteExpenseConfirmed,
   downloadExpenseAttachment,
   getExpenseAttachments,
+  getExpense,
   getExpenses,
   updateExpense,
   uploadExpenseAttachment,
@@ -244,8 +252,10 @@ import { Delete, UploadFilled } from '@element-plus/icons-vue'
 import type { AttachmentResponse, ExpenseResponse, SupplierResponse } from '@/types/api'
 import { normalizeExpenseAmounts, type ExpenseAmountResult } from '@/utils/expenseAmount'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
+import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
 const authStore = useAuthStore()
+const activeView = ref<'ledger' | 'disbursements' | 'expense'>('ledger')
 const canUseSupplier = computed(() => authStore.can('supplier:read'))
 
 const CATEGORIES = ['房租', '水电', '材料采购', '外协加工', '运输', '办公', '工资', '税费', '其他']
@@ -313,8 +323,17 @@ function resetForm() {
 }
 
 function openCreate() {
+  activeView.value = 'expense'
   resetForm()
   showDialog.value = true
+}
+
+async function openExpenseSource(id: string) {
+  try {
+    const record = await getExpense(id)
+    activeView.value = 'expense'
+    openEdit(record)
+  } catch { /* API interceptor displays the error; keep the current view. */ }
 }
 
 function openEdit(row: ExpenseResponse) {

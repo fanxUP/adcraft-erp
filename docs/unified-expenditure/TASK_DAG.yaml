@@ -1,0 +1,13 @@
+tasks:
+  - id: P1
+    acceptance: A1
+    depends_on: []
+  - id: P2
+    acceptance: A2
+    depends_on: [P1]
+  - id: P3
+    acceptance: A3
+    depends_on: [P2]
+  - id: P4
+    acceptance: A4
+    depends_on: [P1, P2, P3]

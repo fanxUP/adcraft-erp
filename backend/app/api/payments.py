@@ -1,6 +1,7 @@
 import os
 import uuid as _uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -46,6 +47,7 @@ from app.services.project_cost_service import ProjectCostService
 from app.services.business_document_service import OrderDataMutationLocked
 from app.services.payable_service import PayableService
 from app.services.task_service import AttachmentService
+from app.services.expenditure_service import ExpenditureFilters, ExpenditureService
 from app.services.operation_log_service import log_operation, OBJ_PAYMENT, OBJ_EXPENSE, OBJ_PROJECT_COST, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
 
 pay_router = APIRouter(prefix="/payments", tags=["Payments"])
@@ -253,6 +255,34 @@ async def confirm_statement(
 
 
 # ── Expenses ────────────────────────────────────────────────────────────────
+
+@exp_router.get("/ledger")
+@exp_router.get("/disbursements")
+async def list_expenditure(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    source_type: Literal["expense", "project_cost", "outsource"] | None = None,
+    keyword: str | None = Query(None, max_length=128),
+    category: str | None = Query(None, max_length=64),
+    supplier_id: UUID | None = None,
+    document_id: UUID | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    date_status: Literal["all", "confirmed", "unverified"] = "all",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
+):
+    try:
+        filters = ExpenditureFilters(source_type, keyword, category, supplier_id,
+                                     document_id, start_date, end_date, date_status)
+        view = "ledger" if request.url.path.endswith("/ledger") else "disbursements"
+        return success(await ExpenditureService(db, current_user).list_records(view, page, page_size, filters))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
 
 @exp_router.get("/")
 async def list_expenses(

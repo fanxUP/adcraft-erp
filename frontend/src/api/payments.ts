@@ -20,6 +20,58 @@ export function confirmStatement(id: string) { return post<StatementResponse>(`/
 
 export function getExpenses(params?: { page?: number; page_size?: number; category?: string; start_date?: string; end_date?: string }) { return get<PaginatedData<ExpenseResponse>>('/expenses/', { params }) }
 export function getExpense(id: string) { return get<ExpenseResponse>(`/expenses/${id}`) }
+
+export type ExpenditureSource = 'expense' | 'project_cost' | 'outsource'
+export type ExpenditureView = 'ledger' | 'disbursements'
+export interface ExpenditureRow {
+  row_key: string
+  source_type: ExpenditureSource
+  source_kind: 'expense' | 'project_cost' | 'outsource_task' | 'outsource_payment'
+  source_id: string
+  source_no: string
+  document_id: string | null
+  document_type: string | null
+  doc_no: string | null
+  project_name: string | null
+  supplier_id: string | null
+  supplier_name: string | null
+  category: string | null
+  description: string | null
+  source_date: string | null
+  source_status: string
+  amount: number
+  paid_amount?: number
+  remaining_amount?: number
+  undated_paid_amount?: number
+  payment_kind?: 'historical' | 'payable' | 'outsource'
+  payment_no?: string | null
+  paid_at?: string | null
+  payment_method?: string | null
+  date_status?: 'confirmed' | 'unverified'
+}
+export interface ExpenditureResult {
+  items: ExpenditureRow[]
+  total: number
+  page: number
+  page_size: number
+  available_sources: ExpenditureSource[]
+  summary: {
+    amount: number
+    paid_amount?: number
+    remaining_amount?: number
+    undated_paid_amount?: number
+    confirmed_paid_amount?: number
+    unverified_paid_amount?: number
+    unverified_count?: number
+  }
+}
+export function getExpenditure(view: ExpenditureView, params: {
+  page: number; page_size: number; source_type?: ExpenditureSource; keyword?: string
+  category?: string; supplier_id?: string; document_id?: string
+  start_date?: string; end_date?: string; date_status?: 'all' | 'confirmed' | 'unverified'
+}) {
+  return get<ExpenditureResult>(`/expenses/${view}`, { params })
+}
 export type ExpenseWritePayload = Partial<Omit<ExpenseResponse, 'id' | 'expense_no' | 'created_by' | 'created_at'>> & {
   /** 登记时支付金额；总金额由它与 payable_amount 相加得到。 */
   paid_amount?: number
