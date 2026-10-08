@@ -166,6 +166,9 @@ describe('page access matrix', () => {
     expect(canAccess('supplier', ['outsource_manager'], ['supplier_center:read', 'supplier:read'])).toBe(true)
     expect(canAccess('supplier', ['designer'], [])).toBe(false)
     expect(canAccess('supplier', ['custom'], ['supplier:read'])).toBe(false)
+    expect(canAccess('supplier', ['custom'], ['outsource_center:read', 'outsource_vendor:read'])).toBe(true)
+    expect(canAccess('supplier', ['custom'], ['outsource_vendor:read'])).toBe(false)
+    expect(canAccess('supplier', ['custom'], ['supplier_center:read', 'outsource_vendor:read'])).toBe(false)
   })
 
   it('keeps AI pages aligned with their exact backend permission contracts', () => {

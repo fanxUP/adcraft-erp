@@ -1,6 +1,9 @@
 """供应商模块必须同时受模块入口和原子动作权限保护。"""
 
 from app.api import suppliers
+import pytest
+from fastapi import HTTPException
+from types import SimpleNamespace
 from app.core.permissions import (
     PERM_SUPPLIER_CENTER_READ,
     PERM_SUPPLIER_CREATE,
@@ -32,11 +35,31 @@ def _route_permissions(method: str, path: str) -> set[str]:
 
 def test_supplier_routes_use_parent_and_action_permissions():
     parent = PERM_SUPPLIER_CENTER_READ
-    assert _route_permissions("GET", "/suppliers/") == {parent, PERM_SUPPLIER_READ}
-    assert _route_permissions("GET", "/suppliers/{supplier_id}") == {parent, PERM_SUPPLIER_READ}
-    assert _route_permissions("POST", "/suppliers/") == {parent, PERM_SUPPLIER_CREATE}
-    assert _route_permissions("PUT", "/suppliers/{supplier_id}") == {parent, PERM_SUPPLIER_UPDATE}
+    read = {parent, PERM_SUPPLIER_READ, "outsource_center:read", "outsource_vendor:read"}
+    assert _route_permissions("GET", "/suppliers/") == read
+    assert _route_permissions("GET", "/suppliers/{supplier_id}") == read
+    assert _route_permissions("POST", "/suppliers/") == {parent, PERM_SUPPLIER_CREATE, "outsource_center:read", "outsource_vendor:create"}
+    assert _route_permissions("PUT", "/suppliers/{supplier_id}") == {parent, PERM_SUPPLIER_UPDATE, "outsource_center:read", "outsource_vendor:update"}
     assert _route_permissions("POST", "/suppliers/{supplier_id}/deactivate") == {
         parent,
         PERM_SUPPLIER_UPDATE,
+        "outsource_center:read", "outsource_vendor:update",
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("codes,allowed", [
+    (["supplier_center:read", "supplier:read"], True),
+    (["outsource_center:read", "outsource_vendor:read"], True),
+    (["supplier:read"], False), (["outsource_vendor:read"], False),
+    (["supplier_center:read", "outsource_vendor:read"], False),
+    (["outsource_center:read", "outsource_task:read"], False),
+])
+async def test_supplier_entry_requires_a_complete_permission_group(codes, allowed):
+    user = SimpleNamespace(roles=[SimpleNamespace(permissions=[SimpleNamespace(code=c) for c in codes])])
+    if allowed:
+        assert await suppliers._READ(user) is user
+    else:
+        with pytest.raises(HTTPException) as error:
+            await suppliers._READ(user)
+        assert error.value.status_code == 403

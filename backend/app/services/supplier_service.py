@@ -18,6 +18,9 @@ from app.core.permissions import (
     PERM_SUPPLIER_BANK_READ,
     PERM_SUPPLIER_BANK_UPDATE,
     PERM_SUPPLIER_LEDGER_READ,
+    PERM_SUPPLIER_READ,
+    PERM_SUPPLIER_CREATE,
+    PERM_SUPPLIER_UPDATE,
     user_has_permission,
 )
 from app.models.outsource import OutsourceTask, OutsourceVendor
@@ -26,6 +29,7 @@ from app.models.project_cost import ProjectCost
 from app.models.user import User
 from app.services.number_generator import generate_vendor_no
 from app.services.payable_service import PayableService
+from app.services.supplier_capabilities import SERVICE_TYPE_LABELS, normalize_choices, supplier_roles, supplier_services
 
 
 SUPPLIER_TYPE_LABELS = {
@@ -100,6 +104,34 @@ class SupplierService:
         self.db = db
         self.viewer = viewer
 
+    def _full_access(self, action="read") -> bool:
+        permission = {"read": PERM_SUPPLIER_READ, "create": PERM_SUPPLIER_CREATE, "update": PERM_SUPPLIER_UPDATE}[action]
+        return self.viewer is None or user_has_permission(self.viewer, permission)
+
+    def _assert_scope(self, supplier):
+        if not self._full_access() and "outsource" not in supplier_roles(supplier):
+            raise ValueError("当前角色只能管理具有外协服务业务的供应商")
+
+    def _assert_scoped_write(self, data, supplier=None):
+        if self._full_access("update" if supplier is not None else "create"):
+            return
+        if supplier is not None:
+            self._assert_scope(supplier)
+        roles = supplier_roles(supplier) if supplier is not None else ["outsource"]
+        if "outsource" not in roles:
+            raise ValueError("当前角色只能维护外协服务供应商")
+        if "supplier_types" in data and set(data["supplier_types"]) != set(roles):
+            raise ValueError("当前角色不能更改供应商的业务类型")
+        if supplier is not None and set(roles) != {"outsource"} and "is_active" in data:
+            raise ValueError("该供应商还有其他业务，请由供应商管理员调整启用状态")
+        allowed = {"name", "contact_person", "phone", "address", "service_type", "service_types",
+                   "supplier_type", "supplier_types", "coop_rating", "remark", "is_active"}
+        for key in list(data):
+            if key not in allowed:
+                if data[key] not in (None, ""):
+                    raise ValueError("当前角色只能维护外协商基本资料")
+                data.pop(key)
+
     @staticmethod
     def serialize_supplier(
         supplier: OutsourceVendor,
@@ -115,6 +147,8 @@ class SupplierService:
             "name": supplier.name,
             "short_name": getattr(supplier, "short_name", None),
             "supplier_type": supplier_type,
+            "supplier_types": supplier_roles(supplier),
+            "service_types": supplier_services(supplier),
             "supplier_type_label": SUPPLIER_TYPE_LABELS.get(supplier_type, supplier_type),
             "contact_person": supplier.contact_person,
             "phone": supplier.phone,
@@ -160,6 +194,8 @@ class SupplierService:
         is_active: bool | None = True,
     ) -> tuple[list[dict], int]:
         query = select(OutsourceVendor).where(OutsourceVendor.deleted_at.is_(None))
+        if not self._full_access():
+            query = query.where(OutsourceVendor.supplier_types.contains(["outsource"]))
         if keyword and keyword.strip():
             fuzzy = f"%{keyword.strip()}%"
             query = query.where(
@@ -171,7 +207,7 @@ class SupplierService:
                 )
             )
         if supplier_type:
-            query = query.where(OutsourceVendor.supplier_type == normalize_supplier_type(supplier_type))
+            query = query.where(OutsourceVendor.supplier_types.contains([normalize_supplier_type(supplier_type)]))
         if is_active is not None:
             query = query.where(OutsourceVendor.is_active.is_(is_active))
 
@@ -195,7 +231,10 @@ class SupplierService:
         if not include_inactive:
             query = query.where(OutsourceVendor.is_active.is_(True))
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        supplier = result.scalar_one_or_none()
+        if supplier is not None:
+            self._assert_scope(supplier)
+        return supplier
 
     async def _stats(self, supplier_id: UUID) -> dict:
         cost_result = await self.db.execute(
@@ -280,6 +319,9 @@ class SupplierService:
     @staticmethod
     def _clean_payload(data: dict) -> dict:
         cleaned = dict(data)
+        for key in ("supplier_types", "service_types"):
+            if cleaned.get(key) is None:
+                cleaned.pop(key, None)
         for key, value in list(cleaned.items()):
             if isinstance(value, str):
                 cleaned[key] = value.strip() or None
@@ -287,16 +329,38 @@ class SupplierService:
             cleaned["name"] = str(cleaned["name"] or "").strip()
         if "supplier_type" in cleaned and cleaned["supplier_type"] is not None:
             cleaned["supplier_type"] = normalize_supplier_type(cleaned["supplier_type"])
+        if "supplier_types" in cleaned:
+            cleaned["supplier_types"] = normalize_choices(cleaned["supplier_types"], SUPPLIER_TYPE_LABELS, "业务类型", required=True)
+            cleaned["supplier_type"] = cleaned["supplier_types"][0]
+        elif cleaned.get("supplier_type"):
+            cleaned["supplier_types"] = [cleaned["supplier_type"]]
+        if "service_types" in cleaned:
+            cleaned["service_types"] = normalize_choices(cleaned["service_types"], SERVICE_TYPE_LABELS, "外协能力")
+            cleaned["service_type"] = next(iter(cleaned["service_types"]), None)
+        elif "service_type" in cleaned:
+            value = cleaned["service_type"]
+            cleaned["service_types"] = [value] if value in SERVICE_TYPE_LABELS else list(SERVICE_TYPE_LABELS)
+        if "supplier_types" in cleaned and "outsource" not in cleaned["supplier_types"]:
+            cleaned["service_types"] = []
+            cleaned["service_type"] = None
         return cleaned
 
     async def create_supplier(self, data: dict) -> dict:
         cleaned = self._clean_payload(data)
+        if not self._full_access("create"):
+            cleaned.setdefault("supplier_types", ["outsource"])
+            cleaned.setdefault("supplier_type", "outsource")
+        self._assert_scoped_write(cleaned)
         self._assert_bank_write_allowed(cleaned)
         name = cleaned.get("name") or ""
         if not name:
             raise ValueError("供应商名称不能为空")
         await self._assert_unique_name(name)
         cleaned["supplier_type"] = normalize_supplier_type(cleaned.get("supplier_type") or "other")
+        cleaned.setdefault("supplier_types", [cleaned["supplier_type"]])
+        cleaned.setdefault("service_types", list(SERVICE_TYPE_LABELS) if "outsource" in cleaned["supplier_types"] else [])
+        if "outsource" in cleaned["supplier_types"] and not cleaned["service_types"]:
+            raise ValueError("请至少选择一项外协能力")
         cleaned["vendor_no"] = await generate_vendor_no(self.db)
         supplier = OutsourceVendor(**cleaned)
         self.db.add(supplier)
@@ -308,6 +372,14 @@ class SupplierService:
         if not supplier:
             raise ValueError("供应商不存在")
         cleaned = self._clean_payload(data)
+        self._assert_scoped_write(cleaned, supplier)
+        roles = cleaned.get("supplier_types", supplier_roles(supplier))
+        services = cleaned.get("service_types", supplier_services(supplier))
+        if "outsource" in roles and not services:
+            raise ValueError("请至少选择一项外协能力")
+        if "outsource" not in roles and "service_types" in cleaned:
+            cleaned["service_types"] = []
+            cleaned["service_type"] = None
         self._assert_bank_write_allowed(cleaned)
         if "name" in cleaned:
             if not cleaned["name"]:
@@ -320,6 +392,7 @@ class SupplierService:
             "address", "tax_id", "bank_name", "bank_account", "tax_rate",
             "settlement_method", "settlement_days", "service_type", "coop_rating",
             "remark", "is_active",
+            "supplier_types", "service_types",
         }
         for key, value in cleaned.items():
             if key in allowed:
@@ -336,6 +409,7 @@ class SupplierService:
         supplier = await self._get_active_record(supplier_id, include_inactive=True)
         if not supplier:
             raise ValueError("供应商不存在")
+        self._assert_scoped_write({"is_active": False}, supplier)
         supplier.is_active = False
         await self.db.flush()
         return self.serialize_supplier(supplier, include_bank=self._include_bank())

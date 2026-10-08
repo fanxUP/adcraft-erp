@@ -3,7 +3,7 @@ from decimal import Decimal
 from datetime import datetime
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, Integer, Numeric, String, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, SoftDeleteMixin
@@ -13,7 +13,7 @@ from app.models.business_document import BusinessDocumentItem
 class OutsourceVendor(Base, TimestampMixin, SoftDeleteMixin):
     """统一供应商主数据。
 
-    ``supplier_type=outsource`` 保持旧版外协任务和外协付款兼容；材料、
+    ``supplier_types`` 允许同一档案具有多种业务身份；材料、
     设备及其他供应商共用同一主表，避免多套名称造成对账困难。
     """
     __tablename__ = "outsource_vendors"
@@ -29,6 +29,19 @@ class OutsourceVendor(Base, TimestampMixin, SoftDeleteMixin):
         ),
         Index("ix_outsource_vendors_supplier_type", "supplier_type"),
         Index("ix_outsource_vendors_active_name", "is_active", "name"),
+        Index("ix_outsource_vendors_supplier_types", "supplier_types", postgresql_using="gin"),
+        Index("ix_outsource_vendors_service_types", "service_types", postgresql_using="gin"),
+        CheckConstraint(
+            "jsonb_typeof(supplier_types) = 'array' AND jsonb_array_length(supplier_types) > 0 "
+            "AND supplier_types <@ '[\"outsource\",\"material\",\"equipment\",\"transport\",\"service\",\"other\"]'::jsonb",
+            name="ck_supplier_roles",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(service_types) = 'array' "
+            "AND service_types <@ '[\"production\",\"installation\",\"design\",\"transport\"]'::jsonb "
+            "AND (supplier_types @> '[\"outsource\"]'::jsonb OR service_types = '[]'::jsonb)",
+            name="ck_supplier_services",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -43,6 +56,8 @@ class OutsourceVendor(Base, TimestampMixin, SoftDeleteMixin):
         String(32), nullable=False, default="outsource", server_default="outsource",
         comment="outsource/material/equipment/transport/service/other",
     )
+    supplier_types: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=lambda: ["outsource"])
+    service_types: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     short_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     tax_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     email: Mapped[str | None] = mapped_column(String(128), nullable=True)

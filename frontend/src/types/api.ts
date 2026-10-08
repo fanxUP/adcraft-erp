@@ -1209,6 +1209,8 @@ export interface VendorResponse {
   name: string
   short_name?: string | null
   supplier_type?: string
+  supplier_types?: string[]
+  service_types?: string[]
   supplier_type_label?: string | null
   contact_person?: string
   phone?: string

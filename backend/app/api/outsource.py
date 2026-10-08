@@ -60,11 +60,12 @@ async def list_vendors(
     page_size: int = Query(20, ge=1, le=100),
     keyword: str | None = None,
     service_type: str | None = None,
+    is_active: bool | None = True,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_all_permissions(PERM_OUTSOURCE_CENTER_READ, PERM_OUTSOURCE_VENDOR_READ)),
 ):
     service = OutsourceService(db, viewer=current_user)
-    vendors, total = await service.list_vendors(page, page_size, keyword, service_type)
+    vendors, total = await service.list_vendors(page, page_size, keyword, service_type, is_active)
     return success_paginated(vendors, total, page, page_size)
 
 
@@ -89,7 +90,10 @@ async def create_vendor(
     current_user: User = Depends(require_all_permissions(PERM_OUTSOURCE_CENTER_READ, PERM_OUTSOURCE_VENDOR_CREATE)),
 ):
     service = OutsourceService(db, viewer=current_user)
-    vendor = await service.create_vendor(data.model_dump())
+    try:
+        vendor = await service.create_vendor(data.model_dump(exclude_unset=True))
+    except ValueError as exc:
+        return error(40001, str(exc))
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_OUTSOURCE_VENDOR, UUID(vendor["id"]), ACTION_CREATE,
                         ip_address=request.client.host if request.client else None,
@@ -126,7 +130,10 @@ async def delete_vendor(
 ):
     service = OutsourceService(db, viewer=current_user)
     vid = UUID(vendor_id)
-    ok = await service.delete_vendor(vid)
+    try:
+        ok = await service.delete_vendor(vid)
+    except ValueError as exc:
+        return error(40001, str(exc))
     if not ok:
         return error(40401, "外协商不存在")
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,

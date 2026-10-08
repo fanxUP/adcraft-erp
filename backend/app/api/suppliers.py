@@ -2,16 +2,14 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.core.permissions import (
     PERM_SUPPLIER_CENTER_READ,
-    PERM_SUPPLIER_CREATE,
-    PERM_SUPPLIER_READ,
-    PERM_SUPPLIER_UPDATE,
-    require_all_permissions,
+    user_has_permission,
 )
 from app.models.user import User
 from app.schemas.common import error, success, success_paginated
@@ -26,9 +24,22 @@ from app.services.supplier_service import SupplierService
 
 
 router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
-_READ = require_all_permissions(PERM_SUPPLIER_CENTER_READ, PERM_SUPPLIER_READ)
-_CREATE = require_all_permissions(PERM_SUPPLIER_CENTER_READ, PERM_SUPPLIER_CREATE)
-_UPDATE = require_all_permissions(PERM_SUPPLIER_CENTER_READ, PERM_SUPPLIER_UPDATE)
+
+
+def require_supplier_action(action):
+    required = (PERM_SUPPLIER_CENTER_READ, f"supplier:{action}")
+    legacy = ("outsource_center:read", f"outsource_vendor:{action}")
+
+    async def dependency(current_user: User = Depends(get_current_user)):
+        if any(all(user_has_permission(current_user, code) for code in group) for group in (required, legacy)):
+            return current_user
+        raise HTTPException(403, "权限不足：需要供应商或外协商管理权限")
+    return dependency
+
+
+_READ = require_supplier_action("read")
+_CREATE = require_supplier_action("create")
+_UPDATE = require_supplier_action("update")
 
 
 @router.get("/")
@@ -38,6 +49,7 @@ async def list_suppliers(
     keyword: str | None = None,
     supplier_type: str | None = None,
     is_active: bool | None = True,
+    include_inactive: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(_READ),
 ):
@@ -47,7 +59,7 @@ async def list_suppliers(
             page_size,
             keyword=keyword,
             supplier_type=supplier_type,
-            is_active=is_active,
+            is_active=None if include_inactive else is_active,
         )
     except ValueError as exc:
         return error(40001, str(exc))
@@ -60,10 +72,14 @@ async def get_supplier(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(_READ),
 ):
-    supplier = await SupplierService(db, viewer=current_user).get_supplier(supplier_id)
+    try:
+        supplier = await SupplierService(db, viewer=current_user).get_supplier(supplier_id)
+    except ValueError as exc:
+        return error(40001, str(exc))
     if supplier is None:
         return error(40401, "供应商不存在")
     return success(supplier)
+
 
 @router.post("/")
 async def create_supplier(
@@ -73,7 +89,7 @@ async def create_supplier(
     current_user: User = Depends(_CREATE),
 ):
     try:
-        supplier = await SupplierService(db, viewer=current_user).create_supplier(data.model_dump())
+        supplier = await SupplierService(db, viewer=current_user).create_supplier(data.model_dump(exclude_unset=True))
     except ValueError as exc:
         return error(40001, str(exc))
     await log_operation(

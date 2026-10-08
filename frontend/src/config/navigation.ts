@@ -34,7 +34,6 @@ export const navigationItems: NavigationItem[] = [
       { label: '安装任务', path: '/installation-tasks', accessKey: 'installationListRead' },
       { label: '验收管理', path: '/acceptances', accessKey: 'acceptance' },
       { label: '外协任务', path: '/outsource/tasks', accessKey: 'outsourceTask' },
-      { label: '外协商', path: '/outsource/vendors', accessKey: 'outsourceVendor' },
       { label: '库存管理', path: '/inventory', accessKey: 'inventory' },
       { label: '产品/材质/工艺定价', path: '/products', accessKey: 'product' },
     ],
@@ -47,7 +46,6 @@ export const navigationItems: NavigationItem[] = [
       { label: '应收管理', path: '/receivables', accessKey: 'payment' },
       { label: '支出管理', path: '/expenses', accessKey: 'expense' },
       { label: '项目成本', path: '/project-costs', accessKey: 'projectCost' },
-      { label: '供应商管理', path: '/suppliers', accessKey: 'supplier' },
       { label: '应付管理', path: '/cost-debts', accessKey: 'costDebt' },
       { label: '外协付款', path: '/outsource/payments', accessKey: 'outsourcePayment' },
       { label: '客户对账', path: '/statements', accessKey: 'statement' },
@@ -72,8 +70,9 @@ export const navigationItems: NavigationItem[] = [
   {
     label: '资源中心',
     icon: 'Van',
-    accessKey: 'resourceCenter',
+    accessKey: 'authenticated',
     children: [
+      { label: '供应商管理', path: '/suppliers', accessKey: 'supplier' },
       {
         label: '公司车辆',
         icon: 'Van',

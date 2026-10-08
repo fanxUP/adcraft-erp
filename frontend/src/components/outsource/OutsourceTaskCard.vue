@@ -158,7 +158,7 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="105px">
         <el-form-item label="外协商" prop="vendor_id">
           <el-select v-model="form.vendor_id" filterable clearable placeholder="选择外协商" style="width: 100%">
-            <el-option v-for="vendor in vendors" :key="vendor.id" :label="vendor.name" :value="vendor.id" />
+            <el-option v-for="vendor in eligibleVendors" :key="vendor.id" :label="vendor.name" :value="vendor.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="项目描述">
@@ -206,6 +206,7 @@ import type {
   VendorResponse,
 } from '@/types/api'
 import { StatusTag } from '@/components/ui'
+import { canUndertakeOutsource } from '@/utils/supplierCapabilities'
 
 const props = defineProps<{
   taskType: 'design' | 'production' | 'installation'
@@ -225,6 +226,7 @@ const saving = ref(false)
 const summary = ref<OutsourceOrderItemSummaryResponse | null>(null)
 const outsourceTasks = ref<OutsourceTaskResponse[]>([])
 const vendors = ref<VendorResponse[]>([])
+const eligibleVendors = computed(() => vendors.value.filter(vendor => canUndertakeOutsource(vendor, props.taskType)))
 const dialogVisible = ref(false)
 const formRef = ref<FormInstance>()
 const selectedItem = ref<OutsourceOrderItemSummary | null>(null)

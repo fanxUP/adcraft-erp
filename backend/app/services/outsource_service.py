@@ -12,6 +12,8 @@ from app.models.user import User
 from app.core.permissions import PERM_FINANCE_VIEW_COST, user_has_permission
 from app.domain.presentation import make_action_capability, make_outsource_status_view
 from app.domain.workflows import OUTSOURCE_TASK_WORKFLOW, ensure_transition
+from app.services.supplier_service import SupplierService
+from app.services.supplier_capabilities import SERVICE_TYPE_LABELS, supplier_roles, supplier_services
 
 
 MONEY_QUANTUM = Decimal("0.01")
@@ -501,9 +503,9 @@ class OutsourceService:
     # ── Vendor ──
 
     async def list_vendors(self, page: int, page_size: int, keyword: str | None = None,
-                           service_type: str | None = None) -> tuple[list, int]:
+                           service_type: str | None = None, is_active: bool | None = True) -> tuple[list, int]:
         skip = (page - 1) * page_size
-        vendors, total = await self.vendor_repo.list_vendors(skip, page_size, keyword, service_type)
+        vendors, total = await self.vendor_repo.list_vendors(skip, page_size, keyword, service_type, is_active)
         return [self._vendor_to_dict(v) for v in vendors], total
 
     async def get_vendor(self, vendor_id: UUID) -> dict | None:
@@ -513,7 +515,13 @@ class OutsourceService:
         return self._vendor_to_dict(vendor)
 
     async def create_vendor(self, data: dict) -> dict:
+        data = SupplierService._clean_payload(data)
         data.setdefault("supplier_type", "outsource")
+        data.setdefault("supplier_types", ["outsource"])
+        data.setdefault("service_types", list(SERVICE_TYPE_LABELS))
+        if not data.get("name"):
+            raise ValueError("供应商名称不能为空")
+        await SupplierService(self.db)._assert_unique_name(data["name"])
         data["vendor_no"] = await generate_vendor_no(self.db)
         vendor = await self.vendor_repo.create(data)
         return self._vendor_to_dict(vendor)
@@ -522,6 +530,13 @@ class OutsourceService:
         vendor = await self.vendor_repo.get_by_id(vendor_id)
         if not vendor:
             raise ValueError("外协商不存在")
+        service = SupplierService(self.db, viewer=self.viewer)
+        data = service._clean_payload(data)
+        service._assert_scoped_write(data, vendor)
+        if "name" in data and not data["name"]:
+            raise ValueError("供应商名称不能为空")
+        if data.get("name"):
+            await service._assert_unique_name(data["name"], exclude_id=vendor.id)
         vendor = await self.vendor_repo.update(vendor, data)
         return self._vendor_to_dict(vendor)
 
@@ -529,12 +544,23 @@ class OutsourceService:
         vendor = await self.vendor_repo.get_by_id(vendor_id)
         if not vendor:
             return False
-        # Preserve the legacy external-vendor deletion contract.  The row is
-        # soft-deleted so existing task/payment history remains addressable;
-        # the unified supplier module exposes a separate recoverable
-        # deactivation action for normal lifecycle management.
-        await self.vendor_repo.soft_delete(vendor)
+        SupplierService(self.db, viewer=self.viewer)._assert_scoped_write({"is_active": False}, vendor)
+        await self.vendor_repo.update(vendor, {"is_active": False})
         return True
+
+    async def _validate_task_vendor(self, vendor_id, task_type):
+        try:
+            normalized_id = UUID(str(vendor_id))
+        except (ValueError, TypeError) as exc:
+            raise ValueError("请选择有效的外协供应商") from exc
+        vendor = await self.vendor_repo.get_by_id(normalized_id)
+        if not vendor or not vendor.is_active:
+            raise ValueError("供应商不存在或已停用，不能承接新的外协任务")
+        if "outsource" not in supplier_roles(vendor):
+            raise ValueError("该供应商未启用外协服务")
+        if task_type not in supplier_services(vendor):
+            label = SERVICE_TYPE_LABELS.get(task_type, task_type)
+            raise ValueError(f"该供应商没有{label}外协能力")
 
     # ── Task ──
 
@@ -883,6 +909,7 @@ class OutsourceService:
                 normalized.get("source_task_id"),
             )
 
+        await self._validate_task_vendor(normalized.get("vendor_id"), normalized.get("task_type"))
         normalized["task_no"] = await generate_outsource_task_no(self.db)
         quantity = self._to_decimal(normalized.get("quantity", 1))
         unit_price = self._to_money(normalized.get("unit_price", 0))
@@ -909,6 +936,10 @@ class OutsourceService:
         if task.status == "settled":
             raise ValueError("已结算的外协任务不能编辑")
         data = self._normalize_task_data(data)
+        candidate_vendor = data.get("vendor_id", task.vendor_id)
+        candidate_type = data.get("task_type", task.task_type)
+        if candidate_vendor != task.vendor_id or candidate_type != task.task_type:
+            await self._validate_task_vendor(candidate_vendor, candidate_type)
 
         old_item_id = getattr(task, "order_item_id", None)
         candidate_item_id = data.get("order_item_id", old_item_id)
@@ -1144,6 +1175,7 @@ class OutsourceService:
             "phone": v.phone, "address": v.address,
             "service_type": v.service_type, "coop_rating": v.coop_rating,
             "supplier_type": getattr(v, "supplier_type", "outsource"),
+            "supplier_types": supplier_roles(v), "service_types": supplier_services(v),
             "short_name": getattr(v, "short_name", None),
             "tax_id": getattr(v, "tax_id", None),
             "email": getattr(v, "email", None),

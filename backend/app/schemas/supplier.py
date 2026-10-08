@@ -3,6 +3,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.common import CoercedModel
+from app.services.supplier_capabilities import SERVICE_TYPE_LABELS, normalize_choices
 
 
 SUPPLIER_TYPES = {
@@ -19,6 +20,8 @@ class SupplierCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     short_name: str | None = Field(None, max_length=128)
     supplier_type: str = "other"
+    supplier_types: list[str] | None = None
+    service_types: list[str] | None = None
     contact_person: str | None = Field(None, max_length=128)
     phone: str | None = Field(None, max_length=32)
     email: str | None = Field(None, max_length=128)
@@ -32,6 +35,13 @@ class SupplierCreate(BaseModel):
     service_type: str | None = Field(None, max_length=64)
     coop_rating: str | None = Field(None, max_length=16)
     remark: str | None = None
+
+    @field_validator("supplier_types", "service_types", mode="before")
+    @classmethod
+    def validate_choices(cls, value, info):
+        return normalize_choices(value, SUPPLIER_TYPES if info.field_name == "supplier_types" else SERVICE_TYPE_LABELS,
+                                 "业务类型" if info.field_name == "supplier_types" else "外协能力",
+                                 required=info.field_name == "supplier_types")
 
     @field_validator("name", mode="before")
     @classmethod
@@ -46,6 +56,8 @@ class SupplierUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     short_name: str | None = Field(None, max_length=128)
     supplier_type: str | None = None
+    supplier_types: list[str] | None = None
+    service_types: list[str] | None = None
     contact_person: str | None = Field(None, max_length=128)
     phone: str | None = Field(None, max_length=32)
     email: str | None = Field(None, max_length=128)
@@ -60,6 +72,11 @@ class SupplierUpdate(BaseModel):
     coop_rating: str | None = Field(None, max_length=16)
     remark: str | None = None
     is_active: bool | None = None
+
+    @field_validator("supplier_types", "service_types", mode="before")
+    @classmethod
+    def validate_choices(cls, value, info):
+        return SupplierCreate.validate_choices(value, info)
 
     @field_validator("name", mode="before")
     @classmethod
@@ -89,6 +106,8 @@ class SupplierResponse(CoercedModel):
     name: str
     short_name: str | None = None
     supplier_type: str = "other"
+    supplier_types: list[str] = Field(default_factory=list)
+    service_types: list[str] = Field(default_factory=list)
     supplier_type_label: str | None = None
     contact_person: str | None = None
     phone: str | None = None

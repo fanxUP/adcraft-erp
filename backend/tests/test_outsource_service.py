@@ -31,6 +31,8 @@ def make_mock_vendor(**kwargs):
     v.phone = kwargs.get("phone", "13900139000")
     v.address = kwargs.get("address", "深圳市宝安区")
     v.service_type = kwargs.get("service_type", "加工")
+    v.supplier_types = kwargs.get("supplier_types", ["outsource"])
+    v.service_types = kwargs.get("service_types", ["production", "installation", "design", "transport"])
     v.coop_rating = kwargs.get("coop_rating", "A")
     v.remark = kwargs.get("remark")
     v.is_active = kwargs.get("is_active", True)
@@ -84,7 +86,7 @@ def make_mock_outsource_payment(**kwargs):
 @pytest.fixture
 def mock_repos():
     vendor_repo = MagicMock()
-    vendor_repo.get_by_id = AsyncMock()
+    vendor_repo.get_by_id = AsyncMock(return_value=make_mock_vendor())
     vendor_repo.list_vendors = AsyncMock(return_value=([], 0))
     vendor_repo.create = AsyncMock()
     vendor_repo.update = AsyncMock()
@@ -179,6 +181,7 @@ async def test_get_vendor_not_found(service):
 async def test_create_vendor(service):
     svc, vr, _, _ = service
     vr.create.return_value = make_mock_vendor(name="新外协商")
+    svc.db.execute.return_value.scalar_one_or_none.return_value = None
     with patch("app.services.outsource_service.generate_vendor_no", AsyncMock(return_value="V20260629-0002")):
         result = await svc.create_vendor({"name": "新外协商"})
     assert result["name"] == "新外协商"
@@ -189,6 +192,7 @@ async def test_update_vendor(service):
     svc, vr, _, _ = service
     v = make_mock_vendor(name="旧名称")
     vr.get_by_id.return_value = v
+    svc.db.execute.return_value.scalar_one_or_none.return_value = None
     result = await svc.update_vendor(SAMPLE_USER_ID, {"name": "新名称"})
     assert result["name"] == "新名称"
 
@@ -208,7 +212,8 @@ async def test_delete_vendor_success(service):
     vr.get_by_id.return_value = v
     result = await svc.delete_vendor(SAMPLE_USER_ID)
     assert result is True
-    vr.soft_delete.assert_awaited_once_with(v)
+    assert v.is_active is False
+    vr.soft_delete.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -414,7 +419,7 @@ async def test_create_task(service):
         result = await svc.create_task({
             "vendor_id": SAMPLE_USER_ID,
             "order_id": SAMPLE_ORDER_ID,
-            "task_type": "laser_cutting",
+            "task_type": "production",
             "quantity": 5,
             "unit_price": 100.0,
         })

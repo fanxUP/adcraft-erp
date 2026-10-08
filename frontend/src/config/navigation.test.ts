@@ -86,7 +86,10 @@ describe('filterNavigation', () => {
       ['custom-outsourcing'],
       ['outsource_center:read', 'outsource_vendor:read'],
     ).find(item => item.label === '项目交付')
-    expect(vendorOnly?.children?.map(item => item.label)).toContain('外协商')
-    expect(vendorOnly?.children?.map(item => item.label)).not.toContain('外协任务')
+    expect(vendorOnly?.children?.map(item => item.label) || []).not.toContain('外协商')
+    expect(vendorOnly?.children?.map(item => item.label) || []).not.toContain('外协任务')
+    const resources = filterNavigation(navigationItems, ['custom-outsourcing'], ['outsource_center:read', 'outsource_vendor:read'])
+      .find(item => item.label === '资源中心')
+    expect(resources?.children?.map(item => item.label)).toEqual(['供应商管理'])
   })
 })

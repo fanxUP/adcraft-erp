@@ -14,6 +14,75 @@ from app.services.supplier_service import (
     normalize_supplier_type,
 )
 
+from app.schemas.supplier import SupplierCreate, SupplierUpdate
+from pydantic import ValidationError
+
+
+def test_multi_role_supplier_can_supply_materials_and_outsource():
+    data = SupplierCreate(
+        name="多业务公司", supplier_types=["material", "outsource", "material"],
+        service_types=["production", "installation"],
+    )
+    payload = SupplierService._clean_payload(data.model_dump())
+    assert payload["supplier_types"] == ["material", "outsource"]
+    assert payload["service_types"] == ["production", "installation"]
+    assert payload["supplier_type"] == "material"
+
+
+@pytest.mark.parametrize("payload", [
+    {"supplier_types": []}, {"supplier_types": ["unknown"]},
+    {"supplier_types": ["outsource"], "service_types": ["unknown"]},
+])
+def test_invalid_multi_role_payload_is_rejected(payload):
+    with pytest.raises((ValidationError, ValueError)):
+        SupplierService._clean_payload(SupplierCreate(name="公司", **payload).model_dump())
+
+
+def test_removing_outsource_capability_clears_services():
+    payload = SupplierService._clean_payload(SupplierUpdate(
+        supplier_types=["material"], service_types=["production"],
+    ).model_dump(exclude_unset=True))
+    assert payload["service_types"] == []
+
+
+def test_legacy_payload_is_converted_without_changing_identity():
+    payload = SupplierService._clean_payload({
+        "supplier_type": "outsource", "service_type": "installation", "name": "旧档案",
+    })
+    assert payload["supplier_types"] == ["outsource"]
+    assert payload["service_types"] == ["installation"]
+
+
+def test_external_only_editor_cannot_change_other_business_roles():
+    viewer = SimpleNamespace(roles=[SimpleNamespace(permissions=[
+        SimpleNamespace(code=code) for code in (
+            "outsource_center:read", "outsource_vendor:read", "outsource_vendor:update",
+        )
+    ])])
+    svc = SupplierService(None, viewer=viewer)
+    supplier = SimpleNamespace(supplier_types=["material", "outsource"])
+    svc._assert_scope(supplier)
+    with pytest.raises(ValueError, match="业务类型"):
+        svc._assert_scoped_write({"supplier_types": ["outsource"]}, supplier)
+    with pytest.raises(ValueError, match="其他业务"):
+        svc._assert_scoped_write({"is_active": False}, supplier)
+
+
+def test_scoped_editor_cannot_clear_financial_fields_with_empty_values():
+    svc = SupplierService(None, viewer=SimpleNamespace(roles=[]))
+    payload = {"tax_id": None, "bank_account": "", "remark": "更新合作说明"}
+    svc._assert_scoped_write(payload, SimpleNamespace(supplier_types=["outsource"]))
+    assert payload == {"remark": "更新合作说明"}
+
+
+def test_full_read_access_does_not_expand_legacy_write_scope():
+    user = SimpleNamespace(roles=[SimpleNamespace(permissions=[SimpleNamespace(code=code) for code in (
+        "supplier_center:read", "supplier:read", "outsource_center:read", "outsource_vendor:update",
+    )])])
+    svc = SupplierService(None, viewer=user)
+    with pytest.raises(ValueError, match="外协服务供应商"):
+        svc._assert_scoped_write({"remark": "不应允许"}, SimpleNamespace(supplier_types=["material"]))
+
 
 def test_supplier_type_is_normalized_and_validated():
     assert normalize_supplier_type("  material ") == "material"

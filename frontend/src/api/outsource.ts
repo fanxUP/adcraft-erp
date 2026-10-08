@@ -32,7 +32,7 @@ export interface OutsourceTaskPaymentSummary {
   payments: OutsourcePaymentSummaryItem[]
 }
 
-export function getOutsourceVendors(params: { page?: number; page_size?: number; keyword?: string; service_type?: string }) {
+export function getOutsourceVendors(params: { page?: number; page_size?: number; keyword?: string; service_type?: string; is_active?: boolean | null }) {
   return get<PaginatedData<VendorResponse>>('/outsource/vendors', { params })
 }
 

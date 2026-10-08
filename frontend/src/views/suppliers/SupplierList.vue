@@ -20,11 +20,11 @@
         <el-select
           v-model="filters.supplier_type"
           clearable
-          placeholder="供应商类型"
+          placeholder="业务类型"
           style="width: 160px"
           @change="handleSearch"
         >
-          <el-option v-for="option in supplierTypeOptions" :key="option.value" :label="option.label" :value="option.value" />
+          <el-option v-for="option in visibleTypeOptions" :key="option.value" :label="option.label" :value="option.value" />
         </el-select>
         <el-checkbox v-model="filters.includeInactive" @change="handleSearch">显示停用</el-checkbox>
         <el-button type="primary" @click="handleSearch">搜索</el-button>
@@ -42,8 +42,11 @@
             <div v-if="row.short_name" class="supplier-short-name">{{ row.short_name }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="类型" width="140">
-          <template #default="{ row }">{{ supplierTypeLabel(row.supplier_type) }}</template>
+        <el-table-column label="业务类型" min-width="180">
+          <template #default="{ row }">{{ choiceLabels(supplierRoles(row), supplierTypeOptions) }}</template>
+        </el-table-column>
+        <el-table-column label="外协能力" min-width="150">
+          <template #default="{ row }">{{ choiceLabels(supplierServices(row), serviceTypeOptions) }}</template>
         </el-table-column>
         <el-table-column prop="contact_person" label="联系人" width="120">
           <template #default="{ row }">{{ row.contact_person || '-' }}</template>
@@ -65,8 +68,8 @@
           <template #default="{ row }">
             <el-button text type="primary" size="small" @click="openDetail(row)">详情</el-button>
             <el-button v-if="canUpdate" text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button v-if="canUpdate && row.is_active" text type="warning" size="small" @click="handleDeactivate(row)">停用</el-button>
-            <el-button v-if="canUpdate && !row.is_active" text type="success" size="small" @click="handleActivate(row)">启用</el-button>
+            <el-button v-if="canChangeState(row) && row.is_active" text type="warning" size="small" @click="handleDeactivate(row)">停用</el-button>
+            <el-button v-if="canChangeState(row) && !row.is_active" text type="success" size="small" @click="handleActivate(row)">启用</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -88,11 +91,11 @@
           <el-form-item label="供应商名称" required>
             <el-input v-model="form.name" maxlength="255" show-word-limit placeholder="请输入完整名称" />
           </el-form-item>
-          <el-form-item label="简称">
+          <el-form-item v-if="canFullWrite" label="简称">
             <el-input v-model="form.short_name" maxlength="128" placeholder="列表展示用简称（可选）" />
           </el-form-item>
-          <el-form-item label="供应商类型">
-            <el-select v-model="form.supplier_type" style="width: 100%">
+          <el-form-item label="业务类型" required>
+            <el-select v-model="form.supplier_types" multiple :disabled="!canFullWrite" placeholder="可同时选择材料供应和外协服务" style="width: 100%">
               <el-option v-for="option in supplierTypeOptions" :key="option.value" :label="option.label" :value="option.value" />
             </el-select>
           </el-form-item>
@@ -102,25 +105,27 @@
           <el-form-item label="联系电话">
             <el-input v-model="form.phone" placeholder="手机或座机" />
           </el-form-item>
-          <el-form-item label="电子邮箱">
+          <el-form-item v-if="canFullWrite" label="电子邮箱">
             <el-input v-model="form.email" placeholder="电子邮箱（可选）" />
           </el-form-item>
-          <el-form-item label="统一税号">
+          <el-form-item v-if="canFullWrite" label="统一税号">
             <el-input v-model="form.tax_id" placeholder="统一社会信用代码（可选）" />
           </el-form-item>
-          <el-form-item label="税率">
+          <el-form-item v-if="canFullWrite" label="税率">
             <el-input-number v-model="form.tax_rate" :min="0" :max="100" :precision="2" controls-position="right" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="结算方式">
+          <el-form-item v-if="canFullWrite" label="结算方式">
             <el-select v-model="form.settlement_method" clearable allow-create filterable style="width: 100%">
               <el-option v-for="method in settlementMethods" :key="method" :label="method" :value="method" />
             </el-select>
           </el-form-item>
-          <el-form-item label="账期（天）">
+          <el-form-item v-if="canFullWrite" label="账期（天）">
             <el-input-number v-model="form.settlement_days" :min="0" :max="3650" controls-position="right" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="服务类型">
-            <el-input v-model="form.service_type" placeholder="外协服务的具体类型（可选）" />
+          <el-form-item v-if="form.supplier_types?.includes('outsource')" label="外协能力" required>
+            <el-select v-model="form.service_types" multiple placeholder="选择可承接的服务" style="width: 100%">
+              <el-option v-for="option in serviceTypeOptions" :key="option.value" :label="option.label" :value="option.value" />
+            </el-select>
           </el-form-item>
           <el-form-item label="合作评级">
             <el-select v-model="form.coop_rating" clearable style="width: 100%">
@@ -162,13 +167,14 @@
           </div>
           <div class="detail-grid">
             <div><span class="detail-label">编号</span>{{ detail.vendor_no }}</div>
-            <div><span class="detail-label">类型</span>{{ supplierTypeLabel(detail.supplier_type) }}</div>
+            <div><span class="detail-label">业务类型</span>{{ choiceLabels(supplierRoles(detail), supplierTypeOptions) }}</div>
             <div><span class="detail-label">联系人</span>{{ detail.contact_person || '-' }}</div>
             <div><span class="detail-label">联系电话</span>{{ detail.phone || '-' }}</div>
             <div><span class="detail-label">电子邮箱</span>{{ detail.email || '-' }}</div>
             <div><span class="detail-label">统一税号</span>{{ detail.tax_id || '-' }}</div>
             <div><span class="detail-label">结算方式</span>{{ settlementLabel(detail) }}</div>
-            <div><span class="detail-label">服务类型</span>{{ detail.service_type || '-' }}</div>
+            <div><span class="detail-label">外协能力</span>{{ choiceLabels(supplierServices(detail), serviceTypeOptions) }}</div>
+            <div><span class="detail-label">合作评级</span>{{ detail.coop_rating || '-' }}</div>
             <div class="detail-grid-wide"><span class="detail-label">地址</span>{{ detail.address || '-' }}</div>
             <template v-if="canBankRead">
               <div><span class="detail-label">开户行</span>{{ detail.bank_name || '-' }}</div>
@@ -196,29 +202,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 import { createSupplier, deactivateSupplier, getSupplier, getSuppliers, updateSupplier, type SupplierPayload } from '@/api/suppliers'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney } from '@/utils/format'
 import type { SupplierResponse } from '@/types/api'
+import { choiceLabels, serviceTypeOptions, supplierTypeOptions, supplierRoles, supplierServices } from '@/utils/supplierCapabilities'
 
 const authStore = useAuthStore()
-const canCreate = computed(() => authStore.can('supplier:create'))
-const canUpdate = computed(() => authStore.can('supplier:update'))
+const route = useRoute()
+const canFullRead = computed(() => authStore.can('supplier:read'))
+const canFullWrite = computed(() => authStore.can(editingId.value ? 'supplier:update' : 'supplier:create'))
+const canCreate = computed(() => authStore.canAny(['supplier:create', 'outsource_vendor:create']))
+const canUpdate = computed(() => authStore.canAny(['supplier:update', 'outsource_vendor:update']))
+const visibleTypeOptions = computed(() => canFullRead.value ? supplierTypeOptions : supplierTypeOptions.filter(option => option.value === 'outsource'))
 const canBankRead = computed(() => authStore.can('supplier:bank:view'))
 const canBankUpdate = computed(() => authStore.can('supplier:bank:edit'))
 const canLedgerRead = computed(() => authStore.can('supplier:ledger:read'))
 
-const supplierTypeOptions = [
-  { value: 'outsource', label: '外协服务' },
-  { value: 'material', label: '材料供应商' },
-  { value: 'equipment', label: '设备供应商' },
-  { value: 'transport', label: '运输服务' },
-  { value: 'service', label: '其他服务' },
-  { value: 'other', label: '其他供应商' },
-]
 const settlementMethods = ['现结', '周结', '月结', '按合同结算']
 
 const loading = ref(false)
@@ -228,7 +232,7 @@ const list = ref<SupplierResponse[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
-const filters = reactive({ keyword: '', supplier_type: '', includeInactive: false })
+const filters = reactive({ keyword: '', supplier_type: typeof route.query.supplier_type === 'string' ? route.query.supplier_type : '', includeInactive: false })
 const showEditor = ref(false)
 const editingId = ref('')
 const showDetail = ref(false)
@@ -238,7 +242,8 @@ const detail = ref<SupplierResponse | null>(null)
 const emptyForm = (): SupplierPayload => ({
   name: '',
   short_name: '',
-  supplier_type: 'other',
+  supplier_types: [authStore.can('supplier:create') ? 'other' : 'outsource'],
+  service_types: [],
   contact_person: '',
   phone: '',
   email: '',
@@ -249,7 +254,6 @@ const emptyForm = (): SupplierPayload => ({
   tax_rate: undefined,
   settlement_method: '',
   settlement_days: undefined,
-  service_type: '',
   coop_rating: '',
   remark: '',
 })
@@ -261,9 +265,14 @@ const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
   return list.value.length ? 'ready' : 'empty'
 })
 
-function supplierTypeLabel(value?: string | null) {
-  return supplierTypeOptions.find(option => option.value === value)?.label || value || '-'
+function canChangeState(row: SupplierResponse) {
+  return canUpdate.value && (authStore.can('supplier:update') || supplierRoles(row).length === 1)
 }
+
+watch(() => route.query.supplier_type, value => {
+  filters.supplier_type = typeof value === 'string' ? value : ''
+  handleSearch()
+})
 
 function settlementLabel(row: Pick<SupplierResponse, 'settlement_method' | 'settlement_days'>) {
   const method = row.settlement_method || ''
@@ -280,7 +289,7 @@ async function fetchData() {
       page_size: pageSize.value,
       keyword: filters.keyword.trim() || undefined,
       supplier_type: filters.supplier_type || undefined,
-      is_active: filters.includeInactive ? undefined : true,
+      include_inactive: filters.includeInactive,
     })
     list.value = data.items
     total.value = data.total
@@ -316,7 +325,8 @@ function openEdit(row: SupplierResponse) {
     ...emptyForm(),
     name: row.name,
     short_name: row.short_name || '',
-    supplier_type: row.supplier_type || 'other',
+    supplier_types: [...supplierRoles(row)],
+    service_types: [...supplierServices(row)],
     contact_person: row.contact_person || '',
     phone: row.phone || '',
     email: row.email || '',
@@ -327,7 +337,6 @@ function openEdit(row: SupplierResponse) {
     tax_rate: row.tax_rate ?? undefined,
     settlement_method: row.settlement_method || '',
     settlement_days: row.settlement_days ?? undefined,
-    service_type: row.service_type || '',
     coop_rating: row.coop_rating || '',
     remark: row.remark || '',
   })
@@ -340,9 +349,26 @@ async function handleSave() {
     ElMessage.warning('请输入供应商名称')
     return
   }
+  if (!form.supplier_types?.length) {
+    ElMessage.warning('请至少选择一项业务类型')
+    return
+  }
+  if (form.supplier_types.includes('outsource') && !form.service_types?.length) {
+    ElMessage.warning('请至少选择一项外协能力')
+    return
+  }
   saving.value = true
   try {
-    const payload = { ...form, name }
+    const payload: SupplierPayload = canFullWrite.value ? { ...form, name } : {
+      name, supplier_types: form.supplier_types, service_types: form.service_types,
+      contact_person: form.contact_person, phone: form.phone, address: form.address,
+      coop_rating: form.coop_rating, remark: form.remark,
+    }
+    if (!payload.supplier_types?.includes('outsource')) payload.service_types = []
+    if (!canBankUpdate.value) {
+      delete payload.bank_name
+      delete payload.bank_account
+    }
     if (editingId.value) {
       await updateSupplier(editingId.value, payload)
       ElMessage.success('供应商已更新')
@@ -375,7 +401,7 @@ async function openDetail(row: SupplierResponse) {
 async function handleDeactivate(row: SupplierResponse) {
   try {
     await ElMessageBox.confirm(
-      `停用供应商「${row.name}」后，历史成本仍会保留，但新的成本和支出不能再选择它。确定继续吗？`,
+      `停用供应商「${row.name}」后，新的成本、支出和外协任务不能再选择它，历史记录及未结清款项仍可处理。确定继续吗？`,
       '确认停用',
       { confirmButtonText: '停用', cancelButtonText: '取消', type: 'warning' },
     )

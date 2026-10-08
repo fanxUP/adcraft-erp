@@ -70,7 +70,7 @@ type AccessRoles = readonly string[] | null
 
 export type PermissionRequirement =
   | readonly string[]
-  | { allOf?: readonly string[]; anyOf?: readonly string[] }
+  | { allOf?: readonly string[]; anyOf?: readonly string[]; anyGroups?: readonly (readonly string[])[] }
 
 function isPermissionList(requirement: PermissionRequirement): requirement is readonly string[] {
   return Array.isArray(requirement)
@@ -196,7 +196,7 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement
   // 应付管理会同时读取经营支出和项目成本，必须具备财务支出读取能力；
   // finance:view_cost 只代表成本字段可见，不能单独打开包含经营支出的应付台账。
   costDebt: ['expense:read'],
-  supplier: { allOf: ['supplier_center:read', 'supplier:read'] },
+  supplier: { anyGroups: [['supplier_center:read', 'supplier:read'], ['outsource_center:read', 'outsource_vendor:read']] },
   outsourcePayment: ['outsource_payment:read'],
   reports: { anyOf: ['report:read', 'report:view_financial'] },
   system: ['system:super_admin'],
@@ -453,6 +453,7 @@ export function canAccess(
     const anyOf = requirement.anyOf || []
     return allOf.every(permission => permissions.includes(permission))
       && (anyOf.length === 0 || anyOf.some(permission => permissions.includes(permission)))
+      && (!requirement.anyGroups?.length || requirement.anyGroups.some(group => group.every(permission => permissions.includes(permission))))
   }
 
   const allowedRoles = ACCESS_ROLES[accessKey]
@@ -471,6 +472,7 @@ export function canAccess(
   const anyOf = requirement.anyOf || []
   return allOf.every(permission => (permissions || []).includes(permission))
     && (anyOf.length === 0 || anyOf.some(permission => (permissions || []).includes(permission)))
+    && (!requirement.anyGroups?.length || requirement.anyGroups.some(group => group.every(permission => (permissions || []).includes(permission))))
 }
 
 export function canAccessRoute(

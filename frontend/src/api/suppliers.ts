@@ -5,6 +5,8 @@ export interface SupplierPayload {
   name: string
   short_name?: string | null
   supplier_type?: string
+  supplier_types?: string[]
+  service_types?: string[]
   contact_person?: string | null
   phone?: string | null
   email?: string | null
@@ -27,6 +29,7 @@ export interface SupplierQuery {
   keyword?: string
   supplier_type?: string
   is_active?: boolean
+  include_inactive?: boolean
 }
 
 export function getSuppliers(params?: SupplierQuery) {

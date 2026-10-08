@@ -27,17 +27,19 @@ class OutsourceVendorRepository:
         return result.scalar_one_or_none()
 
     async def list_vendors(self, skip: int = 0, limit: int = 20, keyword: str | None = None,
-                           service_type: str | None = None) -> tuple[list[OutsourceVendor], int]:
-        # Legacy 外协商页面 is a compatibility view over the unified master;
-        # keep it limited to the external-service supplier type.
+                           service_type: str | None = None, is_active: bool | None = True) -> tuple[list[OutsourceVendor], int]:
+        # Business pickers use the external-service identity even when the
+        # same supplier also provides materials or equipment.
         q = select(OutsourceVendor).where(
             OutsourceVendor.deleted_at.is_(None),
-            OutsourceVendor.supplier_type == "outsource",
+            OutsourceVendor.supplier_types.contains(["outsource"]),
         )
+        if is_active is not None:
+            q = q.where(OutsourceVendor.is_active.is_(is_active))
         if keyword:
             q = q.where(OutsourceVendor.name.ilike(f"%{keyword}%"))
         if service_type:
-            q = q.where(OutsourceVendor.service_type == service_type)
+            q = q.where(OutsourceVendor.service_types.contains([service_type]))
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar()
         q = q.order_by(OutsourceVendor.created_at.desc()).offset(skip).limit(limit)

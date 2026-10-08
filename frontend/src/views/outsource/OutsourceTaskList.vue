@@ -182,7 +182,7 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="外协商" prop="vendor_id">
           <el-select v-model="form.vendor_id" filterable clearable style="width: 100%">
-            <el-option v-for="v in vendors" :key="v.id" :label="v.name" :value="v.id" />
+            <el-option v-for="v in eligibleVendors" :key="v.id" :label="v.name" :value="v.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="关联任务" prop="related_doc_id">
@@ -289,7 +289,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getOutsourceVendors, getOutsourceTaskGroups, getOutsourceTaskGroupTasks, getOutsourceTaskPaymentSummary,
@@ -300,7 +300,8 @@ import {
 import type { OutsourceTaskPaymentSummary } from '@/api/outsource'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { OutsourceTaskGroupResponse, OutsourceTaskResponse } from '@/types/api'
+import type { OutsourceTaskGroupResponse, OutsourceTaskResponse, VendorResponse } from '@/types/api'
+import { canUndertakeOutsource } from '@/utils/supplierCapabilities'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -324,13 +325,25 @@ type TaskTab = 'all' | 'design' | 'production' | 'installation'
 const activeTaskType = ref<TaskTab>('all')
 const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
-const vendors = ref<{id: string; name: string}[]>([])
+const vendors = ref<VendorResponse[]>([])
+const originalVendor = ref<{ id: string; name: string; taskType: string } | null>(null)
 const quotes = ref<{id: string; label: string; project_name: string}[]>([])
 const orders = ref<{id: string; label: string; project_name: string}[]>([])
 
 const form = reactive({
   vendor_id: '', related_doc_id: '', related_doc_type: '', task_type: 'production',
   order_item_id: '', description: '', quantity: 1, unit_price: 0, remark: '',
+})
+const eligibleVendors = computed(() => {
+  const rows = vendors.value.filter(vendor => canUndertakeOutsource(vendor, form.task_type))
+  const original = originalVendor.value
+  if (editingId.value && original && original.taskType === form.task_type && !rows.some(row => row.id === original.id)) {
+    return [...rows, { id: original.id, name: `${original.name}（原任务供应商）` }]
+  }
+  return rows
+})
+watch(() => form.task_type, () => {
+  if (form.vendor_id && !eligibleVendors.value.some(vendor => vendor.id === form.vendor_id)) form.vendor_id = ''
 })
 const rules = {
   vendor_id: [{ required: true, message: '请选择外协商', trigger: 'change' }],
@@ -618,6 +631,7 @@ function onRelatedDocChange(val: string) {
 
 function handleCreate() {
   editingId.value = null
+  originalVendor.value = null
   const routeOrderId = typeof route.query.order_id === 'string' ? route.query.order_id : ''
   Object.assign(form, {
     vendor_id: '',
@@ -637,6 +651,7 @@ function handleCreate() {
 
 function handleEdit(row: OutsourceTaskResponse) {
   editingId.value = row.id
+  originalVendor.value = { id: row.vendor_id, name: row.vendor_name || '原供应商', taskType: row.task_type }
   Object.assign(form, {
     vendor_id: row.vendor_id, related_doc_id: row.related_doc_id || '', related_doc_type: row.related_doc_type || '',
     order_item_id: row.order_item_id || '',
