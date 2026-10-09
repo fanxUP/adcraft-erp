@@ -72,6 +72,41 @@ export function getExpenditure(view: ExpenditureView, params: {
 }) {
   return get<ExpenditureResult>(`/expenses/${view}`, { params })
 }
+
+export interface FinanceCashflowSummary {
+  period: { count: number; amount: number }
+  undated: { count: number; amount: number }
+  source: 'payments'
+  date_basis: 'paid_at'
+}
+
+export interface FinanceCostOverlapCandidate {
+  row_key: string
+  cost_id: string
+  cost_no: string
+  category: string
+  cost_amount: number
+  document_no: string
+  project_name: string
+  task_id: string
+  task_no: string
+  task_type: string
+  task_status: string
+  task_amount: number
+  completed_at: string | null
+  supplier_name: string
+  match_rule: string
+  review_status: '待人工核对'
+}
+
+export function getFinanceCashflow(params: { start_date: string; end_date: string }) {
+  return get<FinanceCashflowSummary>('/finance-center/cashflow', { params })
+}
+
+export function getFinanceCostOverlaps(params: { page: number; page_size: number }) {
+  return get<PaginatedData<FinanceCostOverlapCandidate>>('/finance-center/cost-overlaps', { params })
+}
+
 export type ExpenseWritePayload = Partial<Omit<ExpenseResponse, 'id' | 'expense_no' | 'created_by' | 'created_at'>> & {
   /** 登记时支付金额；总金额由它与 payable_amount 相加得到。 */
   paid_amount?: number

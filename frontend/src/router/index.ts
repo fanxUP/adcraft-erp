@@ -46,6 +46,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'installation-tasks', name: 'InstallationTaskList', component: () => import('@/views/tasks/InstallationTaskList.vue') },
       { path: 'installation-tasks/:id', name: 'InstallationTaskDetail', component: () => import('@/views/tasks/InstallationTaskDetail.vue') },
       { path: 'receivables', name: 'ReceivablesView', component: () => import('@/views/payments/ReceivablesView.vue') },
+      { path: 'finance-center', name: 'FinanceCenterDashboard', component: () => import('@/views/finance/FinanceCenterDashboard.vue') },
       { path: 'payments', redirect: '/receivables' },
       { path: 'customer-debts', redirect: '/receivables' },
       { path: 'expenses', name: 'ExpenseList', component: () => import('@/views/payments/ExpenseList.vue') },

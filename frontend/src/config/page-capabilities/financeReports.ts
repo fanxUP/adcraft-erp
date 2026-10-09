@@ -1,6 +1,12 @@
 import type { PageCapabilityMap } from './types'
 
 export const financeReportCapabilities: PageCapabilityMap = {
+  finance_center_dashboard: {
+    title: '财务总览',
+    purpose: '按实际收付款日期汇总期间资金流，并将没有可靠日期的历史金额单独列示',
+    workflowStage: 'finance',
+    availableActions: ['查看期间收款', '查看期间付款', '核对日期待确认金额', '查看疑似重复成本候选'],
+  },
   receivables: {
     title: '应收管理',
     purpose: '查看订单应收、已收、欠款并登记客户收款',

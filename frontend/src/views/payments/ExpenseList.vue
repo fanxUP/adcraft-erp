@@ -232,7 +232,8 @@
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
 import { formatMoney } from '@/utils/format'
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   deleteExpense,
   deleteExpenseAttachment,
@@ -255,7 +256,25 @@ import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/
 import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
 const authStore = useAuthStore()
-const activeView = ref<'ledger' | 'disbursements' | 'expense'>('ledger')
+const route = useRoute()
+const router = useRouter()
+type ExpenseViewTab = 'ledger' | 'disbursements' | 'expense'
+
+function expenseViewFromQuery(value: unknown): ExpenseViewTab {
+  return value === 'disbursements' || value === 'expense' ? value : 'ledger'
+}
+
+const activeView = ref<ExpenseViewTab>(expenseViewFromQuery(route.query.view))
+watch(() => route.query.view, value => {
+  const selected = expenseViewFromQuery(value)
+  if (activeView.value !== selected) activeView.value = selected
+})
+watch(activeView, view => {
+  const nextQuery = { ...route.query }
+  if (view === 'ledger') delete nextQuery.view
+  else nextQuery.view = view
+  if (nextQuery.view !== route.query.view) void router.replace({ query: nextQuery })
+})
 const canUseSupplier = computed(() => authStore.can('supplier:read'))
 
 const CATEGORIES = ['房租', '水电', '材料采购', '外协加工', '运输', '办公', '工资', '税费', '其他']

@@ -66,10 +66,10 @@
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column label="金额" width="120" align="right">
+      <el-table-column label="订单收入 / 报价金额" width="160" align="right">
         <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column label="项目成本" width="120" align="right">
+      <el-table-column label="成本（订单实际 / 报价预计）" width="200" align="right">
         <template #default="{ row }">
           <span :style="{ color: getRowProjectCost(row) > 0 ? 'var(--el-color-warning)' : '' }">
             ¥ {{ getRowProjectCost(row).toFixed(2) }}
@@ -178,8 +178,11 @@ const combinedList = computed(() => {
   return sorted.slice(start, start + pageSize.value)
 })
 
-const currentPageProjectCostTotal = computed(() =>
-  sumCurrentPageProjectCosts(combinedList.value, costMap.value),
+const currentPageOrderCostTotal = computed(() =>
+  sumCurrentPageProjectCosts(combinedList.value.filter(row => row._type === 'order'), costMap.value),
+)
+const currentPageQuoteCostEstimate = computed(() =>
+  sumCurrentPageProjectCosts(combinedList.value.filter(row => row._type === 'quote'), costMap.value),
 )
 
 type SummaryColumn = { label?: string }
@@ -187,7 +190,9 @@ type SummaryColumn = { label?: string }
 function summaryMethod({ columns }: { columns: SummaryColumn[] }) {
   return columns.map((column, index) => {
     if (index === 0) return `本页合计（${combinedList.value.length}条）`
-    if (column.label === '项目成本') return `¥ ${currentPageProjectCostTotal.value.toFixed(2)}`
+    if (column.label === '成本（订单实际 / 报价预计）') {
+      return `实际 ¥ ${currentPageOrderCostTotal.value.toFixed(2)} / 预计 ¥ ${currentPageQuoteCostEstimate.value.toFixed(2)}`
+    }
     return ''
   })
 }

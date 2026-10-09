@@ -43,12 +43,31 @@ export const navigationItems: NavigationItem[] = [
     icon: 'Money',
     accessKey: 'finance',
     children: [
-      { label: '应收管理', path: '/receivables', accessKey: 'payment' },
-      { label: '支出管理', path: '/expenses', accessKey: 'expense' },
-      { label: '项目成本', path: '/project-costs', accessKey: 'projectCost' },
-      { label: '应付管理', path: '/cost-debts', accessKey: 'costDebt' },
-      { label: '外协付款', path: '/outsource/payments', accessKey: 'outsourcePayment' },
-      { label: '客户对账', path: '/statements', accessKey: 'statement' },
+      { label: '财务总览', path: '/finance-center', accessKey: 'finance' },
+      {
+        label: '客户收款',
+        accessKey: 'finance',
+        children: [
+          { label: '应收管理', path: '/receivables', accessKey: 'payment' },
+          { label: '客户对账', path: '/statements', accessKey: 'statement' },
+        ],
+      },
+      {
+        label: '项目经营',
+        accessKey: 'finance',
+        children: [
+          { label: '项目成本', path: '/project-costs', accessKey: 'projectCost' },
+        ],
+      },
+      {
+        label: '供应商与费用付款',
+        accessKey: 'finance',
+        children: [
+          { label: '支出管理', path: '/expenses', accessKey: 'expense' },
+          { label: '应付管理', path: '/cost-debts', accessKey: 'costDebt' },
+          { label: '外协付款', path: '/outsource/payments', accessKey: 'outsourcePayment' },
+        ],
+      },
     ],
   },
   {

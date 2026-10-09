@@ -252,6 +252,7 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   TaskCompletionStats: 'taskCompletion',
 
   ReceivablesView: 'payment',
+  FinanceCenterDashboard: 'finance',
   ExpenseList: 'expense',
   StatementList: 'statement',
   StatementDetail: 'statement',
