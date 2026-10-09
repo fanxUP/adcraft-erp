@@ -17,6 +17,7 @@ from app.repositories.task_repo import AttachmentRepository
 from app.schemas.payment import ProjectCostResponse
 from app.services.number_generator import generate_project_cost_no
 from app.services.payable_service import PayableService, validate_payable_amount
+from app.services.finance_reconciliation_service import FinanceReconciliationService
 from app.services.supplier_service import SupplierService
 from app.services.business_document_service import assert_order_data_mutable
 
@@ -406,7 +407,7 @@ class ProjectCostService:
         })
 
     async def update_cost(self, cost_id: UUID, data: dict) -> dict:
-        c = await self.repo.get_by_id(cost_id)
+        c = await self.repo.get_by_id(cost_id, for_update=True)
         if not c:
             raise ValueError("项目成本记录不存在")
         await self._assert_cost_document_mutable(c)
@@ -463,6 +464,12 @@ class ProjectCostService:
                 c.id,
                 new_debt,
             )
+            await FinanceReconciliationService(self.db).assert_project_cost_base_covers_reconciliations(
+                source_id=c.id,
+                amount=new_amount,
+                debt_amount=new_debt,
+                is_settled=c.is_settled,
+            )
         if "document_item_id" in normalized and normalized["document_item_id"] is None:
             allow_null_fields.add("document_item_id")
         if allow_null_fields:
@@ -479,9 +486,12 @@ class ProjectCostService:
         return self._to_dict(c)
 
     async def delete_cost(self, cost_id: UUID) -> None:
-        c = await self.repo.get_by_id(cost_id)
+        c = await self.repo.get_by_id(cost_id, for_update=True)
         if not c:
             raise ValueError("项目成本记录不存在")
+        await FinanceReconciliationService(self.db).assert_source_has_no_active_reconciliations(
+            source_type="project_cost", source_id=c.id,
+        )
         await self._assert_cost_document_mutable(c)
         debt_amount = Decimal(str(getattr(c, "debt_amount", 0) or 0))
         if debt_amount > 0:
@@ -500,9 +510,13 @@ class ProjectCostService:
         result = await self.db.execute(
             select(ProjectCost)
             .where(ProjectCost.id.in_(cost_ids), ProjectCost.deleted_at.is_(None))
+            .with_for_update()
         )
         costs = list(result.scalars().all())
         for cost in costs:
+            await FinanceReconciliationService(self.db).assert_source_has_no_active_reconciliations(
+                source_type="project_cost", source_id=cost.id,
+            )
             await self._assert_cost_document_mutable(cost)
             debt_amount = Decimal(str(getattr(cost, "debt_amount", 0) or 0))
             if debt_amount > 0:

@@ -88,8 +88,12 @@
         <el-table-column label="记录状态" min-width="150">
           <template #default="{ row }">{{ recordStatus(row) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="110" fixed="right">
-          <template #default="{ row }"><el-button text type="primary" @click="selected = row">查看来源</el-button></template>
+        <el-table-column label="操作" width="190" fixed="right">
+          <template #default="{ row }">
+            <el-button v-if="canReconcile(row)" text type="primary" @click="openReconciliation(row)">核实付款日期</el-button>
+            <el-button v-if="canVoidReconciliation(row)" text type="warning" @click="voidReconciliation(row)">撤销核对</el-button>
+            <el-button text type="primary" @click="selected = row">查看来源</el-button>
+          </template>
         </el-table-column>
       </el-table>
       <template #footer>
@@ -109,6 +113,9 @@
           <el-descriptions-item :label="view === 'ledger' ? '业务总额' : '本次付款 / 历史已付'">{{ formatMoney(selected.amount) }}</el-descriptions-item>
           <el-descriptions-item v-if="view === 'ledger'" label="累计已付 / 剩余待付">{{ formatMoney(selected.paid_amount || 0) }} / {{ formatMoney(selected.remaining_amount || 0) }}</el-descriptions-item>
           <el-descriptions-item v-else label="付款日期">{{ expenditureDateLabel(selected.paid_at) }}</el-descriptions-item>
+          <el-descriptions-item v-if="selected.evidence_reference" label="核对凭证参考">{{ selected.evidence_reference }}</el-descriptions-item>
+          <el-descriptions-item v-if="selected.evidence_type" label="凭证类型">{{ evidenceTypeLabel(selected.evidence_type) }}</el-descriptions-item>
+          <el-descriptions-item v-if="selected.reconciliation_note" label="核对说明">{{ selected.reconciliation_note }}</el-descriptions-item>
           <el-descriptions-item label="记录状态">{{ recordStatus(selected) }}</el-descriptions-item>
         </el-descriptions>
         <p class="expenditure-note">金额、凭证和删除操作仍在原始业务页面维护，此处不新建第二份记录。</p>
@@ -117,17 +124,82 @@
         <p v-else class="expenditure-secondary">原记录未关联单据或已删除；保留此处的只读财务事实。</p>
       </template>
     </el-drawer>
+
+    <el-dialog v-model="reconciliationVisible" title="核实付款日期" width="min(560px, 94vw)" :close-on-click-modal="false">
+      <template v-if="reconciliationRow">
+        <el-alert
+          class="reconciliation-policy"
+          type="warning"
+          :closable="false"
+          show-icon
+          title="此操作只为已有已付款金额补充凭证日期，不会新增付款或改变来源金额。"
+        />
+        <el-descriptions :column="1" border class="reconciliation-source">
+          <el-descriptions-item label="来源编号">{{ reconciliationRow.source_no }}</el-descriptions-item>
+          <el-descriptions-item label="当前待核实金额">{{ formatMoney(reconciliationRow.amount) }}</el-descriptions-item>
+        </el-descriptions>
+        <el-form label-width="110px" class="reconciliation-form">
+          <el-form-item label="本次核实金额" required>
+            <el-input-number
+              v-model="reconciliationForm.amount"
+              :min="0.01"
+              :max="reconciliationRow.amount"
+              :precision="2"
+              :step="100"
+              :controls="false"
+            />
+          </el-form-item>
+          <el-form-item label="实际付款日期" required>
+            <el-date-picker
+              v-model="reconciliationForm.paid_at"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="按银行/付款凭证选择"
+              :disabled-date="disableFutureDate"
+            />
+          </el-form-item>
+          <el-form-item label="凭证类型" required>
+            <el-select v-model="reconciliationForm.evidence_type" placeholder="请选择凭证类型">
+              <el-option label="银行流水" value="bank_statement" />
+              <el-option label="付款凭证" value="payment_voucher" />
+              <el-option label="其他可核验证据" value="other" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="凭证参考" required>
+            <el-input v-model="reconciliationForm.evidence_reference" maxlength="255" placeholder="流水号、凭证编号或档案位置" />
+          </el-form-item>
+          <el-form-item label="核对说明">
+            <el-input v-model="reconciliationForm.note" type="textarea" :rows="3" maxlength="2000" show-word-limit />
+          </el-form-item>
+        </el-form>
+      </template>
+      <template #footer>
+        <el-button @click="reconciliationVisible = false">取消</el-button>
+        <el-button type="primary" :loading="reconciliationSaving" @click="saveReconciliation">保存核对</el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { getExpenditure, type ExpenditureResult, type ExpenditureRow, type ExpenditureSource, type ExpenditureView } from '@/api/payments'
+import {
+  createFinancePaymentDateReconciliation,
+  getExpenditure,
+  voidFinancePaymentDateReconciliation,
+  type ExpenditureResult,
+  type ExpenditureRow,
+  type ExpenditureSource,
+  type ExpenditureView,
+  type FinanceEvidenceType,
+} from '@/api/payments'
 import { PageToolbar, DataTableShell, StatePanel } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney } from '@/utils/format'
 import { expenditureDateLabel, expenditureCategoryLabel, expenditureSourceTarget, latestRequest } from '@/utils/expenditure'
+import { getErrorMessage } from '@/utils/error'
 
 const props = defineProps<{ view: ExpenditureView }>()
 const emit = defineEmits<{ manageExpense: [id: string] }>()
@@ -144,6 +216,16 @@ const loading = ref(false)
 const loadError = ref(false)
 const result = ref<ExpenditureResult | null>(null)
 const selected = ref<ExpenditureRow | null>(null)
+const reconciliationVisible = ref(false)
+const reconciliationSaving = ref(false)
+const reconciliationRow = ref<ExpenditureRow | null>(null)
+const reconciliationForm = reactive<{
+  amount: number | null
+  paid_at: string
+  evidence_type: FinanceEvidenceType | ''
+  evidence_reference: string
+  note: string
+}>({ amount: null, paid_at: '', evidence_type: '', evidence_reference: '', note: '' })
 const requests = latestRequest()
 const availableSources = computed<ExpenditureSource[]>(() => result.value?.available_sources || (authStore.canAll(['outsource_center:read', 'outsource_task:read', 'outsource_payment:read', 'finance:view_cost']) ? ['expense', 'project_cost', 'outsource'] : ['expense', 'project_cost']))
 const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : result.value?.items.length ? 'ready' : 'empty')
@@ -153,6 +235,95 @@ const sourceTarget = computed(() => selected.value ? expenditureSourceTarget(sel
 function recordStatus(row: ExpenditureRow) {
   if (props.view === 'disbursements') return row.date_status === 'unverified' ? '付款日期待核实' : '有付款日期'
   return ({ active: '实际登记费用', pending: '未完成（含预付款）', in_progress: '进行中（含预付款）', completed: '已完成', settled: '已结算', cancelled: '已取消（保留已付）', deleted: '已删除（保留已付）', standalone: '未关联任务付款' } as Record<string, string>)[row.source_status] || row.source_status
+}
+
+function canReconcile(row: ExpenditureRow) {
+  if (props.view !== 'disbursements' || row.date_status !== 'unverified' || row.source_status === 'deleted') return false
+  if (!row.reconciliation_source_type || !row.reconciliation_source_id) return false
+  if (!authStore.canAll(['expense:read', 'expense:update'])) return false
+  return row.source_type !== 'outsource' || authStore.canAll([
+    'finance:view_cost', 'outsource_center:read', 'outsource_task:read',
+    'outsource_payment:read', 'outsource_vendor:read',
+  ])
+}
+
+function canVoidReconciliation(row: ExpenditureRow) {
+  return props.view === 'disbursements'
+    && !!row.reconciliation_id
+    && authStore.canAll(['expense:read', 'expense:update'])
+    && (row.source_type !== 'outsource' || authStore.canAll([
+      'finance:view_cost', 'outsource_center:read', 'outsource_task:read',
+      'outsource_payment:read', 'outsource_vendor:read',
+    ]))
+}
+
+function evidenceTypeLabel(type: FinanceEvidenceType) {
+  return ({ bank_statement: '银行流水', payment_voucher: '付款凭证', other: '其他证据' } as const)[type]
+}
+
+function openReconciliation(row: ExpenditureRow) {
+  reconciliationRow.value = row
+  Object.assign(reconciliationForm, {
+    amount: Number(row.amount), paid_at: '', evidence_type: '', evidence_reference: '', note: '',
+  })
+  reconciliationVisible.value = true
+}
+
+function disableFutureDate(value: Date) {
+  const today = new Date()
+  today.setHours(23, 59, 59, 999)
+  return value.getTime() > today.getTime()
+}
+
+async function saveReconciliation() {
+  const row = reconciliationRow.value
+  if (!row?.reconciliation_source_type || !row.reconciliation_source_id) return
+  if (!reconciliationForm.amount || reconciliationForm.amount <= 0 || reconciliationForm.amount > row.amount) {
+    ElMessage.warning('核实金额必须大于0且不能超过当前待核实金额')
+    return
+  }
+  if (!reconciliationForm.paid_at || !reconciliationForm.evidence_type || !reconciliationForm.evidence_reference.trim()) {
+    ElMessage.warning('请填写实际付款日期、凭证类型和凭证参考')
+    return
+  }
+  reconciliationSaving.value = true
+  try {
+    await createFinancePaymentDateReconciliation({
+      source_type: row.reconciliation_source_type,
+      source_id: row.reconciliation_source_id,
+      amount: reconciliationForm.amount,
+      paid_at: reconciliationForm.paid_at,
+      evidence_type: reconciliationForm.evidence_type,
+      evidence_reference: reconciliationForm.evidence_reference.trim(),
+      ...(reconciliationForm.note.trim() ? { note: reconciliationForm.note.trim() } : {}),
+    })
+    ElMessage.success('付款日期核对已保存')
+    reconciliationVisible.value = false
+    await fetchData()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '保存核对失败，请稍后重试'))
+  } finally {
+    reconciliationSaving.value = false
+  }
+}
+
+async function voidReconciliation(row: ExpenditureRow) {
+  if (!row.reconciliation_id) return
+  const answer = await ElMessageBox.prompt('请说明撤销此日期核对的原因。撤销后金额会重新回到“付款日期待核实”。', '撤销付款日期核对', {
+    inputValidator: value => value?.trim() ? true : '撤销原因不能为空',
+    inputErrorMessage: '撤销原因不能为空',
+    confirmButtonText: '确认撤销',
+    cancelButtonText: '取消',
+    type: 'warning',
+  }).catch(() => null)
+  if (!answer?.value) return
+  try {
+    await voidFinancePaymentDateReconciliation(row.reconciliation_id, { reason: answer.value.trim() })
+    ElMessage.success('核对已撤销，金额已恢复为待核实')
+    await fetchData()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '撤销核对失败，请稍后重试'))
+  }
 }
 
 async function fetchData() {

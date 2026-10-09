@@ -27,6 +27,7 @@ from app.services.payable_service import (
     validate_payable_amount,
 )
 from app.services.supplier_service import SupplierService
+from app.services.finance_reconciliation_service import FinanceReconciliationService
 from app.domain.presentation import make_action_capability, make_payment_status_view, make_statement_status_view
 
 
@@ -605,7 +606,7 @@ class ExpenseService:
         return self._to_dict(expense)
 
     async def update_expense(self, expense_id: UUID, data: dict) -> dict:
-        e = await self.repo.get_by_id(expense_id)
+        e = await self.repo.get_by_id(expense_id, for_update=True)
         if not e:
             raise ValueError("支出记录不存在")
         current_payable_amount = _money_or_zero(getattr(e, "payable_amount", 0))
@@ -652,6 +653,11 @@ class ExpenseService:
                 e.id,
                 payable_amount,
             )
+        await FinanceReconciliationService(self.db).assert_source_base_covers_reconciliations(
+            source_type="expense",
+            source_id=e.id,
+            proposed_base=max(amount - payable_amount, Decimal("0.00")),
+        )
         if allow_null_fields:
             await self.repo.update(e, normalized, allow_null_fields=allow_null_fields)
         else:
@@ -661,9 +667,13 @@ class ExpenseService:
         return self._to_dict(e)
 
     async def delete_expense(self, expense_id: UUID) -> None:
-        e = await self.repo.get_by_id(expense_id)
+        e = await self.repo.get_by_id(expense_id, for_update=True)
         if not e:
             raise ValueError("支出记录不存在")
+
+        await FinanceReconciliationService(self.db).assert_source_has_no_active_reconciliations(
+            source_type="expense", source_id=e.id,
+        )
 
         # A source with any active payable payment must be reversed explicitly
         # from the payable ledger before it can be deleted.  Keep this check
@@ -681,9 +691,13 @@ class ExpenseService:
     ) -> dict:
         """撤销有效应付付款流水后，在同一事务中软删除支出。"""
 
-        e = await self.repo.get_by_id(expense_id)
+        e = await self.repo.get_by_id(expense_id, for_update=True)
         if not e:
             raise ValueError("支出记录不存在")
+
+        await FinanceReconciliationService(self.db).assert_source_has_no_active_reconciliations(
+            source_type="expense", source_id=e.id,
+        )
 
         cleanup = await PayableService(self.db).void_active_payments_for_source(
             "expense",

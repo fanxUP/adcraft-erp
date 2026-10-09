@@ -202,7 +202,9 @@ async def test_delete_cost_rejects_terminal_order_status():
     cost.document_id = order_id
     cost.document = _order_doc(order_id, "completed")
 
-    service = ProjectCostService(MagicMock())
+    db = MagicMock()
+    db.scalar = AsyncMock(return_value=0)
+    service = ProjectCostService(db)
     service.repo = MagicMock()
     service.repo.get_by_id = AsyncMock(return_value=cost)
     service.repo.soft_delete = AsyncMock()

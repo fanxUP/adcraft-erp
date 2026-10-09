@@ -121,7 +121,7 @@
           type="warning"
           :closable="false"
           show-icon
-          title="这里仅列出人工项目成本与已完成外协任务的高相似候选。命中规则不代表重复，不会自动合并、删除或改账，请结合合同、任务和凭证逐笔核实。"
+          title="这里仅列出人工项目成本与已完成外协任务的高相似候选。命中规则不代表重复；核对结论和凭证只留审计记录，不会自动合并、删除或改账。"
         />
 
         <div v-if="!canReviewOverlaps" class="finance-permission-note">
@@ -158,7 +158,24 @@
             </el-table-column>
             <el-table-column label="状态" width="115">
               <template #default="{ row }">
-                <el-tag type="warning" effect="plain" size="small">{{ row.review_status }}</el-tag>
+                <el-tag :type="overlapStatusType(row.review_status)" effect="plain" size="small">
+                  {{ overlapStatusLabel(row.review_status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="evidence_reference" label="凭证参考" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.evidence_reference || '—' }}</template>
+            </el-table-column>
+            <el-table-column prop="review_note" label="核对说明" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.review_note || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="操作" min-width="300" fixed="right">
+              <template #default="{ row }">
+                <el-button v-if="canEditOverlapReviews" link type="primary" @click="openOverlapReview(row)">
+                  {{ row.review_id ? '修改核对结论' : '登记核对结论' }}
+                </el-button>
+                <el-button link @click="openProjectCost(row)">打开项目成本</el-button>
+                <el-button link @click="openOutsourceTask(row)">查看对应外协任务</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -174,21 +191,73 @@
         </template>
       </el-tab-pane>
     </el-tabs>
+
+    <el-dialog v-model="overlapReviewVisible" title="核对疑似重复成本" width="min(620px, 94vw)" :close-on-click-modal="false">
+      <template v-if="overlapReviewRow">
+        <el-alert
+          class="finance-policy-note"
+          type="warning"
+          :closable="false"
+          show-icon
+          title="此处只记录人工结论，不会自动删除成本、外协任务或修改任何金额。"
+        />
+        <el-descriptions :column="1" border class="overlap-review-source">
+          <el-descriptions-item label="项目成本">{{ overlapReviewRow.cost_no }} · {{ formatMoney(overlapReviewRow.cost_amount) }}</el-descriptions-item>
+          <el-descriptions-item label="外协任务">{{ overlapReviewRow.task_no }} · {{ formatMoney(overlapReviewRow.task_amount) }}</el-descriptions-item>
+          <el-descriptions-item label="系统匹配规则">{{ overlapReviewRow.match_rule }}</el-descriptions-item>
+        </el-descriptions>
+        <el-form label-width="110px" class="overlap-review-form">
+          <el-form-item label="核对结论" required>
+            <el-select v-model="overlapReviewForm.decision" placeholder="请选择人工核对结论">
+              <el-option label="确认重复" value="confirmed_duplicate" />
+              <el-option label="确认不重复" value="confirmed_not_duplicate" />
+              <el-option label="证据不足，暂不判断" value="needs_evidence" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="证据类型" :required="overlapNeedsEvidence">
+            <el-select v-model="overlapReviewForm.evidence_type" clearable placeholder="请选择证据类型">
+              <el-option label="银行流水" value="bank_statement" />
+              <el-option label="付款凭证" value="payment_voucher" />
+              <el-option label="其他可核验证据" value="other" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="凭证参考" :required="overlapNeedsEvidence">
+            <el-input v-model="overlapReviewForm.evidence_reference" maxlength="255" placeholder="流水号、凭证编号或档案位置" />
+          </el-form-item>
+          <el-form-item label="核对说明">
+            <el-input v-model="overlapReviewForm.note" type="textarea" :rows="3" maxlength="2000" show-word-limit />
+          </el-form-item>
+        </el-form>
+      </template>
+      <template #footer>
+        <el-button @click="overlapReviewVisible = false">取消</el-button>
+        <el-button type="primary" :loading="overlapReviewSaving" @click="saveOverlapReview">保存核对结论</el-button>
+      </template>
+    </el-dialog>
   </AppPage>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { AppPage, PageHeader } from '@/components/ui'
-import { getExpenditure, getFinanceCashflow, getFinanceCostOverlaps } from '@/api/payments'
+import {
+  getExpenditure,
+  getFinanceCashflow,
+  getFinanceCostOverlaps,
+  reviewFinanceCostOverlap,
+} from '@/api/payments'
 import type {
   ExpenditureResult,
+  FinanceCostOverlapDecision,
   FinanceCashflowSummary,
   FinanceCostOverlapCandidate,
+  FinanceEvidenceType,
 } from '@/api/payments'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney } from '@/utils/format'
+import { getErrorMessage } from '@/utils/error'
 
 type DateRange = [string, string]
 
@@ -216,6 +285,7 @@ const canReviewOverlaps = computed(() => authStore.canAll([
   'outsource_task:read',
   'outsource_vendor:read',
 ]))
+const canEditOverlapReviews = computed(() => canReviewOverlaps.value && authStore.can('expense:update'))
 
 const receiptData = ref<FinanceCashflowSummary | null>(null)
 const expenditureData = ref<ExpenditureResult | null>(null)
@@ -244,6 +314,19 @@ const overlapTotal = ref(0)
 const overlapLoading = ref(false)
 const overlapError = ref(false)
 let overlapRequestId = 0
+const overlapReviewVisible = ref(false)
+const overlapReviewSaving = ref(false)
+const overlapReviewRow = ref<FinanceCostOverlapCandidate | null>(null)
+const overlapReviewForm = reactive<{
+  decision: FinanceCostOverlapDecision | ''
+  evidence_type: FinanceEvidenceType | ''
+  evidence_reference: string
+  note: string
+}>({ decision: '', evidence_type: '', evidence_reference: '', note: '' })
+const overlapNeedsEvidence = computed(() => (
+  overlapReviewForm.decision === 'confirmed_duplicate'
+  || overlapReviewForm.decision === 'confirmed_not_duplicate'
+))
 
 function goTo(path: string) {
   void router.push(path)
@@ -251,6 +334,76 @@ function goTo(path: string) {
 
 function goToExpense(view: 'expense' | 'disbursements') {
   void router.push({ path: '/expenses', query: { view } })
+}
+
+function overlapStatusLabel(status: FinanceCostOverlapCandidate['review_status']) {
+  return ({
+    pending: '待人工核对',
+    confirmed_duplicate: '已确认重复',
+    confirmed_not_duplicate: '已确认不重复',
+    needs_evidence: '证据不足',
+  } as const)[status]
+}
+
+function overlapStatusType(status: FinanceCostOverlapCandidate['review_status']) {
+  return ({
+    pending: 'warning',
+    confirmed_duplicate: 'danger',
+    confirmed_not_duplicate: 'success',
+    needs_evidence: 'info',
+  } as const)[status]
+}
+
+function openOverlapReview(row: FinanceCostOverlapCandidate) {
+  overlapReviewRow.value = row
+  Object.assign(overlapReviewForm, {
+    decision: row.review_status === 'pending' ? '' : row.review_status,
+    evidence_type: row.evidence_type || '',
+    evidence_reference: row.evidence_reference || '',
+    note: row.review_note || '',
+  })
+  overlapReviewVisible.value = true
+}
+
+async function saveOverlapReview() {
+  const row = overlapReviewRow.value
+  if (!row || !overlapReviewForm.decision) {
+    ElMessage.warning('请选择核对结论')
+    return
+  }
+  if (overlapNeedsEvidence.value && (!overlapReviewForm.evidence_type || !overlapReviewForm.evidence_reference.trim())) {
+    ElMessage.warning('确认重复或不重复时，必须填写证据类型和凭证参考')
+    return
+  }
+  overlapReviewSaving.value = true
+  try {
+    await reviewFinanceCostOverlap({
+      cost_id: row.cost_id,
+      task_id: row.task_id,
+      decision: overlapReviewForm.decision,
+      ...(overlapReviewForm.evidence_type ? { evidence_type: overlapReviewForm.evidence_type } : {}),
+      ...(overlapReviewForm.evidence_reference.trim() ? { evidence_reference: overlapReviewForm.evidence_reference.trim() } : {}),
+      ...(overlapReviewForm.note.trim() ? { note: overlapReviewForm.note.trim() } : {}),
+    })
+    ElMessage.success('人工核对结论已保存；业务金额未作更改')
+    overlapReviewVisible.value = false
+    await fetchOverlaps()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '保存核对结论失败，请稍后重试'))
+  } finally {
+    overlapReviewSaving.value = false
+  }
+}
+
+function openProjectCost(row: FinanceCostOverlapCandidate) {
+  void router.push(`/project-costs/${row.document_id}`)
+}
+
+function openOutsourceTask(row: FinanceCostOverlapCandidate) {
+  void router.push({
+    path: '/outsource/tasks',
+    query: { order_id: row.document_id, task_type: row.task_type },
+  })
 }
 
 async function fetchSummary() {

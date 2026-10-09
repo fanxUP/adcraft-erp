@@ -1,4 +1,5 @@
 """SQL execution against a disposable PostgreSQL schema, never app DATABASE_URL."""
+import asyncio
 import importlib
 import os
 import pkgutil
@@ -16,13 +17,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 import app.models
 from app.models.base import Base
 from app.models.business_document import BusinessDocument
+from app.models.finance_reconciliation import FinancePaymentDateReconciliation
 from app.models.outsource import OutsourcePayment, OutsourceTask, OutsourceVendor
 from app.models.payable import PayablePayment
 from app.models.payment import Expense
 from app.models.project_cost import ProjectCost
+from app.services.finance_center_service import FinanceCenterService
+from app.services.finance_reconciliation_service import FinanceReconciliationService
 from app.services.expenditure_service import ExpenditureFilters, ExpenditureService
+from app.services.payment_service import ExpenseService
+from app.services.project_cost_service import ProjectCostService
+from app.services.outsource_service import OutsourceService
 from tests.test_expenditure_service import viewer
 from app.api.payments import exp_router
+from app.api.finance_center import router as finance_center_router
 from app.core.database import get_db
 from app.core.deps import get_current_user
 
@@ -205,3 +213,344 @@ async def test_http_contract_auth_validation_and_real_sql(fixture_db):
         assert (await client.get("/expenses/ledger", params={"source_type": "outsource"})).status_code == 403
         current = viewer()
         assert (await client.get("/expenses/ledger")).status_code == 403
+
+
+async def test_finance_reconciliation_http_routes_enforce_permissions_and_audit(fixture_db):
+    db, _, ids = fixture_db
+    app = FastAPI()
+    app.include_router(exp_router)
+    app.include_router(finance_center_router)
+
+    async def isolated_db():
+        yield db
+
+    current = viewer("expense:read")
+    current.id = None
+    current.real_name = "财务核对测试"
+    current.username = "finance-review-test"
+
+    async def current_viewer():
+        return current
+
+    app.dependency_overrides[get_db] = isolated_db
+    app.dependency_overrides[get_current_user] = current_viewer
+    payload = {
+        "source_type": "project_cost",
+        "source_id": str(ids["cost"]),
+        "amount": 500,
+        "paid_at": "2026-10-03",
+        "evidence_type": "bank_statement",
+        "evidence_reference": "HTTP流水-RECON-01",
+    }
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        denied = await client.post("/finance-center/payment-reconciliations", json=payload)
+        assert denied.status_code == 403
+
+        current.roles = viewer("expense:read", "expense:update").roles
+        created = await client.post("/finance-center/payment-reconciliations", json=payload)
+        assert created.status_code == 200
+        reconciliation_id = created.json()["data"]["id"]
+        flow = await client.get("/expenses/disbursements", params={
+            "source_type": "project_cost", "start_date": "2026-10-03", "end_date": "2026-10-03",
+        })
+        assert flow.status_code == 200
+        assert any(row.get("reconciliation_id") == reconciliation_id for row in flow.json()["data"]["items"])
+
+        voided = await client.post(
+            f"/finance-center/payment-reconciliations/{reconciliation_id}/void",
+            json={"reason": "HTTP测试撤销"},
+        )
+        assert voided.status_code == 200
+        unverified = await client.get("/expenses/disbursements", params={
+            "source_type": "project_cost", "date_status": "unverified",
+        })
+        assert unverified.status_code == 200
+        assert unverified.json()["data"]["summary"]["unverified_paid_amount"] == 3000
+
+        cost_id, task_id = uuid4(), uuid4()
+        await db.execute(sa.insert(ProjectCost.__table__).values(
+            id=cost_id, cost_no="HTTP-DUP-C", document_id=ids["doc"], supplier_id=ids["vendor"],
+            category="外协加工", amount=600, debt_amount=600,
+        ))
+        await db.execute(sa.insert(OutsourceTask.__table__).values(
+            id=task_id, task_no="HTTP-DUP-T", vendor_id=ids["vendor"], task_type="production", status="completed",
+            related_doc_id=ids["doc"], related_doc_type="order", total_amount=600, paid_amount=0,
+        ))
+        await db.flush()
+        current.roles = viewer(
+            "expense:read", "expense:update", "finance:view_cost", "outsource_center:read",
+            "outsource_task:read", "outsource_vendor:read",
+        ).roles
+        review = await client.post("/finance-center/cost-overlaps/reviews", json={
+            "cost_id": str(cost_id),
+            "task_id": str(task_id),
+            "decision": "confirmed_not_duplicate",
+            "evidence_type": "payment_voucher",
+            "evidence_reference": "HTTP凭证-DUP-01",
+            "note": "两项费用对应不同交付内容",
+        })
+        assert review.status_code == 200
+        assert review.json()["data"]["decision"] == "confirmed_not_duplicate"
+        assert await db.scalar(sa.select(ProjectCost.__table__.c.amount).where(ProjectCost.__table__.c.id == cost_id)) == Decimal("600.00")
+
+
+async def test_historical_payment_date_reconciliation_splits_amount_without_adding_payment(fixture_db):
+    db, expenditure, ids = fixture_db
+    reviewer = FinanceReconciliationService(db)
+
+    reconciliation = await reviewer.create_payment_date_reconciliation(
+        source_type="project_cost",
+        source_id=ids["cost"],
+        amount=Decimal("1000.00"),
+        paid_at=date(2026, 10, 3),
+        evidence_type="bank_statement",
+        evidence_reference="流水号-TEST-001",
+        note="依据银行回单核对",
+        created_by=None,
+    )
+
+    flow = await expenditure.list_records(
+        "disbursements", filters=ExpenditureFilters(source_type="project_cost")
+    )
+    dated = next(item for item in flow["items"] if item.get("reconciliation_id") == str(reconciliation["id"]))
+    legacy = next(item for item in flow["items"] if item["payment_kind"] == "historical")
+    ledger = await expenditure.list_records(
+        "ledger", filters=ExpenditureFilters(source_type="project_cost")
+    )
+
+    assert dated["amount"] == 1000
+    assert dated["paid_at"].startswith("2026-10-03")
+    assert dated["evidence_reference"] == "流水号-TEST-001"
+    assert dated["reconciliation_source_type"] == "project_cost"
+    assert dated["reconciliation_source_id"] == str(ids["cost"])
+    assert legacy["amount"] == 2000
+    assert flow["summary"]["confirmed_paid_amount"] == 5000
+    assert flow["summary"]["unverified_paid_amount"] == 2000
+    assert ledger["items"][0]["paid_amount"] == 7000
+    assert ledger["summary"]["paid_amount"] == 7000
+    assert await db.scalar(sa.select(sa.func.count()).select_from(PayablePayment.__table__)) == 2
+
+
+async def test_payment_date_reconciliation_rejects_overallocation_and_void_restores_unknown_amount(fixture_db):
+    db, expenditure, ids = fixture_db
+    reviewer = FinanceReconciliationService(db)
+    record = await reviewer.create_payment_date_reconciliation(
+        source_type="project_cost",
+        source_id=ids["cost"],
+        amount=Decimal("2500.00"),
+        paid_at=date(2026, 10, 3),
+        evidence_type="payment_voucher",
+        evidence_reference="凭证-TEST-002",
+        note=None,
+        created_by=None,
+    )
+    with pytest.raises(ValueError, match="超过尚未核实金额"):
+        await reviewer.create_payment_date_reconciliation(
+            source_type="project_cost",
+            source_id=ids["cost"],
+            amount=Decimal("600.00"),
+            paid_at=date(2026, 10, 4),
+            evidence_type="bank_statement",
+            evidence_reference="流水号-TEST-003",
+            note=None,
+            created_by=None,
+        )
+
+    await reviewer.void_payment_date_reconciliation(
+        reconciliation_id=record["id"],
+        reason="误选了不相关的回单",
+        voided_by=None,
+    )
+    flow = await expenditure.list_records(
+        "disbursements", filters=ExpenditureFilters(source_type="project_cost")
+    )
+    assert flow["summary"]["unverified_paid_amount"] == 3000
+    assert flow["summary"]["confirmed_paid_amount"] == 4000
+    assert all(item.get("reconciliation_id") != str(record["id"]) for item in flow["items"])
+
+
+async def test_concurrent_payment_date_allocations_cannot_overallocate_a_source(fixture_db):
+    db, _, ids = fixture_db
+    engine = db.bind
+
+    async def allocate(reference: str):
+        async with AsyncSession(engine) as session:
+            try:
+                result = await FinanceReconciliationService(session).create_payment_date_reconciliation(
+                    source_type="project_cost",
+                    source_id=ids["cost"],
+                    amount=Decimal("2000.00"),
+                    paid_at=date(2026, 10, 6),
+                    evidence_type="bank_statement",
+                    evidence_reference=reference,
+                    note=None,
+                    created_by=None,
+                )
+                await session.commit()
+                return result
+            except ValueError as error:
+                await session.rollback()
+                return str(error)
+
+    results = await asyncio.gather(allocate("并发流水-1"), allocate("并发流水-2"))
+    assert sum(isinstance(result, dict) for result in results) == 1
+    assert sum(isinstance(result, str) and "超过尚未核实金额" in result for result in results) == 1
+    allocated = await db.scalar(sa.select(sa.func.sum(FinancePaymentDateReconciliation.amount)).where(
+        FinancePaymentDateReconciliation.source_type == "project_cost",
+        FinancePaymentDateReconciliation.source_id == ids["cost"],
+        FinancePaymentDateReconciliation.voided_at.is_(None),
+    ))
+    assert allocated == Decimal("2000.00")
+
+
+async def test_undated_outsource_payment_date_reconciliation_reuses_original_payment(fixture_db):
+    db, expenditure, ids = fixture_db
+    result = await db.execute(sa.insert(OutsourcePayment.__table__).values(
+        payment_no="TEST-UNDATED-OP", vendor_id=ids["vendor"], task_id=ids["task"], amount=125,
+        paid_at=None, payment_method="转账支付",
+    ).returning(OutsourcePayment.__table__.c.id))
+    payment_id = result.scalar_one()
+    await db.commit()
+
+    reconciliation = await FinanceReconciliationService(db).create_payment_date_reconciliation(
+        source_type="outsource_payment",
+        source_id=payment_id,
+        amount=Decimal("125.00"),
+        paid_at=date(2026, 10, 5),
+        evidence_type="bank_statement",
+        evidence_reference="流水号-TEST-004",
+        note=None,
+        created_by=None,
+    )
+    flow = await expenditure.list_records(
+        "disbursements", filters=ExpenditureFilters(source_type="outsource")
+    )
+    matched = next(item for item in flow["items"] if item.get("reconciliation_id") == str(reconciliation["id"]))
+    assert matched["payment_no"] == "TEST-UNDATED-OP"
+    assert matched["amount"] == 125
+    assert matched["date_status"] == "confirmed"
+    assert matched["reconciliation_source_type"] == "outsource_payment"
+    assert matched["reconciliation_source_id"] == str(payment_id)
+    original = await db.scalar(sa.select(OutsourcePayment.__table__.c.paid_at).where(OutsourcePayment.__table__.c.id == payment_id))
+    assert original is None
+    with pytest.raises(ValueError, match="已核实付款日期"):
+        await OutsourceService(db).delete_task(ids["task"])
+
+
+async def test_deleted_outsource_task_cannot_receive_new_date_reconciliation(fixture_db):
+    db, _, ids = fixture_db
+    await db.execute(
+        sa.update(OutsourceTask.__table__)
+        .where(OutsourceTask.__table__.c.id == ids["task"])
+        .values(deleted_at=datetime(2026, 10, 8))
+    )
+    await db.commit()
+
+    with pytest.raises(ValueError, match="来源不存在或已删除"):
+        await FinanceReconciliationService(db).create_payment_date_reconciliation(
+            source_type="outsource_task",
+            source_id=ids["task"],
+            amount=Decimal("200.00"),
+            paid_at=date(2026, 10, 5),
+            evidence_type="bank_statement",
+            evidence_reference="已删除任务不可核对-001",
+            note=None,
+            created_by=None,
+        )
+
+
+async def test_cost_overlap_review_records_evidence_without_changing_cost_or_task(fixture_db):
+    db, _, ids = fixture_db
+    cost_id, task_id = uuid4(), uuid4()
+    await db.execute(sa.insert(ProjectCost.__table__).values(
+        id=cost_id, cost_no="TEST-DUP-C", document_id=ids["doc"], supplier_id=ids["vendor"],
+        category="外协加工", amount=500, debt_amount=500, cost_date=datetime(2026, 9, 1),
+    ))
+    await db.execute(sa.insert(OutsourceTask.__table__).values(
+        id=task_id, task_no="TEST-DUP-T", vendor_id=ids["vendor"], task_type="production", status="completed",
+        related_doc_id=ids["doc"], related_doc_type="order", total_amount=500, paid_amount=0,
+        completed_at=datetime(2026, 9, 3),
+    ))
+    await db.commit()
+
+    await FinanceReconciliationService(db).review_cost_overlap(
+        cost_id=cost_id,
+        task_id=task_id,
+        decision="confirmed_duplicate",
+        evidence_type="payment_voucher",
+        evidence_reference="凭证-重复核对-001",
+        note="同一笔外协费用",
+        reviewed_by=None,
+    )
+    result = await FinanceCenterService(db).cost_overlap_candidates(1, 20)
+    reviewed = next(item for item in result["items"] if item["cost_id"] == str(cost_id))
+    cost_amount = await db.scalar(sa.select(ProjectCost.__table__.c.amount).where(ProjectCost.__table__.c.id == cost_id))
+    task_amount = await db.scalar(sa.select(OutsourceTask.__table__.c.total_amount).where(OutsourceTask.__table__.c.id == task_id))
+
+    assert reviewed["review_status"] == "confirmed_duplicate"
+    assert reviewed["evidence_reference"] == "凭证-重复核对-001"
+    assert cost_amount == Decimal("500.00")
+    assert task_amount == Decimal("500.00")
+
+
+async def test_duplicate_overlap_requires_evidence_for_final_decision(fixture_db):
+    db, _, ids = fixture_db
+    cost_id, task_id = uuid4(), uuid4()
+    await db.execute(sa.insert(ProjectCost.__table__).values(
+        id=cost_id, cost_no="TEST-DUP-NO-EVIDENCE-C", document_id=ids["doc"], supplier_id=ids["vendor"],
+        category="外协", amount=300, debt_amount=300,
+    ))
+    await db.execute(sa.insert(OutsourceTask.__table__).values(
+        id=task_id, task_no="TEST-DUP-NO-EVIDENCE-T", vendor_id=ids["vendor"], task_type="production", status="completed",
+        related_doc_id=ids["doc"], related_doc_type="order", total_amount=300, paid_amount=0,
+    ))
+    await db.commit()
+
+    with pytest.raises(ValueError, match="证据参考不能为空"):
+        await FinanceReconciliationService(db).review_cost_overlap(
+            cost_id=cost_id,
+            task_id=task_id,
+            decision="confirmed_not_duplicate",
+            evidence_type="bank_statement",
+            evidence_reference=" ",
+            note=None,
+            reviewed_by=None,
+        )
+
+
+async def test_reconciled_source_cannot_be_lowered_or_deleted_below_allocated_amount(fixture_db):
+    db, _, ids = fixture_db
+    cost_id = uuid4()
+    await db.execute(sa.update(Expense.__table__).where(Expense.__table__.c.id == ids["expense"]).values(
+        amount=2000, payable_amount=1500,
+    ))
+    await db.execute(sa.insert(ProjectCost.__table__).values(
+        id=cost_id, cost_no="TEST-LOCK-C", document_id=ids["doc"], supplier_id=ids["vendor"],
+        category="材料", amount=1000, debt_amount=900,
+    ))
+    await db.commit()
+    reviewer = FinanceReconciliationService(db)
+    await reviewer.create_payment_date_reconciliation(
+        source_type="expense", source_id=ids["expense"], amount=Decimal("400"),
+        paid_at=date(2026, 10, 3), evidence_type="bank_statement", evidence_reference="流水-LOCK-E",
+        note=None, created_by=None,
+    )
+    await reviewer.create_payment_date_reconciliation(
+        source_type="project_cost", source_id=cost_id, amount=Decimal("80"),
+        paid_at=date(2026, 10, 3), evidence_type="payment_voucher", evidence_reference="凭证-LOCK-C",
+        note=None, created_by=None,
+    )
+
+    with pytest.raises(ValueError, match="历史已付金额低于已核实分配"):
+        await ExpenseService(db).update_expense(
+            ids["expense"], {"amount": 1800, "payable_amount": 1500}
+        )
+    with pytest.raises(ValueError, match="历史已付金额低于已核实分配"):
+        await ProjectCostService(db).update_cost(
+            cost_id, {"amount": 970, "debt_amount": 900}
+        )
+    with pytest.raises(ValueError, match="存在已核实付款日期"):
+        await ExpenseService(db).delete_expense(ids["expense"])
+    with pytest.raises(ValueError, match="存在已核实付款日期"):
+        await ProjectCostService(db).delete_cost(cost_id)

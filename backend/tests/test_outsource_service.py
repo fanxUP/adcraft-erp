@@ -128,10 +128,12 @@ def service(mock_repos):
     vendor_repo, task_repo, payment_repo = mock_repos
     with patch("app.services.outsource_service.OutsourceVendorRepository") as MockVendorRepo, \
          patch("app.services.outsource_service.OutsourceTaskRepository") as MockTaskRepo, \
-         patch("app.services.outsource_service.OutsourcePaymentRepository") as MockPaymentRepo:
+         patch("app.services.outsource_service.OutsourcePaymentRepository") as MockPaymentRepo, \
+         patch("app.services.outsource_service.FinanceReconciliationService") as MockFinanceRecon:
         MockVendorRepo.return_value = vendor_repo
         MockTaskRepo.return_value = task_repo
         MockPaymentRepo.return_value = payment_repo
+        MockFinanceRecon.return_value.assert_outsource_task_has_no_active_reconciliations = AsyncMock()
         db = AsyncMock()
         # Mock _vendor_name lookup
         name_result = MagicMock()

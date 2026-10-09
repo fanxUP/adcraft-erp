@@ -43,11 +43,17 @@ export interface ExpenditureRow {
   paid_amount?: number
   remaining_amount?: number
   undated_paid_amount?: number
-  payment_kind?: 'historical' | 'payable' | 'outsource'
+  payment_kind?: 'historical' | 'payable' | 'outsource' | 'reconciled_legacy'
   payment_no?: string | null
   paid_at?: string | null
   payment_method?: string | null
   date_status?: 'confirmed' | 'unverified'
+  reconciliation_id?: string | null
+  reconciliation_source_type?: 'expense' | 'project_cost' | 'outsource_task' | 'outsource_payment' | null
+  reconciliation_source_id?: string | null
+  evidence_type?: FinanceEvidenceType | null
+  evidence_reference?: string | null
+  reconciliation_note?: string | null
 }
 export interface ExpenditureResult {
   items: ExpenditureRow[]
@@ -82,6 +88,7 @@ export interface FinanceCashflowSummary {
 
 export interface FinanceCostOverlapCandidate {
   row_key: string
+  document_id: string
   cost_id: string
   cost_no: string
   category: string
@@ -96,7 +103,59 @@ export interface FinanceCostOverlapCandidate {
   completed_at: string | null
   supplier_name: string
   match_rule: string
-  review_status: '待人工核对'
+  review_status: FinanceCostOverlapDecision | 'pending'
+  review_id: string | null
+  evidence_type: FinanceEvidenceType | null
+  evidence_reference: string | null
+  review_note: string | null
+  reviewed_at: string | null
+}
+
+export type FinanceEvidenceType = 'bank_statement' | 'payment_voucher' | 'other'
+export type FinanceCostOverlapDecision = 'confirmed_duplicate' | 'confirmed_not_duplicate' | 'needs_evidence'
+
+export interface FinancePaymentDateReconciliationCreate {
+  source_type: 'expense' | 'project_cost' | 'outsource_task' | 'outsource_payment'
+  source_id: string
+  amount: number
+  paid_at: string
+  evidence_type: FinanceEvidenceType
+  evidence_reference: string
+  note?: string
+}
+
+export interface FinancePaymentDateReconciliation {
+  id: string
+  source_type: FinancePaymentDateReconciliationCreate['source_type']
+  source_id: string
+  amount: number
+  paid_at: string
+  evidence_type: FinanceEvidenceType
+  evidence_reference: string
+  note: string | null
+  voided_at?: string | null
+  void_reason?: string | null
+  remaining_undated_amount?: number
+}
+
+export interface FinanceCostOverlapReview {
+  id: string
+  cost_id: string
+  task_id: string
+  decision: FinanceCostOverlapDecision
+  evidence_type: FinanceEvidenceType | null
+  evidence_reference: string | null
+  note: string | null
+  reviewed_at: string | null
+}
+
+export interface FinanceCostOverlapReviewWrite {
+  cost_id: string
+  task_id: string
+  decision: FinanceCostOverlapDecision
+  evidence_type?: FinanceEvidenceType
+  evidence_reference?: string
+  note?: string
 }
 
 export function getFinanceCashflow(params: { start_date: string; end_date: string }) {
@@ -105,6 +164,18 @@ export function getFinanceCashflow(params: { start_date: string; end_date: strin
 
 export function getFinanceCostOverlaps(params: { page: number; page_size: number }) {
   return get<PaginatedData<FinanceCostOverlapCandidate>>('/finance-center/cost-overlaps', { params })
+}
+
+export function createFinancePaymentDateReconciliation(data: FinancePaymentDateReconciliationCreate) {
+  return post<FinancePaymentDateReconciliation>('/finance-center/payment-reconciliations', data)
+}
+
+export function voidFinancePaymentDateReconciliation(id: string, data: { reason: string }) {
+  return post<FinancePaymentDateReconciliation>(`/finance-center/payment-reconciliations/${id}/void`, data)
+}
+
+export function reviewFinanceCostOverlap(data: FinanceCostOverlapReviewWrite) {
+  return post<FinanceCostOverlapReview>('/finance-center/cost-overlaps/reviews', data)
 }
 
 export type ExpenseWritePayload = Partial<Omit<ExpenseResponse, 'id' | 'expense_no' | 'created_by' | 'created_at'>> & {

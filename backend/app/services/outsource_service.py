@@ -13,6 +13,7 @@ from app.core.permissions import PERM_FINANCE_VIEW_COST, user_has_permission
 from app.domain.presentation import make_action_capability, make_outsource_status_view
 from app.domain.workflows import OUTSOURCE_TASK_WORKFLOW, ensure_transition
 from app.services.supplier_service import SupplierService
+from app.services.finance_reconciliation_service import FinanceReconciliationService
 from app.services.supplier_capabilities import SERVICE_TYPE_LABELS, supplier_roles, supplier_services
 
 
@@ -1296,6 +1297,7 @@ class OutsourceService:
         task = await self.task_repo.get_by_id(task_id, for_update=True)
         if not task:
             raise ValueError("外协任务不存在")
+        await FinanceReconciliationService(self.db).assert_outsource_task_has_no_active_reconciliations(task_id)
         count, total = await self.payment_repo.payment_totals(task_id)
         if count:
             await self.payment_repo.delete_by_task(task_id)

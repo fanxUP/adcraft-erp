@@ -493,12 +493,15 @@ class ExpenseRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_by_id(self, expense_id: UUID) -> Expense | None:
-        result = await self.db.execute(
+    async def get_by_id(self, expense_id: UUID, *, for_update: bool = False) -> Expense | None:
+        query = (
             select(Expense)
             .options(selectinload(Expense.supplier))
             .where(Expense.id == expense_id, Expense.deleted_at.is_(None))
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def list_expenses(self, skip: int = 0, limit: int = 20, category: str | None = None,

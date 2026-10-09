@@ -653,6 +653,7 @@ def expense_service(mock_expense_repo):
             payable_service.validate_source_update = AsyncMock()
             payable_service.assert_source_can_be_deleted = AsyncMock()
             db = AsyncMock()
+            db.scalar = AsyncMock(return_value=0)
             svc = ExpenseService(db)
             svc.repo = mock_expense_repo
             svc.payable_service = payable_service

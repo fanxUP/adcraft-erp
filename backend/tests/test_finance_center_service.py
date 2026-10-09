@@ -103,8 +103,10 @@ async def test_receipt_summary_rejects_invalid_or_overflowing_date_ranges(
 async def test_cost_overlap_returns_review_candidates_without_classifying_or_mutating():
     cost_id = uuid4()
     task_id = uuid4()
+    document_id = uuid4()
     completed_at = datetime(2026, 10, 8, 12, 30)
     row = {
+        "document_id": document_id,
         "cost_id": cost_id,
         "cost_no": "PC-001",
         "category": "外协加工",
@@ -118,6 +120,13 @@ async def test_cost_overlap_returns_review_candidates_without_classifying_or_mut
         "task_amount": 500,
         "completed_at": completed_at,
         "supplier_name": "供应商甲",
+        "review_id": None,
+        "review_decision": None,
+        "evidence_type": None,
+        "evidence_reference": None,
+        "review_note": None,
+        "reviewed_at": None,
+        "match_rule": "同一订单、同一供应商、相同金额，且项目成本分类包含外协或加工",
     }
     db = SimpleNamespace(
         scalar=AsyncMock(return_value=1),
@@ -152,6 +161,7 @@ async def test_cost_overlap_returns_review_candidates_without_classifying_or_mut
         "items": [
             {
                 "row_key": f"{cost_id}:{task_id}",
+                "document_id": str(document_id),
                 "cost_id": str(cost_id),
                 "cost_no": "PC-001",
                 "category": "外协加工",
@@ -166,7 +176,12 @@ async def test_cost_overlap_returns_review_candidates_without_classifying_or_mut
                 "completed_at": "2026-10-08T12:30:00",
                 "supplier_name": "供应商甲",
                 "match_rule": "同一订单、同一供应商、相同金额，且项目成本分类包含外协或加工",
-                "review_status": "待人工核对",
+                "review_status": "pending",
+                "review_id": None,
+                "evidence_type": None,
+                "evidence_reference": None,
+                "review_note": None,
+                "reviewed_at": None,
             }
         ],
         "total": 1,
@@ -185,3 +200,16 @@ def test_finance_center_routes_require_the_relevant_read_permissions():
         "outsource_task:read",
         "outsource_vendor:read",
     )
+
+
+def test_finance_reconciliation_write_routes_require_finance_update_permissions():
+    assert set(_route_permissions("POST", "/finance-center/payment-reconciliations")) == {
+        "expense:read", "expense:update",
+    }
+    assert set(_route_permissions("POST", "/finance-center/payment-reconciliations/{reconciliation_id}/void")) == {
+        "expense:read", "expense:update",
+    }
+    assert set(_route_permissions("POST", "/finance-center/cost-overlaps/reviews")) == {
+        "finance:view_cost", "expense:update", "outsource_center:read",
+        "outsource_task:read", "outsource_vendor:read",
+    }
