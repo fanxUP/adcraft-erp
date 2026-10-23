@@ -268,13 +268,16 @@
         <el-form-item label="分项">
           <el-input v-model="form.group_name" placeholder="输入分项名称（可选）" clearable />
         </el-form-item>
-        <el-form-item label="日期">
+        <el-form-item label="日期" :required="!isEditing || editingOriginalHasCostDate || !!form.cost_date">
           <el-date-picker
             v-model="form.cost_date"
             type="date"
             value-format="YYYY-MM-DD"
             style="width: 100%"
           />
+          <div v-if="isEditing && !editingOriginalHasCostDate && !form.cost_date" class="form-tip">
+            历史记录未登记日期；没有可靠凭证时不自动补填。
+          </div>
         </el-form-item>
         <el-form-item v-if="canUseSupplier" label="供应商">
           <el-select
@@ -500,6 +503,7 @@ const showDialog = ref(false)
 const showImport = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
+const editingOriginalHasCostDate = ref(false)
 const order = ref<OrderDetailResponse | QuoteDetailResponse | null>(null)
 const costSummary = ref<ProjectCostItemSummaryResponse | null>(null)
 const suppliers = ref<SupplierResponse[]>([])
@@ -657,6 +661,7 @@ function resetForm() {
   Object.assign(form, { category: '', payment_amount: 0, payment_method: '', supplier_id: '', debt_amount: 0, cost_date: '', remark: '', group_name: '', order_item_id: '', order_item_ids: [], quote_item_id: '' })
   isEditing.value = false
   editingId.value = ''
+  editingOriginalHasCostDate.value = false
   editingScopeSnapshots.value = []
   dialogAttachments.value = []
   attachmentUploadQueue.value = []
@@ -682,6 +687,7 @@ function openEdit(row: ProjectCostResponse) {
   }
   isEditing.value = true
   editingId.value = row.id
+  editingOriginalHasCostDate.value = !!formatDate(row.cost_date)
   form.category = row.category
   form.payment_amount = row.payment_amount ?? getProjectCostPaymentAmount(row.amount, row.debt_amount)
   form.payment_method = row.payment_method || ''
@@ -887,6 +893,10 @@ async function handleSave() {
     ElMessage.warning('当前订单状态已锁定成本变更')
     return
   }
+  if (!form.cost_date && (!isEditing.value || editingOriginalHasCostDate.value)) {
+    ElMessage.warning('请选择日期')
+    return
+  }
   const category = form.category.trim()
   if (!category) {
     ElMessage.warning('请选择分类')
@@ -930,7 +940,7 @@ async function handleSave() {
           category,
           amount: amounts.totalAmount,
           debt_amount: amounts.debtAmount,
-          cost_date: form.cost_date || undefined,
+          cost_date: form.cost_date,
           remark: form.remark || undefined,
           quote_item_id: form.quote_item_id || undefined,
           group_name: form.group_name || undefined,
@@ -944,7 +954,7 @@ async function handleSave() {
           category,
           amount: amounts.totalAmount,
           debt_amount: amounts.debtAmount,
-          cost_date: form.cost_date || undefined,
+          cost_date: form.cost_date,
           remark: form.remark || undefined,
           order_item_ids: form.order_item_ids.length ? [...form.order_item_ids] : undefined,
           group_name: form.group_name || undefined,
@@ -954,6 +964,7 @@ async function handleSave() {
       }
       isEditing.value = true
       editingId.value = savedCost.id
+      editingOriginalHasCostDate.value = true
       ElMessage.success('成本登记成功')
     }
 
