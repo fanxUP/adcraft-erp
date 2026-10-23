@@ -1,10 +1,31 @@
 // @ts-check
 import pluginVue from 'eslint-plugin-vue'
-import { withVueTs, vueTsConfigs } from '@vue/eslint-config-typescript'
+import tseslint from 'typescript-eslint'
+import vueParser from 'vue-eslint-parser'
 
-export default withVueTs(
+export default tseslint.config(
   pluginVue.configs['flat/essential'],
-  vueTsConfigs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    name: 'app/vue-typescript-parser',
+    files: ['*.vue', '**/*.vue'],
+    languageOptions: {
+      parser: vueParser,
+      parserOptions: {
+        parser: {
+          js: 'espree',
+          jsx: 'espree',
+          ts: tseslint.parser,
+          tsx: tseslint.parser,
+        },
+        ecmaVersion: 2024,
+        extraFileExtensions: ['.vue'],
+      },
+    },
+    rules: {
+      'vue/block-lang': ['error', { script: { lang: ['ts'], allowNoLang: true } }],
+    },
+  },
   {
     name: 'app/no-explicit-any',
     rules: {

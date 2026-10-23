@@ -26,6 +26,7 @@ from app.core.permissions import (
     PERM_ORDER_VIEW_PRICE,
     PERM_OUTSOURCE_CENTER_READ,
     PERM_OUTSOURCE_TASK_READ,
+    PERM_OUTSOURCE_TASK_PERMANENT_DELETE,
     PERM_PAYMENT_READ,
     PERM_SYSTEM_SUPER_ADMIN,
     PERM_TASK_QUEUE_READ,
@@ -127,6 +128,26 @@ def test_permission_dependencies_are_transitive_and_explicit():
 
     assert any(issue.kind == "missing_dependency" for issue in issues)
     assert any(PERM_ORDER_READ in issue.permissions for issue in issues)
+
+
+def test_permanent_outsource_delete_is_sensitive_and_admin_only_by_default():
+    from app.core.permission_catalog import SENSITIVE_PERMISSIONS, get_permission_dependencies
+    from scripts.seed_permissions import PERMISSION_SEED_VERSION, ROLE_PERMISSION_MAP
+
+    assert PERM_OUTSOURCE_TASK_PERMANENT_DELETE in SENSITIVE_PERMISSIONS
+    assert get_permission_definition(PERM_OUTSOURCE_TASK_PERMANENT_DELETE).sensitivity == "security"
+    assert set(get_permission_dependencies(PERM_OUTSOURCE_TASK_PERMANENT_DELETE)) == {
+        "outsource_center:read",
+        "outsource_task:read",
+        "outsource_task:delete",
+    }
+    assert PERM_OUTSOURCE_TASK_PERMANENT_DELETE in ROLE_PERMISSION_MAP["admin"]
+    assert all(
+        PERM_OUTSOURCE_TASK_PERMANENT_DELETE not in ROLE_PERMISSION_MAP[role]
+        for role in ROLE_PERMISSION_MAP
+        if role != "admin"
+    )
+    assert PERMISSION_SEED_VERSION == 5
 
 
 def test_unrelated_custom_roles_can_be_combined_without_role_name_rules():

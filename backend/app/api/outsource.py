@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -11,6 +11,7 @@ from app.core.permissions import (
     PERM_OUTSOURCE_TASK_CHANGE_STATUS,
     PERM_OUTSOURCE_TASK_CREATE,
     PERM_OUTSOURCE_TASK_DELETE,
+    PERM_OUTSOURCE_TASK_PERMANENT_DELETE,
     PERM_OUTSOURCE_TASK_READ,
     PERM_OUTSOURCE_TASK_UPDATE,
     PERM_OUTSOURCE_VENDOR_CREATE,
@@ -462,7 +463,7 @@ async def delete_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_all_permissions(PERM_OUTSOURCE_CENTER_READ, PERM_OUTSOURCE_TASK_DELETE)),
 ):
-    """删除外协任务，关联付款一并删除，需要外协任务删除权限。"""
+    """软删除外协任务并保留关联付款事实，需要外协任务删除权限。"""
     service = OutsourceService(db, viewer=current_user)
     tid = UUID(task_id)
     try:
@@ -470,7 +471,7 @@ async def delete_task(
         await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                             OBJ_OUTSOURCE_TASK, tid, ACTION_DELETE,
                             ip_address=request.client.host if request.client else None,
-                            after_data={"deleted_payment_count": result["deleted_payment_count"]})
+                            after_data={"preserved_payment_count": result["preserved_payment_count"]})
         return success(result)
     except ValueError as e:
         return error(40401, str(e))
@@ -510,6 +511,47 @@ async def restore_task(
         return success(task)
     except ValueError as e:
         return error(40401, str(e))
+
+
+@router.delete("/tasks/recycle/{task_id}")
+async def permanently_delete_task(
+    task_id: UUID,
+    request: Request,
+    task_no_confirmation: str = Body(..., min_length=1),
+    reason: str = Body(..., min_length=5, max_length=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_all_permissions(
+        PERM_OUTSOURCE_CENTER_READ,
+        PERM_OUTSOURCE_TASK_DELETE,
+        PERM_OUTSOURCE_TASK_PERMANENT_DELETE,
+    )),
+):
+    """Hard-delete one eligible cancelled recycle task and atomically record its tombstone."""
+    service = OutsourceService(db, viewer=current_user)
+    try:
+        result = await service.permanently_delete_task(
+            task_id,
+            task_no_confirmation=task_no_confirmation,
+            reason=reason,
+        )
+        await log_operation(
+            db,
+            current_user.id,
+            current_user.real_name or current_user.username,
+            OBJ_OUTSOURCE_TASK,
+            task_id,
+            "permanent_delete",
+            ip_address=request.client.host if request.client else None,
+            before_data=result["snapshot"],
+            after_data={
+                "task_no": result["task_no"],
+                "reason": result["reason"],
+                "deleted": True,
+            },
+        )
+        return success({"task_id": result["task_id"], "task_no": result["task_no"]})
+    except ValueError as e:
+        return error(40001, str(e))
 
 
 # ── Quote & Order dropdown data ──

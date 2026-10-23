@@ -1279,6 +1279,16 @@ export interface OutsourceTaskResponse {
   remark?: string
   created_at?: string
   deleted_at?: string
+  permanent_delete_eligibility?: {
+    eligible: boolean
+    block_reasons: string[]
+    references: {
+      payment_count: number
+      reconciliation_count: number
+      cost_overlap_review_count: number
+      legacy_deleted_payment_count: number
+    }
+  }
 }
 
 export interface OutsourceTaskGroupResponse {

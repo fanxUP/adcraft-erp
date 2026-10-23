@@ -163,6 +163,7 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "outsource_task:update", "name": "编辑外协任务", "description": "编辑外协任务信息"},
     {"code": "outsource_task:change_status", "name": "变更外协任务状态", "description": "取消、退回等外协任务状态操作"},
     {"code": "outsource_task:delete", "name": "删除外协任务", "description": "删除外协任务并管理回收站"},
+    {"code": "outsource_task:permanent_delete", "name": "永久删除外协任务", "description": "不可逆删除回收站中的外协任务，仅限系统管理员；付款或财务关联记录存在时禁止"},
     {"code": "outsource_payment:read", "name": "查看外协付款", "description": "查看外协付款记录和任务付款摘要"},
     {"code": "outsource_payment:create", "name": "登记外协付款", "description": "登记外协任务付款"},
     # Report
@@ -315,7 +316,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
 
 # ── Roles referenced by the init-db.sh script ──────────────────────────────
 ROLE_NAMES = ["admin", "sales", "designer", "production", "installer", "finance", "resource_manager", "outsource_manager", "manager"]
-PERMISSION_SEED_VERSION = 4
+PERMISSION_SEED_VERSION = 5
 
 
 def builtin_role_permission_codes(role_name: str) -> list[str] | None:
