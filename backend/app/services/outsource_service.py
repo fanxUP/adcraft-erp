@@ -79,6 +79,8 @@ class OutsourceService:
                 "related_project_amount",
                 "order_level_planned_amount",
                 "order_level_recognized_cost",
+                "payment_total_amount",
+                "reconciliation_total_amount",
                 "amount",
             }
         }
@@ -1158,17 +1160,26 @@ class OutsourceService:
             if can_view_eligibility
             else {}
         )
+        linked_records_by_task = {}
+        related_documents = {}
+        if can_view_eligibility:
+            linked_records_by_task, related_documents = await self._load_deleted_task_link_contexts(tasks)
         result = []
         for t in tasks:
             vname = await self._task_vendor_name(t)
-            pname = await self._related_project_name(t.related_doc_id, t.related_doc_type)
+            if can_view_eligibility:
+                document = related_documents.get(t.related_doc_id, {}) if t.related_doc_id else {}
+                pname = document.get("project_name")
+            else:
+                pname = await self._related_project_name(t.related_doc_id, t.related_doc_type)
             item = self._task_to_dict(t, vname, pname)
             if can_view_eligibility:
+                item["linked_records"] = linked_records_by_task.get(t.id, [])
                 item["permanent_delete_eligibility"] = self._permanent_delete_assessment(
                     t,
                     reference_counts.get(t.id, {}),
                 )
-            result.append(item)
+            result.append(self._without_financial_fields(item))
         return result, total
 
     async def get_permanent_delete_eligibility(self, task_id: UUID) -> dict:
@@ -1188,10 +1199,71 @@ class OutsourceService:
         counts = await self.task_repo.permanent_delete_reference_counts([task.id])
         return self._permanent_delete_assessment(task, counts.get(task.id, {}))
 
+    async def _load_deleted_task_link_contexts(self, tasks: list) -> tuple[dict, dict]:
+        identities = []
+        for task in tasks:
+            if task.related_doc_id and task.related_doc_type:
+                identities.append({
+                    "kind": "related_document",
+                    "related_doc_type": task.related_doc_type,
+                    "related_doc_id": task.related_doc_id,
+                })
+            if (
+                task.source_task_type in self.SOURCE_TASK_LABELS
+                and task.source_task_id is not None
+            ):
+                identities.append({
+                    "kind": "source_task",
+                    "source_task_type": task.source_task_type,
+                    "source_task_id": task.source_task_id,
+                })
+
+        source_contexts = await self._load_source_task_contexts(identities)
+        document_contexts = await self._load_document_contexts(identities, source_contexts)
+        linked_records_by_task = {}
+        for task in tasks:
+            records = []
+            if task.source_task_type and task.source_task_id:
+                source = source_contexts.get((task.source_task_type, task.source_task_id), {})
+                source_type_label = self.SOURCE_TASK_LABELS.get(task.source_task_type, "来源")
+                records.append({
+                    "kind": "source_task",
+                    "label": f"{source_type_label}任务",
+                    "id": str(task.source_task_id),
+                    "business_no": source.get("business_no"),
+                    "name": source.get("project_name"),
+                    "status": source.get("status"),
+                })
+            if task.related_doc_id:
+                document = document_contexts.get(task.related_doc_id, {})
+                doc_type_label = self.DOCUMENT_LABELS.get(task.related_doc_type, "关联单据")
+                records.append({
+                    "kind": "document",
+                    "label": doc_type_label,
+                    "id": str(task.related_doc_id),
+                    "business_no": document.get("doc_no"),
+                    "name": document.get("project_name"),
+                    "status": None,
+                })
+            if task.order_item_id:
+                item = getattr(task, "order_item", None)
+                records.append({
+                    "kind": "order_item",
+                    "label": "订单明细",
+                    "id": str(task.order_item_id),
+                    "business_no": None,
+                    "name": getattr(item, "item_name", None),
+                    "status": None,
+                })
+            linked_records_by_task[task.id] = records
+        return linked_records_by_task, document_contexts
+
     def _permanent_delete_assessment(self, task, references: dict) -> dict:
         counts = {
             "payment_count": int(references.get("payment_count", 0)),
+            "payment_total_amount": float(references.get("payment_total_amount", 0)),
             "reconciliation_count": int(references.get("reconciliation_count", 0)),
+            "reconciliation_total_amount": float(references.get("reconciliation_total_amount", 0)),
             "cost_overlap_review_count": int(references.get("cost_overlap_review_count", 0)),
             "legacy_deleted_payment_count": int(references.get("legacy_deleted_payment_count", 0)),
         }
@@ -1200,19 +1272,6 @@ class OutsourceService:
             reasons.append("任务不在回收站")
         if task.status != "cancelled":
             reasons.append("仅已取消状态的任务可永久删除")
-        paid_amount = self._to_money(task.paid_amount)
-        if paid_amount != 0:
-            reasons.append(f"任务历史已付金额非零（¥{paid_amount:.2f}），需保留并核实")
-        if counts["payment_count"]:
-            reasons.append(f"存在 {counts['payment_count']} 条外协付款记录")
-        if counts["reconciliation_count"]:
-            reasons.append(f"存在 {counts['reconciliation_count']} 条付款日期核对记录（含已撤销记录）")
-        if counts["cost_overlap_review_count"]:
-            reasons.append(f"存在 {counts['cost_overlap_review_count']} 条费用重叠审查记录")
-        if counts["legacy_deleted_payment_count"]:
-            reasons.append(
-                f"历史软删除日志显示曾清除 {counts['legacy_deleted_payment_count']} 条付款流水，无法确认原始财务事实"
-            )
         return {
             "eligible": not reasons,
             "block_reasons": reasons,
@@ -1246,11 +1305,9 @@ class OutsourceService:
         self,
         task_id: UUID,
         *,
-        task_no_confirmation: str,
         reason: str,
     ) -> dict:
         """Recheck and physically remove one eligible task inside the request transaction."""
-        task_no_confirmation = (task_no_confirmation or "").strip()
         reason = (reason or "").strip()
         if len(reason) < 5:
             raise ValueError("删除原因至少需要 5 个字符")
@@ -1260,8 +1317,6 @@ class OutsourceService:
         task = await self.task_repo.get_deleted_by_id(task_id, for_update=True)
         if task is None:
             raise ValueError("外协任务不存在或不在回收站")
-        if task_no_confirmation != task.task_no:
-            raise ValueError("任务编号确认不匹配")
 
         references = await self.task_repo.permanent_delete_reference_counts([task.id])
         assessment = self._permanent_delete_assessment(task, references.get(task.id, {}))
@@ -1279,6 +1334,11 @@ class OutsourceService:
             "item_name",
             None,
         )
+        deleted_financial_references = await self.task_repo.delete_direct_financial_references(task.id)
+        deleted_financial_references["legacy_deleted_payment_count"] = references.get(
+            task.id, {}
+        ).get("legacy_deleted_payment_count", 0)
+        snapshot["deleted_financial_references"] = deleted_financial_references
         await self.task_repo.hard_delete(task)
         return {
             "task_id": str(task.id),

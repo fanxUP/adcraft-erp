@@ -1279,12 +1279,22 @@ export interface OutsourceTaskResponse {
   remark?: string
   created_at?: string
   deleted_at?: string
+  linked_records?: Array<{
+    kind: 'source_task' | 'document' | 'order_item'
+    label: string
+    id: string
+    business_no?: string | null
+    name?: string | null
+    status?: string | null
+  }>
   permanent_delete_eligibility?: {
     eligible: boolean
     block_reasons: string[]
     references: {
       payment_count: number
+      payment_total_amount?: number
       reconciliation_count: number
+      reconciliation_total_amount?: number
       cost_overlap_review_count: number
       legacy_deleted_payment_count: number
     }

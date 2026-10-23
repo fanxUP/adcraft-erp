@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from app.schemas.outsource import OutsourcePaymentCreate, OutsourceTaskCreate
 from app.repositories.outsource_repo import OutsourceTaskRepository
 from app.services.outsource_service import OutsourceService
+from app.core.permissions import PERM_OUTSOURCE_TASK_PERMANENT_DELETE
 from tests.conftest import (
     SAMPLE_USER_ID,
     SAMPLE_ORDER_ID,
@@ -114,6 +115,14 @@ def mock_repos():
             "cost_overlap_review_count": 0,
             "legacy_deleted_payment_count": 0,
         }
+    })
+    task_repo.delete_direct_financial_references = AsyncMock(return_value={
+        "payment_count": 0,
+        "payment_total_amount": "0.00",
+        "reconciliation_count": 0,
+        "reconciliation_total_amount": "0.00",
+        "cost_overlap_review_count": 0,
+        "project_cost_ids": [],
     })
     task_repo.hard_delete = AsyncMock()
     task_repo.restore = AsyncMock()
@@ -945,7 +954,7 @@ async def test_restore_task_preserves_legacy_paid_amount_without_payment_rows(se
 
 
 @pytest.mark.asyncio
-async def test_permanent_delete_eligibility_exposes_server_side_blockers(service):
+async def test_permanent_delete_eligibility_allows_direct_finance_cleanup(service):
     svc, _, tr, _ = service
     task = make_mock_outsource_task(
         task_no="OT20261023-0001",
@@ -956,7 +965,9 @@ async def test_permanent_delete_eligibility_exposes_server_side_blockers(service
     tr.permanent_delete_reference_counts.return_value = {
         SAMPLE_ORDER_ID: {
             "payment_count": 1,
+            "payment_total_amount": 500.0,
             "reconciliation_count": 2,
+            "reconciliation_total_amount": 600.0,
             "cost_overlap_review_count": 1,
             "legacy_deleted_payment_count": 0,
         }
@@ -964,14 +975,17 @@ async def test_permanent_delete_eligibility_exposes_server_side_blockers(service
 
     result = await svc.get_permanent_delete_eligibility(SAMPLE_ORDER_ID)
 
-    assert result["eligible"] is False
+    assert result["eligible"] is True
+    assert result["block_reasons"] == []
     assert result["references"] == {
         "payment_count": 1,
+        "payment_total_amount": 500.0,
         "reconciliation_count": 2,
+        "reconciliation_total_amount": 600.0,
         "cost_overlap_review_count": 1,
         "legacy_deleted_payment_count": 0,
     }
-    assert len(result["block_reasons"]) == 3
+    assert result["references"]["payment_count"] == 1
 
 
 @pytest.mark.asyncio
@@ -982,17 +996,131 @@ async def test_recycle_list_does_not_disclose_finance_reference_counts_without_s
         deleted_at=datetime.now(timezone.utc),
     )
     tr.list_deleted_tasks.return_value = ([task], 1)
+    svc._related_project_name = AsyncMock(return_value="应保留展示的项目")
     svc.viewer = SimpleNamespace(roles=[SimpleNamespace(permissions=[])])
 
     items, total = await svc.list_deleted(page=1, page_size=20)
 
     assert total == 1
+    assert items[0]["related_project_name"] == "应保留展示的项目"
     assert "permanent_delete_eligibility" not in items[0]
+    assert "linked_records" not in items[0]
     tr.permanent_delete_reference_counts.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_permanent_delete_rejects_nonzero_legacy_paid_amount_even_without_payment_rows(service):
+async def test_recycle_list_hides_finance_amounts_without_finance_view_permission(service):
+    svc, _, tr, _ = service
+    task = make_mock_outsource_task(
+        status="cancelled",
+        deleted_at=datetime.now(timezone.utc),
+    )
+    tr.list_deleted_tasks.return_value = ([task], 1)
+    tr.permanent_delete_reference_counts.return_value = {
+        SAMPLE_ORDER_ID: {
+            "payment_count": 1,
+            "payment_total_amount": 500.0,
+            "reconciliation_count": 1,
+            "reconciliation_total_amount": 500.0,
+            "cost_overlap_review_count": 0,
+            "legacy_deleted_payment_count": 0,
+        }
+    }
+    svc.viewer = SimpleNamespace(roles=[SimpleNamespace(permissions=[
+        SimpleNamespace(code=code) for code in (
+            "outsource_center:read",
+            "outsource_task:read",
+            "outsource_task:delete",
+            PERM_OUTSOURCE_TASK_PERMANENT_DELETE,
+        )
+    ])])
+
+    items, _ = await svc.list_deleted(page=1, page_size=20)
+
+    references = items[0]["permanent_delete_eligibility"]["references"]
+    assert references["payment_count"] == 1
+    assert "payment_total_amount" not in references
+    assert "reconciliation_total_amount" not in references
+
+
+@pytest.mark.asyncio
+async def test_recycle_list_includes_human_readable_linked_business_records(service):
+    svc, _, tr, _ = service
+    source_task_id = UUID("66666666-6666-6666-6666-666666666666")
+    task = make_mock_outsource_task(
+        status="cancelled",
+        deleted_at=datetime.now(timezone.utc),
+        related_doc_id=SAMPLE_ORDER_ID,
+        related_doc_type="order",
+        order_item_id=SAMPLE_ORDER_ITEM_ID,
+        order_item=SimpleNamespace(item_name="奖牌制作"),
+        source_task_type="design",
+        source_task_id=source_task_id,
+    )
+    tr.list_deleted_tasks.return_value = ([task], 1)
+    source = SimpleNamespace(
+        id=source_task_id,
+        design_no="D20261023-0001",
+        status="in_progress",
+        project_name="奖牌项目",
+        document_id=SAMPLE_ORDER_ID,
+    )
+    document = SimpleNamespace(
+        id=SAMPLE_ORDER_ID,
+        doc_no="O20261023-0001",
+        doc_type="order",
+        project_name="奖牌项目",
+        total_amount=Decimal("1000.00"),
+    )
+
+    class RowsResult:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def scalars(self):
+            return self
+
+        def all(self):
+            return self.rows
+
+    svc.db.execute.side_effect = [
+        RowsResult([source]),
+        RowsResult([document]),
+        SimpleNamespace(scalar_one_or_none=lambda: "测试外协商"),
+    ]
+
+    items, _ = await svc.list_deleted(page=1, page_size=20)
+
+    assert items[0]["linked_records"] == [
+        {
+            "kind": "source_task",
+            "label": "设计任务",
+            "id": str(source_task_id),
+            "business_no": "D20261023-0001",
+            "name": "奖牌项目",
+            "status": "in_progress",
+        },
+        {
+            "kind": "document",
+            "label": "订单",
+            "id": str(SAMPLE_ORDER_ID),
+            "business_no": "O20261023-0001",
+            "name": "奖牌项目",
+            "status": None,
+        },
+        {
+            "kind": "order_item",
+            "label": "订单明细",
+            "id": str(SAMPLE_ORDER_ITEM_ID),
+            "business_no": None,
+            "name": "奖牌制作",
+            "status": None,
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_permanent_delete_removes_nonzero_legacy_paid_task_and_keeps_snapshot(service):
     svc, _, tr, _ = service
     task = make_mock_outsource_task(
         task_no="OT20261023-0002",
@@ -1003,18 +1131,18 @@ async def test_permanent_delete_rejects_nonzero_legacy_paid_amount_even_without_
     )
     tr.get_deleted_by_id.return_value = task
 
-    with pytest.raises(ValueError, match="已付金额非零"):
-        await svc.permanently_delete_task(
-            SAMPLE_ORDER_ID,
-            task_no_confirmation="OT20261023-0002",
-            reason="清理错误记录",
-        )
+    result = await svc.permanently_delete_task(
+        SAMPLE_ORDER_ID,
+        reason="清理已取消外协任务",
+    )
 
-    tr.hard_delete.assert_not_awaited()
+    tr.delete_direct_financial_references.assert_awaited_once_with(SAMPLE_ORDER_ID)
+    tr.hard_delete.assert_awaited_once_with(task)
+    assert result["snapshot"]["paid_amount"] == "500.00"
 
 
 @pytest.mark.asyncio
-async def test_permanent_delete_requires_matching_task_number_and_reason(service):
+async def test_permanent_delete_requires_reason_without_reentering_task_number(service):
     svc, _, tr, _ = service
     task = make_mock_outsource_task(
         task_no="OT20261023-0003",
@@ -1023,18 +1151,17 @@ async def test_permanent_delete_requires_matching_task_number_and_reason(service
     )
     tr.get_deleted_by_id.return_value = task
 
-    with pytest.raises(ValueError, match="任务编号确认不匹配"):
+    with pytest.raises(ValueError, match="删除原因至少需要 5 个字符"):
         await svc.permanently_delete_task(
             SAMPLE_ORDER_ID,
-            task_no_confirmation="OT-WRONG",
-            reason="清理错误记录",
+            reason="删",
         )
 
     tr.hard_delete.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_permanent_delete_rechecks_eligibility_after_the_list_result_is_stale(service):
+async def test_permanent_delete_rechecks_task_status_after_the_list_result_is_stale(service):
     svc, _, tr, _ = service
     task = make_mock_outsource_task(
         task_no="OT20261023-0007",
@@ -1042,29 +1169,15 @@ async def test_permanent_delete_rechecks_eligibility_after_the_list_result_is_st
         deleted_at=datetime.now(timezone.utc),
     )
     tr.get_deleted_by_id.return_value = task
-    tr.permanent_delete_reference_counts.side_effect = [
-        {SAMPLE_ORDER_ID: {
-            "payment_count": 0,
-            "reconciliation_count": 0,
-            "cost_overlap_review_count": 0,
-            "legacy_deleted_payment_count": 0,
-        }},
-        {SAMPLE_ORDER_ID: {
-            "payment_count": 1,
-            "reconciliation_count": 0,
-            "cost_overlap_review_count": 0,
-            "legacy_deleted_payment_count": 0,
-        }},
-    ]
-
     assert (await svc.get_permanent_delete_eligibility(SAMPLE_ORDER_ID))["eligible"] is True
-    with pytest.raises(ValueError, match="存在 1 条外协付款记录"):
+    task.status = "completed"
+    with pytest.raises(ValueError, match="仅已取消状态"):
         await svc.permanently_delete_task(
             SAMPLE_ORDER_ID,
-            task_no_confirmation="OT20261023-0007",
             reason="清理测试记录",
         )
 
+    tr.delete_direct_financial_references.assert_not_awaited()
     tr.hard_delete.assert_not_awaited()
 
 
@@ -1081,7 +1194,6 @@ async def test_permanent_delete_rejects_non_cancelled_task(service):
     with pytest.raises(ValueError, match="仅已取消状态"):
         await svc.permanently_delete_task(
             SAMPLE_ORDER_ID,
-            task_no_confirmation="OT20261023-0008",
             reason="清理测试记录",
         )
 
@@ -1102,19 +1214,18 @@ async def test_permanent_delete_only_removes_eligible_cancelled_recycle_task(ser
 
     result = await svc.permanently_delete_task(
         SAMPLE_ORDER_ID,
-        task_no_confirmation="OT20261023-0004",
         reason="清理确认无财务记录的测试任务",
     )
 
     tr.get_deleted_by_id.assert_awaited_once_with(SAMPLE_ORDER_ID, for_update=True)
-    tr.permanent_delete_reference_counts.assert_awaited_once_with([SAMPLE_ORDER_ID])
+    tr.delete_direct_financial_references.assert_awaited_once_with(SAMPLE_ORDER_ID)
     tr.hard_delete.assert_awaited_once_with(task)
     assert result["task_no"] == "OT20261023-0004"
     assert result["snapshot"]["unpaid_amount"] == "500.00"
 
 
 @pytest.mark.asyncio
-async def test_permanent_delete_rejects_legacy_task_whose_payments_were_destroyed(service):
+async def test_permanent_delete_preserves_legacy_payment_log_count_in_audit(service):
     svc, _, tr, _ = service
     task = make_mock_outsource_task(
         task_no="OT20261023-0006",
@@ -1132,14 +1243,14 @@ async def test_permanent_delete_rejects_legacy_task_whose_payments_were_destroye
         }
     }
 
-    with pytest.raises(ValueError, match="历史软删除日志显示曾清除"):
-        await svc.permanently_delete_task(
-            SAMPLE_ORDER_ID,
-            task_no_confirmation="OT20261023-0006",
-            reason="清理测试记录",
-        )
+    result = await svc.permanently_delete_task(
+        SAMPLE_ORDER_ID,
+        reason="清理历史已取消任务",
+    )
 
-    tr.hard_delete.assert_not_awaited()
+    assert result["snapshot"]["deleted_financial_references"]["legacy_deleted_payment_count"] == 1
+    tr.delete_direct_financial_references.assert_awaited_once_with(SAMPLE_ORDER_ID)
+    tr.hard_delete.assert_awaited_once_with(task)
 
 
 @pytest.mark.asyncio
@@ -1158,7 +1269,9 @@ async def test_permanent_delete_reference_query_counts_all_finance_history():
             return iter([SimpleNamespace(
                 task_id=task_id,
                 payment_count=1,
+                payment_total_amount=Decimal("500.00"),
                 reconciliation_count=2,
+                reconciliation_total_amount=Decimal("600.00"),
                 cost_overlap_review_count=1,
                 legacy_deleted_payment_count=1,
             )])
@@ -1176,10 +1289,64 @@ async def test_permanent_delete_reference_query_counts_all_finance_history():
     assert "voided_at" not in sql
     assert result[task_id] == {
         "payment_count": 1,
+        "payment_total_amount": 500.0,
         "reconciliation_count": 2,
+        "reconciliation_total_amount": 600.0,
         "cost_overlap_review_count": 1,
         "legacy_deleted_payment_count": 1,
     }
+
+
+@pytest.mark.asyncio
+async def test_delete_direct_financial_references_preserves_project_cost_rows():
+    task_id = SAMPLE_ORDER_ID
+    payment_id = UUID("77777777-7777-7777-7777-777777777777")
+    reconciliation_ids = [
+        UUID("88888888-8888-8888-8888-888888888888"),
+        UUID("99999999-9999-9999-9999-999999999999"),
+    ]
+    review_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    project_cost_id = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+    payment = SimpleNamespace(id=payment_id, amount=Decimal("500.00"))
+    reconciliations = [
+        SimpleNamespace(id=reconciliation_ids[0], amount=Decimal("100.00")),
+        SimpleNamespace(id=reconciliation_ids[1], amount=Decimal("500.00")),
+    ]
+    review = SimpleNamespace(id=review_id, project_cost_id=project_cost_id)
+
+    class ScalarRows:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def all(self):
+            return self.rows
+
+    db = SimpleNamespace(
+        scalars=AsyncMock(side_effect=[
+            ScalarRows([payment]),
+            ScalarRows(reconciliations),
+            ScalarRows([review]),
+        ]),
+        execute=AsyncMock(),
+        flush=AsyncMock(),
+    )
+    repository = OutsourceTaskRepository(db)
+
+    summary = await repository.delete_direct_financial_references(task_id)
+
+    assert summary == {
+        "payment_count": 1,
+        "payment_total_amount": "500.00",
+        "reconciliation_count": 2,
+        "reconciliation_total_amount": "600.00",
+        "cost_overlap_review_count": 1,
+        "project_cost_ids": [str(project_cost_id)],
+    }
+    statements = [str(call.args[0].compile()) for call in db.execute.await_args_list]
+    assert "DELETE FROM finance_payment_date_reconciliations" in statements[0]
+    assert "DELETE FROM finance_cost_overlap_reviews" in statements[1]
+    assert "DELETE FROM outsource_payments" in statements[2]
+    assert all("project_costs" not in statement for statement in statements)
 
 
 def test_outsource_amounts_and_quantity_must_be_valid():

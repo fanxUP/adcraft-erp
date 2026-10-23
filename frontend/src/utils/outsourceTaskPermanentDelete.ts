@@ -3,7 +3,9 @@ export interface PermanentDeleteEligibility {
   block_reasons: string[]
   references: {
     payment_count: number
+    payment_total_amount?: number
     reconciliation_count: number
+    reconciliation_total_amount?: number
     cost_overlap_review_count: number
     legacy_deleted_payment_count: number
   }
@@ -19,13 +21,8 @@ export function permanentDeleteBlockMessage(eligibility?: PermanentDeleteEligibi
   return eligibility.block_reasons.join('；') || '当前任务不符合永久删除条件'
 }
 
-export function isPermanentDeleteConfirmationValid(
-  expectedTaskNo: string,
-  typedTaskNo: string,
-  reason: string,
-): boolean {
+export function isPermanentDeleteReasonValid(reason: string): boolean {
   const normalizedReason = reason.trim()
-  return typedTaskNo.trim() === expectedTaskNo
-    && normalizedReason.length >= 5
+  return normalizedReason.length >= 5
     && normalizedReason.length <= 500
 }

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 import app.models
 from app.models.base import Base
 from app.models.business_document import BusinessDocument
-from app.models.finance_reconciliation import FinancePaymentDateReconciliation
+from app.models.finance_reconciliation import FinanceCostOverlapReview, FinancePaymentDateReconciliation
 from app.models.outsource import OutsourcePayment, OutsourceTask, OutsourceVendor
 from app.models.payable import PayablePayment
 from app.models.payment import Expense
@@ -213,6 +213,74 @@ async def test_outsource_soft_delete_and_restore_preserve_payment_facts(fixture_
     assert await db.scalar(sa.select(sa.func.count()).select_from(OutsourcePayment.__table__).where(
         OutsourcePayment.__table__.c.task_id == task.id
     )) == 1
+
+
+async def test_permanent_delete_cleans_direct_finance_and_preserves_project_cost(fixture_db):
+    db, expenditure, ids = fixture_db
+    now = datetime(2026, 10, 20)
+    await db.execute(sa.update(OutsourceTask.__table__).where(
+        OutsourceTask.__table__.c.id == ids["task"]
+    ).values(status="cancelled", deleted_at=now))
+    payment_id = await db.scalar(sa.select(OutsourcePayment.__table__.c.id).where(
+        OutsourcePayment.__table__.c.task_id == ids["task"]
+    ))
+    await db.execute(sa.insert(FinancePaymentDateReconciliation.__table__), [
+        dict(id=uuid4(), source_type="outsource_task", source_id=ids["task"], amount=Decimal("100"),
+             paid_at=now, evidence_type="other", evidence_reference="task-date-audit"),
+        dict(id=uuid4(), source_type="outsource_payment", source_id=payment_id, amount=Decimal("500"),
+             paid_at=now, evidence_type="bank_statement", evidence_reference="payment-date-audit"),
+        dict(id=uuid4(), source_type="project_cost", source_id=ids["cost"], amount=Decimal("100"),
+             paid_at=now, evidence_type="other", evidence_reference="project-cost-date-audit"),
+    ])
+    await db.execute(sa.insert(FinanceCostOverlapReview.__table__).values(
+        id=uuid4(), project_cost_id=ids["cost"], outsource_task_id=ids["task"],
+        decision="confirmed_not_duplicate",
+    ))
+
+    result = await OutsourceService(db).permanently_delete_task(
+        ids["task"],
+        reason="确认清理外协付款及关联核对",
+    )
+
+    assert result["snapshot"]["paid_amount"] == "500.00"
+    summary = result["snapshot"]["deleted_financial_references"]
+    assert summary == {
+        "payment_count": 1,
+        "payment_total_amount": "500.00",
+        "reconciliation_count": 2,
+        "reconciliation_total_amount": "600.00",
+        "cost_overlap_review_count": 1,
+        "project_cost_ids": [str(ids["cost"])],
+        "legacy_deleted_payment_count": 0,
+    }
+    assert await db.scalar(sa.select(sa.func.count()).select_from(OutsourceTask.__table__).where(
+        OutsourceTask.__table__.c.id == ids["task"]
+    )) == 0
+    assert await db.scalar(sa.select(sa.func.count()).select_from(OutsourcePayment.__table__).where(
+        OutsourcePayment.__table__.c.task_id == ids["task"]
+    )) == 0
+    assert await db.scalar(sa.select(sa.func.count()).select_from(FinanceCostOverlapReview.__table__).where(
+        FinanceCostOverlapReview.__table__.c.outsource_task_id == ids["task"]
+    )) == 0
+    assert await db.scalar(sa.select(sa.func.count()).select_from(FinancePaymentDateReconciliation.__table__).where(
+        FinancePaymentDateReconciliation.__table__.c.source_type.in_(
+            ("outsource_task", "outsource_payment")
+        )
+    )) == 0
+    assert await db.scalar(sa.select(ProjectCost.__table__.c.id).where(
+        ProjectCost.__table__.c.id == ids["cost"]
+    )) == ids["cost"]
+    project_cost_reconciliations = await db.scalar(sa.select(sa.func.count()).select_from(
+        FinancePaymentDateReconciliation.__table__
+    ).where(
+        FinancePaymentDateReconciliation.__table__.c.source_type == "project_cost",
+        FinancePaymentDateReconciliation.__table__.c.source_id == ids["cost"],
+    ))
+    assert project_cost_reconciliations == 1
+    ledger = await expenditure.list_records(
+        "ledger", filters=ExpenditureFilters(source_type="project_cost")
+    )
+    assert ledger["total"] == 1
 
 
 async def test_legacy_settlement_quote_actual_cost_and_deleted_sources(fixture_db):
