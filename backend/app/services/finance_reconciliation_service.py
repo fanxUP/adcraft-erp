@@ -48,7 +48,7 @@ class FinanceReconciliationService:
         )
         return _money(amount)
 
-    async def _historical_paid_base(self, source_type: str, source_id: UUID) -> Decimal:
+    async def _historical_paid_base(self, source_type: str, source_id: UUID) -> tuple[Decimal, Decimal]:
         if source_type == "expense":
             source = await self.db.scalar(
                 select(Expense).where(
@@ -58,7 +58,7 @@ class FinanceReconciliationService:
             )
             if source is None:
                 raise ValueError("经营支出来源不存在或已删除")
-            return max(_money(source.amount) - _money(source.payable_amount), Decimal("0.00"))
+            return max(_money(source.amount) - _money(source.payable_amount), Decimal("0.00")), Decimal("0.00")
 
         if source_type == "project_cost":
             source = await self.db.scalar(
@@ -71,6 +71,7 @@ class FinanceReconciliationService:
                 raise ValueError("项目成本来源不存在或已删除")
             debt = _money(source.debt_amount)
             inferred = max(_money(source.amount) - debt, Decimal("0.00"))
+            registered_paid = inferred if source.cost_date is not None else Decimal("0.00")
             history_count = int(await self.db.scalar(
                 select(func.count(PayablePayment.id)).where(
                     PayablePayment.source_type == "project_cost",
@@ -79,7 +80,7 @@ class FinanceReconciliationService:
             ) or 0)
             if source.is_settled and history_count == 0:
                 inferred += debt
-            return inferred
+            return inferred, registered_paid
 
         if source_type == "outsource_task":
             source = await self.db.scalar(
@@ -95,7 +96,7 @@ class FinanceReconciliationService:
                     OutsourcePayment.task_id == source_id,
                 )
             ))
-            return max(_money(source.paid_amount) - recorded_payments, Decimal("0.00"))
+            return max(_money(source.paid_amount) - recorded_payments, Decimal("0.00")), Decimal("0.00")
 
         raise ValueError("该来源不是汇总型历史已付款")
 
@@ -143,11 +144,12 @@ class FinanceReconciliationService:
             if amount != base_amount:
                 raise ValueError("外协付款日期核对必须对应原付款整笔金额")
         else:
-            base_amount = await self._historical_paid_base(source_type, source_id)
+            base_amount, registered_paid_amount = await self._historical_paid_base(source_type, source_id)
             allocated = await self._active_reconciled_amount(source_type_db, source_id)
             if allocated > base_amount:
                 raise ValueError("已有日期核对金额超过当前来源历史已付，请先撤销冲突核对")
-            available = base_amount - allocated
+            allocated_unverified = max(allocated - registered_paid_amount, Decimal("0.00"))
+            available = base_amount - registered_paid_amount - allocated_unverified
 
         if amount > available:
             raise ValueError(f"核实金额超过尚未核实金额 {available:.2f} 元")

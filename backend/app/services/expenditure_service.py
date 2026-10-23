@@ -61,7 +61,8 @@ class ExpenditureService:
 
     @staticmethod
     def _columns(kind, source_type, source, source_no, doc, vendor, category,
-                 description, source_date, last_payment_date, amount, paid, remaining, undated, status):
+                 description, source_date, last_payment_date, amount, paid, remaining, undated,
+                 registered_paid, status):
         return [
             (literal(kind + ":") + cast(source.c.id, String)).label("row_key"),
             literal(source_type).label("source_type"), literal(kind).label("source_kind"),
@@ -76,7 +77,8 @@ class ExpenditureService:
             source_date.label("source_date"), last_payment_date.label("last_payment_date"),
             amount.label("amount"),
             paid.label("paid_amount"), remaining.label("remaining_amount"),
-            undated.label("undated_paid_amount"), status.label("source_status"),
+            undated.label("undated_paid_amount"), registered_paid.label("registered_paid_amount"),
+            status.label("source_status"),
         ]
 
     def _ledger(self):
@@ -152,9 +154,22 @@ class ExpenditureService:
             amount, payable = _money(table.c.amount), _money(table.c[debt])
             inferred = func.greatest(amount - payable, 0)
             legacy = literal(0)
+            registered_paid = literal(0)
             if kind == "project_cost":
                 legacy = case((and_(table.c.is_settled.is_(True), _money(ps.c.history_count) == 0), payable), else_=0)
-            undated = func.greatest(inferred + legacy - _money(legacy_allocations.c.allocated), 0)
+                # The amount paid when a project cost is registered uses its selected cost date.
+                # Any existing reconciliation allocation takes precedence over this inferred date
+                # so historical records remain additive rather than double-counted.
+                registered_paid = case(
+                    (table.c[date_column].is_not(None), func.greatest(
+                        inferred - _money(legacy_allocations.c.allocated), 0,
+                    )),
+                    else_=0,
+                )
+            undated = func.greatest(
+                inferred + legacy - _money(legacy_allocations.c.allocated) - registered_paid,
+                0,
+            )
             paid = inferred + legacy + _money(ps.c.paid)
             registered_paid_date = case(
                 (inferred > 0, table.c[date_column]),
@@ -171,7 +186,8 @@ class ExpenditureService:
                 table.c.description, table.c[date_column],
                 func.greatest(registered_paid_date, settled_legacy_date, latest.c.last_payment_date),
                 amount, paid,
-                func.greatest(payable - legacy - _money(ps.c.paid), 0), undated, literal("active"),
+                func.greatest(payable - legacy - _money(ps.c.paid), 0), undated,
+                registered_paid, literal("active"),
             )).select_from(join).where(table.c.deleted_at.is_(None)))
         if "outsource" in self.available_sources:
             task, op = OutsourceTask.__table__, OutsourcePayment.__table__
@@ -207,7 +223,7 @@ class ExpenditureService:
                 task.c.description, func.coalesce(task.c.completed_at, task.c.created_at),
                 task_latest.c.last_payment_date, _money(task.c.total_amount), paid,
                 case((inactive, 0), else_=func.greatest(_money(task.c.total_amount) - paid, 0)),
-                undated_legacy + _money(os.c.undated),
+                undated_legacy + _money(os.c.undated), literal(0),
                 case((task.c.deleted_at.is_not(None), "deleted"), else_=task.c.status),
             )).select_from(join).where(or_(and_(~inactive, task.c.status.in_(("completed", "settled"))), paid > 0)))
             standalone_reconciliation = reconciliation.alias("standalone_payment_date_reconciliation")
@@ -229,12 +245,15 @@ class ExpenditureService:
                 "outsource_payment", "outsource", op, op.c.payment_no, doc, vendor,
                 literal("未关联任务付款"), op.c.remark, standalone_paid_at,
                 func.greatest(standalone_paid_at, standalone_latest.c.last_payment_date), op.c.amount, op.c.amount,
-                literal(0), case((standalone_paid_at.is_(None), op.c.amount), else_=0), literal("standalone"),
+                literal(0), case((standalone_paid_at.is_(None), op.c.amount), else_=0), literal(0), literal("standalone"),
             )).select_from(join).where(op.c.task_id.is_(None)))
         return union_all(*branches).subquery("expenditure_ledger")
 
     def _disbursements(self, ledger):
-        metadata = [ledger.c[k] for k in ledger.c.keys() if k not in ("row_key", "amount", "paid_amount", "remaining_amount", "undated_paid_amount")]
+        metadata = [ledger.c[k] for k in ledger.c.keys() if k not in (
+            "row_key", "amount", "paid_amount", "remaining_amount", "undated_paid_amount",
+            "registered_paid_amount",
+        )]
         inferred = ledger.c.undated_paid_amount
         op = OutsourcePayment.__table__
         reconciliation = FinancePaymentDateReconciliation.__table__
@@ -270,6 +289,18 @@ class ExpenditureService:
             ledger.c.source_kind.label("reconciliation_source_type"),
             cast(ledger.c.source_id, String).label("reconciliation_source_id"),
         ).where(inferred > 0)]
+        branches.append(select(
+            (literal("registered:") + ledger.c.row_key).label("row_key"), *metadata,
+            literal("historical").label("payment_kind"), literal("登记时已付").label("payment_no"),
+            ledger.c.registered_paid_amount.label("amount"), ledger.c.source_date.label("paid_at"),
+            cast(literal(None), String).label("payment_method"), literal("confirmed").label("date_status"),
+            cast(literal(None), String).label("reconciliation_id"),
+            cast(literal(None), String).label("evidence_type"),
+            cast(literal(None), String).label("evidence_reference"),
+            cast(literal(None), String).label("reconciliation_note"),
+            ledger.c.source_kind.label("reconciliation_source_type"),
+            cast(ledger.c.source_id, String).label("reconciliation_source_id"),
+        ).where(ledger.c.registered_paid_amount > 0))
         pp = PayablePayment.__table__
         join = pp.join(ledger, and_(pp.c.source_type == ledger.c.source_type, pp.c.source_id == ledger.c.source_id))
         paid_at = func.timezone("Asia/Shanghai", func.timezone("UTC", pp.c.paid_at))
@@ -364,7 +395,12 @@ class ExpenditureService:
         if view not in ("ledger", "disbursements") or page < 1 or not 1 <= page_size <= 200:
             raise ValueError("列表参数无效")
         ledger = self._ledger()
-        table = ledger if view == "ledger" else self._disbursements(ledger)
+        if view == "ledger":
+            table = select(*(
+                ledger.c[key] for key in ledger.c.keys() if key != "registered_paid_amount"
+            )).subquery("expenditure_ledger_public")
+        else:
+            table = self._disbursements(ledger)
         # Reuse one projection and one statement snapshot for page + totals.
         # A concurrent payment cannot land between the summary and list reads.
         table = select(table).where(*self._predicates(table, filters, view, dates=False)).cte("expenditure_view")

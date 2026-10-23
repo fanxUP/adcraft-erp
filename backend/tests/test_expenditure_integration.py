@@ -95,7 +95,7 @@ async def test_principal_once_partial_payments_and_full_page_summary(fixture_db)
     result = await svc.list_records("ledger", page_size=1)
     assert result["total"] == 3
     assert len(result["items"]) == 1
-    assert result["summary"] == dict(amount=13000, paid_amount=7500, remaining_amount=5500, undated_paid_amount=3000)
+    assert result["summary"] == dict(amount=13000, paid_amount=7500, remaining_amount=5500, undated_paid_amount=0)
     cost = await svc.list_records("ledger", filters=ExpenditureFilters(source_type="project_cost"))
     assert cost["total"] == 1
     assert cost["items"][0]["paid_amount"] == 7000
@@ -144,15 +144,71 @@ async def test_actual_payment_day_timezone_and_unknown_date_not_in_period(fixtur
     result = await svc.list_records("disbursements", filters=filters)
     assert result["total"] == 2
     assert result["summary"]["confirmed_paid_amount"] == 4500
-    assert result["summary"]["unverified_paid_amount"] == 3000
-    assert result["summary"]["unverified_count"] == 1
+    assert result["summary"]["unverified_paid_amount"] == 0
+    assert result["summary"]["unverified_count"] == 0
     assert next(r for r in result["items"] if r["payment_no"] == "TEST-P")["paid_at"] == "2026-10-08T00:30:00"
     previous = await svc.list_records("disbursements", filters=ExpenditureFilters(start_date=date(2026, 10, 7), end_date=date(2026, 10, 7)))
     assert previous["total"] == 0
     all_rows = await svc.list_records("disbursements")
-    unknown = [r for r in all_rows["items"] if r["date_status"] == "unverified"]
-    assert len(unknown) == 1 and unknown[0]["amount"] == 3000 and unknown[0]["paid_at"] is None
+    registered = next(r for r in all_rows["items"] if r["source_no"] == "TEST-C" and r["payment_kind"] == "historical")
+    assert registered["amount"] == 3000 and registered["paid_at"] == "2026-09-01T00:00:00"
+    assert registered["date_status"] == "confirmed"
+    assert not [r for r in all_rows["items"] if r["date_status"] == "unverified"]
     assert all(r["payment_no"] != "TEST-VOID" for r in all_rows["items"])
+
+
+async def test_project_cost_registration_date_is_payment_date_but_missing_legacy_date_stays_unverified(fixture_db):
+    db, svc, ids = fixture_db
+    undated_cost_id = uuid4()
+    await db.execute(sa.insert(ProjectCost.__table__).values(
+        id=undated_cost_id, cost_no="TEST-C-UNDATED", category="材料", amount=5000,
+        debt_amount=4000, cost_date=None,
+    ))
+    await db.commit()
+
+    result = await svc.list_records(
+        "disbursements",
+        filters=ExpenditureFilters(source_type="project_cost"),
+    )
+    registered_paid = next(
+        row for row in result["items"]
+        if row["source_no"] == "TEST-C" and row["payment_kind"] == "historical"
+    )
+    assert registered_paid["amount"] == 3000
+    assert registered_paid["paid_at"] == "2026-09-01T00:00:00"
+    assert registered_paid["date_status"] == "confirmed"
+
+    genuinely_undated = next(
+        row for row in result["items"]
+        if row["source_no"] == "TEST-C-UNDATED" and row["payment_kind"] == "historical"
+    )
+    assert genuinely_undated["amount"] == 1000
+    assert genuinely_undated["paid_at"] is None
+    assert genuinely_undated["date_status"] == "unverified"
+
+    dated_period = await svc.list_records(
+        "disbursements",
+        filters=ExpenditureFilters(
+            source_type="project_cost",
+            start_date=date(2026, 9, 1),
+            end_date=date(2026, 9, 1),
+        ),
+    )
+    assert dated_period["total"] == 1
+    assert dated_period["summary"]["confirmed_paid_amount"] == 3000
+    assert all(row["date_status"] == "confirmed" for row in dated_period["items"])
+
+    with pytest.raises(ValueError, match="超过尚未核实金额 0.00 元"):
+        await FinanceReconciliationService(db).create_payment_date_reconciliation(
+            source_type="project_cost",
+            source_id=ids["cost"],
+            amount=Decimal("1.00"),
+            paid_at=date(2026, 9, 2),
+            evidence_type="bank_statement",
+            evidence_reference="不能覆盖登记日期",
+            note=None,
+            created_by=None,
+        )
 
 
 async def test_source_permission_filters_apply_to_totals_and_rows(fixture_db):
@@ -161,7 +217,7 @@ async def test_source_permission_filters_apply_to_totals_and_rows(fixture_db):
     ledger = await restricted.list_records("ledger")
     assert ledger["total"] == 2 and ledger["summary"]["amount"] == 11000
     flow = await restricted.list_records("disbursements")
-    assert flow["summary"]["confirmed_paid_amount"] == 4000
+    assert flow["summary"]["confirmed_paid_amount"] == 7000
     assert "outsource" not in flow["available_sources"]
     scoped = await restricted.list_records("ledger", filters=ExpenditureFilters(supplier_id=ids["vendor"], document_id=ids["doc"], category="材料", keyword="TEST-C"))
     assert scoped["total"] == 1 and scoped["summary"]["amount"] == 10000
@@ -202,7 +258,7 @@ async def test_outsource_soft_delete_and_restore_preserve_payment_facts(fixture_
         OutsourcePayment.__table__.c.task_id == task.id
     )) == 1
     deleted_ledger = await expenditure.list_records(
-        "ledger", filters=ExpenditureFilters(source_type="outsource_task")
+        "ledger", filters=ExpenditureFilters(source_type="outsource")
     )
     assert deleted_ledger["items"][0]["paid_amount"] == 500
     assert deleted_ledger["items"][0]["source_status"] == "deleted"
@@ -370,6 +426,13 @@ async def test_finance_reconciliation_http_routes_enforce_permissions_and_audit(
         assert denied.status_code == 403
 
         current.roles = viewer("expense:read", "expense:update").roles
+        known_date_rejected = await client.post("/finance-center/payment-reconciliations", json=payload)
+        assert known_date_rejected.status_code == 400
+        assert known_date_rejected.json()["detail"] == "核实金额超过尚未核实金额 0.00 元"
+
+        await db.execute(sa.update(ProjectCost.__table__).where(
+            ProjectCost.__table__.c.id == ids["cost"],
+        ).values(cost_date=None))
         created = await client.post("/finance-center/payment-reconciliations", json=payload)
         assert created.status_code == 200
         reconciliation_id = created.json()["data"]["id"]
@@ -419,6 +482,9 @@ async def test_finance_reconciliation_http_routes_enforce_permissions_and_audit(
 
 async def test_historical_payment_date_reconciliation_splits_amount_without_adding_payment(fixture_db):
     db, expenditure, ids = fixture_db
+    await db.execute(sa.update(ProjectCost.__table__).where(
+        ProjectCost.__table__.c.id == ids["cost"],
+    ).values(cost_date=None))
     reviewer = FinanceReconciliationService(db)
 
     reconciliation = await reviewer.create_payment_date_reconciliation(
@@ -456,6 +522,9 @@ async def test_historical_payment_date_reconciliation_splits_amount_without_addi
 
 async def test_payment_date_reconciliation_rejects_overallocation_and_void_restores_unknown_amount(fixture_db):
     db, expenditure, ids = fixture_db
+    await db.execute(sa.update(ProjectCost.__table__).where(
+        ProjectCost.__table__.c.id == ids["cost"],
+    ).values(cost_date=None))
     reviewer = FinanceReconciliationService(db)
     record = await reviewer.create_payment_date_reconciliation(
         source_type="project_cost",
@@ -494,6 +563,10 @@ async def test_payment_date_reconciliation_rejects_overallocation_and_void_resto
 
 async def test_concurrent_payment_date_allocations_cannot_overallocate_a_source(fixture_db):
     db, _, ids = fixture_db
+    await db.execute(sa.update(ProjectCost.__table__).where(
+        ProjectCost.__table__.c.id == ids["cost"],
+    ).values(cost_date=None))
+    await db.commit()
     engine = db.bind
 
     async def allocate(reference: str):
