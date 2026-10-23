@@ -147,6 +147,13 @@ export function restoreOutsourceTask(id: string) {
   return post<OutsourceTaskResponse>(`/outsource/tasks/${id}/restore`)
 }
 
+export function permanentlyDeleteOutsourceTask(
+  id: string,
+  data: { task_no_confirmation: string; reason: string },
+) {
+  return del<SuccessResponse>(`/outsource/tasks/recycle/${id}`, { data })
+}
+
 export function getQuotesForDropdown() {
   return get<{id: string; label: string; quote_no: string; project_name: string; customer_name: string | null}[]>('/outsource/quotes-for-dropdown')
 }

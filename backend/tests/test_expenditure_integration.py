@@ -67,7 +67,7 @@ async def fixture_db():
             ))
             await db.execute(sa.insert(OutsourceTask.__table__).values(
                 id=task_id, task_no="TEST-T", vendor_id=vendor_id, task_type="production", status="completed",
-                related_doc_id=doc_id, related_doc_type="order", total_amount=2000, paid_amount=500,
+                related_doc_id=doc_id, related_doc_type="order", total_amount=2000, paid_amount=500, unpaid_amount=1500,
                 completed_at=datetime(2026, 9, 3),
             ))
             await db.execute(sa.insert(PayablePayment.__table__), [
@@ -188,6 +188,31 @@ async def test_unknown_external_dates_standalone_and_cancelled_payment_facts(fix
     assert flow["total"] == 3  # 500 actual undated + 200 legacy + 100 standalone
     assert flow["summary"]["amount"] == 800 and flow["summary"]["unverified_paid_amount"] == 700
     assert flow["summary"]["confirmed_paid_amount"] == 100
+
+
+async def test_outsource_soft_delete_and_restore_preserve_payment_facts(fixture_db):
+    db, expenditure, ids = fixture_db
+    task = await db.get(OutsourceTask, ids["task"])
+    service = OutsourceService(db)
+    before = (task.total_amount, task.paid_amount, task.unpaid_amount)
+
+    await service.delete_task(task.id)
+
+    assert await db.scalar(sa.select(sa.func.count()).select_from(OutsourcePayment.__table__).where(
+        OutsourcePayment.__table__.c.task_id == task.id
+    )) == 1
+    deleted_ledger = await expenditure.list_records(
+        "ledger", filters=ExpenditureFilters(source_type="outsource_task")
+    )
+    assert deleted_ledger["items"][0]["paid_amount"] == 500
+    assert deleted_ledger["items"][0]["source_status"] == "deleted"
+
+    await service.restore_task(task.id)
+
+    assert (task.total_amount, task.paid_amount, task.unpaid_amount) == before
+    assert await db.scalar(sa.select(sa.func.count()).select_from(OutsourcePayment.__table__).where(
+        OutsourcePayment.__table__.c.task_id == task.id
+    )) == 1
 
 
 async def test_legacy_settlement_quote_actual_cost_and_deleted_sources(fixture_db):

@@ -9,7 +9,11 @@ from app.repositories.outsource_repo import OutsourceVendorRepository, Outsource
 from app.services.number_generator import generate_vendor_no, generate_outsource_task_no, generate_outsource_payment_no
 from app.models.outsource import OutsourceVendor, OutsourcePayment, OutsourceTask
 from app.models.user import User
-from app.core.permissions import PERM_FINANCE_VIEW_COST, user_has_permission
+from app.core.permissions import (
+    PERM_FINANCE_VIEW_COST,
+    PERM_OUTSOURCE_TASK_PERMANENT_DELETE,
+    user_has_permission,
+)
 from app.domain.presentation import make_action_capability, make_outsource_status_view
 from app.domain.workflows import OUTSOURCE_TASK_WORKFLOW, ensure_transition
 from app.services.supplier_service import SupplierService
@@ -1145,24 +1149,150 @@ class OutsourceService:
         """列出已删除的外协任务（回收站）"""
         skip = (page - 1) * page_size
         tasks, total = await self.task_repo.list_deleted_tasks(skip, page_size)
+        can_view_eligibility = (
+            self.viewer is None
+            or user_has_permission(self.viewer, PERM_OUTSOURCE_TASK_PERMANENT_DELETE)
+        )
+        reference_counts = (
+            await self.task_repo.permanent_delete_reference_counts([task.id for task in tasks])
+            if can_view_eligibility
+            else {}
+        )
         result = []
         for t in tasks:
             vname = await self._task_vendor_name(t)
             pname = await self._related_project_name(t.related_doc_id, t.related_doc_type)
-            result.append(self._task_to_dict(t, vname, pname))
+            item = self._task_to_dict(t, vname, pname)
+            if can_view_eligibility:
+                item["permanent_delete_eligibility"] = self._permanent_delete_assessment(
+                    t,
+                    reference_counts.get(t.id, {}),
+                )
+            result.append(item)
         return result, total
+
+    async def get_permanent_delete_eligibility(self, task_id: UUID) -> dict:
+        """Return a server-calculated eligibility result for one recycle task."""
+        task = await self.task_repo.get_deleted_by_id(task_id)
+        if task is None:
+            return {
+                "eligible": False,
+                "block_reasons": ["外协任务不存在或不在回收站"],
+                "references": {
+                    "payment_count": 0,
+                    "reconciliation_count": 0,
+                    "cost_overlap_review_count": 0,
+                    "legacy_deleted_payment_count": 0,
+                },
+            }
+        counts = await self.task_repo.permanent_delete_reference_counts([task.id])
+        return self._permanent_delete_assessment(task, counts.get(task.id, {}))
+
+    def _permanent_delete_assessment(self, task, references: dict) -> dict:
+        counts = {
+            "payment_count": int(references.get("payment_count", 0)),
+            "reconciliation_count": int(references.get("reconciliation_count", 0)),
+            "cost_overlap_review_count": int(references.get("cost_overlap_review_count", 0)),
+            "legacy_deleted_payment_count": int(references.get("legacy_deleted_payment_count", 0)),
+        }
+        reasons = []
+        if task.deleted_at is None:
+            reasons.append("任务不在回收站")
+        if task.status != "cancelled":
+            reasons.append("仅已取消状态的任务可永久删除")
+        paid_amount = self._to_money(task.paid_amount)
+        if paid_amount != 0:
+            reasons.append(f"任务历史已付金额非零（¥{paid_amount:.2f}），需保留并核实")
+        if counts["payment_count"]:
+            reasons.append(f"存在 {counts['payment_count']} 条外协付款记录")
+        if counts["reconciliation_count"]:
+            reasons.append(f"存在 {counts['reconciliation_count']} 条付款日期核对记录（含已撤销记录）")
+        if counts["cost_overlap_review_count"]:
+            reasons.append(f"存在 {counts['cost_overlap_review_count']} 条费用重叠审查记录")
+        if counts["legacy_deleted_payment_count"]:
+            reasons.append(
+                f"历史软删除日志显示曾清除 {counts['legacy_deleted_payment_count']} 条付款流水，无法确认原始财务事实"
+            )
+        return {
+            "eligible": not reasons,
+            "block_reasons": reasons,
+            "references": counts,
+        }
+
+    @staticmethod
+    def _permanent_delete_snapshot(task) -> dict:
+        return {
+            "id": str(task.id),
+            "task_no": task.task_no,
+            "vendor_id": str(task.vendor_id) if task.vendor_id else None,
+            "related_doc_id": str(task.related_doc_id) if task.related_doc_id else None,
+            "related_doc_type": task.related_doc_type,
+            "order_item_id": str(task.order_item_id) if task.order_item_id else None,
+            "source_task_type": task.source_task_type,
+            "source_task_id": str(task.source_task_id) if task.source_task_id else None,
+            "task_type": task.task_type,
+            "description": task.description,
+            "quantity": str(task.quantity or 0),
+            "unit_price": str(OutsourceService._to_money(task.unit_price)),
+            "total_amount": str(OutsourceService._to_money(task.total_amount)),
+            "paid_amount": str(OutsourceService._to_money(task.paid_amount)),
+            "unpaid_amount": str(OutsourceService._to_money(task.unpaid_amount)),
+            "status": task.status,
+            "remark": task.remark,
+            "deleted_at": task.deleted_at.isoformat() if task.deleted_at else None,
+        }
+
+    async def permanently_delete_task(
+        self,
+        task_id: UUID,
+        *,
+        task_no_confirmation: str,
+        reason: str,
+    ) -> dict:
+        """Recheck and physically remove one eligible task inside the request transaction."""
+        task_no_confirmation = (task_no_confirmation or "").strip()
+        reason = (reason or "").strip()
+        if len(reason) < 5:
+            raise ValueError("删除原因至少需要 5 个字符")
+        if len(reason) > 500:
+            raise ValueError("删除原因不能超过 500 个字符")
+
+        task = await self.task_repo.get_deleted_by_id(task_id, for_update=True)
+        if task is None:
+            raise ValueError("外协任务不存在或不在回收站")
+        if task_no_confirmation != task.task_no:
+            raise ValueError("任务编号确认不匹配")
+
+        references = await self.task_repo.permanent_delete_reference_counts([task.id])
+        assessment = self._permanent_delete_assessment(task, references.get(task.id, {}))
+        if not assessment["eligible"]:
+            raise ValueError("当前任务不符合永久删除条件：" + "；".join(assessment["block_reasons"]))
+
+        snapshot = self._permanent_delete_snapshot(task)
+        snapshot["vendor_name"] = await self._task_vendor_name(task)
+        snapshot["related_project_name"] = await self._related_project_name(
+            task.related_doc_id,
+            task.related_doc_type,
+        )
+        snapshot["order_item_name"] = getattr(
+            getattr(task, "order_item", None),
+            "item_name",
+            None,
+        )
+        await self.task_repo.hard_delete(task)
+        return {
+            "task_id": str(task.id),
+            "task_no": task.task_no,
+            "snapshot": snapshot,
+            "reason": reason,
+        }
 
     async def restore_task(self, task_id: UUID) -> dict:
         """从回收站恢复外协任务"""
-        task = await self.task_repo.get_deleted_by_id(task_id)
+        task = await self.task_repo.get_deleted_by_id(task_id, for_update=True)
         if not task:
             raise ValueError("外协任务不存在或未被删除")
         await self.task_repo.restore(task)
-        # 删除时付款已级联清除，恢复后按现存付款记录重算已付/未付
-        count, total = await self.payment_repo.payment_totals(task_id)
-        task.paid_amount = total
-        task.unpaid_amount = max(0.0, float(task.total_amount or 0) - total)
-        await self.db.flush()
         vname = await self._task_vendor_name(task)
         pname = await self._related_project_name(task.related_doc_id, task.related_doc_type)
         return self._task_to_dict(task, vname, pname)
@@ -1287,24 +1417,19 @@ class OutsourceService:
         vname = await self._task_vendor_name(task)
         return self._task_to_dict(task, vname)
 
-    # ── Delete Task (admin only, soft delete + cascade payments) ──
+    # ── Delete Task (soft delete; payment facts remain intact) ──
 
     async def delete_task(self, task_id: UUID) -> dict:
-        """删除外协任务：任务软删除进回收站，关联付款记录一并删除。
-
-        返回删除摘要 {task_id, task_no, deleted_payment_count, deleted_payment_total}。
-        """
+        """将任务移入回收站，不物理删除任何关联付款记录。"""
         task = await self.task_repo.get_by_id(task_id, for_update=True)
         if not task:
             raise ValueError("外协任务不存在")
         await FinanceReconciliationService(self.db).assert_outsource_task_has_no_active_reconciliations(task_id)
         count, total = await self.payment_repo.payment_totals(task_id)
-        if count:
-            await self.payment_repo.delete_by_task(task_id)
         await self.task_repo.soft_delete(task)
         return {
             "task_id": str(task.id),
             "task_no": task.task_no,
-            "deleted_payment_count": count,
-            "deleted_payment_total": total,
+            "preserved_payment_count": count,
+            "preserved_payment_total": total,
         }

@@ -92,6 +92,11 @@ PERMISSION_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "outsource_task:update": ("outsource_center:read", "outsource_task:read"),
     "outsource_task:change_status": ("outsource_center:read", "outsource_task:read"),
     "outsource_task:delete": ("outsource_center:read", "outsource_task:read"),
+    "outsource_task:permanent_delete": (
+        "outsource_center:read",
+        "outsource_task:read",
+        "outsource_task:delete",
+    ),
     # Supplier master data is shared by external work, project costs and
     # expenses, but ledger and bank fields stay separately guarded.
     "supplier:read": ("supplier_center:read",),
@@ -173,6 +178,7 @@ SENSITIVE_PERMISSIONS = frozenset({
     "supplier:ledger:read",
     "supplier:bank:view",
     "supplier:bank:edit",
+    "outsource_task:permanent_delete",
     # AI business tools may expose pricing, financial summaries or anomaly
     # details; treat their entry capabilities as sensitive as the data they
     # return, so a custom execution role cannot add them accidentally.
@@ -353,7 +359,9 @@ def _build_definition(code: str) -> PermissionDefinition:
     if action == "read" and module.endswith("_center"):
         kind = "module"
 
-    if (
+    if code == "outsource_task:permanent_delete":
+        sensitivity = "security"
+    elif (
         action in {"view_price", "view_profit"}
         or module in {"quote", "contract", "cdr_quote"}
         or code in {"ai_quote:read", "ai_knowledge:read"}

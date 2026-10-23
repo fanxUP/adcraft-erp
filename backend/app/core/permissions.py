@@ -184,6 +184,7 @@ PERM_OUTSOURCE_TASK_CREATE = "outsource_task:create"
 PERM_OUTSOURCE_TASK_UPDATE = "outsource_task:update"
 PERM_OUTSOURCE_TASK_CHANGE_STATUS = "outsource_task:change_status"
 PERM_OUTSOURCE_TASK_DELETE = "outsource_task:delete"
+PERM_OUTSOURCE_TASK_PERMANENT_DELETE = "outsource_task:permanent_delete"
 PERM_OUTSOURCE_PAYMENT_READ = "outsource_payment:read"
 PERM_OUTSOURCE_PAYMENT_CREATE = "outsource_payment:create"
 

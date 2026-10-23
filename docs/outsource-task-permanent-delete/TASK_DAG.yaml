@@ -1,0 +1,45 @@
+version: 1
+mode: STRICT
+tasks:
+  P01:
+    title: 保全软删除与恢复的付款事实
+    depends_on: []
+    paths:
+      - backend/app/services/outsource_service.py
+      - backend/app/repositories/outsource_repo.py
+      - backend/tests/test_outsource_service.py
+      - backend/tests/test_expenditure_integration.py
+  P02:
+    title: 建立永久删除资格检查
+    depends_on: [P01]
+    paths:
+      - backend/app/services/outsource_service.py
+      - backend/app/repositories/outsource_repo.py
+      - backend/tests/test_outsource_service.py
+      - backend/tests/test_expenditure_integration.py
+  P03:
+    title: 独立权限、事务删除与审计
+    depends_on: [P01, P02]
+    paths:
+      - backend/app/api/outsource.py
+      - backend/app/core/permissions.py
+      - backend/app/core/permission_catalog.py
+      - backend/scripts/seed_permissions.py
+      - backend/scripts/init_app.py
+      - backend/tests/test_outsource_route_permissions.py
+      - backend/tests/test_modular_permissions.py
+  P04:
+    title: 回收站资格提示与双重确认
+    depends_on: [P02, P03]
+    paths:
+      - frontend/src/views/outsource/OutsourceTaskRecycle.vue
+      - frontend/src/api/outsource.ts
+      - frontend/src/types/api.ts
+      - frontend/src/views/outsource/OutsourceTaskRecycle.test.ts
+  P05:
+    title: 严格验证与发布门禁
+    depends_on: [P01, P02, P03, P04]
+    paths:
+      - docs/outsource-task-permanent-delete/**
+      - backend/tests/**
+      - frontend/src/**

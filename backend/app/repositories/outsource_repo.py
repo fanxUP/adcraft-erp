@@ -14,6 +14,11 @@ from sqlalchemy import (
 )
 
 from app.models.outsource import OutsourceVendor, OutsourceTask, OutsourcePayment
+from app.models.finance_reconciliation import (
+    FinanceCostOverlapReview,
+    FinancePaymentDateReconciliation,
+)
+from app.models.operation_log import OperationLog
 
 
 class OutsourceVendorRepository:
@@ -337,11 +342,92 @@ class OutsourceTaskRepository:
         result = await self.db.execute(q)
         return list(result.scalars().all()), total
 
-    async def get_deleted_by_id(self, task_id: UUID) -> OutsourceTask | None:
-        result = await self.db.execute(
-            select(OutsourceTask).where(OutsourceTask.id == task_id, OutsourceTask.deleted_at.isnot(None))
+    async def get_deleted_by_id(
+        self,
+        task_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> OutsourceTask | None:
+        query = select(OutsourceTask).where(
+            OutsourceTask.id == task_id,
+            OutsourceTask.deleted_at.isnot(None),
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
+
+    async def permanent_delete_reference_counts(
+        self,
+        task_ids: list[UUID],
+    ) -> dict[UUID, dict[str, int]]:
+        """Count financial references without dropping any linked records."""
+        if not task_ids:
+            return {}
+
+        reconciliation_link = or_(
+            and_(
+                FinancePaymentDateReconciliation.source_type == "outsource_task",
+                FinancePaymentDateReconciliation.source_id == OutsourceTask.id,
+            ),
+            and_(
+                FinancePaymentDateReconciliation.source_type == "outsource_payment",
+                FinancePaymentDateReconciliation.source_id == OutsourcePayment.id,
+            ),
+        )
+        legacy_deleted_payment_count = (
+            select(
+                func.coalesce(
+                    func.sum(OperationLog.after_data["deleted_payment_count"].as_integer()),
+                    0,
+                )
+            )
+            .where(
+                OperationLog.object_type == "outsource_task",
+                OperationLog.object_id == OutsourceTask.id,
+                OperationLog.action == "delete",
+                OperationLog.after_data["deleted_payment_count"].as_integer() > 0,
+            )
+            .correlate(OutsourceTask)
+            .scalar_subquery()
+        )
+        query = (
+            select(
+                OutsourceTask.id.label("task_id"),
+                func.count(func.distinct(OutsourcePayment.id)).label("payment_count"),
+                func.count(func.distinct(FinancePaymentDateReconciliation.id)).label(
+                    "reconciliation_count"
+                ),
+                func.count(func.distinct(FinanceCostOverlapReview.id)).label(
+                    "cost_overlap_review_count"
+                ),
+                legacy_deleted_payment_count.label("legacy_deleted_payment_count"),
+            )
+            .select_from(OutsourceTask)
+            .outerjoin(OutsourcePayment, OutsourcePayment.task_id == OutsourceTask.id)
+            .outerjoin(FinancePaymentDateReconciliation, reconciliation_link)
+            .outerjoin(
+                FinanceCostOverlapReview,
+                FinanceCostOverlapReview.outsource_task_id == OutsourceTask.id,
+            )
+            .where(OutsourceTask.id.in_(task_ids))
+            .group_by(OutsourceTask.id)
+        )
+        result = await self.db.execute(query)
+        return {
+            row.task_id: {
+                "payment_count": int(row.payment_count or 0),
+                "reconciliation_count": int(row.reconciliation_count or 0),
+                "cost_overlap_review_count": int(row.cost_overlap_review_count or 0),
+                "legacy_deleted_payment_count": int(row.legacy_deleted_payment_count or 0),
+            }
+            for row in result
+        }
+
+    async def hard_delete(self, task: OutsourceTask) -> None:
+        """Physically remove one already-validated recycle-bin task."""
+        await self.db.delete(task)
+        await self.db.flush()
 
 
 class OutsourcePaymentRepository:
