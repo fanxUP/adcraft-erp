@@ -33,6 +33,7 @@ export interface ExpenditureRow {
   document_type: string | null
   doc_no: string | null
   project_name: string | null
+  department: string | null
   supplier_id: string | null
   supplier_name: string | null
   category: string | null
@@ -41,6 +42,7 @@ export interface ExpenditureRow {
   last_payment_date: string | null
   source_status: string
   amount: number
+  business_amount?: number
   paid_amount?: number
   remaining_amount?: number
   undated_paid_amount?: number
