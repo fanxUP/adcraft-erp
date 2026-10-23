@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canPermanentlyDelete,
-  isPermanentDeleteConfirmationValid,
+  isPermanentDeleteReasonValid,
   permanentDeleteBlockMessage,
 } from '@/utils/outsourceTaskPermanentDelete'
 
@@ -28,17 +28,17 @@ describe('外协任务回收站永久删除确认', () => {
     })).toBe('历史已付金额非零；存在核对记录')
   })
 
-  it('必须准确确认任务编号并填写有效删除原因', () => {
-    expect(isPermanentDeleteConfirmationValid('OT-001', 'OT-001', '确认重复记录')).toBe(true)
-    expect(isPermanentDeleteConfirmationValid('OT-001', 'OT-002', '确认重复记录')).toBe(false)
-    expect(isPermanentDeleteConfirmationValid('OT-001', 'OT-001', '删除')).toBe(false)
+  it('不再要求重复输入任务编号，但仍要求有效删除原因', () => {
+    expect(isPermanentDeleteReasonValid('确认重复记录')).toBe(true)
+    expect(isPermanentDeleteReasonValid('删')).toBe(false)
+    expect(isPermanentDeleteReasonValid(' '.repeat(5))).toBe(false)
   })
 
-  it('旧版已清除过付款流水的任务即使当前已付为零也不能误显示为可删除', () => {
+  it('旧版付款清理记录作为审计信息保留，不再阻止直接关联财务数据清理', () => {
     expect(canPermanentlyDelete({
-      eligible: false,
-      block_reasons: ['历史软删除日志显示曾清除付款流水，无法确认原始财务事实'],
+      eligible: true,
+      block_reasons: [],
       references: { payment_count: 0, reconciliation_count: 0, cost_overlap_review_count: 0, legacy_deleted_payment_count: 1 },
-    })).toBe(false)
+    })).toBe(true)
   })
 })

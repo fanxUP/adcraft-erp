@@ -43,3 +43,32 @@ tasks:
       - docs/outsource-task-permanent-delete/**
       - backend/tests/**
       - frontend/src/**
+  P06:
+    title: 原子清理直接关联外协财务行并保留独立项目成本
+    depends_on: [P05]
+    paths:
+      - backend/app/services/outsource_service.py
+      - backend/app/repositories/outsource_repo.py
+      - backend/tests/test_outsource_service.py
+      - backend/tests/test_outsource_route_permissions.py
+  P07:
+    title: 简化删除确认并展示关联业务和财务影响
+    depends_on: [P06]
+    paths:
+      - backend/app/services/outsource_service.py
+      - frontend/src/views/outsource/OutsourceTaskRecycle.vue
+      - frontend/src/api/outsource.ts
+      - frontend/src/types/api.ts
+      - frontend/src/views/outsource/OutsourceTaskRecycle.test.ts
+  P08:
+    title: 验证财务清理边界、审计和发布前质量
+    depends_on: [P06, P07]
+    paths:
+      - docs/outsource-task-permanent-delete/**
+      - backend/tests/**
+      - frontend/src/**
+  P09:
+    title: 用户授权的受控提交、推送与生产部署
+    depends_on: [P08]
+    paths:
+      - docs/outsource-task-permanent-delete/**

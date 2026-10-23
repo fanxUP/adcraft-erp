@@ -79,6 +79,17 @@ def test_outsource_routes_use_parent_and_action_permissions():
         assert _route_permissions(method, path) == permissions
 
 
+def test_permanent_delete_route_embeds_reason_as_the_frontend_json_object():
+    route = next(
+        route for route in outsource.router.routes
+        if route.path == "/outsource/tasks/recycle/{task_id}"
+        and "DELETE" in route.methods
+    )
+    reason = next(param for param in route.dependant.body_params if param.name == "reason")
+
+    assert reason.field_info.embed is True
+
+
 def test_payment_routes_do_not_inherit_external_task_write_permissions():
     assert _route_permissions("GET", "/outsource/payments") == {PERM_OUTSOURCE_PAYMENT_READ}
     assert _route_permissions("POST", "/outsource/payments") == {PERM_OUTSOURCE_PAYMENT_CREATE}
@@ -101,7 +112,12 @@ def test_external_task_status_update_requires_the_separate_status_permission():
 @pytest.mark.asyncio
 async def test_permanent_delete_route_records_snapshot_reason_and_actor_in_same_session(monkeypatch):
     task_id = UUID("33333333-3333-3333-3333-333333333333")
-    snapshot = {"task_no": "OT20261023-0005", "status": "cancelled", "paid_amount": 0.0}
+    snapshot = {
+        "task_no": "OT20261023-0005",
+        "status": "cancelled",
+        "paid_amount": 0.0,
+        "deleted_financial_references": {"payment_count": 2},
+    }
     service = SimpleNamespace(permanently_delete_task=AsyncMock(return_value={
         "task_id": str(task_id),
         "task_no": "OT20261023-0005",
@@ -118,7 +134,6 @@ async def test_permanent_delete_route_records_snapshot_reason_and_actor_in_same_
     response = await outsource.permanently_delete_task(
         task_id=task_id,
         request=request,
-        task_no_confirmation="OT20261023-0005",
         reason="确认无财务影响后清理",
         db=db,
         current_user=user,
@@ -127,7 +142,6 @@ async def test_permanent_delete_route_records_snapshot_reason_and_actor_in_same_
     assert response["data"] == {"task_id": str(task_id), "task_no": "OT20261023-0005"}
     service.permanently_delete_task.assert_awaited_once_with(
         task_id,
-        task_no_confirmation="OT20261023-0005",
         reason="确认无财务影响后清理",
     )
     audit.assert_awaited_once_with(

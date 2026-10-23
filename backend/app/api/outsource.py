@@ -517,8 +517,7 @@ async def restore_task(
 async def permanently_delete_task(
     task_id: UUID,
     request: Request,
-    task_no_confirmation: str = Body(..., min_length=1),
-    reason: str = Body(..., min_length=5, max_length=500),
+    reason: str = Body(..., embed=True, min_length=5, max_length=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_all_permissions(
         PERM_OUTSOURCE_CENTER_READ,
@@ -531,7 +530,6 @@ async def permanently_delete_task(
     try:
         result = await service.permanently_delete_task(
             task_id,
-            task_no_confirmation=task_no_confirmation,
             reason=reason,
         )
         await log_operation(

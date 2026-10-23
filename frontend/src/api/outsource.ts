@@ -149,7 +149,7 @@ export function restoreOutsourceTask(id: string) {
 
 export function permanentlyDeleteOutsourceTask(
   id: string,
-  data: { task_no_confirmation: string; reason: string },
+  data: { reason: string },
 ) {
   return del<SuccessResponse>(`/outsource/tasks/recycle/${id}`, { data })
 }

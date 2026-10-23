@@ -73,27 +73,41 @@
         <el-alert type="error" :closable="false" show-icon>
           <template #title>此操作不可恢复，请先确认下列记录及影响</template>
           <template #default>
-            只删除这条已取消任务，不删除订单、订单明细或内部任务。已取消任务的未付金额按取消的计划余额处理；任何付款或财务关联均会由服务器拒绝。
+            将删除当前外协任务及其外协付款、付款日期核对和费用重叠审查记录。关联订单、订单明细、设计/制作/安装任务、项目成本及操作审计会保留；删除后这些外协付款不再计入支出台账。
           </template>
         </el-alert>
         <el-descriptions :column="1" border class="delete-summary">
           <el-descriptions-item label="任务编号">{{ permanentDeleteTarget.task_no }}</el-descriptions-item>
           <el-descriptions-item label="外协商">{{ permanentDeleteTarget.vendor_name || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="关联项目">{{ permanentDeleteTarget.related_project_name || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="关联业务">
+            <div v-if="permanentDeleteTarget.linked_records?.length" class="linked-record-list">
+              <div v-for="record in permanentDeleteTarget.linked_records" :key="`${record.kind}-${record.id}`" class="linked-record">
+                <el-tag size="small" type="info">{{ record.label }}</el-tag>
+                <span class="linked-record-number">{{ record.business_no || record.id }}</span>
+                <span v-if="record.name">{{ record.name }}</span>
+                <span v-if="record.status" class="linked-record-status">状态：{{ record.status }}</span>
+              </div>
+            </div>
+            <span v-else>-</span>
+          </el-descriptions-item>
           <el-descriptions-item v-if="canViewOutsourceCost" label="金额">
             计划 {{ formatMoney(permanentDeleteTarget.total_amount) }}；已付 {{ formatMoney(permanentDeleteTarget.paid_amount) }}；未付 {{ formatMoney(permanentDeleteTarget.unpaid_amount) }}
           </el-descriptions-item>
-          <el-descriptions-item label="关联记录">
-            付款 {{ permanentDeleteTarget.permanent_delete_eligibility?.references.payment_count ?? '-' }} 条；
-            日期核对 {{ permanentDeleteTarget.permanent_delete_eligibility?.references.reconciliation_count ?? '-' }} 条；
-            费用审查 {{ permanentDeleteTarget.permanent_delete_eligibility?.references.cost_overlap_review_count ?? '-' }} 条；
-            历史已清除付款流水 {{ permanentDeleteTarget.permanent_delete_eligibility?.references.legacy_deleted_payment_count ?? '-' }} 条
+          <el-descriptions-item label="将删除的财务记录">
+            外协付款 {{ permanentDeleteTarget.permanent_delete_eligibility?.references.payment_count ?? '-' }} 条
+            <template v-if="canViewOutsourceCost">，合计 {{ formatMoney(permanentDeleteTarget.permanent_delete_eligibility?.references.payment_total_amount) }}</template>；
+            付款日期核对 {{ permanentDeleteTarget.permanent_delete_eligibility?.references.reconciliation_count ?? '-' }} 条（含已撤销）
+            <template v-if="canViewOutsourceCost">，合计 {{ formatMoney(permanentDeleteTarget.permanent_delete_eligibility?.references.reconciliation_total_amount) }}</template>；
+            费用重叠审查 {{ permanentDeleteTarget.permanent_delete_eligibility?.references.cost_overlap_review_count ?? '-' }} 条。
+          </el-descriptions-item>
+          <el-descriptions-item label="历史审计记录">
+            旧版日志记录曾清除付款流水 {{ permanentDeleteTarget.permanent_delete_eligibility?.references.legacy_deleted_payment_count ?? '-' }} 条；本次不会删除这些日志。
+          </el-descriptions-item>
+          <el-descriptions-item label="保留的数据">
+            项目成本、订单/明细、来源设计/制作/安装任务和操作审计均保留；关联记录只解除与本外协任务的关系。
           </el-descriptions-item>
         </el-descriptions>
         <el-form label-position="top" class="delete-confirm-form">
-          <el-form-item label="输入完整任务编号以确认">
-            <el-input v-model="typedTaskNo" :placeholder="permanentDeleteTarget.task_no" autocomplete="off" />
-          </el-form-item>
           <el-form-item label="删除原因（5–500 字）">
             <el-input v-model="permanentDeleteReason" type="textarea" :rows="3" maxlength="500" show-word-limit />
           </el-form-item>
@@ -105,9 +119,9 @@
         <el-button
           type="danger"
           :loading="permanentDeleteSubmitting"
-          :disabled="!permanentDeleteTarget || !isPermanentDeleteConfirmationValid(permanentDeleteTarget.task_no, typedTaskNo, permanentDeleteReason)"
+          :disabled="!permanentDeleteTarget || !isPermanentDeleteReasonValid(permanentDeleteReason)"
           @click="handlePermanentDelete"
-        >永久删除</el-button>
+        >确认永久删除</el-button>
       </template>
     </el-dialog>
   </AppPage>
@@ -124,7 +138,7 @@ import { formatMoney } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import {
   canPermanentlyDelete,
-  isPermanentDeleteConfirmationValid,
+  isPermanentDeleteReasonValid,
   permanentDeleteBlockMessage,
 } from '@/utils/outsourceTaskPermanentDelete'
 
@@ -141,7 +155,6 @@ const canUsePermanentDelete = computed(() => authStore.can('outsource_task:perma
 const permanentDeleteDialogVisible = ref(false)
 const permanentDeleteSubmitting = ref(false)
 const permanentDeleteTarget = ref<OutsourceTaskResponse | null>(null)
-const typedTaskNo = ref('')
 const permanentDeleteReason = ref('')
 const permanentDeleteError = ref('')
 
@@ -184,7 +197,6 @@ async function handleRestore(row: OutsourceTaskResponse) {
 function openPermanentDeleteDialog(row: OutsourceTaskResponse) {
   if (!canUsePermanentDelete.value || !canPermanentlyDelete(row.permanent_delete_eligibility)) return
   permanentDeleteTarget.value = row
-  typedTaskNo.value = ''
   permanentDeleteReason.value = ''
   permanentDeleteError.value = ''
   permanentDeleteDialogVisible.value = true
@@ -192,13 +204,12 @@ function openPermanentDeleteDialog(row: OutsourceTaskResponse) {
 
 async function handlePermanentDelete() {
   const target = permanentDeleteTarget.value
-  if (!target || !isPermanentDeleteConfirmationValid(target.task_no, typedTaskNo.value, permanentDeleteReason.value)) return
+  if (!target || !isPermanentDeleteReasonValid(permanentDeleteReason.value)) return
 
   permanentDeleteSubmitting.value = true
   permanentDeleteError.value = ''
   try {
     await permanentlyDeleteOutsourceTask(target.id, {
-      task_no_confirmation: typedTaskNo.value.trim(),
       reason: permanentDeleteReason.value.trim(),
     })
     permanentDeleteDialogVisible.value = false
@@ -221,5 +232,25 @@ onMounted(fetchData)
 
 .delete-confirm-form {
   margin-top: 18px;
+}
+
+.linked-record-list {
+  display: grid;
+  gap: 8px;
+}
+
+.linked-record {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.linked-record-number {
+  font-weight: 600;
+}
+
+.linked-record-status {
+  color: var(--el-text-color-secondary);
 }
 </style>

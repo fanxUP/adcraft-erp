@@ -1,4 +1,5 @@
 import uuid as _uuid
+from decimal import Decimal
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import (
@@ -360,8 +361,8 @@ class OutsourceTaskRepository:
     async def permanent_delete_reference_counts(
         self,
         task_ids: list[UUID],
-    ) -> dict[UUID, dict[str, int]]:
-        """Count financial references without dropping any linked records."""
+    ) -> dict[UUID, dict[str, int | float]]:
+        """Summarize financial references without dropping linked records."""
         if not task_ids:
             return {}
 
@@ -391,13 +392,41 @@ class OutsourceTaskRepository:
             .correlate(OutsourceTask)
             .scalar_subquery()
         )
+        payment_total_amount = (
+            select(func.coalesce(func.sum(OutsourcePayment.amount), 0))
+            .where(OutsourcePayment.task_id == OutsourceTask.id)
+            .correlate(OutsourceTask)
+            .scalar_subquery()
+        )
+        task_payment_ids = (
+            select(OutsourcePayment.id)
+            .where(OutsourcePayment.task_id == OutsourceTask.id)
+            .correlate(OutsourceTask)
+        )
+        reconciliation_total_amount = (
+            select(func.coalesce(func.sum(FinancePaymentDateReconciliation.amount), 0))
+            .where(or_(
+                and_(
+                    FinancePaymentDateReconciliation.source_type == "outsource_task",
+                    FinancePaymentDateReconciliation.source_id == OutsourceTask.id,
+                ),
+                and_(
+                    FinancePaymentDateReconciliation.source_type == "outsource_payment",
+                    FinancePaymentDateReconciliation.source_id.in_(task_payment_ids),
+                ),
+            ))
+            .correlate(OutsourceTask)
+            .scalar_subquery()
+        )
         query = (
             select(
                 OutsourceTask.id.label("task_id"),
                 func.count(func.distinct(OutsourcePayment.id)).label("payment_count"),
+                payment_total_amount.label("payment_total_amount"),
                 func.count(func.distinct(FinancePaymentDateReconciliation.id)).label(
                     "reconciliation_count"
                 ),
+                reconciliation_total_amount.label("reconciliation_total_amount"),
                 func.count(func.distinct(FinanceCostOverlapReview.id)).label(
                     "cost_overlap_review_count"
                 ),
@@ -417,12 +446,68 @@ class OutsourceTaskRepository:
         return {
             row.task_id: {
                 "payment_count": int(row.payment_count or 0),
+                "payment_total_amount": float(row.payment_total_amount or 0),
                 "reconciliation_count": int(row.reconciliation_count or 0),
+                "reconciliation_total_amount": float(row.reconciliation_total_amount or 0),
                 "cost_overlap_review_count": int(row.cost_overlap_review_count or 0),
                 "legacy_deleted_payment_count": int(row.legacy_deleted_payment_count or 0),
             }
             for row in result
         }
+
+    async def delete_direct_financial_references(self, task_id: UUID) -> dict:
+        """Delete only finance rows owned by one locked outsource task."""
+        payment_rows = list((await self.db.scalars(
+            select(OutsourcePayment)
+            .where(OutsourcePayment.task_id == task_id)
+            .with_for_update()
+        )).all())
+        payment_ids = [payment.id for payment in payment_rows]
+
+        reconciliation_links = [and_(
+            FinancePaymentDateReconciliation.source_type == "outsource_task",
+            FinancePaymentDateReconciliation.source_id == task_id,
+        )]
+        if payment_ids:
+            reconciliation_links.append(and_(
+                FinancePaymentDateReconciliation.source_type == "outsource_payment",
+                FinancePaymentDateReconciliation.source_id.in_(payment_ids),
+            ))
+        reconciliation_rows = list((await self.db.scalars(
+            select(FinancePaymentDateReconciliation)
+            .where(or_(*reconciliation_links))
+            .with_for_update()
+        )).all())
+        review_rows = list((await self.db.scalars(
+            select(FinanceCostOverlapReview)
+            .where(FinanceCostOverlapReview.outsource_task_id == task_id)
+            .with_for_update()
+        )).all())
+
+        project_cost_ids = sorted({str(review.project_cost_id) for review in review_rows})
+        summary = {
+            "payment_count": len(payment_rows),
+            "payment_total_amount": f"{sum((Decimal(str(row.amount or 0)) for row in payment_rows), Decimal('0')):.2f}",
+            "reconciliation_count": len(reconciliation_rows),
+            "reconciliation_total_amount": f"{sum((Decimal(str(row.amount or 0)) for row in reconciliation_rows), Decimal('0')):.2f}",
+            "cost_overlap_review_count": len(review_rows),
+            "project_cost_ids": project_cost_ids,
+        }
+
+        if reconciliation_rows:
+            await self.db.execute(sa_delete(FinancePaymentDateReconciliation).where(
+                FinancePaymentDateReconciliation.id.in_([row.id for row in reconciliation_rows])
+            ))
+        if review_rows:
+            await self.db.execute(sa_delete(FinanceCostOverlapReview).where(
+                FinanceCostOverlapReview.id.in_([row.id for row in review_rows])
+            ))
+        if payment_ids:
+            await self.db.execute(sa_delete(OutsourcePayment).where(
+                OutsourcePayment.id.in_(payment_ids)
+            ))
+        await self.db.flush()
+        return summary
 
     async def hard_delete(self, task: OutsourceTask) -> None:
         """Physically remove one already-validated recycle-bin task."""
