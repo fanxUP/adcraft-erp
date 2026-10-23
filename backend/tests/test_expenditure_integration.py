@@ -55,7 +55,7 @@ async def fixture_db():
                 id=vendor_id, vendor_no="TEST-V", name="测试供应商", supplier_types=["material", "outsource"], service_types=["production"],
             ))
             await db.execute(sa.insert(BusinessDocument.__table__).values(
-                id=doc_id, doc_type="order", doc_no="TEST-O", order_date=date(2026, 9, 1), project_name="测试项目", status="confirmed", cost_amount=999999,
+                id=doc_id, doc_type="order", doc_no="TEST-O", order_date=date(2026, 9, 1), project_name="测试项目", department="测试部门", status="confirmed", cost_amount=999999,
             ))
             await db.execute(sa.insert(ProjectCost.__table__).values(
                 id=cost_id, cost_no="TEST-C", document_id=doc_id, supplier_id=vendor_id, category="材料",
@@ -138,6 +138,50 @@ async def test_ledger_last_payment_date_uses_latest_active_payment_or_registrati
     assert registered["last_payment_date"] == "2026-10-01T00:00:00"
 
 
+async def test_ledger_period_filter_uses_latest_payment_date_and_returns_department(fixture_db):
+    db, svc, _ = fixture_db
+    reconciled_cost_id = uuid4()
+    undated_expense_id = uuid4()
+    await db.execute(sa.insert(ProjectCost.__table__).values(
+        id=reconciled_cost_id, cost_no="TEST-RECONCILED-COST", category="材料",
+        amount=1000, debt_amount=0, cost_date=datetime(2026, 10, 9),
+    ))
+    await db.execute(sa.insert(FinancePaymentDateReconciliation.__table__).values(
+        id=uuid4(), source_type="project_cost", source_id=reconciled_cost_id,
+        amount=1000, paid_at=datetime(2026, 10, 8), evidence_type="other",
+        evidence_reference="TEST-RECONCILED-COST-DATE",
+    ))
+    await db.execute(sa.insert(Expense.__table__).values(
+        id=undated_expense_id, expense_no="TEST-EXPENSE-UNDATED", amount=1000,
+        payable_amount=600, expense_date=datetime(2026, 10, 8), category="办公",
+    ))
+    await db.commit()
+
+    all_rows = await svc.list_records("ledger")
+    cost = next(row for row in all_rows["items"] if row["source_no"] == "TEST-C")
+    task = next(row for row in all_rows["items"] if row["source_no"] == "TEST-T")
+    expense = next(row for row in all_rows["items"] if row["source_no"] == "TEST-E")
+
+    assert cost["department"] == "测试部门"
+    assert task["department"] == "测试部门"
+    assert expense["department"] is None
+    reconciled = next(row for row in all_rows["items"] if row["source_id"] == str(reconciled_cost_id))
+    undated_expense = next(row for row in all_rows["items"] if row["source_id"] == str(undated_expense_id))
+    assert reconciled["last_payment_date"] == "2026-10-08T00:00:00"
+    assert undated_expense["last_payment_date"] is None
+    assert undated_expense["undated_paid_amount"] == 400
+
+    period = await svc.list_records(
+        "ledger",
+        filters=ExpenditureFilters(start_date=date(2026, 10, 8), end_date=date(2026, 10, 8)),
+    )
+    assert period["total"] == 3
+    assert {row["source_kind"] for row in period["items"]} == {"project_cost", "outsource_task"}
+    assert "TEST-RECONCILED-COST" in {row["source_no"] for row in period["items"]}
+    assert "TEST-EXPENSE-UNDATED" not in {row["source_no"] for row in period["items"]}
+    assert all(row["last_payment_date"].startswith("2026-10-08") for row in period["items"])
+
+
 async def test_actual_payment_day_timezone_and_unknown_date_not_in_period(fixture_db):
     _, svc, _ = fixture_db
     filters = ExpenditureFilters(start_date=date(2026, 10, 8), end_date=date(2026, 10, 8))
@@ -150,6 +194,11 @@ async def test_actual_payment_day_timezone_and_unknown_date_not_in_period(fixtur
     previous = await svc.list_records("disbursements", filters=ExpenditureFilters(start_date=date(2026, 10, 7), end_date=date(2026, 10, 7)))
     assert previous["total"] == 0
     all_rows = await svc.list_records("disbursements")
+    project_payment = next(r for r in all_rows["items"] if r["payment_no"] == "TEST-P")
+    assert project_payment["business_amount"] == 10000
+    assert project_payment["paid_amount"] == 7000
+    assert project_payment["remaining_amount"] == 3000
+    assert project_payment["department"] == "测试部门"
     registered = next(r for r in all_rows["items"] if r["source_no"] == "TEST-C" and r["payment_kind"] == "historical")
     assert registered["amount"] == 3000 and registered["paid_at"] == "2026-09-01T00:00:00"
     assert registered["date_status"] == "confirmed"

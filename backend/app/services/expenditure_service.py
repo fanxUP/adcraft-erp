@@ -69,6 +69,7 @@ class ExpenditureService:
             source.c.id.label("source_id"), source_no.label("source_no"),
             doc.c.id.label("document_id"), doc.c.doc_type.label("document_type"),
             doc.c.doc_no.label("doc_no"), doc.c.project_name.label("project_name"),
+            doc.c.department.label("department"),
             vendor.c.id.label("supplier_id"),
             func.coalesce(vendor.c.name, source.c.payee_name if kind == "expense" else
                           source.c.payee_company_name if kind in ("project_cost", "outsource_payment") else
@@ -172,7 +173,7 @@ class ExpenditureService:
             )
             paid = inferred + legacy + _money(ps.c.paid)
             registered_paid_date = case(
-                (inferred > 0, table.c[date_column]),
+                (registered_paid > 0, table.c[date_column]),
                 else_=cast(literal(None), DateTime),
             )
             settled_legacy_date = cast(literal(None), DateTime)
@@ -254,6 +255,12 @@ class ExpenditureService:
             "row_key", "amount", "paid_amount", "remaining_amount", "undated_paid_amount",
             "registered_paid_amount",
         )]
+        source_totals = [
+            ledger.c.amount.label("business_amount"),
+            ledger.c.paid_amount,
+            ledger.c.remaining_amount,
+            ledger.c.undated_paid_amount,
+        ]
         inferred = ledger.c.undated_paid_amount
         op = OutsourcePayment.__table__
         reconciliation = FinancePaymentDateReconciliation.__table__
@@ -278,7 +285,7 @@ class ExpenditureService:
                 (ledger.c.source_kind == "outsource_payment", 0), else_=inferred,
             )
         branches = [select(
-            (literal("inferred:") + ledger.c.row_key).label("row_key"), *metadata,
+            (literal("inferred:") + ledger.c.row_key).label("row_key"), *metadata, *source_totals,
             literal("historical").label("payment_kind"), cast(literal(None), String).label("payment_no"),
             inferred.label("amount"), cast(literal(None), DateTime).label("paid_at"),
             cast(literal(None), String).label("payment_method"), literal("unverified").label("date_status"),
@@ -290,7 +297,7 @@ class ExpenditureService:
             cast(ledger.c.source_id, String).label("reconciliation_source_id"),
         ).where(inferred > 0)]
         branches.append(select(
-            (literal("registered:") + ledger.c.row_key).label("row_key"), *metadata,
+            (literal("registered:") + ledger.c.row_key).label("row_key"), *metadata, *source_totals,
             literal("historical").label("payment_kind"), literal("登记时已付").label("payment_no"),
             ledger.c.registered_paid_amount.label("amount"), ledger.c.source_date.label("paid_at"),
             cast(literal(None), String).label("payment_method"), literal("confirmed").label("date_status"),
@@ -305,7 +312,7 @@ class ExpenditureService:
         join = pp.join(ledger, and_(pp.c.source_type == ledger.c.source_type, pp.c.source_id == ledger.c.source_id))
         paid_at = func.timezone("Asia/Shanghai", func.timezone("UTC", pp.c.paid_at))
         branches.append(select(
-            (literal("payable:") + cast(pp.c.id, String)).label("row_key"), *metadata,
+            (literal("payable:") + cast(pp.c.id, String)).label("row_key"), *metadata, *source_totals,
             literal("payable").label("payment_kind"), pp.c.payment_no,
             pp.c.amount, paid_at.label("paid_at"), pp.c.payment_method,
             literal("confirmed").label("date_status"),
@@ -322,7 +329,7 @@ class ExpenditureService:
             and_(legacy.c.source_type == ledger.c.source_kind, legacy.c.source_id == ledger.c.source_id),
         )
         branches.append(select(
-            (literal("reconciled:") + cast(legacy.c.id, String)).label("row_key"), *metadata,
+            (literal("reconciled:") + cast(legacy.c.id, String)).label("row_key"), *metadata, *source_totals,
             literal("reconciled_legacy").label("payment_kind"),
             literal("历史已付核对").label("payment_no"),
             legacy.c.amount,
@@ -354,7 +361,7 @@ class ExpenditureService:
                 and_(ledger.c.source_kind == "outsource_payment", ledger.c.source_id == op.c.id, op.c.task_id.is_(None)),
             )))
             branches.append(select(
-                (literal("outsource:") + cast(op.c.id, String)).label("row_key"), *metadata,
+                (literal("outsource:") + cast(op.c.id, String)).label("row_key"), *metadata, *source_totals,
                 literal("outsource").label("payment_kind"), op.c.payment_no,
                 op.c.amount, effective_paid_at.label("paid_at"), op.c.payment_method,
                 case((effective_paid_at.is_(None), "unverified"), else_="confirmed").label("date_status"),
@@ -380,7 +387,7 @@ class ExpenditureService:
         if view == "disbursements" and dates and filters.date_status != "all":
             conditions.append(table.c.date_status == filters.date_status)
         if dates:
-            column = table.c.source_date if view == "ledger" else table.c.paid_at
+            column = table.c.last_payment_date if view == "ledger" else table.c.paid_at
             if filters.start_date:
                 conditions.append(column >= datetime.combine(filters.start_date, datetime.min.time()))
             if filters.end_date:
@@ -412,7 +419,7 @@ class ExpenditureService:
             totals += [func.coalesce(func.sum(case((table.c.date_status == "confirmed", table.c.amount), else_=0)), 0).label("confirmed_paid_amount")]
         aggregate = select(*totals).where(*predicates).subquery("filtered_totals")
         summary_columns = [aggregate.c[k].label("summary_" + k) for k in aggregate.c.keys()]
-        order_date = table.c.source_date if view == "ledger" else table.c.paid_at
+        order_date = table.c.last_payment_date if view == "ledger" else table.c.paid_at
         paged = select(table).where(*predicates).order_by(
             order_date.desc().nulls_last(), table.c.row_key.asc(),
         ).offset((page - 1) * page_size).limit(page_size).subquery("paged_records")
@@ -424,7 +431,7 @@ class ExpenditureService:
             join = join.join(unverified, literal(True))
             summary_columns += [unverified.c.amount.label("summary_unverified_paid_amount"),
                                 unverified.c.count.label("summary_unverified_count")]
-        page_date = paged.c.source_date if view == "ledger" else paged.c.paid_at
+        page_date = paged.c.last_payment_date if view == "ledger" else paged.c.paid_at
         records = (await self.db.execute(select(paged, *summary_columns).select_from(join).order_by(
             page_date.desc().nulls_last(), paged.c.row_key.asc(),
         ))).mappings().all()

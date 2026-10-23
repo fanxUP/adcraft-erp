@@ -5,7 +5,7 @@
         <el-form-item label="搜索">
           <el-input v-model="keyword" clearable maxlength="128" placeholder="单号、项目或供应商" aria-label="支出搜索" @keyup.enter="search" />
         </el-form-item>
-        <el-form-item :label="view === 'ledger' ? '业务日期' : '付款日期'">
+        <el-form-item label="付款日期">
           <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" range-separator="至" @change="search" />
         </el-form-item>
         <el-form-item>
@@ -36,16 +36,16 @@
 
     <p class="expenditure-note">
       {{ view === 'ledger'
-        ? '按业务日期筛选；已付金额为累计值，项目总额不等于当期现金支出。'
+        ? '按最近付款日期筛选；业务总额、累计已付和剩余待付为来源当前汇总，不等于所选期间现金支出。'
         : '按实际付款日期筛选；历史记录可按日期状态查看并核对。' }}
       当前汇总经营支出、项目实际费用及账号有权查看的外协；不含库存领用等未接入模块，也不代表公司全部现金流。
     </p>
     <dl v-if="result && !loading && !loadError" class="expenditure-summary" aria-label="当前筛选全量汇总">
       <div><dt>筛选结果</dt><dd>{{ result.total }} {{ view === 'ledger' ? '笔业务' : '条记录' }}</dd></div>
       <template v-if="view === 'ledger'">
-        <div><dt>支出总额</dt><dd>{{ formatMoney(result.summary.amount) }}</dd></div>
+        <div><dt>业务总额</dt><dd>{{ formatMoney(result.summary.amount) }}</dd></div>
         <div><dt>累计已付</dt><dd>{{ formatMoney(result.summary.paid_amount || 0) }}</dd></div>
-        <div><dt>待付款</dt><dd>{{ formatMoney(result.summary.remaining_amount || 0) }}</dd></div>
+        <div><dt>剩余待付</dt><dd>{{ formatMoney(result.summary.remaining_amount || 0) }}</dd></div>
       </template>
       <template v-else>
         <div><dt>{{ dateRange ? '期间有日期付款' : '有日期付款合计' }}</dt><dd>{{ formatMoney(result.summary.confirmed_paid_amount || 0) }}</dd></div>
@@ -55,42 +55,50 @@
     <DataTableShell :state="tableState" aria-label="支出查询结果">
       <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
       <el-table :data="result?.items || []" row-key="row_key" stripe>
-        <el-table-column label="来源" width="120">
-          <template #default="{ row }"><el-tag size="small">{{ sourceLabels[row.source_type as ExpenditureSource] }}</el-tag></template>
-        </el-table-column>
-        <el-table-column prop="source_no" label="来源编号" min-width="180" />
-        <el-table-column v-if="view === 'disbursements'" label="付款编号" min-width="170">
-          <template #default="{ row }">{{ row.payment_no || '历史已付（非逐笔流水）' }}</template>
-        </el-table-column>
-        <el-table-column label="项目 / 单据" min-width="210">
+        <el-table-column label="付款日期" min-width="145">
           <template #default="{ row }">
-            <div>{{ row.project_name || '未关联项目' }}</div><small class="expenditure-secondary">{{ row.doc_no || '—' }}</small>
+            <div>{{ view === 'ledger' ? expenditureLastPaymentDateLabel(row.last_payment_date, row.paid_amount) : expenditureDateLabel(row.paid_at) }}</div>
+            <small v-if="view === 'ledger' && row.last_payment_date && row.undated_paid_amount > 0" class="expenditure-secondary">
+              另有 {{ formatMoney(row.undated_paid_amount) }} 日期待核实
+            </small>
           </template>
         </el-table-column>
-        <el-table-column prop="supplier_name" label="供应商 / 收款方" min-width="160" show-overflow-tooltip />
+        <el-table-column label="项目" min-width="190">
+          <template #default="{ row }">
+            <div>{{ row.project_name || '未关联项目' }}</div>
+            <small class="expenditure-secondary">{{ row.doc_no || row.source_no }}</small>
+            <el-tag
+              v-if="view === 'ledger' && ['cancelled', 'deleted'].includes(row.source_status)"
+              size="small"
+              type="warning"
+            >{{ recordStatus(row) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="department" label="部门/科室" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.department || '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="supplier_name" label="供应商 / 收款方" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.supplier_name || '—' }}</template>
+        </el-table-column>
         <el-table-column label="分类" min-width="100">
           <template #default="{ row }">{{ expenditureCategoryLabel(row.source_type, row.category) }}</template>
         </el-table-column>
-        <el-table-column v-if="view === 'ledger'" label="业务日期 / 最后付款日期" min-width="190">
+        <el-table-column v-if="view === 'ledger'" label="业务总额" min-width="140" align="right">
           <template #default="{ row }">
-            <div>{{ row.source_date?.slice(0, 10) || '未填写业务日期' }}</div>
-            <small class="expenditure-secondary">最后付款：{{ expenditureLastPaymentDateLabel(row.last_payment_date, row.paid_amount) }}</small>
+            {{ formatMoney(row.amount) }}
           </template>
         </el-table-column>
-        <el-table-column v-else label="付款日期" min-width="160">
-          <template #default="{ row }">{{ expenditureDateLabel(row.paid_at) }}</template>
-        </el-table-column>
-        <el-table-column :label="view === 'ledger' ? '业务总额' : '本次付款 / 历史已付'" min-width="160" align="right">
-          <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
+        <el-table-column v-else label="本次付款" min-width="140" align="right">
+          <template #default="{ row }">
+            <div>{{ formatMoney(row.amount) }}</div>
+            <small class="expenditure-secondary">{{ row.payment_no || '历史金额（非逐笔流水）' }}</small>
+          </template>
         </el-table-column>
         <el-table-column v-if="view === 'ledger'" label="累计已付" width="130" align="right">
           <template #default="{ row }">{{ formatMoney(row.paid_amount || 0) }}</template>
         </el-table-column>
         <el-table-column v-if="view === 'ledger'" label="剩余待付" width="130" align="right">
           <template #default="{ row }">{{ formatMoney(row.remaining_amount || 0) }}</template>
-        </el-table-column>
-        <el-table-column label="记录状态" min-width="150">
-          <template #default="{ row }">{{ recordStatus(row) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="190" fixed="right">
           <template #default="{ row }">
@@ -112,13 +120,22 @@
           <el-descriptions-item label="来源编号">{{ selected.source_no }}</el-descriptions-item>
           <el-descriptions-item label="项目">{{ selected.project_name || '未关联项目' }}</el-descriptions-item>
           <el-descriptions-item label="关联单据">{{ selected.doc_no || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="部门/科室">{{ selected.department || '—' }}</el-descriptions-item>
           <el-descriptions-item label="供应商 / 收款方">{{ selected.supplier_name || '未关联供应商' }}</el-descriptions-item>
           <el-descriptions-item label="说明">{{ selected.description || '—' }}</el-descriptions-item>
           <el-descriptions-item v-if="view === 'ledger'" label="业务日期">{{ selected.source_date?.slice(0, 10) || '未填写业务日期' }}</el-descriptions-item>
           <el-descriptions-item v-if="view === 'ledger'" label="最后付款日期">{{ expenditureLastPaymentDateLabel(selected.last_payment_date, selected.paid_amount) }}</el-descriptions-item>
-          <el-descriptions-item :label="view === 'ledger' ? '业务总额' : '本次付款 / 历史已付'">{{ formatMoney(selected.amount) }}</el-descriptions-item>
-          <el-descriptions-item v-if="view === 'ledger'" label="累计已付 / 剩余待付">{{ formatMoney(selected.paid_amount || 0) }} / {{ formatMoney(selected.remaining_amount || 0) }}</el-descriptions-item>
-          <el-descriptions-item v-else label="付款日期">{{ expenditureDateLabel(selected.paid_at) }}</el-descriptions-item>
+          <el-descriptions-item :label="view === 'ledger' ? '业务总额' : '本次付款金额'">{{ formatMoney(selected.amount) }}</el-descriptions-item>
+          <el-descriptions-item v-if="view === 'ledger'" label="累计已付">{{ formatMoney(selected.paid_amount || 0) }}</el-descriptions-item>
+          <el-descriptions-item v-if="view === 'ledger'" label="剩余待付">{{ formatMoney(selected.remaining_amount || 0) }}</el-descriptions-item>
+          <template v-else>
+            <el-descriptions-item v-if="selected.payment_no" label="付款编号">{{ selected.payment_no }}</el-descriptions-item>
+            <el-descriptions-item label="付款日期">{{ expenditureDateLabel(selected.paid_at) }}</el-descriptions-item>
+            <el-descriptions-item label="来源业务总额">{{ formatMoney(selected.business_amount || 0) }}</el-descriptions-item>
+            <el-descriptions-item label="来源当前累计已付">{{ formatMoney(selected.paid_amount || 0) }}</el-descriptions-item>
+            <el-descriptions-item label="来源当前剩余待付">{{ formatMoney(selected.remaining_amount || 0) }}</el-descriptions-item>
+            <el-descriptions-item v-if="selected.undated_paid_amount" label="来源待核实金额">{{ formatMoney(selected.undated_paid_amount) }}</el-descriptions-item>
+          </template>
           <el-descriptions-item v-if="selected.evidence_reference" label="核对凭证参考">{{ selected.evidence_reference }}</el-descriptions-item>
           <el-descriptions-item v-if="selected.evidence_type" label="凭证类型">{{ evidenceTypeLabel(selected.evidence_type) }}</el-descriptions-item>
           <el-descriptions-item v-if="selected.reconciliation_note" label="核对说明">{{ selected.reconciliation_note }}</el-descriptions-item>

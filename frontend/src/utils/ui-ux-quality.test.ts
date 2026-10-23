@@ -192,4 +192,18 @@ describe('P08 UI/UX quality guardrails', () => {
     expect(dashboard).not.toContain('<span>付款日期待核实</span>')
     expect(dashboard).not.toContain('日期口径：不会用业务日期或系统创建时间推测收付款日期。')
   })
+
+  it('shows payment-oriented finance columns with project department context', () => {
+    const expenditure = readSource('components/payments/ExpenditureTable.vue')
+
+    expect(expenditure).not.toContain('业务日期 / 最后付款日期')
+    expect(expenditure).toContain('label="付款日期"')
+    expect(expenditure).toContain('label="项目"')
+    expect(expenditure).toContain('prop="department" label="部门/科室"')
+    expect(expenditure).toContain('label="供应商 / 收款方"')
+    expect(expenditure).toContain('label="本次付款"')
+    expect(expenditure).toContain('label="累计已付"')
+    expect(expenditure).toContain('label="剩余待付"')
+    expect(expenditure).toContain('label="操作"')
+  })
 })

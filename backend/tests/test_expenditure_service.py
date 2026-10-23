@@ -54,6 +54,28 @@ def test_ledger_projection_includes_a_derived_latest_payment_date():
     service = ExpenditureService(AsyncMock(), viewer("expense:read"))
 
     assert "last_payment_date" in service._ledger().c
+    assert "department" in service._ledger().c
+
+
+def test_ledger_date_filter_uses_the_displayed_latest_payment_date():
+    service = ExpenditureService(AsyncMock(), viewer("expense:read"))
+    table = service._ledger()
+    predicates = service._predicates(
+        table,
+        ExpenditureFilters(start_date=date(2026, 10, 1), end_date=date(2026, 10, 31)),
+        "ledger",
+    )
+
+    assert predicates
+    assert all("last_payment_date" in str(predicate) for predicate in predicates)
+    assert all("source_date" not in str(predicate) for predicate in predicates)
+
+
+def test_disbursement_projection_includes_parent_business_totals():
+    service = ExpenditureService(AsyncMock(), viewer("expense:read"))
+    projection = service._disbursements(service._ledger())
+
+    assert {"department", "business_amount", "paid_amount", "remaining_amount"}.issubset(projection.c.keys())
 
 
 @pytest.mark.asyncio
