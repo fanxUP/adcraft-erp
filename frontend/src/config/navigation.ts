@@ -63,7 +63,7 @@ export const navigationItems: NavigationItem[] = [
         label: '供应商与费用付款',
         accessKey: 'finance',
         children: [
-          { label: '支出管理', path: '/expenses', accessKey: 'expense' },
+          { label: '支出总览', path: '/expenses', accessKey: 'expense' },
           { label: '应付管理', path: '/cost-debts', accessKey: 'costDebt' },
           { label: '外协付款', path: '/outsource/payments', accessKey: 'outsourcePayment' },
         ],

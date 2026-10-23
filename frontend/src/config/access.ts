@@ -360,7 +360,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   CompletedProjectDetail: '完成项目详情',
   TaskCompletionStats: '完成统计',
   ReceivablesView: '应收管理',
-  ExpenseList: '支出管理',
+  ExpenseList: '支出总览',
   StatementList: '客户对账',
   StatementDetail: '对账详情',
   ProjectCostList: '项目成本',

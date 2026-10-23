@@ -1,57 +1,64 @@
 <template>
-  <section class="expenditure-view" :aria-label="view === 'ledger' ? '统一支出台账' : '付款流水'">
-    <PageToolbar aria-label="统一支出筛选">
+  <section class="expenditure-view" :aria-label="view === 'ledger' ? '支出台账' : '付款记录'">
+    <PageToolbar aria-label="支出筛选">
       <el-form inline class="expenditure-filters" @submit.prevent="search">
-        <el-form-item label="来源">
-          <el-select v-model="sourceType" clearable placeholder="全部有权查看的来源" aria-label="支出来源" @change="search">
-            <el-option v-for="source in availableSources" :key="source" :label="sourceLabels[source]" :value="source" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="关键词">
-          <el-input v-model="keyword" clearable maxlength="128" placeholder="来源编号 / 项目 / 供应商" aria-label="支出关键词" @keyup.enter="search" />
+        <el-form-item label="搜索">
+          <el-input v-model="keyword" clearable maxlength="128" placeholder="单号、项目或供应商" aria-label="支出搜索" @keyup.enter="search" />
         </el-form-item>
         <el-form-item :label="view === 'ledger' ? '业务日期' : '付款日期'">
           <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" range-separator="至" @change="search" />
         </el-form-item>
-        <el-form-item v-if="view === 'disbursements'" label="日期状态">
-          <el-select v-model="dateStatus" aria-label="付款日期状态" @change="changeDateStatus">
-            <el-option label="全部" value="all" />
-            <el-option label="有付款日期" value="confirmed" />
-            <el-option label="付款日期待核实" value="unverified" />
-          </el-select>
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" @click="search">搜索</el-button>
           <el-button @click="reset">重置</el-button>
+          <el-button text :aria-expanded="showAdvancedFilters" @click="showAdvancedFilters = !showAdvancedFilters">
+            {{ showAdvancedFilters ? '收起筛选' : '更多筛选' }}
+          </el-button>
         </el-form-item>
       </el-form>
+      <el-collapse-transition>
+        <el-form v-if="showAdvancedFilters" inline class="expenditure-filters expenditure-advanced-filters" @submit.prevent="search">
+          <el-form-item label="来源">
+            <el-select v-model="sourceType" clearable placeholder="全部有权查看的来源" aria-label="支出来源" @change="search">
+              <el-option v-for="source in availableSources" :key="source" :label="sourceLabels[source]" :value="source" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="view === 'disbursements'" label="日期状态">
+            <el-select v-model="dateStatus" aria-label="付款日期状态" @change="changeDateStatus">
+              <el-option label="全部" value="all" />
+              <el-option label="有付款日期" value="confirmed" />
+              <el-option label="日期待核实" value="unverified" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+      </el-collapse-transition>
     </PageToolbar>
 
     <p class="expenditure-note">
       {{ view === 'ledger'
-        ? '按业务日期筛选，已付为这些业务的累计付款；业务总额不是当期资金支出。外协未完成但已付款的任务包含预付款。'
-        : '按实际付款日期统计有日期的付款；历史推算已付及无日期流水单独列示，不计入指定日期期间。' }}
-      本页仅覆盖经营支出、实际登记项目费用及有权查看的外协；不含库存领用、报价预计成本，也不代表公司完整现金流量表。
+        ? '按业务日期筛选；已付金额为累计值，项目总额不等于当期现金支出。'
+        : '按实际付款日期筛选；没有可靠日期的历史金额单独列为待核实。' }}
+      当前汇总经营支出、项目实际费用及账号有权查看的外协；不含库存领用等未接入模块，也不代表公司全部现金流。
     </p>
     <dl v-if="result && !loading && !loadError" class="expenditure-summary" aria-label="当前筛选全量汇总">
       <div><dt>筛选结果</dt><dd>{{ result.total }} {{ view === 'ledger' ? '笔业务' : '条记录' }}</dd></div>
       <template v-if="view === 'ledger'">
-        <div><dt>业务总额</dt><dd>{{ formatMoney(result.summary.amount) }}</dd></div>
+        <div><dt>支出总额</dt><dd>{{ formatMoney(result.summary.amount) }}</dd></div>
         <div><dt>累计已付</dt><dd>{{ formatMoney(result.summary.paid_amount || 0) }}</dd></div>
-        <div><dt>剩余待付</dt><dd>{{ formatMoney(result.summary.remaining_amount || 0) }}</dd></div>
+        <div><dt>待付款</dt><dd>{{ formatMoney(result.summary.remaining_amount || 0) }}</dd></div>
       </template>
       <template v-else>
         <div><dt>{{ dateRange ? '期间有日期付款' : '有日期付款合计' }}</dt><dd>{{ formatMoney(result.summary.confirmed_paid_amount || 0) }}</dd></div>
-        <div><dt>同来源范围待核实（不受日期筛选）</dt><dd>{{ formatMoney(result.summary.unverified_paid_amount || 0) }}</dd></div>
+        <div><dt>历史待核实</dt><dd>{{ formatMoney(result.summary.unverified_paid_amount || 0) }}</dd></div>
       </template>
     </dl>
     <el-alert v-if="result && !loading && !loadError && unverifiedAmount > 0" type="warning" :closable="false" show-icon class="expenditure-warning">
-      <template #title>付款日期待核实 {{ formatMoney(unverifiedAmount) }}，未计入有日期付款统计</template>
-      登记时已付和历史结清金额保留原值，不用业务日期或创建时间推测付款日期。
+      <template #title>付款日期待核实 {{ formatMoney(unverifiedAmount) }}</template>
+      这部分不计入所选期间的实际付款，也不会用其他日期推测。
       <el-button v-if="view === 'disbursements'" text type="primary" @click="showUnverified">查看待核实记录</el-button>
     </el-alert>
 
-    <DataTableShell :state="tableState" aria-label="统一支出结果">
+    <DataTableShell :state="tableState" aria-label="支出查询结果">
       <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
       <el-table :data="result?.items || []" row-key="row_key" stripe>
         <el-table-column label="来源" width="120">
@@ -119,7 +126,7 @@
           <el-descriptions-item label="记录状态">{{ recordStatus(selected) }}</el-descriptions-item>
         </el-descriptions>
         <p class="expenditure-note">金额、凭证和删除操作仍在原始业务页面维护，此处不新建第二份记录。</p>
-        <el-button v-if="selected.source_kind === 'expense'" @click="emit('manageExpense', selected.source_id)">查看经营支出原记录与凭证</el-button>
+        <el-button v-if="selected.source_kind === 'expense'" @click="manageExpenseSource(selected.source_id)">打开经营支出记录</el-button>
         <el-button v-else-if="sourceTarget && selected.source_status !== 'deleted'" type="primary" @click="router.push(sourceTarget)">打开来源页面</el-button>
         <p v-else class="expenditure-secondary">原记录未关联单据或已删除；保留此处的只读财务事实。</p>
       </template>
@@ -201,7 +208,7 @@ import { formatMoney } from '@/utils/format'
 import { expenditureDateLabel, expenditureCategoryLabel, expenditureSourceTarget, latestRequest } from '@/utils/expenditure'
 import { getErrorMessage } from '@/utils/error'
 
-const props = defineProps<{ view: ExpenditureView }>()
+const props = defineProps<{ view: ExpenditureView; refreshKey: number }>()
 const emit = defineEmits<{ manageExpense: [id: string] }>()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -210,6 +217,7 @@ const sourceType = ref<ExpenditureSource | ''>('')
 const keyword = ref('')
 const dateRange = ref<string[] | null>(null)
 const dateStatus = ref<'all' | 'confirmed' | 'unverified'>('all')
+const showAdvancedFilters = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
@@ -245,6 +253,11 @@ function canReconcile(row: ExpenditureRow) {
     'finance:view_cost', 'outsource_center:read', 'outsource_task:read',
     'outsource_payment:read', 'outsource_vendor:read',
   ])
+}
+
+function manageExpenseSource(sourceId: string) {
+  selected.value = null
+  emit('manageExpense', sourceId)
 }
 
 function canVoidReconciliation(row: ExpenditureRow) {
@@ -347,10 +360,22 @@ async function fetchData() {
   }
 }
 function search() { page.value = 1; void fetchData() }
-function reset() { sourceType.value = ''; keyword.value = ''; dateRange.value = null; dateStatus.value = 'all'; search() }
-function showUnverified() { dateRange.value = null; dateStatus.value = 'unverified'; search() }
+function reset() {
+  sourceType.value = ''
+  keyword.value = ''
+  dateRange.value = null
+  dateStatus.value = 'all'
+  showAdvancedFilters.value = false
+  search()
+}
+function showUnverified() { dateRange.value = null; dateStatus.value = 'unverified'; showAdvancedFilters.value = true; search() }
 function changeDateStatus() { if (dateStatus.value === 'unverified') dateRange.value = null; search() }
 watch(() => props.view, () => { result.value = null; reset() }, { immediate: true })
+watch(() => props.refreshKey, (value, previous) => {
+  if (value === previous) return
+  page.value = 1
+  void fetchData()
+})
 onUnmounted(() => requests.begin())
 </script>
 
@@ -359,6 +384,7 @@ onUnmounted(() => requests.begin())
 .expenditure-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ui-space-3); min-width: 0; }
 .expenditure-filters :deep(.el-form-item) { margin: 0; }
 .expenditure-filters :deep(.el-select), .expenditure-filters :deep(.el-input) { width: 220px; }
+.expenditure-advanced-filters { margin-top: var(--ui-space-3); padding-top: var(--ui-space-3); border-top: 1px solid var(--ui-border); }
 .expenditure-note { color: var(--ui-text-secondary); line-height: 1.7; margin: var(--ui-space-3) 0; }
 .expenditure-secondary { color: var(--ui-text-secondary); }
 .expenditure-summary { display: flex; flex-wrap: wrap; gap: var(--ui-space-6); margin: var(--ui-space-4) 0; padding: var(--ui-space-4); background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); }

@@ -123,17 +123,17 @@ describe('P08 UI/UX quality guardrails', () => {
     }
   })
 
-  it('keeps expense entry ordered around the paid-plus-debt workflow', () => {
+  it('keeps the expense form focused and groups optional details', () => {
     const source = readSource('views/payments/ExpenseList.vue')
     const formSource = source.slice(source.indexOf('<el-form'))
     const fieldLabels = [
-      'label="日期"',
-      'label="供应商"',
-      'label="支付金额"',
-      'label="欠款金额"',
+      'label="业务日期"',
       'label="分类"',
-      'label="付款方式"',
-      'label="支出总额"',
+      'label="供应商（可选）"',
+      'label="登记时已付"',
+      'label="登记时未付"',
+      '补充信息（付款方式、说明、凭证）',
+      'label="登记时付款方式"',
       'label="说明"',
       'label="凭证"',
     ]
@@ -141,6 +141,8 @@ describe('P08 UI/UX quality guardrails', () => {
 
     expect(positions.every(position => position >= 0)).toBe(true)
     expect(positions).toEqual([...positions].sort((left, right) => left - right))
+    expect(formSource).toContain('class="expense-amount-summary"')
+    expect(formSource).toContain('class="expense-extra-fields"')
     expect(formSource).toContain('v-model="form.payment_method"')
     expect(formSource).toContain('v-for="pm in PAYMENT_METHODS"')
     expect(source).not.toContain('label="应付对象"')

@@ -9,7 +9,7 @@
           <el-button v-if="canReadReceipts" @click="goTo('/receivables')">客户收款</el-button>
           <el-button v-if="canReadDisbursements" @click="goToExpense('expense')">登记经营支出</el-button>
           <el-button v-if="canReadDisbursements" type="primary" @click="goToExpense('disbursements')">
-            查看付款流水
+            查看付款记录
           </el-button>
         </template>
       </PageHeader>

@@ -1,36 +1,69 @@
 <template>
   <AppPage>
     <template #header>
-      <PageHeader title="支出管理" description="统一查看经营支出、项目实际费用与外协付款；原始业务只登记一次。">
-        <template #actions><el-button v-if="authStore.can('expense:create')" @click="openCreate" type="primary">登记经营支出</el-button></template>
+      <PageHeader
+        :title="activeView === 'expense' ? '经营支出记录' : '支出总览'"
+        description="汇总经营支出、项目费用和有权限的外协费用；项目与外协仍在原业务中维护。"
+      >
+        <template #actions>
+          <el-button v-if="activeView !== 'expense' && authStore.can('expense:read')" @click="activeView = 'expense'">
+            经营支出记录
+          </el-button>
+          <el-button v-else-if="activeView === 'expense'" @click="activeView = 'ledger'">
+            返回支出总览
+          </el-button>
+          <el-button v-if="authStore.can('expense:create')" @click="openCreate" type="primary">
+            登记经营支出
+          </el-button>
+        </template>
       </PageHeader>
     </template>
 
     <template #toolbar>
-      <el-tabs v-model="activeView" aria-label="支出查看方式">
-        <el-tab-pane label="统一台账" name="ledger" />
-        <el-tab-pane label="付款流水" name="disbursements" />
-        <el-tab-pane label="经营支出维护" name="expense" />
+      <el-tabs v-if="activeView !== 'expense'" v-model="activeView" aria-label="支出数据视图">
+        <el-tab-pane label="支出台账" name="ledger" />
+        <el-tab-pane label="付款记录" name="disbursements" />
       </el-tabs>
+      <div v-else class="expense-maintenance-heading">
+        <span>仅显示经营支出记录；项目费用和外协费用请从支出总览进入原业务记录。</span>
+      </div>
       <PageToolbar v-if="activeView === 'expense'" aria-label="支出筛选">
-      <el-select v-model="filterCategory" placeholder="支出分类" clearable style="width: 160px" @change="fetchData">
-        <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
-      </el-select>
-      <el-date-picker
-        v-model="dateRange"
-        type="daterange"
-        range-separator="至"
-        start-placeholder="开始日期"
-        end-placeholder="结束日期"
-        value-format="YYYY-MM-DD"
-        style="width: 260px; margin-left: 12px"
-        @change="fetchData"
-      />
-      <el-button style="margin-left: 12px" @click="fetchData" type="primary">搜索</el-button>
+        <el-date-picker
+          v-model="dateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          value-format="YYYY-MM-DD"
+          clearable
+          @change="searchExpenseRecords"
+        />
+        <el-button @click="searchExpenseRecords" type="primary">搜索</el-button>
+        <el-button @click="resetExpenseFilters">重置</el-button>
+        <el-button text @click="showCategoryFilter = !showCategoryFilter" :aria-expanded="showCategoryFilter">
+          {{ showCategoryFilter ? '收起分类筛选' : '更多筛选' }}
+        </el-button>
+        <el-collapse-transition>
+          <el-select
+            v-if="showCategoryFilter"
+            v-model="filterCategory"
+            placeholder="支出分类"
+            clearable
+            aria-label="支出分类"
+            @change="searchExpenseRecords"
+          >
+            <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
+          </el-select>
+        </el-collapse-transition>
       </PageToolbar>
     </template>
 
-    <ExpenditureTable v-if="activeView !== 'expense'" :view="activeView" @manage-expense="openExpenseSource" />
+    <ExpenditureTable
+      v-if="activeView !== 'expense'"
+      :view="activeView"
+      :refresh-key="expenditureRefreshKey"
+      @manage-expense="openExpenseSource"
+    />
     <DataTableShell v-else :state="tableState" aria-label="支出列表">
       <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
       <el-table :data="list" stripe>
@@ -47,12 +80,12 @@
       <el-table-column label="供应商" min-width="180" show-overflow-tooltip>
         <template #default="{ row }">{{ row.supplier_name || '-' }}</template>
       </el-table-column>
-      <el-table-column label="已支付" width="120" align="right">
+      <el-table-column label="累计已付" width="120" align="right">
         <template #default="{ row }">
           <span :class="{ 'text-success': expensePaidAmount(row) > 0 }">{{ formatMoney(expensePaidAmount(row)) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="剩余欠款" width="120" align="right">
+      <el-table-column label="剩余待付" width="120" align="right">
         <template #default="{ row }">
           <span :class="{ 'text-warning': expenseRemainingAmount(row) > 0 }">{{ formatMoney(expenseRemainingAmount(row)) }}</span>
         </template>
@@ -64,7 +97,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="日期" width="120">
+      <el-table-column label="业务日期" width="120">
         <template #default="{ row }">{{ formatDate(row.expense_date) || '-' }}</template>
       </el-table-column>
       <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
@@ -90,134 +123,160 @@
     <el-dialog
       v-model="showDialog"
       :title="isEditing ? (authStore.can('expense:update') ? '编辑支出' : '查看支出') : '登记支出'"
-      width="min(94vw, 620px)"
+      width="min(94vw, 700px)"
       :close-on-click-modal="false"
       @closed="handleExpenseDialogClosed"
     >
-      <el-form :model="form" label-width="100px" :disabled="isEditing && !authStore.can('expense:update')">
-        <el-form-item label="日期">
-          <el-date-picker v-model="form.expense_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-        </el-form-item>
-        <el-form-item v-if="canUseSupplier" label="供应商">
-          <el-select
-            v-model="form.supplier_id"
-            clearable
-            filterable
-            placeholder="选择供应商（可选）"
-            style="width: 100%"
-          >
-            <el-option v-for="supplier in suppliers" :key="supplier.id" :label="supplier.name" :value="supplier.id" />
-          </el-select>
-          <div class="form-tip">可选；选择后将这笔支出关联到供应商。</div>
-        </el-form-item>
-        <el-form-item label="支付金额">
-          <el-input-number v-model="form.paid_amount" :min="0" :precision="2" style="width: 100%" />
-          <div class="form-tip">登记这笔支出时已经支付的金额，不会进入应付管理。</div>
-        </el-form-item>
-        <el-form-item label="欠款金额">
-          <el-input-number v-model="form.payable_amount" :min="0" :precision="2" style="width: 100%" />
-          <div class="form-tip">这部分会进入应付管理，后续付款在应付管理中登记。</div>
-        </el-form-item>
-        <el-form-item label="分类">
-          <el-select v-model="form.category" placeholder="选择分类" clearable style="width: 100%">
-            <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="付款方式">
-          <el-select v-model="form.payment_method" placeholder="选择付款方式（可选）" clearable style="width: 100%">
-            <el-option v-for="pm in PAYMENT_METHODS" :key="pm" :label="pm" :value="pm" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="支出总额">
-          <span class="form-total">{{ formatMoney(totalAmount) }}</span>
-          <div class="form-tip">支出总额 = 支付金额 + 欠款金额。</div>
-        </el-form-item>
-        <el-form-item label="说明">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="支出说明…" />
-        </el-form-item>
-        <el-form-item label="凭证">
-          <div
-            v-if="isEditing ? authStore.can('expense:update') : authStore.can('expense:create')"
-            class="expense-attachment-dropzone"
-            :class="{ 'is-dragover': expenseAttachmentDragActive }"
-            role="button"
-            tabindex="0"
-            @click="openExpenseAttachmentPicker"
-            @keydown.enter.prevent="openExpenseAttachmentPicker"
-            @keydown.space.prevent="openExpenseAttachmentPicker"
-            @dragenter.prevent="handleExpenseAttachmentDragEnter"
-            @dragover.prevent="handleExpenseAttachmentDragOver"
-            @dragleave.prevent="handleExpenseAttachmentDragLeave"
-            @drop.prevent="handleExpenseAttachmentDrop"
-          >
-            <input
-              ref="expenseAttachmentInput"
-              class="expense-attachment-input"
-              type="file"
-              multiple
-              :accept="EXPENSE_ATTACHMENT_ACCEPT"
-              @click.stop
-              @change="handleExpenseAttachmentInputChange"
-            />
-            <el-icon class="expense-attachment-drop-icon"><UploadFilled /></el-icon>
-            <div class="expense-attachment-drop-title">将凭证拖到这里上传</div>
-            <div class="expense-attachment-drop-subtitle">或点击选择文件，支持批量上传</div>
-            <div class="expense-attachment-drop-hint">
-              支持 JPG、PNG、WEBP、PDF；{{ isEditing ? '上传后立即保存到这笔支出' : '保存支出后自动上传' }}
-            </div>
-          </div>
-
-          <div v-if="expenseAttachmentUploadQueue.length" class="expense-attachment-upload-queue">
-            <div v-for="item in expenseAttachmentUploadQueue" :key="item.id" class="expense-attachment-upload-row">
-              <span class="expense-attachment-upload-name" :title="item.name">{{ item.name }}</span>
-              <el-tag v-if="item.status === 'queued'" size="small" type="info">{{ isEditing ? '等待上传' : '待保存' }}</el-tag>
-              <el-tag v-else-if="item.status === 'uploading'" size="small" type="warning">上传中</el-tag>
-              <template v-else>
-                <el-tag size="small" type="danger">{{ item.error || '上传失败' }}</el-tag>
-                <el-button text type="primary" size="small" @click="retryExpenseAttachment(item)">重试</el-button>
-              </template>
-            </div>
-          </div>
-
-          <div v-if="dialogAttachments.length" class="expense-attachment-grid">
-            <div v-for="attachment in dialogAttachments" :key="attachment.id" class="expense-attachment-item">
-              <el-image
-                v-if="expenseAttachmentKind(attachment) === 'image' && attachment.preview_url"
-                class="expense-attachment-image"
-                :src="attachment.preview_url"
-                :alt="attachment.filename"
-                fit="cover"
-                lazy
-                :preview-src-list="expenseImageAttachmentUrls"
-                :initial-index="expenseImagePreviewIndex(attachment.id)"
-                :zoom-rate="EXPENSE_ATTACHMENT_PREVIEW_ZOOM_RATE"
-                preview-teleported
-              />
-              <button
-                v-else
-                type="button"
-                class="expense-attachment-file"
-                :title="`打开 ${attachment.filename || '凭证'}`"
-                @click="previewExpenseAttachment(attachment)"
+      <el-form
+        :model="form"
+        label-position="top"
+        class="expense-form"
+        :disabled="isEditing && !authStore.can('expense:update')"
+      >
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12">
+            <el-form-item label="业务日期">
+              <el-date-picker v-model="form.expense_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12">
+            <el-form-item label="分类">
+              <el-select v-model="form.category" placeholder="选择分类（可选）" clearable style="width: 100%">
+                <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="canUseSupplier" :span="24">
+            <el-form-item label="供应商（可选）">
+              <el-select
+                v-model="form.supplier_id"
+                clearable
+                filterable
+                placeholder="选择供应商"
+                style="width: 100%"
               >
-                <span class="expense-attachment-file-ext">{{ expenseAttachmentExtension(attachment.filename) }}</span>
-                <span class="expense-attachment-file-name">{{ attachment.filename || '凭证文件' }}</span>
-              </button>
-              <div class="expense-attachment-name" :title="attachment.filename">
-                {{ attachment.filename || '未命名凭证' }} · {{ formatExpenseAttachmentSize(attachment.file_size) }}
-              </div>
-              <el-button
-                v-if="authStore.can('expense:delete')"
-                class="expense-attachment-delete"
-                :icon="Delete"
-                size="small"
-                circle
-                :aria-label="`删除凭证 ${attachment.filename || ''}`"
-                @click="handleDeleteExpenseAttachment(attachment)"
-              />
-            </div>
+                <el-option v-for="supplier in suppliers" :key="supplier.id" :label="supplier.name" :value="supplier.id" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <section class="expense-amount-section" aria-label="支出金额">
+          <el-row :gutter="16">
+            <el-col :xs="24" :sm="12">
+              <el-form-item label="登记时已付">
+                <el-input-number v-model="form.paid_amount" :min="0" :precision="2" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12">
+              <el-form-item label="登记时未付">
+                <el-input-number v-model="form.payable_amount" :min="0" :precision="2" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <div class="expense-amount-summary">
+            <span>本次登记总额</span>
+            <strong class="form-total">{{ formatMoney(totalAmount) }}</strong>
           </div>
-        </el-form-item>
+          <p class="form-tip">后续付款在“应付管理”登记；总额按登记时已付与登记时未付自动计算。</p>
+        </section>
+
+        <el-collapse v-model="expenseDetailsExpanded" class="expense-extra-fields">
+          <el-collapse-item name="details">
+            <template #title>补充信息（付款方式、说明、凭证）</template>
+            <el-form-item label="登记时付款方式">
+              <el-select v-model="form.payment_method" placeholder="选择付款方式（可选）" clearable style="width: 100%">
+                <el-option v-for="pm in PAYMENT_METHODS" :key="pm" :label="pm" :value="pm" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="说明">
+              <el-input v-model="form.description" type="textarea" :rows="2" placeholder="补充支出说明（可选）" />
+            </el-form-item>
+            <el-form-item label="凭证">
+              <div
+                v-if="isEditing ? authStore.can('expense:update') : authStore.can('expense:create')"
+                class="expense-attachment-dropzone"
+                :class="{ 'is-dragover': expenseAttachmentDragActive }"
+                role="button"
+                tabindex="0"
+                @click="openExpenseAttachmentPicker"
+                @keydown.enter.prevent="openExpenseAttachmentPicker"
+                @keydown.space.prevent="openExpenseAttachmentPicker"
+                @dragenter.prevent="handleExpenseAttachmentDragEnter"
+                @dragover.prevent="handleExpenseAttachmentDragOver"
+                @dragleave.prevent="handleExpenseAttachmentDragLeave"
+                @drop.prevent="handleExpenseAttachmentDrop"
+              >
+                <input
+                  ref="expenseAttachmentInput"
+                  class="expense-attachment-input"
+                  type="file"
+                  multiple
+                  :accept="EXPENSE_ATTACHMENT_ACCEPT"
+                  @click.stop
+                  @change="handleExpenseAttachmentInputChange"
+                />
+                <el-icon class="expense-attachment-drop-icon"><UploadFilled /></el-icon>
+                <div class="expense-attachment-drop-title">将凭证拖到这里上传</div>
+                <div class="expense-attachment-drop-subtitle">或点击选择文件，支持批量上传</div>
+                <div class="expense-attachment-drop-hint">
+                  支持 JPG、PNG、WEBP、PDF；{{ isEditing ? '上传后立即保存到这笔支出' : '保存支出后自动上传' }}
+                </div>
+              </div>
+
+              <div v-if="expenseAttachmentUploadQueue.length" class="expense-attachment-upload-queue">
+                <div v-for="item in expenseAttachmentUploadQueue" :key="item.id" class="expense-attachment-upload-row">
+                  <span class="expense-attachment-upload-name" :title="item.name">{{ item.name }}</span>
+                  <el-tag v-if="item.status === 'queued'" size="small" type="info">{{ isEditing ? '等待上传' : '待保存' }}</el-tag>
+                  <el-tag v-else-if="item.status === 'uploading'" size="small" type="warning">上传中</el-tag>
+                  <template v-else>
+                    <el-tag size="small" type="danger">{{ item.error || '上传失败' }}</el-tag>
+                    <el-button text type="primary" size="small" @click="retryExpenseAttachment(item)">重试</el-button>
+                  </template>
+                </div>
+              </div>
+
+              <div v-if="dialogAttachments.length" class="expense-attachment-grid">
+                <div v-for="attachment in dialogAttachments" :key="attachment.id" class="expense-attachment-item">
+                  <el-image
+                    v-if="expenseAttachmentKind(attachment) === 'image' && attachment.preview_url"
+                    class="expense-attachment-image"
+                    :src="attachment.preview_url"
+                    :alt="attachment.filename"
+                    fit="cover"
+                    lazy
+                    :preview-src-list="expenseImageAttachmentUrls"
+                    :initial-index="expenseImagePreviewIndex(attachment.id)"
+                    :zoom-rate="EXPENSE_ATTACHMENT_PREVIEW_ZOOM_RATE"
+                    preview-teleported
+                  />
+                  <button
+                    v-else
+                    type="button"
+                    class="expense-attachment-file"
+                    :title="`打开 ${attachment.filename || '凭证'}`"
+                    @click="previewExpenseAttachment(attachment)"
+                  >
+                    <span class="expense-attachment-file-ext">{{ expenseAttachmentExtension(attachment.filename) }}</span>
+                    <span class="expense-attachment-file-name">{{ attachment.filename || '凭证文件' }}</span>
+                  </button>
+                  <div class="expense-attachment-name" :title="attachment.filename">
+                    {{ attachment.filename || '未命名凭证' }} · {{ formatExpenseAttachmentSize(attachment.file_size) }}
+                  </div>
+                  <el-button
+                    v-if="authStore.can('expense:delete')"
+                    class="expense-attachment-delete"
+                    :icon="Delete"
+                    size="small"
+                    circle
+                    :aria-label="`删除凭证 ${attachment.filename || ''}`"
+                    @click="handleDeleteExpenseAttachment(attachment)"
+                  />
+                </div>
+              </div>
+            </el-form-item>
+          </el-collapse-item>
+        </el-collapse>
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
@@ -288,9 +347,12 @@ const page = ref(1)
 const pageSize = ref(20)
 const loadError = ref(false)
 const filterCategory = ref('')
+const showCategoryFilter = ref(false)
 const dateRange = ref<string[] | null>(null)
+const expenditureRefreshKey = ref(0)
 const suppliers = ref<SupplierResponse[]>([])
 const showDialog = ref(false)
+const expenseDetailsExpanded = ref<string[]>([])
 const isEditing = ref(false)
 const editingId = ref('')
 const form = reactive({ category: '', payment_method: '', paid_amount: 0, supplier_id: '', payable_amount: 0, expense_date: '', description: '' })
@@ -337,12 +399,12 @@ const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
 function resetForm() {
   clearExpenseAttachmentState()
   Object.assign(form, { category: '', payment_method: '', paid_amount: 0, supplier_id: '', payable_amount: 0, expense_date: '', description: '' })
+  expenseDetailsExpanded.value = []
   isEditing.value = false
   editingId.value = ''
 }
 
 function openCreate() {
-  activeView.value = 'expense'
   resetForm()
   showDialog.value = true
 }
@@ -350,9 +412,19 @@ function openCreate() {
 async function openExpenseSource(id: string) {
   try {
     const record = await getExpense(id)
-    activeView.value = 'expense'
     openEdit(record)
   } catch { /* API interceptor displays the error; keep the current view. */ }
+}
+
+function searchExpenseRecords() {
+  page.value = 1
+  void fetchData()
+}
+
+function resetExpenseFilters() {
+  filterCategory.value = ''
+  dateRange.value = null
+  searchExpenseRecords()
 }
 
 function openEdit(row: ExpenseResponse) {
@@ -692,11 +764,13 @@ async function handleSave() {
     if (savedExpense.id) await startExpenseAttachmentUploadQueue()
     if (expenseAttachmentUploadQueue.value.some(item => item.status === 'error')) {
       ElMessage.warning('支出已保存，部分凭证上传失败，请重试')
+      expenditureRefreshKey.value += 1
       void fetchData()
       return
     }
 
     showDialog.value = false
+    expenditureRefreshKey.value += 1
     void fetchData()
   } catch {
     // API error handled by interceptor, cancel does nothing
@@ -731,6 +805,8 @@ async function handleDelete(row: ExpenseResponse) {
         expected_paid_amount: payablePaidAmount,
       })
       ElMessage.success(`已撤销 ${result.payment_count} 条应付付款流水并删除支出`)
+      expenditureRefreshKey.value += 1
+      showDialog.value = false
       await fetchData()
       return
     }
@@ -740,6 +816,8 @@ async function handleDelete(row: ExpenseResponse) {
     })
     await deleteExpense(row.id)
     ElMessage.success('已删除')
+    expenditureRefreshKey.value += 1
+    showDialog.value = false
     await fetchData()
   } catch {
     // User cancelled or API error (handled by interceptor)
@@ -762,6 +840,14 @@ onUnmounted(() => {
 .text-success { color: var(--el-color-success); font-weight: 600; }
 .form-tip { color: var(--ad-text-secondary, #888); font-size: 12px; line-height: 1.5; }
 .form-total { color: var(--ad-text); font-size: 18px; font-weight: 700; }
+.expense-maintenance-heading { padding: var(--ui-space-2) 0; color: var(--ui-text-secondary); line-height: 1.5; }
+.expense-form :deep(.el-form-item) { margin-bottom: var(--ui-space-4); }
+.expense-amount-section { padding: var(--ui-space-4); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); }
+.expense-amount-section :deep(.el-form-item) { margin-bottom: var(--ui-space-2); }
+.expense-amount-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-3); padding-top: var(--ui-space-3); border-top: 1px solid var(--ui-border); color: var(--ui-text-secondary); }
+.expense-extra-fields { margin-top: var(--ui-space-4); }
+.expense-extra-fields :deep(.el-collapse-item__header) { color: var(--ui-text); font-weight: var(--ui-font-weight-medium); }
+.expense-extra-fields :deep(.el-collapse-item__content) { padding-top: var(--ui-space-3); }
 .expense-attachment-dropzone {
   display: flex;
   flex-direction: column;
@@ -812,5 +898,6 @@ onUnmounted(() => {
 .expense-attachment-delete:focus-visible { opacity: 1; }
 @media (max-width: 760px) {
   .expense-attachment-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+  .expense-amount-section { padding: var(--ui-space-3); }
 }
 </style>
