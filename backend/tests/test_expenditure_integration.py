@@ -139,22 +139,46 @@ async def test_ledger_last_payment_date_uses_latest_active_payment_or_registrati
 
 
 async def test_ledger_period_filter_uses_latest_payment_date_and_returns_department(fixture_db):
-    _, svc, _ = fixture_db
+    db, svc, _ = fixture_db
+    reconciled_cost_id = uuid4()
+    undated_expense_id = uuid4()
+    await db.execute(sa.insert(ProjectCost.__table__).values(
+        id=reconciled_cost_id, cost_no="TEST-RECONCILED-COST", category="材料",
+        amount=1000, debt_amount=0, cost_date=datetime(2026, 10, 9),
+    ))
+    await db.execute(sa.insert(FinancePaymentDateReconciliation.__table__).values(
+        id=uuid4(), source_type="project_cost", source_id=reconciled_cost_id,
+        amount=1000, paid_at=datetime(2026, 10, 8), evidence_type="other",
+        evidence_reference="TEST-RECONCILED-COST-DATE",
+    ))
+    await db.execute(sa.insert(Expense.__table__).values(
+        id=undated_expense_id, expense_no="TEST-EXPENSE-UNDATED", amount=1000,
+        payable_amount=600, expense_date=datetime(2026, 10, 8), category="办公",
+    ))
+    await db.commit()
+
     all_rows = await svc.list_records("ledger")
-    cost = next(row for row in all_rows["items"] if row["source_kind"] == "project_cost")
-    task = next(row for row in all_rows["items"] if row["source_kind"] == "outsource_task")
-    expense = next(row for row in all_rows["items"] if row["source_kind"] == "expense")
+    cost = next(row for row in all_rows["items"] if row["source_no"] == "TEST-C")
+    task = next(row for row in all_rows["items"] if row["source_no"] == "TEST-T")
+    expense = next(row for row in all_rows["items"] if row["source_no"] == "TEST-E")
 
     assert cost["department"] == "测试部门"
     assert task["department"] == "测试部门"
     assert expense["department"] is None
+    reconciled = next(row for row in all_rows["items"] if row["source_id"] == str(reconciled_cost_id))
+    undated_expense = next(row for row in all_rows["items"] if row["source_id"] == str(undated_expense_id))
+    assert reconciled["last_payment_date"] == "2026-10-08T00:00:00"
+    assert undated_expense["last_payment_date"] is None
+    assert undated_expense["undated_paid_amount"] == 400
 
     period = await svc.list_records(
         "ledger",
         filters=ExpenditureFilters(start_date=date(2026, 10, 8), end_date=date(2026, 10, 8)),
     )
-    assert period["total"] == 2
+    assert period["total"] == 3
     assert {row["source_kind"] for row in period["items"]} == {"project_cost", "outsource_task"}
+    assert "TEST-RECONCILED-COST" in {row["source_no"] for row in period["items"]}
+    assert "TEST-EXPENSE-UNDATED" not in {row["source_no"] for row in period["items"]}
     assert all(row["last_payment_date"].startswith("2026-10-08") for row in period["items"])
 
 

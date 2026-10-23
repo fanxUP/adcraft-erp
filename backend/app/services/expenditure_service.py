@@ -173,7 +173,7 @@ class ExpenditureService:
             )
             paid = inferred + legacy + _money(ps.c.paid)
             registered_paid_date = case(
-                (inferred > 0, table.c[date_column]),
+                (registered_paid > 0, table.c[date_column]),
                 else_=cast(literal(None), DateTime),
             )
             settled_legacy_date = cast(literal(None), DateTime)
