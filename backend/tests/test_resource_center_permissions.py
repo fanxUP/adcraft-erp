@@ -113,11 +113,14 @@ def test_vehicle_read_and_mutation_routes_keep_expected_boundaries():
 
 
 def test_all_resource_center_app_routes_require_the_parent_permission():
-    resource_routes = [
-        route
-        for route in app.routes
-        if getattr(route, "path", "").startswith(("/api/v1/vehicle", "/api/v1/aerial"))
-    ]
+    resource_routes = []
+    for route in app.routes:
+        contexts = route.effective_route_contexts() if hasattr(route, "effective_route_contexts") else (route,)
+        resource_routes.extend(
+            context
+            for context in contexts
+            if getattr(context, "path", "").startswith(("/api/v1/vehicle", "/api/v1/aerial"))
+        )
     assert resource_routes
 
     for route in resource_routes:
