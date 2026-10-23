@@ -445,6 +445,7 @@ def test_project_cost_payload_accepts_bounded_multi_item_scope():
         order_id=str(uuid4()),
         category="材料费",
         amount=200,
+        cost_date="2026-10-23",
         order_item_ids=item_ids,
     )
     update = ProjectCostUpdate(order_item_ids=item_ids)
@@ -453,12 +454,32 @@ def test_project_cost_payload_accepts_bounded_multi_item_scope():
     assert update.order_item_ids == item_ids
 
 
+def test_project_cost_create_requires_a_valid_payment_date():
+    base_payload = {
+        "order_id": str(uuid4()),
+        "category": "材料费",
+        "amount": 200,
+    }
+
+    with pytest.raises(ValueError, match="cost_date"):
+        ProjectCostCreate(**base_payload)
+
+    with pytest.raises(ValueError, match="付款日期不能为空"):
+        ProjectCostCreate(**base_payload, cost_date="  ")
+
+    with pytest.raises(ValueError, match="付款日期格式无效"):
+        ProjectCostCreate(**base_payload, cost_date="2026-02-30")
+
+    assert ProjectCostCreate(**base_payload, cost_date="2026-10-23").cost_date == "2026-10-23"
+
+
 def test_project_cost_payload_rejects_more_than_100_item_scopes():
     with pytest.raises(ValueError, match="at most 100 items"):
         ProjectCostCreate(
             order_id=str(uuid4()),
             category="材料费",
             amount=200,
+            cost_date="2026-10-23",
             order_item_ids=[uuid4() for _ in range(101)],
         )
 

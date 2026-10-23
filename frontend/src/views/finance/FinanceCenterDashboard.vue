@@ -3,7 +3,7 @@
     <template #header>
       <PageHeader
         title="财务总览"
-        description="按实际收款日和付款日查看资金变动；没有可靠日期的历史金额单独列示。"
+        description="按实际收款日和付款日查看期间资金变动；历史未注明日期的收款单独列示。"
       >
         <template #actions>
           <el-button v-if="canReadReceipts" @click="goTo('/receivables')">客户收款</el-button>
@@ -80,8 +80,8 @@
           </el-card>
         </div>
 
-        <div class="finance-undated-grid">
-          <el-card v-if="canReadReceipts" shadow="never" class="finance-undated-card">
+        <div v-if="canReadReceipts" class="finance-undated-grid">
+          <el-card shadow="never" class="finance-undated-card">
             <div class="finance-undated-heading">
               <span>收款日期待核实</span>
               <el-tag type="warning" effect="plain" size="small">不计入本期</el-tag>
@@ -89,26 +89,7 @@
             <div class="finance-undated-value">{{ receiptData ? formatMoney(receiptData.undated.amount) : '—' }}</div>
             <p>{{ receiptLoading ? '读取中…' : receiptData ? `${receiptData.undated.count} 笔历史收款 · 全部历史累计，不受所选期间影响` : receiptError ? '读取失败，请重试' : '暂无数据' }}</p>
           </el-card>
-
-          <el-card v-if="canReadDisbursements" shadow="never" class="finance-undated-card">
-            <div class="finance-undated-heading">
-              <span>付款日期待核实</span>
-              <el-tag type="warning" effect="plain" size="small">不计入本期</el-tag>
-            </div>
-            <div class="finance-undated-value">
-              {{ expenditureData ? formatMoney(expenditureData.summary.unverified_paid_amount ?? 0) : '—' }}
-            </div>
-            <p>{{ expenditureLoading ? '读取中…' : expenditureData ? `${expenditureData.summary.unverified_count ?? 0} 笔历史付款 · 全部历史累计，不受所选期间影响` : expenditureError ? '读取失败，请重试' : '暂无数据' }}</p>
-          </el-card>
         </div>
-
-        <el-alert
-          class="finance-policy-note"
-          type="info"
-          :closable="false"
-          show-icon
-          title="日期口径：不会用业务日期或系统创建时间推测收付款日期。核对凭证后，应在原业务记录补全或更正日期；不要重复登记一笔收付款。"
-        />
         <div v-if="summaryError" class="finance-retry-row">
           <span>部分汇总暂时无法读取。</span>
           <el-button link type="primary" @click="fetchSummary">重试</el-button>

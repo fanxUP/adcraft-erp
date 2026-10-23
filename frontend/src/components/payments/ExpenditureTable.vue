@@ -37,7 +37,7 @@
     <p class="expenditure-note">
       {{ view === 'ledger'
         ? '按业务日期筛选；已付金额为累计值，项目总额不等于当期现金支出。'
-        : '按实际付款日期筛选；没有可靠日期的历史金额单独列为待核实。' }}
+        : '按实际付款日期筛选；历史记录可按日期状态查看并核对。' }}
       当前汇总经营支出、项目实际费用及账号有权查看的外协；不含库存领用等未接入模块，也不代表公司全部现金流。
     </p>
     <dl v-if="result && !loading && !loadError" class="expenditure-summary" aria-label="当前筛选全量汇总">
@@ -49,14 +49,8 @@
       </template>
       <template v-else>
         <div><dt>{{ dateRange ? '期间有日期付款' : '有日期付款合计' }}</dt><dd>{{ formatMoney(result.summary.confirmed_paid_amount || 0) }}</dd></div>
-        <div><dt>历史待核实</dt><dd>{{ formatMoney(result.summary.unverified_paid_amount || 0) }}</dd></div>
       </template>
     </dl>
-    <el-alert v-if="result && !loading && !loadError && unverifiedAmount > 0" type="warning" :closable="false" show-icon class="expenditure-warning">
-      <template #title>付款日期待核实 {{ formatMoney(unverifiedAmount) }}</template>
-      这部分不计入所选期间的实际付款，也不会用其他日期推测。
-      <el-button v-if="view === 'disbursements'" text type="primary" @click="showUnverified">查看待核实记录</el-button>
-    </el-alert>
 
     <DataTableShell :state="tableState" aria-label="支出查询结果">
       <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
@@ -242,7 +236,6 @@ const reconciliationForm = reactive<{
 const requests = latestRequest()
 const availableSources = computed<ExpenditureSource[]>(() => result.value?.available_sources || (authStore.canAll(['outsource_center:read', 'outsource_task:read', 'outsource_payment:read', 'finance:view_cost']) ? ['expense', 'project_cost', 'outsource'] : ['expense', 'project_cost']))
 const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : result.value?.items.length ? 'ready' : 'empty')
-const unverifiedAmount = computed(() => props.view === 'ledger' ? result.value?.summary.undated_paid_amount || 0 : result.value?.summary.unverified_paid_amount || 0)
 const sourceTarget = computed(() => selected.value ? expenditureSourceTarget(selected.value) : null)
 
 function recordStatus(row: ExpenditureRow) {
@@ -373,7 +366,6 @@ function reset() {
   showAdvancedFilters.value = false
   search()
 }
-function showUnverified() { dateRange.value = null; dateStatus.value = 'unverified'; showAdvancedFilters.value = true; search() }
 function changeDateStatus() { if (dateStatus.value === 'unverified') dateRange.value = null; search() }
 watch(() => props.view, () => { result.value = null; reset() }, { immediate: true })
 watch(() => props.refreshKey, (value, previous) => {
@@ -395,7 +387,6 @@ onUnmounted(() => requests.begin())
 .expenditure-summary { display: flex; flex-wrap: wrap; gap: var(--ui-space-6); margin: var(--ui-space-4) 0; padding: var(--ui-space-4); background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); }
 .expenditure-summary dt { color: var(--ui-text-secondary); margin-bottom: var(--ui-space-2); }
 .expenditure-summary dd { margin: 0; color: var(--ui-text); font-size: var(--ui-font-size-title); font-weight: var(--ui-font-weight-semibold); font-variant-numeric: tabular-nums; }
-.expenditure-warning { margin-bottom: var(--ui-space-4); }
 @media (max-width: 768px) {
   .expenditure-filters { width: 100%; }
   .expenditure-filters :deep(.el-form-item) { width: 100%; min-width: 0; }

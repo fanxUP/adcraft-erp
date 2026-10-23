@@ -153,6 +153,7 @@ describe('P08 UI/UX quality guardrails', () => {
 
   it('keeps project-cost entry and list on the simplified financial fields', () => {
     const source = readSource('views/payments/ProjectCostDetail.vue')
+    const api = readSource('api/payments.ts')
     const formSource = source.slice(source.indexOf('<el-form'))
     const fieldLabels = [
       'label="日期"',
@@ -175,5 +176,20 @@ describe('P08 UI/UX quality guardrails', () => {
     expect(source).toContain('label="支付金额"')
     expect(source).toContain('支出总额 = 支付金额 + 欠款金额')
     expect(source).toContain('row.supplier_name || row.payee_company_name')
+    expect(source).toContain(':required="!isEditing || editingOriginalHasCostDate || !!form.cost_date"')
+    expect(source).toContain("if (!form.cost_date && (!isEditing.value || editingOriginalHasCostDate.value))")
+    expect(api).toContain('cost_date: string')
+  })
+
+  it('removes the repeated undated-payment warning but preserves record-level reconciliation', () => {
+    const expenditure = readSource('components/payments/ExpenditureTable.vue')
+    const dashboard = readSource('views/finance/FinanceCenterDashboard.vue')
+
+    expect(expenditure).not.toContain('付款日期待核实 {{ formatMoney(unverifiedAmount) }}')
+    expect(expenditure).not.toContain('这部分不计入所选期间的实际付款，也不会用其他日期推测。')
+    expect(expenditure).toContain('核实付款日期')
+    expect(expenditure).toContain('value="unverified"')
+    expect(dashboard).not.toContain('<span>付款日期待核实</span>')
+    expect(dashboard).not.toContain('日期口径：不会用业务日期或系统创建时间推测收付款日期。')
   })
 })

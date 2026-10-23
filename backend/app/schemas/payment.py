@@ -332,7 +332,7 @@ class ProjectCostCreate(BaseModel):
     category: str
     amount: float
     description: str | None = None
-    cost_date: str | None = None
+    cost_date: str
     receipt_url: str | None = None
     remark: str | None = None
     order_item_id: str | None = None
@@ -348,6 +348,18 @@ class ProjectCostCreate(BaseModel):
     unit: str | None = None
     unit_price: float | None = None
     summary: str | None = None
+
+    @field_validator("cost_date")
+    @classmethod
+    def cost_date_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("付款日期不能为空")
+        try:
+            datetime.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError("付款日期格式无效，请使用 YYYY-MM-DD") from exc
+        return value
 
     @field_validator("amount")
     @classmethod

@@ -288,7 +288,12 @@ export function getTaskCompletionDetails(params: {
 export function getProjectCosts(params?: { page?: number; page_size?: number; order_id?: string; order_item_id?: string; quote_id?: string; category?: string; date_from?: string; date_to?: string }) {
   return get<PaginatedData<ProjectCostResponse>>('/project-costs/', { params })
 }
-export function createProjectCost(data: Omit<Partial<ProjectCostResponse>, 'id' | 'cost_no' | 'customer_id' | 'customer_name' | 'project_name' | 'created_by' | 'created_at'> & { quote_id?: string; order_item_ids?: string[] }) {
+export type ProjectCostCreatePayload = Omit<Partial<ProjectCostResponse>, 'id' | 'cost_no' | 'customer_id' | 'customer_name' | 'project_name' | 'created_by' | 'created_at' | 'cost_date'> & {
+  cost_date: string
+  quote_id?: string
+  order_item_ids?: string[]
+}
+export function createProjectCost(data: ProjectCostCreatePayload) {
   return post<ProjectCostResponse>('/project-costs/', data)
 }
 export function updateProjectCost(id: string, data: Partial<Omit<ProjectCostResponse, 'id' | 'cost_no' | 'customer_id' | 'customer_name' | 'project_name' | 'created_by' | 'created_at'>>) {
