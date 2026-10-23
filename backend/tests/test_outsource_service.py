@@ -1161,7 +1161,7 @@ async def test_permanent_delete_requires_reason_without_reentering_task_number(s
 
 
 @pytest.mark.asyncio
-async def test_permanent_delete_rechecks_task_status_after_the_list_result_is_stale(service):
+async def test_permanent_delete_rechecks_recycle_membership_after_the_list_result_is_stale(service):
     svc, _, tr, _ = service
     task = make_mock_outsource_task(
         task_no="OT20261023-0007",
@@ -1170,8 +1170,8 @@ async def test_permanent_delete_rechecks_task_status_after_the_list_result_is_st
     )
     tr.get_deleted_by_id.return_value = task
     assert (await svc.get_permanent_delete_eligibility(SAMPLE_ORDER_ID))["eligible"] is True
-    task.status = "completed"
-    with pytest.raises(ValueError, match="仅已取消状态"):
+    task.deleted_at = None
+    with pytest.raises(ValueError, match="任务不在回收站"):
         await svc.permanently_delete_task(
             SAMPLE_ORDER_ID,
             reason="清理测试记录",
@@ -1182,26 +1182,28 @@ async def test_permanent_delete_rechecks_task_status_after_the_list_result_is_st
 
 
 @pytest.mark.asyncio
-async def test_permanent_delete_rejects_non_cancelled_task(service):
+@pytest.mark.parametrize("original_status", ["pending", "in_progress", "completed", "settled"])
+async def test_permanent_delete_accepts_any_original_status_when_task_is_in_recycle_bin(service, original_status):
     svc, _, tr, _ = service
     task = make_mock_outsource_task(
         task_no="OT20261023-0008",
-        status="completed",
+        status=original_status,
         deleted_at=datetime.now(timezone.utc),
     )
     tr.get_deleted_by_id.return_value = task
 
-    with pytest.raises(ValueError, match="仅已取消状态"):
-        await svc.permanently_delete_task(
-            SAMPLE_ORDER_ID,
-            reason="清理测试记录",
-        )
+    result = await svc.permanently_delete_task(
+        SAMPLE_ORDER_ID,
+        reason="经确认清理回收站任务",
+    )
 
-    tr.hard_delete.assert_not_awaited()
+    assert result["snapshot"]["status"] == original_status
+    tr.delete_direct_financial_references.assert_awaited_once_with(SAMPLE_ORDER_ID)
+    tr.hard_delete.assert_awaited_once_with(task)
 
 
 @pytest.mark.asyncio
-async def test_permanent_delete_only_removes_eligible_cancelled_recycle_task(service):
+async def test_permanent_delete_only_removes_recycle_task(service):
     svc, _, tr, _ = service
     task = make_mock_outsource_task(
         task_no="OT20261023-0004",

@@ -78,6 +78,7 @@
         </el-alert>
         <el-descriptions :column="1" border class="delete-summary">
           <el-descriptions-item label="任务编号">{{ permanentDeleteTarget.task_no }}</el-descriptions-item>
+          <el-descriptions-item label="原任务状态">{{ statusLabel(permanentDeleteTarget.status) }}</el-descriptions-item>
           <el-descriptions-item label="外协商">{{ permanentDeleteTarget.vendor_name || '-' }}</el-descriptions-item>
           <el-descriptions-item label="关联业务">
             <div v-if="permanentDeleteTarget.linked_records?.length" class="linked-record-list">

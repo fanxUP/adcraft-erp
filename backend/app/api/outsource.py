@@ -525,7 +525,7 @@ async def permanently_delete_task(
         PERM_OUTSOURCE_TASK_PERMANENT_DELETE,
     )),
 ):
-    """Hard-delete one eligible cancelled recycle task and atomically record its tombstone."""
+    """Hard-delete one eligible recycle task and atomically record its tombstone."""
     service = OutsourceService(db, viewer=current_user)
     try:
         result = await service.permanently_delete_task(

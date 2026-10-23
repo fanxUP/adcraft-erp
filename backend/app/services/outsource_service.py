@@ -1270,8 +1270,6 @@ class OutsourceService:
         reasons = []
         if task.deleted_at is None:
             reasons.append("任务不在回收站")
-        if task.status != "cancelled":
-            reasons.append("仅已取消状态的任务可永久删除")
         return {
             "eligible": not reasons,
             "block_reasons": reasons,
@@ -1307,7 +1305,7 @@ class OutsourceService:
         *,
         reason: str,
     ) -> dict:
-        """Recheck and physically remove one eligible task inside the request transaction."""
+        """Recheck recycle-bin membership and physically remove one task transactionally."""
         reason = (reason or "").strip()
         if len(reason) < 5:
             raise ValueError("删除原因至少需要 5 个字符")
