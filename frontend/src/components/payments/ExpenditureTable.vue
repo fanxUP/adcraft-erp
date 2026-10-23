@@ -77,11 +77,14 @@
         <el-table-column label="分类" min-width="100">
           <template #default="{ row }">{{ expenditureCategoryLabel(row.source_type, row.category) }}</template>
         </el-table-column>
-        <el-table-column :label="view === 'ledger' ? '业务日期' : '付款日期'" min-width="160">
+        <el-table-column v-if="view === 'ledger'" label="业务日期 / 最后付款日期" min-width="190">
           <template #default="{ row }">
-            <span v-if="view === 'ledger'">{{ row.source_date?.slice(0, 10) || '未填写业务日期' }}</span>
-            <span v-else>{{ expenditureDateLabel(row.paid_at) }}</span>
+            <div>{{ row.source_date?.slice(0, 10) || '未填写业务日期' }}</div>
+            <small class="expenditure-secondary">最后付款：{{ expenditureLastPaymentDateLabel(row.last_payment_date, row.paid_amount) }}</small>
           </template>
+        </el-table-column>
+        <el-table-column v-else label="付款日期" min-width="160">
+          <template #default="{ row }">{{ expenditureDateLabel(row.paid_at) }}</template>
         </el-table-column>
         <el-table-column :label="view === 'ledger' ? '业务总额' : '本次付款 / 历史已付'" min-width="160" align="right">
           <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
@@ -117,6 +120,8 @@
           <el-descriptions-item label="关联单据">{{ selected.doc_no || '—' }}</el-descriptions-item>
           <el-descriptions-item label="供应商 / 收款方">{{ selected.supplier_name || '未关联供应商' }}</el-descriptions-item>
           <el-descriptions-item label="说明">{{ selected.description || '—' }}</el-descriptions-item>
+          <el-descriptions-item v-if="view === 'ledger'" label="业务日期">{{ selected.source_date?.slice(0, 10) || '未填写业务日期' }}</el-descriptions-item>
+          <el-descriptions-item v-if="view === 'ledger'" label="最后付款日期">{{ expenditureLastPaymentDateLabel(selected.last_payment_date, selected.paid_amount) }}</el-descriptions-item>
           <el-descriptions-item :label="view === 'ledger' ? '业务总额' : '本次付款 / 历史已付'">{{ formatMoney(selected.amount) }}</el-descriptions-item>
           <el-descriptions-item v-if="view === 'ledger'" label="累计已付 / 剩余待付">{{ formatMoney(selected.paid_amount || 0) }} / {{ formatMoney(selected.remaining_amount || 0) }}</el-descriptions-item>
           <el-descriptions-item v-else label="付款日期">{{ expenditureDateLabel(selected.paid_at) }}</el-descriptions-item>
@@ -205,7 +210,7 @@ import {
 import { PageToolbar, DataTableShell, StatePanel } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney } from '@/utils/format'
-import { expenditureDateLabel, expenditureCategoryLabel, expenditureSourceTarget, latestRequest } from '@/utils/expenditure'
+import { expenditureDateLabel, expenditureLastPaymentDateLabel, expenditureCategoryLabel, expenditureSourceTarget, latestRequest } from '@/utils/expenditure'
 import { getErrorMessage } from '@/utils/error'
 
 const props = defineProps<{ view: ExpenditureView; refreshKey: number }>()

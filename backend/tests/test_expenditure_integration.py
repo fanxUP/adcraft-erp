@@ -101,12 +101,41 @@ async def test_principal_once_partial_payments_and_full_page_summary(fixture_db)
     assert cost["items"][0]["paid_amount"] == 7000
     assert cost["items"][0]["remaining_amount"] == 3000
     assert cost["items"][0]["document_id"] == str(ids["doc"])
+    outsource = await svc.list_records("ledger", filters=ExpenditureFilters(source_type="outsource"))
+    task = next(row for row in outsource["items"] if row["source_kind"] == "outsource_task")
+    assert task["last_payment_date"] == "2026-10-08T00:00:00"
     page2 = await svc.list_records("ledger", page=2, page_size=1)
     assert page2["summary"] == result["summary"]
     assert page2["items"][0]["row_key"] != result["items"][0]["row_key"]
     # Service performs no writes, including synthetic payment backfill.
     assert (await db.scalar(sa.select(sa.func.count()).select_from(PayablePayment.__table__))) == 2
     assert await db.scalar(sa.select(ProjectCost.__table__.c.amount).where(ProjectCost.__table__.c.id == ids["cost"])) == Decimal("10000")
+
+
+async def test_ledger_last_payment_date_uses_latest_active_payment_or_registration_date(fixture_db):
+    db, svc, ids = fixture_db
+    await db.execute(sa.update(PayablePayment.__table__).where(
+        PayablePayment.__table__.c.payment_no == "TEST-VOID",
+    ).values(paid_at=datetime(2026, 10, 11)))
+    await db.execute(sa.insert(PayablePayment.__table__).values(
+        id=uuid4(), payment_no="TEST-P-LATER", source_type="project_cost", source_id=ids["cost"],
+        amount=1000, payment_method="转账支付", paid_at=datetime(2026, 10, 9, 16, 30), is_voided=False,
+    ))
+    await db.execute(sa.insert(ProjectCost.__table__).values(
+        id=uuid4(), cost_no="TEST-REGISTERED-PAID", category="材料", amount=1000,
+        debt_amount=0, is_debt=False, is_settled=False,
+        cost_date=datetime(2026, 10, 1),
+    ))
+    await db.commit()
+
+    result = await svc.list_records("ledger", filters=ExpenditureFilters(source_type="project_cost"))
+    scheduled = next(row for row in result["items"] if row["source_id"] == str(ids["cost"]))
+    registered = next(row for row in result["items"] if row["source_no"] == "TEST-REGISTERED-PAID")
+
+    # Use the latest of multiple active payments, excluding the later-dated void.
+    assert scheduled["last_payment_date"] == "2026-10-10T00:30:00"
+    # Registration date is the payment date for the amount already paid at entry.
+    assert registered["last_payment_date"] == "2026-10-01T00:00:00"
 
 
 async def test_actual_payment_day_timezone_and_unknown_date_not_in_period(fixture_db):

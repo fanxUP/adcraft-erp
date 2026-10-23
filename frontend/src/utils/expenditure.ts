@@ -20,6 +20,11 @@ export function expenditureDateLabel(value?: string | null): string {
   return value ? value.slice(0, 10) : '付款日期待核实'
 }
 
+export function expenditureLastPaymentDateLabel(value?: string | null, paidAmount?: number | null): string {
+  if (value) return value.slice(0, 10)
+  return Number(paidAmount || 0) > 0 ? '日期待核实' : '未付款'
+}
+
 export function expenditureCategoryLabel(source: string, category?: string | null): string {
   if (!category) return '—'
   if (source !== 'outsource') return category

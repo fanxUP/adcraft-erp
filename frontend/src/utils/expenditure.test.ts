@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { expenditureSourceTarget, expenditureDateLabel, expenditureCategoryLabel, latestRequest } from './expenditure'
+import { expenditureSourceTarget, expenditureDateLabel, expenditureLastPaymentDateLabel, expenditureCategoryLabel, latestRequest } from './expenditure'
 
 describe('expenditure display contracts', () => {
   it('uses the actual document kind, including incurred quote-stage costs', () => {
@@ -7,9 +7,14 @@ describe('expenditure display contracts', () => {
     expect(expenditureSourceTarget({ source_kind: 'project_cost', document_id: 'quote-1', document_type: 'quote' })).toEqual({ name: 'QuoteCostDetail', params: { quoteId: 'quote-1' } })
     expect(expenditureSourceTarget({ source_kind: 'project_cost', document_id: null })).toBeNull()
   })
-  it('never uses a creation/cost date as a payment date', () => {
+  it('keeps missing disbursement dates unverified instead of guessing', () => {
     expect(expenditureDateLabel(null)).toBe('付款日期待核实')
     expect(expenditureDateLabel('2026-10-08')).toBe('2026-10-08')
+  })
+  it('labels latest payment dates and distinguishes unverified paid amounts from unpaid records', () => {
+    expect(expenditureLastPaymentDateLabel('2026-10-08T00:30:00', 500)).toBe('2026-10-08')
+    expect(expenditureLastPaymentDateLabel(null, 500)).toBe('日期待核实')
+    expect(expenditureLastPaymentDateLabel(null, 0)).toBe('未付款')
   })
   it('localizes external capabilities without rewriting ordinary categories', () => {
     expect(expenditureCategoryLabel('outsource', 'production')).toBe('制作')

@@ -38,6 +38,7 @@ export interface ExpenditureRow {
   category: string | null
   description: string | null
   source_date: string | null
+  last_payment_date: string | null
   source_status: string
   amount: number
   paid_amount?: number

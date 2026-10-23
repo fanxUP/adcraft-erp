@@ -61,7 +61,7 @@ class ExpenditureService:
 
     @staticmethod
     def _columns(kind, source_type, source, source_no, doc, vendor, category,
-                 description, source_date, amount, paid, remaining, undated, status):
+                 description, source_date, last_payment_date, amount, paid, remaining, undated, status):
         return [
             (literal(kind + ":") + cast(source.c.id, String)).label("row_key"),
             literal(source_type).label("source_type"), literal(kind).label("source_kind"),
@@ -73,7 +73,8 @@ class ExpenditureService:
                           source.c.payee_company_name if kind in ("project_cost", "outsource_payment") else
                           cast(literal(None), String)).label("supplier_name"),
             category.label("category"), description.label("description"),
-            source_date.label("source_date"), amount.label("amount"),
+            source_date.label("source_date"), last_payment_date.label("last_payment_date"),
+            amount.label("amount"),
             paid.label("paid_amount"), remaining.label("remaining_amount"),
             undated.label("undated_paid_amount"), status.label("source_status"),
         ]
@@ -81,6 +82,42 @@ class ExpenditureService:
     def _ledger(self):
         pp = PayablePayment.__table__
         reconciliation = FinancePaymentDateReconciliation.__table__
+        op = OutsourcePayment.__table__
+        # Display-only date projection; this never backfills historical payment rows.
+        payable_paid_at = func.timezone("Asia/Shanghai", func.timezone("UTC", pp.c.paid_at))
+        payment_events = [
+            select(
+                pp.c.source_type.label("source_kind"),
+                pp.c.source_id.label("source_id"),
+                payable_paid_at.label("paid_at"),
+            ).where(pp.c.is_voided.is_(False)),
+            select(
+                reconciliation.c.source_type.label("source_kind"),
+                reconciliation.c.source_id.label("source_id"),
+                reconciliation.c.paid_at.label("paid_at"),
+            ).where(reconciliation.c.voided_at.is_(None)),
+        ]
+        if "outsource" in self.available_sources:
+            event_reconciliation = reconciliation.alias("latest_outsource_payment_reconciliation")
+            effective_outsource_paid_at = func.coalesce(op.c.paid_at, event_reconciliation.c.paid_at)
+            payment_events.append(select(
+                case((op.c.task_id.is_(None), "outsource_payment"), else_="outsource_task").label("source_kind"),
+                case((op.c.task_id.is_(None), op.c.id), else_=op.c.task_id).label("source_id"),
+                effective_outsource_paid_at.label("paid_at"),
+            ).select_from(op.outerjoin(
+                event_reconciliation,
+                and_(
+                    event_reconciliation.c.source_type == "outsource_payment",
+                    event_reconciliation.c.source_id == op.c.id,
+                    event_reconciliation.c.voided_at.is_(None),
+                ),
+            )).where(effective_outsource_paid_at.is_not(None)))
+        dated_events = union_all(*payment_events).subquery("expenditure_payment_date_events")
+        latest_payment_dates = select(
+            dated_events.c.source_kind,
+            dated_events.c.source_id,
+            func.max(dated_events.c.paid_at).label("last_payment_date"),
+        ).group_by(dated_events.c.source_kind, dated_events.c.source_id).subquery("latest_expenditure_payment_dates")
         # ALL history, including voids, prevents resurrecting legacy settlement.
         ps = select(pp.c.source_type, pp.c.source_id,
                     func.sum(case((pp.c.is_voided.is_(False), pp.c.amount), else_=0)).label("paid"),
@@ -101,6 +138,11 @@ class ExpenditureService:
         ):
             doc, vendor = BusinessDocument.__table__.alias(kind + "_doc"), OutsourceVendor.__table__.alias(kind + "_vendor")
             join = table.outerjoin(ps, and_(ps.c.source_type == kind, ps.c.source_id == table.c.id))
+            latest = latest_payment_dates.alias(kind + "_latest_payment_date")
+            join = join.outerjoin(
+                latest,
+                and_(latest.c.source_kind == kind, latest.c.source_id == table.c.id),
+            )
             join = join.outerjoin(
                 legacy_allocations,
                 and_(legacy_allocations.c.source_type == kind, legacy_allocations.c.source_id == table.c.id),
@@ -114,9 +156,21 @@ class ExpenditureService:
                 legacy = case((and_(table.c.is_settled.is_(True), _money(ps.c.history_count) == 0), payable), else_=0)
             undated = func.greatest(inferred + legacy - _money(legacy_allocations.c.allocated), 0)
             paid = inferred + legacy + _money(ps.c.paid)
+            registered_paid_date = case(
+                (inferred > 0, table.c[date_column]),
+                else_=cast(literal(None), DateTime),
+            )
+            settled_legacy_date = cast(literal(None), DateTime)
+            if kind == "project_cost":
+                settled_legacy_date = case(
+                    (legacy > 0, table.c.settled_at),
+                    else_=cast(literal(None), DateTime),
+                )
             branches.append(select(*self._columns(
                 kind, kind, table, table.c[number], doc, vendor, table.c.category,
-                table.c.description, table.c[date_column], amount, paid,
+                table.c.description, table.c[date_column],
+                func.greatest(registered_paid_date, settled_legacy_date, latest.c.last_payment_date),
+                amount, paid,
                 func.greatest(payable - legacy - _money(ps.c.paid), 0), undated, literal("active"),
             )).select_from(join).where(table.c.deleted_at.is_(None)))
         if "outsource" in self.available_sources:
@@ -135,10 +189,14 @@ class ExpenditureService:
                         func.sum(case((effective_payment_date.is_(None), op.c.amount), else_=0)).label("undated")) \
                 .select_from(payment_join).where(op.c.task_id.is_not(None)).group_by(op.c.task_id).subquery("outsource_totals")
             task_allocations = legacy_allocations.alias("outsource_task_legacy_dates")
+            task_latest = latest_payment_dates.alias("outsource_task_latest_payment_date")
             doc, vendor = BusinessDocument.__table__.alias("outsource_doc"), OutsourceVendor.__table__.alias("outsource_vendor")
             join = task.outerjoin(os, os.c.task_id == task.c.id).outerjoin(
                 task_allocations,
                 and_(task_allocations.c.source_type == "outsource_task", task_allocations.c.source_id == task.c.id),
+            ).outerjoin(
+                task_latest,
+                and_(task_latest.c.source_kind == "outsource_task", task_latest.c.source_id == task.c.id),
             ).outerjoin(doc, task.c.related_doc_id == doc.c.id).outerjoin(vendor, task.c.vendor_id == vendor.c.id)
             inferred = func.greatest(_money(task.c.paid_amount) - _money(os.c.paid), 0)
             paid = _money(os.c.paid) + inferred
@@ -147,12 +205,13 @@ class ExpenditureService:
             branches.append(select(*self._columns(
                 "outsource_task", "outsource", task, task.c.task_no, doc, vendor, task.c.task_type,
                 task.c.description, func.coalesce(task.c.completed_at, task.c.created_at),
-                _money(task.c.total_amount), paid,
+                task_latest.c.last_payment_date, _money(task.c.total_amount), paid,
                 case((inactive, 0), else_=func.greatest(_money(task.c.total_amount) - paid, 0)),
                 undated_legacy + _money(os.c.undated),
                 case((task.c.deleted_at.is_not(None), "deleted"), else_=task.c.status),
             )).select_from(join).where(or_(and_(~inactive, task.c.status.in_(("completed", "settled"))), paid > 0)))
             standalone_reconciliation = reconciliation.alias("standalone_payment_date_reconciliation")
+            standalone_latest = latest_payment_dates.alias("standalone_latest_payment_date")
             standalone_paid_at = func.coalesce(op.c.paid_at, standalone_reconciliation.c.paid_at)
             doc, vendor = BusinessDocument.__table__.alias("standalone_doc"), OutsourceVendor.__table__.alias("standalone_vendor")
             join = op.outerjoin(
@@ -162,10 +221,14 @@ class ExpenditureService:
                     standalone_reconciliation.c.source_id == op.c.id,
                     standalone_reconciliation.c.voided_at.is_(None),
                 ),
+            ).outerjoin(
+                standalone_latest,
+                and_(standalone_latest.c.source_kind == "outsource_payment", standalone_latest.c.source_id == op.c.id),
             ).outerjoin(doc, literal(False)).outerjoin(vendor, op.c.vendor_id == vendor.c.id)
             branches.append(select(*self._columns(
                 "outsource_payment", "outsource", op, op.c.payment_no, doc, vendor,
-                literal("未关联任务付款"), op.c.remark, standalone_paid_at, op.c.amount, op.c.amount,
+                literal("未关联任务付款"), op.c.remark, standalone_paid_at,
+                func.greatest(standalone_paid_at, standalone_latest.c.last_payment_date), op.c.amount, op.c.amount,
                 literal(0), case((standalone_paid_at.is_(None), op.c.amount), else_=0), literal("standalone"),
             )).select_from(join).where(op.c.task_id.is_(None)))
         return union_all(*branches).subquery("expenditure_ledger")

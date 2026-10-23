@@ -50,6 +50,12 @@ def test_date_range_validation():
         ExpenditureFilters(source_type="inventory")
 
 
+def test_ledger_projection_includes_a_derived_latest_payment_date():
+    service = ExpenditureService(AsyncMock(), viewer("expense:read"))
+
+    assert "last_payment_date" in service._ledger().c
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("path", ["/expenses/ledger", "/expenses/disbursements"])
 async def test_read_routes_precede_dynamic_expense_route_and_require_expense_read(path):
