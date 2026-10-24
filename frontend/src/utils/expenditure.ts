@@ -31,6 +31,27 @@ export function expenditureCategoryLabel(source: string, category?: string | nul
   return ({ production: '制作', installation: '安装', design: '设计', transport: '运输' } as Record<string, string>)[category] || category
 }
 
+export function expenditureDimensionCategoryLabel(source: string, category?: string | null): string {
+  const sourceLabel = ({ expense: '经营支出', project_cost: '项目实际费用', outsource: '外协' } as Record<string, string>)[source] || '其他来源'
+  const categoryLabel = category ? expenditureCategoryLabel(source, category) : '未分类'
+  return `${categoryLabel}（${sourceLabel}）`
+}
+
+export function expenditureDimensionShare(amount: number, total: number): number {
+  if (!Number.isFinite(amount) || !Number.isFinite(total) || amount <= 0 || total <= 0) return 0
+  return Math.min(100, Math.round((amount / total) * 1000) / 10)
+}
+
+export function expenditureDefaultDateRange(now = new Date()): string[] {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now)
+  const part = (type: string) => parts.find(item => item.type === type)?.value || ''
+  const year = part('year')
+  const month = part('month')
+  return [`${year}-${month}-01`, `${year}-${month}-${part('day')}`]
+}
+
 export function latestRequest() {
   let current = 0
   return { begin: () => ++current, isCurrent: (id: number) => id === current }

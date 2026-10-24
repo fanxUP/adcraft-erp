@@ -206,4 +206,20 @@ describe('P08 UI/UX quality guardrails', () => {
     expect(expenditure).toContain('label="剩余待付"')
     expect(expenditure).toContain('label="操作"')
   })
+
+  it('keeps dimension totals on actual payment dates and drills into matching payments', () => {
+    const expenseList = readSource('views/payments/ExpenseList.vue')
+    const summary = readSource('components/payments/ExpenditureDimensionSummary.vue')
+
+    expect(expenseList).toContain('<el-tab-pane label="维度汇总" name="summary" />')
+    for (const dimension of ['项目', '部门/科室', '供应商/收款方', '分类']) {
+      expect(summary).toContain(`label="${dimension}"`)
+    }
+    expect(summary).toContain('按所选付款日期统计有实际付款日期的记录')
+    expect(summary).toContain('业务总额和剩余待付请在“支出台账”查看')
+    expect(summary).toContain('getExpenditureSummary')
+    expect(summary).toContain("getExpenditure('disbursements'")
+    expect(summary).toContain('group_key: group.dimension_key')
+    expect(summary).toContain('overflow-x: auto')
+  })
 })
