@@ -206,128 +206,6 @@ async def test_actual_payment_day_timezone_and_unknown_date_not_in_period(fixtur
     assert all(r["payment_no"] != "TEST-VOID" for r in all_rows["items"])
 
 
-async def test_dimension_summary_uses_dated_payments_groups_and_full_set_totals(fixture_db):
-    db, svc, _ = fixture_db
-    await db.execute(sa.insert(Expense.__table__).values(
-        id=uuid4(), expense_no="TEST-UNDATED-DIMENSION", amount=1000,
-        payable_amount=400, expense_date=datetime(2026, 10, 8), category="办公",
-    ))
-    await db.commit()
-    period = ExpenditureFilters(
-        start_date=date(2026, 10, 8), end_date=date(2026, 10, 8),
-    )
-
-    project = await svc.list_summary("project", page_size=1, filters=period)
-    department = await svc.list_summary("department", filters=period)
-    supplier = await svc.list_summary("supplier", filters=period)
-    categories_page_1 = await svc.list_summary("category", page=1, page_size=1, filters=period)
-    categories_page_2 = await svc.list_summary("category", page=2, page_size=1, filters=period)
-
-    assert project["summary"] == {
-        "period_paid_amount": 4500.0, "payment_count": 2, "business_count": 2,
-    }
-    assert project["total"] == 1
-    assert project["items"][0]["label"] == "TEST-O - 测试项目"
-    assert project["items"][0]["period_paid_amount"] == 4500.0
-    assert department["items"][0]["label"] == "测试部门"
-    assert department["items"][0]["business_count"] == 2
-    assert supplier["items"][0]["label"] == "测试供应商"
-    assert categories_page_1["total"] == categories_page_2["total"] == 2
-    assert categories_page_1["summary"] == categories_page_2["summary"] == project["summary"]
-    assert categories_page_1["items"][0]["dimension_key"] != categories_page_2["items"][0]["dimension_key"]
-
-    department_detail = await svc.list_records(
-        "disbursements",
-        filters=ExpenditureFilters(
-            start_date=date(2026, 10, 8), end_date=date(2026, 10, 8),
-            date_status="confirmed", group_by="department", group_key="department:value:测试部门",
-        ),
-    )
-    assert department_detail["summary"]["confirmed_paid_amount"] == 4500.0
-    assert department_detail["total"] == 2
-
-    restricted = ExpenditureService(db, viewer("expense:read"))
-    restricted_summary = await restricted.list_summary("project", filters=period)
-    assert restricted_summary["summary"]["period_paid_amount"] == 4000.0
-    assert restricted_summary["summary"]["payment_count"] == 1
-    assert restricted_summary["available_sources"] == ["expense", "project_cost"]
-
-
-async def test_dimension_summary_stable_keys_for_unlinked_and_unassigned_values(fixture_db):
-    db, svc, _ = fixture_db
-    expense_id = uuid4()
-    padded_payee_expense_id = uuid4()
-    await db.execute(sa.insert(Expense.__table__).values(
-        id=expense_id, expense_no="TEST-UNLINKED-PAID", amount=125,
-        payable_amount=125, expense_date=datetime(2026, 10, 8),
-        category="办公", payee_name="独立收款人",
-    ))
-    await db.execute(sa.insert(Expense.__table__).values(
-        id=padded_payee_expense_id, expense_no="TEST-UNASSIGNED-NAME-PAID", amount=75,
-        payable_amount=75, expense_date=datetime(2026, 10, 8),
-        category="办公", payee_name=" 独立收款人 ",
-    ))
-    unassigned_department_doc_id, unassigned_department_cost_id = uuid4(), uuid4()
-    await db.execute(sa.insert(BusinessDocument.__table__).values(
-        id=unassigned_department_doc_id, doc_type="order", doc_no="TEST-DIMENSION-UNASSIGNED",
-        order_date=date(2026, 10, 1), project_name="未分配哨兵名称测试", department="unassigned",
-        status="confirmed", cost_amount=75,
-    ))
-    await db.execute(sa.insert(ProjectCost.__table__).values(
-        id=unassigned_department_cost_id, cost_no="TEST-UNASSIGNED-DEPARTMENT-COST",
-        document_id=unassigned_department_doc_id, category="材料", amount=75,
-        debt_amount=75, cost_date=datetime(2026, 10, 1),
-    ))
-    await db.execute(sa.insert(PayablePayment.__table__).values(
-        [
-            dict(id=uuid4(), payment_no="TEST-UNLINKED-PAYMENT", source_type="expense",
-                 source_id=expense_id, amount=125, payment_method="转账支付",
-                 paid_at=datetime(2026, 10, 8, 10), is_voided=False),
-            dict(id=uuid4(), payment_no="TEST-PADDED-PAYEE-PAYMENT", source_type="expense",
-                 source_id=padded_payee_expense_id, amount=75, payment_method="转账支付",
-                 paid_at=datetime(2026, 10, 8, 11), is_voided=False),
-            dict(id=uuid4(), payment_no="TEST-NAMED-UNASSIGNED-DEPARTMENT-PAYMENT", source_type="project_cost",
-                 source_id=unassigned_department_cost_id, amount=75, payment_method="转账支付",
-                 paid_at=datetime(2026, 10, 8, 12), is_voided=False),
-        ]
-    ))
-    await db.commit()
-    period = ExpenditureFilters(start_date=date(2026, 10, 8), end_date=date(2026, 10, 8))
-
-    projects = await svc.list_summary("project", filters=period)
-    departments = await svc.list_summary("department", filters=period)
-    suppliers = await svc.list_summary("supplier", filters=period)
-    categories = await svc.list_summary("category", filters=period)
-    unlinked = next(row for row in projects["items"] if row["dimension_key"] == "unlinked")
-    unassigned = next(row for row in departments["items"] if row["label"] == "未填写")
-    named_unassigned = next(row for row in departments["items"] if row["label"] == "unassigned")
-    payee_rows = [row for row in suppliers["items"] if row["label"] == "独立收款人"]
-    category = next(row for row in categories["items"] if row["dimension_key"] == "source:expense:办公")
-
-    assert unlinked["label"] == "未关联项目" and unlinked["period_paid_amount"] == 200
-    assert unassigned["dimension_key"] != named_unassigned["dimension_key"]
-    assert unassigned["dimension_key"] == "department:unassigned"
-    assert named_unassigned["dimension_key"] == "department:value:unassigned"
-    assert len(payee_rows) == 1
-    assert payee_rows[0]["dimension_key"] == "payee:独立收款人"
-    assert payee_rows[0]["period_paid_amount"] == 200
-    assert category["source_type"] == "expense" and category["category"] == "办公"
-
-    detail = await svc.list_records("disbursements", filters=ExpenditureFilters(
-        start_date=date(2026, 10, 8), end_date=date(2026, 10, 8), date_status="confirmed",
-        group_by="department", group_key=unassigned["dimension_key"],
-    ))
-    assert detail["total"] == 2
-    assert detail["summary"]["confirmed_paid_amount"] == 200
-
-    named_detail = await svc.list_records("disbursements", filters=ExpenditureFilters(
-        start_date=date(2026, 10, 8), end_date=date(2026, 10, 8), date_status="confirmed",
-        group_by="department", group_key=named_unassigned["dimension_key"],
-    ))
-    assert named_detail["total"] == 1
-    assert named_detail["summary"]["confirmed_paid_amount"] == 75
-
-
 async def test_project_cost_registration_date_is_payment_date_but_missing_legacy_date_stays_unverified(fixture_db):
     db, svc, ids = fixture_db
     undated_cost_id = uuid4()
@@ -556,27 +434,12 @@ async def test_http_contract_auth_validation_and_real_sql(fixture_db):
         assert len(ledger.json()["data"]["items"]) == 1
         flow = await client.get("/expenses/disbursements", params={"start_date": "2026-10-08", "end_date": "2026-10-08"})
         assert flow.json()["data"]["summary"]["confirmed_paid_amount"] == 4000
-        summary = await client.get("/expenses/summary", params={
-            "group_by": "department", "start_date": "2026-10-08", "end_date": "2026-10-08",
-        })
-        assert summary.status_code == 200
-        assert summary.json()["data"]["summary"] == {
-            "period_paid_amount": 4000, "payment_count": 1, "business_count": 1,
-        }
-        assert summary.json()["data"]["items"][0]["label"] == "测试部门"
-        detail = await client.get("/expenses/disbursements", params={
-            "start_date": "2026-10-08", "end_date": "2026-10-08", "date_status": "confirmed",
-            "group_by": "department", "group_key": "department:value:测试部门",
-        })
-        assert detail.json()["data"]["summary"]["confirmed_paid_amount"] == 4000
         for params in ({"start_date": "2026-13-01"}, {"start_date": "2026-10-09", "end_date": "2026-10-08"},
                        {"source_type": "inventory"}, {"supplier_id": "bad"}, {"page_size": 201}):
             assert (await client.get("/expenses/ledger", params=params)).status_code == 422
-        assert (await client.get("/expenses/summary", params={"group_by": "unexpected"})).status_code == 422
         assert (await client.get("/expenses/ledger", params={"source_type": "outsource"})).status_code == 403
         current = viewer()
         assert (await client.get("/expenses/ledger")).status_code == 403
-        assert (await client.get("/expenses/summary", params={"group_by": "project"})).status_code == 403
 
 
 async def test_finance_reconciliation_http_routes_enforce_permissions_and_audit(fixture_db):

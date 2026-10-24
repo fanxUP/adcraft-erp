@@ -28,24 +28,12 @@ class ExpenditureFilters:
     start_date: date | None = None
     end_date: date | None = None
     date_status: str = "all"
-    project_keyword: str | None = None
-    department_keyword: str | None = None
-    supplier_keyword: str | None = None
-    category_keyword: str | None = None
-    group_by: str | None = None
-    group_key: str | None = None
 
     def __post_init__(self):
         if self.source_type not in (None, "expense", "project_cost", "outsource"):
             raise ValueError("支出来源无效")
         if self.date_status not in ("all", "confirmed", "unverified"):
             raise ValueError("付款日期状态无效")
-        if self.group_by not in (None, "project", "department", "supplier", "category"):
-            raise ValueError("支出汇总维度无效")
-        if bool(self.group_by) != bool(self.group_key):
-            raise ValueError("分组维度和分组值必须同时提供")
-        if self.group_key and len(self.group_key) > 512:
-            raise ValueError("分组值过长")
         if self.start_date and self.end_date and self.start_date > self.end_date:
             raise ValueError("开始日期不能晚于结束日期")
         if self.end_date == date.max:
@@ -387,54 +375,6 @@ class ExpenditureService:
         return union_all(*branches).subquery("expenditure_disbursements")
 
     @staticmethod
-    def _dimension_projection(table, dimension):
-        if dimension == "project":
-            document_id = table.c.document_id
-            project_label = func.concat_ws(
-                " - ", func.nullif(table.c.doc_no, ""), func.nullif(table.c.project_name, ""),
-            )
-            key = case(
-                (document_id.is_not(None), literal("document:") + cast(document_id, String)),
-                else_=literal("unlinked"),
-            )
-            label = case(
-                (document_id.is_not(None), func.nullif(project_label, "")),
-                else_=literal("未关联项目"),
-            )
-            return key, func.coalesce(label, literal("未命名项目"))
-
-        if dimension == "department":
-            value = func.nullif(func.btrim(func.coalesce(table.c.department, "")), "")
-            key = case(
-                (value.is_not(None), literal("department:value:") + value),
-                else_=literal("department:unassigned"),
-            )
-            return key, func.coalesce(value, literal("未填写"))
-
-        if dimension == "supplier":
-            value = func.nullif(func.btrim(func.coalesce(table.c.supplier_name, "")), "")
-            key = case(
-                (table.c.supplier_id.is_not(None), literal("supplier:") + cast(table.c.supplier_id, String)),
-                else_=literal("payee:") + func.coalesce(value, ""),
-            )
-            label = func.coalesce(value, literal("未填写"))
-            return key, label
-
-        if dimension == "category":
-            category = func.coalesce(table.c.category, "")
-            key = literal("source:") + table.c.source_type + literal(":") + category
-            localized = case(
-                (and_(table.c.source_type == "outsource", category == "design"), "设计"),
-                (and_(table.c.source_type == "outsource", category == "production"), "制作"),
-                (and_(table.c.source_type == "outsource", category == "installation"), "安装"),
-                (and_(table.c.source_type == "outsource", category == "transport"), "运输"),
-                else_=func.coalesce(func.nullif(table.c.category, ""), "未分类"),
-            )
-            return key, localized
-
-        raise ValueError("支出汇总维度无效")
-
-    @staticmethod
     def _predicates(table, filters, view, *, dates=True):
         conditions = []
         for key in ("source_type", "category", "supplier_id", "document_id"):
@@ -444,28 +384,6 @@ class ExpenditureService:
         if filters.keyword and filters.keyword.strip():
             conditions.append(or_(*(table.c[k].contains(filters.keyword.strip(), autoescape=True)
                                    for k in ("source_no", "doc_no", "project_name", "supplier_name", "description"))))
-        if filters.project_keyword and filters.project_keyword.strip():
-            value = filters.project_keyword.strip()
-            conditions.append(or_(
-                table.c.doc_no.contains(value, autoescape=True),
-                table.c.project_name.contains(value, autoescape=True),
-            ))
-        if filters.department_keyword and filters.department_keyword.strip():
-            conditions.append(table.c.department.contains(filters.department_keyword.strip(), autoescape=True))
-        if filters.supplier_keyword and filters.supplier_keyword.strip():
-            conditions.append(table.c.supplier_name.contains(filters.supplier_keyword.strip(), autoescape=True))
-        if filters.category_keyword and filters.category_keyword.strip():
-            _, display_category = ExpenditureService._dimension_projection(table, "category")
-            value = filters.category_keyword.strip()
-            conditions.append(or_(
-                table.c.category.contains(value, autoescape=True),
-                display_category.contains(value, autoescape=True),
-            ))
-        if filters.group_key is not None:
-            if view != "disbursements":
-                raise ValueError("分组下钻仅支持付款记录")
-            dimension_key, _ = ExpenditureService._dimension_projection(table, filters.group_by)
-            conditions.append(dimension_key == filters.group_key)
         if view == "disbursements" and dates and filters.date_status != "all":
             conditions.append(table.c.date_status == filters.date_status)
         if dates:
@@ -475,88 +393,6 @@ class ExpenditureService:
             if filters.end_date:
                 conditions.append(column < datetime.combine(filters.end_date + timedelta(days=1), datetime.min.time()))
         return conditions
-
-    async def list_summary(self, group_by, page=1, page_size=20, filters=None):
-        filters = filters or ExpenditureFilters()
-        sources = self.available_sources
-        if not sources or (filters.source_type and filters.source_type not in sources):
-            raise PermissionError("没有查看该支出来源的权限")
-        if group_by not in ("project", "department", "supplier", "category"):
-            raise ValueError("支出汇总维度无效")
-        if page < 1 or not 1 <= page_size <= 200:
-            raise ValueError("列表参数无效")
-
-        disbursements = self._disbursements(self._ledger())
-        conditions = self._predicates(disbursements, filters, "disbursements")
-        conditions.extend((
-            disbursements.c.date_status == "confirmed",
-            disbursements.c.paid_at.is_not(None),
-        ))
-        base = select(disbursements).where(*conditions).cte("dated_expenditure_payments")
-        dimension_key, label = self._dimension_projection(base, group_by)
-        business_key = func.concat(base.c.source_kind, literal(":"), cast(base.c.source_id, String))
-
-        grouped = select(
-            dimension_key.label("dimension_key"),
-            label.label("label"),
-            (func.min(base.c.source_type) if group_by == "category" else cast(literal(None), String)).label("source_type"),
-            (func.min(base.c.category) if group_by == "category" else cast(literal(None), String)).label("category"),
-            func.coalesce(func.sum(base.c.amount), 0).label("period_paid_amount"),
-            func.count().label("payment_count"),
-            func.count(func.distinct(business_key)).label("business_count"),
-        ).group_by(dimension_key, label).cte("expenditure_dimension_groups")
-        overall = select(
-            func.coalesce(func.sum(base.c.amount), 0).label("period_paid_amount"),
-            func.count().label("payment_count"),
-            func.count(func.distinct(business_key)).label("business_count"),
-        ).cte("expenditure_dimension_overall")
-        group_total = select(func.count().label("total")).select_from(grouped).cte("expenditure_dimension_count")
-        page_rows = select(grouped).order_by(
-            grouped.c.period_paid_amount.desc(), grouped.c.dimension_key.asc(),
-        ).offset((page - 1) * page_size).limit(page_size).cte("expenditure_dimension_page")
-        statement = select(
-            page_rows.c.dimension_key,
-            page_rows.c.label,
-            page_rows.c.source_type,
-            page_rows.c.category,
-            page_rows.c.period_paid_amount,
-            page_rows.c.payment_count,
-            page_rows.c.business_count,
-            overall.c.period_paid_amount.label("summary_period_paid_amount"),
-            overall.c.payment_count.label("summary_payment_count"),
-            overall.c.business_count.label("summary_business_count"),
-            group_total.c.total.label("summary_total"),
-        ).select_from(
-            overall.join(group_total, literal(True)).outerjoin(page_rows, literal(True))
-        ).order_by(page_rows.c.period_paid_amount.desc().nulls_last(), page_rows.c.dimension_key.asc())
-        records = (await self.db.execute(statement)).mappings().all()
-        first = records[0]
-        summary = {
-            "period_paid_amount": float(first["summary_period_paid_amount"] or 0),
-            "payment_count": int(first["summary_payment_count"] or 0),
-            "business_count": int(first["summary_business_count"] or 0),
-        }
-        items = []
-        for record in records:
-            if record["dimension_key"] is None:
-                continue
-            items.append({
-                "dimension_key": record["dimension_key"],
-                "label": record["label"],
-                "source_type": record["source_type"],
-                "category": record["category"],
-                "period_paid_amount": float(record["period_paid_amount"] or 0),
-                "payment_count": int(record["payment_count"] or 0),
-                "business_count": int(record["business_count"] or 0),
-            })
-        return {
-            "items": items,
-            "total": int(first["summary_total"] or 0),
-            "page": page,
-            "page_size": page_size,
-            "summary": summary,
-            "available_sources": sources,
-        }
 
     async def list_records(self, view, page=1, page_size=20, filters=None):
         filters = filters or ExpenditureFilters()
