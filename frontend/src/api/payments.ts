@@ -23,7 +23,6 @@ export function getExpense(id: string) { return get<ExpenseResponse>(`/expenses/
 
 export type ExpenditureSource = 'expense' | 'project_cost' | 'outsource'
 export type ExpenditureView = 'ledger' | 'disbursements'
-export type ExpenditureDimension = 'project' | 'department' | 'supplier' | 'category'
 export interface ExpenditureRow {
   row_key: string
   source_type: ExpenditureSource
@@ -75,49 +74,10 @@ export interface ExpenditureResult {
     unverified_count?: number
   }
 }
-export interface ExpenditureDimensionRow {
-  dimension_key: string
-  label: string
-  source_type: ExpenditureSource | null
-  category: string | null
-  period_paid_amount: number
-  payment_count: number
-  business_count: number
-}
-export interface ExpenditureDimensionResult {
-  items: ExpenditureDimensionRow[]
-  total: number
-  page: number
-  page_size: number
-  available_sources: ExpenditureSource[]
-  summary: {
-    period_paid_amount: number
-    payment_count: number
-    business_count: number
-  }
-}
-export interface ExpenditureDimensionFilters {
-  page: number
-  page_size: number
-  group_by: ExpenditureDimension
-  source_type?: ExpenditureSource
-  keyword?: string
-  project_keyword?: string
-  department_keyword?: string
-  supplier_keyword?: string
-  category_keyword?: string
-  start_date?: string
-  end_date?: string
-}
-export function getExpenditureSummary(params: ExpenditureDimensionFilters) {
-  return get<ExpenditureDimensionResult>('/expenses/summary', { params })
-}
 export function getExpenditure(view: ExpenditureView, params: {
   page: number; page_size: number; source_type?: ExpenditureSource; keyword?: string
   category?: string; supplier_id?: string; document_id?: string
   start_date?: string; end_date?: string; date_status?: 'all' | 'confirmed' | 'unverified'
-  project_keyword?: string; department_keyword?: string; supplier_keyword?: string; category_keyword?: string
-  group_by?: ExpenditureDimension; group_key?: string
 }) {
   return get<ExpenditureResult>(`/expenses/${view}`, { params })
 }

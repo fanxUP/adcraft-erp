@@ -23,7 +23,6 @@
       <el-tabs v-if="activeView !== 'expense'" v-model="activeView" aria-label="支出数据视图">
         <el-tab-pane label="支出台账" name="ledger" />
         <el-tab-pane label="付款记录" name="disbursements" />
-        <el-tab-pane label="维度汇总" name="summary" />
       </el-tabs>
       <div v-else class="expense-maintenance-heading">
         <span>仅显示经营支出记录；项目费用和外协费用请从支出总览进入原业务记录。</span>
@@ -60,13 +59,9 @@
     </template>
 
     <ExpenditureTable
-      v-if="activeView === 'ledger' || activeView === 'disbursements'"
+      v-if="activeView !== 'expense'"
       :view="activeView"
       :refresh-key="expenditureRefreshKey"
-      @manage-expense="openExpenseSource"
-    />
-    <ExpenditureDimensionSummary
-      v-else-if="activeView === 'summary'"
       @manage-expense="openExpenseSource"
     />
     <DataTableShell v-else :state="tableState" aria-label="支出列表">
@@ -318,15 +313,14 @@ import type { AttachmentResponse, ExpenseResponse, SupplierResponse } from '@/ty
 import { normalizeExpenseAmounts, type ExpenseAmountResult } from '@/utils/expenseAmount'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
-import ExpenditureDimensionSummary from '@/components/payments/ExpenditureDimensionSummary.vue'
 
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
-type ExpenseViewTab = 'ledger' | 'disbursements' | 'summary' | 'expense'
+type ExpenseViewTab = 'ledger' | 'disbursements' | 'expense'
 
 function expenseViewFromQuery(value: unknown): ExpenseViewTab {
-  return value === 'disbursements' || value === 'summary' || value === 'expense' ? value : 'ledger'
+  return value === 'disbursements' || value === 'expense' ? value : 'ledger'
 }
 
 const activeView = ref<ExpenseViewTab>(expenseViewFromQuery(route.query.view))

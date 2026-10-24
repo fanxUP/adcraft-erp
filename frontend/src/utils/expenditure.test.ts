@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { expenditureSourceTarget, expenditureDateLabel, expenditureLastPaymentDateLabel, expenditureCategoryLabel, expenditureDimensionCategoryLabel, expenditureDimensionShare, expenditureDefaultDateRange, latestRequest } from './expenditure'
+import { expenditureSourceTarget, expenditureDateLabel, expenditureLastPaymentDateLabel, expenditureCategoryLabel, latestRequest } from './expenditure'
 
 describe('expenditure display contracts', () => {
   it('uses the actual document kind, including incurred quote-stage costs', () => {
@@ -20,16 +20,6 @@ describe('expenditure display contracts', () => {
     expect(expenditureCategoryLabel('outsource', 'production')).toBe('制作')
     expect(expenditureCategoryLabel('expense', 'production')).toBe('production')
     expect(expenditureCategoryLabel('project_cost', null)).toBe('—')
-  })
-  it('keeps dimension categories distinct by source and computes safe percentage shares', () => {
-    expect(expenditureDimensionCategoryLabel('outsource', 'production')).toBe('制作（外协）')
-    expect(expenditureDimensionCategoryLabel('project_cost', '材料')).toBe('材料（项目实际费用）')
-    expect(expenditureDimensionShare(25, 100)).toBe(25)
-    expect(expenditureDimensionShare(1, 0)).toBe(0)
-    expect(expenditureDimensionShare(-1, 100)).toBe(0)
-  })
-  it('uses Shanghai calendar dates for the default summary period', () => {
-    expect(expenditureDefaultDateRange(new Date('2026-10-23T16:30:00Z'))).toEqual(['2026-10-01', '2026-10-24'])
   })
   it('only allows the latest async response to update a view', () => {
     const request = latestRequest()
