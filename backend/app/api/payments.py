@@ -256,6 +256,42 @@ async def confirm_statement(
 
 # ── Expenses ────────────────────────────────────────────────────────────────
 
+@exp_router.get("/summary")
+async def summarize_expenditure(
+    group_by: Literal["project", "department", "supplier", "category"],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    source_type: Literal["expense", "project_cost", "outsource"] | None = None,
+    keyword: str | None = Query(None, max_length=128),
+    project_keyword: str | None = Query(None, max_length=128),
+    department_keyword: str | None = Query(None, max_length=128),
+    supplier_keyword: str | None = Query(None, max_length=128),
+    category_keyword: str | None = Query(None, max_length=128),
+    start_date: date | None = None,
+    end_date: date | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
+):
+    try:
+        filters = ExpenditureFilters(
+            source_type=source_type,
+            keyword=keyword,
+            start_date=start_date,
+            end_date=end_date,
+            project_keyword=project_keyword,
+            department_keyword=department_keyword,
+            supplier_keyword=supplier_keyword,
+            category_keyword=category_keyword,
+        )
+        return success(await ExpenditureService(db, current_user).list_summary(
+            group_by, page, page_size, filters,
+        ))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @exp_router.get("/ledger")
 @exp_router.get("/disbursements")
 async def list_expenditure(
@@ -270,12 +306,32 @@ async def list_expenditure(
     start_date: date | None = None,
     end_date: date | None = None,
     date_status: Literal["all", "confirmed", "unverified"] = "all",
+    project_keyword: str | None = Query(None, max_length=128),
+    department_keyword: str | None = Query(None, max_length=128),
+    supplier_keyword: str | None = Query(None, max_length=128),
+    category_keyword: str | None = Query(None, max_length=128),
+    group_by: Literal["project", "department", "supplier", "category"] | None = None,
+    group_key: str | None = Query(None, max_length=512),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     try:
-        filters = ExpenditureFilters(source_type, keyword, category, supplier_id,
-                                     document_id, start_date, end_date, date_status)
+        filters = ExpenditureFilters(
+            source_type=source_type,
+            keyword=keyword,
+            category=category,
+            supplier_id=supplier_id,
+            document_id=document_id,
+            start_date=start_date,
+            end_date=end_date,
+            date_status=date_status,
+            project_keyword=project_keyword,
+            department_keyword=department_keyword,
+            supplier_keyword=supplier_keyword,
+            category_keyword=category_keyword,
+            group_by=group_by,
+            group_key=group_key,
+        )
         view = "ledger" if request.url.path.endswith("/ledger") else "disbursements"
         return success(await ExpenditureService(db, current_user).list_records(view, page, page_size, filters))
     except PermissionError as exc:
