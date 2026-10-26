@@ -3,6 +3,7 @@ import type { OrderItemResponse } from '@/types/api'
 import {
   buildOrderBatchItemDiff,
   buildOrderGroupPayload,
+  cloneOrderItemDraft,
   serializeOrderItemDraft,
 } from './orderEditorDraft'
 
@@ -77,5 +78,43 @@ describe('order editor draft helpers', () => {
       { group_id: 'group-b', group_name: '灯箱', sort_order: 1 },
       { group_id: 'group-empty', group_name: '待制作', sort_order: 2 },
     ])
+  })
+
+  it('copies only editable fields and submits the copy as a new, unlinked item', () => {
+    const source = { ...item(), lifecycle_status: 'active', order_item_ids: ['task-linked-item'], paid_amount: 500, task_id: 'task-1' }
+    const copy = cloneOrderItemDraft(source)
+    const diff = buildOrderBatchItemDiff([source], [source, copy])
+    expect(copy.id).toBe('')
+    expect(copy.other_fee).toBe(10)
+    expect(copy).not.toHaveProperty('task_id')
+    expect(copy).not.toHaveProperty('order_item_ids')
+    expect(copy).not.toHaveProperty('paid_amount')
+    expect(copy).not.toHaveProperty('lifecycle_status')
+    expect(diff.added).toHaveLength(1)
+    expect(diff.deleted).toEqual([])
+    expect(diff.updated).toEqual([])
+  })
+
+  it('treats moving and ungrouping as updates, preserving the linked item identity', () => {
+    const source = item()
+    const moved = { ...source, group_id: 'group-b', group_name: '室内' }
+    const diff = buildOrderBatchItemDiff([source], [moved])
+    expect(diff.added).toEqual([])
+    expect(diff.deleted).toEqual([])
+    expect(diff.updated[0]).toMatchObject({ id: source.id, changedFields: ['group_name', 'group_id'] })
+    const ungrouped = buildOrderBatchItemDiff([source], [{ ...source, group_id: undefined, group_name: undefined }])
+    expect(ungrouped.updated[0].item.group_id).toBeNull()
+    expect(ungrouped.updated[0].item.group_name).toBeNull()
+    expect(ungrouped.deleted).toEqual([])
+  })
+
+  it('retains explicit group order including an empty group between populated groups', () => {
+    const groups = buildOrderGroupPayload([item(), item({ id: 'item-2', group_id: 'group-b', sort_order: 1 })], [], [
+      { groupId: 'group-b', groupName: '室内' },
+      { groupId: 'empty', groupName: '待定' },
+      { groupId: 'group-a', groupName: '门头' },
+    ])
+    expect(groups.map(group => group.group_id)).toEqual(['group-b', 'empty', 'group-a'])
+    expect(groups.map(group => group.sort_order)).toEqual([0, 1, 2])
   })
 })

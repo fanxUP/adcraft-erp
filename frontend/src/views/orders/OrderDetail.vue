@@ -251,19 +251,27 @@
                 </span>
               </template>
             </el-alert>
-            <el-table :data="displayRows" stripe border size="small" :row-class-name="rowClassName">
+            <div class="order-detail-toolbar"><span>{{ orderSections.length }} 个明细区块 · {{ order.items.length }} 条明细</span><div><el-button size="small" @click="collapsedGroupIds = new Set()">全部展开</el-button><el-button size="small" @click="collapsedGroupIds = new Set(orderSections.map(section => section.groupId))">全部收起</el-button></div></div>
+            <el-table :data="displayRows" stripe border size="small" :row-key="(row: DisplayRow) => row.key" :row-class-name="rowClassName" :span-method="detailSpanMethod">
+              <el-table-column type="expand" width="42">
+                <template #default="{ row }"><div v-if="row.type === 'item'" class="order-item-extra">
+                  <div><strong>计价方式：</strong>{{ row.item.use_area ? '按尺寸计算面积' : row.item.quantity_mode === 'area' ? '直接填写面积' : '按数量' }}</div>
+                  <div><strong>规格：</strong>{{ formatOrderItemSpec(row.item) }}</div>
+                  <div><strong>其他费：</strong>¥{{ Number(row.item.other_fee || 0).toFixed(2) }}</div>
+                  <div><strong>备注：</strong>{{ row.item.remark || '-' }}</div>
+                  <el-image v-if="row.item.image_url" :src="row.item.image_url" :preview-src-list="[row.item.image_url]" fit="contain" class="order-item-image" />
+                  <div class="order-item-formula">{{ orderItemFormula(row.item) }}</div>
+                </div></template>
+              </el-table-column>
               <el-table-column label="序号" width="55">
-                <template #default="{ row, $index }">
-                  <template v-if="row.type === 'item'">{{ itemIndex(row, $index) }}</template>
+                <template #default="{ row }">
+                  <template v-if="row.type === 'item'">{{ itemIndex(row) }}</template>
                 </template>
               </el-table-column>
               <el-table-column label="项目内容" min-width="150">
                 <template #default="{ row }">
                   <template v-if="row.type === 'group-header'">
-                    <span style="font-weight: 600;">分项：{{ row.groupName }}</span>
-                  </template>
-                  <template v-else-if="row.type === 'group-total'">
-                    <span style="font-weight: 600; float: right;">分项合计</span>
+                    <div class="order-section-heading"><el-button text :aria-expanded="!collapsedGroupIds.has(row.groupId)" :aria-label="`${collapsedGroupIds.has(row.groupId) ? '展开' : '收起'} ${row.groupName}`" @click="toggleDetailGroup(row.groupId)"><el-icon><ArrowRight v-if="collapsedGroupIds.has(row.groupId)" /><ArrowDown v-else /></el-icon>{{ row.groupName }}</el-button><strong>{{ row.count }} 条明细 · ¥{{ row.total.toFixed(2) }}</strong></div>
                   </template>
                   <template v-else>{{ row.item.item_name }}</template>
                 </template>
@@ -276,15 +284,7 @@
               <el-table-column label="规格" min-width="140">
                 <template #default="{ row }">
                   <template v-if="row.type === 'item'">
-                    <template v-if="row.item.specification">
-                      {{ row.item.specification }}
-                    </template>
-                    <template v-else-if="row.item.length || row.item.width || row.item.height">
-                      {{ row.item.length ?? '' }}{{ row.item.length_unit || 'm' }}
-                      <template v-if="row.item.width"> x {{ row.item.width }}{{ row.item.width_unit || 'm' }}</template>
-                      <template v-if="row.item.height"> x {{ row.item.height }}{{ row.item.height_unit || 'm' }}</template>
-                    </template>
-                    <span v-else>-</span>
+                    {{ formatOrderItemSpec(row.item) }}
                   </template>
                 </template>
               </el-table-column>
@@ -311,20 +311,6 @@
               <el-table-column label="小计" width="110">
                 <template #default="{ row }">
                   <template v-if="row.type === 'item'">¥ {{ row.item.subtotal_amount?.toFixed(2) }}</template>
-                  <template v-else-if="row.type === 'group-total'"><strong>¥ {{ row.total.toFixed(2) }}</strong></template>
-                </template>
-              </el-table-column>
-              <el-table-column label="样图" width="80">
-                <template #default="{ row }">
-                  <template v-if="row.type === 'item'">
-                    <el-image v-if="row.item.image_url" :src="row.item.image_url" :preview-src-list="[row.item.image_url]" fit="cover" style="width: 32px; height: 32px; border-radius: 4px; cursor: pointer;" />
-                    <span v-else style="color: var(--ad-text-secondary);">-</span>
-                  </template>
-                </template>
-              </el-table-column>
-              <el-table-column label="备注" min-width="120">
-                <template #default="{ row }">
-                  <template v-if="row.type === 'item'">{{ row.item.remark || '-' }}</template>
                 </template>
               </el-table-column>
               <el-table-column label="成本" width="110" fixed="right">
@@ -541,6 +527,7 @@ import { getDesignTasks, getProductionTasks, getInstallationTasks } from '@/api/
 import { ProgressBar, StatusTag } from '@/components/ui'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { buildOrderItemSections, formatOrderItemSpec, orderItemFormula } from '@/utils/orderItemPresentation'
 import { escapePrintText } from '@/utils/printSafety'
 import type {
   DesignTaskResponse,
@@ -894,47 +881,30 @@ function toChineseAmount(n: number): string {
 }
 
 type DisplayRow =
-  | { type: 'group-header'; groupName: string }
-  | { type: 'item'; item: OrderItemResponse; groupName: string }
-  | { type: 'group-total'; groupName: string; total: number }
+  | { type: 'group-header'; key: string; groupId: string; groupName: string; count: number; total: number }
+  | { type: 'item'; key: string; item: OrderItemResponse; groupId: string }
 
-const displayRows = computed<DisplayRow[]>(() => {
-  const items = order.value?.items || []
-  const grouped = new Map<string, OrderItemResponse[]>()
-  const ungrouped: OrderItemResponse[] = []
-
-  for (const item of items) {
-    if (item.group_name) {
-      if (!grouped.has(item.group_name)) grouped.set(item.group_name, [])
-      grouped.get(item.group_name)!.push(item)
-    } else {
-      ungrouped.push(item)
-    }
-  }
-
-  const rows: DisplayRow[] = []
-  for (const [groupName, groupItems] of grouped) {
-    rows.push({ type: 'group-header', groupName })
-    for (const item of groupItems) rows.push({ type: 'item', item, groupName })
-    const total = groupItems.reduce((s, i) => s + (i.subtotal_amount || 0), 0)
-    rows.push({ type: 'group-total', groupName, total })
-  }
-  for (const item of ungrouped) rows.push({ type: 'item', item, groupName: '' })
+const collapsedGroupIds = ref(new Set<string>())
+const orderSections = computed(() => buildOrderItemSections(order.value?.items || [], [...(order.value?.groups || [])].sort((a, b) => a.sort_order - b.sort_order).map(group => ({ groupId: group.group_id, groupName: group.group_name }))))
+const displayRows = computed<DisplayRow[]>(() => orderSections.value.flatMap(section => {
+  const rows: DisplayRow[] = [{ type: 'group-header', key: `group-${section.groupId}`, groupId: section.groupId, groupName: section.groupName, count: section.items.length, total: section.total }]
+  if (!collapsedGroupIds.value.has(section.groupId)) rows.push(...section.items.map(item => ({ type: 'item' as const, key: item.id, item, groupId: section.groupId })))
   return rows
-})
-
-function rowClassName({ row }: { row: DisplayRow }) {
-  if (row.type === 'group-header') return 'group-header-row'
-  if (row.type === 'group-total') return 'group-total-row'
-  return ''
+}))
+function toggleDetailGroup(groupId: string) {
+  const next = new Set(collapsedGroupIds.value)
+  if (next.has(groupId)) next.delete(groupId); else next.add(groupId)
+  collapsedGroupIds.value = next
 }
-
-function itemIndex(row: DisplayRow, displayIdx: number): number {
-  let count = 0
-  for (let i = 0; i <= displayIdx; i++) {
-    if (displayRows.value[i].type === 'item') count++
-  }
-  return count
+function detailSpanMethod({ row, columnIndex }: { row: DisplayRow; columnIndex: number }) {
+  if (row.type !== 'group-header') return { rowspan: 1, colspan: 1 }
+  if (columnIndex === 2) return { rowspan: 1, colspan: 9 }
+  if (columnIndex > 2) return { rowspan: 0, colspan: 0 }
+  return { rowspan: 1, colspan: 1 }
+}
+function rowClassName({ row }: { row: DisplayRow }) { return row.type === 'group-header' ? 'group-header-row' : '' }
+function itemIndex(row: DisplayRow): number {
+  return row.type === 'item' ? orderSections.value.flatMap(section => section.items).findIndex(item => item.id === row.item.id) + 1 : 0
 }
 
 async function fetchOrder() {
@@ -1104,23 +1074,27 @@ async function handlePrintOrder() {
   
   // Items table
   html += '<table class="print-table"><thead><tr><th class="center">序号</th><th>项目内容</th><th>产品/材质/工艺</th><th>规格</th><th class="numeric">数量</th><th class="center">单位</th><th class="numeric">单价</th><th class="numeric">小计</th><th>备注</th></tr></thead><tbody>'
-  const items = o.items || []
-  if (items.length === 0) {
+  const sections = orderSections.value
+  if (!o.items?.length) {
     html += '<tr><td colspan="9" class="print-empty">暂无明细</td></tr>'
   } else {
-    items.forEach((item, i) => {
-      html += '<tr>'
-      html += '<td class="center">' + (i + 1) + '</td>'
-      html += '<td>' + escapePrintText(item.item_name, '') + '</td>'
-      html += '<td>' + escapePrintText(item.material_process) + '</td>'
-      html += '<td>' + escapePrintText(item.specification) + '</td>'
-      html += '<td class="numeric">' + escapePrintText(item.quantity, '') + '</td>'
-      html += '<td class="center">' + escapePrintText(item.unit) + '</td>'
-      html += '<td class="numeric">' + (item.unit_price != null ? item.unit_price.toFixed(2) : '-') + '</td>'
-      html += '<td class="numeric">' + (item.subtotal_amount != null ? item.subtotal_amount.toFixed(2) : '-') + '</td>'
-      html += '<td>' + escapePrintText(item.remark, '') + '</td>'
-      html += '</tr>'
-    })
+    let sequence = 0
+    for (const section of sections) {
+      html += '<tr><td colspan="9"><strong>分项：' + escapePrintText(section.groupName) + '</strong></td></tr>'
+      for (const item of section.items) {
+        html += '<tr><td class="center">' + (++sequence) + '</td>'
+        html += '<td>' + escapePrintText(item.item_name, '') + '</td>'
+        html += '<td>' + escapePrintText(item.material_process) + '</td>'
+        html += '<td>' + escapePrintText(formatOrderItemSpec(item)) + '</td>'
+        html += '<td class="numeric">' + escapePrintText(item.quantity, '') + '</td>'
+        html += '<td class="center">' + escapePrintText(item.use_area || item.quantity_mode === 'area' ? '㎡' : item.unit) + '</td>'
+        html += '<td class="numeric">' + (item.unit_price != null ? item.unit_price.toFixed(2) : '-') + '</td>'
+        html += '<td class="numeric">' + (item.subtotal_amount != null ? item.subtotal_amount.toFixed(2) : '-') + '</td>'
+        const feeNote = item.other_fee ? `其他费 ¥${item.other_fee.toFixed(2)}` : ''
+        html += '<td>' + escapePrintText([item.remark, feeNote].filter(Boolean).join('；'), '') + '</td></tr>'
+      }
+      html += '<tr><td colspan="7" style="text-align:right">分项合计</td><td class="numeric">¥' + section.total.toFixed(2) + '</td><td></td></tr>'
+    }
   }
   html += '</tbody></table>'
   
@@ -1162,6 +1136,11 @@ onMounted(() => { fetchOrder(); fetchTasks(); loadOrderTaskAssignees() })
 .amount-down { color: var(--el-color-danger); }
 :deep(.group-header-row) { background: var(--ad-bg-secondary, #f5f7fa) !important; }
 :deep(.group-header-row td) { border-bottom: 2px solid var(--ad-primary, #409eff) !important; }
-:deep(.group-total-row) { background: var(--ad-bg-secondary, #fafafa) !important; }
-:deep(.group-total-row td) { border-top: 1px solid var(--ad-border, #dcdfe6) !important; font-weight: 600; }
+.order-detail-toolbar, .order-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.order-section-heading { margin: 0; }
+.order-section-heading :deep(.el-button) { white-space: normal; height: auto; text-align: left; }
+.order-item-extra { padding: 12px 20px; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.order-item-formula { grid-column: 1 / -1; color: var(--ad-text-secondary); }
+.order-item-image { width: 96px; height: 72px; }
+:deep(.group-header-row .el-table__expand-icon) { visibility: hidden; pointer-events: none; }
 </style>

@@ -113,170 +113,118 @@
           <div class="toolbar">
             <el-button v-if="canEdit" size="small" @click="downloadTemplate">下载导入模板</el-button>
             <el-upload v-if="canEdit" :show-file-list="false" accept=".xlsx" :http-request="importItems"><el-button size="small">导入明细</el-button></el-upload>
-            <el-button v-if="canEdit" size="small" type="danger" @click="addGroup">添加分项</el-button>
-            <el-button v-if="canEdit" size="small" type="danger" @click="addItem()">添加行</el-button>
+            <el-button v-if="canEdit" size="small" type="primary" plain @click="addGroup">添加分项</el-button>
+            <el-button v-if="canEdit" size="small" type="primary" @click="openAddDialog">新增明细</el-button>
           </div>
         </div>
       </template>
 
+      <div class="detail-toolbar">
+        <span class="muted">{{ groups.length }} 个分项 · {{ items.length }} 条明细 · 明细合计 ¥{{ localSubtotal.toFixed(2) }}</span>
+        <div class="toolbar">
+          <el-button size="small" @click="setAllGroupsCollapsed(false)">全部展开</el-button>
+          <el-button size="small" @click="setAllGroupsCollapsed(true)">全部收起</el-button>
+          <el-button v-if="canEdit" size="small" :disabled="!selectedItems.length" @click="openMoveDialog(selectedItems)">移动已选 {{ selectedItems.length || '' }}</el-button>
+        </div>
+      </div>
       <el-table
         ref="tableRef"
         :data="displayRows"
-        stripe
-        border
-        scrollbar-always-on
+        stripe border scrollbar-always-on
         :row-key="(row: DisplayRow) => row.key"
         :row-class-name="rowClassName"
         :row-style="rowStyle"
+        :span-method="tableSpanMethod"
+        :expand-row-keys="expandedRowKeys"
+        @expand-change="onExpandChange"
+        @selection-change="onSelectionChange"
       >
-        <el-table-column v-if="canEdit" label="排序" width="46" align="center">
+        <el-table-column v-if="canEdit" type="selection" width="42" :selectable="(row: DisplayRow) => row.type === 'item'" />
+        <el-table-column type="expand" width="42">
           <template #default="{ row }">
-            <span
-              v-if="row.type === 'group-header'"
-              class="row-drag-handle"
-              title="拖动整个分项"
-              @mousedown="dragStartKey = row.key"
-              @touchstart.passive="dragStartKey = row.key"
-            >⠿</span>
-            <span
-              v-else-if="row.type === 'item'"
-              class="row-drag-handle"
-              title="拖动排序"
-              @mousedown="dragStartKey = row.key"
-              @touchstart.passive="dragStartKey = row.key"
-            >
-              <el-icon><Rank /></el-icon>
-            </span>
+            <div v-if="row.type === 'item'" class="item-expanded">
+              <el-form label-position="top" class="item-settings">
+                <el-form-item label="计价方式">
+                  <el-select :model-value="getOrderPricingMode(row.item)" :disabled="!canEdit" @change="(mode: OrderPricingMode) => changePricingMode(row.item, mode)">
+                    <el-option label="按数量" value="quantity" /><el-option label="按尺寸计算面积" value="dimensions" /><el-option label="直接填写面积" value="area" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="宽">
+                  <div class="dimension-cell">
+                    <el-input-number v-model="row.item.width" :precision="2" :min="0" :disabled="!canEdit" :controls="false" @change="syncAreaQuantity(row.item)" />
+                    <el-select v-model="row.item.width_unit" :disabled="!canEdit" @change="syncAreaQuantity(row.item)"><el-option label="m" value="m" /><el-option label="cm" value="cm" /><el-option label="mm" value="mm" /></el-select>
+                  </div>
+                </el-form-item>
+                <el-form-item label="高">
+                  <div class="dimension-cell">
+                    <el-input-number v-model="row.item.height" :precision="2" :min="0" :disabled="!canEdit" :controls="false" @change="syncAreaQuantity(row.item)" />
+                    <el-select v-model="row.item.height_unit" :disabled="!canEdit" @change="syncAreaQuantity(row.item)"><el-option label="m" value="m" /><el-option label="cm" value="cm" /><el-option label="mm" value="mm" /></el-select>
+                  </div>
+                </el-form-item>
+                <el-form-item label="件数"><el-input-number v-model="row.item.pieces" :precision="0" :min="1" :disabled="!canEdit" :controls="false" @change="syncAreaQuantity(row.item)" /></el-form-item>
+                <el-form-item label="其他费（元）"><el-input-number v-model="row.item.other_fee" :min="0" :precision="2" :disabled="!canEdit" :controls="false" /></el-form-item>
+                <el-form-item label="样图">
+                  <div class="image-cell">
+                    <el-image v-if="row.item.image_url" :src="row.item.image_url" :preview-src-list="[row.item.image_url]" fit="cover" class="item-image" />
+                    <el-upload v-if="canEdit" :show-file-list="false" :http-request="(option: UploadRequestOptions) => handleImageUpload(option, row.item)" accept="image/*"><el-button size="small">{{ row.item.image_url ? '替换样图' : '上传样图' }}</el-button></el-upload>
+                    <el-button v-if="canEdit && row.item.image_url" text type="danger" @click="row.item.image_url = ''">移除</el-button>
+                  </div>
+                </el-form-item>
+                <el-form-item label="备注" class="item-remark"><el-input v-model="row.item.remark" type="textarea" :rows="2" :disabled="!canEdit" /></el-form-item>
+              </el-form>
+              <div class="calculation-note">{{ orderItemFormula(row.item) }}</div>
+              <div v-if="row.item.use_area" class="muted">面积 = 宽 × 高 × 件数（统一换算为平方米），当前 {{ calcArea(row.item).toFixed(2) }}㎡</div>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="项目内容" min-width="300">
+        <el-table-column v-if="canEdit" label="排序" width="46" align="center">
           <template #default="{ row }">
-            <template v-if="row.type === 'group-header'">
-              <div class="group-header-content">
-                <span class="group-header-drag" title="拖动整个分项">分项名称：</span>
-                <el-input
-                  v-if="canEdit"
-                  :model-value="row.groupName"
-                  size="small"
-                  placeholder="输入分项名称"
-                  @focus="selectInput"
-                  @input="(value: string) => renameGroup(row.groupId, value)"
-                />
-                <span v-else>{{ row.groupName || '未命名分项' }}</span>
-              </div>
-            </template>
-            <template v-else-if="row.type === 'group-total'">
-              <span class="group-total-label">分项合计：{{ row.groupName || '未命名分项' }}</span>
-            </template>
+            <span class="row-drag-handle" :title="row.type === 'group-header' ? '拖动整个分项；更多菜单也可上移或下移' : '拖动排序；更多菜单也可移动'" @mousedown="dragStartKey = row.key" @touchstart.passive="dragStartKey = row.key"><el-icon><Rank /></el-icon></span>
+          </template>
+        </el-table-column>
+        <el-table-column label="项目内容" min-width="155">
+          <template #default="{ row }">
+            <div v-if="row.type === 'group-header'" class="group-header-content">
+              <el-button text :aria-expanded="!collapsedGroupIds.has(row.groupId)" :aria-label="`${collapsedGroupIds.has(row.groupId) ? '展开' : '收起'}分项 ${row.groupName}`" @click="toggleGroup(row.groupId)"><el-icon><ArrowRight v-if="collapsedGroupIds.has(row.groupId)" /><ArrowDown v-else /></el-icon></el-button>
+              <el-input v-if="canEdit" :model-value="row.groupName" size="small" placeholder="分项名称" @focus="selectInput" @input="(value: string) => renameGroup(row.groupId, value)" />
+              <strong v-else>{{ row.groupName || '未命名分项' }}</strong>
+              <span class="group-summary">{{ groupSummary(row.groupId).count }} 条明细 · ¥{{ groupSummary(row.groupId).total.toFixed(2) }}</span>
+            </div>
             <el-input v-else v-model="row.item.item_name" :disabled="!canEdit" size="small" placeholder="项目内容" />
           </template>
         </el-table-column>
-        <el-table-column label="产品/材质/工艺" min-width="260">
-          <template #default="{ row }">
-            <el-input
-              v-if="row.type === 'item'"
-              v-model="row.item.material_process"
-              :disabled="!canEdit"
-              size="small"
-              placeholder="点击选择产品/材质/工艺"
-              clearable
-              @click="openProductPicker(row.item)"
-              @clear="clearProduct(row.item)"
-            />
-          </template>
+        <el-table-column label="产品/材质/工艺" min-width="155">
+          <template #default="{ row }"><el-input v-if="row.type === 'item'" v-model="row.item.material_process" :disabled="!canEdit" size="small" placeholder="选择产品/材质/工艺" clearable @click="openProductPicker(row.item)" @clear="clearProduct(row.item)" /></template>
         </el-table-column>
-        <el-table-column label="宽" width="168">
+        <el-table-column label="规格 / 计价" min-width="125">
+          <template #default="{ row }"><el-button v-if="row.type === 'item'" text class="spec-button" @click="toggleItemDetails(row)">{{ formatOrderItemSpec(row.item) }}<br />{{ pricingModeLabel(getOrderPricingMode(row.item)) }}</el-button></template>
+        </el-table-column>
+        <el-table-column label="数量" width="86">
+          <template #default="{ row }"><el-input-number v-if="row.type === 'item'" v-model="row.item.quantity" :precision="2" :min="0.01" :disabled="!canEdit || row.item.use_area" size="small" :controls="false" /></template>
+        </el-table-column>
+        <el-table-column label="单位" width="76">
+          <template #default="{ row }"><el-autocomplete v-if="row.type === 'item'" v-model="row.item.unit" :disabled="!canEdit || getOrderPricingMode(row.item) !== 'quantity'" size="small" :fetch-suggestions="(query: string, callback: (options: Array<{ value: string; disabled?: boolean }>) => void) => queryUnits(query, callback, row.item.unit)" placeholder="单位" :trigger-on-focus="true" @blur="addRecentUnit(row.item.unit || '')" /></template>
+        </el-table-column>
+        <el-table-column label="单价" width="96">
+          <template #default="{ row }"><el-input-number v-if="row.type === 'item'" v-model="row.item.unit_price" :precision="2" :min="0" :disabled="!canEdit" size="small" :controls="false" /></template>
+        </el-table-column>
+        <el-table-column label="小计" width="116" align="right" fixed="right">
+          <template #default="{ row }"><template v-if="row.type === 'item'"><strong>¥{{ calcItemSubtotal(row.item).toFixed(2) }}</strong><div v-if="row.item.other_fee" class="muted">含其他费 ¥{{ row.item.other_fee.toFixed(2) }}</div></template></template>
+        </el-table-column>
+        <el-table-column v-if="canEdit" label="操作" width="160" fixed="right">
           <template #default="{ row }">
-            <div v-if="row.type === 'item'" class="dimension-cell">
-              <el-input-number v-model="row.item.width" :precision="2" :min="0" :disabled="!canEdit" size="small" :controls="false" @change="syncAreaQuantity(row.item)" />
-              <el-select v-model="row.item.width_unit" :disabled="!canEdit" size="small" style="width: 64px" @change="syncAreaQuantity(row.item)">
-                <el-option label="m" value="m" /><el-option label="cm" value="cm" /><el-option label="mm" value="mm" />
-              </el-select>
+            <div class="row-actions">
+              <el-button v-if="row.type === 'group-header'" text type="primary" size="small" @click="addItem(row.groupId, row.groupName)">添加本分项明细</el-button>
+              <el-button v-else text type="primary" size="small" @click="copyItem(row.item)">复制</el-button>
+              <el-dropdown trigger="click" @command="(command: string) => handleRowCommand(command, row)">
+                <el-button text size="small" aria-label="更多明细操作">更多<el-icon><ArrowDown /></el-icon></el-button>
+                <template #dropdown><el-dropdown-menu>
+                  <el-dropdown-item command="up">上移</el-dropdown-item><el-dropdown-item command="down">下移</el-dropdown-item>
+                  <template v-if="row.type === 'item'"><el-dropdown-item command="insert">在下方插入</el-dropdown-item><el-dropdown-item command="move">移动到分项</el-dropdown-item><el-dropdown-item command="delete" divided>删除明细</el-dropdown-item></template>
+                  <template v-else><el-dropdown-item command="ungroup" divided>取消分项，保留明细</el-dropdown-item><el-dropdown-item command="delete">删除分项及明细</el-dropdown-item></template>
+                </el-dropdown-menu></template>
+              </el-dropdown>
             </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="高" width="168">
-          <template #default="{ row }">
-            <div v-if="row.type === 'item'" class="dimension-cell">
-              <el-input-number v-model="row.item.height" :precision="2" :min="0" :disabled="!canEdit" size="small" :controls="false" @change="syncAreaQuantity(row.item)" />
-              <el-select v-model="row.item.height_unit" :disabled="!canEdit" size="small" style="width: 64px" @change="syncAreaQuantity(row.item)">
-                <el-option label="m" value="m" /><el-option label="cm" value="cm" /><el-option label="mm" value="mm" />
-              </el-select>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="件数" width="76">
-          <template #default="{ row }">
-            <el-input-number v-if="row.type === 'item'" v-model="row.item.pieces" :precision="0" :min="1" :disabled="!canEdit" size="small" :controls="false" @change="syncAreaQuantity(row.item)" />
-          </template>
-        </el-table-column>
-        <el-table-column label="面积" width="132">
-          <template #default="{ row }">
-            <div v-if="row.type === 'item'" class="area-cell">
-              <span>{{ calcArea(row.item).toFixed(2) }}</span>
-              <el-switch v-model="row.item.use_area" :disabled="!canEdit" size="small" @change="(value: boolean) => onAreaToggle(row.item, value)" />
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="数量" width="92">
-          <template #default="{ row }">
-            <el-input-number v-if="row.type === 'item'" v-model="row.item.quantity" :precision="2" :min="0.01" :disabled="!canEdit || row.item.use_area" size="small" :controls="false" />
-          </template>
-        </el-table-column>
-        <el-table-column label="单位" width="104">
-          <template #default="{ row }">
-            <el-autocomplete
-              v-if="row.type === 'item'"
-              v-model="row.item.unit"
-              :disabled="!canEdit"
-              size="small"
-              :fetch-suggestions="(query: string, callback: Function) => queryUnits(query, callback, row.item.unit)"
-              placeholder="选择/输入"
-              :trigger-on-focus="true"
-              @select="(option: { value: string; disabled?: boolean }) => { if (!option.disabled) row.item.unit = option.value }"
-              @blur="addRecentUnit(row.item.unit || '')"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="单价" width="120">
-          <template #default="{ row }">
-            <el-input-number v-if="row.type === 'item'" v-model="row.item.unit_price" :precision="2" :min="0" :disabled="!canEdit" size="small" :controls="false" />
-          </template>
-        </el-table-column>
-        <el-table-column label="小计" width="124">
-          <template #default="{ row }">
-            <template v-if="row.type === 'item'">¥ {{ calcItemSubtotal(row.item).toFixed(2) }}</template>
-            <template v-else-if="row.type === 'group-total'"><strong>¥ {{ row.total.toFixed(2) }}</strong></template>
-          </template>
-        </el-table-column>
-        <el-table-column label="样图" width="90">
-          <template #default="{ row }">
-            <template v-if="row.type === 'item'">
-              <div v-if="row.item.image_url" class="image-cell">
-                <el-image :src="row.item.image_url" :preview-src-list="[row.item.image_url]" fit="cover" class="item-image" />
-                <el-button v-if="canEdit" text type="danger" size="small" @click="row.item.image_url = ''">×</el-button>
-              </div>
-              <el-upload v-else-if="canEdit" :show-file-list="false" :http-request="(option: any) => handleImageUpload(option, row.item)" accept="image/*">
-                <el-button text type="primary" size="small">上传</el-button>
-              </el-upload>
-              <span v-else class="muted">-</span>
-            </template>
-          </template>
-        </el-table-column>
-        <el-table-column label="备注" min-width="140">
-          <template #default="{ row }">
-            <el-input v-if="row.type === 'item'" v-model="row.item.remark" :disabled="!canEdit" size="small" />
-          </template>
-        </el-table-column>
-        <el-table-column v-if="canEdit" label="操作" width="150" align="center" fixed="right">
-          <template #default="{ row }">
-            <template v-if="row.type === 'group-header'">
-              <div class="row-actions">
-                <el-button text type="primary" size="small" @click="addItem(row.groupId, row.groupName)">添加行</el-button>
-                <el-button text type="danger" size="small" @click="removeGroup(row.groupId)">删除组</el-button>
-              </div>
-            </template>
-            <el-button v-else-if="row.type === 'item'" text type="danger" size="small" @click="removeItem(row.item)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -314,6 +262,23 @@
         </el-col>
       </el-row>
     </el-card>
+
+    <el-dialog v-model="itemTargetDialogVisible" :title="itemTargetAction === 'add' ? '新增明细' : `移动 ${moveTargets.length} 条明细`" width="440px">
+      <el-form label-position="top"><el-form-item label="所属分项"><el-select v-model="targetGroupId" style="width: 100%"><el-option label="未分项明细" value="" /><el-option v-for="group in groups" :key="group.groupId" :value="group.groupId" :label="group.groupName || '未命名分项'" /></el-select></el-form-item></el-form>
+      <template #footer><el-button @click="itemTargetDialogVisible = false">取消</el-button><el-button type="primary" @click="confirmItemTarget">确认</el-button></template>
+    </el-dialog>
+    <el-dialog v-model="deleteGroupDialogVisible" title="删除分项及明细" width="min(900px, 94vw)" :close-on-click-modal="false">
+      <div v-loading="deleteGroupChecking">
+        <el-alert type="warning" :closable="false" :title="`将删除分项“${deleteGroupTarget?.groupName || '未命名分项'}”及 ${deleteGroupItems.length} 条明细，合计 ¥${deleteGroupTotal.toFixed(2)}`" description="确认后先从当前编辑草稿移除，保存订单时作废并处理关联。已发生的付款、验收等事实保留核对。" />
+        <el-table :data="deleteGroupItems" size="small" max-height="200"><el-table-column prop="item_name" label="明细" /><el-table-column prop="quantity" label="数量" width="90" /><el-table-column label="小计" width="130"><template #default="{ row }">¥{{ calcQuoteLineSubtotal(row).toFixed(2) }}</template></el-table-column></el-table>
+        <p class="muted">保存影响目录（包含当前草稿中的其他修改）</p>
+        <el-alert v-if="deleteGroupError" type="error" :closable="false" :title="deleteGroupError" />
+        <el-table v-if="deleteGroupImpact?.association_catalog.length" :data="deleteGroupImpact.association_catalog" size="small" max-height="240"><el-table-column prop="label" label="关联模块" width="130" /><el-table-column label="编号"><template #default="{ row }">{{ row.record_no || row.record_id }}</template></el-table-column><el-table-column label="处理方式"><template #default="{ row }">{{ relationActionLabel(row.action) }}</template></el-table-column></el-table>
+        <p v-else-if="!deleteGroupChecking && !deleteGroupError" class="muted">{{ isCreate ? '新订单明细尚无关联业务' : '本次预检未识别到关联记录' }}</p>
+        <el-alert v-if="deleteGroupImpact?.auto_recycle" type="warning" :closable="false" title="这是订单的全部有效明细，保存后订单将移入回收站。" />
+      </div>
+      <template #footer><el-button @click="deleteGroupDialogVisible = false">取消</el-button><el-button type="danger" :disabled="deleteGroupChecking || Boolean(deleteGroupError) || Boolean(deleteGroupImpact && !deleteGroupImpact.can_apply)" @click="confirmDeleteGroup">确认从草稿删除</el-button></template>
+    </el-dialog>
 
     <el-dialog
       v-model="impactDialogVisible"
@@ -396,7 +361,7 @@ function fieldLabel(field: string) { return orderFieldLabels[field] || field }
 import { computed, nextTick, onBeforeMount, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import Sortable from 'sortablejs'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type UploadRequestOptions } from 'element-plus'
 import { getCustomers, getCustomer } from '@/api/customers'
 import { createOrder, getOrder, getOrderItemEditability, previewOrderEdit, saveOrderEdit, previewOrderImport } from '@/api/orders'
 import { apiClient, get } from '@/api/index'
@@ -408,8 +373,9 @@ import { applyProductMaterialProcess, formatProductMaterialProcess } from '@/uti
 import { createQuoteGroupDragVisual, type QuoteGroupDragVisual } from '@/utils/quoteGroupDragVisual'
 import { createQuoteGroupColorRegistry } from '@/utils/quoteGroupColors'
 import { calcQuoteLineArea, calcQuoteLineSubtotal, migrateLegacyQuoteDimensions, syncQuoteLineAreaQuantity } from '@/utils/quoteLineCalculation'
-import { applyQuoteDisplayOrder, buildQuoteDisplayRows, getQuoteDropSuccessorKey, getQuoteGroupBlock, isDuplicateQuoteGroupName, reorderQuoteDisplayRows, type QuoteEmptyGroup, type QuoteDisplayRow } from '@/utils/quoteItemOrdering'
-import { buildOrderBatchItemDiff, buildOrderGroupPayload, serializeOrderItemDraft, type OrderEditorEmptyGroup } from '@/utils/orderEditorDraft'
+import { applyQuoteDisplayOrder, getQuoteDropSuccessorKey, getQuoteGroupBlock, isDuplicateQuoteGroupName, reorderQuoteDisplayRows, type QuoteDisplayRow } from '@/utils/quoteItemOrdering'
+import { buildOrderBatchItemDiff, buildOrderGroupPayload, cloneOrderItemDraft, serializeOrderItemDraft, type OrderEditorEmptyGroup } from '@/utils/orderEditorDraft'
+import { buildOrderDisplayRows, buildOrderItemSections, formatOrderItemSpec, getOrderPricingMode, normalizeOrderItemGroups, orderItemFormula, withOrderPricingMode, type OrderPricingMode } from '@/utils/orderItemPresentation'
 import type { ContactResponse, CustomerResponse, OrderDetailResponse, OrderEditImpactResponse, OrderItemEditabilityResponse, OrderItemResponse, ProductResponse } from '@/types/api'
 
 const route = useRoute()
@@ -428,7 +394,23 @@ const customerSelectRef = ref()
 const tableRef = ref()
 const items = ref<OrderItemResponse[]>([])
 const originalItems = ref<OrderItemResponse[]>([])
-const emptyGroups = ref<OrderEditorEmptyGroup[]>([])
+const groups = ref<OrderEditorEmptyGroup[]>([])
+const originalGroups = ref<OrderEditorEmptyGroup[]>([])
+const collapsedGroupIds = ref(new Set<string>())
+const expandedRowKeys = ref<string[]>([])
+const selectedItems = ref<OrderItemResponse[]>([])
+const itemTargetDialogVisible = ref(false)
+const itemTargetAction = ref<'add' | 'move'>('add')
+const targetGroupId = ref('')
+const moveTargets = ref<OrderItemResponse[]>([])
+const deleteGroupDialogVisible = ref(false)
+const deleteGroupChecking = ref(false)
+const deleteGroupTarget = ref<OrderEditorEmptyGroup | null>(null)
+const deleteGroupImpact = ref<OrderEditImpactResponse | null>(null)
+const deleteGroupError = ref('')
+const deleteGroupItems = computed(() => items.value.filter(item => item.group_id === deleteGroupTarget.value?.groupId))
+const deleteGroupTotal = computed(() => deleteGroupItems.value.reduce((sum, item) => sum + calcQuoteLineSubtotal(item), 0))
+const pricingMemory = new WeakMap<OrderItemResponse, Partial<Record<OrderPricingMode, { quantity: number; unit: string }>>>()
 const reason = ref('')
 const dirty = ref(false)
 const isLoaded = ref(false)
@@ -519,7 +501,7 @@ function snapshotValue() {
     form: { ...form },
     reason: reason.value,
     items: items.value.map(item => ({ ...serializeOrderItemDraft(item), subtotal_amount: calcQuoteLineSubtotal(item) })),
-    emptyGroups: emptyGroups.value,
+    groups: groups.value,
   })
 }
 
@@ -533,7 +515,7 @@ function hasUnsavedChanges() {
   return isLoaded.value && snapshotValue() !== cleanSnapshot
 }
 
-watch([form, items, emptyGroups, reason], () => { dirty.value = hasUnsavedChanges() }, { deep: true })
+watch([form, items, groups, reason], () => { dirty.value = hasUnsavedChanges() }, { deep: true })
 
 onBeforeRouteLeave((_to, _from, next) => {
   if (!dirty.value) return next()
@@ -561,10 +543,11 @@ onBeforeUnmount(() => {
 })
 
 function displayRowsFor(itemsToDisplay = items.value): DisplayRow[] {
-  return buildQuoteDisplayRows(itemsToDisplay, rowKeyFor, calcQuoteLineSubtotal, groupColors.colorFor, emptyGroups.value as QuoteEmptyGroup[])
+  return buildOrderDisplayRows(itemsToDisplay, groups.value, rowKeyFor, calcQuoteLineSubtotal, groupColors.colorFor)
 }
 
-const displayRows = computed(() => displayRowsFor())
+const fullRows = computed(() => displayRowsFor())
+const displayRows = computed(() => fullRows.value.filter(row => row.type === 'group-header' || (row.type === 'item' && !collapsedGroupIds.value.has(row.groupId))))
 const sortableStructure = computed(() => displayRows.value.map(row => row.key).join('|'))
 
 function rowClassName({ row, rowIndex }: { row: DisplayRow; rowIndex: number }) {
@@ -572,7 +555,6 @@ function rowClassName({ row, rowIndex }: { row: DisplayRow; rowIndex: number }) 
   if (row.colorIndex > 0) classes.push('quote-group-row')
   if (row.type === 'group-header') classes.push('group-header-row')
   if (row.type === 'group-header' && rowIndex > 0) classes.push('group-card-gap')
-  if (row.type === 'group-total') classes.push('group-total-row')
   return classes.join(' ')
 }
 
@@ -607,7 +589,7 @@ function initSortable() {
 
 function handleDragStart(evt: Sortable.SortableEvent) {
   const key = dragStartKey.value || rowKeyFromElement(evt.item) || displayRows.value[evt.oldIndex ?? 0]?.key
-  const dragged = key ? displayRows.value.find(row => row.key === key) : undefined
+  const dragged = key ? fullRows.value.find(row => row.key === key) : undefined
   if (!dragged || dragged.type === 'group-total') return
 
   dragStartKey.value = key
@@ -616,7 +598,7 @@ function handleDragStart(evt: Sortable.SortableEvent) {
   document.addEventListener('touchmove', handleDragPointer, { capture: true, passive: true })
   if (dragged.type !== 'group-header') return
 
-  const rows = displayRows.value
+  const rows = fullRows.value
   const headerIndex = rows.indexOf(dragged)
   const block = getQuoteGroupBlock(rows, headerIndex)
   const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody') as HTMLElement | null
@@ -626,7 +608,7 @@ function handleDragStart(evt: Sortable.SortableEvent) {
   groupDragVisual = createQuoteGroupDragVisual({
     colorIndex: dragged.colorIndex,
     sourceElements: block
-      .map(row => tbody?.querySelector(`.rk-${row.key}`) as HTMLElement | null)
+      .map(row => tbody?.querySelector(`.rk-${CSS.escape(row.key)}`) as HTMLElement | null)
       .filter((element): element is HTMLElement => Boolean(element)),
     rows: block.map((row, index) => {
       if (row.type === 'group-header') return { type: row.type, label: `⠿ 分项名称：${row.groupName}` }
@@ -658,7 +640,7 @@ function handleDragPointer(event: Event) {
   const targetKey = rowKeyFromElement(target)
   if (!targetKey) return
   const rect = target.getBoundingClientRect()
-  dragDropSuccessorKey = getQuoteDropSuccessorKey(displayRows.value, draggedKey, targetKey, point.y >= rect.top + rect.height / 2)
+  dragDropSuccessorKey = getQuoteDropSuccessorKey(fullRows.value, draggedKey, targetKey, point.y >= rect.top + rect.height / 2)
   showGroupDropIndicator(dragDropSuccessorKey)
 }
 
@@ -675,11 +657,11 @@ function showGroupDropIndicator(successorKey: string | null) {
   const tbody = tableRef.value?.$el?.querySelector('.el-table__body-wrapper tbody') as HTMLElement | null
   if (!tbody) return
   if (successorKey) {
-    groupDragVisual?.showBoundary(tbody.querySelector(`.rk-${successorKey}`), 'before')
+    groupDragVisual?.showBoundary(tbody.querySelector(`.rk-${CSS.escape(successorKey)}`), 'before')
     return
   }
-  const lastTarget = [...displayRows.value].reverse().find(row => !groupDragSourceKeys.has(row.key))
-  if (lastTarget) groupDragVisual?.showBoundary(tbody.querySelector(`.rk-${lastTarget.key}`), 'after')
+  const lastTarget = [...fullRows.value].reverse().find(row => !groupDragSourceKeys.has(row.key))
+  if (lastTarget) groupDragVisual?.showBoundary(tbody.querySelector(`.rk-${CSS.escape(lastTarget.key)}`), 'after')
 }
 
 function cleanupDrag() {
@@ -698,27 +680,11 @@ function handleDragEnd(evt: Sortable.SortableEvent) {
   cleanupDrag()
   if (!draggedKey) return
 
-  const rows = displayRows.value
+  const rows = fullRows.value
   const nextRows = reorderQuoteDisplayRows(rows, draggedKey, successorKey)
   if (nextRows === rows) return
 
-  const draggedRow = rows.find(row => row.key === draggedKey)
-  const nextItems = applyQuoteDisplayOrder(nextRows)
-  if (draggedRow?.type === 'item') {
-    const previousGroupNames = new Map<string, string>()
-    for (const row of rows) if (row.type === 'group-header') previousGroupNames.set(row.groupId, row.groupName)
-
-    const nextGroupIds = new Set(nextItems.map(item => item.group_id).filter((value): value is string => Boolean(value)))
-    for (const [groupId, groupName] of previousGroupNames) {
-      const hadDetail = rows.some(row => row.type === 'item' && row.groupId === groupId)
-      if (hadDetail && !nextGroupIds.has(groupId) && !emptyGroups.value.some(group => group.groupId === groupId)) {
-        emptyGroups.value.push({ groupId, groupName })
-      }
-    }
-    if (nextGroupIds.size) emptyGroups.value = emptyGroups.value.filter(group => !nextGroupIds.has(group.groupId))
-  }
-  nextItems.forEach((item, index) => { item.sort_order = index })
-  items.value = nextItems
+  applyDisplayRows(nextRows)
 }
 
 function rowKeyFromElement(element: HTMLElement): string {
@@ -739,75 +705,149 @@ watch([sortableStructure, canEdit], () => nextTick(initSortable))
 
 function selectInput(event: FocusEvent) { (event.target as HTMLInputElement).select() }
 
-function addItem(groupId?: string, groupName?: string) {
-  if (groupId) emptyGroups.value = emptyGroups.value.filter(group => group.groupId !== groupId)
-  const item = newItem(groupId, groupName)
-  item.sort_order = items.value.length
-  items.value.push(item)
+function tableSpanMethod({ row, columnIndex }: { row: DisplayRow; columnIndex: number }) {
+  if (row.type !== 'group-header') return { rowspan: 1, colspan: 1 }
+  const titleIndex = canEdit.value ? 3 : 1
+  // Keep sorting and actions separate from the merged section heading.
+  const end = canEdit.value ? 10 : 8
+  if (columnIndex === titleIndex) return { rowspan: 1, colspan: end - titleIndex }
+  if (columnIndex > titleIndex && columnIndex < end) return { rowspan: 0, colspan: 0 }
+  return { rowspan: 1, colspan: 1 }
 }
-
+function groupSummary(groupId: string) {
+  const members = items.value.filter(item => item.group_id === groupId)
+  return { count: members.length, total: members.reduce((sum, item) => sum + calcQuoteLineSubtotal(item), 0) }
+}
+function toggleGroup(groupId: string) {
+  const next = new Set(collapsedGroupIds.value)
+  if (next.has(groupId)) next.delete(groupId); else next.add(groupId)
+  collapsedGroupIds.value = next
+}
+function setAllGroupsCollapsed(collapsed: boolean) { collapsedGroupIds.value = new Set(collapsed ? groups.value.map(group => group.groupId) : []) }
+function onExpandChange(_row: DisplayRow, expanded: DisplayRow[]) { expandedRowKeys.value = expanded.filter(row => row.type === 'item').map(row => row.key) }
+function toggleItemDetails(row: DisplayRow) { tableRef.value?.toggleRowExpansion(row) }
+function onSelectionChange(rows: DisplayRow[]) { selectedItems.value = rows.filter(row => row.type === 'item').map(row => row.item) }
+function reindexItems() { items.value.forEach((item, index) => { item.sort_order = index }) }
+function applyDisplayRows(rows: DisplayRow[]) {
+  groups.value = rows.filter(row => row.type === 'group-header').map(row => ({ groupId: row.groupId, groupName: row.groupName }))
+  items.value = applyQuoteDisplayOrder(rows)
+  reindexItems()
+}
+function addItem(groupId?: string, groupName?: string, after?: OrderItemResponse) {
+  if (!canEdit.value) return
+  const item = newItem(groupId, groupName)
+  const last = after ? items.value.indexOf(after) : groupId ? items.value.map(current => current.group_id).lastIndexOf(groupId) : items.value.length - 1
+  items.value.splice(last < 0 ? items.value.length : last + 1, 0, item)
+  reindexItems()
+  collapsedGroupIds.value.delete(groupId || '')
+}
+function openAddDialog() { itemTargetAction.value = 'add'; targetGroupId.value = ''; itemTargetDialogVisible.value = true }
+function openMoveDialog(targets: OrderItemResponse[]) { itemTargetAction.value = 'move'; moveTargets.value = [...targets]; targetGroupId.value = targets[0]?.group_id || ''; itemTargetDialogVisible.value = true }
+function confirmItemTarget() {
+  if (!canEdit.value) return
+  const group = groups.value.find(group => group.groupId === targetGroupId.value)
+  if (itemTargetAction.value === 'add') addItem(group?.groupId, group?.groupName || undefined)
+  else {
+    const moved = items.value.filter(item => moveTargets.value.includes(item))
+    items.value = items.value.filter(item => !moved.includes(item))
+    moved.forEach(item => { item.group_id = group?.groupId; item.group_name = group?.groupName || undefined })
+    const last = group ? items.value.map(item => item.group_id).lastIndexOf(group.groupId) : items.value.length - 1
+    items.value.splice(last < 0 ? items.value.length : last + 1, 0, ...moved)
+    reindexItems()
+    tableRef.value?.clearSelection()
+  }
+  collapsedGroupIds.value.delete(targetGroupId.value)
+  itemTargetDialogVisible.value = false
+}
+function copyItem(source: OrderItemResponse) {
+  if (!canEdit.value) return
+  const copy = cloneOrderItemDraft(source)
+  items.value.splice(items.value.indexOf(source) + 1, 0, copy)
+  reindexItems()
+  ElMessage.success('已复制为新明细，任务、进度和财务关联不会复制')
+}
 function addGroup() {
-  const used = new Set([
-    ...items.value.map(item => item.group_name).filter((name): name is string => Boolean(name)),
-    ...emptyGroups.value.map(group => group.groupName).filter((name): name is string => Boolean(name)),
-  ])
+  const used = new Set(groups.value.map(group => group.groupName))
   let index = 1
   while (used.has(`分项${index}`)) index++
-  const groupId = `order-group-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-  emptyGroups.value.push({ groupId, groupName: `分项${index}` })
+  groups.value.push({ groupId: `order-group-${newRequestId()}`, groupName: `分项${index}` })
 }
-
-function removeGroup(groupId: string) {
-  const groupItems = items.value.filter(item => item.group_id === groupId)
-  if (groupItems.length) {
-    ElMessageBox.confirm(`删除分项后，其中 ${groupItems.length} 条明细会在保存时作废，是否继续？`, '删除分项', {
-      confirmButtonText: '继续', cancelButtonText: '取消', type: 'warning',
-    }).then(() => {
-      items.value = items.value.filter(item => item.group_id !== groupId)
-      emptyGroups.value = emptyGroups.value.filter(group => group.groupId !== groupId)
-    }).catch(() => undefined)
-    return
-  }
-  emptyGroups.value = emptyGroups.value.filter(group => group.groupId !== groupId)
+function cancelGroup(groupId: string) {
+  if (!canEdit.value) return
+  items.value.forEach(item => { if (item.group_id === groupId) { item.group_id = undefined; item.group_name = undefined } })
+  groups.value = groups.value.filter(group => group.groupId !== groupId)
 }
-
+async function requestDeleteGroup(groupId: string) {
+  deleteGroupTarget.value = groups.value.find(group => group.groupId === groupId) || null
+  deleteGroupImpact.value = null
+  deleteGroupError.value = ''
+  deleteGroupDialogVisible.value = true
+  if (isCreate.value) return
+  deleteGroupChecking.value = true
+  try {
+    const payload = buildPayload()
+    const remaining = items.value.filter(item => item.group_id !== groupId)
+    const remainingGroups = groups.value.filter(group => group.groupId !== groupId)
+    const impact = await previewOrderEdit(orderId.value, { ...payload, reason: reason.value.trim() || '预览删除分项及明细', items: remaining.map((item, index) => serializeOrderItemDraft(item, index)), groups: buildOrderGroupPayload(remaining, [], remainingGroups) })
+    deleteGroupImpact.value = impact
+    if (!impact.can_apply) deleteGroupError.value = impact.lock_reasons.map(reason => reason.message).join('；') || '当前分项不可删除'
+  } catch (error: unknown) { deleteGroupError.value = error instanceof Error ? error.message : '影响预检失败，请重试' }
+  finally { deleteGroupChecking.value = false }
+}
+function confirmDeleteGroup() {
+  if (!canEdit.value || deleteGroupChecking.value || deleteGroupError.value || !deleteGroupTarget.value) return
+  const id = deleteGroupTarget.value.groupId
+  items.value = items.value.filter(item => item.group_id !== id)
+  groups.value = groups.value.filter(group => group.groupId !== id)
+  reindexItems()
+  deleteGroupDialogVisible.value = false
+}
 function removeItem(item: OrderItemResponse) {
-  const index = items.value.indexOf(item)
-  if (index < 0) return
-  const groupId = item.group_id || ''
-  const groupName = item.group_name || ''
-  items.value.splice(index, 1)
-  if (groupId && !items.value.some(current => current.group_id === groupId) && !emptyGroups.value.some(group => group.groupId === groupId)) {
-    emptyGroups.value.push({ groupId, groupName })
-  }
+  if (!canEdit.value) return
+  items.value = items.value.filter(current => current !== item)
+  reindexItems()
 }
-
 function renameGroup(groupId: string, name: string) {
+  if (!canEdit.value) return
   const newName = name.trim()
-  if (isDuplicateQuoteGroupName(items.value, groupId, newName) || emptyGroups.value.some(group => group.groupId !== groupId && group.groupName === newName)) {
-    ElMessage.warning('分项名称不能重复，否则两组明细会合并')
+  if (isDuplicateQuoteGroupName(items.value, groupId, newName) || groups.value.some(group => group.groupId !== groupId && group.groupName === newName && newName)) {
+    ElMessage.warning('请使用不同的分项名称以便区分')
     return
   }
   items.value.forEach(item => { if (item.group_id === groupId) item.group_name = newName || undefined })
-  const empty = emptyGroups.value.find(group => group.groupId === groupId)
-  if (empty) empty.groupName = newName
+  const group = groups.value.find(group => group.groupId === groupId)
+  if (group) group.groupName = newName
 }
-
+function handleRowCommand(command: string, row: DisplayRow) {
+  if (!canEdit.value) return
+  if (command === 'delete') { if (row.type === 'group-header') void requestDeleteGroup(row.groupId); else if (row.type === 'item') removeItem(row.item); return }
+  if (command === 'ungroup') { cancelGroup(row.groupId); return }
+  if (row.type === 'item' && command === 'move') { openMoveDialog([row.item]); return }
+  if (row.type === 'item' && command === 'insert') { addItem(row.item.group_id || undefined, row.item.group_name || undefined, row.item); return }
+  const rows = fullRows.value
+  const peers = rows.filter(current => row.type === 'group-header' ? current.type === 'group-header' : current.type === 'item' && current.groupId === row.groupId)
+  const peerIndex = peers.findIndex(current => current.key === row.key)
+  const target = peers[peerIndex + (command === 'up' ? -1 : 1)]
+  if (!target) return
+  const block = row.type === 'group-header' ? getQuoteGroupBlock(rows, rows.indexOf(target)) : [target]
+  const successor = command === 'up' ? target.key : rows[rows.indexOf(block[block.length - 1]!) + 1]?.key || (row.groupId ? rows.find(current => current.type === 'group-total' && current.groupId === row.groupId)?.key : null) || null
+  applyDisplayRows(reorderQuoteDisplayRows(rows, row.key, successor))
+}
 function calcArea(item: OrderItemResponse) { return calcQuoteLineArea(item) }
-function calcItemSubtotal(item: OrderItemResponse) {
-  const value = calcQuoteLineSubtotal(item)
-  item.subtotal_amount = value
-  return value
-}
+function calcItemSubtotal(item: OrderItemResponse) { return calcQuoteLineSubtotal(item) }
 function syncAreaQuantity(item: OrderItemResponse) { syncQuoteLineAreaQuantity(item) }
-function onAreaToggle(item: OrderItemResponse, enabled: boolean) {
-  item.use_area = enabled
-  if (enabled) {
-    syncAreaQuantity(item)
-  } else {
-    item.quantity = 1
-    item.unit = ''
-  }
+function pricingModeLabel(mode: OrderPricingMode) { return ({ quantity: '按数量', dimensions: '按尺寸计算面积', area: '直接填写面积' })[mode] }
+async function changePricingMode(item: OrderItemResponse, mode: OrderPricingMode) {
+  const current = getOrderPricingMode(item)
+  if (!canEdit.value || mode === current) return
+  const memory = pricingMemory.get(item) || {}
+  const next = withOrderPricingMode(item, mode, memory[mode])
+  try {
+    await ElMessageBox.confirm(`计价方式：${pricingModeLabel(current)} → ${pricingModeLabel(mode)}；数量：${item.quantity}${item.unit || ''} → ${next.quantity}${next.unit || ''}；小计：¥${calcQuoteLineSubtotal(item).toFixed(2)} → ¥${calcQuoteLineSubtotal(next).toFixed(2)}。请核对数量、尺寸与单价。`, '切换计价方式', { confirmButtonText: '确认切换', cancelButtonText: '取消' })
+    memory[current] = { quantity: item.quantity, unit: item.unit || '' }
+    pricingMemory.set(item, memory)
+    Object.assign(item, next)
+  } catch { /* Cancellation keeps the current mode and values. */ }
 }
 
 const defaultUnits = ['㎡', 'm', '个', '套', '块', '件', '批', '次', '组', '台']
@@ -851,21 +891,23 @@ function clearProduct(item: OrderItemResponse) {
   item.material_id = undefined
   item.process_id = undefined
   item.material_process = ''
-  item.use_area = false
-  item.quantity = 1
-  item.unit = ''
 }
 function onProductPicked(product: ProductResponse) {
   if (!pendingPickerItem.value) return
   const item = pendingPickerItem.value
+  const mode = getOrderPricingMode(item)
+  const previousUnit = item.unit
   Object.assign(item, applyProductMaterialProcess(item, product))
   item.material_process = formatProductMaterialProcess(product)
-  if (product.pricing_method === 'area') { item.use_area = true; syncAreaQuantity(item) } else { item.use_area = false; item.quantity = 1 }
+  if (mode !== 'quantity') item.unit = '㎡'
+  else if (item.unit === '㎡') item.unit = previousUnit
+  if (product.pricing_method === 'area' && mode === 'quantity') void changePricingMode(item, 'dimensions')
   pendingPickerItem.value = null
 }
 function onProductUpdated(product: ProductResponse) {
   if (!pendingPickerItem.value || pendingPickerItem.value.product_id !== product.id) return
   Object.assign(pendingPickerItem.value, applyProductMaterialProcess(pendingPickerItem.value, product))
+  if (getOrderPricingMode(pendingPickerItem.value) !== 'quantity') pendingPickerItem.value.unit = '㎡'
 }
 
 function buildHeaderPayload() {
@@ -891,7 +933,7 @@ function buildPayload() {
     expected_updated_at: order.value.updated_at,
     header: buildHeaderPayload(),
     items: serializedItems,
-    groups: buildOrderGroupPayload(items.value, emptyGroups.value),
+    groups: buildOrderGroupPayload(items.value, [], groups.value),
   }
 }
 
@@ -899,13 +941,16 @@ async function handleSave() {
   if (!canEdit.value) return
   if (!form.customer_id.trim()) { ElMessage.warning('请先选择或填写客户'); return }
   if (!form.project_name.trim()) { ElMessage.warning('请填写项目名称'); return }
-  if (items.value.some(item => !item.item_name.trim())) { ElMessage.warning('请填写所有明细的项目内容'); return }
+  const unnamed = items.value.find(item => !item.item_name.trim())
+  if (unnamed) { collapsedGroupIds.value.delete(unnamed.group_id || ''); ElMessage.warning('请填写所有明细的项目内容，已展开未填写的分项'); return }
+  const invalidArea = items.value.findIndex(item => item.use_area && calcQuoteLineArea(item) <= 0)
+  if (invalidArea >= 0) { const item = items.value[invalidArea]!; collapsedGroupIds.value.delete(item.group_id || ''); expandedRowKeys.value = [rowKeyFor(item)]; ElMessage.warning(`第 ${invalidArea + 1} 条明细按尺寸计价，请填写有效的宽、高和件数`); return }
   if (isCreate.value) {
     if (!items.value.length || !form.order_date) { ElMessage.warning('请填写下单日期并添加明细'); return }
     saving.value = true
     try {
       const result = await createOrder({request_id: creationRequestId, capture_id: typeof route.query.capture_id === 'string' ? route.query.capture_id : undefined, order_date: form.order_date, header: buildHeaderPayload(),
-        items: items.value.map((item, index) => serializeOrderItemDraft(item, index)), groups: buildOrderGroupPayload(items.value, emptyGroups.value)})
+        items: items.value.map((item, index) => serializeOrderItemDraft(item, index)), groups: buildOrderGroupPayload(items.value, [], groups.value)})
       captureCleanSnapshot()
       ElMessage.success('订单已保存为待确认，确认后即可安排执行')
       await router.replace(`/orders/${result.id}`)
@@ -915,8 +960,8 @@ async function handleSave() {
   }
   if (!reason.value.trim()) { ElMessage.warning('请填写订单变更原因'); return }
   const diff = buildOrderBatchItemDiff(originalItems.value, items.value)
-  const groups = buildOrderGroupPayload(items.value, emptyGroups.value)
-  const hasGroupChange = JSON.stringify(groups) !== JSON.stringify(buildOrderGroupPayload(originalItems.value, [])) || emptyGroups.value.length > 0
+  const groupPayload = buildOrderGroupPayload(items.value, [], groups.value)
+  const hasGroupChange = JSON.stringify(groupPayload) !== JSON.stringify(buildOrderGroupPayload(originalItems.value, [], originalGroups.value))
   if (!diff.added.length && !diff.updated.length && !diff.deleted.length && !hasGroupChange && !hasHeaderChanges()) {
     ElMessage.info('没有检测到需要保存的修改')
     return
@@ -966,7 +1011,7 @@ async function applyOrderEdit(impact: OrderEditImpactResponse, payload: ReturnTy
   order.value = result
   items.value = (result.items || []).map(item => migrateLegacyQuoteDimensions({ ...item }))
   originalItems.value = items.value.map(item => ({ ...item }))
-  rebuildEmptyGroups(result)
+  rebuildGroups(result)
   captureCleanSnapshot()
   impactDialogVisible.value = false
   preview.value = null
@@ -996,7 +1041,8 @@ function cancelImpactConfirmation() {
 async function handleImageUpload(option: { file: File }, item: OrderItemResponse) {
   try {
     if (isCreate.value) { ElMessage.warning('请先保存订单，再上传明细图片'); return }
-    const result = await uploadAttachment('order_item', item.id || orderId.value, option.file, 'image')
+    if (!item.id) { ElMessage.warning('请先保存新增明细，再上传样图'); return }
+    const result = await uploadAttachment('order_item', item.id, option.file, 'image')
     item.image_url = `/uploads/${result.file_path}`
     ElMessage.success('上传成功')
   } catch { ElMessage.error('上传失败') }
@@ -1011,22 +1057,29 @@ async function downloadTemplate() {
 async function importItems(option: { file: File }) {
   try {
     const result = await previewOrderImport(option.file)
-    const groups = new Map(items.value.filter(item => item.group_name).map(item => [item.group_name!, item.group_id!]))
+    const groupByName = new Map(groups.value.filter(group => group.groupName).map(group => [group.groupName!, group.groupId]))
     const imported = result.items.map(raw => {
-      let groupId = raw.group_name ? groups.get(raw.group_name) : undefined
-      if (raw.group_name && !groupId) { groupId = newRequestId(); groups.set(raw.group_name, groupId) }
+      let groupId = raw.group_name ? groupByName.get(raw.group_name) : undefined
+      if (raw.group_name && !groupId) { groupId = newRequestId(); groupByName.set(raw.group_name, groupId); groups.value.push({ groupId, groupName: raw.group_name }) }
       return { ...newItem(), ...raw, id: '', group_id: groupId } as OrderItemResponse
     })
-    items.value = [...items.value.filter(item => item.item_name.trim()), ...imported]
+    items.value = [...items.value.filter(item => item.id || item.item_name.trim() || item.material_process || item.unit_price || item.other_fee), ...imported]
+    reindexItems()
     ElMessage.success(`已载入 ${imported.length} 条明细，保存订单后生效`)
   } catch (error: unknown) { ElMessage.error(error instanceof Error ? error.message : '导入失败') }
 }
 
 async function fetchItemEditability() { try { itemEditability.value = await getOrderItemEditability(orderId.value) } catch { itemEditability.value = null } }
-function rebuildEmptyGroups(data: OrderDetailResponse) {
+function rebuildGroups(data: OrderDetailResponse) {
   groupColors.reset()
-  const activeGroupIds = new Set((data.items || []).map(item => item.group_id).filter((value): value is string => Boolean(value)))
-  emptyGroups.value = (data.groups || []).filter(group => !activeGroupIds.has(group.group_id)).map(group => ({ groupId: group.group_id, groupName: group.group_name || '' }))
+  const definitions = [...(data.groups || [])].sort((a, b) => a.sort_order - b.sort_order).map(group => ({ groupId: group.group_id, groupName: group.group_name || '' }))
+  items.value = normalizeOrderItemGroups(items.value, definitions)
+  groups.value = buildOrderItemSections(items.value, definitions).filter(section => section.groupId).map(section => ({ groupId: section.groupId, groupName: definitions.find(group => group.groupId === section.groupId)?.groupName ?? section.groupName }))
+  originalGroups.value = groups.value.map(group => ({ ...group }))
+  originalItems.value = items.value.map(item => ({ ...item }))
+  expandedRowKeys.value = []
+  selectedItems.value = []
+  tableRef.value?.clearSelection()
 }
 async function fetchOrder() {
   loading.value = true
@@ -1048,7 +1101,7 @@ async function fetchOrder() {
     })
     items.value = (data.items?.length ? data.items : [newItem()]).map(item => migrateLegacyQuoteDimensions({ ...item }))
     originalItems.value = items.value.map(item => ({ ...item }))
-    rebuildEmptyGroups(data)
+    rebuildGroups(data)
     await fetchItemEditability()
     captureCleanSnapshot()
   } finally { loading.value = false }
@@ -1142,7 +1195,6 @@ onMounted(async () => {
 .dimension-cell :deep(.el-input-number) { width: 92px; }
 .group-header-content .group-header-drag { flex: 0 0 auto; font-weight: 600; cursor: grab; user-select: none; }
 .group-header-content :deep(.el-input) { flex: 1; }
-.group-total-label { font-weight: 600; }
 .summary-card { margin-top: 16px; }
 .summary-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .summary-item.total { border-top: 1px solid var(--ad-border); padding-top: 10px; margin-top: 10px; font-size: 18px; color: var(--el-color-danger); }
@@ -1159,10 +1211,27 @@ onMounted(async () => {
 :deep(.group-card-gap td) { border-top: 8px solid var(--ad-card) !important; }
 :deep(.group-header-row td:not(:first-child)) { box-shadow: inset 0 2px 0 rgba(var(--ad-g), 0.65); }
 :deep(.group-header-row td:first-child) { box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.65), inset 0 2px 0 rgba(var(--ad-g), 0.65); }
-:deep(.group-total-row td:not(:first-child)) { box-shadow: inset 0 -2px 0 rgba(var(--ad-g), 0.65); font-weight: 600; }
-:deep(.group-total-row td:first-child) { box-shadow: inset 3px 0 0 rgba(var(--ad-g), 0.65), inset 0 -2px 0 rgba(var(--ad-g), 0.65); font-weight: 600; }
 :deep(.el-table .el-input-number) { width: 100%; }
 :deep(.ad-drag-ghost) { opacity: 0.4; }
 :deep(.el-table.el-table--scrollable-x .el-scrollbar__view) { padding-bottom: 12px; }
 :deep(.el-table.el-table--scrollable-x .el-table__body-wrapper) { margin-bottom: 8px; }
+.detail-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.toolbar { flex-wrap: wrap; }
+.card-header { gap: 12px; flex-wrap: wrap; }
+.group-header-content { flex-wrap: wrap; }
+.group-header-content :deep(.el-input) { max-width: 300px; min-width: 120px; }
+.group-summary { font-weight: 600; white-space: nowrap; }
+.spec-button { height: auto; padding: 6px 0; white-space: normal; line-height: 1.5; text-align: left; }
+.spec-button :deep(span) { display: block; }
+.item-expanded { padding: 16px 24px; background: var(--ad-bg-secondary, var(--ad-card)); }
+.item-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 20px; }
+.item-settings :deep(.el-form-item) { min-width: 0; }
+.item-settings :deep(.el-input-number), .item-settings :deep(.el-select) { width: 100%; }
+.dimension-cell { width: 100%; }
+.dimension-cell :deep(.el-input-number) { flex: 1; min-width: 0; }
+.dimension-cell :deep(.el-select) { width: 64px; flex: 0 0 64px; }
+.item-remark { grid-column: 1 / -1; }
+.calculation-note { color: var(--ad-text); margin-bottom: 6px; overflow-wrap: anywhere; }
+:deep(.group-header-row .el-table__expand-icon), :deep(.group-header-row .el-checkbox) { visibility: hidden; pointer-events: none; }
+@media (max-width: 760px) { .page-title-row { flex-wrap: wrap; } .title-actions { margin-top: 0; } .title-meta { flex-wrap: wrap; } .item-expanded { padding: 12px; } .summary-card :deep(.el-col) { flex: 0 0 100%; max-width: 100%; } }
 </style>

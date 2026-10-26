@@ -1,4 +1,5 @@
 import type { OrderEditGroup, OrderEditItem, OrderItemResponse } from '@/types/api'
+import { calcQuoteLineSubtotal } from './quoteLineCalculation'
 
 export interface OrderEditorEmptyGroup {
   groupId: string
@@ -63,6 +64,12 @@ export function serializeOrderItemDraft(item: OrderItemResponse, sortOrder = ite
   return payload
 }
 
+/** Copy editable business fields only: never carry IDs, execution or payment state. */
+export function cloneOrderItemDraft(item: OrderItemResponse): OrderItemResponse {
+  const fields = Object.fromEntries(ORDER_EDIT_ITEM_FIELDS.map(field => [field, item[field]]))
+  return { ...fields, id: '', subtotal_amount: calcQuoteLineSubtotal(item) } as OrderItemResponse
+}
+
 export function buildOrderBatchItemDiff(
   originalItems: OrderItemResponse[],
   draftItems: OrderItemResponse[],
@@ -101,6 +108,7 @@ export function buildOrderBatchItemDiff(
 export function buildOrderGroupPayload(
   items: OrderItemResponse[],
   emptyGroups: OrderEditorEmptyGroup[] = [],
+  groupOrder?: OrderEditorEmptyGroup[],
 ): OrderEditGroup[] {
   const groups = new Map<string, { group_name: string | null; firstSort: number }>()
   for (const item of items) {
@@ -128,5 +136,14 @@ export function buildOrderGroupPayload(
     })
     existing.add(emptyGroup.groupId)
   }
-  return result
+  if (!groupOrder) return result
+  const byId = new Map(result.map(group => [group.group_id, group]))
+  const orderedGroups: OrderEditGroup[] = []
+  for (const group of groupOrder) {
+    if (!group.groupId || orderedGroups.some(current => current.group_id === group.groupId)) continue
+    orderedGroups.push({ group_id: group.groupId, group_name: group.groupName || null, sort_order: orderedGroups.length })
+    byId.delete(group.groupId)
+  }
+  for (const group of byId.values()) orderedGroups.push({ ...group, sort_order: orderedGroups.length })
+  return orderedGroups
 }
