@@ -19,9 +19,9 @@
     </div>
 
           <el-table :data="list" v-loading="loading" stripe style="margin-top: 16px">
-        <el-table-column prop="design_no" label="业务单号" width="180" />
-        <el-table-column prop="source" label="来源" width="100" />
-        <el-table-column prop="order_no" label="关联编号" width="180" />
+        <el-table-column label="创建时间" width="160">
+          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+        </el-table-column>
         <el-table-column prop="customer_name" label="客户" min-width="160" />
         <el-table-column prop="department" label="部门/科室" width="120" />
         <el-table-column prop="project_name" label="项目名称" min-width="200" />
@@ -43,9 +43,6 @@
             <el-tag v-if="row.is_outsourced" type="warning" size="small">已外协</el-tag>
             <span v-else>-</span>
           </template>
-        </el-table-column>
-        <el-table-column label="创建时间" width="160">
-          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="200">
           <template #default="{ row }">
