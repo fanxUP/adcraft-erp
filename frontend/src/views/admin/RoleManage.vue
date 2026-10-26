@@ -155,7 +155,9 @@ const roleTableState = computed(() => loading.value ? 'loading' : loadError.valu
 const groupedPerms = computed(() => {
   const groups: Record<string, PermissionItem[]> = {}
   for (const p of allPerms.value) {
-    const group = p.module || p.code.split(':')[0]
+    const module = p.module || p.code.split(':')[0]
+    if (['quote', 'cdr_quote'].includes(module) && !checkedPermIds.value.includes(p.id)) continue
+    const group = ['quote', 'cdr_quote'].includes(module) ? '历史报价兼容权限（现有授权）' : module
     if (!groups[group]) groups[group] = []
     groups[group].push(p)
   }

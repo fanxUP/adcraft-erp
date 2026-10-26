@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permission_catalog import (
     PermissionDefinition,
+    permission_lifecycle_status,
     PermissionValidationIssue,
     get_permission_definition,
     validate_permission_set,
@@ -82,7 +83,7 @@ class RoleService:
             "action": metadata("action", definition.action),
             "kind": metadata("kind", definition.kind),
             "sensitivity": metadata("sensitivity", definition.sensitivity),
-            "status": metadata("status", "active"),
+            "status": "deprecated" if permission_lifecycle_status(permission.code) == "deprecated" else metadata("status", "active"),
             "sort_order": metadata("sort_order", 0),
             "requires": list(definition.requires),
         }
@@ -232,7 +233,7 @@ class RoleService:
     ) -> list[PermissionValidationIssue]:
         issues = []
         for permission in perms:
-            status = getattr(permission, "status", None)
+            status = "deprecated" if permission_lifecycle_status(permission.code) == "deprecated" else getattr(permission, "status", None)
             if (
                 isinstance(status, str)
                 and status

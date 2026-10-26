@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { canAccessRoute } from '@/config/access'
+import { legacyQuoteRoutes } from './legacyQuotes'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -24,9 +25,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'customers', name: 'CustomerList', component: () => import('@/views/customers/CustomerList.vue') },
       { path: 'customers/:id', name: 'CustomerDetail', component: () => import('@/views/customers/CustomerDetail.vue') },
       { path: 'products', name: 'ProductManage', component: () => import('@/views/products/ProductManage.vue') },
-      { path: 'quotes', name: 'QuoteList', component: () => import('@/views/orders/OrderHistory.vue') },
-      { path: 'quotes/new', name: 'QuoteCreate', redirect: '/orders/new' },
-      { path: 'quotes/:id/edit', name: 'QuoteEdit', component: () => import('@/views/orders/OrderHistory.vue') },
+      ...legacyQuoteRoutes,
       { path: 'contracts', name: 'ContractList', component: () => import('@/views/contracts/ContractList.vue') },
       { path: 'contracts/:id', name: 'ContractDetail', component: () => import('@/views/contracts/ContractDetail.vue') },
       { path: 'orders', name: 'OrderList', component: () => import('@/views/orders/OrderList.vue') },
@@ -113,11 +112,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'ai/site-photos', name: 'SitePhotoRecognition', component: () => import('@/views/ai/SitePhotoRecognition.vue') },
       { path: 'ai/payment-ocr', name: 'PaymentOCR', component: () => import('@/views/ai/PaymentOCR.vue') },
 
-      // CDR 智能报价
-      { path: 'cdr/quotes', name: 'CDRQuoteList', component: () => import('@/views/orders/OrderHistory.vue') },
-      { path: 'cdr/quotes/new', name: 'CDRQuoteCreate', redirect: '/orders/new' },
-      { path: 'cdr/quotes/:id', name: 'CDRQuoteDetail', component: () => import('@/views/orders/OrderHistory.vue') },
-      { path: 'cdr/quotes/:id/edit', name: 'CDRQuoteEdit', component: () => import('@/views/orders/OrderHistory.vue') },
       { path: 'cdr/price-rules', name: 'PriceRuleList', component: () => import('@/views/cdr-quotes/PriceRuleList.vue') },
     ],
   },

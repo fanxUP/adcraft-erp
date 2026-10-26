@@ -333,6 +333,64 @@ async def test_concurrent_retries_create_one_order(fixture_db):
     assert await db.scalar(sa.select(sa.func.count()).select_from(BusinessDocument)) == 1
 
 
+@pytest.mark.parametrize("quote_mode", ["regular", "cdr"])
+@pytest.mark.parametrize("linked_state", ["active", "deleted", "missing"])
+async def test_old_quote_link_only_resolves_active_order(fixture_db, quote_mode, linked_state):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+    from app.api import orders
+    from app.core.database import get_db
+    from app.core.deps import get_current_user
+
+    db, service, customer = fixture_db
+    quote = BusinessDocument(doc_type="quote", quote_mode=quote_mode, doc_no="Q-HISTORY",
+                             customer_id=customer.id, project_name="历史来源", status="converted")
+    db.add(quote)
+    await db.flush()
+    # A quotation referencing the source and an unrelated order must never match.
+    db.add_all([
+        BusinessDocument(doc_type="quote", doc_no="Q-OTHER", source_quote_id=quote.id,
+                         project_name="其他报价", status="confirmed"),
+        BusinessDocument(doc_type="order", doc_no="O-OTHER", project_name="其他订单", status="confirmed",
+                         order_date=date(2026, 10, 26)),
+    ])
+    linked = None
+    if linked_state != "missing":
+        linked = BusinessDocument(doc_type="order", doc_no="O-HISTORY", source_quote_id=quote.id,
+                                  project_name="已有来源订单", status="confirmed", order_date=date(2026, 10, 26),
+                                  deleted_at=datetime(2026, 10, 26) if linked_state == "deleted" else None)
+        db.add(linked)
+    await db.flush()
+    before_count = await db.scalar(sa.select(sa.func.count()).select_from(BusinessDocument))
+
+    application = FastAPI()
+    application.include_router(orders.router, prefix="/api/v1")
+
+    async def database():
+        yield db
+
+    viewer = SimpleNamespace(id=service.viewer.id, roles=[SimpleNamespace(
+        permissions=[SimpleNamespace(code="order:read")])])
+    application.dependency_overrides[get_db] = database
+    application.dependency_overrides[get_current_user] = lambda: viewer
+    path = f"/api/v1/orders/from-history/{quote.id}"
+    async with AsyncClient(transport=ASGITransport(app=application), base_url="http://test") as client:
+        response = await client.get(path)
+        expected_id = str(linked.id) if linked_state == "active" else None
+        assert response.status_code == 200
+        assert response.json()["data"] == {"order_id": expected_id}
+        assert (await client.get(f"/api/v1/orders/from-history/{uuid4()}")).json()["data"] == {"order_id": None}
+        assert (await client.get("/api/v1/orders/from-history/invalid-id")).status_code == 422
+        viewer.roles = []
+        assert (await client.get(path)).status_code == 403
+        application.dependency_overrides.pop(get_current_user)
+        assert (await client.get(path)).status_code == 401
+
+    assert await db.scalar(sa.select(sa.func.count()).select_from(BusinessDocument)) == before_count
+    assert not db.new and not db.dirty
+    assert quote.status == "converted" and quote.deleted_at is None
+
+
 async def test_http_creation_and_retired_quotation_writes(fixture_db):
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
@@ -573,3 +631,215 @@ async def test_confirmation_retry_and_customer_change_refresh_both_draft_stateme
     await service.documents.apply_order_edit(doc_id,**data,**{k:preview[k] for k in ['preview_id','plan_hash','preview_expires_at']},confirm_high_risk=True)
     for statement in statements:await db.refresh(statement)
     assert statements[0].total_order_amount==0 and statements[1].total_order_amount==1000
+
+
+def board_viewer(user_id, *codes):
+    return SimpleNamespace(id=user_id, roles=[SimpleNamespace(permissions=[SimpleNamespace(code=code) for code in codes])])
+
+
+async def test_board_sql_pages_all_three_stages_without_truncation_or_price_leak(fixture_db):
+    from app.models.task import DesignTask, ProductionTask, InstallationTask
+    from app.models.task_order_item_link import TaskOrderItemLink
+    from app.services.task_queue_service import list_task_queue
+    db, service, customer = fixture_db
+    created = await create_order(service, customer)
+    doc = await db.get(BusinessDocument, UUID(created['id']))
+    doc.status = 'designing'
+    item = (await service.documents.repo.get_items(doc.id))[0]
+    item.quantity = Decimal('12')
+    tasks = [DesignTask(design_no=f'BOARD-D-{index:03d}', document_id=doc.id,
+        customer_id=customer.id, project_name='旧项目名', status='pending', progress_pct=index % 80,
+        created_at=datetime(2026, 10, 25)) for index in range(205)]
+    db.add_all(tasks)
+    db.add_all([ProductionTask(production_no='BOARD-P', document_id=doc.id, customer_id=customer.id,
+        project_name=doc.project_name, status='in_progress', progress_pct=35),
+        InstallationTask(installation_no='BOARD-I', document_id=doc.id, customer_id=customer.id,
+        project_name=doc.project_name, status='pending', progress_pct=0)])
+    db.add_all([DesignTask(design_no=f'BOARD-HIDE-{status}', document_id=doc.id, customer_id=customer.id,
+        project_name=doc.project_name, status=status, progress_pct=0) for status in ['completed', 'confirmed', 'cancelled', 'rolled_back']])
+    db.add(DesignTask(design_no='BOARD-100', document_id=doc.id, customer_id=customer.id,
+        project_name=doc.project_name, status='in_progress', progress_pct=100))
+    await db.flush()
+    db.add(TaskOrderItemLink(task_type='design', task_id=tasks[0].id, order_item_id=item.id,
+        planned_quantity=2, completed_quantity=0, scope_snapshot={'item_name': '追加灯箱', 'quantity': 12, 'unit': '个', 'task_origin': 'order_followup'}, item_status='pending'))
+    db.add_all([OrderChangeAction(document_id=doc.id, batch_id='board-actions', module='design_tasks', record_key=str(tasks[0].id), action_type='review', detail='核对追加范围'),
+        OrderChangeAction(document_id=doc.id, batch_id='board-actions', module='payments', record_key=str(doc.id), action_type='review', detail='财务核对')])
+    await db.flush()
+    viewer = board_viewer(service.viewer.id, 'task_queue:read', 'design_task:read', 'production_task:read', 'installation_task:read')
+    first, total = await list_task_queue(db, page=1, page_size=200, viewer=viewer)
+    second, total2 = await list_task_queue(db, page=2, page_size=200, viewer=viewer)
+    assert total == total2 == 207
+    assert len(first) == 200 and len(second) == 7
+    assert len({(row['task_type'], row['id']) for row in first + second}) == 207
+    assert {row['stage'] for row in first + second} == {'design', 'production', 'installation'}
+    assert all(row['total_amount'] is None and row['project_name'] == doc.project_name for row in first + second)
+    followup = next(row for row in first + second if row['id'] == str(tasks[0].id))
+    assert followup['is_followup']
+    assert followup['pending_action_count'] == 1
+    assert all(row['pending_action_count'] == 0 for row in first + second if row['id'] != str(tasks[0].id))
+    assert followup['scope_items'][0]['planned_quantity'] == 2
+    assert followup['scope_items'][0]['current_quantity'] == 12
+    assert followup['scope_items'][0]['completed_quantity'] == 0
+    viewer.roles = board_viewer(viewer.id, 'task_queue:read', 'design_task:read').roles
+    rows, total = await list_task_queue(db, page=1, page_size=200, stage='production', viewer=viewer)
+    assert rows == [] and total == 0
+    # Order queue totals share the exact pending/confirmed status filter.
+    doc.status = 'pending_confirm'
+    await db.flush()
+    assert await list_task_queue(db, page=1, page_size=20, viewer=viewer) == ([], 0)
+    orders, total = await service.documents.list_all(1, 20, 'pending_confirm,confirmed')
+    assert total == 1 and orders[0]['id'] == str(doc.id)
+
+
+async def test_board_employee_scope_overdue_review_and_financial_actions(fixture_db):
+    from app.models.task import DesignTask
+    from app.models.employee import Employee
+    from app.models.order_task_assignee import OrderTaskAssignee
+    from app.services.task_queue_service import list_task_queue
+    db, service, customer = fixture_db
+    created = await create_order(service, customer)
+    doc = await db.get(BusinessDocument, UUID(created['id']))
+    doc.status = 'designing'
+    task = DesignTask(design_no='SCOPE-D', document_id=doc.id, customer_id=customer.id, project_name=doc.project_name,
+        status='in_progress', progress_pct=25, planned_end_at=datetime(2020, 1, 1), scope_closed_reason='订单变更待复核：核对新尺寸')
+    db.add(task)
+    employee = Employee(employee_no='TEST-E', name='执行人', user_id=service.viewer.id, is_active=True, employment_status='active')
+    db.add(employee)
+    await db.flush()
+    db.add(OrderTaskAssignee(document_id=doc.id, employee_id=employee.id))
+    await db.flush()
+    viewer = board_viewer(service.viewer.id, 'task_queue:read', 'design_task:read')
+    rows, total = await list_task_queue(db, page=1, page_size=20, overdue=True, viewer=viewer)
+    assert total == 1 and rows[0]['is_overdue']
+    assert rows[0]['review_required'] and '核对新尺寸' in rows[0]['review_reason']
+    assert await list_task_queue(db, page=1, page_size=20, overdue=False, viewer=viewer) == ([], 0)
+    viewer.id = uuid4()
+    assert await list_task_queue(db, page=1, page_size=20, viewer=viewer) == ([], 0)
+    viewer.roles = board_viewer(viewer.id, 'task_queue:read', 'task_queue:view_all', 'design_task:read').roles
+    assert (await list_task_queue(db, page=1, page_size=20, viewer=viewer))[1] == 1
+    employee.is_active = False
+    await db.flush()
+    viewer = board_viewer(service.viewer.id, 'task_queue:read', 'design_task:read')
+    assert await list_task_queue(db, page=1, page_size=20, viewer=viewer) == ([], 0)
+
+
+async def test_finance_can_resolve_own_module_without_order_edit_and_cannot_rewrite(fixture_db):
+    from fastapi import FastAPI
+    from httpx import AsyncClient, ASGITransport
+    from app.api import orders
+    from app.core.database import get_db
+    from app.core.deps import get_current_user
+    db, service, customer = fixture_db
+    created = await create_order(service, customer)
+    doc = await db.get(BusinessDocument, UUID(created['id']))
+    doc.total_amount, doc.paid_amount = Decimal('700'), Decimal('800')
+    fund = OrderChangeAction(document_id=doc.id, batch_id='finance', module='payments', record_key=str(doc.id), action_type='funds', detail='退款100')
+    cost = OrderChangeAction(document_id=doc.id, batch_id='finance', module='project_costs', record_key=str(doc.id), action_type='review', detail='核对成本')
+    db.add_all([fund, cost]); await db.flush()
+    viewer = board_viewer(service.viewer.id, 'order:read', 'payment:read', 'payment:create')
+    application = FastAPI(); application.include_router(orders.router)
+    async def database():
+        yield db
+    application.dependency_overrides[get_db] = database
+    application.dependency_overrides[get_current_user] = lambda: viewer
+    base = f'/orders/{doc.id}/change-actions'
+    async with AsyncClient(transport=ASGITransport(app=application), base_url='http://test') as client:
+        rows = (await client.get(base)).json()['data']
+        assert len(rows) == 1 and rows[0]['can_resolve']
+        assert not any(permission.code == 'order:update' for permission in viewer.roles[0].permissions)
+        # Check service rejection in a savepoint so route rollback does not
+        # discard fixtures held by the same test transaction.
+        async with db.begin_nested():
+            with pytest.raises(ValueError, match='超收款尚未退款'):
+                await OrderManagementService(db, viewer).resolve_action(doc.id, fund.id, '写文字不能代替退款')
+        doc.paid_amount = Decimal('700'); await db.flush()
+        response = await client.post(f'{base}/{fund.id}/resolve', json={'resolution': '已核对退款凭据 TEST-REFUND'})
+        assert response.status_code == 200 and response.json()['data']['status'] == 'resolved'
+        doc.deleted_at = datetime(2026, 10, 26)
+        await db.flush()
+        recycled = await client.get('/orders/recycle/list')
+        assert recycled.status_code == 200 and recycled.json()['data']['total'] == 1
+        assert (await client.post(f'/orders/{doc.id}/restore')).status_code == 403
+    viewer.roles[0].permissions += [SimpleNamespace(code='expense:read'), SimpleNamespace(code='expense:update')]
+    management = OrderManagementService(db, viewer)
+    assert (await management.resolve_action(doc.id, cost.id, '成本记录已复核'))['status'] == 'resolved'
+    with pytest.raises(ValueError, match='不能重复改写'):
+        await management.resolve_action(doc.id, cost.id, '覆盖原结果')
+
+
+async def test_completed_board_sql_pagination_and_actual_scope_survives_current_reduction(fixture_db):
+    from app.models.business_document import BusinessDocumentItem, BusinessDocumentStatusLog
+    from app.models.task import DesignTask
+    from app.models.task_item_status_log import TaskItemStatusLog
+    from app.models.task_order_item_link import TaskOrderItemLink
+    from app.services.completed_project_board_service import CompletedProjectBoardService
+    db, service, customer = fixture_db
+    docs = [BusinessDocument(doc_type='order', doc_no=f'FINISHED-{i:03d}', project_name='已完成项目', customer_id=customer.id,
+        status='completed', order_date=date(2026, 10, 26)) for i in range(205)]
+    db.add_all(docs); await db.flush()
+    for doc in docs:
+        db.add(BusinessDocumentStatusLog(document_id=doc.id, from_status='designing', to_status='completed', operated_at=datetime(2026, 10, 26)))
+        item = BusinessDocumentItem(document_id=doc.id, item_name='灯箱', quantity=8, unit='个')
+        db.add(item); await db.flush()
+        for index, qty in enumerate([10, 2]):
+            task = DesignTask(design_no=f'{doc.doc_no}-D{index}', document_id=doc.id, customer_id=customer.id,
+                project_name=doc.project_name, status='confirmed', progress_pct=100)
+            db.add(task); await db.flush()
+            db.add(TaskOrderItemLink(task_type='design', task_id=task.id, order_item_id=item.id, item_status='confirmed',
+                planned_quantity=qty, completed_quantity=qty, scope_snapshot={'item_name': '历史灯箱', 'unit': '个', 'quantity': qty}))
+            db.add(TaskItemStatusLog(task_type='design', task_id=task.id, document_id=doc.id, order_item_id=item.id,
+                to_status='confirmed', operated_at=datetime(2026, 10, 26, 12, index)))
+    await db.flush()
+    viewer = board_viewer(service.viewer.id, 'task_completion:read', 'task_completion:view_all', 'design_task:read', 'task_queue:read', 'task_queue:view_all')
+    board = CompletedProjectBoardService(db, viewer)
+    first, total = await board.get_projects(page=1, page_size=200)
+    second, total2 = await board.get_projects(page=2, page_size=200)
+    assert total == total2 == 205 and len(first) == 200 and len(second) == 5
+    assert len({row['project_id'] for row in first + second}) == 205
+    detail = await board.get_project(docs[0].id)
+    assert detail['items'][0]['quantity'] == 8
+    scopes = detail['items'][0]['stages']['design']['execution_scopes']
+    assert [scope['completed_quantity'] for scope in scopes] == [10, 2]
+    assert sum(scope['completed_quantity'] for scope in scopes) == 12
+    assert all(scope['item_name'] == '历史灯箱' for scope in scopes)
+    assert 'total_amount' not in detail
+    docs[0].status = 'designing'; await db.flush()
+    assert (await board.get_projects(page=1, page_size=200))[1] == 204
+
+
+async def test_both_seed_entrypoints_preserve_retired_status_and_existing_grants(fixture_db, monkeypatch, capsys):
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from app.models.user import Permission, Role
+    from scripts import init_app, seed_permissions
+    from app.core.permission_catalog import RETIRED_QUOTE_PERMISSIONS
+    db, _, _ = fixture_db
+    # Use only this fixture's disposable schema; seed scripts commit their own
+    # sessions, never the developer database.
+    maker = async_sessionmaker(db.bind, expire_on_commit=False)
+    monkeypatch.setattr(init_app, 'async_session_maker', maker)
+    monkeypatch.setattr(init_app, '_ADMIN_INIT_PASSWORD', None)
+    monkeypatch.setattr(seed_permissions, 'async_session_maker', maker)
+    await init_app.init_app()
+    async with maker() as session:
+        role = (await session.scalars(sa.select(Role).where(Role.name == 'sales'))).one()
+        legacy = (await session.scalars(sa.select(Permission).where(Permission.code == 'quote:update'))).one()
+        role.permissions = [*role.permissions, legacy]
+        await session.commit()
+    await seed_permissions.seed_permissions()
+    await init_app.init_app()
+    async with maker() as session:
+        rows = (await session.scalars(sa.select(Permission).where(Permission.code.in_(RETIRED_QUOTE_PERMISSIONS)))).all()
+        assert all(row.status == 'deprecated' for row in rows)
+        role = (await session.scalars(sa.select(Role).where(Role.name == 'sales'))).one()
+        assert 'quote:update' in {permission.code for permission in role.permissions}
+
+    from scripts import audit_order_permissions
+    from unittest.mock import AsyncMock
+    import json
+    capsys.readouterr()
+    monkeypatch.setattr(audit_order_permissions, 'async_session_maker', maker)
+    monkeypatch.setattr(audit_order_permissions, 'engine', SimpleNamespace(dispose=AsyncMock()))
+    await audit_order_permissions.main()
+    inventory = json.loads(capsys.readouterr().out)
+    assert inventory['mode'] == 'read_only'
+    assert any(role['name'] == 'sales' and 'quote:update' in role['retired_grants'] for role in inventory['roles'])

@@ -8,7 +8,7 @@ from decimal import Decimal
 import hmac
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select, text
+from sqlalchemy import exists, func, select, text
 from sqlalchemy.orm import selectinload
 
 from app.models.business_document import BusinessDocument, BusinessDocumentVersion, OrderChangeAction
@@ -249,7 +249,7 @@ class OrderManagementService:
             for index, (item, quantity) in enumerate(followup):
                 self.db.add(TaskOrderItemLink(task_type=kind, task_id=task.id, order_item_id=item.id,
                     position=index, item_status="pending", item_progress_pct=0, planned_quantity=quantity,
-                    completed_quantity=0, scope_snapshot=self.documents._item_snapshot(item)))
+                    completed_quantity=0, scope_snapshot={**self.documents._item_snapshot(item), "task_origin": "order_followup"}))
             if doc.status == "completed":
                 doc.status = "designing"
                 await self.documents.repo.create_status_log(doc.id, "completed", doc.status,
@@ -319,15 +319,51 @@ class OrderManagementService:
         refresh["pending_review"] = [row for row in refresh.get("pending_review", []) if (row.get("module"), row.get("record_id")) not in refreshed]
         await self.db.flush()
 
+    async def _action_capabilities(self, row):
+        """Apply module rights and the existing order/employee delivery scope."""
+        from app.core.access_policy import AuthorizationPolicy
+        from app.models.task import DesignTask, ProductionTask, InstallationTask
+        from app.services.order_task_assignment_service import task_visibility_clause
+        policy = AuthorizationPolicy(self.viewer)
+        modules = {
+            "payments": ("payment:read", "payment:create"),
+            "project_costs": ("expense:read", "expense:update"),
+            "contracts": ("contract:read", "contract:update"),
+            "framework_contracts": ("contract:read", "contract:update"),
+            "customer_statements": ("statement:read", "statement:confirm"),
+            "outsource_tasks": ("outsource_task:read", "outsource_task:update"),
+            "acceptance_forms": ("acceptance:read", "acceptance:update"),
+            "acceptance_items": ("acceptance:read", "acceptance:update"),
+            "stock_records": ("inventory:read", "inventory:update"),
+        }
+        task_sources = {"design": DesignTask, "production": ProductionTask, "installation": InstallationTask}
+        task_type = next((kind for kind in task_sources if row.module in {f"{kind}_tasks", f"{kind}_task_links"}), None)
+        if task_type:
+            modules[row.module] = (f"{task_type}_task:read", f"{task_type}_task:update")
+        read, write = modules.get(row.module, ("order:read", "order:update"))
+        readable = policy.allows(read)
+        if readable and task_type:
+            model = task_sources[task_type]
+            readable = bool(await self.db.scalar(select(exists().where(
+                model.document_id == row.document_id, task_visibility_clause(model, self.viewer)))))
+        writable = readable and policy.allows(write) and row.status == "pending"
+        return readable, writable, "" if writable else "当前账号无处理权限或事项已处理"
+
     async def list_actions(self, order_id):
         await self._order(order_id, deleted=True)
         rows = (await self.db.execute(select(OrderChangeAction).where(OrderChangeAction.document_id == order_id)
                                      .order_by(OrderChangeAction.created_at.desc(), OrderChangeAction.id))).scalars().all()
-        return [{"id": str(row.id), "batch_id": row.batch_id, "module": row.module, "record_no": row.record_no,
+        result = []
+        for row in rows:
+            readable, writable, reason = await self._action_capabilities(row)
+            if not readable:
+                continue
+            result.append({"id": str(row.id), "batch_id": row.batch_id, "module": row.module, "record_no": row.record_no,
                  "action_type": row.action_type, "detail": row.detail, "status": row.status,
                  "assigned_to": str(row.assigned_to) if row.assigned_to else None, "resolution": row.resolution,
-                 "created_at": row.created_at.isoformat(),
-                 "resolved_at": row.resolved_at.isoformat() if row.resolved_at else None} for row in rows]
+                 "created_at": row.created_at.isoformat(), "can_resolve": writable, "resolve_reason": reason,
+                 "resolved_at": row.resolved_at.isoformat() if row.resolved_at else None})
+        return result
 
     async def resolve_action(self, order_id, action_id, resolution):
         doc = await self._order(order_id, deleted=True, lock=True)
@@ -335,11 +371,9 @@ class OrderManagementService:
             OrderChangeAction.document_id == order_id).with_for_update())).scalar_one_or_none()
         if not row:
             raise ValueError("处理事项不存在")
-        from app.core.permissions import user_has_permission
-        required = {"payments": "payment:create", "contracts": "contract:update", "framework_contracts": "contract:update",
-                    "project_costs": "project_cost:update", "outsource_tasks": "outsource_task:update"}.get(row.module)
-        if required and self.viewer and not user_has_permission(self.viewer, required):
-            raise ValueError("请由具备该关联业务操作权限的人员登记处理结果")
+        readable, writable, _ = await self._action_capabilities(row)
+        if not readable or not writable:
+            raise ValueError("请由具备该关联业务操作权限的人员登记处理结果，已处理事项不能重复改写")
         if row.action_type == "funds" and money(doc.paid_amount) > money(doc.total_amount):
             raise ValueError("超收款尚未退款或转预收，请先完成资金处理")
         if not resolution.strip():

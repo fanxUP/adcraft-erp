@@ -29,11 +29,26 @@
       </div>
     </div>
 
-    <div v-if="authStore.hasPermission('order:view_price')" class="card-amount">
+    <div v-if="authStore.can('order:view_price')" class="card-amount">
       <span class="card-field-label">订单金额</span>
       <strong>{{ formatMoney(task.total_amount) }}</strong>
     </div>
 
+    <div class="scope-notices">
+      <el-tag v-if="task.is_followup" size="small" type="warning">追加 / 补做</el-tag>
+      <el-tag v-if="task.is_outsourced" size="small">含外协</el-tag>
+      <el-tag v-if="task.pending_action_count" size="small" type="warning">待处理事项 {{ task.pending_action_count }}</el-tag>
+    </div>
+    <el-alert v-if="task.review_required" :title="task.review_reason || '订单已变更，请先核对任务范围'" type="warning" :closable="false" show-icon />
+    <div class="scope-items">
+      <div v-for="item in task.scope_items" :key="item.order_item_id" class="scope-item">
+        <strong>{{ item.scope_item_name || item.item_name }}</strong>
+        <span>本次计划 {{ quantity(item.planned_quantity, item.scope_unit) }} · 已完成 {{ quantity(item.completed_quantity, item.scope_unit) }}</span>
+        <span>订单当前需求 {{ quantity(item.current_quantity, item.unit) }}</span>
+        <span v-if="item.assignee_name">执行人：{{ item.assignee_name }}</span>
+      </div>
+      <span v-if="!task.scope_items?.length">{{ task.item_names?.join('、') || task.item_name || '明细范围未记录' }}</span>
+    </div>
     <ProgressBar
       :percentage="taskProgress(task)"
       :tone="task.status_view?.tone"
@@ -68,6 +83,10 @@ const emit = defineEmits<{
   open: []
 }>()
 
+function quantity(value?: number | null, unit?: string | null) {
+  return value === null || value === undefined ? '未记录' : `${value}${unit ? ` ${unit}` : ''}`
+}
+
 function openTask() {
   emit('open')
 }
@@ -81,6 +100,10 @@ function handleKeydown(event: KeyboardEvent) {
 </script>
 
 <style scoped>
+.scope-notices { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.scope-items { display: grid; gap: 8px; margin: 10px 0; font-size: 12px; color: var(--ad-text-secondary); }
+.scope-item { display: grid; gap: 3px; }
+.scope-item strong { color: var(--ad-text); font-weight: 600; }
 .board-card {
   margin-bottom: 8px;
   cursor: pointer;

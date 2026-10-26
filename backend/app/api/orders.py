@@ -80,6 +80,29 @@ async def create_order(data: OrderCreate, db: AsyncSession = Depends(get_db),
         return error(40001, str(exc))
 
 
+@router.get("/from-history/{quote_id}")
+async def find_order_from_history(
+    quote_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_READ)),
+):
+    """Resolve old quotation links without creating or changing documents."""
+    from sqlalchemy import select
+    from app.models.business_document import BusinessDocument
+
+    order_id = await db.scalar(
+        select(BusinessDocument.id)
+        .where(
+            BusinessDocument.doc_type == "order",
+            BusinessDocument.source_quote_id == quote_id,
+            BusinessDocument.deleted_at.is_(None),
+        )
+        .order_by(BusinessDocument.created_at, BusinessDocument.id)
+        .limit(1)
+    )
+    return success({"order_id": str(order_id) if order_id else None})
+
+
 @router.post("/from-history/{quote_id}")
 async def continue_quote_history(quote_id: UUID, db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_CREATE))):
@@ -166,13 +189,13 @@ async def list_orders(
     return success_paginated(orders, total, page, page_size)
 
 
-@router.get("/recycle/list")
+@router.get("/recycle/list", dependencies=[Depends(require_permission(PERM_ORDER_READ))])
 async def list_deleted_orders(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_ORDER_DELETE)),
+    current_user: User = Depends(require_any_permission(PERM_ORDER_DELETE, PERM_PAYMENT_READ)),
 ):
     service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     orders, total = await service.list_deleted(page, page_size, keyword=keyword)
@@ -1013,13 +1036,10 @@ async def preview_order_delete(order_id: UUID, data: OrderDeleteRequest, db: Asy
 
 @router.get("/{order_id}/change-actions")
 async def order_change_actions(order_id: UUID, db: AsyncSession = Depends(get_db),
-                               current_user: User = Depends(require_permission(PERM_ORDER_UPDATE))):
+                               current_user: User = Depends(require_permission(PERM_ORDER_READ))):
     from app.services.order_management_service import OrderManagementService
-    from app.core.permissions import user_has_permission
     try:
         rows = await OrderManagementService(db, current_user).list_actions(order_id)
-        if not user_has_permission(current_user, PERM_PAYMENT_READ):
-            rows = [row for row in rows if row["module"] not in {"payments", "project_costs", "contracts", "framework_contracts", "customer_statements"}]
         return success(rows)
     except ValueError as exc:
         return error(40401, str(exc))
@@ -1028,7 +1048,7 @@ async def order_change_actions(order_id: UUID, db: AsyncSession = Depends(get_db
 @router.post("/{order_id}/change-actions/{action_id}/resolve")
 async def resolve_order_action(order_id: UUID, action_id: UUID, data: OrderActionResolve,
                                db: AsyncSession = Depends(get_db),
-                               current_user: User = Depends(require_permission(PERM_ORDER_UPDATE))):
+                               current_user: User = Depends(require_permission(PERM_ORDER_READ))):
     from app.services.order_management_service import OrderManagementService
     try:
         return success(await OrderManagementService(db, current_user).resolve_action(order_id, action_id, data.resolution))

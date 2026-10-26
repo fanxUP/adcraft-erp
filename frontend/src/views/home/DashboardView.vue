@@ -1,5 +1,6 @@
 <template>
-  <div class="page" v-loading="loading">
+  <div v-if="authStore.can('dashboard:read')" class="page" v-loading="loading">
+    <el-alert v-if="dashboardError" :title="dashboardError" type="error" :closable="false" show-icon />
     <h1 style="margin: 0 0 24px; color: var(--ad-text)">经营驾驶舱</h1>
 
     <el-row :gutter="16" style="margin-bottom: 16px">
@@ -173,81 +174,37 @@
   <!-- 项目看板 -->
   <div class="page" style="margin-top: 24px">
     <h2 style="margin: 0 0 16px; color: var(--ad-text)">项目看板</h2>
-    <div class="board" v-loading="boardLoading">
-      <div v-for="col in visibleColumns" :key="col.key" class="board-column">
-        <div class="column-header">
-          <span>{{ col.label }}</span>
-          <el-tag size="small" :type="col.key === 'completed' ? 'success' : 'danger'">{{ columnCount(col.key) }}</el-tag>
-        </div>
-        <div class="column-body">
-          <template v-if="col.key === 'queue'">
-            <el-empty v-if="!queueCards().length" description="暂无项目" :image-size="56" />
-            <ProjectQueueCard
-              v-for="order in queueCards()"
-              :key="order.id"
-              :order="order"
-              @open="handleOrderCardClick(order)"
-            />
-          </template>
-
-          <template v-else-if="col.key === 'completed'">
-            <el-empty v-if="!completedProjects.length" description="暂无完成项目" :image-size="56" />
-            <CompletedProjectCard
-              v-for="project in completedProjects"
-              :key="project.project_id"
-              :project="project"
-              @open="handleCompletedProjectClick(project)"
-            />
-          </template>
-
-          <template v-else>
-            <el-empty v-if="!stageCards(col.key).length" description="暂无任务" :image-size="56" />
-            <TaskBoardCard
-              v-for="task in stageCards(col.key)"
-              :key="task.id"
-              :task="task"
-              @open="handleTaskCardClick(task)"
-            />
-          </template>
-        </div>
-      </div>
-    </div>
+    <ProjectBoard />
   </div>
 
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { getDashboard, getTaskCompletionSummary } from '@/api/payments'
-import { getOrders, getProjectQueueOrders } from '@/api/orders'
-import { getCompletedProjects, getTaskQueue } from '@/api/tasks'
+import { getOrders } from '@/api/orders'
 import type {
   CustomerDebtItem,
   OrderListResponse,
   TaskCompletionPeriod,
   TaskCompletionSummary,
   TaskCompletionType,
-  TaskQueueItem,
-  CompletedProjectCard as CompletedProjectCardType,
 } from '@/types/api'
-import TaskBoardCard from '@/components/ui/TaskBoardCard.vue'
-import CompletedProjectCard from '@/components/ui/CompletedProjectCard.vue'
-import ProjectQueueCard from '@/components/ui/ProjectQueueCard.vue'
-import { isTaskVisible, TASK_BOARD_COLUMNS } from '@/utils/task-board'
+import ProjectBoard from '@/components/ui/ProjectBoard.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
-const canViewFinancial = computed(() => authStore.hasPermission('report:view_financial'))
+const canViewFinancial = computed(() => authStore.can('report:view_financial'))
 const canViewPricedOrders = computed(() => (
   authStore.canAll(['order:read', 'order:view_price'])
 ))
-const canViewProjectQueue = computed(() => authStore.can('order:read'))
 const canViewTaskCompletion = computed(() => authStore.can('task_completion:read'))
 const canViewCompletionAll = computed(() => authStore.can('task_completion:view_all'))
 
 const loading = ref(false)
+const dashboardError = ref('')
 const data = reactive({
   today_order_amount: 0, today_payment_amount: 0,
   month_order_amount: 0, month_payment_amount: 0,
@@ -273,64 +230,16 @@ const completionEntryStats = computed(() => (
     : completionSummary.value?.own
 ))
 
-const boardLoading = ref(false)
-const projectQueueOrders = ref<OrderListResponse[]>([])
-const taskCards = ref<TaskQueueItem[]>([])
-const completedProjects = ref<CompletedProjectCardType[]>([])
 const router = useRouter()
 
-const columns = [
-  { key: 'queue', label: '项目队列' },
-  ...TASK_BOARD_COLUMNS,
-  { key: 'completed', label: '完成' },
-] as const
-
-const visibleColumns = computed(() => columns.filter(col => (
-  (col.key !== 'queue' || canViewProjectQueue.value)
-  && (col.key !== 'completed' || canViewTaskCompletion.value)
-)))
-
-type BoardColumnKey = (typeof columns)[number]['key']
-
-function queueCards() {
-  return projectQueueOrders.value
-}
-
-function stageCards(stage: string) {
-  return taskCards.value.filter(task => task.stage === stage && isTaskVisible(task))
-}
-
-function columnCount(columnKey: BoardColumnKey) {
-  if (columnKey === 'queue') return queueCards().length
-  if (columnKey === 'completed') return completedProjects.value.length
-  return stageCards(columnKey).length
-}
-
-async function fetchBoardData() {
-  boardLoading.value = true
-  try {
-    const emptyCompleted = { items: [] as CompletedProjectCardType[], total: 0, page: 1, page_size: 200 }
-    const [orders, tasks, completed] = await Promise.all([
-      canViewProjectQueue.value
-        ? getProjectQueueOrders().catch(() => [] as OrderListResponse[])
-        : Promise.resolve([] as OrderListResponse[]),
-      getTaskQueue({ page: 1, page_size: 200 }).catch(() => ({ items: [] as TaskQueueItem[] })),
-      canViewTaskCompletion.value
-        ? getCompletedProjects({ page: 1, page_size: 200 }).catch(() => emptyCompleted)
-        : Promise.resolve(emptyCompleted),
-    ])
-    projectQueueOrders.value = orders
-    taskCards.value = tasks.items
-    completedProjects.value = completed.items
-  } finally { boardLoading.value = false }
-}
-
 async function fetchData() {
+  if (!authStore.can('dashboard:read')) return
+  dashboardError.value = ''
   loading.value = true
   try {
     const d = await getDashboard()
     Object.assign(data, d)
-  } finally { loading.value = false }
+  } catch { dashboardError.value = '驾驶舱加载失败，请刷新重试' } finally { loading.value = false }
 }
 
 async function fetchCompletionSummary() {
@@ -376,42 +285,12 @@ function goPendingOrder(item: OrderListResponse) {
   window.location.href = `/orders/${item.id}`
 }
 
-function handleOrderCardClick(card: OrderListResponse) {
-  window.location.href = '/orders/' + card.id
-}
-
-function handleTaskCardClick(task: TaskQueueItem) {
-  const routeByType: Record<TaskQueueItem['task_type'], string> = {
-    design: '/design-tasks/',
-    production: '/production-tasks/',
-    installation: '/installation-tasks/',
-  }
-  window.location.href = routeByType[task.task_type] + task.id
-}
-
-function handleCompletedProjectClick(project: CompletedProjectCardType) {
-  router.push({ name: 'CompletedProjectDetail', params: { projectId: project.project_id } })
-}
-
-// 从详情页返回时浏览器可能走 bfcache 恢复页面（onMounted 不再触发），
-// 需要监听 pageshow 在恢复时重新拉取看板数据，避免删除任务后卡片仍显示旧数据。
-function handlePageShow(e: PageTransitionEvent) {
-  if (e.persisted) {
-    fetchBoardData()
-  }
-}
-
 onMounted(() => {
   fetchData()
   fetchPendingOrders()
-  fetchBoardData()
   fetchTaskCompletion()
-  window.addEventListener('pageshow', handlePageShow)
 })
 
-onBeforeUnmount(() => {
-  window.removeEventListener('pageshow', handlePageShow)
-})
 </script>
 
 <style scoped>

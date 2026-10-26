@@ -20,6 +20,7 @@ export type AccessKey =
   | 'orderRead'
   | 'orderManage'
   | 'orderDelete'
+  | 'orderRecycleRead'
   | 'acceptance'
   | 'cdrQuote'
   | 'cdrPriceRules'
@@ -94,6 +95,7 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   orderRead: ['admin', 'sales', 'finance', 'manager'],
   orderManage: ['admin', 'sales'],
   orderDelete: ['admin'],
+  orderRecycleRead: ['admin', 'sales', 'finance'],
   acceptance: ['admin', 'sales'],
   cdrQuote: ['admin', 'sales'],
   cdrPriceRules: ['admin', 'sales'],
@@ -157,10 +159,11 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement
   quoteCreate: ['quote:create'],
   quoteUpdate: ['quote:update'],
   contract: ['contract:read'],
-  orderCreate: ['order:create'],
+  orderCreate: ['order:create', 'order:read', 'order:view_price', 'order_item:view_price'],
   orderRead: ['order:read'],
-  orderManage: ['order:update'],
+  orderManage: ['order:update', 'order:read', 'order:view_price', 'order_item:view_price'],
   orderDelete: ['order:delete'],
+  orderRecycleRead: { allOf: ['order:read'], anyOf: ['order:delete', 'payment:read'] },
   acceptance: ['acceptance:read'],
   cdrQuote: ['cdr_quote:read'],
   cdrPriceRules: ['cdr_rule_set:publish'],
@@ -174,7 +177,7 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement
   installation: ['installation_task:read'],
   installationRead: ['installation_task:read'],
   installationListRead: ['installation_task:list'],
-  boardRead: { anyOf: ['design_task:read', 'production_task:read', 'installation_task:read'] },
+  boardRead: { anyGroups: [['order:read'], ...['design_task:read', 'production_task:read', 'installation_task:read'].flatMap(permission => [['task_queue:read', permission], ['task_completion:read', permission]])] },
   taskCompletion: ['task_completion:read'],
   outsourceVendor: { allOf: ['outsource_center:read', 'outsource_vendor:read'] },
   outsourceTask: { allOf: ['outsource_center:read', 'outsource_task:read'] },
@@ -232,14 +235,12 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   CustomerList: 'customer',
   CustomerDetail: 'customer',
   ProductManage: 'product',
-  QuoteList: 'quote',
-  QuoteCreate: 'quoteCreate',
-  QuoteEdit: 'quoteUpdate',
+  LegacyQuoteOrder: 'orderRead',
   ContractList: 'contract',
   ContractDetail: 'contract',
   OrderCreate: 'orderCreate',
   OrderList: 'orderRead',
-  OrderRecycle: 'orderDelete',
+  OrderRecycle: 'orderRecycleRead',
   OrderEdit: 'orderManage',
   OrderDetail: 'orderRead',
   AcceptanceList: 'acceptance',
@@ -325,10 +326,6 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   SitePhotoRecognition: 'aiSitePhoto',
   PaymentOCR: 'aiPaymentOcr',
 
-  CDRQuoteList: 'cdrQuote',
-  CDRQuoteCreate: 'cdrQuote',
-  CDRQuoteDetail: 'cdrQuote',
-  CDRQuoteEdit: 'cdrQuote',
   PriceRuleList: 'cdrPriceRules',
 
   MobileHome: 'authenticated',
@@ -343,9 +340,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   CustomerList: '客户管理',
   CustomerDetail: '客户详情',
   ProductManage: '产品 / 材质 / 工艺定价',
-  QuoteList: '常规报价',
-  QuoteCreate: '新建报价',
-  QuoteEdit: '编辑报价',
+  LegacyQuoteOrder: '订单管理',
   ContractList: '合同管理',
   ContractDetail: '合同详情',
   OrderCreate: '新建订单',
@@ -416,10 +411,6 @@ export const ROUTE_TITLES: Record<string, string> = {
   QuoteKnowledgeBase: '报价知识库',
   SitePhotoRecognition: '现场照片识别',
   PaymentOCR: '收款截图识别',
-  CDRQuoteList: '智能报价',
-  CDRQuoteCreate: '新建智能报价',
-  CDRQuoteDetail: '智能报价详情',
-  CDRQuoteEdit: '编辑智能报价',
   PriceRuleList: '定价规则',
   MobileHome: '移动工作台',
   MobileInstallation: '安装任务',

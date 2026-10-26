@@ -29,22 +29,22 @@ function order(overrides: Partial<OrderListResponse> = {}): OrderListResponse {
 
 describe('项目看板与项目成本的部门/科室展示', () => {
   it('独立项目看板包含项目队列列并使用共享项目队列卡片', () => {
-    const source = readSource('views/tasks/ProductionTaskBoard.vue')
+    const source = readSource('components/ui/ProjectBoard.vue')
 
-    expect(source).toContain("label: '项目队列'")
-    expect(source).toContain('getProjectQueueOrders')
+    expect(source).toContain("label: '待确认 / 待安排'")
+    expect(source).toContain('getProjectQueuePage')
     expect(source).toContain('ProjectQueueCard')
-    expect(source).toContain('queueCards')
+    expect(source).toContain('col.orders')
   })
 
   it('工作台和独立项目看板使用同一项目队列加载方法与卡片', () => {
     const dashboard = readSource('views/home/DashboardView.vue')
     const board = readSource('views/tasks/ProductionTaskBoard.vue')
 
-    expect(dashboard).toContain('getProjectQueueOrders')
-    expect(dashboard).toContain('ProjectQueueCard')
-    expect(board).toContain('getProjectQueueOrders')
-    expect(board).toContain('ProjectQueueCard')
+    expect(dashboard).toContain('<ProjectBoard')
+    expect(dashboard).toContain('ProjectBoard')
+    expect(board).toContain('<ProjectBoard')
+    expect(board).toContain('ProjectBoard')
     expect(dashboard).not.toContain('getOrders({ page_size: 100 })')
   })
 

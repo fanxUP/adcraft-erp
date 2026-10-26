@@ -19,14 +19,14 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import engine, async_session_maker
-from app.core.permission_catalog import get_permission_definition
+from app.core.permission_catalog import get_permission_definition, permission_lifecycle_status
 from app.models.user import Role, Permission, User, user_roles
 from app.utils.security import hash_password
 
 
 ROLES = [
     {"name": "admin", "description": "系统管理员，拥有所有权限"},
-    {"name": "sales", "description": "销售员，管理客户和报价"},
+    {"name": "sales", "description": "销售员，管理客户和订单"},
     {"name": "designer", "description": "设计师，处理设计任务"},
     {"name": "production", "description": "制作人员，处理制作任务"},
     {"name": "installer", "description": "安装人员，处理安装任务"},
@@ -143,7 +143,7 @@ async def init_app():
             perm.action = definition.action
             perm.kind = definition.kind
             perm.sensitivity = definition.sensitivity
-            perm.status = "active"
+            perm.status = permission_lifecycle_status(perm.code)
             perm.sort_order = sort_order
 
         await session.flush()

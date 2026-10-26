@@ -214,7 +214,7 @@ async def test_confirmed_action_failure_marks_action_failed():
         required_permission="order:change_status",
         handler=AsyncMock(side_effect=RuntimeError("confirmed handler failed")),
     ))
-    owner = _user("order:change_status")
+    owner = _user("order:change_status", "order:read")
     action_id = uuid4()
     pending = SimpleNamespace(
         id=action_id,

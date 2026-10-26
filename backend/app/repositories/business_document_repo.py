@@ -87,7 +87,7 @@ class BusinessDocumentRepository:
         if self.quote_mode:
             q = q.where(BusinessDocument.quote_mode == self.quote_mode)
         if status:
-            q = q.where(BusinessDocument.status == status)
+            q = q.where(BusinessDocument.status.in_([value.strip() for value in status.split(",") if value.strip()]))
         if exclude_status:
             excluded_statuses = (
                 [exclude_status]
@@ -109,6 +109,7 @@ class BusinessDocumentRepository:
             q = q.order_by(
                 BusinessDocument.order_date.desc().nullslast(),
                 BusinessDocument.created_at.desc(),
+                BusinessDocument.id.desc(),
             )
         else:
             q = q.order_by(BusinessDocument.created_at.desc())

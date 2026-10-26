@@ -30,7 +30,7 @@
           <el-tag :type="statusColor(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="总金额" width="120">
+      <el-table-column v-if="auth.can('order:view_price')" label="总金额" width="120">
         <template #default="{ row }">¥ {{ row.total_amount?.toFixed(2) }}</template>
       </el-table-column>
       <el-table-column label="删除时间" width="160">
@@ -38,7 +38,7 @@
       </el-table-column>
       <el-table-column label="操作" width="200">
         <template #default="{ row }">
-          <el-button text type="success" @click="handleRestore(row as OrderListResponse)">恢复</el-button>
+          <el-button v-if="auth.can('order:delete')" text type="success" @click="handleRestore(row as OrderListResponse)">恢复</el-button>
           <el-button text type="primary" @click="selectedId = row.id; changeDialog = true">变更与资金</el-button>
         </template>
       </el-table-column>
@@ -60,6 +60,8 @@
 <script setup lang="ts">
 import { formatDateTimeFull } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+const auth = useAuthStore()
 import OrderChangePanel from '@/components/orders/OrderChangePanel.vue'
 import { getDeletedOrders, restoreOrder } from '@/api/orders'
 import { ElMessage, ElMessageBox } from 'element-plus'

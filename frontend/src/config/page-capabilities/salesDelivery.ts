@@ -56,13 +56,6 @@ export const salesDeliveryCapabilities: PageCapabilityMap = {
       { label: '收款', prompt: '这个订单的收款情况' },
     ],
   },
-  quote_list: { title: '历史报价档案', purpose: '只读查询历史来源，新业务直接创建订单', workflowStage: 'history', availableActions: ['查看历史内容'] },
-  quote_create: { title: '历史报价档案', purpose: '只读查询历史来源，新业务直接创建订单', workflowStage: 'history', availableActions: ['查看历史内容'] },
-  quote_edit: { title: '历史报价档案', purpose: '只读查询历史来源，新业务直接创建订单', workflowStage: 'history', availableActions: ['查看历史内容'] },
-  cdr_quote_list: { title: '历史报价档案', purpose: '只读查询历史来源，新业务直接创建订单', workflowStage: 'history', availableActions: ['查看历史内容'] },
-  cdr_quote_create: { title: '历史报价档案', purpose: '只读查询历史来源，新业务直接创建订单', workflowStage: 'history', availableActions: ['查看历史内容'] },
-  cdr_quote_detail: { title: '历史报价档案', purpose: '只读查询历史来源，新业务直接创建订单', workflowStage: 'history', availableActions: ['查看历史内容'] },
-  cdr_quote_edit: { title: '历史报价档案', purpose: '只读查询历史来源，新业务直接创建订单', workflowStage: 'history', availableActions: ['查看历史内容'] },
   price_rules: {
     title: '定价规则',
     purpose: '维护智能报价使用的材料、工艺和计价规则',
@@ -116,9 +109,9 @@ export const salesDeliveryCapabilities: PageCapabilityMap = {
   },
   production_task_board: {
     title: '项目看板',
-    purpose: '按状态直观查看制作任务并进行排产调度',
-    workflowStage: 'production',
-    availableActions: ['查看排产状态', '调整任务状态', '查看任务详情'],
+    purpose: '按订单与独立任务查看设计、制作、安装及完成项目，核对订单变更后的执行范围',
+    workflowStage: 'delivery',
+    availableActions: ['查看待确认订单', '查看授权阶段任务', '核对变更提示', '查看完成项目'],
   },
   production_task_detail: {
     title: '制作任务详情',

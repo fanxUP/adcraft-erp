@@ -64,6 +64,10 @@ PERMISSION_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "installation_task:update": ("installation_task:read",),
     "installation_task:change_status": ("installation_task:read",),
     "installation_task:delete": ("installation_task:read",),
+    "order:create": ("order:read", "order:view_price", "order_item:view_price"),
+    "order:update": ("order:read", "order:view_price", "order_item:view_price"),
+    "order:delete": ("order:read", "order:view_price"),
+    "order:change_status": ("order:read",),
     # Order task visibility management is still an order operation.
     "order:task_assign": ("order:read",),
     "order:change_date": ("order:read",),
@@ -115,6 +119,18 @@ PERMISSION_DEPENDENCIES: dict[str, tuple[str, ...]] = {
 }
 
 
+# Keep legacy reads valid for historical attachments and compatibility APIs.
+# Writes are retired from new role configurations, without deleting grants.
+RETIRED_QUOTE_PERMISSIONS = frozenset({
+    "quote:create", "quote:update", "quote:delete", "quote:confirm", "quote:convert",
+    "cdr_quote:create", "cdr_quote:update", "cdr_quote:delete", "cdr_quote:adjust_price",
+    "cdr_quote:approve", "cdr_quote:convert",
+})
+
+def permission_lifecycle_status(code: str) -> str:
+    return "deprecated" if code in RETIRED_QUOTE_PERMISSIONS else "active"
+
+
 # These are the high-risk capabilities that must be reviewed together.  Read
 # access to task details is not considered an execution role: sales users can
 # read/assign tasks while still viewing commercial information.  Mutating a
@@ -135,6 +151,9 @@ TASK_MUTATION_PERMISSIONS = frozenset({
 })
 
 SENSITIVE_PERMISSIONS = frozenset({
+    "order:create",
+    "order:update",
+    "order:delete",
     "quote:read",
     "quote:create",
     "quote:update",

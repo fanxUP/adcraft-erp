@@ -484,17 +484,6 @@
       ]
     },
     {
-      "page_key": "quote_edit",
-      "route_name": "QuoteEdit",
-      "path": "/quotes/:id/edit",
-      "title": "历史报价档案",
-      "purpose": "只读查询历史来源，新业务直接创建订单",
-      "workflow_stage": "history",
-      "business_types": [
-        "quote"
-      ]
-    },
-    {
       "page_key": "acceptance_detail",
       "route_name": "AcceptanceDetail",
       "path": "/acceptances/:id",

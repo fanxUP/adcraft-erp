@@ -2,9 +2,8 @@
   <div class="page">
     <div class="page-header">
       <h2>订单管理</h2>
-      <el-button v-if="authStore.can('quote:read')" @click="$router.push('/quotes')">历史报价档案</el-button>
       <el-button v-if="authStore.can('order:create')" type="primary" @click="$router.push('/orders/new')">新建订单</el-button>
-      <el-button v-if="authStore.isAdmin" @click="$router.push('/orders/recycle')" type="warning">
+      <el-button v-if="authStore.can('order:delete') || authStore.canAll(['order:read', 'payment:read'])" @click="$router.push('/orders/recycle')" type="warning">
         <el-icon><Delete /></el-icon> 回收站
       </el-button>
     </div>

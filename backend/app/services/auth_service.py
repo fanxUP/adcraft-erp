@@ -7,6 +7,7 @@ from app.models.user import User
 from app.models.employee import Employee
 from app.models.user_preferences import UserPreference
 from app.core.permissions import get_user_capabilities, get_user_permission_codes
+from app.core.authorization import AuthorizationEvaluator
 from app.core.password_policy import MAX_PASSWORD_LENGTH, validate_new_password
 from app.schemas.auth import (
     DEFAULT_USER_PREFERENCES,
@@ -52,6 +53,7 @@ class AuthService:
         if not user:
             return None
         preferences = await self._ensure_preferences(user.id)
+        evaluator = AuthorizationEvaluator(user)
         return {
             "id": str(user.id),
             "username": user.username,
@@ -62,6 +64,7 @@ class AuthService:
             "must_change_password": user.must_change_password,
             "roles": [r.name for r in user.roles],
             "permissions": sorted(get_user_permission_codes(user)),
+            "effective_permissions": sorted(code for code in get_user_permission_codes(user) if evaluator.check(code).allowed),
             "capabilities": get_user_capabilities(user),
             "preferences": preferences,
         }

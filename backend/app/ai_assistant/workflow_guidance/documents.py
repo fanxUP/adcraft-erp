@@ -221,6 +221,6 @@ def build_acceptance_guidance(snapshot: dict) -> dict:
 
 def build_quote_guidance(snapshot: dict) -> dict:
     quote_id = str(snapshot.get("business_id") or "")
-    return guidance_result(snapshot, "历史报价档案", [],
-        action("查看历史来源；新业务直接创建订单", "历史报价档案", f"/quotes/{quote_id}/edit"),
-        "历史来源只读保留，新增业务使用订单", {})
+    return guidance_result(snapshot, "报价功能已停用", [],
+        action("打开对应订单", "订单详情", f"/quotes/{quote_id}/edit"),
+        "已有对应订单时自动打开；无对应订单时返回订单管理，新增业务直接创建订单", {})

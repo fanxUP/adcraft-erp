@@ -71,6 +71,7 @@ class UserProfile(BaseModel):
     is_active: bool
     must_change_password: bool = False
     roles: list[str] = Field(default_factory=list)
+    effective_permissions: list[str] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)
     capabilities: dict[str, bool] = Field(default_factory=dict)
     preferences: UserPreferencesResponse

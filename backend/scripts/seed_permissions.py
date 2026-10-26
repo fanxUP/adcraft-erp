@@ -322,7 +322,8 @@ def builtin_role_permission_codes(role_name: str) -> list[str] | None:
     """Return defaults only for built-in roles; preserve custom roles."""
     if role_name not in ROLE_NAMES:
         return None
-    return ROLE_PERMISSION_MAP[role_name]
+    from app.core.permission_catalog import RETIRED_QUOTE_PERMISSIONS
+    return [code for code in ROLE_PERMISSION_MAP[role_name] if code not in RETIRED_QUOTE_PERMISSIONS]
 
 
 def replace_role_permissions(role: Role, permissions: list[Permission]) -> None:
@@ -381,7 +382,8 @@ async def seed_permissions():
             perm.action = definition.action
             perm.kind = definition.kind
             perm.sensitivity = definition.sensitivity
-            perm.status = "active"
+            from app.core.permission_catalog import permission_lifecycle_status
+            perm.status = permission_lifecycle_status(perm.code)
             perm.sort_order = index
 
         await session.flush()

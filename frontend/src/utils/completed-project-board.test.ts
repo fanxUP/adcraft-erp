@@ -11,26 +11,22 @@ function readSource(relativePath: string) {
 
 describe('完成项目看板', () => {
   it('独立项目看板增加完成列并使用完成项目接口', () => {
-    const source = readSource('views/tasks/ProductionTaskBoard.vue')
+    const source = readSource('components/ui/ProjectBoard.vue')
 
     expect(source).toContain('getCompletedProjects')
     expect(source).toContain('CompletedProjectCard')
-    expect(source).toContain('completedProjects')
-    expect(source).toContain("label: '完成'")
+    expect(source).toContain('col.projects')
+    expect(source).toContain("label: '已完成项目'")
     expect(source).toContain("name: 'CompletedProjectDetail'")
     expect(source).not.toContain('getCompletedProject(')
     expect(source).not.toContain('CompletedProjectDetailDrawer')
   })
 
-  it('工作台使用同一完成项目接口而不是复制完成筛选逻辑', () => {
-    const source = readSource('views/home/DashboardView.vue')
-
-    expect(source).toContain('getCompletedProjects')
-    expect(source).toContain('CompletedProjectCard')
-    expect(source).toContain("label: '完成'")
-    expect(source).toContain("name: 'CompletedProjectDetail'")
-    expect(source).not.toContain('getCompletedProject(')
-    expect(source).not.toContain('CompletedProjectDetailDrawer')
+  it('工作台和独立看板共享完成项目加载组件', () => {
+    for (const page of ['views/home/DashboardView.vue', 'views/tasks/ProductionTaskBoard.vue']) {
+      expect(readSource(page)).toContain('<ProjectBoard')
+      expect(readSource(page)).not.toContain('getCompletedProjects')
+    }
   })
 
   it('完成卡片和独立详情页是只读展示，不提供状态或恢复操作', () => {
@@ -100,7 +96,8 @@ describe('完成项目看板', () => {
     expect(source).toContain('el-table-column')
     expect(source).toContain('产品/材质/工艺')
     expect(source).toContain('规格')
-    expect(source).toContain('数量')
+    expect(source).toContain('当前需求量')
+    expect(source).toContain('execution_scopes')
     expect(source).toContain('row.stages.design')
     expect(source).toContain('执行人：')
     expect(source).toContain('完成时间：')

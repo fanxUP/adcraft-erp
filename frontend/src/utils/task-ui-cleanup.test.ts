@@ -213,12 +213,12 @@ describe('任务详情页界面收敛', () => {
   })
 
   it('工作台项目看板与独立项目看板复用任务进度', () => {
-    const source = readSource('views/home/DashboardView.vue')
+    const source = readSource('components/ui/ProjectBoard.vue')
     const cardSource = readSource('components/ui/TaskBoardCard.vue')
 
     expect(source).toContain('getTaskQueue')
     expect(source).toContain('TaskQueueItem')
-    expect(source).toContain('isTaskVisible')
+    expect(source).toContain('stage: col.key')
     expect(source).not.toContain('design_progress_pct')
     expect(source).not.toContain('production_progress_pct')
     expect(source).not.toContain('installation_progress_pct')
@@ -228,9 +228,7 @@ describe('任务详情页界面收敛', () => {
     expect(cardSource).toContain(':percentage="taskProgress(task)"')
 
     const projectBoardSource = readSource('views/tasks/ProductionTaskBoard.vue')
-    expect(projectBoardSource).toContain("from '@/utils/task-board'")
-    expect(projectBoardSource).toContain('taskProgress')
-    expect(projectBoardSource).toContain('isTaskVisible')
+    expect(projectBoardSource).toContain('<ProjectBoard')
   })
 
   it('两处项目看板复用统一任务卡片并显示订单归属信息', () => {
@@ -244,8 +242,8 @@ describe('任务详情页界面收敛', () => {
 
     for (const relativePath of ['views/home/DashboardView.vue', 'views/tasks/ProductionTaskBoard.vue']) {
       const source = readSource(relativePath)
-      expect(source).toContain("import TaskBoardCard from '@/components/ui/TaskBoardCard.vue'")
-      expect(source).toContain('<TaskBoardCard')
+      expect(source).toContain("import ProjectBoard from '@/components/ui/ProjectBoard.vue'")
+      expect(source).toContain('<ProjectBoard')
     }
   })
 

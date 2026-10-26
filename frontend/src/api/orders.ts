@@ -26,15 +26,27 @@ export function getOrders(params: { page?: number; page_size?: number; status?: 
  * Load the order-level project queue from the same status contract used by
  * the workbench and the independent project board.
  */
+export function getProjectQueuePage(page = 1, pageSize = 20) {
+  return getOrders({ page, page_size: pageSize, status: PROJECT_QUEUE_STATUSES.join(',') })
+}
+
 export async function getProjectQueueOrders(pageSize = 200): Promise<OrderListResponse[]> {
-  const responses = await Promise.all(
-    PROJECT_QUEUE_STATUSES.map(status => getOrders({ page: 1, page_size: pageSize, status })),
-  )
-  return dedupeProjectQueueOrders(responses.flatMap(response => response.items || []))
+  const rows: OrderListResponse[] = []
+  let page = 1
+  while (true) {
+    const response = await getProjectQueuePage(page++, pageSize)
+    rows.push(...response.items)
+    if (!response.items.length || rows.length >= response.total) break
+  }
+  return dedupeProjectQueueOrders(rows)
 }
 
 export function getOrder(id: string) {
   return get<OrderDetailResponse>(`/orders/${id}`)
+}
+
+export function getOrderForHistoricalQuote(quoteId: string) {
+  return get<{ order_id: string | null }>(`/orders/from-history/${quoteId}`)
 }
 
 export type OrderDateChangePreview = {
@@ -301,7 +313,7 @@ export async function previewOrderImport(file: File) {
 export interface OrderDeletePayload { reason: string; expected_updated_at: string; settlement_amount: number; preview_id?: string; plan_hash?: string; preview_expires_at?: string; confirm_high_risk?: boolean }
 export interface OrderFinancialValues { total_amount: number; paid_amount: number; unpaid_amount: number; overpaid_amount: number; cost_amount?: number; gross_profit?: number }
 export interface OrderDeletePreview { order_id: string; order_no: string; before: OrderFinancialValues; after: OrderFinancialValues; preview_id: string; plan_hash: string; preview_expires_at: string; association_catalog: Array<{ label: string; record_no?: string; status: string; note: string }> }
-export interface OrderAction { id: string; batch_id: string; module: string; record_no?: string; detail: string; status: string; resolution?: string }
+export interface OrderAction { id: string; batch_id: string; module: string; record_no?: string; detail: string; status: string; resolution?: string; can_resolve: boolean; resolve_reason?: string }
 export interface OrderFunds extends OrderFinancialValues { payments: Array<{ id: string; payment_no: string; amount: number; record_type: string; is_voided: boolean; paid_at?: string; remark?: string }> }
 export function previewOrderDelete(id: string, data: OrderDeletePayload) { return post<OrderDeletePreview>(`/orders/${id}/delete-preview`, data) }
 export function getOrderActions(id: string) { return get<OrderAction[]>(`/orders/${id}/change-actions`) }

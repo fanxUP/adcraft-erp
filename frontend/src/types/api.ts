@@ -67,6 +67,7 @@ export interface UserProfile {
   is_active: boolean
   must_change_password?: boolean
   roles: string[]
+  effective_permissions?: string[]
   permissions: string[]
   capabilities: {
     view_order_price: boolean
@@ -780,6 +781,9 @@ export interface TaskQueueItem {
   project_name: string
   item_name?: string | null
   item_names?: string[]
+  scope_items?: Array<{ order_item_id: string; item_name: string; current_quantity?: number | null; unit?: string | null; planned_quantity?: number | null; completed_quantity?: number | null; scope_item_name?: string | null; scope_unit?: string | null; assignee_name?: string | null }>
+  is_followup?: boolean
+  pending_action_count?: number
   status: string
   progress_pct: number
   review_required?: boolean
@@ -837,6 +841,7 @@ export interface CompletedProjectStage {
   completed_at?: string | null
   task_id: string
   task_no?: string | null
+  execution_scopes?: Array<{ task_id: string; task_no?: string | null; item_name?: string | null; unit?: string | null; planned_quantity?: number | null; completed_quantity?: number | null }>
   source: string
 }
 

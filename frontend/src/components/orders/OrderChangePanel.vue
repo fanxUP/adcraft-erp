@@ -1,13 +1,13 @@
 <template>
   <div>
-    <el-card v-if="auth.can('order:update')" shadow="never" style="margin-bottom: 16px">
+    <el-card v-if="auth.can('order:read')" shadow="never" style="margin-bottom: 16px">
       <template #header><div class="panel-header"><span>订单变更处理事项</span><el-button text @click="load">刷新</el-button></div></template>
       <el-table :data="actions" empty-text="暂无变更处理事项" border>
         <el-table-column prop="record_no" label="关联编号" min-width="160" />
         <el-table-column prop="detail" label="需要处理的内容" min-width="300" />
         <el-table-column label="状态" width="100"><template #default="{ row }"><el-tag :type="row.status === 'resolved' ? 'success' : 'warning'">{{ row.status === 'resolved' ? '已处理' : '待处理' }}</el-tag></template></el-table-column>
         <el-table-column prop="resolution" label="处理结果" min-width="180" />
-        <el-table-column label="操作" width="110"><template #default="{ row }"><el-button v-if="row.status === 'pending'" text type="primary" @click="resolve(row.id)">登记处理结果</el-button></template></el-table-column>
+        <el-table-column label="操作" width="110"><template #default="{ row }"><el-button v-if="row.status === 'pending'" :disabled="!row.can_resolve" :title="row.resolve_reason" text type="primary" @click="resolve(row.id)">登记处理结果</el-button></template></el-table-column>
       </el-table>
     </el-card>
     <el-card v-if="auth.can('payment:read')" shadow="never">
@@ -51,7 +51,7 @@ const sourcePayments = computed(() => (funds.value?.payments || []).filter(payme
 async function load() {
   if (!props.orderId) return
   try {
-    const result = await Promise.all([auth.can('order:update') ? getOrderActions(props.orderId) : Promise.resolve([]), auth.can('payment:read') ? getOrderFunds(props.orderId) : Promise.resolve(null)])
+    const result = await Promise.all([auth.can('order:read') ? getOrderActions(props.orderId) : Promise.resolve([]), auth.can('payment:read') ? getOrderFunds(props.orderId) : Promise.resolve(null)])
     actions.value = result[0]; funds.value = result[1]
   } catch (error: unknown) { ElMessage.error(error instanceof Error ? error.message : '变更信息读取失败') }
 }

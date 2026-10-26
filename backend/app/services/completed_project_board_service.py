@@ -15,6 +15,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, exists, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import raiseload
 
 from app.core.permissions import (
     PERM_DESIGN_TASK_READ,
@@ -33,6 +34,7 @@ from app.models.business_document import (
 from app.models.employee import Employee
 from app.models.task import DesignTask, InstallationTask, ProductionTask
 from app.models.task_item_status_log import TaskItemStatusLog
+from app.models.task_order_item_link import TaskOrderItemLink
 from app.models.user import User
 from app.schemas.attachment import AttachmentResponse
 from app.schemas.task import (
@@ -273,6 +275,7 @@ def build_completed_project_detail(
     owner_user_id: UUID | None = None,
     order_items: Iterable[object] | None = None,
     resources: Mapping[str, dict] | None = None,
+    execution_scopes: Mapping[tuple[UUID, str], list[dict]] | None = None,
 ) -> dict:
     """Build an item-centric, read-only project detail payload."""
     project_events = [event for event in events if event.document_id == document.id]
@@ -345,6 +348,7 @@ def build_completed_project_detail(
                     "task_id": str(event.task_id),
                     "task_no": event.task_no,
                     "source": event.source,
+                    "execution_scopes": (execution_scopes or {}).get((item_id, task_type), []),
                 }
                 if event
                 else None
@@ -450,11 +454,11 @@ class CompletedProjectBoardService:
             )
         return or_(*clauses) if clauses else false()
 
-    async def _load_completed_documents(
+    def _completed_documents_query(
         self,
         *,
         project_id: UUID | None = None,
-    ) -> list[tuple[BusinessDocument, BusinessDocumentStatusLog]]:
+    ):
         status_log = BusinessDocumentStatusLog
         rank = func.row_number().over(
             partition_by=status_log.document_id,
@@ -470,24 +474,21 @@ class CompletedProjectBoardService:
         ]
         if project_id is not None:
             conditions.append(BusinessDocument.id == project_id)
-        result = await self.db.execute(
-            select(BusinessDocument, status_log)
+        return (select(BusinessDocument, status_log).options(raiseload("*"))
             .join(ranked, ranked.c.event_id == status_log.id)
             .join(BusinessDocument, BusinessDocument.id == status_log.document_id)
-            .where(*conditions)
-        )
-        return list(result.all())
+            .where(*conditions))
 
-    async def _load_completion_events(
+    async def _load_completed_documents(self, *, project_id=None):
+        return list((await self.db.execute(self._completed_documents_query(project_id=project_id))).all())
+
+    def _completion_events_query(
         self,
         task_types: list[str],
         *,
         owner_user_id: UUID | None = None,
         project_id: UUID | None = None,
-    ) -> list[CompletionEvent]:
-        if not task_types:
-            return []
-
+    ):
         log = TaskItemStatusLog
         rank = func.row_number().over(
             partition_by=(log.task_type, log.order_item_id),
@@ -514,13 +515,19 @@ class CompletedProjectBoardService:
         if project_id is not None:
             conditions.append(log.document_id == project_id)
 
-        result = await self.db.execute(
-            select(log, BusinessDocument, BusinessDocumentItem)
+        return (select(log, BusinessDocument, BusinessDocumentItem).options(raiseload("*"))
             .join(ranked, ranked.c.event_id == log.id)
             .join(BusinessDocument, BusinessDocument.id == log.document_id)
             .join(BusinessDocumentItem, BusinessDocumentItem.id == log.order_item_id)
-            .where(*conditions)
-        )
+            .where(*conditions))
+
+    async def _load_completion_events(self, task_types, *, owner_user_id=None, project_id=None, project_ids=None):
+        if not task_types:
+            return []
+        query = self._completion_events_query(task_types, owner_user_id=owner_user_id, project_id=project_id)
+        if project_ids is not None:
+            query = query.where(TaskItemStatusLog.document_id.in_(project_ids))
+        result = await self.db.execute(query)
         return [
             CompletionEvent(
                 id=log_row.id,
@@ -625,9 +632,21 @@ class CompletedProjectBoardService:
     ) -> tuple[list[dict], int]:
         if page < 1 or page_size < 1 or page_size > 200:
             raise ValueError("分页参数不正确")
-        scope, owner_user_id, no_data, document_rows, events = await self._load_projection(stage=stage)
-        if no_data:
+        scope, owner_user_id, no_data = await self._resolve_scope()
+        task_types = self.allowed_task_types(stage)
+        if no_data or not task_types:
             return [], 0
+        query = self._completed_documents_query()
+        if scope == "own" or not self.is_super_admin or stage:
+            visible = self._completion_events_query(task_types, owner_user_id=owner_user_id).with_only_columns(TaskItemStatusLog.document_id).subquery()
+            query = query.where(BusinessDocument.id.in_(select(visible.c.document_id)))
+        total = await self.db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        document_rows = list((await self.db.execute(query.order_by(
+            BusinessDocumentStatusLog.operated_at.desc().nulls_last(), BusinessDocument.doc_no.desc(), BusinessDocument.id,
+        ).offset((page - 1) * page_size).limit(page_size))).all())
+        events = await self._load_completion_events(task_types, owner_user_id=owner_user_id,
+            project_ids=[document.id for document, _ in document_rows]) if document_rows else []
+        await self._prepare_events(events)
         documents = [document for document, _ in document_rows]
         completion_times = {
             document.id: status_log.operated_at
@@ -641,14 +660,12 @@ class CompletedProjectBoardService:
             owner_user_id=owner_user_id,
             include_amount=user_has_permission(self.viewer, PERM_ORDER_VIEW_PRICE),
         )
-        total = len(rows)
-        offset = (page - 1) * page_size
         return [
             CompletedProjectCard.model_validate(row).model_dump(
                 mode="json",
                 exclude_none=True,
             )
-            for row in rows[offset : offset + page_size]
+            for row in rows
         ], total
 
     async def get_project(self, project_id: UUID) -> dict:
@@ -673,4 +690,36 @@ class CompletedProjectBoardService:
             owner_user_id=owner_user_id,
             include_amount=user_has_permission(self.viewer, PERM_ORDER_VIEW_PRICE),
             order_items=order_items,
+            execution_scopes=await self._execution_scopes(document.id, owner_user_id=owner_user_id),
         )
+
+    async def _execution_scopes(self, project_id, *, owner_user_id=None):
+        """Keep every authorized completed task scope, including prior batches.
+
+        A null quantity is an unknown historical fact, never the current order
+        quantity and never a percentage-derived estimate.
+        """
+        result = defaultdict(list)
+        link = TaskOrderItemLink
+        for kind in self.allowed_task_types():
+            model = TASK_MODELS[kind]
+            query = select(link, getattr(model, TASK_NUMBER_FIELDS[kind])).join(model, model.id == link.task_id).where(
+                link.task_type == kind, model.document_id == project_id,
+                task_visibility_clause(model, self.viewer),
+                or_(link.completed_quantity > 0, link.item_status.in_(TASK_COMPLETED_STATUSES[kind])),
+            ).order_by(link.item_completed_at.asc().nulls_last(), model.created_at, getattr(model, TASK_NUMBER_FIELDS[kind]), link.id)
+            if owner_user_id:
+                query = query.where(exists(select(TaskItemStatusLog.id).where(
+                    TaskItemStatusLog.task_type == kind, TaskItemStatusLog.task_id == link.task_id,
+                    TaskItemStatusLog.order_item_id == link.order_item_id,
+                    TaskItemStatusLog.to_status.in_(TASK_COMPLETED_STATUSES[kind]),
+                    TaskItemStatusLog.assignee_user_id == owner_user_id)))
+            for row, task_no in (await self.db.execute(query)).all():
+                snapshot = row.scope_snapshot or {}
+                result[(row.order_item_id, kind)].append({
+                    "task_id": str(row.task_id), "task_no": task_no,
+                    "item_name": snapshot.get("item_name"), "unit": snapshot.get("unit"),
+                    "planned_quantity": _number(row.planned_quantity),
+                    "completed_quantity": _number(row.completed_quantity),
+                })
+        return result

@@ -20,7 +20,7 @@
 
       <OrderDeleteDialog v-model="deleteVisible" :order-id="order.id" @deleted="router.push('/orders')" />
       <el-tabs v-model="activeTab">
-        <el-tab-pane v-if="authStore.canAny(['order:update', 'payment:read'])" label="变更与资金处理" name="changes"><OrderChangePanel :order-id="order.id" @updated="fetchOrder" /></el-tab-pane>
+        <el-tab-pane v-if="authStore.can('order:read')" label="变更与资金处理" name="changes"><OrderChangePanel :order-id="order.id" @updated="fetchOrder" /></el-tab-pane>
         <el-tab-pane label="基本信息" name="info">
           <OrderProjectOverview
             :order-id="order.id"
@@ -573,7 +573,7 @@ const orderDateEditing = ref(false)
 const orderDateSaving = ref(false)
 const orderDateDraft = ref('')
 const itemEditability = ref<OrderItemEditabilityResponse | null>(null)
-const canEditItems = computed(() => itemEditability.value?.can_edit_items === true)
+const canEditItems = computed(() => authStore.canAll(['order:update', 'order:read', 'order:view_price', 'order_item:view_price']) && itemEditability.value?.can_edit_items === true)
 const ORDER_DATA_MUTABLE_STATUSES = new Set([
   'pending_confirm',
   'confirmed',
@@ -582,6 +582,7 @@ const ORDER_DATA_MUTABLE_STATUSES = new Set([
   'in_installation',
 ])
 const canEditOrderData = computed(() => {
+  if (!authStore.canAll(['order:update', 'order:read', 'order:view_price', 'order_item:view_price'])) return false
   const status = order.value?.status
   if (!status) return false
   return itemEditability.value?.editable_statuses?.length

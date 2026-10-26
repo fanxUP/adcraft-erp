@@ -462,7 +462,7 @@ const form = reactive({
   remark: '',
 })
 
-const canEdit = computed(() => isCreate.value ? auth.can('order:create') : auth.can('order:update') && itemEditability.value?.can_edit_items === true)
+const canEdit = computed(() => auth.canAll(['order:read', 'order:view_price', 'order_item:view_price', isCreate.value ? 'order:create' : 'order:update']) && (isCreate.value || itemEditability.value?.can_edit_items === true))
 const localSubtotal = computed(() => Math.round(items.value.reduce((sum, item) => sum + calcQuoteLineSubtotal(item), 0) * 100) / 100)
 const localTax = computed(() => Math.round(Math.max(0, localSubtotal.value - form.discount_amount) * form.tax_rate) / 100)
 const localTotal = computed(() => Math.round((localSubtotal.value - form.discount_amount + localTax.value) * 100) / 100)

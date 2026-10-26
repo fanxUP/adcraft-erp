@@ -377,6 +377,18 @@ class TaskAssigneeOption(BaseModel):
     user_id: str
 
 
+class TaskBoardScopeItem(BaseModel):
+    order_item_id: str
+    item_name: str
+    current_quantity: float | None = None
+    unit: str | None = None
+    planned_quantity: float | None = None
+    completed_quantity: float | None = None
+    scope_item_name: str | None = None
+    scope_unit: str | None = None
+    assignee_name: str | None = None
+
+
 class TaskQueueItem(CoercedModel):
     """统一项目队列中的任务卡片数据。"""
 
@@ -396,6 +408,9 @@ class TaskQueueItem(CoercedModel):
     project_name: str
     item_name: str | None = None
     item_names: list[str] = Field(default_factory=list)
+    scope_items: list[TaskBoardScopeItem] = Field(default_factory=list)
+    is_followup: bool = False
+    pending_action_count: int = 0
     status: str
     progress_pct: int = Field(0, ge=0, le=100)
     scope_status: TaskScopeStatus = "active"
@@ -436,6 +451,15 @@ class CompletedProjectCard(CoercedModel):
     total_amount: float | None = None
 
 
+class CompletedExecutionScope(BaseModel):
+    task_id: str
+    task_no: str | None = None
+    item_name: str | None = None
+    unit: str | None = None
+    planned_quantity: float | None = None
+    completed_quantity: float | None = None
+
+
 class CompletedProjectStage(CoercedModel):
     """One authorized completion snapshot for a stage and order item."""
 
@@ -447,6 +471,7 @@ class CompletedProjectStage(CoercedModel):
     task_id: str
     task_no: str | None = None
     source: str = "live"
+    execution_scopes: list[CompletedExecutionScope] = Field(default_factory=list)
 
 
 class CompletedProjectDetailItem(CoercedModel):

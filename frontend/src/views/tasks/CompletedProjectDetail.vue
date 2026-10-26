@@ -81,13 +81,15 @@
                 <span class="wrap-cell">{{ row.specification || '—' }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="数量" width="100" align="right">
+            <el-table-column label="当前需求量" width="120" align="right">
               <template #default="{ row }">{{ formatQuantity(row) }}</template>
             </el-table-column>
             <el-table-column label="设计" min-width="170">
               <template #default="{ row }">
                 <div v-if="row.stages.design" class="stage-cell">
                   <span class="stage-status">{{ row.stages.design.status_label }}</span>
+                  <span v-for="scope in row.stages.design.execution_scopes" :key="scope.task_id" class="stage-scope">{{ scope.task_no }} · 已完成 {{ scope.completed_quantity ?? '未记录' }} {{ scope.unit || '' }}<template v-if="scope.item_name"> · {{ scope.item_name }}</template></span>
+                  <span v-if="!row.stages.design.execution_scopes?.length">实际完成量：未记录</span>
                   <span class="stage-executor">执行人：{{ row.stages.design.employee_name || '未分配' }}</span>
                   <span class="stage-date">完成时间：{{ formatStageDate(row.stages.design) }}</span>
                 </div>
@@ -98,6 +100,8 @@
               <template #default="{ row }">
                 <div v-if="row.stages.production" class="stage-cell">
                   <span class="stage-status">{{ row.stages.production.status_label }}</span>
+                  <span v-for="scope in row.stages.production.execution_scopes" :key="scope.task_id" class="stage-scope">{{ scope.task_no }} · 已完成 {{ scope.completed_quantity ?? '未记录' }} {{ scope.unit || '' }}<template v-if="scope.item_name"> · {{ scope.item_name }}</template></span>
+                  <span v-if="!row.stages.production.execution_scopes?.length">实际完成量：未记录</span>
                   <span class="stage-executor">执行人：{{ row.stages.production.employee_name || '未分配' }}</span>
                   <span class="stage-date">完成时间：{{ formatStageDate(row.stages.production) }}</span>
                 </div>
@@ -108,6 +112,8 @@
               <template #default="{ row }">
                 <div v-if="row.stages.installation" class="stage-cell">
                   <span class="stage-status">{{ row.stages.installation.status_label }}</span>
+                  <span v-for="scope in row.stages.installation.execution_scopes" :key="scope.task_id" class="stage-scope">{{ scope.task_no }} · 已完成 {{ scope.completed_quantity ?? '未记录' }} {{ scope.unit || '' }}<template v-if="scope.item_name"> · {{ scope.item_name }}</template></span>
+                  <span v-if="!row.stages.installation.execution_scopes?.length">实际完成量：未记录</span>
                   <span class="stage-executor">执行人：{{ row.stages.installation.employee_name || '未分配' }}</span>
                   <span class="stage-date">完成时间：{{ formatStageDate(row.stages.installation) }}</span>
                 </div>

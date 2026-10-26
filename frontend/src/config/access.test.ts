@@ -59,9 +59,22 @@ describe('page access matrix', () => {
 
   it('lets any delivery-stage operator enter the shared project board', () => {
     expect(findNavigationItem('/production-tasks/board')?.accessKey).toBe('boardRead')
-    expect(canAccess('boardRead', ['designer'], ['design_task:read'])).toBe(true)
-    expect(canAccess('boardRead', ['production'], ['production_task:read'])).toBe(true)
-    expect(canAccess('boardRead', ['installer'], ['installation_task:read'])).toBe(true)
+    expect(canAccess('boardRead', ['designer'], ['task_queue:read', 'design_task:read'])).toBe(true)
+    expect(canAccess('boardRead', ['production'], ['task_queue:read', 'production_task:read'])).toBe(true)
+    expect(canAccess('boardRead', ['installer'], ['task_queue:read', 'installation_task:read'])).toBe(true)
+  })
+
+  it('only enters boards with an authorized data source', () => {
+    expect(canAccess('boardRead', [], ['design_task:read'])).toBe(false)
+    expect(canAccess('boardRead', [], ['task_queue:read'])).toBe(false)
+    expect(canAccess('boardRead', [], ['task_completion:read'])).toBe(false)
+    expect(canAccess('boardRead', [], ['order:read'])).toBe(true)
+    expect(canAccess('orderRecycleRead', [], ['order:read', 'payment:read'])).toBe(true)
+    expect(canAccess('orderDelete', [], ['order:read', 'payment:read'])).toBe(false)
+    expect(canAccess('orderRecycleRead', [], ['order:read'])).toBe(false)
+    expect(canAccess('boardRead', [], ['task_completion:read', 'design_task:read'])).toBe(true)
+    expect(canAccessRoute('OrderEdit', [], [], ['order:read', 'order:update'])).toBe(false)
+    expect(canAccessRoute('OrderEdit', [], [], ['order:read', 'order:update', 'order:view_price', 'order_item:view_price'])).toBe(true)
   })
 
   it('gives the manager operational read access without commercial or write access', () => {

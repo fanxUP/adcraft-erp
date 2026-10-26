@@ -429,7 +429,7 @@ def test_pending_acceptance_guides_user_to_confirm_each_item():
     assert guidance["next_action"]["target_key"] == "acceptance-items"
 
 
-def test_quote_guidance_is_readonly_history():
+def test_retired_quote_guidance_opens_existing_order():
     guidance = build_workflow_guidance(
         {
             "business_type": "quote",
@@ -440,7 +440,9 @@ def test_quote_guidance_is_readonly_history():
 
     assert guidance["allowed_next_statuses"] == []
     assert "target_key" not in guidance["next_action"]
-    assert guidance["current_step"] == "历史报价档案"
+    assert guidance["current_step"] == "报价功能已停用"
+    assert guidance["next_action"]["label"] == "打开对应订单"
+    assert guidance["next_action"]["target_path"] == "/quotes/11111111-1111-1111-1111-111111111111/edit"
 
 
 @pytest.mark.parametrize(
