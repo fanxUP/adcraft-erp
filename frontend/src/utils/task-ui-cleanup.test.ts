@@ -94,10 +94,10 @@ describe('任务详情页界面收敛', () => {
     expect(readSource('components/tasks/TaskCompletionAttachmentDialog.vue')).toContain('跳过资料并完成')
   })
 
-  it('任务处理明细按数量、金额、小计、任务进度顺序展示金额信息', () => {
+  it('任务处理明细按数量、单价、小计、任务进度顺序展示金额信息', () => {
     const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
     const quantityHeader = source.indexOf('>数量</span>')
-    const amountHeader = source.indexOf('>金额</span>')
+    const amountHeader = source.indexOf('>单价</span>')
     const subtotalHeader = source.indexOf('>小计</span>')
     const progressHeader = source.indexOf('>本任务进度</span>')
 

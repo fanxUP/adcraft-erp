@@ -107,9 +107,9 @@ export function uploadAttachment(relatedType: string, relatedId: string, file: F
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
-export function deleteDesignTask(id: string) { return del<SuccessResponse>(`/design-tasks/${id}`) }
-export function deleteProductionTask(id: string) { return del<SuccessResponse>(`/production-tasks/${id}`) }
-export function deleteInstallationTask(id: string) { return del<SuccessResponse>(`/installation-tasks/${id}`) }
+export function deleteDesignTask(id: string, planHash?: string) { return del<SuccessResponse>(`/design-tasks/${id}`, { params: { plan_hash: planHash } }) }
+export function deleteProductionTask(id: string, planHash?: string) { return del<SuccessResponse>(`/production-tasks/${id}`, { params: { plan_hash: planHash } }) }
+export function deleteInstallationTask(id: string, planHash?: string) { return del<SuccessResponse>(`/installation-tasks/${id}`, { params: { plan_hash: planHash } }) }
 export function deleteAttachment(id: string) { return del<SuccessResponse>(`/attachments/${id}`) }
 
 export function getTaskQueue(params?: {
@@ -154,4 +154,60 @@ export function getTaskAssigneeOptions(taskType: TaskType) {
   return get<TaskAssigneeOption[]>('/task-queue/assignee-options', {
     params: { task_type: taskType },
   })
+}
+
+export interface TaskDeleteImpactEntry {
+  id: string
+  label: string
+  effect: 'delete_task' | 'recycle_acceptance' | 'unlink_outsource' | 'reopen_task'
+  detail?: string | null
+  items?: string[]
+}
+
+export interface TaskDeleteImpact {
+  task_id: string
+  task_type: TaskType
+  task_no: string
+  order_no: string | null
+  order_status: string | null
+  target_order_status: string | null
+  entries: TaskDeleteImpactEntry[]
+  warnings: string[]
+  plan_hash: string
+}
+
+export function getTaskDeleteImpact(taskType: TaskType, taskId: string) {
+  return get<TaskDeleteImpact>('/task-queue/delete-impact', {
+    params: { task_type: taskType, task_id: taskId },
+  })
+}
+
+export interface TaskActivityChange {
+  field: string
+  label: string
+  before: string | number | boolean | null
+  after: string | number | boolean | null
+  item: string | null
+}
+export interface TaskActivityEvent {
+  id: string
+  kind: string
+  occurred_at: string | null
+  actor: string | null
+  title: string
+  detail: string | null
+  batch_id?: string
+  version_no?: number
+  changes: TaskActivityChange[]
+}
+export interface TaskActivityPage {
+  items: TaskActivityEvent[]
+  total: number
+  page: number
+  page_size: number
+}
+export function getTaskActivity(taskType: TaskType, taskId: string, params: {
+  page: number; page_size: number; kind: 'all' | 'change' | 'execution'
+}) {
+  return get<TaskActivityPage>('/task-queue/activity', { params: { task_type: taskType, task_id: taskId, ...params } })
 }

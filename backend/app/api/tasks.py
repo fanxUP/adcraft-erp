@@ -68,6 +68,8 @@ from app.services.task_service import (
     ProductionTaskService,
     acknowledge_task_order_review,
     get_task_order_item_options,
+    get_task_delete_impact,
+    validate_task_delete_impact,
 )
 from app.services.order_task_assignment_service import list_task_assignee_options, get_visible_task
 from app.services.operation_log_service import ACTION_CREATE, OBJ_ORDER, log_operation
@@ -440,6 +442,45 @@ _TASK_CHANGE_STATUS_PERMISSIONS = {
 }
 
 
+@queue_router.get("/delete-impact")
+async def preview_task_delete(
+    task_type: TaskType = Query(...),
+    task_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_permission(
+        PERM_DESIGN_TASK_DELETE, PERM_PRODUCTION_TASK_DELETE, PERM_INSTALLATION_TASK_DELETE,
+    )),
+):
+    if not _user_has_permission(current_user, f"{task_type}_task:delete"):
+        raise HTTPException(status_code=403, detail="没有该类型任务的删除权限")
+    try:
+        return success(await get_task_delete_impact(db, task_type, _ensure_uuid(task_id), current_user))
+    except ValueError as exc:
+        return {"code": 40001, "message": str(exc), "data": None}
+
+
+@queue_router.get("/activity")
+async def task_activity(
+    task_type: TaskType = Query(...),
+    task_id: str = Query(...),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    kind: str = Query("all", pattern="^(all|change|execution)$"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_permission(
+        PERM_DESIGN_TASK_READ, PERM_PRODUCTION_TASK_READ, PERM_INSTALLATION_TASK_READ,
+    )),
+):
+    from app.services.task_history_service import list_task_activity
+    try:
+        return success(await list_task_activity(db, task_type, _ensure_uuid(task_id), current_user,
+                                                page=page, page_size=page_size, kind=kind))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        return {"code": 40001, "message": str(exc), "data": None}
+
+
 @queue_router.post("/acknowledge-order-review")
 async def acknowledge_order_review(
     task_type: TaskType = Query(...),
@@ -646,11 +687,14 @@ async def reassign_design_task_items(
 @design_router.delete("/{task_id}")
 async def delete_design_task(
     task_id: str,
+    plan_hash: str | None = Query(None, min_length=64, max_length=64),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_DESIGN_TASK_DELETE)),
 ):
     service = DesignTaskService(db, current_user)
     try:
+        if isinstance(plan_hash, str):
+            await validate_task_delete_impact(db, "design", _ensure_uuid(task_id), current_user, plan_hash)
         await service.delete_task(_ensure_uuid(task_id))
         return success(None)
     except ValueError as e:
@@ -782,11 +826,14 @@ async def reassign_production_task_items(
 @prod_router.delete("/{task_id}")
 async def delete_production_task(
     task_id: str,
+    plan_hash: str | None = Query(None, min_length=64, max_length=64),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_PRODUCTION_TASK_DELETE)),
 ):
     service = ProductionTaskService(db, current_user)
     try:
+        if isinstance(plan_hash, str):
+            await validate_task_delete_impact(db, "production", _ensure_uuid(task_id), current_user, plan_hash)
         await service.delete_task(_ensure_uuid(task_id))
         return success(None)
     except ValueError as e:
@@ -939,11 +986,14 @@ async def reassign_installation_task_items(
 @inst_router.delete("/{task_id}")
 async def delete_installation_task(
     task_id: str,
+    plan_hash: str | None = Query(None, min_length=64, max_length=64),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_INSTALLATION_TASK_DELETE)),
 ):
     service = InstallationTaskService(db, current_user)
     try:
+        if isinstance(plan_hash, str):
+            await validate_task_delete_impact(db, "installation", _ensure_uuid(task_id), current_user, plan_hash)
         await service.delete_task(_ensure_uuid(task_id))
         return success(None)
     except ValueError as e:

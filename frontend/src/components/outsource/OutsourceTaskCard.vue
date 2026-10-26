@@ -10,6 +10,7 @@
       </div>
     </template>
 
+    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon class="order-level-alert" />
     <el-alert
       v-if="summary && summary.order_level_task_count > 0"
       type="warning"
@@ -26,16 +27,21 @@
       </div>
     </el-alert>
 
-    <div class="section-heading">
+    <div ref="allocationHeading" class="section-heading">
       <div>
-        <span class="section-title">订单项目明细外协分配</span>
+        <el-button text type="primary" @click="allocationExpanded = !allocationExpanded">{{ allocationExpanded ? '收起' : '展开' }}外协分配</el-button>
         <span v-if="summary" class="section-caption">订单 {{ summary.order_no }} · 当前{{ taskTypeLabel }}任务</span>
       </div>
       <el-button text type="primary" size="small" :loading="loading" @click="fetchOutsource">刷新</el-button>
     </div>
 
+    <div v-if="focusedItemId" class="focused-item-note">
+      当前明细：{{ findSummaryItem(focusedItemId)?.item_name || '加载中' }}
+      <el-button text size="small" @click="clearItemFocus">查看全部明细</el-button>
+    </div>
     <el-table
-      :data="summary?.items || []"
+      v-if="allocationExpanded"
+      :data="focusedSummaryItems"
       v-loading="loading"
       stripe
       size="small"
@@ -76,7 +82,7 @@
               <el-button text type="info" size="small" disabled>不可发送</el-button>
             </span>
           </el-tooltip>
-          <el-button v-else-if="canCreateOutsourceTask" text type="danger" size="small" @click="openItemDialog(row)">
+          <el-button v-else-if="canCreateOutsourceTask" text type="danger" size="small" :disabled="loading || Boolean(loadError)" @click="openItemDialog(row)">
             {{ row.active_task_count > 0 ? '追加外协' : '发送外协' }}
           </el-button>
           <el-button text type="primary" size="small" @click="goToOutsourceList(row)">查看</el-button>
@@ -84,8 +90,8 @@
       </el-table-column>
     </el-table>
 
-    <div v-if="canViewOutsourceCost" class="cost-note">
-      明细外协计划成本 ¥{{ moneyText(itemPlannedAmount) }}，已确认成本 ¥{{ moneyText(itemRecognizedCost) }}。
+    <div v-if="canViewOutsourceCost && allocationExpanded" class="cost-note">
+      所示明细外协计划成本 ¥{{ moneyText(itemPlannedAmount) }}，已确认成本 ¥{{ moneyText(itemRecognizedCost) }}。
       订单销售金额与外协成本分别核算，不会相互覆盖。
     </div>
 
@@ -94,7 +100,7 @@
         <span class="section-title">当前任务已发送外协任务</span>
         <span class="section-caption">仅展示当前{{ taskTypeLabel }}任务发出的外协记录</span>
       </div>
-      <span v-if="outsourceTasks.length" class="task-count">{{ outsourceTasks.length }} 条</span>
+      <span v-if="outsourceTasks.length" class="task-count">{{ outsourceTotal }} 条</span>
     </div>
 
     <el-table :data="outsourceTasks" v-loading="loading" stripe size="small" empty-text="当前任务尚未发送外协">
@@ -129,6 +135,9 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <el-pagination v-if="outsourceTotal > 20" v-model:current-page="outsourcePage" :page-size="20" :total="outsourceTotal"
+      small layout="total, prev, pager, next" class="outsource-pagination" @current-change="fetchOutsource" />
 
     <el-dialog v-model="dialogVisible" title="发送订单明细外协" width="560px" :close-on-click-modal="false" append-to-body>
       <el-alert
@@ -188,7 +197,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { formatApiError } from '@/api/requestContract'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
@@ -213,8 +223,10 @@ const props = defineProps<{
   taskId: string
   orderId: string
   projectName: string
+  refreshKey?: string | number | null
 }>()
 
+const emit = defineEmits<{ changed: [] }>()
 const router = useRouter()
 const authStore = useAuthStore()
 const canViewOutsourceTask = computed(() => authStore.hasPermission('outsource_task:read'))
@@ -222,6 +234,14 @@ const canCreateOutsourceTask = computed(() => authStore.hasPermission('outsource
 const canViewOutsourceVendor = computed(() => authStore.hasPermission('outsource_vendor:read'))
 const canViewOutsourceCost = computed(() => authStore.hasPermission('finance:view_cost'))
 const loading = ref(false)
+const loadError = ref('')
+const focusedItemId = ref('')
+const allocationExpanded = ref(false)
+const allocationHeading = ref<HTMLElement | null>(null)
+const focusedSummaryItems = computed(() => (summary.value?.items || []).filter(item => !focusedItemId.value || item.id === focusedItemId.value))
+const outsourcePage = ref(1)
+const outsourceTotal = ref(0)
+let fetchVersion = 0
 const saving = ref(false)
 const summary = ref<OutsourceOrderItemSummaryResponse | null>(null)
 const outsourceTasks = ref<OutsourceTaskResponse[]>([])
@@ -246,8 +266,8 @@ const taskTypeLabel = computed(() => ({
 }[props.taskType]))
 const isAppend = computed(() => Boolean(selectedItem.value?.active_task_count))
 const hasOutsource = computed(() => outsourceTasks.value.length > 0 || Boolean(summary.value?.items.some(item => item.active_task_count > 0)))
-const itemPlannedAmount = computed(() => summary.value?.items.reduce((total, item) => total + Number(item.planned_amount || 0), 0) || 0)
-const itemRecognizedCost = computed(() => summary.value?.items.reduce((total, item) => total + Number(item.recognized_cost || 0), 0) || 0)
+const itemPlannedAmount = computed(() => focusedSummaryItems.value.reduce((total, item) => total + Number(item.planned_amount || 0), 0) || 0)
+const itemRecognizedCost = computed(() => focusedSummaryItems.value.reduce((total, item) => total + Number(item.recognized_cost || 0), 0) || 0)
 
 const rules: FormRules = {
   vendor_id: [{ required: true, message: '请选择外协商', trigger: 'change' }],
@@ -305,8 +325,10 @@ function goToOutsourceList(item?: OutsourceOrderItemSummary) {
 }
 
 async function fetchOutsource() {
+  const version = ++fetchVersion
   if (!canViewOutsourceTask.value) return
   loading.value = true
+  loadError.value = ''
   try {
     const [summaryResult, taskResult] = await Promise.allSettled([
       getOutsourceOrderItemsSummary(props.orderId, {
@@ -315,18 +337,26 @@ async function fetchOutsource() {
         source_task_id: props.taskId,
       }),
       getOutsourceTasks({
-        page: 1,
-        page_size: 50,
+        page: outsourcePage.value,
+        page_size: 20,
         order_id: props.orderId,
+        order_item_id: focusedItemId.value || undefined,
         source_task_id: props.taskId,
         source_task_type: props.taskType,
         task_type: props.taskType,
       }),
     ])
+    if (version !== fetchVersion) return
+    const errors: string[] = []
     if (summaryResult.status === 'fulfilled') summary.value = summaryResult.value
-    if (taskResult.status === 'fulfilled') outsourceTasks.value = taskResult.value.items
+    else errors.push(formatApiError(summaryResult.reason, '外协明细加载失败'))
+    if (taskResult.status === 'fulfilled') {
+      outsourceTasks.value = taskResult.value.items
+      outsourceTotal.value = taskResult.value.total
+    } else errors.push(formatApiError(taskResult.reason, '外协任务加载失败'))
+    loadError.value = errors.join('；')
   } finally {
-    loading.value = false
+    if (version === fetchVersion) loading.value = false
   }
 }
 
@@ -373,19 +403,46 @@ async function handleSubmit() {
     })
     ElMessage.success(isAppend.value ? '已追加订单明细外协' : '已发送订单明细外协')
     dialogVisible.value = false
+    emit('changed')
     await fetchOutsource()
+  } catch (cause) {
+    ElMessage.error(formatApiError(cause, '发送外协失败，请重试'))
   } finally {
     saving.value = false
   }
 }
 
-onMounted(() => {
+async function focusItem(orderItemId: string) {
+  focusedItemId.value = orderItemId
+  allocationExpanded.value = true
+  outsourcePage.value = 1
+  await nextTick()
+  allocationHeading.value?.scrollIntoView({ block: 'start', behavior: 'auto' })
+  await fetchOutsource()
+}
+function clearItemFocus() {
+  focusedItemId.value = ''
+  outsourcePage.value = 1
   void fetchOutsource()
-  void loadVendors()
-})
+}
+defineExpose({ focusItem })
+
+watch([() => props.taskId, () => props.orderId, () => props.taskType], () => {
+  focusedItemId.value = ''
+  allocationExpanded.value = false
+  outsourcePage.value = 1
+  summary.value = null
+  outsourceTasks.value = []
+  outsourceTotal.value = 0
+  void fetchOutsource()
+}, { immediate: true })
+watch(() => props.refreshKey, () => void fetchOutsource())
+onMounted(() => void loadVendors())
 </script>
 
 <style scoped>
+.focused-item-note { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; color: var(--ad-text-secondary); font-size: 13px; margin-bottom: 10px; }
+.outsource-pagination { justify-content: flex-end; margin-top: 12px; }
 .info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .section-heading { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 10px; }

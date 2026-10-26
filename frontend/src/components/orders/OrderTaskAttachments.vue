@@ -32,6 +32,10 @@
           </el-tag>
         </div>
 
+        <p v-if="hasUploadHistory(group)" class="header-hint">
+          同一明细的同名文件保留上传历史；“最近上传”仅表示时间顺序。
+        </p>
+
         <div
           v-if="allowUpload && !readonly"
           class="material-dropzone"
@@ -69,15 +73,17 @@
           </div>
         </div>
 
-        <div
+        <details
           v-for="itemAlbum in attachmentAlbums(group)"
           :key="`${group.stage}-${itemAlbum.key}`"
           class="item-album-section"
+          :open="!compact"
+          @toggle="handleAlbumToggle($event, itemAlbum, group)"
         >
-          <div class="item-album-heading">
+          <summary class="item-album-heading">
             <span class="item-album-title">{{ itemAlbum.label }}</span>
             <span class="stage-summary">{{ itemAlbumCount(itemAlbum) }} 个资料</span>
-          </div>
+          </summary>
 
           <div
             v-for="album in itemAlbum.dates"
@@ -126,6 +132,8 @@
                   <div class="preview-caption-main">
                     <span :title="attachment.filename">{{ attachment.filename }}</span>
                     <small>{{ attachment.created_at ? formatDateTimeFull(attachment.created_at) : '时间未知' }}</small>
+                    <small>{{ attachment.uploaded_by_name || '上传人未记录' }}</small>
+                    <el-tag v-if="historyLabel(attachment, group)" size="small" type="info">{{ historyLabel(attachment, group) }}</el-tag>
                   </div>
                   <el-button
                     v-if="canDelete(group)"
@@ -145,7 +153,12 @@
               size="small"
               class="file-table"
             >
-              <el-table-column prop="filename" label="文件名" min-width="220" show-overflow-tooltip />
+              <el-table-column prop="filename" label="文件名" min-width="220" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <div>{{ row.filename }}</div>
+                  <small v-if="historyLabel(row, group)" class="upload-history-label">{{ historyLabel(row, group) }}</small>
+                </template>
+              </el-table-column>
               <el-table-column label="类型" width="105">
                 <template #default="{ row }">{{ getTaskAttachmentTypeLabel(row) }}</template>
               </el-table-column>
@@ -179,7 +192,7 @@
               </el-table-column>
             </el-table>
           </div>
-        </div>
+        </details>
 
         <div v-if="!group.attachments.length" class="material-empty">
           {{ group.stage === 'installation' ? '暂无现场照片或视频' : '暂无订单阶段资料' }}
@@ -214,7 +227,7 @@
 </template>
 
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Picture, UploadFilled, VideoPlay } from '@element-plus/icons-vue'
 import { formatDateTimeFull } from '@/utils/datetime'
@@ -233,6 +246,7 @@ import {
   uploadOrderAttachment,
 } from '@/api/orders'
 import { groupAttachmentsByItemAndDate } from '@/utils/orderAttachmentAlbum'
+import { attachmentUploadHistory } from '@/utils/attachmentUploadHistory'
 import type {
   OrderTaskAttachmentGroup,
   OrderTaskAttachmentResponse,
@@ -258,6 +272,7 @@ const props = withDefaults(defineProps<{
 type LocalAttachment = OrderTaskAttachmentResponse & {
   preview_url?: string
   preview_error?: boolean
+  preview_loading?: boolean
 }
 type LocalGroup = Omit<OrderTaskAttachmentGroup, 'attachments'> & {
   stage: TaskType
@@ -273,8 +288,19 @@ type UploadQueueItem = {
 }
 
 const loading = ref(false)
+let materialsVersion = 0
 const loadError = ref(false)
 const groups = ref<LocalGroup[]>([])
+const uploadHistories = computed(() => new Map(groups.value.map(group => [group.stage, attachmentUploadHistory(group.attachments)])))
+function hasUploadHistory(group: LocalGroup) {
+  return [...(uploadHistories.value.get(group.stage)?.values() || [])].some(history => history.count > 1)
+}
+function historyLabel(attachment: LocalAttachment, group: LocalGroup) {
+  const history = uploadHistories.value.get(group.stage)?.get(attachment.id)
+  if (!history || history.count < 2) return ''
+  if (!history.latestId) return `同名上传 ${history.count} 份 · 顺序待核实`
+  return `${history.latestId === attachment.id ? '最近上传' : '较早上传'} · 共 ${history.count} 份`
+}
 const fileInput = ref<HTMLInputElement | null>(null)
 const activeStage = ref<TaskType | null>(null)
 const activeAccept = ref('')
@@ -420,19 +446,29 @@ async function retryUpload(group: LocalGroup, item: UploadQueueItem) {
 }
 
 async function loadPreview(attachment: LocalAttachment, group: LocalGroup) {
+  const version = materialsVersion
   if (!isImage(attachment) && !isVideo(attachment)) return
-  if (attachment.preview_url || attachment.preview_error) return
+  if (attachment.preview_url || attachment.preview_error || attachment.preview_loading) return
+  attachment.preview_loading = true
   try {
     const blob = await downloadOrderAttachment(props.orderId, attachment.id, {
       stage: group.stage,
       task_id: props.taskId,
     })
+    if (version !== materialsVersion) return
     const url = URL.createObjectURL(blob)
     objectUrls.set(attachment.id, url)
     attachment.preview_url = url
   } catch {
     attachment.preview_error = true
+  } finally {
+    attachment.preview_loading = false
   }
+}
+
+async function handleAlbumToggle(event: Event, album: ReturnType<typeof attachmentAlbums>[number], group: LocalGroup) {
+  if (!props.compact || !(event.target as HTMLDetailsElement).open) return
+  await Promise.all(album.dates.flatMap(date => date.attachments.map(attachment => loadPreview(attachment, group))))
 }
 
 async function loadAllPreviews() {
@@ -507,6 +543,7 @@ async function removeAttachment(attachment: LocalAttachment, group: LocalGroup) 
 }
 
 async function loadMaterials() {
+  const version = ++materialsVersion
   clearObjectUrls()
   groups.value = []
   loading.value = true
@@ -516,16 +553,17 @@ async function loadMaterials() {
       stage: props.stage,
       task_id: props.taskId,
     })
+    if (version !== materialsVersion) return
     groups.value = response.groups.map(group => ({
       ...group,
       stage: group.stage || group.task_type,
       attachments: group.attachments.map(attachment => ({ ...attachment })),
     }))
-    await loadAllPreviews()
+    if (!props.compact) await loadAllPreviews()
   } catch {
-    loadError.value = true
+    if (version === materialsVersion) loadError.value = true
   } finally {
-    loading.value = false
+    if (version === materialsVersion) loading.value = false
   }
 }
 
@@ -541,19 +579,24 @@ watch(
 )
 
 onUnmounted(() => {
+  materialsVersion++
   clearObjectUrls()
 })
 </script>
 
 <style scoped>
-.info-card { background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
+.info-card { container-type: inline-size; background: var(--ad-card); border: 1px solid var(--ad-border); color: var(--ad-text); }
 .card-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .header-hint, .stage-summary { color: var(--ad-text-secondary); font-size: 12px; font-weight: normal; }
+.upload-history-label { display: block; color: var(--el-color-primary); }
+@container (max-width: 640px) { .card-header { align-items: flex-start; flex-direction: column; } }
 .stage-section + .stage-section { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--ad-border); }
 .stage-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .stage-heading h3 { margin: 0 0 5px; color: var(--ad-text); font-size: 16px; }
 .item-album-section { margin-top: 16px; padding: 12px; border: 1px solid var(--ad-border); border-radius: 8px; background: var(--ad-bg-secondary, #f8fafc); }
-.item-album-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.item-album-heading { cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.item-album-heading::after { content: "展开"; flex: 0 0 auto; color: var(--el-color-primary); font-size: 12px; }
+.item-album-section[open] > .item-album-heading::after { content: "收起"; }
 .item-album-title { color: var(--ad-text); font-size: 14px; font-weight: 600; }
 .material-dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 116px; padding: 16px; border: 1px dashed var(--ad-border); border-radius: 8px; background: var(--ad-bg-secondary, #f8fafc); cursor: pointer; transition: border-color .15s, background .15s; }
 .material-dropzone:hover, .material-dropzone.is-dragover { border-color: var(--ad-primary, #409eff); background: var(--ad-primary-light, #ecf5ff); }

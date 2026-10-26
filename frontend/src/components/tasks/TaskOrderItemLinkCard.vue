@@ -9,7 +9,7 @@
         <el-tag v-else-if="linkedItemIds.length" type="success" size="small">
           已关联 {{ linkedItemIds.length }} 条明细
         </el-tag>
-        <el-tag v-else type="warning" size="small">历史任务待关联明细</el-tag>
+        <el-tag v-else type="warning" size="small">待关联明细</el-tag>
       </div>
     </template>
 
@@ -30,7 +30,29 @@
         </el-button>
       </div>
 
-      <div v-if="canManageTaskItems" class="item-assignee-toolbar" data-ai-target="task-item-assignee">
+      <div class="item-filter-toolbar">
+        <el-input v-model="keyword" clearable placeholder="搜索项目、分项、工艺、规格或执行人" aria-label="搜索订单明细" class="item-search" />
+        <el-select v-model="itemScope" aria-label="明细范围" class="item-filter-select">
+          <el-option label="全部订单明细" value="all" />
+          <el-option label="本任务明细" value="linked" />
+        </el-select>
+        <el-select v-model="itemFilter" aria-label="明细状态" class="item-filter-select">
+          <el-option label="全部状态" value="all" />
+          <el-option label="待处理" value="pending" />
+          <el-option label="进行中" value="in_progress" />
+          <el-option label="已完成" value="completed" />
+          <el-option label="我的明细" value="mine" />
+        </el-select>
+        <el-checkbox v-if="canViewItemPrice" v-model="showPrices">显示价格</el-checkbox>
+        <el-button text size="small" @click="expandSections(true)">全部展开</el-button>
+        <el-button text size="small" @click="expandSections(false)">全部收起</el-button>
+      </div>
+      <div v-if="items.length" class="selection-context-note">
+        <span>显示 {{ filteredItems.length }} / {{ items.length }} 条明细</span>
+        <el-button v-if="keyword || itemFilter !== 'all' || itemScope !== 'all'" text size="small" @click="resetFilters">清除筛选</el-button>
+      </div>
+
+      <div v-if="canManageTaskItems && selectedItemIds.length" class="item-assignee-toolbar" data-ai-target="task-item-assignee">
         <div class="item-assignee-toolbar-main">
           <span class="item-assignee-toolbar-label">明细改派</span>
           <el-select
@@ -77,12 +99,19 @@
       </div>
 
       <div v-loading="loadingItems" class="link-panel">
+        <el-collapse v-if="sections.length" v-model="expandedSectionKeys" class="item-section-collapse">
+          <el-collapse-item v-for="section in sections" :key="section.key" :name="section.key">
+            <template #title>
+              <div class="item-section-title">
+                <strong>{{ section.name }}</strong>
+                <span>共 {{ section.items.length }} 项 · 已完成 {{ section.completed }} 项</span>
+              </div>
+            </template>
         <div
-          v-if="items.length"
           class="item-table"
           :class="{
             'has-selection-column': selectionEnabled,
-            'has-price-columns': canViewItemPrice,
+            'has-price-columns': priceColumnsVisible,
             'has-outsource-column': canViewOutsourceTask,
           }"
           role="table"
@@ -96,18 +125,18 @@
             <span class="item-table-cell" role="columnheader">产品/材质/工艺</span>
             <span class="item-table-cell" role="columnheader">规格</span>
             <span class="item-table-cell item-table-number" role="columnheader">数量</span>
-            <span class="item-table-cell" role="columnheader">订单阶段</span>
-            <span class="item-table-cell" role="columnheader">本任务</span>
+            <span class="item-table-cell" role="columnheader">明细当前阶段</span>
+            <span class="item-table-cell" role="columnheader">本任务状态</span>
             <span class="item-table-cell" role="columnheader">执行人</span>
-            <span v-if="canViewItemPrice" class="item-table-cell item-table-number" role="columnheader">金额</span>
-            <span v-if="canViewItemPrice" class="item-table-cell item-table-number" role="columnheader">小计</span>
+            <span v-if="priceColumnsVisible" class="item-table-cell item-table-number" role="columnheader">单价</span>
+            <span v-if="priceColumnsVisible" class="item-table-cell item-table-number" role="columnheader">小计</span>
             <span class="item-table-cell item-table-number" role="columnheader">本任务进度</span>
             <span v-if="canViewOutsourceTask" class="item-table-cell" role="columnheader">外协</span>
             <span class="item-table-cell item-table-actions-header" role="columnheader">操作</span>
           </div>
 
           <div
-            v-for="item in items"
+            v-for="item in section.items"
             :key="item.id"
             class="item-table-row"
             :class="{
@@ -141,10 +170,10 @@
               {{ item.quantity }}{{ item.unit ? ` ${item.unit}` : '' }}
               <small v-if="item.planned_quantity != null" style="display: block">本任务 {{ item.planned_quantity }} / 已完成 {{ item.completed_quantity ?? '待核实' }}</small>
             </span>
-            <span class="item-table-cell" data-label="订单阶段" role="cell">
+            <span class="item-table-cell" data-label="明细当前阶段" role="cell">
               <StatusTag :status="item.stage_view || item.stage" :label="item.stage_label" size="sm" />
             </span>
-            <span class="item-table-cell" data-label="本任务" role="cell">
+            <span class="item-table-cell" data-label="本任务状态" role="cell">
               <StatusTag
                 v-if="item.is_linked && (item.task_status_view || item.task_status_label)"
                 :status="item.task_status_view || item.task_status"
@@ -162,8 +191,8 @@
               </span>
               <span v-else class="item-table-placeholder">—</span>
             </span>
-            <template v-if="canViewItemPrice">
-              <span class="item-table-cell item-table-number" data-label="金额" role="cell">
+            <template v-if="priceColumnsVisible">
+              <span class="item-table-cell item-table-number" data-label="单价" role="cell">
                 {{ formatMoney(item.unit_price) }}
               </span>
               <span class="item-table-cell item-table-number" data-label="小计" role="cell">
@@ -181,6 +210,7 @@
                 {{ item.outsource_status_label || '外协任务进行中' }}
               </el-tag>
               <span v-else class="item-table-placeholder">—</span>
+              <el-button text type="primary" size="small" :aria-label="`查看${item.item_name}的外协`" @click="emit('outsource', item.id)">查看外协</el-button>
             </span>
             <span class="item-table-cell item-table-actions" data-label="操作" role="cell">
               <el-button
@@ -211,6 +241,9 @@
             </span>
           </div>
         </div>
+          </el-collapse-item>
+        </el-collapse>
+        <el-empty v-if="items.length && !sections.length && !loadingItems" description="没有符合筛选条件的明细" :image-size="48" />
 
         <div v-if="loadError" class="link-tip error-tip">订单明细加载失败，请刷新后重试。</div>
         <div v-else-if="!loadingItems && !items.length" class="link-tip">
@@ -261,6 +294,8 @@ import TaskCompletionAttachmentDialog from '@/components/tasks/TaskCompletionAtt
 import { useAuthStore } from '@/stores/auth'
 import { getTaskItemActions, isTaskOrderItemSelectable } from '@/utils/taskItemActions'
 import { formatMoney } from '@/utils/format'
+import { buildTaskItemSections, filterTaskItems } from '@/utils/taskDetailPresentation'
+import type { TaskItemFilter, TaskItemScope } from '@/utils/taskDetailPresentation'
 
 const authStore = useAuthStore()
 
@@ -272,12 +307,14 @@ const props = withDefaults(defineProps<{
   currentItemIds?: string[] | null
   currentStatus: string
   workflow: Record<string, string[]>
-  refreshKey?: string | null
+  refreshKey?: string | number | null
+  completionSuccessKey?: number
   changing: boolean
 }>(), {
   currentItemId: null,
   currentItemIds: () => [],
   refreshKey: null,
+  completionSuccessKey: 0,
 })
 
 const emit = defineEmits<{
@@ -285,11 +322,13 @@ const emit = defineEmits<{
   change: [status: string, orderItemIds: string[], reason?: string]
   rollback: [targetStage: 'design' | 'production', orderItemIds: string[], reason?: string]
   complete: [orderItemId: string, files: File[], skipped: boolean]
+  outsource: [orderItemId: string]
 }>()
 
 const items = ref<TaskOrderItemOption[]>([])
 const selectedItemIds = ref<string[]>([])
 const loadingItems = ref(false)
+let itemsRequestVersion = 0
 const linking = ref(false)
 const loadError = ref(false)
 const assigneeOptions = ref<TaskAssigneeOption[]>([])
@@ -299,6 +338,39 @@ const reassigning = ref(false)
 const actionLoadingId = ref<string | null>(null)
 const completionDialogVisible = ref(false)
 const completionItem = ref<TaskOrderItemOption | null>(null)
+
+const keyword = ref('')
+const itemScope = ref<TaskItemScope>('all')
+const itemFilter = ref<TaskItemFilter>('all')
+const showPrices = ref(false)
+const expandedSectionKeys = ref<string[]>([])
+const knownSectionKeys = new Set<string>()
+const priceColumnsVisible = computed(() => canViewItemPrice.value && showPrices.value)
+const filteredItems = computed(() => filterTaskItems(items.value, itemScope.value, itemFilter.value, keyword.value, authStore.user?.id))
+const sections = computed(() => buildTaskItemSections(filteredItems.value))
+
+function expandSections(expanded: boolean) {
+  expandedSectionKeys.value = expanded ? sections.value.map(section => section.key) : []
+}
+function resetFilters() {
+  keyword.value = ''
+  itemScope.value = 'all'
+  itemFilter.value = 'all'
+}
+watch(sections, value => {
+  const searching = keyword.value.trim() || itemFilter.value !== 'all' || itemScope.value !== 'all'
+  for (const section of value) {
+    if (searching || (!knownSectionKeys.has(section.key) && section.pending)) {
+      if (!expandedSectionKeys.value.includes(section.key)) expandedSectionKeys.value.push(section.key)
+    }
+    knownSectionKeys.add(section.key)
+  }
+}, { immediate: true })
+watch([keyword, itemScope, itemFilter], () => {
+  // Hidden selections must never be silently included in a later reassignment.
+  const visibleIds = new Set(filteredItems.value.map(item => item.id))
+  selectedItemIds.value = selectedItemIds.value.filter(id => visibleIds.has(id))
+})
 
 const terminalStatuses: Record<TaskType, string[]> = {
   design: ['confirmed', 'cancelled', 'rolled_back'],
@@ -393,7 +465,13 @@ async function handleItemAction(item: TaskOrderItemOption, action: TaskItemActio
     ElMessage.info(action.disabled_reason || '当前账号不能操作该明细')
     return
   }
-  if (actionLoadingId.value) return
+  if (actionLoadingId.value || props.changing || reassigning.value) return
+  if (action.to_status === 'confirmed' || action.to_status === 'completed') {
+    completionItem.value = item
+    completionDialogVisible.value = true
+    actionLoadingId.value = item.id
+    return
+  }
 
   let reason = ''
   if (action.to_status === 'cancelled') {
@@ -429,13 +507,6 @@ async function handleItemAction(item: TaskOrderItemOption, action: TaskItemActio
     return
   }
 
-  if (action.to_status === 'confirmed' || action.to_status === 'completed') {
-    completionItem.value = item
-    completionDialogVisible.value = true
-    actionLoadingId.value = item.id
-    return
-  }
-
   actionLoadingId.value = item.id
   if (action.operation === 'rollback') {
     const targetStage = action.target_stage
@@ -456,6 +527,7 @@ function handleCompletionSubmit(files: File[], skipped: boolean) {
 }
 
 async function loadItems() {
+  const version = ++itemsRequestVersion
   if (!props.orderId) {
     selectedItemIds.value = []
     return
@@ -464,13 +536,13 @@ async function loadItems() {
   loadingItems.value = true
   loadError.value = false
   try {
-    items.value = await getTaskOrderItemOptions(props.taskType, props.taskId)
-    if (canManageTaskItems.value) await loadAssigneeOptions()
+    const data = await getTaskOrderItemOptions(props.taskType, props.taskId)
+    if (version !== itemsRequestVersion) return
+    items.value = data
   } catch {
-    items.value = []
-    loadError.value = true
+    if (version === itemsRequestVersion) { items.value = []; loadError.value = true }
   } finally {
-    loadingItems.value = false
+    if (version === itemsRequestVersion) loadingItems.value = false
   }
 }
 
@@ -587,14 +659,19 @@ watch(
 watch(() => props.changing, value => {
   if (!value) {
     actionLoadingId.value = null
-    if (completionDialogVisible.value) completionDialogVisible.value = false
   }
+})
+watch(() => props.completionSuccessKey, () => {
+  completionDialogVisible.value = false
 })
 watch(completionDialogVisible, value => {
   if (!value) {
     completionItem.value = null
     actionLoadingId.value = null
   }
+})
+watch(() => selectedItemIds.value.length > 0, selected => {
+  if (selected && canManageTaskItems.value) void loadAssigneeOptions()
 })
 onMounted(loadItems)
 </script>
@@ -611,7 +688,7 @@ onMounted(loadItems)
 .item-assignee-select { width: 220px; }
 .item-assignee-toolbar-note, .selection-context-note { color: var(--ad-text-secondary); font-size: 12px; }
 .selection-context-note { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 8px; padding: 0 4px; }
-.link-panel { margin-top: 16px; }
+.link-panel { margin-top: 10px; container-type: inline-size; container-name: task-items; }
 .item-table { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.55fr) minmax(80px, .9fr) minmax(56px, .65fr) minmax(70px, .75fr) minmax(72px, .75fr) minmax(84px, .85fr) minmax(80px, .7fr) minmax(150px, 1.2fr); overflow: visible; border: 1px solid var(--el-border-color); border-radius: 6px; }
 .item-table.has-selection-column { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.55fr) minmax(80px, .9fr) minmax(56px, .65fr) minmax(70px, .75fr) minmax(72px, .75fr) minmax(84px, .85fr) minmax(80px, .7fr) minmax(150px, 1.2fr); }
 .item-table.has-price-columns { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(72px, .6fr) minmax(72px, .65fr) minmax(80px, .7fr) minmax(150px, 1.1fr); }
@@ -631,11 +708,12 @@ onMounted(loadItems)
 .item-table-row > .item-table-cell { align-items: center; }
 .item-table-header .item-table-cell { color: var(--ad-text-secondary); }
 .item-table-select { justify-content: center; padding-right: 2px; padding-left: 2px; }
-.item-table-checkbox { width: 16px; height: 16px; margin: 0; accent-color: var(--el-color-primary); }
+.item-table-checkbox { width: 20px; height: 20px; margin: 0; accent-color: var(--el-color-primary); }
 .item-table-name, .item-table-product, .item-table-spec { white-space: normal; word-break: break-word; }
 .item-table-name { font-weight: 600; }
 .item-table-number { justify-content: flex-end; text-align: right; font-variant-numeric: tabular-nums; white-space: normal; }
-.item-assignee-name { color: var(--el-color-danger); font-weight: 600; overflow-wrap: anywhere; }
+.item-assignee-name { color: var(--ad-text); font-weight: 600; overflow-wrap: anywhere; }
+.item-table-outsourcing { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; }
 .item-assignee-placeholder, .item-table-placeholder { color: var(--ad-text-secondary); }
 .item-table-actions-header { justify-content: flex-start; }
 .item-table-actions { flex-wrap: wrap; gap: 4px; }
@@ -644,14 +722,25 @@ onMounted(loadItems)
 .link-context-note, .link-tip { color: var(--ad-text-secondary); font-size: 12px; }
 .link-tip { margin-top: 10px; }
 .error-tip { color: var(--el-color-danger); }
-@media (max-width: 900px) {
+.item-filter-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.item-search { width: 300px; max-width: 100%; }
+.item-filter-select { width: 150px; }
+.item-section-collapse { border: 0; }
+.item-section-collapse :deep(.el-collapse-item__header) { height: auto; min-height: 48px; background: var(--ad-bg-secondary); border: 1px solid var(--ad-border); border-radius: 6px; padding: 8px 12px; line-height: 1.5; }
+.item-section-collapse :deep(.el-collapse-item__wrap) { border-bottom: 0; background: transparent; }
+.item-section-collapse :deep(.el-collapse-item__content) { padding: 10px 0 0; }
+.item-section-collapse :deep(.el-collapse-item) { margin-bottom: 12px; }
+.item-section-title { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding-right: 12px; text-align: left; }
+.item-section-title span { color: var(--ad-text-secondary); font-size: 12px; }
+
+@container task-items (max-width: 1050px) {
   .item-table-header { display: none; }
   .item-table, .item-table.has-selection-column, .item-table.has-price-columns, .item-table.has-selection-column.has-price-columns, .item-table.has-outsource-column:not(.has-price-columns), .item-table.has-selection-column.has-outsource-column:not(.has-price-columns), .item-table.has-price-columns.has-outsource-column, .item-table.has-selection-column.has-price-columns.has-outsource-column { --item-table-columns: minmax(0, 1fr) minmax(128px, auto); }
   .item-table-row { grid-template-columns: var(--item-table-columns); padding: 10px; }
-  .item-table-row .item-table-cell:not(.item-table-actions):not(.item-table-select):not(.item-action-reason) { grid-column: 1 / -1; flex-direction: column; align-items: flex-start; gap: 2px; padding: 5px 6px; }
+  .item-table-row .item-table-cell:not(.item-table-actions):not(.item-table-select):not(.item-action-reason) { flex-direction: column; align-items: flex-start; gap: 2px; padding: 5px 6px; }
   .item-table-row .item-table-cell:not(.item-table-actions):not(.item-table-select):not(.item-action-reason)::before { content: attr(data-label); color: var(--ad-text-secondary); font-size: 11px; line-height: 1.4; }
-  .item-table-row .item-table-select { grid-column: 1; grid-row: 1; align-self: flex-start; }
-  .item-table-row .item-table-actions { grid-column: 2; grid-row: 1; justify-content: flex-end; }
+  .item-table-row .item-table-select { grid-column: 1; align-self: flex-start; min-height: 28px; }
+  .item-table-row .item-table-actions { grid-column: 1 / -1; justify-content: flex-end; padding-top: 10px; }
   .item-table-row .item-table-number { justify-content: flex-start; text-align: left; }
   .item-table-row .item-action-reason { grid-column: 1 / -1; padding: 6px; }
 }

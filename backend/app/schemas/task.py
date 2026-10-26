@@ -10,6 +10,26 @@ from app.schemas.order import OrderItemResponse
 TaskType = Literal["design", "production", "installation"]
 
 
+class TaskDeleteImpactEntry(BaseModel):
+    id: str
+    label: str
+    effect: Literal["delete_task", "recycle_acceptance", "unlink_outsource", "reopen_task"]
+    detail: str | None = None
+    items: list[str] = Field(default_factory=list)
+
+
+class TaskDeleteImpact(BaseModel):
+    task_id: str
+    task_type: TaskType
+    task_no: str
+    order_no: str | None = None
+    order_status: str | None = None
+    target_order_status: str | None = None
+    entries: list[TaskDeleteImpactEntry]
+    warnings: list[str]
+    plan_hash: str
+
+
 def _coerce_task_scope_status(value: object) -> str:
     """Keep responses compatible with rows/fixtures created before the migration."""
     if isinstance(value, str) and value in {"active", "empty_after_item_delete"}:
