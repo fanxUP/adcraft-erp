@@ -2,14 +2,18 @@
   <el-card
     shadow="hover"
     class="board-card"
-    role="button"
-    tabindex="0"
-    :aria-label="`打开任务 ${task.task_no}`"
+    role="group"
+    :aria-label="`任务 ${task.task_no}`"
     @click="openTask"
-    @keydown="handleKeydown"
   >
     <div class="card-topline">
-      <span class="card-no" :title="task.task_no">{{ task.task_no }}</span>
+      <button
+        type="button"
+        class="card-no card-open"
+        :title="task.task_no"
+        :aria-label="`打开任务 ${task.task_no}`"
+        @click.stop="openTask"
+      >{{ task.task_no }}</button>
       <div class="card-statuses">
         <el-tag v-if="task.is_overdue" size="small" type="danger">逾期</el-tag>
         <StatusTag :status="task.status_view || task.status" size="sm" />
@@ -40,7 +44,20 @@
       <el-tag v-if="task.pending_action_count" size="small" type="warning">待处理事项 {{ task.pending_action_count }}</el-tag>
     </div>
     <el-alert v-if="task.review_required" :title="task.review_reason || '订单已变更，请先核对任务范围'" type="warning" :closable="false" show-icon />
-    <div class="scope-items">
+    <button
+      type="button"
+      class="scope-toggle"
+      :aria-expanded="detailsExpanded"
+      :aria-controls="detailsId"
+      @click.stop="detailsExpanded = !detailsExpanded"
+    >
+      <span>项目明细<span v-if="itemCount">（{{ itemCount }} 项）</span></span>
+      <span class="scope-toggle-action">
+        {{ detailsExpanded ? '收起' : '展开' }}
+        <el-icon aria-hidden="true"><ArrowUp v-if="detailsExpanded" /><ArrowDown v-else /></el-icon>
+      </span>
+    </button>
+    <div v-show="detailsExpanded" :id="detailsId" class="scope-items">
       <div v-for="item in task.scope_items" :key="item.order_item_id" class="scope-item">
         <strong>{{ item.scope_item_name || item.item_name }}</strong>
         <span>本次计划 {{ quantity(item.planned_quantity, item.scope_unit) }} · 已完成 {{ quantity(item.completed_quantity, item.scope_unit) }}</span>
@@ -65,6 +82,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref, useId } from 'vue'
 import type { TaskQueueItem } from '@/types/api'
 import ProgressBar from './ProgressBar.vue'
 import StatusTag from './StatusTag.vue'
@@ -75,9 +93,16 @@ import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
 
-defineProps<{
+const props = defineProps<{
   task: TaskQueueItem
 }>()
+
+const detailsExpanded = ref(false)
+const detailsId = `task-scope-${useId()}`
+const itemCount = computed(() => props.task.scope_items?.length
+  || props.task.order_item_ids?.length
+  || props.task.item_names?.length
+  || (props.task.item_name ? 1 : 0))
 
 const emit = defineEmits<{
   open: []
@@ -90,17 +115,32 @@ function quantity(value?: number | null, unit?: string | null) {
 function openTask() {
   emit('open')
 }
-
-function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault()
-    openTask()
-  }
-}
 </script>
 
 <style scoped>
 .scope-notices { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.scope-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  margin: 8px 0;
+  padding: 6px 0;
+  border: 0;
+  border-top: 1px solid var(--ad-border);
+  background: transparent;
+  color: var(--ad-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.scope-toggle-action { display: flex; align-items: center; gap: 4px; color: var(--ad-primary, #409eff); }
+.scope-toggle:hover { color: var(--ad-primary, #409eff); }
+.scope-toggle:focus-visible,
+.card-open:focus-visible { outline: 2px solid var(--ad-primary, #409eff); outline-offset: 2px; border-radius: 2px; }
 .scope-items { display: grid; gap: 8px; margin: 10px 0; font-size: 12px; color: var(--ad-text-secondary); }
 .scope-item { display: grid; gap: 3px; }
 .scope-item strong { color: var(--ad-text); font-weight: 600; }
@@ -114,7 +154,7 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 .board-card:hover,
-.board-card:focus-visible {
+.board-card:focus-within {
   border-color: var(--ad-primary, #409eff);
 }
 
@@ -150,6 +190,15 @@ function handleKeydown(event: KeyboardEvent) {
 
 .card-no {
   min-width: 0;
+}
+
+.card-open {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .card-name {
