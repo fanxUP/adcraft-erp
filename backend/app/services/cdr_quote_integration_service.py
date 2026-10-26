@@ -251,68 +251,30 @@ class CdrQuoteIntegrationService(CdrQuoteServiceBase):
             "expires_at": capture.expires_at.isoformat() if capture.expires_at else None,
         }
 
-    async def create_quote_from_capture(self, capture_id: UUID, data: dict, current_user_id: UUID) -> dict:
-        """根据图稿采集创建报价草稿。"
-        """
-        from app.models.business_document import BusinessDocument
-
+    async def create_quote_from_capture(self, capture_id: UUID, data: dict, current_user_id: UUID, viewer=None) -> dict:
+        """Legacy method name retained for bridge clients; creates an order."""
+        from app.schemas.order import OrderCreate
+        from app.services.order_management_service import OrderManagementService
+        from app.services.business_document_service import _business_today
+        from app.models.cdr_quote import DrawingSnapshot
+        from types import SimpleNamespace
+        from sqlalchemy import select
+        from app.core.permissions import user_has_permission
         capture = await self.repo.get_capture_session(capture_id)
-        if not capture:
-            raise ValueError("采集记录不存在")
-
-        # Create a CDR quote (business_document with doc_type="quote")
-        from app.services.number_generator import generate_quote_no
-        quote_no = await generate_quote_no(self.db)
-
-        doc = BusinessDocument(
-            doc_type="quote",
-            doc_no=quote_no,
-            status="draft",
-            quote_mode="cdr",
-            customer_id=data.get("customer_id"),
-            customer_name=data.get("customer_name", ""),
-            project_name=data.get("project_name", f"CDR: {capture.document_name or ''}"),
-            department=data.get("department", ""),
-            subtotal_amount=Decimal("0"),
-            discount_amount=Decimal("0"),
-            tax_rate=Decimal(str(data.get("tax_rate", 0.13))),
-            tax_amount=Decimal("0"),
-            total_amount=Decimal("0"),
-            paid_amount=Decimal("0"),
-            cost_amount=Decimal("0"),
-            gross_profit=Decimal("0"),
-            remark=data.get("notes", f"来源：CDR 图稿采集 {capture.session_code}"),
-            created_by=current_user_id,
-        )
-        self.db.add(doc)
-        await self.db.commit()
-        await self.db.refresh(doc)
-
-        # Create drawing snapshot
-        snapshot_data = {
-            "snapshot_code": "DS-" + capture.session_code,
-            "capture_session_id": capture.id,
-            "quote_id": doc.id,
-            "drawing_fingerprint": capture.drawing_fingerprint or "",
-            "geometry_summary_json": data.get("geometry_summary"),
-            "object_summary_json": data.get("object_summary"),
-            "created_by": current_user_id,
-        }
-        await self.repo.create_drawing_snapshot(snapshot_data)
-
-        # Log audit
-        await self.repo.create_audit_log({
-            "quote_id": doc.id,
-            "actor_id": current_user_id,
-            "action": "quote.created_from_capture",
-            "after_json": {"capture_session_id": str(capture.id), "quote_no": quote_no},
-        })
-
-        return {
-            "id": str(doc.id),
-            "quote_no": doc.doc_no,
-            "status": doc.status,
-            "project_name": doc.project_name,
-            "capture_session_id": str(capture.id),
-            "message": "报价草稿已创建，请完善报价明细",
-        }
+        if not capture or (capture.employee_id != current_user_id and not (viewer and user_has_permission(viewer, "system:super_admin"))):
+            raise ValueError("采集记录不存在或无权使用")
+        items = data.get("items") or [{"item_name": capture.document_name or "图稿明细（待完善）", "quantity": 1, "unit_price": 0,
+            "remark": "请确认图稿规格、材质和价格后再确认订单"}]
+        request = OrderCreate(request_id=capture_id, order_date=data.get("order_date") or _business_today(),
+            header={"customer_id": data.get("customer_id"), "customer_name": data.get("customer_name"),
+                    "project_name": data.get("project_name") or capture.document_name or "图稿订单", "department": data.get("department"),
+                    "remark": data.get("notes") or f"来源：图稿采集 {capture.session_code}", "tax_rate": data.get("tax_rate", 0)}, items=items)
+        management = OrderManagementService(self.db, viewer or SimpleNamespace(id=current_user_id, roles=[], real_name=None, username=None))
+        result = await management.create(request.model_dump())
+        existing = (await self.db.execute(select(DrawingSnapshot.id).where(DrawingSnapshot.capture_session_id == capture_id, DrawingSnapshot.quote_id == UUID(result["id"])))).scalar_one_or_none()
+        if not existing:
+            self.db.add(DrawingSnapshot(snapshot_code="DS-" + capture.session_code, capture_session_id=capture_id,
+                quote_id=UUID(result["id"]), drawing_fingerprint=capture.drawing_fingerprint,
+                geometry_summary_json=data.get("geometry_summary"), object_summary_json=data.get("object_summary"), created_by=current_user_id))
+            await self.db.flush()
+        return {**result, "capture_session_id": str(capture_id), "message": "订单已保存为待确认，请完善图稿明细"}

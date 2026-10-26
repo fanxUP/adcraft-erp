@@ -1,0 +1,5 @@
+
+> adcraft-erp-frontend@0.1.0 check:ai-contract
+> node scripts/check-ai-page-contract.mjs
+
+AI 页面能力契约校验通过：7 个页面，30 个语义控件，97 个命名路由

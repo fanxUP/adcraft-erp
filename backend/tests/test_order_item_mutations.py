@@ -157,7 +157,7 @@ def associated_relations():
 
 
 def test_order_item_lock_reasons_cover_execution_and_finance_links():
-    order = make_order(status="completed")
+    order = make_order(status="cancelled")
     relations = empty_relations()
     relations["payments"] = 1
     relations["accepted_acceptance_forms"] = 1
@@ -188,7 +188,7 @@ def test_executing_associated_order_requires_confirmation_but_is_editable():
     assert not any(reason["code"] == "TASK_LINKED" for reason in decision["lock_reasons"])
 
 
-def test_completed_order_remains_blocked_even_with_confirmation():
+def test_completed_order_uses_confirmation_instead_of_status_lock():
     order = make_order(status="completed")
 
     decision = BusinessDocumentService._order_item_mutation_decision(
@@ -199,9 +199,9 @@ def test_completed_order_remains_blocked_even_with_confirmation():
         paid_amount=Decimal("20.00"),
     )
 
-    assert decision["decision"] == "BLOCK"
-    assert decision["can_apply"] is False
-    assert any(reason["code"] == "STATUS_LOCKED" for reason in decision["lock_reasons"])
+    assert decision["decision"] == "APPROVAL_AND_ADJUSTMENT"
+    assert decision["can_apply"] is True
+    assert not decision["lock_reasons"]
 
 
 def test_deleting_order_item_always_requires_explicit_confirmation():
@@ -329,6 +329,7 @@ async def test_confirmed_associated_update_refreshes_and_records_pending_adjustm
     service._find_applied_mutation = AsyncMock(return_value=None)
     service._apply_order_item_refresh = AsyncMock(return_value={
         "status": "PENDING_ADJUSTMENT",
+        "pending_review": [{"module": "production_tasks", "record_id": str(uuid4()), "detail": "执行范围待复核"}],
         "counts": {"auto_refreshed": 0, "preserved_facts": 1, "pending_review": 1, "adjustments": 1, "blocked": 0},
     })
 
@@ -623,6 +624,7 @@ async def test_stable_acceptance_and_outsource_links_refresh_only_planning_field
         unpaid_amount=Decimal("10"),
     )
     db.execute = AsyncMock(side_effect=[
+        FakeExecuteResult(), FakeExecuteResult(), FakeExecuteResult(),  # no internal execution tasks
         FakeExecuteResult(all_rows=[(acceptance_item, form)]),
         FakeExecuteResult(scalar_rows=[outsource]),
     ])
@@ -660,6 +662,8 @@ async def test_stable_acceptance_and_outsource_links_refresh_only_planning_field
             },
         ],
         change_batch_id="batch-refresh",
+        changed_fields=["item_name", "quantity", "unit_price"],
+        previous_item={"quantity": 1},
     )
 
     assert result["status"] == "VERIFIED"
@@ -860,7 +864,7 @@ def test_order_item_change_batch_and_reconciliation_routes_are_registered():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("status", ["completed", "cancelled"])
+@pytest.mark.parametrize("status", ["cancelled"])
 async def test_terminal_order_blocks_cost_and_contact_mutations(status):
     db = MagicMock()
     db.flush = AsyncMock()
@@ -932,3 +936,15 @@ async def test_task_completion_is_blocked_until_order_change_review_is_acknowled
             "completed",
             [str(uuid4())],
         )
+
+
+@pytest.fixture(autouse=True)
+def isolate_execution_projection_in_unit_tests(monkeypatch):
+    monkeypatch.setattr("app.services.payment_service.StatementService.capture_confirmed_for_customer", AsyncMock())
+    monkeypatch.setattr("app.services.payment_service.StatementService.refresh_drafts_for_customer", AsyncMock(return_value=[]))
+    # These tests cover mutation signing/lifecycle with repository doubles.
+    # Real task scope SQL is verified in test_order_first_integration.py.
+    monkeypatch.setattr("app.services.order_management_service.OrderManagementService.sync_execution", AsyncMock())
+    monkeypatch.setattr("app.services.order_management_service.OrderManagementService.sync_drafts", AsyncMock())
+    monkeypatch.setattr("app.services.order_management_service.OrderManagementService.cancel_outsourcing", AsyncMock())
+    monkeypatch.setattr("app.services.business_document_service.BusinessDocumentService._cancel_open_tasks", AsyncMock(return_value={"tasks": [], "acceptance_ids": []}))

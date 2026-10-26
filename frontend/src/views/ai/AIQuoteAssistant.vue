@@ -1,6 +1,6 @@
 <template>
   <AppPage>
-    <template #header><PageHeader title="AI 报价助手" description="根据需求描述生成可编辑的报价草稿，保存前仍由业务人员确认。">
+    <template #header><PageHeader title="AI 智能填单" description="根据需求描述生成订单明细，确认后保存为待确认订单。">
       <template #meta><el-tag :type="modeTagType">{{ modeLabel }}</el-tag></template>
     </PageHeader></template>
 
@@ -35,7 +35,7 @@
             </el-form-item>
             <el-form-item>
               <el-button :loading="loading" style="width: 100%" @click="generateDraft" type="danger">
-                <el-icon><MagicStick /></el-icon> 生成报价草稿
+                <el-icon><MagicStick /></el-icon> 生成订单明细草稿
               </el-button>
             </el-form-item>
           </el-form>
@@ -56,7 +56,7 @@
       <el-col :span="16">
         <el-card v-loading="loading">
           <template #header>
-            <span>报价草稿</span>
+            <span>订单明细草稿</span>
             <el-tag v-if="draft" size="small" style="margin-left: 12px">
               {{ draft.mode === 'ai_enhanced' ? 'AI 增强' : '规则引擎' }}
             </el-tag>
@@ -64,7 +64,7 @@
 
           <div v-if="!draft" class="empty-state">
             <el-icon :size="64"><MagicStick /></el-icon>
-            <p>输入需求描述，AI 将自动生成报价草稿</p>
+            <p>输入需求描述，AI 将自动生成订单明细草稿</p>
           </div>
 
           <div v-else>
@@ -121,7 +121,7 @@
             <!-- Actions -->
             <div class="actions" style="margin-top: 16px; text-align: right;">
               <el-button @click="draft = null" type="danger">重新生成</el-button>
-              <el-button :loading="saving" @click="saveQuote" type="primary">保存为正式报价</el-button>
+              <el-button :loading="saving" @click="saveQuote" type="primary">保存为待确认订单</el-button>
             </div>
           </div>
         </el-card>
@@ -135,7 +135,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { MagicStick } from '@element-plus/icons-vue'
+import { newRequestId } from '@/utils/requestId'
 import { assistQuote, saveAssistedQuote } from '@/api/ai'
+const draftRequestId = newRequestId()
 import { getCustomers } from '@/api/customers'
 import type { AIQuoteAssistResponse, CustomerResponse } from '@/types/api'
 import { AppPage, PageHeader } from '@/components/ui'
@@ -177,7 +179,7 @@ async function generateDraft() {
       customer_id: customerId.value || undefined,
     })
   } catch {
-    ElMessage.error('生成报价草稿失败')
+    ElMessage.error('生成订单明细草稿失败')
   } finally {
     loading.value = false
   }
@@ -188,13 +190,14 @@ async function saveQuote() {
   saving.value = true
   try {
     const quote = await saveAssistedQuote({
+      request_id: draftRequestId,
       project_name: draft.value.project_name,
       customer_id: customerId.value || undefined,
       items: draft.value.items,
       ai_analysis: draft.value.ai_analysis,
     })
-    ElMessage.success('报价已保存为草稿')
-    router.push(`/quotes/${(quote as Record<string, unknown>).id}/edit`)
+    ElMessage.success('订单已保存为待确认')
+    router.push(`/orders/${(quote as Record<string, unknown>).id}/edit`)
   } catch {
     ElMessage.error('保存失败')
   } finally {

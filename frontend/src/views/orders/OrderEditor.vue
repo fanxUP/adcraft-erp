@@ -6,7 +6,7 @@
 
     <div class="page-title-row">
       <div>
-        <h2 style="margin: 16px 0 4px; color: var(--ad-text)">编辑订单 {{ order?.order_no || '' }}</h2>
+        <h2 style="margin: 16px 0 4px; color: var(--ad-text)">{{ isCreate ? '新建订单' : `编辑订单 ${order?.order_no || ''}` }}</h2>
         <div v-if="order" class="title-meta">
           <span>订单编号：{{ order.order_no }}</span>
           <el-tag :type="statusColor(order.status)" size="small">{{ statusLabel(order.status) }}</el-tag>
@@ -16,7 +16,7 @@
       <div class="title-actions">
         <el-button @click="goBack">取消</el-button>
         <el-button type="primary" :loading="saving" :disabled="!canEdit" @click="handleSave">
-          保存订单
+          {{ isCreate ? '保存为待确认' : '保存订单' }}
         </el-button>
       </div>
     </div>
@@ -91,6 +91,9 @@
         <el-form-item label="联系电话">
           <el-input v-model="form.contact_phone" :disabled="!canEdit" placeholder="手机/电话" style="width: 180px" />
         </el-form-item>
+        <el-form-item v-if="isCreate" label="下单日期" required>
+          <el-date-picker v-model="form.order_date" type="date" value-format="YYYY-MM-DD" :clearable="false" />
+        </el-form-item>
         <el-form-item label="交付日期">
           <el-date-picker v-model="form.delivery_deadline" type="date" value-format="YYYY-MM-DD" :disabled="!canEdit" style="width: 180px" />
         </el-form-item>
@@ -108,6 +111,8 @@
         <div class="card-header">
           <span>订单明细</span>
           <div class="toolbar">
+            <el-button v-if="canEdit" size="small" @click="downloadTemplate">下载导入模板</el-button>
+            <el-upload v-if="canEdit" :show-file-list="false" accept=".xlsx" :http-request="importItems"><el-button size="small">导入明细</el-button></el-upload>
             <el-button v-if="canEdit" size="small" type="danger" @click="addGroup">添加分项</el-button>
             <el-button v-if="canEdit" size="small" type="danger" @click="addItem()">添加行</el-button>
           </div>
@@ -280,10 +285,11 @@
     <el-card shadow="never" class="section-card summary-card">
       <el-row :gutter="20">
         <el-col :span="14">
-          <el-alert type="info" :closable="false" title="保存前请填写变更原因">
+          <el-alert v-if="!isCreate" type="info" :closable="false" title="保存前请填写变更原因">
             明细删除会以作废方式留痕；保存后的订单头、明细、分组和关联刷新结果属于同一变更批次。
           </el-alert>
           <el-input
+            v-if="!isCreate"
             v-model="reason"
             type="textarea"
             :rows="3"
@@ -295,9 +301,13 @@
           />
         </el-col>
         <el-col :span="10">
-          <div class="summary-item"><span>明细合计：</span><strong>¥ {{ localTotal.toFixed(2) }}</strong></div>
+          <div class="summary-item"><span>明细合计：</span><strong>¥ {{ localSubtotal.toFixed(2) }}</strong></div>
+          <div class="summary-item"><label for="order-discount">优惠金额：</label><el-input-number id="order-discount" v-model="form.discount_amount" :min="0" :max="localSubtotal" :precision="2" :disabled="!canEdit" /></div>
+          <div class="summary-item"><label for="order-tax">税率（%）：</label><el-input-number id="order-tax" v-model="form.tax_rate" :min="0" :max="100" :precision="2" :disabled="!canEdit" /></div>
+          <div class="summary-item"><span>税额：</span><strong>¥ {{ localTax.toFixed(2) }}</strong></div>
           <div class="summary-item"><span>已收金额：</span><strong>¥ {{ (order?.paid_amount || 0).toFixed(2) }}</strong></div>
           <div class="summary-item"><span>未收金额：</span><strong>¥ {{ localUnpaid.toFixed(2) }}</strong></div>
+          <div v-if="localOverpaid > 0" class="summary-item"><span>超收/待退：</span><strong>¥ {{ localOverpaid.toFixed(2) }}</strong></div>
           <div class="summary-item"><span>成本金额：</span><strong>¥ {{ (order?.cost_amount || 0).toFixed(2) }}</strong></div>
           <div class="summary-item total"><span>订单总计：</span><strong>¥ {{ localTotal.toFixed(2) }}</strong></div>
           <div class="amount-words">大写金额：{{ toChineseAmount(localTotal) }}</div>
@@ -323,6 +333,7 @@
           <el-descriptions-item label="订单总额">¥{{ preview.before.total_amount.toFixed(2) }} → ¥{{ preview.after.total_amount.toFixed(2) }}</el-descriptions-item>
           <el-descriptions-item label="已收金额">¥{{ preview.after.paid_amount.toFixed(2) }}</el-descriptions-item>
           <el-descriptions-item label="未收金额">¥{{ preview.after.unpaid_amount.toFixed(2) }}</el-descriptions-item>
+          <el-descriptions-item v-if="preview.after.overpaid_amount" label="超收/待退">¥{{ preview.after.overpaid_amount.toFixed(2) }}</el-descriptions-item>
           <el-descriptions-item label="成本">¥{{ preview.after.cost_amount.toFixed(2) }}</el-descriptions-item>
           <el-descriptions-item label="毛利">¥{{ preview.after.gross_profit.toFixed(2) }}</el-descriptions-item>
           <el-descriptions-item label="金额差额"><span :class="preview.delta >= 0 ? 'amount-up' : 'amount-down'">¥{{ preview.delta.toFixed(2) }}</span></el-descriptions-item>
@@ -339,7 +350,7 @@
         <el-table v-if="preview.item_diffs.length" :data="preview.item_diffs" border stripe size="small" max-height="230" style="margin-bottom: 12px">
           <el-table-column label="操作" width="75"><template #default="{ row }">{{ mutationOperationLabel(row.operation) }}</template></el-table-column>
           <el-table-column prop="item_name" label="项目内容" min-width="180" />
-          <el-table-column label="变更字段" min-width="240"><template #default="{ row }">{{ row.changed_fields.join('、') || '-' }}</template></el-table-column>
+          <el-table-column label="变更字段" min-width="240"><template #default="{ row }">{{ row.changed_fields.map(fieldLabel).join('、') || '-' }}</template></el-table-column>
           <el-table-column label="变更后小计" width="130"><template #default="{ row }">{{ amountFromDiff(row.after) }}</template></el-table-column>
         </el-table>
 
@@ -373,12 +384,24 @@
 </template>
 
 <script setup lang="ts">
+const orderFieldLabels: Record<string, string> = {
+  item_name: '项目内容', product_name: '产品', material_process: '材质/工艺', specification: '规格',
+  length: '长度', width: '宽度', height: '高度', length_unit: '长度单位', width_unit: '宽度单位', height_unit: '高度单位',
+  quantity: '数量', unit: '单位', unit_price: '单价', subtotal_amount: '小计', area: '面积',
+  pieces: '件数', remark: '备注', image_url: '样图', group_id: '所属分项', group_name: '分项名称',
+  pricing_mode: '计价方式', sort_order: '排序', cost_amount: '成本',
+}
+function fieldLabel(field: string) { return orderFieldLabels[field] || field }
+
 import { computed, nextTick, onBeforeMount, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import Sortable from 'sortablejs'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getCustomers, getCustomer } from '@/api/customers'
-import { getOrder, getOrderItemEditability, previewOrderEdit, saveOrderEdit } from '@/api/orders'
+import { createOrder, getOrder, getOrderItemEditability, previewOrderEdit, saveOrderEdit, previewOrderImport } from '@/api/orders'
+import { apiClient, get } from '@/api/index'
+import { useAuthStore } from '@/stores/auth'
+import { newRequestId } from '@/utils/requestId'
 import { uploadAttachment } from '@/api/tasks'
 import ProductPickerDialog from '@/components/ProductPickerDialog.vue'
 import { applyProductMaterialProcess, formatProductMaterialProcess } from '@/utils/productMaterialProcess'
@@ -391,7 +414,10 @@ import type { ContactResponse, CustomerResponse, OrderDetailResponse, OrderEditI
 
 const route = useRoute()
 const router = useRouter()
-const orderId = computed(() => route.params.id as string)
+const orderId = computed(() => String(route.params.id || ''))
+const isCreate = computed(() => !orderId.value)
+const auth = useAuthStore()
+const creationRequestId = newRequestId()
 const order = ref<OrderDetailResponse | null>(null)
 const itemEditability = ref<OrderItemEditabilityResponse | null>(null)
 const loading = ref(false)
@@ -423,6 +449,9 @@ const itemKeyMap = new WeakMap<OrderItemResponse, string>()
 let cleanSnapshot = ''
 
 const form = reactive({
+  order_date: new Date().toLocaleDateString('sv-SE'),
+  discount_amount: 0,
+  tax_rate: 0,
   customer_id: '',
   project_name: '',
   department: '',
@@ -433,8 +462,11 @@ const form = reactive({
   remark: '',
 })
 
-const canEdit = computed(() => itemEditability.value?.can_edit_items === true)
-const localTotal = computed(() => items.value.reduce((sum, item) => sum + calcQuoteLineSubtotal(item), 0))
+const canEdit = computed(() => isCreate.value ? auth.can('order:create') : auth.can('order:update') && itemEditability.value?.can_edit_items === true)
+const localSubtotal = computed(() => Math.round(items.value.reduce((sum, item) => sum + calcQuoteLineSubtotal(item), 0) * 100) / 100)
+const localTax = computed(() => Math.round(Math.max(0, localSubtotal.value - form.discount_amount) * form.tax_rate) / 100)
+const localTotal = computed(() => Math.round((localSubtotal.value - form.discount_amount + localTax.value) * 100) / 100)
+const localOverpaid = computed(() => Math.max(0, (order.value?.paid_amount || 0) - localTotal.value))
 const localUnpaid = computed(() => Math.max(0, localTotal.value - (order.value?.paid_amount || 0)))
 
 type DisplayRow = QuoteDisplayRow<OrderItemResponse>
@@ -837,7 +869,9 @@ function onProductUpdated(product: ProductResponse) {
 }
 
 function buildHeaderPayload() {
-  const header: Record<string, string | null> = {
+  const header = {
+    discount_amount: form.discount_amount,
+    tax_rate: form.tax_rate,
     project_name: form.project_name.trim(),
     department: form.department.trim() || null,
     contact_person: form.contact_person.trim() || null,
@@ -846,9 +880,7 @@ function buildHeaderPayload() {
     installation_address: form.installation_address.trim() || null,
     remark: form.remark.trim() || null,
   }
-  if (isExistingCustomer(form.customer_id)) header.customer_id = form.customer_id
-  else if (form.customer_id.trim()) header.customer_name = form.customer_id.trim()
-  return header
+  return { ...header, ...(isExistingCustomer(form.customer_id) ? { customer_id: form.customer_id } : { customer_name: form.customer_id.trim() }) }
 }
 
 function buildPayload() {
@@ -868,6 +900,19 @@ async function handleSave() {
   if (!form.customer_id.trim()) { ElMessage.warning('请先选择或填写客户'); return }
   if (!form.project_name.trim()) { ElMessage.warning('请填写项目名称'); return }
   if (items.value.some(item => !item.item_name.trim())) { ElMessage.warning('请填写所有明细的项目内容'); return }
+  if (isCreate.value) {
+    if (!items.value.length || !form.order_date) { ElMessage.warning('请填写下单日期并添加明细'); return }
+    saving.value = true
+    try {
+      const result = await createOrder({request_id: creationRequestId, capture_id: typeof route.query.capture_id === 'string' ? route.query.capture_id : undefined, order_date: form.order_date, header: buildHeaderPayload(),
+        items: items.value.map((item, index) => serializeOrderItemDraft(item, index)), groups: buildOrderGroupPayload(items.value, emptyGroups.value)})
+      captureCleanSnapshot()
+      ElMessage.success('订单已保存为待确认，确认后即可安排执行')
+      await router.replace(`/orders/${result.id}`)
+    } catch (error: unknown) { ElMessage.error(error instanceof Error ? error.message : '保存失败，请重试') }
+    finally { saving.value = false }
+    return
+  }
   if (!reason.value.trim()) { ElMessage.warning('请填写订单变更原因'); return }
   const diff = buildOrderBatchItemDiff(originalItems.value, items.value)
   const groups = buildOrderGroupPayload(items.value, emptyGroups.value)
@@ -950,10 +995,31 @@ function cancelImpactConfirmation() {
 
 async function handleImageUpload(option: { file: File }, item: OrderItemResponse) {
   try {
+    if (isCreate.value) { ElMessage.warning('请先保存订单，再上传明细图片'); return }
     const result = await uploadAttachment('order_item', item.id || orderId.value, option.file, 'image')
     item.image_url = `/uploads/${result.file_path}`
     ElMessage.success('上传成功')
   } catch { ElMessage.error('上传失败') }
+}
+
+
+async function downloadTemplate() {
+  const response = await apiClient.get('/orders/import-template', { responseType: 'blob' })
+  const url = URL.createObjectURL(response.data)
+  const link = document.createElement('a'); link.href = url; link.download = '订单明细模板.xlsx'; link.click(); URL.revokeObjectURL(url)
+}
+async function importItems(option: { file: File }) {
+  try {
+    const result = await previewOrderImport(option.file)
+    const groups = new Map(items.value.filter(item => item.group_name).map(item => [item.group_name!, item.group_id!]))
+    const imported = result.items.map(raw => {
+      let groupId = raw.group_name ? groups.get(raw.group_name) : undefined
+      if (raw.group_name && !groupId) { groupId = newRequestId(); groups.set(raw.group_name, groupId) }
+      return { ...newItem(), ...raw, id: '', group_id: groupId } as OrderItemResponse
+    })
+    items.value = [...items.value.filter(item => item.item_name.trim()), ...imported]
+    ElMessage.success(`已载入 ${imported.length} 条明细，保存订单后生效`)
+  } catch (error: unknown) { ElMessage.error(error instanceof Error ? error.message : '导入失败') }
 }
 
 async function fetchItemEditability() { try { itemEditability.value = await getOrderItemEditability(orderId.value) } catch { itemEditability.value = null } }
@@ -969,6 +1035,8 @@ async function fetchOrder() {
     if (!data) throw new Error('订单不存在')
     order.value = data
     Object.assign(form, {
+      discount_amount: data.discount_amount || 0,
+      tax_rate: data.tax_rate || 0,
       customer_id: data.customer_id || data.customer_name || '',
       project_name: data.project_name || '',
       department: data.department || '',
@@ -986,7 +1054,7 @@ async function fetchOrder() {
   } finally { loading.value = false }
 }
 
-function goBack() { router.push(`/orders/${orderId.value}`) }
+function goBack() { router.push(isCreate.value ? '/orders' : `/orders/${orderId.value}`) }
 
 function statusLabel(status: string) {
   const labels: Record<string, string> = { pending_confirm: '待确认', confirmed: '已确认', designing: '设计中', in_production: '生产中', in_installation: '安装中', completed: '已完成', cancelled: '已取消' }
@@ -1049,7 +1117,17 @@ onMounted(async () => {
   const stored = localStorage.getItem('quoteEditor_recentUnits')
   if (stored) { try { recentUnits.value = JSON.parse(stored) } catch { recentUnits.value = [] } }
   await loadCustomers()
-  await fetchOrder()
+  if (isCreate.value) {
+    items.value = [newItem()]
+    if (typeof route.query.capture_id === 'string') {
+      const capture = await get<{ document_name?: string; session_code: string }>(`/cdr/captures/${route.query.capture_id}`)
+      form.project_name = capture.document_name || '图稿订单'
+      items.value[0]!.item_name = capture.document_name || '图稿明细（待完善）'
+      form.remark = `来源：图稿采集 ${capture.session_code}，请核对规格、材质和价格`
+    }
+    captureCleanSnapshot()
+  }
+  else await fetchOrder()
 })
 </script>
 

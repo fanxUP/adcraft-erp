@@ -1,0 +1,535 @@
+{
+  "verified_at_utc": "2026-10-26T12:05:41.562287+00:00",
+  "branch": "master",
+  "base_head": "bd54aededd626b28db76222ffa7a31109fb79e89",
+  "deployment_performed": false,
+  "production_data_written": false,
+  "backend": {
+    "tests": 1459,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "backend_versions": {
+    "SQLAlchemy": "2.1.6",
+    "fastapi": "0.162.0",
+    "pytest": "9.1.1",
+    "asyncpg": "0.32.0"
+  },
+  "frontend": {
+    "passed": 222,
+    "test_files": 35,
+    "lint": "passed",
+    "typecheck_and_build": "passed",
+    "bundle_gzip_kib": 159.09
+  },
+  "ai_contract": {
+    "pages": 9,
+    "controls": 27,
+    "named_routes": 98
+  },
+  "source_sha256": {
+    "backend/alembic/versions/order_first_01.py": "892da53dfb94b64d1525dcf23e93a9f77ba8ad56b6a2699c1636c832ca241d17",
+    "backend/app/ai/api/ai_quote.py": "bf54ba9589a586492a103975e8d0ac1353b24f2a9e1c8242a9bd3bfc4b1ac072",
+    "backend/app/ai_assistant/contracts/page_capabilities.json": "9617ca64a98cc949c491a7b3e2c60a7e5ccf4224a48b831d65c63b3f798fbf7f",
+    "backend/app/ai_assistant/prompt_builder.py": "962502cef8942d98adbff8f77aaf5c11cb95119cc85acc508a0f06e51ca612de",
+    "backend/app/ai_assistant/tool_executor.py": "16fccc1a352249ae608474eb5e0b63c2b5ba88dad2aa304c0f066cf40b8dbd5a",
+    "backend/app/ai_assistant/tool_registry.py": "d324c466d2e46c9b20b20503bede48ede6303ebefabb448fd457810616965228",
+    "backend/app/ai_assistant/tools/__init__.py": "03bcc9c557fad29f70cc90d3cd7bdb54e4df8a52e7e0e659a84d696e2d707e4a",
+    "backend/app/ai_assistant/tools/order_tools.py": "8270f5af5feaf751d320ef0d66fd5a2fd4f360047e9bb40da0c716d9a6edae61",
+    "backend/app/ai_assistant/workflow_guidance/documents.py": "b3d7943f0f22c8383082c49b724f3cf11517ea25165b072f4bb1a457230cfa15",
+    "backend/app/api/cdr_quotes.py": "bc0574e237053ef4a6013cc3e9a0961a5d08237732974eeb879e703f8abd1718",
+    "backend/app/api/orders.py": "841a4c8bc9d4f7f627f13265f1e6c3aa8e82b95ea262b3c1c7e63d32400c218d",
+    "backend/app/api/quotes.py": "f4a5630cb2a21be61b9a58f866aab23414fd99e8f4b459eba7df58e0f7ed452e",
+    "backend/app/core/after_commit.py": "2362a009f58fd553122b3e7a73aa41d420482ecbdd24cc82405199a25c1a94e5",
+    "backend/app/core/quotation_archive.py": "f300e5953a3cf4a2864aa811b63f913e2e96a4c712aaa41e31d2e36241161eba",
+    "backend/app/main.py": "12ccdbddf0242c32d2ce6616431bffd05fc82a3f41c147c995c08024c565f526",
+    "backend/app/models/business_document.py": "ca6fd459225481aa9b303f0d97dca16112c18359e01cb263f1b7d966693986e4",
+    "backend/app/models/payment.py": "a216dc8e1eeb95e66bede4f992b52bf302f8f99130ecad07476f4b5b22203805",
+    "backend/app/models/task_order_item_link.py": "c1c3fa9372b9c4a2baf550f7d0ac34ae31e6c99ce06d9ac346a8662e8c4a6072",
+    "backend/app/repositories/business_document_repo.py": "3f2a20504e148fbd0a49379bddfdcccb55a50fe810bfd73c535f58ba6208a169",
+    "backend/app/repositories/payment_repo.py": "548ec1e08f356ce427e448043fb35a90ef933082fd233599f2525da6864039e7",
+    "backend/app/schemas/order.py": "a0c9b9f2c89186daf8993ffba385bbd19b05a8a38c4c710eafdf33ad75e62050",
+    "backend/app/schemas/payment.py": "8316703af71613d3b872bf4a2130b3f52b86e3eeee6e1f776507f5eee8fcab8e",
+    "backend/app/schemas/task.py": "4dcca47f71bdaa9fc2929e7253af719cb42912f7354c42ece03280e042c50e5d",
+    "backend/app/services/acceptance_service.py": "a4c638a16b523e9079211e3f09809d3436b2185da9e3aaa2c6ddedab9eb36fa9",
+    "backend/app/services/business_document_service.py": "932370adae225ad0d4efbb99d19c1e879db8531e6d68109166a75d7119d59f63",
+    "backend/app/services/cdr_quote_integration_service.py": "8a8ef1011277cede3e772ac5ef38cb2062006a412d0d2604d3542fbbe7bad6d1",
+    "backend/app/services/notification_service.py": "02ae6b5497bb490536caf6b916449e969d205b897cb946a2cb338fa79fcb1e94",
+    "backend/app/services/number_generator.py": "736a0ff4b4d3ef7ecce3334052c9a76ddb584ad28a98cf7f1a02c7b8909365a9",
+    "backend/app/services/order_management_service.py": "8f28971fb5d4be02e6595d0afd7fa05387e9be0c87dbc08c5aa9c8926bb64009",
+    "backend/app/services/outsource_service.py": "e14f741629d8dc68c5d9ff3be433d709df6762e20ffc6ce7f128a8383450e0a0",
+    "backend/app/services/payment_service.py": "c4ed9b0bd00b3a69e7bc5dc6367d87f3724b833c4e3df81fd6683420ab293052",
+    "backend/app/services/project_cost_service.py": "30240e68b18cdc2c67c07d7c1cdfa0064d41ec676c7a6fd0b523c91f1b47a3d6",
+    "backend/app/services/report_service.py": "6ab471f2a2d5e37c8373df02cf90cc729cfae076b0e3657bff00e3d30eb87131",
+    "backend/app/services/task_service.py": "b42e65cd394ec9127e7f50dffe347b1e96e76921de57757c2b34c8162cb30ad5",
+    "backend/tests/test_acceptance_workflow.py": "ac17dbb3f1bd890777eb4d1a12a2583fd93bc5ccaaef7dc3f9be9d8594ee8039",
+    "backend/tests/test_ai_api_integration.py": "e005b5ccacfb3080ef60fa03a58c719845b2864de22965a91f5c6f635a84c897",
+    "backend/tests/test_ai_business_rules.py": "46bb2fbb48dd339856e34eaac9f28099c24c47dff11978c8f296699d36fa78a2",
+    "backend/tests/test_ai_page_contract.py": "6ae8d5033186a5406c8e389bdd9518e2a824eac7c1cfd685b7335defb826594d",
+    "backend/tests/test_design_task_service.py": "743898717ed69527611108957780ab811e8013c504772b73dfaae0394b843851",
+    "backend/tests/test_finance_route_permissions.py": "988f62446854ac06bad35a8da845af8ceb7c14ea7aaad39951de25217a720395",
+    "backend/tests/test_order_editor_batch.py": "9e6ef62e68089a2aa66e177fe14060bd6b97b64ac7ab6f890253e54c0064795b",
+    "backend/tests/test_order_first_integration.py": "c51c818a3e07daf8d84c967b8d7470220103352af0aad66d693f5aa022218887",
+    "backend/tests/test_order_first_workflow.py": "35321b12191d94f2c2c27d2ad1c79f1b6459a6bacbf83cc9647acd31d00e6a03",
+    "backend/tests/test_order_item_mutations.py": "c97e1942a436f738a822adb5c279fd0fcd178ca6581fee47ed4167b22074c91f",
+    "backend/tests/test_order_item_task_progress.py": "c66ef96491ae8c57b8ec55be6012d2eb890957cc04d7361a31303e8f5c65b26b",
+    "backend/tests/test_order_service.py": "562afb15e15be784dc6ed6b4494fded0227e55fdea56ef685349977f6e0ed583",
+    "backend/tests/test_payment_service.py": "35dda681848a8df0bc76268568595a5fe0c3446a0dc1091ca500daf185cd1fcc",
+    "backend/tests/test_production_task_service.py": "d28a624cdf0843839e23236331042f8dda1d4867603f92f5ef21e7ec89891050",
+    "backend/tests/test_quote_route_permissions.py": "fea09339db78df90dd19ee4057db8833434e2fe36853119530f5a5e7e51954ea",
+    "backend/tests/test_report_service.py": "5b0f3dbe77de5205f9d42c56790987cc4b26c7ec4abda26c1bdf92134ab058d2",
+    "backend/tests/test_task_completion_metrics.py": "ad75f591caf128b367f98e63ec7f3fda4e2b06d2c3395f3acea5e3bc9c67b15e",
+    "backend/tests/test_task_item_execution_ownership.py": "d6781482d3b957de6d0ed78d35a626b804ae76b66cc53725a722373ff9e873d8",
+    "backend/tests/test_task_progress.py": "6d3fe5c3a2963c5307b817b1ab1c96436aaffd024e91d5aea14b3bfab88d6889",
+    "backend/tests/test_task_service.py": "8768d7243cb6c1af3adba783ca8a230002d911bc414a2118c75559846b1ef1b1",
+    "backend/tests/test_workflow_guidance.py": "17cdc7b4e0a840545f3f477512cc8a27477583a260a28090a00a7e11a5ed6ee8",
+    "cdr-bridge/CdrBridge.csproj": "45741d4aec58a8cf7c5314a33f5ccc8f13322dcfdcf391b3d162c063d1c4d147",
+    "cdr-bridge/CdrBridgeService.cs": "144088084e79f7805797d3f47d1380e3c51f2674ac1fe6af618a9092fbfe5294",
+    "cdr-bridge/CdrPluginModels.cs": "5f4c80da52dac47ffd4a467313195148185788c4fdb97c2b45d1659db91543a3",
+    "cdr-plugin/ApiClient.bas": "11941f546b314f0693e304a303f7778c96821e07f8d5df774ebd56e880bb502a",
+    "cdr-plugin/SmartQuote.bas": "9a7ef0a0bbf2b6c9a408354827e9e40265a59adaff65deeaa5e7b719bdaf4247",
+    "frontend/src/api/orders.ts": "103f3c99d049ee728c2f78bb750c00d85f33ef392633a4a8afc01e0f12f9ccbc",
+    "frontend/src/components/ai-assistant/AiActionPreview.vue": "b9926b3adf1976a4f4f5441cfaf2fc665f925e2e488cdc1ccdc6e8d1094cbecd",
+    "frontend/src/components/ai-assistant/AiToolResultCard.vue": "d35921696e64f21d6636274ecd5f073f0408297574e2b356bdf1d1d379c78051",
+    "frontend/src/components/orders/OrderChangePanel.vue": "e637fa890cc50362b2457cf704a77e5a3920183153ceca2c383f1b42aa712c30",
+    "frontend/src/components/orders/OrderDeleteDialog.vue": "999dca3f5cc3fb3564600d9d99d1c74b4d8b8c34a5aa473ce09d0fa14c428e3c",
+    "frontend/src/components/tasks/TaskOrderItemLinkCard.vue": "387ebe9909b4fdd3da2c51b739426a9696ec8fe57ad5b92651c420327d8cbb3c",
+    "frontend/src/config/access.ts": "d4b70a4a43d1dc84ff82f18677e79f8af8ddf26310c715f7e333e323640785ae",
+    "frontend/src/config/navigation.ts": "0a92ed79bd7b811e1e7550c4cbd5e0c8c859a7cce8793686e78ec0e0a3b633af",
+    "frontend/src/config/page-capabilities/salesDelivery.ts": "e797a0fffb6f0992d0345a68810c0dbb1014b21e3edc8d08c0e0edb9f1a8d700",
+    "frontend/src/config/page-capabilities/systemAi.ts": "cb756886d6a0173575157dc180558845b315959a27fae21807931effa96e9ea9",
+    "frontend/src/config/pageContext.ts": "540e9407f4597816c55ff7eaf1362972b4b91e96320e726c47810fe243ec60eb",
+    "frontend/src/router/index.ts": "2d7f716dc74f050ed52d1277b5f67cb10ac2fef703061c32c4f7da3058155e93",
+    "frontend/src/types/api.ts": "c24420f43b445b781a9dee3c1525da416af6fa3d19373ded93da1898fb953a81",
+    "frontend/src/utils/requestId.ts": "ff0042a1b9f713f123b9db419326d0bf67344967c6a1658d9b2990ef485c1be1",
+    "frontend/src/utils/ui-ux-quality.test.ts": "8d0fd0eb4708100af6b58748e4893ec49ce9f6b613282c3f403c3a619c1a49ba",
+    "frontend/src/views/acceptances/AcceptanceList.vue": "5319f68d514478e951f1ed0fd991e8085896e2ccc5da4262e839824791c22d8e",
+    "frontend/src/views/ai/AIQuoteAssistant.vue": "a638982f2cff5fc53b18313a626595869b2fe47443f090731f4582e770a1f8cc",
+    "frontend/src/views/home/DashboardView.vue": "b6fe2d30b577528a3e598f694afc8b6a52a996145d9e710d77ed81b3b21c2372",
+    "frontend/src/views/orders/OrderDetail.vue": "ec093f1bdaefe208c4a29843c6eb0c5532c9392348039bc15531f7386dc41ef4",
+    "frontend/src/views/orders/OrderEditor.vue": "7af7777e54bbf4339287e08cb3d80107b96df3791715e34eef6fc22349f6cbe1",
+    "frontend/src/views/orders/OrderHistory.vue": "b86bfe3e970d473ec5e66fbc1976a7f9b9d2f97cf5f138dcb363ed9688d6824d",
+    "frontend/src/views/orders/OrderList.vue": "4023d717436dd13a4615c6e947b43be23e1d9eb1223d9b18574c09c6e4b373c1",
+    "frontend/src/views/orders/OrderRecycle.vue": "8f556555fbf383d3e7e9e3046a4a894a02385e9905076f33c2f7e9f077a03da2",
+    "frontend/src/views/outsource/OutsourceTaskList.vue": "bcd946157e5b5782fe27a03c91b3a70788762b9c297d4f2116e9804783712496",
+    "frontend/src/views/payments/ProjectCostDetail.vue": "e6c06188046689fd5697d91c004842a402dee1bcdfe72ed215e08316dd9082f7",
+    "frontend/src/views/payments/ProjectCostList.vue": "18a3c4b50eb60f898a31156d119bdab4e72381937b4f2f563bab966d03795c22",
+    "frontend/src/views/payments/ReceivablesView.vue": "94b077bbcd17e43c9e233369791cf673d19392bd2597a8450d74840d619bc71c",
+    "frontend/src/views/quotes/QuoteWorkflow.vue": "64d6c670ec3cc6e8f9dbd0e5880afa59db4e57ffac3b7a81fc12f8c5020a674f"
+  },
+  "evidence": {
+    "backend.txt": {
+      "sha256": "cc1f40234d7fe285fa42d2641c8377b36a79e0cd13f7bd8cda5ccbc68d277c9a",
+      "tail": [
+        "........................................................................ [ 54%]",
+        "........................................................................ [ 59%]",
+        "........................................................................ [ 64%]",
+        "........................................................................ [ 69%]",
+        "........................................................................ [ 74%]",
+        "........................................................................ [ 78%]",
+        "........................................................................ [ 83%]",
+        "........................................................................ [ 88%]",
+        "........................................................................ [ 93%]",
+        "........................................................................ [ 98%]",
+        "...................                                                      [100%]",
+        "1459 passed in 83.63s (0:01:23)"
+      ]
+    },
+    "frontend-test.txt": {
+      "sha256": "75cb7c93b6e5dbdcaaeb1c7f116e4e3fbc3b51f5e4b738cc3762df5a04c580af",
+      "tail": [
+        "(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:",
+        "  - `__dirname` (vite.config.ts:24:30). Use `import.meta.dirname` instead",
+        "Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.",
+        "",
+        " RUN  v4.1.12 /Users/estefan-macworkstation/Downloads/ERP/frontend",
+        "",
+        "",
+        " Test Files  35 passed (35)",
+        "      Tests  222 passed (222)",
+        "   Start at  19:48:52",
+        "   Duration  2.45s (transform 2.36s, setup 0ms, import 4.11s, tests 915ms, environment 29ms)",
+        ""
+      ]
+    },
+    "frontend-lint.txt": {
+      "sha256": "6a1baba490888d39ebeb9f93176fb0370d18cd2cd4fad776cef85bc6d9165dfb",
+      "tail": [
+        "",
+        "> adcraft-erp-frontend@0.1.0 lint",
+        "> eslint .",
+        ""
+      ]
+    },
+    "build.txt": {
+      "sha256": "541093fb38a4740ba7679c3ed0163162b0446350129e2fe2024be4e4a26c306a",
+      "tail": [
+        "dist/assets/index-0g5l4UxJ.js                        74.94 kB │ gzip:  26.82 kB",
+        "dist/assets/css-BlZPEmu5.js                          75.33 kB │ gzip:  25.79 kB",
+        "dist/assets/DefaultLayout-D5VbfLI2.js                92.52 kB │ gzip:  29.42 kB",
+        "dist/assets/OrderEditor-CQyhSja5.js                 100.21 kB │ gzip:  32.92 kB",
+        "dist/assets/index.es-dDtB7brF.js                    151.28 kB │ gzip:  48.87 kB",
+        "dist/assets/html2canvas-Bw0OShmD.js                 199.40 kB │ gzip:  46.74 kB",
+        "dist/assets/auth-BbtSa6u6.js                        232.76 kB │ gzip:  75.37 kB",
+        "dist/assets/jspdf.es.min-BJIMf1Rb.js                398.94 kB │ gzip: 129.62 kB",
+        "",
+        "✓ built in 4.11s",
+        "[version-plugin] version.json written: mvp6xug4",
+        "[bundle-size] 首屏资源 159.09 KiB gzip / 200 KiB"
+      ]
+    },
+    "ai-contract.txt": {
+      "sha256": "99f7b5d08e233dee9457a97671e29f2009d1ba563c1ce1cfcc04e6622ec338a5",
+      "tail": [
+        "",
+        "> adcraft-erp-frontend@0.1.0 check:ai-contract",
+        "> node scripts/check-ai-page-contract.mjs",
+        "",
+        "AI 页面能力契约校验通过：9 个页面，27 个语义控件，98 个命名路由"
+      ]
+    },
+    "ui-reconciliation.txt": {
+      "sha256": "ce0a88959e330a59b6107f14ab4361096f841bb530e7994b3531fd2240df6db0",
+      "tail": [
+        "(2 rows)",
+        "",
+        "   design_no    | status  ",
+        "----------------+---------",
+        " D20261026-0001 | pending",
+        "(1 row)",
+        "",
+        " hidden_quotes ",
+        "---------------",
+        "             0",
+        "(1 row)",
+        ""
+      ]
+    }
+  },
+  "api_inventory": {
+    "direct_router_changes": [
+      {
+        "file": "backend/app/api/orders.py",
+        "method": "POST",
+        "path": "/",
+        "kind": "added"
+      },
+      {
+        "file": "backend/app/api/orders.py",
+        "method": "POST",
+        "path": "/from-history/{quote_id}",
+        "kind": "added"
+      },
+      {
+        "file": "backend/app/api/orders.py",
+        "method": "GET",
+        "path": "/import-template",
+        "kind": "added"
+      },
+      {
+        "file": "backend/app/api/orders.py",
+        "method": "POST",
+        "path": "/import-preview",
+        "kind": "added"
+      },
+      {
+        "file": "backend/app/api/orders.py",
+        "method": "POST",
+        "path": "/{order_id}/change-status",
+        "kind": "changed"
+      },
+      {
+        "file": "backend/app/api/orders.py",
+        "method": "DELETE",
+        "path": "/{order_id}",
+        "kind": "changed"
+      },
+      {
+        "file": "backend/app/api/orders.py",
+        "method": "POST",
+        "path": "/{order_id}/delete-preview",
+        "kind": "added"
+      },
+      {
+        "file": "backend/app/api/orders.py",
+        "method": "GET",
+        "path": "/{order_id}/change-actions",
+        "kind": "added"
+      },
+      {
+        "file": "backend/app/api/orders.py",
+        "method": "POST",
+        "path": "/{order_id}/change-actions/{action_id}/resolve",
+        "kind": "added"
+      },
+      {
+        "file": "backend/app/api/orders.py",
+        "method": "GET",
+        "path": "/{order_id}/funds",
+        "kind": "added"
+      },
+      {
+        "file": "backend/app/api/orders.py",
+        "method": "POST",
+        "path": "/{order_id}/funds",
+        "kind": "added"
+      },
+      {
+        "file": "backend/app/api/orders.py",
+        "method": "PUT",
+        "path": "/{order_id}/contact",
+        "kind": "changed"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "GET",
+        "path": "/",
+        "kind": "changed"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "POST",
+        "path": "/",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "POST",
+        "path": "/import/school-list/preview",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "POST",
+        "path": "/import/school-list/commit",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "POST",
+        "path": "/import/school-list/dimensions/preview",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "POST",
+        "path": "/import/school-list/dimensions/commit",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "POST",
+        "path": "/import",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "PUT",
+        "path": "/{quote_id}",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "DELETE",
+        "path": "/{quote_id}",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "POST",
+        "path": "/{quote_id}/items",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "PUT",
+        "path": "/{quote_id}/items/{item_id}",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "DELETE",
+        "path": "/{quote_id}/items/{item_id}",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "POST",
+        "path": "/{quote_id}/confirm",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "POST",
+        "path": "/{quote_id}/revert-to-draft",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "POST",
+        "path": "/{quote_id}/cancel",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "POST",
+        "path": "/{quote_id}/convert-to-order",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/quotes.py",
+        "method": "POST",
+        "path": "/{quote_id}/import-items",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "DELETE",
+        "path": "/quotes/{quote_id}",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/quotes",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/quotes/{quote_id}/versions",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/quotes/{quote_id}/approvals",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/quotes/{quote_id}/convert-to-order",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/quotes/{quote_id}/geometry/refresh",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/quotes/{quote_id}/process-gaps",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/quotes/{quote_id}/generate-description",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/quotes/{quote_id}/price-anomaly",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/quotes/{quote_id}/ai-assist",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/captures/{capture_id}/create-order-draft",
+        "kind": "added"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/captures/{capture_id}/create-quote-draft",
+        "kind": "changed"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/quotes/{quote_id}/upload",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/api/cdr_quotes.py",
+        "method": "POST",
+        "path": "/quotes/{quote_id}/ai-assist-description",
+        "kind": "retired_quote_write"
+      },
+      {
+        "file": "backend/app/ai/api/ai_quote.py",
+        "method": "POST",
+        "path": "/assist/save",
+        "kind": "changed"
+      }
+    ],
+    "additional_cost_readonly_contracts": [
+      "POST /project-costs/",
+      "PUT /project-costs/{cost_id}",
+      "DELETE /project-costs/{cost_id}",
+      "DELETE /project-costs/batch",
+      "POST /project-costs/import"
+    ],
+    "declared_contract_changes": 49
+  },
+  "scope": {
+    "task_files_at_capture": 96,
+    "task_new_files_at_capture": 17,
+    "limits": {
+      "max_files_changed": 125,
+      "max_new_files": 24,
+      "max_new_dependencies": 0,
+      "max_schema_migrations": 1,
+      "max_unplanned_modules": 0,
+      "max_public_api_changes": 49,
+      "declared_public_api_changes": 49,
+      "regression_budget": {
+        "new_test_failures": 0,
+        "new_lint_errors": 0,
+        "new_type_errors": 0,
+        "new_security_findings": 0
+      },
+      "architecture_budget": {
+        "new_services": 2,
+        "new_abstractions": 2,
+        "new_background_workers": 0,
+        "new_datastores": 0
+      },
+      "schema_version": 1,
+      "public_api_budget_reason": "按单个HTTP方法/路径重新盘点，涵盖已批准的订单入口、报价写接口退役、状态失败回滚及历史报价成本只读约束。原12项按业务组估计；不扩大业务范围。"
+    }
+  },
+  "verification_commands": {
+    "backend": "cd backend; DATABASE_URL=postgresql+asyncpg:///adcraft_order_test_20261026 DATABASE_URL_SYNC=postgresql+psycopg2:///adcraft_order_test_20261026 ORDER_FIRST_TEST_URL=postgresql+asyncpg:///adcraft_order_test_20261026 EXPENDITURE_TEST_URL=postgresql+asyncpg:///adcraft_order_test_20261026 SUPPLIER_MIGRATION_TEST_URL=postgresql+psycopg2:///adcraft_order_test_20261026 FINANCE_RECON_MIGRATION_TEST_URL=postgresql+psycopg2:///adcraft_order_test_20261026 ../.venv/bin/python -m pytest -q",
+    "frontend": [
+      "npm test",
+      "npm run lint",
+      "npm run build",
+      "npm run check:ai-contract"
+    ]
+  },
+  "limitations": [
+    "No production data inventory or deployment in this turn",
+    "Windows/CorelDRAW COM and C# compilation not run",
+    "Existing empty-database historical migration issue R03 remains",
+    "Preexisting confirmed statements cannot reconstruct previously overwritten historical details"
+  ],
+  "cleanup": {
+    "ui_tab_closed": true,
+    "ui_backend_port_18000_stopped": true,
+    "ui_frontend_port_5177_stopped": true,
+    "task_databases_removed": true,
+    "temporary_credentials_removed": true
+  }
+}

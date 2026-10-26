@@ -1,0 +1,67 @@
+=== backend.txt ===
+........................................................................ [ 54%]
+........................................................................ [ 59%]
+........................................................................ [ 64%]
+........................................................................ [ 69%]
+........................................................................ [ 74%]
+........................................................................ [ 78%]
+........................................................................ [ 83%]
+........................................................................ [ 88%]
+........................................................................ [ 93%]
+........................................................................ [ 98%]
+...................                                                      [100%]
+1459 passed in 83.63s (0:01:23)
+
+=== frontend-test.txt ===
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vite.config.ts:24:30). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.12 /Users/estefan-macworkstation/Downloads/ERP/frontend
+
+
+ Test Files  35 passed (35)
+      Tests  222 passed (222)
+   Start at  19:48:52
+   Duration  2.45s (transform 2.36s, setup 0ms, import 4.11s, tests 915ms, environment 29ms)
+
+
+=== frontend-lint.txt ===
+
+> adcraft-erp-frontend@0.1.0 lint
+> eslint .
+
+
+=== build.txt ===
+dist/assets/index-0g5l4UxJ.js                        74.94 kB │ gzip:  26.82 kB
+dist/assets/css-BlZPEmu5.js                          75.33 kB │ gzip:  25.79 kB
+dist/assets/DefaultLayout-D5VbfLI2.js                92.52 kB │ gzip:  29.42 kB
+dist/assets/OrderEditor-CQyhSja5.js                 100.21 kB │ gzip:  32.92 kB
+dist/assets/index.es-dDtB7brF.js                    151.28 kB │ gzip:  48.87 kB
+dist/assets/html2canvas-Bw0OShmD.js                 199.40 kB │ gzip:  46.74 kB
+dist/assets/auth-BbtSa6u6.js                        232.76 kB │ gzip:  75.37 kB
+dist/assets/jspdf.es.min-BJIMf1Rb.js                398.94 kB │ gzip: 129.62 kB
+
+✓ built in 4.11s
+[version-plugin] version.json written: mvp6xug4
+[bundle-size] 首屏资源 159.09 KiB gzip / 200 KiB
+
+=== ai-contract.txt ===
+
+> adcraft-erp-frontend@0.1.0 check:ai-contract
+> node scripts/check-ai-page-contract.mjs
+
+AI 页面能力契约校验通过：9 个页面，27 个语义控件，98 个命名路由
+
+=== ui-reconciliation.txt ===
+(2 rows)
+
+   design_no    | status
+----------------+---------
+ D20261026-0001 | pending
+(1 row)
+
+ hidden_quotes
+---------------
+             0
+(1 row)

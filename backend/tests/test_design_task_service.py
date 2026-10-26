@@ -476,3 +476,11 @@ async def test_list_tasks_outsourced_filter_passes_to_repo(service, mock_repo):
     mock_repo.list_tasks.return_value = ([], 0)
     await service.list_tasks(page=1, page_size=20, outsourced=True)
     assert mock_repo.list_tasks.call_args.kwargs["outsourced"] is True
+
+
+@pytest.fixture(autouse=True)
+def isolate_parent_lock_and_scope_persistence(monkeypatch):
+    # Unit state-machine/ownership tests use repository doubles; real order
+    # locking and completed quantity snapshots are covered in SQL integration.
+    monkeypatch.setattr("app.services.task_service._assert_live_task_order", AsyncMock())
+    monkeypatch.setattr("app.services.task_service._capture_completed_scope", AsyncMock())

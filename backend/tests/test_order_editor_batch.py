@@ -247,3 +247,15 @@ async def test_order_batch_apply_preserves_existing_item_ids_and_soft_voids_miss
     assert second.void_reason == "客户确认订单明细调整"
     service._apply_order_item_refresh.assert_awaited()
     db.delete.assert_not_called()
+
+
+@pytest.fixture(autouse=True)
+def isolate_execution_projection_in_unit_tests(monkeypatch):
+    monkeypatch.setattr("app.services.payment_service.StatementService.capture_confirmed_for_customer", AsyncMock())
+    monkeypatch.setattr("app.services.payment_service.StatementService.refresh_drafts_for_customer", AsyncMock(return_value=[]))
+    # These tests cover mutation signing/lifecycle with repository doubles.
+    # Real task scope SQL is verified in test_order_first_integration.py.
+    monkeypatch.setattr("app.services.order_management_service.OrderManagementService.sync_execution", AsyncMock())
+    monkeypatch.setattr("app.services.order_management_service.OrderManagementService.sync_drafts", AsyncMock())
+    monkeypatch.setattr("app.services.order_management_service.OrderManagementService.cancel_outsourcing", AsyncMock())
+    monkeypatch.setattr("app.services.business_document_service.BusinessDocumentService._cancel_open_tasks", AsyncMock(return_value={"tasks": [], "acceptance_ids": []}))

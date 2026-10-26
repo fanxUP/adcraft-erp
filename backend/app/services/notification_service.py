@@ -37,13 +37,15 @@ async def broadcast_to_user(user_id: uuid.UUID, data: dict) -> None:
         return
     message = json.dumps(data, default=str)
     dead = set()
-    for ws in _ws_connections[user_id]:
+    # A socket may unregister while send_text yields control.
+    for ws in tuple(_ws_connections.get(user_id, ())):
         try:
             await ws.send_text(message)
         except Exception:
             dead.add(ws)
-    for ws in dead:
-        _ws_connections[user_id].discard(ws)
+    connections = _ws_connections.get(user_id)
+    if connections is not None:
+        connections.difference_update(dead)
     if not _ws_connections.get(user_id):
         _ws_connections.pop(user_id, None)
 
@@ -63,15 +65,16 @@ class NotificationService:
             link=data.link,
         )
         notification = await self.repo.create(notification)
-        await self.db.commit()
+        await self.db.flush()
 
         # Broadcast via WebSocket
         resp = NotificationResponse.model_validate(notification).model_dump(mode="json")
-        await broadcast_to_user(data.user_id, {"type": "new_notification", "data": resp})
-
-        # Also broadcast updated unread count
         count = await self.repo.get_unread_count(data.user_id)
-        await broadcast_to_user(data.user_id, {"type": "unread_count", "data": {"count": count}})
+        from app.core.after_commit import after_commit
+        async def notify():
+            await broadcast_to_user(data.user_id, {"type": "new_notification", "data": resp})
+            await broadcast_to_user(data.user_id, {"type": "unread_count", "data": {"count": count}})
+        after_commit(self.db, notify)
 
         return notification
 

@@ -17,8 +17,6 @@ export const navigationItems: NavigationItem[] = [
     accessKey: 'sales',
     children: [
       { label: '客户管理', path: '/customers', accessKey: 'customer' },
-      { label: '常规报价', path: '/quotes', accessKey: 'quote' },
-      { label: '智能报价', path: '/cdr/quotes', accessKey: 'cdrQuote' },
       { label: '定价规则', path: '/cdr/price-rules', accessKey: 'cdrPriceRules' },
       { label: '合同管理', path: '/contracts', accessKey: 'contract' },
       { label: '订单管理', path: '/orders', accessKey: 'orderRead' },

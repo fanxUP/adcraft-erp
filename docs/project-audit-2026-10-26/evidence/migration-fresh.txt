@@ -1,0 +1,176 @@
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 8fcb54ed1467, initial
+INFO  [alembic.runtime.migration] Running upgrade 8fcb54ed1467 -> 2988637fa9d0, add outsource models
+INFO  [alembic.runtime.migration] Running upgrade 2988637fa9d0 -> 666e093af5d2, add inventory models
+INFO  [alembic.runtime.migration] Running upgrade 666e093af5d2 -> bd80b5a9576a, fix operation_log model
+INFO  [alembic.runtime.migration] Running upgrade bd80b5a9576a -> 2254fcfe9080, add notifications table
+INFO  [alembic.runtime.migration] Running upgrade 2254fcfe9080 -> a32c1ade8b8e, add chat tables
+INFO  [alembic.runtime.migration] Running upgrade a32c1ade8b8e -> c1d2e3f4a5b6, add_quote_item_unit_and_use_area
+INFO  [alembic.runtime.migration] Running upgrade c1d2e3f4a5b6 -> d4e5f6a7b8c9, add quote_item quantity_mode
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> e5f6a7b8c9d0, add quote_item group_name
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, add quote_item material_process
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a1b2c3d4e5f6, add acceptance forms
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> b2c3d4e5f6a7, add acceptance item fields
+INFO  [alembic.runtime.migration] Running upgrade b2c3d4e5f6a7 -> c3d4e5f6a7b8, add order item fields from quote
+INFO  [alembic.runtime.migration] Running upgrade c3d4e5f6a7b8 -> e6f7a8b9c0d1, add acceptance item group_name
+INFO  [alembic.runtime.migration] Running upgrade e6f7a8b9c0d1 -> f7a8b9c0d1e2, add acceptance item area
+INFO  [alembic.runtime.migration] Running upgrade f7a8b9c0d1e2 -> a8b9c0d1e2f3, add acceptance discount and advance amounts
+INFO  [alembic.runtime.migration] Running upgrade a8b9c0d1e2f3 -> b9c0d1e2f3a4, add quote item image_url
+INFO  [alembic.runtime.migration] Running upgrade b9c0d1e2f3a4 -> c0d1e2f3a4b5, add order item image_url
+INFO  [alembic.runtime.migration] Running upgrade c0d1e2f3a4b5 -> d1e2f3a4b5c6, add customer_name to quotes
+INFO  [alembic.runtime.migration] Running upgrade d1e2f3a4b5c6 -> f8a9b0c1d2e3, add quote department column
+INFO  [alembic.runtime.migration] Running upgrade f8a9b0c1d2e3 -> 15f543dcc3dc, add pieces to quote_items
+INFO  [alembic.runtime.migration] Running upgrade 15f543dcc3dc -> d2a4c8f4f019, add pieces to order_items
+INFO  [alembic.runtime.migration] Running upgrade d2a4c8f4f019 -> 89cf4bec9732, add department to orders
+INFO  [alembic.runtime.migration] Running upgrade 89cf4bec9732 -> ca2b1dc1af9a, add contact_person and contact_phone to quotes and orders
+INFO  [alembic.runtime.migration] Running upgrade ca2b1dc1af9a -> 833782bd89eb, add project_costs table (clean migration)
+INFO  [alembic.runtime.migration] Running upgrade 833782bd89eb -> 85ddbdc2b996, add_order_item_id_to_project_costs
+INFO  [alembic.runtime.migration] Running upgrade 85ddbdc2b996 -> c09fe8b0f4ff, add_payment_method_and_debt_fields_to_project_costs
+INFO  [alembic.runtime.migration] Running upgrade c09fe8b0f4ff -> f05f82b3d64b, add_payee_company_name_to_project_costs
+INFO  [alembic.runtime.migration] Running upgrade f05f82b3d64b -> cc23a92b0290, add_quote_support_to_project_costs
+INFO  [alembic.runtime.migration] Running upgrade cc23a92b0290 -> cc23a92b0291, add_summary_to_project_costs
+INFO  [alembic.runtime.migration] Running upgrade cc23a92b0291 -> cc23a92b0292, add_token_version_to_users
+INFO  [alembic.runtime.migration] Running upgrade cc23a92b0292 -> c27ecb09c5ad, add_quote_id_to_outsource_tasks
+INFO  [alembic.runtime.migration] Running upgrade c27ecb09c5ad -> 6d88d54999c7, replace_quote_id_with_related_doc_fields
+INFO  [alembic.runtime.migration] Running upgrade 6d88d54999c7 -> ef45f9b8eae8, add_paid_amount_to_outsource_tasks
+INFO  [alembic.runtime.migration] Running upgrade ef45f9b8eae8 -> ad64d94c02a5, add_payee_company_name_to_outsource_payments
+INFO  [alembic.runtime.migration] Running upgrade ad64d94c02a5 -> 20260709161647, add deleted_at to outsource_tasks
+INFO  [alembic.runtime.migration] Running upgrade ad64d94c02a5, 20260709161647 -> 8309d8ebb025, merge heads
+INFO  [alembic.runtime.migration] Running upgrade 8309d8ebb025 -> cc23a92b0293, add quantity/unit/unit_price to project_costs
+INFO  [alembic.runtime.migration] Running upgrade cc23a92b0293 -> cc23a92b0294, add quote_item_id to project_costs
+INFO  [alembic.runtime.migration] Running upgrade cc23a92b0294 -> c3030d853060, add contract models
+INFO  [alembic.runtime.migration] Running upgrade c3030d853060 -> d3030d853061, add specification to project costs
+INFO  [alembic.runtime.migration] Running upgrade d3030d853061 -> fa0b1c2d3e4f, add attachment fields to contracts
+INFO  [alembic.runtime.migration] Running upgrade fa0b1c2d3e4f -> feedc0de0001, add framework contract projects
+INFO  [alembic.runtime.migration] Running upgrade feedc0de0001 -> 1be543a2e1f4, add_department_to_framework_contract_projects
+INFO  [alembic.runtime.migration] Running upgrade 1be543a2e1f4 -> f1e2d3c4b5a6, make acceptance_form order_id nullable
+INFO  [alembic.runtime.migration] Running upgrade f1e2d3c4b5a6 -> a2b3c4d5e6f7, add quote_id to acceptance_forms
+INFO  [alembic.runtime.migration] Running upgrade a2b3c4d5e6f7 -> b3c4d5e6f7a8, rename quote/order number prefixes: SO→O for quotes, SO→S for orders, Q→O for quotes
+INFO  [alembic.runtime.migration] Running upgrade b3c4d5e6f7a8 -> c4d5e6f7a8b9, ensure all order_no start with S, all quote_no start with O
+INFO  [alembic.runtime.migration] Running upgrade c4d5e6f7a8b9 -> f0e1d2c3b4a5, merge orders & quotes into business_documents
+INFO  [alembic.runtime.migration] Running upgrade f0e1d2c3b4a5 -> v1v2v3v4v5v6, add vehicle management tables
+INFO  [alembic.runtime.migration] Running upgrade v1v2v3v4v5v6 -> w1x2y3z4, add vehicle agent drafts table
+INFO  [alembic.runtime.migration] Running upgrade w1x2y3z4 -> a1b2c3d4aerial, add aerial work platform tables
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4aerial -> b2c3d4e5agent, add aerial_agent_drafts table
+INFO  [alembic.runtime.migration] Running upgrade b2c3d4e5agent -> c3d4e5f6personnel, rename driver → personnel: tables, columns, indexes
+INFO  [alembic.runtime.migration] Running upgrade c3d4e5f6personnel -> d5e6f7g8personnel, add soft-delete (deleted_at) to aerial_personnel
+INFO  [alembic.runtime.migration] Running upgrade d5e6f7g8personnel -> e5f6g7h8vehicle, 为 aerial_vehicles 表添加软删除支持
+INFO  [alembic.runtime.migration] Running upgrade e5f6g7h8vehicle -> 97d60c4ad1c9, add_cdr_quote_tables
+INFO  [alembic.runtime.migration] Running upgrade 97d60c4ad1c9, e5f6g7h8vehicle -> 83cd02c2a988, merge_cdr_quote_and_other_heads
+INFO  [alembic.runtime.migration] Running upgrade 83cd02c2a988 -> phase7_add_quote_geometry, add_quote_geometry_table
+INFO  [alembic.runtime.migration] Running upgrade phase7_add_quote_geometry -> phase1_add_ai_model_center, Phase 1: Add AI provider and model tables for Model Center
+INFO  [alembic.runtime.migration] Running upgrade phase1_add_ai_model_center -> phase2_add_ai_gateway_tables, Phase 2: Add AI Gateway tables for routing, logging, usage, and health checks
+INFO  [alembic.runtime.migration] Running upgrade phase2_add_ai_gateway_tables -> phase3_add_prompt_center, Phase 3: Add Prompt Center tables - templates, versions, execution logs
+INFO  [alembic.runtime.migration] Running upgrade phase3_add_prompt_center -> phase8_add_ai_assistant_tables, Phase 8: AI Assistant — 5 new tables
+INFO  [alembic.runtime.migration] Running upgrade phase8_add_ai_assistant_tables -> r1s2t3u4_add_quote_mode, 区分常规报价与 CDR 智能报价
+INFO  [alembic.runtime.migration] Running upgrade r1s2t3u4_add_quote_mode -> f2a9c7d1e4b6, 为项目成本增加分项名称。
+INFO  [alembic.runtime.migration] Running upgrade f2a9c7d1e4b6 -> a4c8e2f6b901, 为派车单增加随车人员。
+INFO  [alembic.runtime.migration] Running upgrade a4c8e2f6b901 -> b5c6d7e8f9a0, 增加 AI 业务规则版本库和同步审计。
+INFO  [alembic.runtime.migration] Running upgrade b5c6d7e8f9a0 -> c8d9e0f1a2b3, 为产品材质工艺主数据增加材质和工艺字段。
+INFO  [alembic.runtime.migration] Running upgrade c8d9e0f1a2b3 -> d9e0f1a2b3c4, 统一智能报价与常规报价明细字段，并迁移历史报价尺寸。
+INFO  [alembic.runtime.migration] Running upgrade d9e0f1a2b3c4 -> e0f1a2b3c4d5, 重算常规报价金额并修复订单收款余额。
+INFO  [alembic.runtime.migration] Running upgrade e0f1a2b3c4d5 -> 63a384fdefbc, add_hr_management_tables
+Traceback (most recent call last):
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1958, in _exec_single_context
+    self.dialect.do_execute(
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 1192, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.UndefinedTable: relation "employees" does not exist
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/estefan-macworkstation/Downloads/ERP/backend/../.venv/bin/alembic", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/config.py", line 1039, in main
+    CommandLine(prog=prog).main(argv=argv)
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/config.py", line 1029, in main
+    self.run_cmd(cfg, options)
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/config.py", line 963, in run_cmd
+    fn(
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/command.py", line 487, in upgrade
+    script.run_env()
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/script/base.py", line 550, in run_env
+    util.load_python_file(self.dir, "env.py")
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/util/pyfiles.py", line 114, in load_python_file
+    module = load_module_py(module_id, path)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/util/pyfiles.py", line 132, in load_module_py
+    spec.loader.exec_module(module)  # type: ignore
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/Users/estefan-macworkstation/Downloads/ERP/backend/alembic/env.py", line 139, in <module>
+    run_migrations_online()
+  File "/Users/estefan-macworkstation/Downloads/ERP/backend/alembic/env.py", line 133, in run_migrations_online
+    context.run_migrations()
+  File "<string>", line 8, in run_migrations
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/runtime/environment.py", line 970, in run_migrations
+    self.get_context().run_migrations(**kw)
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/runtime/migration.py", line 616, in run_migrations
+    step.migration_fn(**kw)
+  File "/Users/estefan-macworkstation/Downloads/ERP/backend/alembic/versions/63a384fdefbc_add_hr_management_tables.py", line 36, in upgrade
+    op.create_table('salary_records',
+  File "<string>", line 8, in create_table
+  File "<string>", line 3, in create_table
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/operations/ops.py", line 1323, in create_table
+    return operations.invoke(op)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/operations/base.py", line 448, in invoke
+    return fn(self, operation)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/operations/toimpl.py", line 139, in create_table
+    operations.impl.create_table(table, **kw)
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/ddl/impl.py", line 434, in create_table
+    self._exec(schema.CreateTable(table, **kw))
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/alembic/ddl/impl.py", line 252, in _exec
+    return conn.execute(construct, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1463, in execute
+    return meth(
+           ^^^^^
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/sqlalchemy/sql/ddl.py", line 203, in _execute_on_connection
+    return connection._execute_ddl(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1572, in _execute_ddl
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1837, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1977, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2347, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1958, in _exec_single_context
+    self.dialect.do_execute(
+  File "/Users/estefan-macworkstation/Downloads/ERP/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 1192, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedTable) relation "employees" does not exist
+
+[SQL:
+CREATE TABLE salary_records (
+	id UUID NOT NULL,
+	employee_id UUID NOT NULL,
+	month VARCHAR(7) NOT NULL,
+	base_salary NUMERIC(14, 2) NOT NULL,
+	overtime_pay NUMERIC(14, 2),
+	bonus NUMERIC(14, 2),
+	commission NUMERIC(14, 2),
+	subsidy NUMERIC(14, 2),
+	deduction NUMERIC(14, 2),
+	net_salary NUMERIC(14, 2) NOT NULL,
+	payment_status VARCHAR(16),
+	paid_at TIMESTAMP WITH TIME ZONE,
+	remark TEXT,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+	updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+	PRIMARY KEY (id),
+	FOREIGN KEY(employee_id) REFERENCES employees (id)
+)
+
+]
+(Background on this error at: https://sqlalche.me/e/21/f405)

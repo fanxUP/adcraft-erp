@@ -1,0 +1,3837 @@
+{
+  "calls": 519,
+  "matched": 519,
+  "unmatched": [],
+  "dynamic_or_wrapper_calls": [
+    {
+      "file": "attendance.ts",
+      "method": "PUT",
+      "expression": "\"/attendance/rules/\" + id"
+    },
+    {
+      "file": "attendance.ts",
+      "method": "DELETE",
+      "expression": "\"/attendance/rules/\" + id"
+    },
+    {
+      "file": "attendance.ts",
+      "method": "PUT",
+      "expression": "\"/attendance/records/\" + id"
+    },
+    {
+      "file": "attendance.ts",
+      "method": "DELETE",
+      "expression": "\"/attendance/records/\" + id"
+    },
+    {
+      "file": "departments.ts",
+      "method": "GET",
+      "expression": "\"/departments/\" + id"
+    },
+    {
+      "file": "departments.ts",
+      "method": "PUT",
+      "expression": "\"/departments/\" + id"
+    },
+    {
+      "file": "departments.ts",
+      "method": "DELETE",
+      "expression": "\"/departments/\" + id"
+    },
+    {
+      "file": "employees.ts",
+      "method": "GET",
+      "expression": "'/employees/' + id"
+    },
+    {
+      "file": "employees.ts",
+      "method": "PUT",
+      "expression": "'/employees/' + id"
+    },
+    {
+      "file": "employees.ts",
+      "method": "DELETE",
+      "expression": "'/employees/' + id"
+    },
+    {
+      "file": "employees.ts",
+      "method": "PUT",
+      "expression": "'/employees/' + employeeId + '/account'"
+    },
+    {
+      "file": "employees.ts",
+      "method": "GET",
+      "expression": "'/employees/' + id + '/attachments'"
+    },
+    {
+      "file": "employees.ts",
+      "method": "POST",
+      "expression": "'/employees/' + id + '/attachments'"
+    },
+    {
+      "file": "employees.ts",
+      "method": "DELETE",
+      "expression": "'/employees/attachments/' + attachmentId"
+    },
+    {
+      "file": "employmentHistories.ts",
+      "method": "GET",
+      "expression": "\"/employment-histories/\" + id"
+    },
+    {
+      "file": "employmentHistories.ts",
+      "method": "PUT",
+      "expression": "\"/employment-histories/\" + id"
+    },
+    {
+      "file": "employmentHistories.ts",
+      "method": "DELETE",
+      "expression": "\"/employment-histories/\" + id"
+    },
+    {
+      "file": "index.ts",
+      "method": "GET",
+      "expression": "url"
+    },
+    {
+      "file": "index.ts",
+      "method": "POST",
+      "expression": "url"
+    },
+    {
+      "file": "index.ts",
+      "method": "PUT",
+      "expression": "url"
+    },
+    {
+      "file": "index.ts",
+      "method": "DELETE",
+      "expression": "url"
+    },
+    {
+      "file": "index.ts",
+      "method": "PATCH",
+      "expression": "url"
+    },
+    {
+      "file": "leaves.ts",
+      "method": "GET",
+      "expression": "\"/leaves/\" + id"
+    },
+    {
+      "file": "leaves.ts",
+      "method": "PUT",
+      "expression": "\"/leaves/\" + id"
+    },
+    {
+      "file": "leaves.ts",
+      "method": "POST",
+      "expression": "\"/leaves/\" + id + \"/approve\""
+    },
+    {
+      "file": "leaves.ts",
+      "method": "DELETE",
+      "expression": "\"/leaves/\" + id"
+    },
+    {
+      "file": "salaries.ts",
+      "method": "GET",
+      "expression": "\"/salaries/\" + id"
+    },
+    {
+      "file": "salaries.ts",
+      "method": "PUT",
+      "expression": "\"/salaries/\" + id"
+    },
+    {
+      "file": "salaries.ts",
+      "method": "DELETE",
+      "expression": "\"/salaries/\" + id"
+    },
+    {
+      "file": "salaries.ts",
+      "method": "PUT",
+      "expression": "\"/salaries/items/\" + id"
+    },
+    {
+      "file": "salaries.ts",
+      "method": "DELETE",
+      "expression": "\"/salaries/items/\" + id"
+    },
+    {
+      "file": "salaries.ts",
+      "method": "PUT",
+      "expression": "\"/salaries/templates/\" + id"
+    },
+    {
+      "file": "salaries.ts",
+      "method": "DELETE",
+      "expression": "\"/salaries/templates/\" + id"
+    },
+    {
+      "file": "salaries.ts",
+      "method": "POST",
+      "expression": "\"/salaries/templates/\" + id + \"/apply\""
+    },
+    {
+      "file": "salaries.ts",
+      "method": "PUT",
+      "expression": "\"/salaries/params/\" + id"
+    },
+    {
+      "file": "salaries.ts",
+      "method": "DELETE",
+      "expression": "\"/salaries/params/\" + id"
+    },
+    {
+      "file": "salaryRules.ts",
+      "method": "GET",
+      "expression": "'/salary-rules/employee/' + employeeId"
+    },
+    {
+      "file": "salaryRules.ts",
+      "method": "PUT",
+      "expression": "'/salary-rules/' + id"
+    },
+    {
+      "file": "salaryRules.ts",
+      "method": "DELETE",
+      "expression": "'/salary-rules/' + id"
+    }
+  ],
+  "contracts": [
+    {
+      "file": "frontend/src/api/acceptances.ts",
+      "line": 17,
+      "method": "GET",
+      "url": "/acceptances/available-orders",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/acceptances.ts",
+      "line": 21,
+      "method": "GET",
+      "url": "/acceptances/available-quotes",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/acceptances.ts",
+      "line": 31,
+      "method": "GET",
+      "url": "/acceptances/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/acceptances.ts",
+      "line": 35,
+      "method": "GET",
+      "url": "/acceptances/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/acceptances.ts",
+      "line": 55,
+      "method": "POST",
+      "url": "/acceptances/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/acceptances.ts",
+      "line": 83,
+      "method": "PUT",
+      "url": "/acceptances/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/acceptances.ts",
+      "line": 87,
+      "method": "DELETE",
+      "url": "/acceptances/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/acceptances.ts",
+      "line": 90,
+      "method": "POST",
+      "url": "/acceptances/{}/admin-delete",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/acceptances.ts",
+      "line": 98,
+      "method": "POST",
+      "url": "/acceptances/{}/change-status",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/acceptances.ts",
+      "line": 104,
+      "method": "POST",
+      "url": "/acceptances/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/acceptances.ts",
+      "line": 111,
+      "method": "DELETE",
+      "url": "/acceptances/{}/attachments/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 53,
+      "method": "GET",
+      "url": "/admin/roles",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 57,
+      "method": "POST",
+      "url": "/admin/roles",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 61,
+      "method": "PUT",
+      "url": "/admin/roles/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 65,
+      "method": "DELETE",
+      "url": "/admin/roles/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 69,
+      "method": "PUT",
+      "url": "/admin/roles/{}/permissions",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 73,
+      "method": "POST",
+      "url": "/admin/roles/{}/permissions/preview",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 79,
+      "method": "GET",
+      "url": "/admin/permissions",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 83,
+      "method": "GET",
+      "url": "/admin/permission-packs",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 114,
+      "method": "GET",
+      "url": "/admin/settings",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 118,
+      "method": "POST",
+      "url": "/admin/force-relogin",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 122,
+      "method": "PUT",
+      "url": "/admin/settings",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 128,
+      "method": "POST",
+      "url": "/admin/settings/logo",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/admin.ts",
+      "line": 134,
+      "method": "DELETE",
+      "url": "/admin/settings/logo",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 296,
+      "method": "GET",
+      "url": "/aerial/vehicles",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 299,
+      "method": "GET",
+      "url": "/aerial/vehicles/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 302,
+      "method": "POST",
+      "url": "/aerial/vehicles",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 305,
+      "method": "PATCH",
+      "url": "/aerial/vehicles/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 308,
+      "method": "DELETE",
+      "url": "/aerial/vehicles/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 313,
+      "method": "GET",
+      "url": "/aerial/personnel",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 316,
+      "method": "GET",
+      "url": "/aerial/personnel/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 319,
+      "method": "POST",
+      "url": "/aerial/personnel",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 322,
+      "method": "PATCH",
+      "url": "/aerial/personnel/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 325,
+      "method": "DELETE",
+      "url": "/aerial/personnel/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 340,
+      "method": "GET",
+      "url": "/aerial/ledgers",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 343,
+      "method": "GET",
+      "url": "/aerial/ledgers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 346,
+      "method": "GET",
+      "url": "/aerial/ledgers/locations",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 349,
+      "method": "POST",
+      "url": "/aerial/ledgers",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 352,
+      "method": "PATCH",
+      "url": "/aerial/ledgers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 355,
+      "method": "POST",
+      "url": "/aerial/ledgers/{}/settle",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 371,
+      "method": "GET",
+      "url": "/aerial/ledgers/{}/settlements",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 374,
+      "method": "DELETE",
+      "url": "/aerial/ledgers/{}/settlements/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 377,
+      "method": "DELETE",
+      "url": "/aerial/ledgers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 402,
+      "method": "GET",
+      "url": "/aerial/attendance",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 405,
+      "method": "POST",
+      "url": "/aerial/attendance",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 408,
+      "method": "PATCH",
+      "url": "/aerial/attendance/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 411,
+      "method": "DELETE",
+      "url": "/aerial/attendance/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 429,
+      "method": "POST",
+      "url": "/aerial/personnel/upload",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 435,
+      "method": "GET",
+      "url": "/aerial/personnel/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 441,
+      "method": "POST",
+      "url": "/aerial/personnel/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 447,
+      "method": "DELETE",
+      "url": "/aerial/personnel/attachments/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 463,
+      "method": "GET",
+      "url": "/aerial/vehicles/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 469,
+      "method": "POST",
+      "url": "/aerial/vehicles/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 475,
+      "method": "DELETE",
+      "url": "/aerial/vehicles/attachments/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 492,
+      "method": "GET",
+      "url": "/aerial/vehicles/expiring",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 495,
+      "method": "POST",
+      "url": "/aerial/vehicles/expiry-notifications/check",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 500,
+      "method": "GET",
+      "url": "/aerial/personnel-expenses",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 503,
+      "method": "POST",
+      "url": "/aerial/personnel-expenses",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 506,
+      "method": "POST",
+      "url": "/aerial/personnel-expenses/{}/reimburse",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 511,
+      "method": "GET",
+      "url": "/aerial/personnel-wages",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 514,
+      "method": "POST",
+      "url": "/aerial/personnel-wages",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 517,
+      "method": "POST",
+      "url": "/aerial/personnel-wages/{}/pay",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 522,
+      "method": "GET",
+      "url": "/aerial/vehicle-costs",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 525,
+      "method": "POST",
+      "url": "/aerial/vehicle-costs",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 530,
+      "method": "PATCH",
+      "url": "/aerial/vehicle-costs/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 533,
+      "method": "DELETE",
+      "url": "/aerial/vehicle-costs/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 538,
+      "method": "GET",
+      "url": "/aerial/safety-checks",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 541,
+      "method": "POST",
+      "url": "/aerial/safety-checks",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 546,
+      "method": "GET",
+      "url": "/aerial/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 549,
+      "method": "POST",
+      "url": "/aerial/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 552,
+      "method": "DELETE",
+      "url": "/aerial/attachments/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 557,
+      "method": "GET",
+      "url": "/aerial/dashboard/overview",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 560,
+      "method": "GET",
+      "url": "/aerial/dashboard/today",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 563,
+      "method": "GET",
+      "url": "/aerial/dashboard/reminders",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 568,
+      "method": "GET",
+      "url": "/aerial/reports/daily",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 571,
+      "method": "GET",
+      "url": "/aerial/reports/monthly",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 574,
+      "method": "GET",
+      "url": "/aerial/reports/receivables",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 577,
+      "method": "GET",
+      "url": "/aerial/reports/reimbursements",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 580,
+      "method": "GET",
+      "url": "/aerial/reports/costs",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 583,
+      "method": "GET",
+      "url": "/aerial/reports/personnel-summary",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 588,
+      "method": "GET",
+      "url": "/aerial/reports/export/ledgers",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 603,
+      "method": "GET",
+      "url": "/aerial/reports/export/wages",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 669,
+      "method": "POST",
+      "url": "/aerial/agent/messages/ingest",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 672,
+      "method": "GET",
+      "url": "/aerial/agent/drafts",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 675,
+      "method": "GET",
+      "url": "/aerial/agent/drafts/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 678,
+      "method": "POST",
+      "url": "/aerial/agent/drafts/{}/confirm",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aerial.ts",
+      "line": 681,
+      "method": "POST",
+      "url": "/aerial/agent/drafts/{}/reject",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 125,
+      "method": "GET",
+      "url": "/ai/providers/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 129,
+      "method": "GET",
+      "url": "/ai/providers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 133,
+      "method": "POST",
+      "url": "/ai/providers/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 137,
+      "method": "PATCH",
+      "url": "/ai/providers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 141,
+      "method": "DELETE",
+      "url": "/ai/providers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 145,
+      "method": "POST",
+      "url": "/ai/providers/{}/enable",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 149,
+      "method": "POST",
+      "url": "/ai/providers/{}/disable",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 153,
+      "method": "POST",
+      "url": "/ai/providers/{}/duplicate",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 159,
+      "method": "POST",
+      "url": "/ai/providers/{}/test",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 170,
+      "method": "GET",
+      "url": "/ai/models/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 174,
+      "method": "GET",
+      "url": "/ai/models/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 178,
+      "method": "POST",
+      "url": "/ai/models/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 182,
+      "method": "PATCH",
+      "url": "/ai/models/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai-admin.ts",
+      "line": 186,
+      "method": "DELETE",
+      "url": "/ai/models/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai.ts",
+      "line": 17,
+      "method": "POST",
+      "url": "/ai/quotes/assist",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai.ts",
+      "line": 21,
+      "method": "POST",
+      "url": "/ai/quotes/assist/save",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai.ts",
+      "line": 31,
+      "method": "POST",
+      "url": "/ai/site-photos/analyze?{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai.ts",
+      "line": 43,
+      "method": "POST",
+      "url": "/ai/payment-ocr/recognize?{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai.ts",
+      "line": 56,
+      "method": "GET",
+      "url": "/ai/reports/business-narrative",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai.ts",
+      "line": 62,
+      "method": "GET",
+      "url": "/ai/anomalies/scan",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai.ts",
+      "line": 74,
+      "method": "GET",
+      "url": "/ai/knowledge/similar-quotes",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai.ts",
+      "line": 78,
+      "method": "GET",
+      "url": "/ai/knowledge/search-by-description",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/ai.ts",
+      "line": 91,
+      "method": "POST",
+      "url": "/ai/quotes/pricing/recommend",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aiAssistant.ts",
+      "line": 69,
+      "method": "POST",
+      "url": "/ai-assistant/chat",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aiAssistant.ts",
+      "line": 90,
+      "method": "GET",
+      "url": "/ai-assistant/sessions",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aiAssistant.ts",
+      "line": 97,
+      "method": "POST",
+      "url": "/ai-assistant/workflow-guidance",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aiAssistant.ts",
+      "line": 101,
+      "method": "GET",
+      "url": "/ai-assistant/business-rules/status",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aiAssistant.ts",
+      "line": 105,
+      "method": "POST",
+      "url": "/ai-assistant/business-rules/sync",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aiAssistant.ts",
+      "line": 109,
+      "method": "GET",
+      "url": "/ai-assistant/sessions/{}/messages",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aiAssistant.ts",
+      "line": 113,
+      "method": "POST",
+      "url": "/ai-assistant/actions/{}/confirm",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aiAssistant.ts",
+      "line": 117,
+      "method": "POST",
+      "url": "/ai-assistant/actions/{}/cancel",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aiAssistant.ts",
+      "line": 121,
+      "method": "GET",
+      "url": "/ai-assistant/tool-call-logs",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/aiAssistant.ts",
+      "line": 125,
+      "method": "GET",
+      "url": "/ai-assistant/audit-logs",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/attendance.ts",
+      "line": 15,
+      "method": "GET",
+      "url": "/attendance/rules",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/attendance.ts",
+      "line": 16,
+      "method": "POST",
+      "url": "/attendance/rules",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/attendance.ts",
+      "line": 19,
+      "method": "GET",
+      "url": "/attendance/records",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/attendance.ts",
+      "line": 20,
+      "method": "POST",
+      "url": "/attendance/records",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/attendance.ts",
+      "line": 23,
+      "method": "GET",
+      "url": "/attendance/employees",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/auth.ts",
+      "line": 5,
+      "method": "POST",
+      "url": "/auth/login",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/auth.ts",
+      "line": 9,
+      "method": "GET",
+      "url": "/auth/me",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/auth.ts",
+      "line": 13,
+      "method": "POST",
+      "url": "/auth/change-password",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/auth.ts",
+      "line": 17,
+      "method": "PATCH",
+      "url": "/auth/preferences",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/backup.ts",
+      "line": 4,
+      "method": "POST",
+      "url": "/admin/backup/create",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/backup.ts",
+      "line": 6,
+      "method": "GET",
+      "url": "/admin/backup/list",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/backup.ts",
+      "line": 8,
+      "method": "POST",
+      "url": "/admin/backup/restore",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/backup.ts",
+      "line": 10,
+      "method": "DELETE",
+      "url": "/admin/backup/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/backup.ts",
+      "line": 14,
+      "method": "GET",
+      "url": "/admin/backup/export/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/backup.ts",
+      "line": 32,
+      "method": "POST",
+      "url": "/admin/backup/import",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 280,
+      "method": "POST",
+      "url": "/cdr/pricing/calculate",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 284,
+      "method": "POST",
+      "url": "/cdr/quotes",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 292,
+      "method": "POST",
+      "url": "/cdr/quotes/{}/versions",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 296,
+      "method": "GET",
+      "url": "/cdr/quotes/{}/versions/latest",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 300,
+      "method": "GET",
+      "url": "/cdr/quotes/{}/versions",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 304,
+      "method": "GET",
+      "url": "/cdr/quotes/{}/approvals",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 311,
+      "method": "POST",
+      "url": "/cdr/quotes/{}/approvals",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 315,
+      "method": "POST",
+      "url": "/cdr/approvals/{}/approve",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 319,
+      "method": "POST",
+      "url": "/cdr/approvals/{}/reject",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 323,
+      "method": "GET",
+      "url": "/cdr/rule-sets",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 327,
+      "method": "POST",
+      "url": "/cdr/rule-sets",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 332,
+      "method": "PUT",
+      "url": "/cdr/customer-agreements/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 336,
+      "method": "DELETE",
+      "url": "/cdr/customer-agreements/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 354,
+      "method": "POST",
+      "url": "/cdr/customer-agreements/batch",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 359,
+      "method": "GET",
+      "url": "/cdr/customer-agreements",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 363,
+      "method": "POST",
+      "url": "/cdr/customer-agreements",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 367,
+      "method": "GET",
+      "url": "/cdr/quotes/{}/audit-logs",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 371,
+      "method": "DELETE",
+      "url": "/cdr/quotes/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 375,
+      "method": "POST",
+      "url": "/cdr/quotes/{}/convert-to-order",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 379,
+      "method": "GET",
+      "url": "/cdr/quotes/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 383,
+      "method": "GET",
+      "url": "/cdr/quotes",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 389,
+      "method": "POST",
+      "url": "/cdr/quotes/{}/upload",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 395,
+      "method": "GET",
+      "url": "/cdr/quotes/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 399,
+      "method": "DELETE",
+      "url": "/cdr/attachments/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 403,
+      "method": "POST",
+      "url": "/cdr/attachments/{}/parse-svg",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/cdrQuote.ts",
+      "line": 407,
+      "method": "POST",
+      "url": "/cdr/quotes/{}/ai-assist-description",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 36,
+      "method": "POST",
+      "url": "/conversations",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 41,
+      "method": "GET",
+      "url": "/conversations",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 46,
+      "method": "GET",
+      "url": "/conversations/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 51,
+      "method": "PUT",
+      "url": "/conversations/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 56,
+      "method": "DELETE",
+      "url": "/conversations/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 63,
+      "method": "POST",
+      "url": "/conversations/{}/members",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 68,
+      "method": "DELETE",
+      "url": "/conversations/{}/members/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 73,
+      "method": "PUT",
+      "url": "/conversations/{}/members/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 78,
+      "method": "POST",
+      "url": "/conversations/{}/transfer",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 90,
+      "method": "GET",
+      "url": "/conversations/{}/messages",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 95,
+      "method": "POST",
+      "url": "/conversations/{}/messages",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 100,
+      "method": "DELETE",
+      "url": "/conversations/messages/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 105,
+      "method": "POST",
+      "url": "/conversations/messages/{}/recall",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 115,
+      "method": "GET",
+      "url": "/conversations/messages/search",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 122,
+      "method": "POST",
+      "url": "/conversations/{}/messages/{}/read",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 127,
+      "method": "POST",
+      "url": "/conversations/{}/read-all",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 134,
+      "method": "GET",
+      "url": "/conversations/presence/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 139,
+      "method": "PUT",
+      "url": "/conversations/presence",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 144,
+      "method": "POST",
+      "url": "/conversations/presence/batch",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 154,
+      "method": "POST",
+      "url": "/conversations/upload",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 176,
+      "method": "POST",
+      "url": "/conversations/share-card",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 190,
+      "method": "POST",
+      "url": "/conversations/{}/messages/batch-share",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 198,
+      "method": "GET",
+      "url": "/conversations/{}/recommendations",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 209,
+      "method": "GET",
+      "url": "/conversations/search-objects",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 220,
+      "method": "GET",
+      "url": "/conversations/recent-shared",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 231,
+      "method": "GET",
+      "url": "/conversations/my-recent-objects",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 241,
+      "method": "GET",
+      "url": "/users/all",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/chat.ts",
+      "line": 246,
+      "method": "GET",
+      "url": "/conversations/private/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/contracts.ts",
+      "line": 13,
+      "method": "GET",
+      "url": "/contracts/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/contracts.ts",
+      "line": 17,
+      "method": "GET",
+      "url": "/contracts/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/contracts.ts",
+      "line": 21,
+      "method": "POST",
+      "url": "/contracts/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/contracts.ts",
+      "line": 25,
+      "method": "PUT",
+      "url": "/contracts/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/contracts.ts",
+      "line": 29,
+      "method": "DELETE",
+      "url": "/contracts/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/contracts.ts",
+      "line": 37,
+      "method": "POST",
+      "url": "/contracts/{}/upload",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/contracts.ts",
+      "line": 43,
+      "method": "DELETE",
+      "url": "/contracts/{}/attachment",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/contracts.ts",
+      "line": 47,
+      "method": "GET",
+      "url": "/contracts/{}/attachment",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/contracts.ts",
+      "line": 57,
+      "method": "GET",
+      "url": "/contracts/available-resources",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/contracts.ts",
+      "line": 61,
+      "method": "GET",
+      "url": "/contracts/orders-without-contract",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/contracts.ts",
+      "line": 65,
+      "method": "POST",
+      "url": "/contracts/{}/orders",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/customers.ts",
+      "line": 18,
+      "method": "GET",
+      "url": "/customers/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/customers.ts",
+      "line": 22,
+      "method": "GET",
+      "url": "/customers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/customers.ts",
+      "line": 26,
+      "method": "POST",
+      "url": "/customers/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/customers.ts",
+      "line": 30,
+      "method": "PUT",
+      "url": "/customers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/customers.ts",
+      "line": 34,
+      "method": "DELETE",
+      "url": "/customers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/customers.ts",
+      "line": 39,
+      "method": "GET",
+      "url": "/customers/tree",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/customers.ts",
+      "line": 45,
+      "method": "POST",
+      "url": "/customers/import",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/departments.ts",
+      "line": 11,
+      "method": "GET",
+      "url": "/departments/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/departments.ts",
+      "line": 14,
+      "method": "POST",
+      "url": "/departments/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/employees.ts",
+      "line": 30,
+      "method": "GET",
+      "url": "/employees/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/employees.ts",
+      "line": 31,
+      "method": "POST",
+      "url": "/employees/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/employees.ts",
+      "line": 36,
+      "method": "GET",
+      "url": "/employees/account-options",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/employees.ts",
+      "line": 47,
+      "method": "POST",
+      "url": "/employees/upload",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/employmentHistories.ts",
+      "line": 13,
+      "method": "GET",
+      "url": "/employment-histories/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/employmentHistories.ts",
+      "line": 16,
+      "method": "POST",
+      "url": "/employment-histories/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/framework-contracts.ts",
+      "line": 12,
+      "method": "GET",
+      "url": "/framework-contracts/{}/projects",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/framework-contracts.ts",
+      "line": 19,
+      "method": "GET",
+      "url": "/framework-contracts/projects/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/framework-contracts.ts",
+      "line": 23,
+      "method": "POST",
+      "url": "/framework-contracts/{}/projects",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/framework-contracts.ts",
+      "line": 27,
+      "method": "PUT",
+      "url": "/framework-contracts/projects/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/framework-contracts.ts",
+      "line": 31,
+      "method": "DELETE",
+      "url": "/framework-contracts/projects/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/framework-contracts.ts",
+      "line": 39,
+      "method": "POST",
+      "url": "/framework-contracts/projects/{}/upload",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/framework-contracts.ts",
+      "line": 47,
+      "method": "DELETE",
+      "url": "/framework-contracts/projects/{}/attachment",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/framework-contracts.ts",
+      "line": 51,
+      "method": "GET",
+      "url": "/framework-contracts/projects/{}/attachment",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/framework-contracts.ts",
+      "line": 64,
+      "method": "GET",
+      "url": "/framework-contracts/available-projects",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/inventory.ts",
+      "line": 5,
+      "method": "GET",
+      "url": "/inventory/items",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/inventory.ts",
+      "line": 9,
+      "method": "GET",
+      "url": "/inventory/items/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/inventory.ts",
+      "line": 13,
+      "method": "POST",
+      "url": "/inventory/items",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/inventory.ts",
+      "line": 17,
+      "method": "PUT",
+      "url": "/inventory/items/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/inventory.ts",
+      "line": 21,
+      "method": "GET",
+      "url": "/inventory/records",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/inventory.ts",
+      "line": 25,
+      "method": "POST",
+      "url": "/inventory/stock-in",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/inventory.ts",
+      "line": 29,
+      "method": "POST",
+      "url": "/inventory/stock-out",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/leaves.ts",
+      "line": 13,
+      "method": "GET",
+      "url": "/leaves/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/leaves.ts",
+      "line": 16,
+      "method": "POST",
+      "url": "/leaves/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/notifications.ts",
+      "line": 10,
+      "method": "GET",
+      "url": "/notifications",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/notifications.ts",
+      "line": 14,
+      "method": "GET",
+      "url": "/notifications/recent",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/notifications.ts",
+      "line": 18,
+      "method": "GET",
+      "url": "/notifications/unread-count",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/notifications.ts",
+      "line": 22,
+      "method": "PUT",
+      "url": "/notifications/{}/read",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/notifications.ts",
+      "line": 26,
+      "method": "PUT",
+      "url": "/notifications/read-all",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/notifications.ts",
+      "line": 30,
+      "method": "DELETE",
+      "url": "/notifications/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/notifications.ts",
+      "line": 39,
+      "method": "POST",
+      "url": "/notifications/send",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/operation_logs.ts",
+      "line": 13,
+      "method": "GET",
+      "url": "/logs/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/operation_logs.ts",
+      "line": 17,
+      "method": "GET",
+      "url": "/logs/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 22,
+      "method": "GET",
+      "url": "/orders/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 37,
+      "method": "GET",
+      "url": "/orders/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 79,
+      "method": "POST",
+      "url": "/orders/{}/order-date/preview",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 91,
+      "method": "PATCH",
+      "url": "/orders/{}/order-date",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 98,
+      "method": "GET",
+      "url": "/orders/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 111,
+      "method": "POST",
+      "url": "/orders/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 125,
+      "method": "GET",
+      "url": "/orders/{}/attachments/{}/file",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 137,
+      "method": "DELETE",
+      "url": "/orders/{}/attachments/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 142,
+      "method": "GET",
+      "url": "/orders/{}/task-attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 155,
+      "method": "POST",
+      "url": "/orders/{}/task-attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 165,
+      "method": "GET",
+      "url": "/orders/{}/task-attachments/{}/file",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 173,
+      "method": "DELETE",
+      "url": "/orders/{}/task-attachments/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 177,
+      "method": "GET",
+      "url": "/orders/task-assignee-options",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 181,
+      "method": "GET",
+      "url": "/orders/{}/task-assignees",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 185,
+      "method": "PUT",
+      "url": "/orders/{}/task-assignees",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 191,
+      "method": "GET",
+      "url": "/orders/{}/items/editability",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 201,
+      "method": "POST",
+      "url": "/orders/{}/items/preview",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 208,
+      "method": "GET",
+      "url": "/orders/{}/items/change-batches",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 212,
+      "method": "GET",
+      "url": "/orders/{}/items/change-batches/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 216,
+      "method": "GET",
+      "url": "/orders/{}/items/reconciliation",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 229,
+      "method": "POST",
+      "url": "/orders/{}/items",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 240,
+      "method": "PATCH",
+      "url": "/orders/{}/items/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 251,
+      "method": "DELETE",
+      "url": "/orders/{}/items/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 255,
+      "method": "POST",
+      "url": "/orders/{}/items/batch-preview",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 259,
+      "method": "POST",
+      "url": "/orders/{}/items/batch",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 263,
+      "method": "POST",
+      "url": "/orders/{}/change-status",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 267,
+      "method": "POST",
+      "url": "/orders/{}/reopen-completed",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 271,
+      "method": "POST",
+      "url": "/orders/{}/set-cost",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 275,
+      "method": "POST",
+      "url": "/orders/{}/auto-cost",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 279,
+      "method": "DELETE",
+      "url": "/orders/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 283,
+      "method": "GET",
+      "url": "/orders/recycle/list",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 287,
+      "method": "POST",
+      "url": "/orders/{}/restore",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/orders.ts",
+      "line": 291,
+      "method": "PUT",
+      "url": "/orders/{}/contact",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 36,
+      "method": "GET",
+      "url": "/outsource/vendors",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 40,
+      "method": "GET",
+      "url": "/outsource/tasks",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 56,
+      "method": "GET",
+      "url": "/outsource/task-groups",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 60,
+      "method": "GET",
+      "url": "/outsource/task-groups/{}/tasks",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 67,
+      "method": "GET",
+      "url": "/outsource/orders/{}/items-summary",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 71,
+      "method": "GET",
+      "url": "/outsource/orders/{}/items-for-dropdown",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 87,
+      "method": "POST",
+      "url": "/outsource/orders/{}/items/{}/send",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 91,
+      "method": "GET",
+      "url": "/outsource/tasks/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 95,
+      "method": "POST",
+      "url": "/outsource/tasks",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 99,
+      "method": "PUT",
+      "url": "/outsource/tasks/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 103,
+      "method": "GET",
+      "url": "/outsource/payments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 107,
+      "method": "POST",
+      "url": "/outsource/payments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 111,
+      "method": "POST",
+      "url": "/outsource/tasks/{}/cancel",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 115,
+      "method": "POST",
+      "url": "/outsource/tasks/{}/revert",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 119,
+      "method": "DELETE",
+      "url": "/outsource/tasks/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 123,
+      "method": "GET",
+      "url": "/outsource/tasks/payment-summary/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 127,
+      "method": "GET",
+      "url": "/outsource/tasks/recycle/list",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 131,
+      "method": "POST",
+      "url": "/outsource/tasks/{}/restore",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 138,
+      "method": "DELETE",
+      "url": "/outsource/tasks/recycle/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 142,
+      "method": "GET",
+      "url": "/outsource/quotes-for-dropdown",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/outsource.ts",
+      "line": 146,
+      "method": "GET",
+      "url": "/outsource/orders-for-dropdown",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 4,
+      "method": "GET",
+      "url": "/payments/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 5,
+      "method": "GET",
+      "url": "/payments/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 6,
+      "method": "POST",
+      "url": "/payments/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 7,
+      "method": "POST",
+      "url": "/payments/{}/void",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 11,
+      "method": "POST",
+      "url": "/payments/{}/upload-receipt",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 16,
+      "method": "GET",
+      "url": "/statements/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 17,
+      "method": "GET",
+      "url": "/statements/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 18,
+      "method": "POST",
+      "url": "/statements/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 19,
+      "method": "POST",
+      "url": "/statements/{}/confirm",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 21,
+      "method": "GET",
+      "url": "/expenses/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 22,
+      "method": "GET",
+      "url": "/expenses/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 82,
+      "method": "GET",
+      "url": "/expenses/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 165,
+      "method": "GET",
+      "url": "/finance-center/cashflow",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 169,
+      "method": "GET",
+      "url": "/finance-center/cost-overlaps",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 173,
+      "method": "POST",
+      "url": "/finance-center/payment-reconciliations",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 177,
+      "method": "POST",
+      "url": "/finance-center/payment-reconciliations/{}/void",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 181,
+      "method": "POST",
+      "url": "/finance-center/cost-overlaps/reviews",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 189,
+      "method": "POST",
+      "url": "/expenses/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 190,
+      "method": "PUT",
+      "url": "/expenses/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 191,
+      "method": "DELETE",
+      "url": "/expenses/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 196,
+      "method": "POST",
+      "url": "/expenses/{}/delete-confirmed",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 200,
+      "method": "GET",
+      "url": "/expenses/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 206,
+      "method": "POST",
+      "url": "/expenses/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 216,
+      "method": "GET",
+      "url": "/expenses/{}/attachments/{}/file",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 224,
+      "method": "DELETE",
+      "url": "/expenses/{}/attachments/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 237,
+      "method": "GET",
+      "url": "/payables/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 241,
+      "method": "GET",
+      "url": "/payables/{}/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 255,
+      "method": "POST",
+      "url": "/payables/{}/{}/payments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 264,
+      "method": "POST",
+      "url": "/payables/{}/{}/payments/{}/void",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 270,
+      "method": "GET",
+      "url": "/reports/dashboard",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 271,
+      "method": "GET",
+      "url": "/reports/daily",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 272,
+      "method": "GET",
+      "url": "/reports/monthly",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 273,
+      "method": "GET",
+      "url": "/reports/customer-debt",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 275,
+      "method": "GET",
+      "url": "/reports/task-completion/summary",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 285,
+      "method": "GET",
+      "url": "/reports/task-completion/details",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 291,
+      "method": "GET",
+      "url": "/project-costs/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 299,
+      "method": "POST",
+      "url": "/project-costs/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 302,
+      "method": "PUT",
+      "url": "/project-costs/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 305,
+      "method": "DELETE",
+      "url": "/project-costs/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 309,
+      "method": "DELETE",
+      "url": "/project-costs/batch?cost_ids={}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 312,
+      "method": "GET",
+      "url": "/project-costs/summary",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 315,
+      "method": "GET",
+      "url": "/project-costs/orders/{}/item-summary",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 323,
+      "method": "POST",
+      "url": "/project-costs/import",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 330,
+      "method": "GET",
+      "url": "/project-costs/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 337,
+      "method": "POST",
+      "url": "/project-costs/{}/upload",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 341,
+      "method": "DELETE",
+      "url": "/project-costs/attachments/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 347,
+      "method": "GET",
+      "url": "/project-costs/quotes",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 351,
+      "method": "GET",
+      "url": "/project-costs/debts/list",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/payments.ts",
+      "line": 355,
+      "method": "POST",
+      "url": "/project-costs/{}/settle-debt",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 5,
+      "method": "GET",
+      "url": "/products/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 9,
+      "method": "GET",
+      "url": "/products/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 13,
+      "method": "POST",
+      "url": "/products/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 17,
+      "method": "PUT",
+      "url": "/products/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 21,
+      "method": "DELETE",
+      "url": "/products/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 27,
+      "method": "POST",
+      "url": "/products/import",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 34,
+      "method": "GET",
+      "url": "/product-categories/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 38,
+      "method": "POST",
+      "url": "/product-categories/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 42,
+      "method": "DELETE",
+      "url": "/product-categories/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 47,
+      "method": "GET",
+      "url": "/materials/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 51,
+      "method": "GET",
+      "url": "/materials/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 55,
+      "method": "POST",
+      "url": "/materials/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 59,
+      "method": "PUT",
+      "url": "/materials/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 63,
+      "method": "DELETE",
+      "url": "/materials/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 69,
+      "method": "POST",
+      "url": "/materials/import",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 76,
+      "method": "GET",
+      "url": "/processes/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 80,
+      "method": "GET",
+      "url": "/processes/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 84,
+      "method": "POST",
+      "url": "/processes/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 88,
+      "method": "PUT",
+      "url": "/processes/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/products.ts",
+      "line": 92,
+      "method": "DELETE",
+      "url": "/processes/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 5,
+      "method": "GET",
+      "url": "/quotes/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 9,
+      "method": "GET",
+      "url": "/quotes/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 13,
+      "method": "POST",
+      "url": "/quotes/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 17,
+      "method": "PUT",
+      "url": "/quotes/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 21,
+      "method": "DELETE",
+      "url": "/quotes/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 25,
+      "method": "GET",
+      "url": "/quotes/{}/delete-preview",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 29,
+      "method": "POST",
+      "url": "/quotes/{}/confirm",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 33,
+      "method": "POST",
+      "url": "/quotes/{}/convert-to-order",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 37,
+      "method": "POST",
+      "url": "/quotes/{}/revert-to-draft",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 41,
+      "method": "POST",
+      "url": "/quotes/{}/cancel",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 47,
+      "method": "POST",
+      "url": "/quotes/import",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 57,
+      "method": "POST",
+      "url": "/quotes/import/school-list/preview",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 68,
+      "method": "POST",
+      "url": "/quotes/import/school-list/commit",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 78,
+      "method": "POST",
+      "url": "/quotes/import/school-list/dimensions/preview",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 89,
+      "method": "POST",
+      "url": "/quotes/import/school-list/dimensions/commit",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 97,
+      "method": "POST",
+      "url": "/quotes/{}/import-items",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/quotes.ts",
+      "line": 103,
+      "method": "GET",
+      "url": "/quotes/template",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 21,
+      "method": "GET",
+      "url": "/salaries/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 24,
+      "method": "POST",
+      "url": "/salaries/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 36,
+      "method": "POST",
+      "url": "/salaries/generate",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 50,
+      "method": "GET",
+      "url": "/salaries/report",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 98,
+      "method": "GET",
+      "url": "/salaries/items",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 101,
+      "method": "POST",
+      "url": "/salaries/items",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 122,
+      "method": "GET",
+      "url": "/salaries/templates",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 125,
+      "method": "POST",
+      "url": "/salaries/templates",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 159,
+      "method": "GET",
+      "url": "/salaries/params",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 162,
+      "method": "POST",
+      "url": "/salaries/params",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 171,
+      "method": "POST",
+      "url": "/salaries/params/save",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 174,
+      "method": "GET",
+      "url": "/salaries/grid",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 177,
+      "method": "POST",
+      "url": "/salaries/grid/compute",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaries.ts",
+      "line": 185,
+      "method": "POST",
+      "url": "/salaries/grid/save",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaryRules.ts",
+      "line": 22,
+      "method": "GET",
+      "url": "/salary-rules/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/salaryRules.ts",
+      "line": 30,
+      "method": "POST",
+      "url": "/salary-rules/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/suppliers.ts",
+      "line": 36,
+      "method": "GET",
+      "url": "/suppliers/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/suppliers.ts",
+      "line": 40,
+      "method": "GET",
+      "url": "/suppliers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/suppliers.ts",
+      "line": 44,
+      "method": "POST",
+      "url": "/suppliers/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/suppliers.ts",
+      "line": 48,
+      "method": "PUT",
+      "url": "/suppliers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/suppliers.ts",
+      "line": 52,
+      "method": "POST",
+      "url": "/suppliers/{}/deactivate",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 56,
+      "method": "POST",
+      "url": "/task-queue/complete-item",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 73,
+      "method": "GET",
+      "url": "/design-tasks/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 74,
+      "method": "GET",
+      "url": "/design-tasks/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 75,
+      "method": "POST",
+      "url": "/design-tasks/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 76,
+      "method": "PUT",
+      "url": "/design-tasks/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 77,
+      "method": "POST",
+      "url": "/design-tasks/{}/historical-order-item-links",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 78,
+      "method": "PUT",
+      "url": "/design-tasks/{}/assignee",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 79,
+      "method": "PUT",
+      "url": "/design-tasks/{}/order-item-assignees",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 80,
+      "method": "POST",
+      "url": "/design-tasks/{}/change-status",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 82,
+      "method": "GET",
+      "url": "/production-tasks/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 83,
+      "method": "GET",
+      "url": "/production-tasks/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 84,
+      "method": "POST",
+      "url": "/production-tasks/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 85,
+      "method": "PUT",
+      "url": "/production-tasks/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 86,
+      "method": "POST",
+      "url": "/production-tasks/{}/historical-order-item-links",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 87,
+      "method": "PUT",
+      "url": "/production-tasks/{}/assignee",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 88,
+      "method": "PUT",
+      "url": "/production-tasks/{}/order-item-assignees",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 89,
+      "method": "POST",
+      "url": "/production-tasks/{}/change-status",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 90,
+      "method": "POST",
+      "url": "/production-tasks/{}/rollback-items",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 92,
+      "method": "GET",
+      "url": "/installation-tasks/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 93,
+      "method": "GET",
+      "url": "/installation-tasks/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 94,
+      "method": "POST",
+      "url": "/installation-tasks/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 95,
+      "method": "PUT",
+      "url": "/installation-tasks/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 96,
+      "method": "POST",
+      "url": "/installation-tasks/{}/historical-order-item-links",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 97,
+      "method": "PUT",
+      "url": "/installation-tasks/{}/assignee",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 98,
+      "method": "PUT",
+      "url": "/installation-tasks/{}/order-item-assignees",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 99,
+      "method": "POST",
+      "url": "/installation-tasks/{}/change-status",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 100,
+      "method": "POST",
+      "url": "/installation-tasks/{}/rollback-items",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 105,
+      "method": "POST",
+      "url": "/attachments/upload",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 110,
+      "method": "DELETE",
+      "url": "/design-tasks/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 111,
+      "method": "DELETE",
+      "url": "/production-tasks/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 112,
+      "method": "DELETE",
+      "url": "/installation-tasks/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 113,
+      "method": "DELETE",
+      "url": "/attachments/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 124,
+      "method": "GET",
+      "url": "/task-queue/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 132,
+      "method": "GET",
+      "url": "/task-queue/completed-projects",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 136,
+      "method": "GET",
+      "url": "/task-queue/completed-projects/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 140,
+      "method": "GET",
+      "url": "/task-queue/order-item-options",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 146,
+      "method": "POST",
+      "url": "/task-queue/acknowledge-order-review",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/tasks.ts",
+      "line": 154,
+      "method": "GET",
+      "url": "/task-queue/assignee-options",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/users.ts",
+      "line": 13,
+      "method": "GET",
+      "url": "/users/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/users.ts",
+      "line": 17,
+      "method": "GET",
+      "url": "/users/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/users.ts",
+      "line": 21,
+      "method": "PUT",
+      "url": "/users/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/users.ts",
+      "line": 25,
+      "method": "DELETE",
+      "url": "/users/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/users.ts",
+      "line": 29,
+      "method": "POST",
+      "url": "/users/{}/reset-password",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleDispatches.ts",
+      "line": 70,
+      "method": "GET",
+      "url": "/vehicle-dispatches/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleDispatches.ts",
+      "line": 74,
+      "method": "GET",
+      "url": "/vehicle-dispatches/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleDispatches.ts",
+      "line": 78,
+      "method": "POST",
+      "url": "/vehicle-dispatches/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleDispatches.ts",
+      "line": 82,
+      "method": "PATCH",
+      "url": "/vehicle-dispatches/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleDispatches.ts",
+      "line": 86,
+      "method": "POST",
+      "url": "/vehicle-dispatches/{}/cancel",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleDispatches.ts",
+      "line": 90,
+      "method": "GET",
+      "url": "/vehicles/available",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleDispatches.ts",
+      "line": 94,
+      "method": "GET",
+      "url": "/vehicle-drivers/available",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleUseRequests.ts",
+      "line": 68,
+      "method": "GET",
+      "url": "/vehicle-use-requests",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleUseRequests.ts",
+      "line": 72,
+      "method": "GET",
+      "url": "/vehicle-use-requests/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleUseRequests.ts",
+      "line": 76,
+      "method": "POST",
+      "url": "/vehicle-use-requests",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleUseRequests.ts",
+      "line": 80,
+      "method": "PATCH",
+      "url": "/vehicle-use-requests/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleUseRequests.ts",
+      "line": 84,
+      "method": "POST",
+      "url": "/vehicle-use-requests/{}/submit",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleUseRequests.ts",
+      "line": 88,
+      "method": "POST",
+      "url": "/vehicle-use-requests/{}/approve",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleUseRequests.ts",
+      "line": 92,
+      "method": "POST",
+      "url": "/vehicle-use-requests/{}/reject",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicleUseRequests.ts",
+      "line": 96,
+      "method": "POST",
+      "url": "/vehicle-use-requests/{}/cancel",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 92,
+      "method": "GET",
+      "url": "/vehicles/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 96,
+      "method": "GET",
+      "url": "/vehicles/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 100,
+      "method": "POST",
+      "url": "/vehicles/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 104,
+      "method": "PATCH",
+      "url": "/vehicles/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 108,
+      "method": "POST",
+      "url": "/vehicles/{}/disable",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 112,
+      "method": "POST",
+      "url": "/vehicles/{}/enable",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 116,
+      "method": "POST",
+      "url": "/vehicles/{}/scrap",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 120,
+      "method": "DELETE",
+      "url": "/vehicles/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 131,
+      "method": "GET",
+      "url": "/vehicle-drivers/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 135,
+      "method": "GET",
+      "url": "/vehicle-drivers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 139,
+      "method": "POST",
+      "url": "/vehicle-drivers/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 143,
+      "method": "PATCH",
+      "url": "/vehicle-drivers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 147,
+      "method": "POST",
+      "url": "/vehicle-drivers/{}/disable",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 151,
+      "method": "POST",
+      "url": "/vehicle-drivers/{}/enable",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 155,
+      "method": "DELETE",
+      "url": "/vehicle-drivers/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 193,
+      "method": "GET",
+      "url": "/vehicle-fuel-records/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 197,
+      "method": "POST",
+      "url": "/vehicle-fuel-records/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 201,
+      "method": "PATCH",
+      "url": "/vehicle-fuel-records/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 205,
+      "method": "POST",
+      "url": "/vehicle-fuel-records/{}/review",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 241,
+      "method": "GET",
+      "url": "/vehicle-maintenance-records/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 245,
+      "method": "POST",
+      "url": "/vehicle-maintenance-records/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 249,
+      "method": "PATCH",
+      "url": "/vehicle-maintenance-records/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 253,
+      "method": "POST",
+      "url": "/vehicle-maintenance-records/{}/review",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 284,
+      "method": "GET",
+      "url": "/vehicle-cost-records/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 288,
+      "method": "POST",
+      "url": "/vehicle-cost-records/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 322,
+      "method": "GET",
+      "url": "/vehicle-certificates/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 329,
+      "method": "GET",
+      "url": "/vehicle-certificates/expiring",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 333,
+      "method": "POST",
+      "url": "/vehicle-certificates/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 337,
+      "method": "PATCH",
+      "url": "/vehicle-certificates/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 341,
+      "method": "DELETE",
+      "url": "/vehicle-certificates/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 357,
+      "method": "GET",
+      "url": "/vehicles/expiring",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 374,
+      "method": "GET",
+      "url": "/vehicles/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 381,
+      "method": "POST",
+      "url": "/vehicles/{}/attachments",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 387,
+      "method": "DELETE",
+      "url": "/vehicles/attachments/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 428,
+      "method": "GET",
+      "url": "/vehicle-incidents/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 432,
+      "method": "POST",
+      "url": "/vehicle-incidents/",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 436,
+      "method": "PATCH",
+      "url": "/vehicle-incidents/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 440,
+      "method": "POST",
+      "url": "/vehicle-incidents/{}/resolve",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 444,
+      "method": "DELETE",
+      "url": "/vehicle-incidents/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 514,
+      "method": "GET",
+      "url": "/vehicle-reports/overview",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 520,
+      "method": "GET",
+      "url": "/vehicle-reports/costs",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 526,
+      "method": "GET",
+      "url": "/vehicle-reports/drivers",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 530,
+      "method": "GET",
+      "url": "/vehicle-reports/mileage",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 536,
+      "method": "GET",
+      "url": "/vehicle-reports/dispatches",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 542,
+      "method": "GET",
+      "url": "/vehicle-reports/order-costs",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 548,
+      "method": "GET",
+      "url": "/vehicle-reports/cost-types",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 587,
+      "method": "POST",
+      "url": "/vehicle-agent/messages/analyze",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 597,
+      "method": "GET",
+      "url": "/vehicle-agent/drafts",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 601,
+      "method": "GET",
+      "url": "/vehicle-agent/drafts/{}",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 605,
+      "method": "POST",
+      "url": "/vehicle-agent/drafts/{}/confirm",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 609,
+      "method": "POST",
+      "url": "/vehicle-agent/drafts/{}/reject",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 692,
+      "method": "GET",
+      "url": "/vehicle-dashboard/overview",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 696,
+      "method": "GET",
+      "url": "/vehicle-dashboard/today",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 700,
+      "method": "GET",
+      "url": "/vehicle-dashboard/monthly",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 704,
+      "method": "GET",
+      "url": "/vehicle-dashboard/reminders",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 708,
+      "method": "GET",
+      "url": "/vehicle-dashboard/daily-report",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 712,
+      "method": "GET",
+      "url": "/vehicle-dashboard/expense-ranking",
+      "matched": true
+    },
+    {
+      "file": "frontend/src/api/vehicles.ts",
+      "line": 716,
+      "method": "GET",
+      "url": "/vehicle-dashboard/driver-ranking",
+      "matched": true
+    }
+  ]
+}

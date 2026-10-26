@@ -65,7 +65,6 @@ def _route_permission_tuple(router, method: str, path: str) -> tuple[str, ...]:
         ("DELETE", "/orders/{order_id}/items/{item_id}", "order:update"),
         ("POST", "/orders/{order_id}/set-cost", "order:update"),
         ("POST", "/orders/{order_id}/auto-cost", "order:update"),
-        ("DELETE", "/orders/{order_id}", "order:delete"),
         ("POST", "/orders/{order_id}/restore", "order:delete"),
     ],
 )
@@ -340,3 +339,7 @@ def test_project_cost_mutations_keep_operation_log_contract():
 )
 def test_payable_routes_require_expense_permissions(method, path, permission):
     assert _route_permission(payables.router, method, path) == permission
+
+
+def test_order_cancellation_requires_price_visibility_for_final_settlement():
+    assert _route_permission_tuple(orders.router, "DELETE", "/orders/{order_id}") == ("order:delete", "order:view_price")

@@ -70,6 +70,7 @@ ORDER_ITEM_MUTABLE_STATUSES = frozenset({
     "designing",
     "in_production",
     "in_installation",
+    "completed",
 })
 ORDER_DATE_ELEVATED_STATUSES = frozenset({"completed", "cancelled"})
 ORDER_ITEM_FIELDS = (
@@ -111,6 +112,8 @@ ORDER_EDIT_HEADER_FIELDS = (
     "delivery_deadline",
     "installation_address",
     "remark",
+    "discount_amount",
+    "tax_rate",
 )
 TASK_REVIEW_ITEM_FIELDS = frozenset({
     "product_id",
@@ -156,7 +159,7 @@ class OrderDataMutationLocked(ValueError):
 
 def assert_order_data_mutable(doc, label: str) -> None:
     """Enforce the shared order data mutation boundary for every entry point."""
-    if doc.status not in ORDER_ITEM_MUTABLE_STATUSES:
+    if doc.status not in ORDER_ITEM_MUTABLE_STATUSES or (doc.status == "completed" and "成本" in label):
         raise OrderDataMutationLocked(
             f"订单状态“{doc.status}”不允许修改{label}"
         )
@@ -407,6 +410,9 @@ class BusinessDocumentService:
         )).scalars().all()
         changed = False
         for p in projects:
+            contract = getattr(p, "contract", None)
+            if contract is not None and contract.status != "draft":
+                continue
             if (p.project_name or "") != (doc.project_name or ""):
                 p.project_name = doc.project_name
                 changed = True
@@ -600,10 +606,15 @@ class BusinessDocumentService:
         *,
         acceptance_id: UUID | None = None,
     ) -> dict:
-        doc = await self.repo.get_by_id(doc_id)
+        doc = await self._get_locked_order(doc_id) if self.doc_type == "order" else await self.repo.get_by_id(doc_id)
         if not doc:
             raise ValueError("单据不存在")
 
+        if doc.doc_type == "order" and to_status == "cancelled":
+            raise ValueError("取消订单请使用删除订单的关联影响预览与确认流程")
+        if doc.doc_type == "order":
+            if to_status == "confirmed" and doc.status in {"designing", "in_production", "in_installation", "completed"}:
+                return self._to_detail(doc)
         from_status = doc.status
         transitions = ORDER_TRANSITIONS if doc.doc_type == "order" else QUOTE_TRANSITIONS
         allowed = allowed_targets(transitions, from_status)
@@ -637,8 +648,9 @@ class BusinessDocumentService:
                 raise ValueError("请先添加报价明细再确认报价")
             await self._calculate_quote(doc_id)
 
-
-
+        if doc.doc_type == "order":
+            from app.services.payment_service import StatementService
+            await StatementService(self.db).capture_confirmed_for_customer(doc.customer_id)
         await self.repo.update(doc, {"status": to_status})
         await self.repo.create_status_log(doc_id, from_status, to_status, reason, operated_by)
 
@@ -691,36 +703,28 @@ class BusinessDocumentService:
         # 状态更新使用数据库侧 onupdate 生成 updated_at。异步 SQLAlchemy 会将该
         # 字段标记为过期，序列化前必须显式异步刷新，否则同步读取会触发
         # MissingGreenlet 并让确认订单接口返回 500。
+        if doc.doc_type == "order":
+            await StatementService(self.db).refresh_drafts_for_customer(doc.customer_id)
         await self.db.refresh(doc, attribute_names=["updated_at"])
         return self._to_detail(doc)
 
-    async def _cancel_open_tasks(self, doc_id: UUID) -> None:
-        """订单取消后关闭未完任务和验收，避免交付链继续推进。"""
-        task_rules = (
-            (DesignTask, {"confirmed"}),
-            (ProductionTask, {"completed"}),
-            (InstallationTask, {"completed"}),
-        )
-        for model, terminal_statuses in task_rules:
-            result = await self.db.execute(
-                select(model).where(model.document_id == doc_id)
-            )
+    async def _cancel_open_tasks(self, doc_id: UUID) -> dict:
+        """Close only open work; return an exact snapshot for scoped restore."""
+        snapshot = {"tasks": [], "acceptance_ids": []}
+        for kind, model in (("design", DesignTask), ("production", ProductionTask), ("installation", InstallationTask)):
+            result = await self.db.execute(select(model).where(model.document_id == doc_id).with_for_update())
             for task in result.scalars().all():
-                if task.status not in terminal_statuses:
+                if task.status not in {"confirmed", "completed", "cancelled"}:
+                    snapshot["tasks"].append({"type": kind, "id": str(task.id), "status": task.status})
                     task.status = "cancelled"
-
         from app.models.acceptance import AcceptanceForm
-
-        acceptance_result = await self.db.execute(
-            select(AcceptanceForm).where(
-                AcceptanceForm.document_id == doc_id,
-                AcceptanceForm.deleted_at.is_(None),
-                AcceptanceForm.status != "accepted",
-            )
-        )
-        for form in acceptance_result.scalars().all():
+        forms = (await self.db.execute(select(AcceptanceForm).where(AcceptanceForm.document_id == doc_id,
+            AcceptanceForm.deleted_at.is_(None), AcceptanceForm.status.in_(["draft", "rejected"])).with_for_update())).scalars().all()
+        for form in forms:
+            snapshot["acceptance_ids"].append(str(form.id))
             form.deleted_at = datetime.now()
         await self.db.flush()
+        return snapshot
 
     async def reopen_completed_order(self, doc_id: UUID, reason: str, operated_by: UUID) -> dict:
         """管理员专用：将已完成订单退回安装中，供后续取消或纠正。"""
@@ -1251,6 +1255,10 @@ class BusinessDocumentService:
             gross_profit=quote.total_amount,
             order_date=_business_today(),
             source_quote_id=quote.id,
+            subtotal_amount=quote.subtotal_amount,
+            discount_amount=quote.discount_amount,
+            tax_rate=quote.tax_rate,
+            tax_amount=quote.tax_amount,
             remark=quote.remark,
         )
         self.db.add(order)
@@ -1290,6 +1298,7 @@ class BusinessDocumentService:
                 image_url=src.image_url,
                 sort_order=src.sort_order,
                 group_name=src.group_name,
+                group_id=src.group_id,
                 material_process=src.material_process,
             )
             self.db.add(item)
@@ -1314,7 +1323,7 @@ class BusinessDocumentService:
         # 报价状态 → converted
         quote.status = "converted"
 
-        await self.db.commit()
+        await self.db.flush()
 
         # 显式加载关系后再序列化（与 create() 的 refresh 模式一致），避免异步懒加载 MissingGreenlet
         await self.db.refresh(
@@ -1334,14 +1343,52 @@ class BusinessDocumentService:
         await self.repo.restore(doc)
         # 订单取消会连带取消下游任务、软删验收单，恢复时一并还原，避免交付链卡死
         if doc.doc_type == "order":
-            await self._restore_delivery_chain(doc_id)
-            await self._restore_order_item_delete_snapshot(doc)
+            cancellation = next((version.snapshot for version in sorted(
+                doc.versions if isinstance(getattr(doc, "versions", None), (list, tuple)) else [],
+                key=lambda row: row.version_no, reverse=True)
+                if (version.snapshot or {}).get("change_type") == "order_cancelled" or (version.snapshot or {}).get("auto_recycled")), None)
+            if cancellation and cancellation.get("cancel_snapshot") is not None:
+                from app.models.acceptance import AcceptanceForm
+                if cancellation.get("auto_recycled"):
+                    await self._restore_order_item_delete_snapshot(doc)
+                for entry in cancellation["cancel_snapshot"].get("tasks", []):
+                    model = {"design": DesignTask, "production": ProductionTask, "installation": InstallationTask}[entry["type"]]
+                    task = await self.db.get(model, UUID(entry["id"]), with_for_update=True)
+                    if task and task.status == "cancelled":
+                        task.status = entry["status"]
+                for form_id in cancellation["cancel_snapshot"].get("acceptance_ids", []):
+                    form = await self.db.get(AcceptanceForm, UUID(form_id), with_for_update=True)
+                    if form and form.status in {"draft", "rejected"}:
+                        form.deleted_at = None
+                from app.models.outsource import OutsourceTask
+                from app.models.business_document import OrderChangeAction
+                for entry in cancellation["cancel_snapshot"].get("outsource_tasks", []):
+                    task = await self.db.get(OutsourceTask, UUID(entry["id"]), with_for_update=True)
+                    if task and task.status == "cancelled" and task.deleted_at and not self._to_decimal(task.paid_amount) and task.deleted_at.isoformat() == entry["deleted_at"]:
+                        task.status, task.deleted_at = entry["status"], None
+                actions = (await self.db.execute(select(OrderChangeAction).where(
+                    OrderChangeAction.document_id == doc.id,
+                    OrderChangeAction.batch_id == cancellation.get("change_batch_id"),
+                    OrderChangeAction.status == "pending", OrderChangeAction.action_type != "funds"
+                ).with_for_update())).scalars().all()
+                for row in actions:
+                    row.status, row.resolution = "resolved", "订单已恢复，本次取消待办已撤回；原实际发生记录保留"
+                    row.resolved_at = datetime.now()
+                for field in ("discount_amount", "tax_rate", "settlement_adjustment"):
+                    setattr(doc, field, self._to_decimal((cancellation.get("before") or {}).get(field)))
+                await self._recalculate_order_financials(doc)
+            else:
+                await self._restore_delivery_chain(doc_id)
+                await self._restore_order_item_delete_snapshot(doc)
         restored_status = await self._pre_cancel_status(doc)
         restored_status = await self._reconcile_restored_order_status(
             doc_id,
             restored_status,
         )
         doc.status = restored_status
+        if doc.doc_type == "order":
+            from app.services.payment_service import StatementService
+            await StatementService(self.db).refresh_drafts_for_customer(doc.customer_id)
         await self.db.flush()
         # repo.restore()/flush() 会触发数据库侧 onupdate(updated_at)。异步
         # SQLAlchemy 会将该字段标记为过期，序列化前必须显式刷新，避免同步
@@ -1767,7 +1814,7 @@ class BusinessDocumentService:
                 "fields": ["item_name", "quantity", "unit_price", "subtotal_amount"],
                 "note": "未开始外协可按订单明细刷新计划值",
             }
-        if module == "acceptance_forms" and normalized_status in {"draft", "pending", "rejected"}:
+        if module == "acceptance_forms" and normalized_status in {"draft", "rejected"}:
             return {
                 "action": "refresh_draft",
                 "risk": "medium",
@@ -1870,11 +1917,6 @@ class BusinessDocumentService:
             lock_reasons.append({
                 "code": "STATUS_LOCKED",
                 "message": f"订单状态“{doc.status}”不允许修改明细",
-            })
-        if after_total < paid_amount:
-            lock_reasons.append({
-                "code": "PAID_EXCEEDS_TOTAL",
-                "message": "变更后订单总额不能低于已收款金额",
             })
 
         task_counts = relations.get("tasks") or {}
@@ -2104,6 +2146,7 @@ class BusinessDocumentService:
                 "record_id": str(record.id),
                 "record_no": record_no,
                 "status": status,
+                "record_updated_at": self._json_safe(getattr(record, "updated_at", None)),
                 **action,
             })
 
@@ -2419,7 +2462,7 @@ class BusinessDocumentService:
                     relation_type="snapshot",
                 )
 
-        if doc.source_quote_id:
+        if doc.source_quote_id or doc.doc_type == "order":
             cdr_models = (
                 (QuoteVersion, "cdr_quote_versions", "来源报价版本"),
                 (DrawingSnapshot, "cdr_drawing_snapshots", "CDR 图稿快照"),
@@ -2428,7 +2471,7 @@ class BusinessDocumentService:
             for model, module, label in cdr_models:
                 result = await self.db.execute(
                     select(model)
-                    .where(model.quote_id == doc.source_quote_id)
+                    .where(model.quote_id.in_([doc.id] + ([doc.source_quote_id] if doc.source_quote_id else [])))
                     .order_by(model.updated_at.desc())
                 )
                 for record in result.scalars().all():
@@ -2972,8 +3015,11 @@ class BusinessDocumentService:
             raise ValueError("高风险订单日期变更需要明确确认后才能提交")
 
         before_snapshot = self._to_detail(doc)
+        from app.services.payment_service import StatementService
+        await StatementService(self.db).capture_confirmed_for_customer(doc.customer_id)
         doc.order_date = target_date
         await self.db.flush()
+        await StatementService(self.db).refresh_drafts_for_customer(doc.customer_id)
         await self.db.refresh(doc, attribute_names=["order_date", "updated_at"])
         updated = await self.repo.get_by_id(doc.id)
         after_snapshot = self._to_detail(updated or doc)
@@ -3033,7 +3079,33 @@ class BusinessDocumentService:
         )
         if result.scalar_one_or_none() is None:
             return None
+        await self._lock_order_dependencies(doc_id)
         return await self.repo.get_by_id(doc_id)
+
+    async def _lock_order_dependencies(self, doc_id: UUID):
+        """Stabilize the existing impact directory before rechecking a plan."""
+        from app.models.acceptance import AcceptanceForm
+        from app.models.business_document import BusinessDocumentItem
+        from app.models.inventory import StockRecord
+        from app.models.payment import Payment, PaymentAllocation
+        from app.models.contract import Contract, ContractDocument
+        from app.models.framework_contract import FrameworkContractProject, FrameworkContractProjectDocument
+        specs = [(BusinessDocumentItem, BusinessDocumentItem.document_id),
+                 (DesignTask, DesignTask.document_id), (ProductionTask, ProductionTask.document_id),
+                 (InstallationTask, InstallationTask.document_id), (AcceptanceForm, AcceptanceForm.document_id),
+                 (OutsourceTask, OutsourceTask.related_doc_id), (ProjectCost, ProjectCost.document_id),
+                 (StockRecord, StockRecord.document_id)]
+        for model, field in specs:
+            await self.db.execute(select(model.id).where(field == doc_id).order_by(model.id).with_for_update())
+        await self.db.execute(select(Payment.id).where(or_(Payment.document_id == doc_id,
+            Payment.id.in_(select(PaymentAllocation.payment_id).where(PaymentAllocation.document_id == doc_id))))
+            .order_by(Payment.id).with_for_update())
+        await self.db.execute(select(Contract.id).where(Contract.id.in_(
+            select(ContractDocument.contract_id).where(ContractDocument.document_id == doc_id)))
+            .order_by(Contract.id).with_for_update())
+        await self.db.execute(select(FrameworkContractProject.id).where(FrameworkContractProject.id.in_(
+            select(FrameworkContractProjectDocument.project_id).where(FrameworkContractProjectDocument.document_id == doc_id)))
+            .order_by(FrameworkContractProject.id).with_for_update())
 
     async def get_order_item_editability(self, doc_id: UUID) -> dict:
         doc = await self.repo.get_by_id(doc_id)
@@ -3201,6 +3273,10 @@ class BusinessDocumentService:
             (self._to_decimal(item.subtotal_amount) for item in active_items),
             Decimal("0"),
         ).quantize(MONEY_QUANTUM)
+        from app.services.order_management_service import document_totals
+        active_item_total = document_totals([item.subtotal_amount for item in active_items],
+            discount_amount=(getattr(doc, "discount_amount", 0) if active_items else 0),
+            tax_rate=getattr(doc, "tax_rate", 0), settlement_adjustment=getattr(doc, "settlement_adjustment", 0))["total_amount"]
         payment_total = await self._get_nonvoided_payment_total(doc.id)
         payment_has_order_allocation = exists(
             select(PaymentAllocation.id).where(
@@ -3594,18 +3670,19 @@ class BusinessDocumentService:
             projected_items = [item for item in projected_items if item["id"] != item_id]
 
         relations = await self._collect_order_item_relations(doc, item_id=item_id)
+        self._adapt_relation_actions(relations, operation)
 
-        before_total = sum(
-            (self._to_decimal(item.subtotal_amount) for item in items),
-            Decimal("0"),
-        ).quantize(MONEY_QUANTUM)
-        after_total = sum(
-            (self._to_decimal(item.get("subtotal_amount")) for item in projected_items),
-            Decimal("0"),
-        ).quantize(MONEY_QUANTUM)
+        from app.services.order_management_service import document_totals
+        before_total = self._to_decimal(doc.total_amount).quantize(MONEY_QUANTUM)
+        after_total = document_totals(
+            [item.get("subtotal_amount") for item in projected_items],
+            discount_amount=(getattr(doc, "discount_amount", 0) if projected_items else 0),
+            tax_rate=getattr(doc, "tax_rate", 0),
+            settlement_adjustment=getattr(doc, "settlement_adjustment", 0),
+        )["total_amount"]
         paid_amount = await self._get_nonvoided_payment_total(doc.id)
         cost_amount = self._to_decimal(getattr(doc, "cost_amount", 0)).quantize(MONEY_QUANTUM)
-        after_unpaid = (after_total - paid_amount).quantize(MONEY_QUANTUM)
+        after_unpaid = max(Decimal("0"), after_total - paid_amount).quantize(MONEY_QUANTUM)
         decision = self._order_item_mutation_decision(
             doc,
             relations,
@@ -3615,7 +3692,7 @@ class BusinessDocumentService:
         )
         auto_recycle = operation == "delete" and not projected_items
 
-        before_unpaid = (before_total - paid_amount).quantize(MONEY_QUANTUM)
+        before_unpaid = max(Decimal("0"), before_total - paid_amount).quantize(MONEY_QUANTUM)
         before_financials = {
             "total_amount": before_total,
             "paid_amount": paid_amount,
@@ -3629,6 +3706,7 @@ class BusinessDocumentService:
             "total_amount": after_total,
             "paid_amount": paid_amount,
             "unpaid_amount": after_unpaid,
+                "overpaid_amount": max(Decimal("0"), paid_amount - after_total),
             "cost_amount": cost_amount,
             "gross_profit": (after_total - cost_amount).quantize(MONEY_QUANTUM),
             "line_count": len(projected_items),
@@ -3647,10 +3725,7 @@ class BusinessDocumentService:
                 changed_fields = [
                     field
                     for field in ORDER_ITEM_FIELDS
-                    if not self._order_edit_values_equal(
-                        getattr(current_item, field, None),
-                        normalized.get(field) if normalized else None,
-                    )
+                    if self._order_item_field_changed(field, current_item, normalized or {})
                 ]
         if projected_item:
             projected_item["specification"] = _build_spec(projected_item)
@@ -3728,22 +3803,22 @@ class BusinessDocumentService:
         }
 
     async def _recalculate_order_financials(self, doc) -> None:
+        from app.services.order_management_service import document_totals
         items = await self.repo.get_items(doc.id)
-        total = sum(
-            (self._to_decimal(item.subtotal_amount) for item in items),
-            Decimal("0"),
-        ).quantize(MONEY_QUANTUM)
+        totals = document_totals(
+            [item.subtotal_amount for item in items],
+            discount_amount=(getattr(doc, "discount_amount", 0) if items else 0),
+            tax_rate=getattr(doc, "tax_rate", 0),
+            settlement_adjustment=getattr(doc, "settlement_adjustment", 0),
+        )
+        for field, value in totals.items():
+            setattr(doc, field, value)
         paid = await self._get_nonvoided_payment_total(doc.id)
-        if total < paid:
-            raise ValueError("变更后订单总额不能低于已收款金额")
         cost = self._to_decimal(getattr(doc, "cost_amount", 0)).quantize(MONEY_QUANTUM)
-        doc.total_amount = total
         doc.paid_amount = paid.quantize(MONEY_QUANTUM)
-        doc.unpaid_amount = (total - paid).quantize(MONEY_QUANTUM)
+        doc.unpaid_amount = max(Decimal("0"), doc.total_amount - paid).quantize(MONEY_QUANTUM)
         doc.cost_amount = cost
-        doc.gross_profit = (total - cost).quantize(MONEY_QUANTUM)
-        # 明细是独立子表，不能依赖父表 onupdate 自动触发版本变化。
-        # 每次明细提交都显式推进订单版本，避免相同总额的变更绕过乐观锁。
+        doc.gross_profit = (doc.total_amount - cost).quantize(MONEY_QUANTUM)
         doc.updated_at = datetime.now()
         await self.db.flush()
 
@@ -4017,6 +4092,7 @@ class BusinessDocumentService:
         operated_by: UUID | None = None,
         reason: str | None = None,
         changed_fields: list[str] | None = None,
+        previous_item: dict | None = None,
     ) -> dict:
         """Apply only stable, reversible downstream refreshes.
 
@@ -4097,7 +4173,7 @@ class BusinessDocumentService:
                 .where(AcceptanceItem.id.in_(acceptance_item_ids))
             )
             for acceptance_item, form in acceptance_result.all():
-                if form.status in {"draft", "pending", "rejected"} and acceptance_item.item_status not in {"accepted", "conditional"}:
+                if form.status in {"draft", "rejected"} and acceptance_item.item_status not in {"accepted", "conditional"}:
                     if operation == "delete":
                         acceptance_item.document_item_id = None
                         append(
@@ -4148,6 +4224,9 @@ class BusinessDocumentService:
                         },
                         "已验收事实保留，订单变更差异待调整",
                     )
+                    append("adjustments", {"module": "acceptance_items", "record_id": str(acceptance_item.id),
+                        "record_no": form.acceptance_no, "action": "preserve_fact_and_adjust"},
+                        "已验收明细保留原范围，请确认本次变更是否补验或调整")
 
         outsource_ids = [
             UUID(entry["record_id"])
@@ -4192,6 +4271,17 @@ class BusinessDocumentService:
                             )
                     elif operation == "update" and projected_item:
                         quantity = self._to_decimal(projected_item.get("quantity"))
+                        if "quantity" not in (changed_fields or []):
+                            task.description = projected_item.get("item_name") or task.description
+                            append("auto_refreshed", {"module": "outsource_tasks", "record_id": str(task.id), "record_no": task.task_no}, "外协描述已刷新，原采购数量和金额保留")
+                            continue
+                        # The item may already have its new quantity here. The
+                        # supplier's own pricing identity is the safe criterion;
+                        # fixed-price/partial scopes require explicit review.
+                        vendor_price = self._to_decimal(task.unit_price)
+                        if (previous_item is not None and self._to_decimal(task.quantity) != self._to_decimal(previous_item.get("quantity"))) or not vendor_price or self._to_decimal(task.total_amount).quantize(MONEY_QUANTUM) != (self._to_decimal(task.quantity) * vendor_price).quantize(MONEY_QUANTUM):
+                            append("pending_review", {"module": "outsource_tasks", "record_id": str(task.id), "record_no": task.task_no}, "外协采用固定金额或非按件计价，请确认采购数量及差额，原采购金额保留")
+                            continue
                         # 订单明细的 unit_price/subtotal_amount 是销售价，外协任务的
                         # unit_price/total_amount 是供应商成本。订单变更只刷新描述、
                         # 数量和按原外协成本单价重算的计划金额，绝不复制销售价。
@@ -4329,7 +4419,26 @@ class BusinessDocumentService:
 
     @classmethod
     def _order_edit_values_equal(cls, left, right) -> bool:
+        numeric = (int, float, Decimal)
+        if isinstance(left, numeric) and isinstance(right, numeric) and not isinstance(left, bool) and not isinstance(right, bool):
+            return Decimal(str(left)) == Decimal(str(right))
         return cls._stable_order_edit_value(left) == cls._stable_order_edit_value(right)
+
+    @classmethod
+    def _order_item_field_changed(cls, field, item, projected):
+        if field in {"length_unit", "width_unit", "height_unit"}:
+            dimension = field.removesuffix("_unit")
+            if not getattr(item, dimension, None) and not projected.get(dimension):
+                return False
+        return not cls._order_edit_values_equal(getattr(item, field, None), projected.get(field))
+
+    @staticmethod
+    def _adapt_relation_actions(relations, operation):
+        if operation == "delete":
+            return
+        for entry in relations.get("association_catalog", []):
+            if entry.get("module") in {"design_task_links", "production_task_links", "installation_task_links"}:
+                entry.update(action="refresh_plan", note="保留明细关联，读取订单最新需求，进度与负责人不变")
 
     @staticmethod
     def _merge_order_relation_contexts(contexts: list[dict]) -> dict:
@@ -4545,10 +4654,7 @@ class BusinessDocumentService:
             changed_fields = [
                 field
                 for field in ORDER_ITEM_FIELDS
-                if not self._order_edit_values_equal(
-                    getattr(current_item, field, None),
-                    normalized.get(field),
-                )
+                if self._order_item_field_changed(field, current_item, normalized)
             ]
             if changed_fields:
                 operations.append({
@@ -4598,6 +4704,7 @@ class BusinessDocumentService:
                     doc,
                     item_id=operation["item_id"],
                 )
+                self._adapt_relation_actions(relation_context, operation["operation"])
                 operation["_relation_context"] = relation_context
                 relation_contexts.append(relation_context)
         if any(operation["operation"] == "add" for operation in operations) or header_diff or groups_changed:
@@ -4605,15 +4712,18 @@ class BusinessDocumentService:
                 await self._collect_order_item_relations(doc)
             )
         relations = self._merge_order_relation_contexts(relation_contexts)
+        ownership_changed = any(diff["field"] in {"customer_id", "customer_name"} for diff in header_diff)
+        if ownership_changed and (relations.get("payments") or relations.get("contract_links") or relations.get("framework_contract_links")):
+            raise ValueError("已有收款或合同的订单更换客户前，请先处理资金分配与合同归属")
 
-        before_total = sum(
-            (self._to_decimal(item.subtotal_amount) for item in current_items),
-            Decimal("0"),
-        ).quantize(MONEY_QUANTUM)
-        after_total = sum(
-            (self._to_decimal(item.get("subtotal_amount")) for item in normalized_items),
-            Decimal("0"),
-        ).quantize(MONEY_QUANTUM)
+        from app.services.order_management_service import document_totals
+        before_total = self._to_decimal(doc.total_amount).quantize(MONEY_QUANTUM)
+        after_total = document_totals(
+            [item.get("subtotal_amount") for item in normalized_items],
+            discount_amount=(normalized_header.get("discount_amount", getattr(doc, "discount_amount", 0)) if normalized_items else 0),
+            tax_rate=normalized_header.get("tax_rate", getattr(doc, "tax_rate", 0)),
+            settlement_adjustment=getattr(doc, "settlement_adjustment", 0),
+        )["total_amount"]
         paid_amount = await self._get_nonvoided_payment_total(doc.id)
         cost_amount = self._to_decimal(getattr(doc, "cost_amount", 0)).quantize(MONEY_QUANTUM)
         decision = self._order_item_mutation_decision(
@@ -4629,8 +4739,8 @@ class BusinessDocumentService:
             and all(operation["operation"] == "delete" for operation in operations)
         )
 
-        before_unpaid = (before_total - paid_amount).quantize(MONEY_QUANTUM)
-        after_unpaid = (after_total - paid_amount).quantize(MONEY_QUANTUM)
+        before_unpaid = max(Decimal("0"), before_total - paid_amount).quantize(MONEY_QUANTUM)
+        after_unpaid = max(Decimal("0"), after_total - paid_amount).quantize(MONEY_QUANTUM)
         item_diffs = []
         for operation in operations:
             projected = operation.get("item") or {}
@@ -4676,6 +4786,7 @@ class BusinessDocumentService:
                 "total_amount": after_total,
                 "paid_amount": paid_amount,
                 "unpaid_amount": after_unpaid,
+                "overpaid_amount": max(Decimal("0"), paid_amount - after_total),
                 "cost_amount": cost_amount,
                 "gross_profit": (after_total - cost_amount).quantize(MONEY_QUANTUM),
                 "line_count": len(normalized_items),
@@ -4772,6 +4883,8 @@ class BusinessDocumentService:
             if field in {"customer_id", "customer_name"} or field not in header:
                 continue
             setattr(doc, field, header[field])
+        if "customer_id" in header or "customer_name" in header:
+            await ensure_document_customer(self.db, doc, getattr(self.viewer, "id", None))
         doc.updated_at = datetime.now()
         await self.db.flush()
 
@@ -4914,6 +5027,8 @@ class BusinessDocumentService:
                 raise ValueError("高风险关联变更需要明确确认后才能提交")
 
         before_snapshot = self._to_detail(doc)
+        from app.services.payment_service import StatementService
+        await StatementService(self.db).capture_confirmed_for_customer(doc.customer_id)
         await self._apply_order_edit_header(doc, context["header"])
         active_items = {item.id: item for item in await self.repo.get_items(doc.id)}
         refresh_results = []
@@ -4954,6 +5069,7 @@ class BusinessDocumentService:
                         doc,
                         operation=operation_type,
                         item_id=operation["item_id"],
+                        previous_item=next((row for row in before_snapshot.get("items", []) if row["id"] == str(operation["item_id"])), None),
                         projected_item=(
                             operation.get("item")
                             if operation_type == "update"
@@ -5017,7 +5133,7 @@ class BusinessDocumentService:
 
         if context["groups_changed"]:
             await self._sync_order_edit_groups(doc.id, context["groups"])
-        if context["operations"]:
+        if context["operations"] or any(field in context["header"] for field in ("discount_amount", "tax_rate")):
             await self._recalculate_order_financials(doc)
         else:
             doc.updated_at = datetime.now()
@@ -5029,6 +5145,7 @@ class BusinessDocumentService:
 
         auto_recycled = bool(context.get("auto_recycle") and not await self.repo.get_items(doc.id))
         task_scope_snapshots: list[dict] = []
+        cancel_snapshot = None
         if auto_recycled:
             recycle_result = await self._close_empty_order_task_scopes(
                 doc,
@@ -5045,6 +5162,7 @@ class BusinessDocumentService:
                 "blocked": [],
                 **recycle_result,
             })
+            cancel_snapshot = await self._cancel_open_tasks(doc.id)
             previous_status = doc.status
             doc.status = "cancelled"
             doc.deleted_at = datetime.now()
@@ -5075,6 +5193,15 @@ class BusinessDocumentService:
                     "installation_tasks",
                 ],
             )
+        from app.services.order_management_service import OrderManagementService
+        management = OrderManagementService(self.db, self.viewer)
+        if auto_recycled:
+            await management.cancel_outsourcing(updated, refresh_result, previous_catalog=context.get("association_catalog"), cancellation_snapshot=cancel_snapshot)
+        await management.sync_execution(updated, change_batch_id, context["operations"], before_snapshot, refresh_result)
+        if updated.status != "cancelled":
+            await management.sync_drafts(updated, before_snapshot, refresh_result)
+        await self.db.refresh(updated, attribute_names=["updated_at"])
+        await management.persist_actions(updated, change_batch_id, refresh_result, before=before_snapshot, after=self._to_detail(updated))
         after_snapshot = self._to_detail(updated)
         final_change_status = refresh_result.get("status", "VERIFIED")
         audit_snapshot = {
@@ -5092,6 +5219,7 @@ class BusinessDocumentService:
             "after": after_snapshot,
             "refresh_result": refresh_result,
             "auto_recycled": auto_recycled,
+            "cancel_snapshot": cancel_snapshot,
             "recycle_reason": (
                 "订单有效明细已全部删除，系统自动移入回收站"
                 if auto_recycled
@@ -5207,10 +5335,13 @@ class BusinessDocumentService:
             )
 
         before_snapshot = self._to_detail(doc)
+        from app.services.payment_service import StatementService
+        await StatementService(self.db).capture_confirmed_for_customer(doc.customer_id)
         normalized = context["normalized"]
         deleted_item_snapshots: list[dict] = []
         if operation == "add":
-            await self.repo.add_items(doc.id, [dict(normalized or {})])
+            added_items = await self.repo.add_items(doc.id, [dict(normalized or {})])
+            item_id = added_items[0].id if added_items else None
         elif operation == "update":
             item = await self.repo.get_item(item_id, document_id=doc.id)
             if not item:
@@ -5239,6 +5370,7 @@ class BusinessDocumentService:
             doc,
             operation=operation,
             item_id=item_id,
+            previous_item=next((row for row in before_snapshot.get("items", []) if row["id"] == str(item_id)), None),
             projected_item=context.get("projected_item"),
             relation_catalog=context.get("association_catalog") or [],
             change_batch_id=change_batch_id,
@@ -5255,6 +5387,7 @@ class BusinessDocumentService:
             and not await self.repo.get_items(doc.id)
         )
         task_scope_snapshots: list[dict] = []
+        cancel_snapshot = None
         if auto_recycled:
             recycle_result = await self._close_empty_order_task_scopes(
                 doc,
@@ -5268,6 +5401,7 @@ class BusinessDocumentService:
                 recycle_result["task_scope_snapshots"]
             )
             task_scope_snapshots = recycle_result["task_scope_snapshots"]
+            cancel_snapshot = await self._cancel_open_tasks(doc.id)
             previous_status = doc.status
             doc.status = "cancelled"
             doc.deleted_at = datetime.now()
@@ -5297,6 +5431,15 @@ class BusinessDocumentService:
                     "installation_tasks",
                 ],
             )
+        from app.services.order_management_service import OrderManagementService
+        management = OrderManagementService(self.db, self.viewer)
+        if auto_recycled:
+            await management.cancel_outsourcing(updated, refresh_result, previous_catalog=context.get("association_catalog"), cancellation_snapshot=cancel_snapshot)
+        await management.sync_execution(updated, change_batch_id, [{"operation": operation, "item_id": item_id, "changed_fields": context.get("changed_fields", [])}], before_snapshot, refresh_result)
+        if updated.status != "cancelled":
+            await management.sync_drafts(updated, before_snapshot, refresh_result)
+        await self.db.refresh(updated, attribute_names=["updated_at"])
+        await management.persist_actions(updated, change_batch_id, refresh_result, before=before_snapshot, after=self._to_detail(updated))
         after_snapshot = self._to_detail(updated)
         final_change_status = refresh_result.get("status", "VERIFIED")
         audit_snapshot = {
@@ -5315,6 +5458,7 @@ class BusinessDocumentService:
             "after": after_snapshot,
             "refresh_result": refresh_result,
             "auto_recycled": auto_recycled,
+            "cancel_snapshot": cancel_snapshot,
             "recycle_reason": (
                 "订单有效明细已全部删除，系统自动移入回收站"
                 if auto_recycled
@@ -5520,6 +5664,13 @@ class BusinessDocumentService:
         }
         if self.can_view_order_price:
             base["total_amount"] = float(d.total_amount)
+            base.update({
+                "subtotal_amount": float(getattr(d, "subtotal_amount", 0) or 0),
+                "discount_amount": float(getattr(d, "discount_amount", 0) or 0),
+                "tax_rate": float(getattr(d, "tax_rate", 0) or 0),
+                "tax_amount": float(getattr(d, "tax_amount", 0) or 0),
+                "settlement_adjustment": float(getattr(d, "settlement_adjustment", 0) or 0),
+            })
         if d.doc_type == "order":
             base.update({
                 "order_no": d.doc_no,
@@ -5528,7 +5679,8 @@ class BusinessDocumentService:
             if self.can_view_order_price:
                 base.update({
                     "paid_amount": float(d.paid_amount),
-                    "unpaid_amount": float(d.unpaid_amount),
+                    "unpaid_amount": max(0.0, float(d.unpaid_amount)),
+                    "overpaid_amount": max(0.0, float(d.paid_amount) - float(d.total_amount)),
                 })
             if self.can_view_finance_cost:
                 base.update({
@@ -5551,19 +5703,19 @@ class BusinessDocumentService:
             "product_id": str(it.product_id) if it.product_id else None,
             "material_id": str(it.material_id) if it.material_id else None,
             "process_id": str(it.process_id) if it.process_id else None,
-            "length": float(it.length) if it.length else None,
+            "length": float(it.length) if it.length is not None else None,
             "length_unit": it.length_unit,
-            "width": float(it.width) if it.width else None,
+            "width": float(it.width) if it.width is not None else None,
             "width_unit": it.width_unit,
-            "height": float(it.height) if it.height else None,
+            "height": float(it.height) if it.height is not None else None,
             "height_unit": it.height_unit,
             "quantity": float(it.quantity),
             "unit": it.unit,
             "use_area": it.use_area,
             "quantity_mode": it.quantity_mode,
-            "pieces": float(it.pieces) if it.pieces else None,
+            "pieces": float(it.pieces) if it.pieces is not None else None,
             "specification": _build_spec(it),
-            "area": float(it.area) if it.area else None,
+            "area": float(it.area) if it.area is not None else None,
             "remark": it.remark,
             "image_url": it.image_url,
             "sort_order": it.sort_order,
@@ -5636,6 +5788,13 @@ class BusinessDocumentService:
 
         if self.can_view_order_price:
             base["total_amount"] = float(d.total_amount)
+            base.update({
+                "subtotal_amount": float(getattr(d, "subtotal_amount", 0) or 0),
+                "discount_amount": float(getattr(d, "discount_amount", 0) or 0),
+                "tax_rate": float(getattr(d, "tax_rate", 0) or 0),
+                "tax_amount": float(getattr(d, "tax_amount", 0) or 0),
+                "settlement_adjustment": float(getattr(d, "settlement_adjustment", 0) or 0),
+            })
 
         if d.doc_type == "order":
             base.update({
@@ -5660,7 +5819,8 @@ class BusinessDocumentService:
             if self.can_view_order_price:
                 base.update({
                     "paid_amount": float(d.paid_amount),
-                    "unpaid_amount": float(d.unpaid_amount),
+                    "unpaid_amount": max(0.0, float(d.unpaid_amount)),
+                    "overpaid_amount": max(0.0, float(d.paid_amount) - float(d.total_amount)),
                 })
             if self.can_view_finance_cost:
                 base.update({

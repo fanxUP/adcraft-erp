@@ -6,7 +6,6 @@
     <Nullable>enable</Nullable>
     <AssemblyName>AdCraftCdrBridge</AssemblyName>
     <RootNamespace>AdCraft.CdrBridge</RootNamespace>
-    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
     <Title>AdCraft CDR Bridge</Title>
     <Description>AdCraft ERP CDR 智能报价本地桥接服务</Description>
     <Version>1.0.0</Version>

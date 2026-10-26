@@ -29,7 +29,7 @@ class BusinessDocumentRepository:
     # ── 基础查询 ──
 
     async def get_by_id(self, doc_id: UUID) -> BusinessDocument | None:
-        q = select(BusinessDocument).options(
+        q = select(BusinessDocument).execution_options(populate_existing=True).options(
             selectinload(BusinessDocument.items),
             selectinload(BusinessDocument.groups),
             selectinload(BusinessDocument.status_logs),
@@ -49,7 +49,7 @@ class BusinessDocumentRepository:
         return result.scalar_one_or_none()
 
     async def get_deleted_by_id(self, doc_id: UUID) -> BusinessDocument | None:
-        q = select(BusinessDocument).options(
+        q = select(BusinessDocument).with_for_update().execution_options(populate_existing=True).options(
             selectinload(BusinessDocument.items),
             selectinload(BusinessDocument.groups),
             selectinload(BusinessDocument.status_logs),

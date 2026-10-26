@@ -90,7 +90,6 @@ class CdrDesignService:
             raise ValueError("不支持的文件格式: " + ext)
 
         from app.models.business_document import BusinessDocument
-        from app.models.business_document import BusinessDocument
         doc = await self.db.get(BusinessDocument, uuid.UUID(quote_id))
         if not doc or doc.doc_type != "quote":
             raise ValueError("报价不存在")

@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+import hashlib
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 
@@ -7,7 +9,10 @@ EMPLOYEE_NUMBER_LOCK_ID = 9_240_321_991
 
 
 async def _generate_no(db: AsyncSession, prefix: str) -> str:
-    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    today = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y%m%d")
+    if prefix != "EMP":
+        lock_id = int.from_bytes(hashlib.sha256(f"adcraft-number:{prefix}:{today}".encode()).digest()[:8], "big", signed=True)
+        await db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": lock_id})
     pattern = f"{prefix}{today}-%"
 
     if prefix in ("O", "S"):

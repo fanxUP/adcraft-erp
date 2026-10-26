@@ -39,10 +39,12 @@
       <el-table-column label="操作" width="200">
         <template #default="{ row }">
           <el-button text type="success" @click="handleRestore(row as OrderListResponse)">恢复</el-button>
+          <el-button text type="primary" @click="selectedId = row.id; changeDialog = true">变更与资金</el-button>
         </template>
       </el-table-column>
     </el-table>
 
+    <el-dialog v-model="changeDialog" title="已取消订单的变更与资金处理" width="min(1100px, 95vw)" destroy-on-close><OrderChangePanel v-if="selectedId" :order-id="selectedId" /></el-dialog>
     <el-pagination
       v-model:current-page="page"
       v-model:page-size="pageSize"
@@ -58,10 +60,12 @@
 <script setup lang="ts">
 import { formatDateTimeFull } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
+import OrderChangePanel from '@/components/orders/OrderChangePanel.vue'
 import { getDeletedOrders, restoreOrder } from '@/api/orders'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { OrderListResponse } from '@/types/api'
 
+const changeDialog = ref(false), selectedId = ref('')
 const loading = ref(false)
 const list = ref<OrderListResponse[]>([])
 const total = ref(0)

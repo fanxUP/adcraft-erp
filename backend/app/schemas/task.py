@@ -56,6 +56,8 @@ class TaskScheduleInput(BaseModel):
 class TaskOrderItemState(BaseModel):
     """状态快照 for one order item inside a multi-item task."""
 
+    planned_quantity: float | None = None
+    completed_quantity: float | None = None
     status: str
     status_label: str | None = None
     progress_pct: int = Field(0, ge=0, le=100)
@@ -324,6 +326,8 @@ class TaskItemAction(BaseModel):
 
 class TaskOrderItemOption(OrderItemResponse):
     """任务处理页使用的订单明细阶段与可选性。"""
+    planned_quantity: float | None = None
+    completed_quantity: float | None = None
 
     # Price fields are optional because the operational task response omits
     # them entirely for users without order-item price permission.  Sales,

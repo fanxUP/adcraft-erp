@@ -1,7 +1,9 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
 from app.schemas.common import StatusView
 
 
@@ -87,6 +89,12 @@ class OrderDetailResponse(BaseModel):
     sales_user_id: str | None = None
     status: str
     status_view: StatusView | None = None
+    subtotal_amount: float | None = None
+    discount_amount: float | None = None
+    tax_rate: float | None = None
+    tax_amount: float | None = None
+    settlement_adjustment: float | None = None
+    overpaid_amount: float | None = None
     total_amount: float
     paid_amount: float
     unpaid_amount: float
@@ -242,6 +250,8 @@ class OrderEditHeader(BaseModel):
     delivery_deadline: str | None = None
     installation_address: str | None = Field(None, max_length=500)
     remark: str | None = Field(None, max_length=2000)
+    discount_amount: Decimal = Field(Decimal("0"), ge=0)
+    tax_rate: Decimal = Field(Decimal("0"), ge=0, le=100)
 
 
 class OrderEditItem(BaseModel):
@@ -293,3 +303,37 @@ class OrderEditRequest(OrderItemMutationBase):
     header: OrderEditHeader = Field(default_factory=OrderEditHeader)
     items: list[OrderEditItem] = Field(default_factory=list)
     groups: list[OrderEditGroup] = Field(default_factory=list)
+
+
+class OrderCreate(BaseModel):
+    model_config = {"extra": "forbid"}
+    request_id: UUID
+    capture_id: UUID | None = None
+    order_date: date
+    header: OrderEditHeader
+    items: list[OrderEditItem] = Field(min_length=1, max_length=1000)
+    groups: list[OrderEditGroup] = Field(default_factory=list, max_length=200)
+
+
+class OrderDeleteRequest(OrderItemMutationBase):
+    settlement_amount: Decimal = Field(ge=0, max_digits=14, decimal_places=2)
+
+
+class OrderFundMutation(BaseModel):
+    model_config = {"extra": "forbid"}
+    request_id: UUID
+    payment_id: UUID | None = None
+    operation: Literal["receipt", "refund", "release_credit", "apply_credit"]
+    amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    paid_at: date
+    reason: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_source(self):
+        if self.operation != "receipt" and not self.payment_id:
+            raise ValueError("请选择原收款凭据")
+        return self
+
+
+class OrderActionResolve(BaseModel):
+    resolution: str = Field(min_length=1, max_length=1000)

@@ -132,6 +132,7 @@ def make_quote_item(**overrides):
         "image_url": None,
         "sort_order": 0,
         "group_name": None,
+        "group_id": None,
         "material_process": None,
     }
     defaults.update(overrides)
@@ -298,7 +299,10 @@ async def test_convert_regular_quote_to_order_preserves_quote(service):
     db.refresh = AsyncMock()
 
     quote = make_quote(status="confirmed", total_amount=Decimal("1680.50"))
-    quote.items = [make_quote_item(unit_price=Decimal("100"), subtotal_amount=Decimal("100"))]
+    quote.items = [make_quote_item(
+        unit_price=Decimal("100"), subtotal_amount=Decimal("100"),
+        group_id="original-quote-group", group_name="原报价分项",
+    )]
 
     execute_result = MagicMock()
     execute_result.scalar_one_or_none.return_value = quote
@@ -322,6 +326,8 @@ async def test_convert_regular_quote_to_order_preserves_quote(service):
     copied_item = db.add.call_args_list[1].args[0]
     assert copied_item.source_quote_item_id == quote.items[0].id
     assert copied_item.document_id == added_order.id
+    assert copied_item.group_id == "original-quote-group"
+    assert copied_item.group_name == "原报价分项"
 
     repository.create_version.assert_awaited_once()
 

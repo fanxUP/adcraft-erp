@@ -1,0 +1,16 @@
+{
+  "upload_access": {
+    "environment": "isolated local upload fixture",
+    "authenticated": false,
+    "http": 200,
+    "content_type": "text/html; charset=utf-8",
+    "content_security_policy": null
+  },
+  "chat_recommendation_membership": {
+    "environment": "mock message repository; no private production messages read",
+    "authenticated_user_membership": "no membership lookup/check at this endpoint",
+    "message_repository_read_before_membership_validation": true,
+    "response_code": 0
+  },
+  "limitations": "Tests identify missing control boundaries; they do not claim a production exploit or an actual data breach."
+}

@@ -197,6 +197,8 @@ export interface TaskOrderItemOption extends Omit<OrderItemResponse,
   | 'other_fee'
   | 'subtotal_amount'
 > {
+  planned_quantity?: number | null
+  completed_quantity?: number | null
   // Task-facing APIs omit line price fields unless the caller has the
   // explicit order_item:view_price permission.
   unit_price?: number
@@ -281,6 +283,8 @@ export interface OrderEditGroup {
 }
 
 export interface OrderEditHeader {
+  discount_amount?: number
+  tax_rate?: number
   customer_id?: string | null
   customer_name?: string | null
   project_name?: string | null
@@ -372,6 +376,7 @@ export interface OrderItemRelationCatalogEntry {
 }
 
 export interface OrderItemFinancialSnapshot {
+  overpaid_amount?: number
   total_amount: number
   paid_amount: number
   unpaid_amount: number
@@ -494,6 +499,12 @@ export interface OrderStatusLogResponse {
 }
 
 export interface OrderDetailResponse {
+  subtotal_amount?: number
+  discount_amount?: number
+  tax_rate?: number
+  tax_amount?: number
+  overpaid_amount?: number
+  settlement_adjustment?: number
   id: string
   order_id?: string
   order_no: string
@@ -620,6 +631,8 @@ export interface OrderTaskAttachmentsResponse {
 export type TaskType = 'design' | 'production' | 'installation'
 
 export interface TaskOrderItemState {
+  planned_quantity?: number | null
+  completed_quantity?: number | null
   status: string
   status_label?: string | null
   progress_pct: number
@@ -1751,6 +1764,7 @@ export interface CustomerDebtQuote {
 }
 
 export interface CustomerDebtItem {
+  standalone_orders?: CustomerDebtOrder[]
   customer_id: string
   customer_name: string
   debt_amount: number

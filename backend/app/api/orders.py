@@ -12,6 +12,12 @@ from app.core.permissions import (
     PERM_DESIGN_TASK_READ,
     PERM_DESIGN_TASK_UPDATE,
     PERM_ORDER_CHANGE_STATUS,
+    PERM_ORDER_CREATE,
+    PERM_PAYMENT_READ,
+    PERM_PAYMENT_CREATE,
+    PERM_QUOTE_READ,
+    PERM_CDR_QUOTE_READ,
+    PERM_ORDER_VIEW_PRICE,
     PERM_ORDER_CHANGE_DATE,
     PERM_ORDER_DELETE,
     PERM_ORDER_READ,
@@ -24,6 +30,7 @@ from app.core.permissions import (
     PERM_SYSTEM_SUPER_ADMIN,
     PERM_TASK_COMPLETION_READ,
     require_any_permission,
+    require_all_permissions,
     require_permission,
 )
 from app.models.user import User
@@ -36,6 +43,10 @@ from app.schemas.order import (
     OrderItemUpdate,
     OrderStatusChange,
     OrderTaskAssigneesUpdate,
+    OrderCreate,
+    OrderDeleteRequest,
+    OrderFundMutation,
+    OrderActionResolve,
 )
 from app.schemas.common import success, success_paginated, error
 from app.services.business_document_service import (
@@ -56,6 +67,78 @@ from app.services.order_task_attachment_service import (
 from app.core.file_security import confined_path
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
+
+
+@router.post("/")
+async def create_order(data: OrderCreate, db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(require_permission(PERM_ORDER_CREATE))):
+    from app.services.order_management_service import OrderManagementService
+    try:
+        return success(await OrderManagementService(db, current_user).create(data.model_dump()))
+    except ValueError as exc:
+        await db.rollback()
+        return error(40001, str(exc))
+
+
+@router.post("/from-history/{quote_id}")
+async def continue_quote_history(quote_id: UUID, db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(PERM_ORDER_CREATE))):
+    from app.services.order_management_service import OrderManagementService
+    from app.core.permissions import user_has_permission
+    from app.models.business_document import BusinessDocument
+    from app.schemas.order import OrderCreate
+    try:
+        management = OrderManagementService(db, current_user)
+        await management._lock_request(quote_id)
+        source = await db.get(BusinessDocument, quote_id, with_for_update=True)
+        if not source or source.doc_type != "quote" or source.deleted_at or source.status == "cancelled":
+            raise ValueError("历史来源不存在或已取消")
+        permission = PERM_CDR_QUOTE_READ if source.quote_mode == "cdr" else PERM_QUOTE_READ
+        if not user_has_permission(current_user, permission):
+            raise HTTPException(status_code=403, detail="没有读取该历史来源的权限")
+        from sqlalchemy import select
+        existing = (await db.execute(select(BusinessDocument).where(BusinessDocument.doc_type == "order", BusinessDocument.source_quote_id == quote_id))).scalars().first()
+        if existing:
+            if not user_has_permission(current_user, PERM_ORDER_READ):
+                raise HTTPException(status_code=403, detail="没有读取已有来源订单的权限")
+            if existing.deleted_at:
+                raise ValueError("该来源的订单已在回收站，请先恢复")
+            return success(await management.documents.get_by_id(existing.id))
+        # Legacy associations require an explicit mapping; never duplicate or
+        # move financial facts merely because a historical quote is copied.
+        history = BusinessDocumentService(db, doc_type="quote", quote_mode=source.quote_mode)
+        relations = await history._collect_order_item_relations(source)
+        if any(relations.get(key) for key in ("payments", "project_costs", "outsource_tasks", "contract_links", "framework_contract_links", "acceptance_forms")):
+            raise ValueError("该历史来源已有合同、成本或执行关联，请先核对关联归属后处理，未创建重复订单")
+        if source.quote_mode == "cdr":
+            from app.repositories.cdr_quote_repo import CdrQuoteRepository
+            from app.services.cdr_quote_line_adapter import to_business_document_item_data
+            version = await CdrQuoteRepository(db).get_latest_version(quote_id)
+            lines = [to_business_document_item_data(line) for line in version.lines] if version else []
+        else:
+            lines = [management.documents._to_order_item_input(line) for line in await history.repo.get_items(quote_id)]
+        from app.services.business_document_service import _business_today
+        data = OrderCreate(request_id=quote_id, order_date=_business_today(),
+            header={"customer_id": str(source.customer_id) if source.customer_id else None, "customer_name": source.customer_name,
+                    "project_name": source.project_name, "department": source.department, "remark": source.remark,
+                    "discount_amount": source.discount_amount, "tax_rate": source.tax_rate}, items=lines,
+            groups=[{"group_id": group.group_id, "group_name": group.group_name, "sort_order": group.sort_order} for group in source.groups])
+        result = await management.create(data.model_dump())
+        order = await db.get(BusinessDocument, UUID(result["id"]))
+        order.source_quote_id = quote_id
+        if source.quote_mode == "regular":
+            originals = await history.repo.get_items(quote_id)
+            created_items = await management.documents.repo.get_items(order.id)
+            for new, original in zip(created_items, originals, strict=True):
+                new.source_quote_item_id = original.id
+        await db.flush()
+        await management.documents.repo.create_version(order.id, await management.documents.repo.get_next_version_no(order.id),
+            {"change_type": "order_from_history", "source_quote_id": str(quote_id), "source_no": source.doc_no,
+             "after": await management.documents.get_by_id(order.id)}, current_user.id)
+        return success(await management.documents.get_by_id(order.id))
+    except ValueError as exc:
+        await db.rollback()
+        return error(40001, str(exc))
 
 
 class CostEntry(BaseModel):
@@ -94,6 +177,63 @@ async def list_deleted_orders(
     service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
     orders, total = await service.list_deleted(page, page_size, keyword=keyword)
     return success_paginated(orders, total, page, page_size)
+
+
+@router.get("/import-template")
+async def order_import_template(current_user: User = Depends(require_any_permission(PERM_ORDER_CREATE, PERM_ORDER_UPDATE))):
+    from io import BytesIO
+    from urllib.parse import quote
+    from openpyxl import Workbook
+    from fastapi.responses import StreamingResponse
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "订单明细"
+    sheet.append(["明细分组", "项目内容", "产品/材质/工艺", "宽", "宽单位", "高", "高单位", "件数", "面积开关", "数量", "单位", "单价", "其他费用", "备注"])
+    sheet.append(["门头", "灯箱", "铝型材", 1, "m", 1, "m", 1, "否", 2, "个", 100, 0, ""])
+    data = BytesIO()
+    workbook.save(data)
+    data.seek(0)
+    return StreamingResponse(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote('订单明细模板.xlsx')}"})
+
+
+@router.post("/import-preview")
+async def order_import_preview(file: UploadFile = File(...),
+    current_user: User = Depends(require_any_permission(PERM_ORDER_CREATE, PERM_ORDER_UPDATE))):
+    from app.api.quotes import QUOTE_ITEM_TEMPLATE_MAP, QUOTE_ITEM_REQUIRED
+    from app.utils.excel_import import parse_excel, format_value, parse_number
+    from app.services.quote_calculation import normalize_quote_item_data
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        return error(40001, "请上传 .xlsx 格式的订单明细")
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        return error(40001, "导入文件不能超过 5MB")
+    try:
+        import zipfile
+        from io import BytesIO
+        with zipfile.ZipFile(BytesIO(content)) as archive:
+            if sum(entry.file_size for entry in archive.infolist()) > 30 * 1024 * 1024:
+                return error(40001, "Excel 解压内容过大")
+        mapping = {**QUOTE_ITEM_TEMPLATE_MAP, "其他费用": "other_fee"}
+        rows, errors = parse_excel(content, QUOTE_ITEM_REQUIRED, mapping)
+        if errors:
+            return error(40002, "；".join(str(row) for row in errors))
+        if not rows or len(rows) > 1000:
+            return error(40001, "请导入 1 至 1000 条明细")
+        items = []
+        for index, row in enumerate(rows):
+            raw = {key: format_value(row.get(key)) for key in ("item_name", "group_name", "material_process", "unit", "remark")}
+            for key in ("quantity", "unit_price", "width", "height", "pieces", "other_fee"):
+                value = parse_number(row.get(key))
+                raw[key] = value if value is not None else (1 if key in {"quantity", "pieces"} else 0)
+            raw.update({"width_unit": format_value(row.get("width_unit")) or "m", "height_unit": format_value(row.get("height_unit")) or "m",
+                "use_area": str(row.get("use_area") or "").strip().lower() in {"是", "1", "y", "yes", "true"}, "sort_order": index})
+            if not raw["item_name"]:
+                raise ValueError(f"第 {index + 2} 行项目内容不能为空")
+            items.append(BusinessDocumentService._json_safe(normalize_quote_item_data(raw)))
+        return success({"items": items})
+    except (ValueError, zipfile.BadZipFile) as exc:
+        return error(40001, str(exc))
 
 
 @router.get("/task-assignee-options")
@@ -834,6 +974,7 @@ async def change_order_status(
     try:
         order = await service.change_status(oid, data.to_status, data.reason, current_user.id)
     except ValueError as e:
+        await db.rollback()
         return error(40001, str(e))
     await log_operation(db, current_user.id, current_user.real_name or current_user.username,
                         OBJ_ORDER, oid, ACTION_STATUS_CHANGE,
@@ -845,20 +986,76 @@ async def change_order_status(
 @router.delete("/{order_id}")
 async def delete_order(
     order_id: str,
+    data: OrderDeleteRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_ORDER_DELETE)),
+    current_user: User = Depends(require_all_permissions(PERM_ORDER_DELETE, PERM_ORDER_VIEW_PRICE)),
 ):
-    service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
+    from app.services.order_management_service import OrderManagementService
+    service = OrderManagementService(db, current_user)
     oid = UUID(order_id)
     try:
-        await service.delete(oid)
-        await log_operation(db, current_user.id, current_user.real_name or current_user.username,
-                            OBJ_ORDER, oid, ACTION_DELETE,
-                            ip_address=request.client.host if request.client else None)
-        return success({"message": "订单已移入回收站"})
+        return success(await service.delete(oid, data.model_dump()))
     except ValueError as e:
+        await db.rollback()
         return error(40001, str(e))
+
+
+@router.post("/{order_id}/delete-preview")
+async def preview_order_delete(order_id: UUID, data: OrderDeleteRequest, db: AsyncSession = Depends(get_db),
+                               current_user: User = Depends(require_all_permissions(PERM_ORDER_DELETE, PERM_ORDER_VIEW_PRICE))):
+    from app.services.order_management_service import OrderManagementService
+    try:
+        return success(await OrderManagementService(db, current_user).deletion_preview(order_id, data.model_dump()))
+    except ValueError as exc:
+        return error(40001, str(exc))
+
+
+@router.get("/{order_id}/change-actions")
+async def order_change_actions(order_id: UUID, db: AsyncSession = Depends(get_db),
+                               current_user: User = Depends(require_permission(PERM_ORDER_UPDATE))):
+    from app.services.order_management_service import OrderManagementService
+    from app.core.permissions import user_has_permission
+    try:
+        rows = await OrderManagementService(db, current_user).list_actions(order_id)
+        if not user_has_permission(current_user, PERM_PAYMENT_READ):
+            rows = [row for row in rows if row["module"] not in {"payments", "project_costs", "contracts", "framework_contracts", "customer_statements"}]
+        return success(rows)
+    except ValueError as exc:
+        return error(40401, str(exc))
+
+
+@router.post("/{order_id}/change-actions/{action_id}/resolve")
+async def resolve_order_action(order_id: UUID, action_id: UUID, data: OrderActionResolve,
+                               db: AsyncSession = Depends(get_db),
+                               current_user: User = Depends(require_permission(PERM_ORDER_UPDATE))):
+    from app.services.order_management_service import OrderManagementService
+    try:
+        return success(await OrderManagementService(db, current_user).resolve_action(order_id, action_id, data.resolution))
+    except ValueError as exc:
+        await db.rollback()
+        return error(40001, str(exc))
+
+
+@router.get("/{order_id}/funds")
+async def order_funds(order_id: UUID, db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(require_all_permissions(PERM_ORDER_READ, PERM_PAYMENT_READ))):
+    from app.services.order_management_service import OrderManagementService
+    try:
+        return success(await OrderManagementService(db, current_user).funds(order_id))
+    except ValueError as exc:
+        return error(40401, str(exc))
+
+
+@router.post("/{order_id}/funds")
+async def mutate_order_funds(order_id: UUID, data: OrderFundMutation, db: AsyncSession = Depends(get_db),
+                            current_user: User = Depends(require_all_permissions(PERM_ORDER_READ, PERM_PAYMENT_CREATE, PERM_PAYMENT_READ))):
+    from app.services.order_management_service import OrderManagementService
+    try:
+        return success(await OrderManagementService(db, current_user).mutate_funds(order_id, data.model_dump()))
+    except ValueError as exc:
+        await db.rollback()
+        return error(40001, str(exc))
 
 
 @router.post("/{order_id}/restore")
@@ -888,13 +1085,4 @@ async def update_order_contact(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_ORDER_UPDATE)),
 ):
-    service = BusinessDocumentService(db, doc_type='order', viewer=current_user)
-    try:
-        order = await service.update_order_contact(
-            UUID(order_id), data.contact_person, data.contact_phone
-        )
-        return success(order)
-    except OrderDataMutationLocked as e:
-        return error(40001, str(e))
-    except ValueError as e:
-        return error(40401, str(e))
+    raise HTTPException(status_code=410, detail="请使用完整订单编辑页修改联系人并确认关联影响")

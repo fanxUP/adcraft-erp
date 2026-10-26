@@ -11,13 +11,16 @@
       <el-button v-if="canEditItems" @click="router.push(`/orders/${order.id}/edit`)" type="primary" plain>
         编辑订单
       </el-button>
+      <el-button v-if="authStore.canAll(['order:delete', 'order:view_price'])" type="danger" plain @click="deleteVisible = true">删除订单</el-button>
       <el-button @click="handlePrintOrder" type="primary">
         <el-icon><Printer /></el-icon> 打印预览
       </el-button>
       </div>
     </div>
 
+      <OrderDeleteDialog v-model="deleteVisible" :order-id="order.id" @deleted="router.push('/orders')" />
       <el-tabs v-model="activeTab">
+        <el-tab-pane v-if="authStore.canAny(['order:update', 'payment:read'])" label="变更与资金处理" name="changes"><OrderChangePanel :order-id="order.id" @updated="fetchOrder" /></el-tab-pane>
         <el-tab-pane label="基本信息" name="info">
           <OrderProjectOverview
             :order-id="order.id"
@@ -163,21 +166,8 @@
               <el-descriptions-item label="系统创建时间">
                 {{ formatDateTimeFull(order.created_at) }}
               </el-descriptions-item>
-              <el-descriptions-item label="联系人">
-                <el-input v-if="contactEditing" v-model="contactDraft.person" size="small" style="width: 140px" placeholder="联系人" />
-                <template v-else>{{ order.contact_person || '-' }}</template>
-              </el-descriptions-item>
-              <el-descriptions-item label="联系电话">
-                <div v-if="contactEditing" style="display: flex; align-items: center; gap: 8px">
-                  <el-input v-model="contactDraft.phone" size="small" style="width: 140px" placeholder="联系电话" />
-                  <el-button size="small" :loading="contactSaving" @click="handleSaveContact" type="primary">保存</el-button>
-                  <el-button size="small" @click="cancelContactEdit">取消</el-button>
-                </div>
-                <template v-else>
-                  {{ order.contact_phone || '-' }}
-                  <el-button v-if="canEditOrderData" size="small" text type="primary" style="margin-left: 8px" @click="startContactEdit">编辑</el-button>
-                </template>
-              </el-descriptions-item>
+              <el-descriptions-item label="联系人">{{ order.contact_person || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="联系电话">{{ order.contact_phone || '-' }}</el-descriptions-item>
               <el-descriptions-item label="总金额">¥ {{ order.total_amount?.toFixed(2) }}</el-descriptions-item>
               <el-descriptions-item label="已收金额">¥ {{ order.paid_amount?.toFixed(2) }}</el-descriptions-item>
               <el-descriptions-item label="未收金额">¥ {{ order.unpaid_amount?.toFixed(2) }}</el-descriptions-item>
@@ -190,7 +180,7 @@
             <template #header>
               <div class="card-header">
                 <span>成本与利润</span>
-                <div v-if="canEditOrderData">
+                <div v-if="canEditOrderData && order.status !== 'completed'">
                   <el-button size="small" @click="handleAutoCost" :loading="autoCostLoading">自动核算</el-button>
                   <el-button size="small" @click="$router.push(`/project-costs/${order.id}`)">登记成本</el-button>
                 </div>
@@ -525,8 +515,10 @@
 
 <script setup lang="ts">
 import { formatDate, formatDateTimeFull } from '@/utils/datetime'
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Printer } from '@element-plus/icons-vue'
+import OrderDeleteDialog from '@/components/orders/OrderDeleteDialog.vue'
+import OrderChangePanel from '@/components/orders/OrderChangePanel.vue'
 import OrderWorkflow from './OrderWorkflow.vue'
 import OrderProjectOverview from './OrderProjectOverview.vue'
 import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
@@ -539,7 +531,6 @@ import {
   reopenCompletedOrder,
   autoCalculateCost,
   applyOrderDateChange,
-  updateOrderContact,
   previewOrderDateChange,
   getOrderTaskAssigneeOptions,
   getOrderTaskAssignees,
@@ -570,16 +561,14 @@ const loading = ref(false)
 const changing = ref(false)
 const tasksLoading = ref(false)
 const order = ref<OrderDetailResponse | null>(null)
-const activeTab = ref('info')
+const deleteVisible = ref(false)
+const activeTab = ref(route.query.tab === 'changes' ? 'changes' : 'info')
 // 状态管理由 OrderWorkflow 组件接管
 
 const designTasks = ref<DesignTaskResponse[]>([])
 const productionTasks = ref<ProductionTaskResponse[]>([])
 const installationTasks = ref<InstallationTaskResponse[]>([])
 const autoCostLoading = ref(false)
-const contactEditing = ref(false)
-const contactSaving = ref(false)
-const contactDraft = reactive({ person: '', phone: '' })
 const orderDateEditing = ref(false)
 const orderDateSaving = ref(false)
 const orderDateDraft = ref('')
@@ -628,15 +617,6 @@ type ItemProgressRow = {
   productionProgress: number
   installationProgress: number
   overallProgress: number
-}
-
-function startContactEdit() {
-  contactDraft.person = order.value?.contact_person || ''
-  contactDraft.phone = order.value?.contact_phone || ''
-  contactEditing.value = true
-}
-function cancelContactEdit() {
-  contactEditing.value = false
 }
 
 function disableFutureOrderDate(value: Date) {
@@ -729,19 +709,7 @@ async function handleSaveOrderDate() {
   }
 }
 
-async function handleSaveContact() {
-  contactSaving.value = true
-  try {
-    order.value = await updateOrderContact(route.params.id as string, {
-      contact_person: contactDraft.person || null,
-      contact_phone: contactDraft.phone || null,
-    })
-    contactEditing.value = false
-    ElMessage.success('联系人已更新')
-  } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '保存失败')
-  } finally { contactSaving.value = false }
-}
+
 
 const itemsTotal = computed(() => (order.value?.items || []).reduce((s, i) => s + (i.subtotal_amount || 0), 0))
 
@@ -1043,6 +1011,7 @@ async function fetchTasks() {
 }
 
 async function handleChangeStatus(to_status: string) {
+  if (to_status === 'cancelled') { deleteVisible.value = true; return }
   const labels: Record<string, string> = {
     pending_confirm: '待确认', confirmed: '已确认', designing: '设计中',
     in_production: '生产中', in_installation: '安装中',

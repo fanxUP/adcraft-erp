@@ -62,7 +62,7 @@ describe('P08 UI/UX quality guardrails', () => {
     const orderList = readSource('views/orders/OrderList.vue')
 
     expect(orderList).not.toContain('label="系统创建时间"')
-    expect(orderList).toContain('<el-table-column label="操作" width="200" fixed="right">')
+    expect(orderList).toContain('<el-table-column label="操作" width="240" fixed="right">')
   })
 
   it('uses employee numbers as the only employee login entry point', () => {
@@ -111,7 +111,7 @@ describe('P08 UI/UX quality guardrails', () => {
       'views/aerial/AerialPersonnelExpenseList.vue',
       'views/aerial/AerialPersonnelWageList.vue',
       'views/aerial/AerialVehicleCostList.vue',
-      'views/outsource/OutsourceVendorList.vue',
+      'views/suppliers/SupplierList.vue',
       'views/outsource/OutsourceTaskRecycle.vue',
       'views/payments/StatementList.vue',
       'views/payments/ExpenseList.vue',

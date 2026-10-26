@@ -8,8 +8,8 @@
       <el-card v-if="order" shadow="never" class="order-card" style="margin-top: 12px">
         <div class="order-info-row">
           <div class="order-info-item">
-            <span class="label">订单编号</span>
-            <span class="value">{{ order.order_no }}</span>
+            <span class="label">{{ isQuote ? '历史报价编号' : '订单编号' }}</span>
+            <span class="value">{{ isQuote ? order.quote_no : order.order_no }}</span>
           </div>
           <div class="order-info-item">
             <span class="label">项目名称</span>
@@ -44,7 +44,8 @@
     <div style="display: flex; gap: 8px; margin: 16px 0">
       <el-button v-if="canMutateOrderCost" type="danger" @click="openCreate">登记成本</el-button>
       <el-button v-if="canMutateOrderCost" @click="openImport">导入Excel</el-button>
-      <el-tag v-else-if="!isQuote && order" type="info">当前订单状态已锁定成本变更</el-tag>
+      <el-tag v-else-if="isQuote" type="info">历史报价成本只读，新成本请登记到订单</el-tag>
+      <el-tag v-else-if="order" type="info">当前订单状态已锁定成本变更</el-tag>
     </div>
 
     <!-- Filters -->
@@ -546,7 +547,7 @@ const ORDER_COST_MUTABLE_STATUSES = new Set([
   'in_installation',
 ])
 const canMutateOrderCost = computed(() => {
-  if (isQuote.value) return true
+  if (isQuote.value) return false
   const currentStatus = (order.value as OrderDetailResponse | null)?.status
   return typeof currentStatus === 'string' && ORDER_COST_MUTABLE_STATUSES.has(currentStatus)
 })

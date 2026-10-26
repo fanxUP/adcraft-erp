@@ -100,6 +100,9 @@ public class PreflightWarning
 
 public class ErpAuthResponse
 {
+    [JsonPropertyName("data")]
+    public ErpAuthData? Data { get; set; }
+
     [JsonPropertyName("access_token")]
     public string AccessToken { get; set; } = "";
 
@@ -130,4 +133,10 @@ public class OfflineQueueItem
     public string Payload { get; set; } = "";
     public string Status { get; set; } = "pending"; // pending | submitting | completed | failed
     public string? ErrorMessage { get; set; }
+}
+
+public class ErpAuthData
+{
+    [JsonPropertyName("token")]
+    public string Token { get; set; } = "";
 }

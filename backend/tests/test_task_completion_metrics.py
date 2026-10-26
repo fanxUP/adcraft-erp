@@ -225,3 +225,9 @@ def test_completion_report_routes_require_personal_read_permission():
                 if isinstance(value, str) and ":" in value:
                     permissions.add(value)
         assert permissions == {PERM_TASK_COMPLETION_READ}
+
+
+@pytest.fixture(autouse=True)
+def isolate_order_scope_storage(monkeypatch):
+    monkeypatch.setattr("app.services.task_service._capture_completed_scope", AsyncMock())
+    monkeypatch.setattr("app.services.task_service._assert_live_task_order", AsyncMock())

@@ -275,8 +275,8 @@ export function autoCalculateCost(id: string) {
   return post<OrderDetailResponse>(`/orders/${id}/auto-cost`)
 }
 
-export function deleteOrder(id: string) {
-  return del(`/orders/${id}`)
+export async function deleteOrder(id: string, data: OrderDeletePayload) {
+  return apiClient.delete(`/orders/${id}`, { data })
 }
 
 export function getDeletedOrders(params: { page?: number; page_size?: number; keyword?: string }) {
@@ -287,6 +287,24 @@ export function restoreOrder(id: string) {
   return post<OrderDetailResponse>(`/orders/${id}/restore`)
 }
 
-export function updateOrderContact(id: string, data: { contact_person?: string | null; contact_phone?: string | null }) {
-  return put<OrderDetailResponse>(`/orders/${id}/contact`, data)
+
+
+
+export function createOrder(data: { request_id: string; capture_id?: string; order_date: string; header: OrderEditRequest['header']; items: OrderEditRequest['items']; groups: OrderEditRequest['groups'] }) {
+  return post<OrderDetailResponse>('/orders/', data)
 }
+export async function previewOrderImport(file: File) {
+  const data = new FormData(); data.append('file', file)
+  return post<{ items: Array<Partial<import('@/types/api').OrderItemResponse>> }>('/orders/import-preview', data)
+}
+
+export interface OrderDeletePayload { reason: string; expected_updated_at: string; settlement_amount: number; preview_id?: string; plan_hash?: string; preview_expires_at?: string; confirm_high_risk?: boolean }
+export interface OrderFinancialValues { total_amount: number; paid_amount: number; unpaid_amount: number; overpaid_amount: number; cost_amount?: number; gross_profit?: number }
+export interface OrderDeletePreview { order_id: string; order_no: string; before: OrderFinancialValues; after: OrderFinancialValues; preview_id: string; plan_hash: string; preview_expires_at: string; association_catalog: Array<{ label: string; record_no?: string; status: string; note: string }> }
+export interface OrderAction { id: string; batch_id: string; module: string; record_no?: string; detail: string; status: string; resolution?: string }
+export interface OrderFunds extends OrderFinancialValues { payments: Array<{ id: string; payment_no: string; amount: number; record_type: string; is_voided: boolean; paid_at?: string; remark?: string }> }
+export function previewOrderDelete(id: string, data: OrderDeletePayload) { return post<OrderDeletePreview>(`/orders/${id}/delete-preview`, data) }
+export function getOrderActions(id: string) { return get<OrderAction[]>(`/orders/${id}/change-actions`) }
+export function resolveOrderAction(id: string, actionId: string, resolution: string) { return post(`/orders/${id}/change-actions/${actionId}/resolve`, { resolution }) }
+export function getOrderFunds(id: string) { return get<OrderFunds>(`/orders/${id}/funds`) }
+export function mutateOrderFunds(id: string, data: { request_id: string; payment_id?: string; operation: string; amount: number; paid_at: string; reason: string }) { return post<OrderFunds>(`/orders/${id}/funds`, data) }

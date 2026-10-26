@@ -58,6 +58,7 @@ const actionLabel = computed(() => {
     create_installation_task_confirmed: '创建安装任务',
     create_installation_task_draft: '安装任务草稿预览',
     create_quote_draft: '报价草稿预览',
+    create_order_confirmed: '创建待确认订单',
     create_quote_confirmed: '创建报价单',
     add_quote_items: '新增报价项目',
     change_order_status: '推进订单状态',

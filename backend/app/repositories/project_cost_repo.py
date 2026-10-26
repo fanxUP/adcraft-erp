@@ -115,7 +115,6 @@ class ProjectCostRepository:
         return cost
 
     async def batch_soft_delete(self, cost_ids: list[UUID]) -> int:
-        from sqlalchemy import update
         now = datetime.now()
         result = await self.db.execute(
             update(ProjectCost)

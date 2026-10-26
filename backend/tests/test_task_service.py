@@ -379,3 +379,11 @@ async def test_unauthorized_list_ignores_outsourced_filter_and_flag(service, moc
     assert total == 1
     assert tasks[0]["is_outsourced"] is False
     assert mock_repo.list_tasks.call_args.kwargs["outsourced"] is None
+
+
+@pytest.fixture(autouse=True)
+def isolate_parent_lock_and_scope_persistence(monkeypatch):
+    # Unit state-machine/ownership tests use repository doubles; real order
+    # locking and completed quantity snapshots are covered in SQL integration.
+    monkeypatch.setattr("app.services.task_service._assert_live_task_order", AsyncMock())
+    monkeypatch.setattr("app.services.task_service._capture_completed_scope", AsyncMock())

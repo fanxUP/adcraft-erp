@@ -1,0 +1,704 @@
+{
+  "checked_at_utc": "2026-10-26T04:55:25.384295+00:00",
+  "transaction_read_only": "on",
+  "permission_count": 149,
+  "mode": "ASGI handlers with production dependencies and read-only production DB; no app lifespan; real admin permission projection; no authentication/login test",
+  "results": [
+    {
+      "path": "/auth/me",
+      "http": 200,
+      "code": 0,
+      "ms": 38
+    },
+    {
+      "path": "/users/all",
+      "http": 200,
+      "code": 0,
+      "ms": 22
+    },
+    {
+      "path": "/customers/",
+      "http": 200,
+      "code": 0,
+      "ms": 26
+    },
+    {
+      "path": "/customers/tree",
+      "http": 200,
+      "code": 0,
+      "ms": 7
+    },
+    {
+      "path": "/products/",
+      "http": 200,
+      "code": 0,
+      "ms": 23
+    },
+    {
+      "path": "/product-categories/",
+      "http": 200,
+      "code": 0,
+      "ms": 8
+    },
+    {
+      "path": "/materials/",
+      "http": 200,
+      "code": 0,
+      "ms": 17
+    },
+    {
+      "path": "/processes/",
+      "http": 200,
+      "code": 0,
+      "ms": 14
+    },
+    {
+      "path": "/quotes/",
+      "http": 200,
+      "code": 0,
+      "ms": 212
+    },
+    {
+      "path": "/orders/",
+      "http": 200,
+      "code": 0,
+      "ms": 109
+    },
+    {
+      "path": "/orders/recycle/list",
+      "http": 200,
+      "code": 0,
+      "ms": 18
+    },
+    {
+      "path": "/orders/task-assignee-options",
+      "http": 200,
+      "code": 0,
+      "ms": 20
+    },
+    {
+      "path": "/contracts/",
+      "http": 200,
+      "code": 0,
+      "ms": 99
+    },
+    {
+      "path": "/contracts/available-resources",
+      "http": 200,
+      "code": 0,
+      "ms": 51
+    },
+    {
+      "path": "/contracts/orders-without-contract",
+      "http": 200,
+      "code": 0,
+      "ms": 39
+    },
+    {
+      "path": "/framework-contracts/",
+      "http": 200,
+      "code": 0,
+      "ms": 42
+    },
+    {
+      "path": "/framework-contracts/available-projects?customer_id={record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 11
+    },
+    {
+      "path": "/employees/",
+      "http": 200,
+      "code": 0,
+      "ms": 35
+    },
+    {
+      "path": "/employees/account-options",
+      "http": 200,
+      "code": 0,
+      "ms": 11
+    },
+    {
+      "path": "/attendance/rules",
+      "http": 200,
+      "code": 0,
+      "ms": 18
+    },
+    {
+      "path": "/attendance/records?month=2026-10",
+      "http": 200,
+      "code": 0,
+      "ms": 9
+    },
+    {
+      "path": "/attendance/employees",
+      "http": 200,
+      "code": 0,
+      "ms": 18
+    },
+    {
+      "path": "/departments/",
+      "http": 200,
+      "code": 0,
+      "ms": 12
+    },
+    {
+      "path": "/salaries/",
+      "http": 200,
+      "code": 0,
+      "ms": 127
+    },
+    {
+      "path": "/salaries/report?month=2026-10",
+      "http": 200,
+      "code": 0,
+      "ms": 62
+    },
+    {
+      "path": "/salaries/items",
+      "http": 200,
+      "code": 0,
+      "ms": 7
+    },
+    {
+      "path": "/salaries/grid?month=2026-10",
+      "http": 200,
+      "code": 0,
+      "ms": 22
+    },
+    {
+      "path": "/salaries/params?month=2026-10",
+      "http": 200,
+      "code": 0,
+      "ms": 8
+    },
+    {
+      "path": "/salaries/templates",
+      "http": 200,
+      "code": 0,
+      "ms": 6
+    },
+    {
+      "path": "/salary-rules/",
+      "http": 200,
+      "code": 0,
+      "ms": 48
+    },
+    {
+      "path": "/employment-histories/",
+      "http": 200,
+      "code": 0,
+      "ms": 15
+    },
+    {
+      "path": "/leaves/",
+      "http": 200,
+      "code": 0,
+      "ms": 17
+    },
+    {
+      "path": "/design-tasks/",
+      "http": 200,
+      "code": 0,
+      "ms": 102
+    },
+    {
+      "path": "/production-tasks/",
+      "http": 200,
+      "code": 0,
+      "ms": 79
+    },
+    {
+      "path": "/installation-tasks/",
+      "http": 200,
+      "code": 0,
+      "ms": 84
+    },
+    {
+      "path": "/task-queue/",
+      "http": 200,
+      "code": 0,
+      "ms": 192
+    },
+    {
+      "path": "/task-queue/completed-projects",
+      "http": 200,
+      "code": 0,
+      "ms": 267
+    },
+    {
+      "path": "/task-queue/assignee-options?task_type=design",
+      "http": 200,
+      "code": 0,
+      "ms": 13
+    },
+    {
+      "path": "/payments/",
+      "http": 200,
+      "code": 0,
+      "ms": 136
+    },
+    {
+      "path": "/statements/",
+      "http": 200,
+      "code": 0,
+      "ms": 16
+    },
+    {
+      "path": "/expenses/disbursements",
+      "http": 200,
+      "code": 0,
+      "ms": 229
+    },
+    {
+      "path": "/expenses/ledger",
+      "http": 200,
+      "code": 0,
+      "ms": 60
+    },
+    {
+      "path": "/expenses/",
+      "http": 200,
+      "code": 0,
+      "ms": 16
+    },
+    {
+      "path": "/project-costs/",
+      "http": 200,
+      "code": 0,
+      "ms": 101
+    },
+    {
+      "path": "/project-costs/summary?order_ids={record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 7
+    },
+    {
+      "path": "/project-costs/quotes",
+      "http": 200,
+      "code": 0,
+      "ms": 21
+    },
+    {
+      "path": "/project-costs/debts/list",
+      "http": 200,
+      "code": 0,
+      "ms": 60
+    },
+    {
+      "path": "/finance-center/cashflow?start_date=2026-07-01&end_date=2026-10-26",
+      "http": 200,
+      "code": 0,
+      "ms": 13
+    },
+    {
+      "path": "/finance-center/cost-overlaps",
+      "http": 200,
+      "code": 0,
+      "ms": 19
+    },
+    {
+      "path": "/payables/",
+      "http": 200,
+      "code": 0,
+      "ms": 69
+    },
+    {
+      "path": "/suppliers/",
+      "http": 200,
+      "code": 0,
+      "ms": 22
+    },
+    {
+      "path": "/reports/dashboard",
+      "http": 200,
+      "code": 0,
+      "ms": 41
+    },
+    {
+      "path": "/reports/daily?report_date=2026-08-04",
+      "http": 200,
+      "code": 0,
+      "ms": 32
+    },
+    {
+      "path": "/reports/monthly?year=2026&month=8",
+      "http": 200,
+      "code": 0,
+      "ms": 131
+    },
+    {
+      "path": "/reports/customer-debt",
+      "http": 200,
+      "code": 0,
+      "ms": 379
+    },
+    {
+      "path": "/reports/task-completion/summary?start_date=2026-07-01&end_date=2026-10-26",
+      "http": 200,
+      "code": 0,
+      "ms": 88
+    },
+    {
+      "path": "/reports/task-completion/details?start_date=2026-07-01&end_date=2026-10-26",
+      "http": 200,
+      "code": 0,
+      "ms": 50
+    },
+    {
+      "path": "/outsource/vendors",
+      "http": 200,
+      "code": 0,
+      "ms": 52
+    },
+    {
+      "path": "/outsource/task-groups",
+      "http": 200,
+      "code": 0,
+      "ms": 27
+    },
+    {
+      "path": "/outsource/tasks",
+      "http": 200,
+      "code": 0,
+      "ms": 9
+    },
+    {
+      "path": "/outsource/payments",
+      "http": 200,
+      "code": 0,
+      "ms": 8
+    },
+    {
+      "path": "/outsource/orders-for-dropdown",
+      "http": 200,
+      "code": 0,
+      "ms": 8
+    },
+    {
+      "path": "/inventory/items",
+      "http": 200,
+      "code": 0,
+      "ms": 18
+    },
+    {
+      "path": "/inventory/records",
+      "http": 200,
+      "code": 0,
+      "ms": 8
+    },
+    {
+      "path": "/admin/roles",
+      "http": 200,
+      "code": 0,
+      "ms": 71
+    },
+    {
+      "path": "/admin/permissions",
+      "http": 200,
+      "code": 0,
+      "ms": 23
+    },
+    {
+      "path": "/admin/permission-packs",
+      "http": 200,
+      "code": 0,
+      "ms": 4
+    },
+    {
+      "path": "/acceptances/",
+      "http": 200,
+      "code": 0,
+      "ms": 129
+    },
+    {
+      "path": "/acceptances/available-orders",
+      "http": 200,
+      "code": 0,
+      "ms": 52
+    },
+    {
+      "path": "/acceptances/available-quotes",
+      "http": 200,
+      "code": 0,
+      "ms": 7
+    },
+    {
+      "path": "/vehicles/available",
+      "http": 200,
+      "code": 0,
+      "ms": 32
+    },
+    {
+      "path": "/vehicles/",
+      "http": 200,
+      "code": 0,
+      "ms": 10
+    },
+    {
+      "path": "/vehicles/expiring",
+      "http": 200,
+      "code": 0,
+      "ms": 7
+    },
+    {
+      "path": "/vehicle-drivers/",
+      "http": 200,
+      "code": 0,
+      "ms": 20
+    },
+    {
+      "path": "/vehicle-use-requests/",
+      "http": 200,
+      "code": 0,
+      "ms": 21
+    },
+    {
+      "path": "/vehicle-dispatches/",
+      "http": 200,
+      "code": 0,
+      "ms": 23
+    },
+    {
+      "path": "/vehicle-trip-records/",
+      "http": 200,
+      "code": 0,
+      "ms": 13
+    },
+    {
+      "path": "/vehicle-fuel-records/",
+      "http": 200,
+      "code": 0,
+      "ms": 19
+    },
+    {
+      "path": "/vehicle-maintenance-records/",
+      "http": 200,
+      "code": 0,
+      "ms": 17
+    },
+    {
+      "path": "/vehicle-cost-records/",
+      "http": 200,
+      "code": 0,
+      "ms": 14
+    },
+    {
+      "path": "/vehicle-certificates/",
+      "http": 200,
+      "code": 0,
+      "ms": 23
+    },
+    {
+      "path": "/vehicle-incidents/",
+      "http": 200,
+      "code": 0,
+      "ms": 20
+    },
+    {
+      "path": "/vehicle-dashboard/overview",
+      "http": 200,
+      "code": 0,
+      "ms": 64
+    },
+    {
+      "path": "/vehicle-dashboard/today",
+      "http": 200,
+      "code": 0,
+      "ms": 18
+    },
+    {
+      "path": "/vehicle-dashboard/monthly",
+      "http": 200,
+      "code": 0,
+      "ms": 14
+    },
+    {
+      "path": "/vehicle-dashboard/reminders",
+      "http": 200,
+      "code": 0,
+      "ms": 10
+    },
+    {
+      "path": "/aerial/vehicles",
+      "http": 200,
+      "code": 0,
+      "ms": 30
+    },
+    {
+      "path": "/aerial/personnel",
+      "http": 200,
+      "code": 0,
+      "ms": 24
+    },
+    {
+      "path": "/aerial/ledgers",
+      "http": 200,
+      "code": 0,
+      "ms": 62
+    },
+    {
+      "path": "/aerial/personnel-expenses",
+      "http": 200,
+      "code": 0,
+      "ms": 15
+    },
+    {
+      "path": "/aerial/personnel-wages",
+      "http": 200,
+      "code": 0,
+      "ms": 14
+    },
+    {
+      "path": "/aerial/vehicle-costs",
+      "http": 200,
+      "code": 0,
+      "ms": 23
+    },
+    {
+      "path": "/aerial/safety-checks?ledger_id={record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 10
+    },
+    {
+      "path": "/aerial/dashboard/overview",
+      "http": 200,
+      "code": 0,
+      "ms": 20
+    },
+    {
+      "path": "/aerial/dashboard/today",
+      "http": 200,
+      "code": 0,
+      "ms": 11
+    },
+    {
+      "path": "/aerial/dashboard/reminders",
+      "http": 200,
+      "code": 0,
+      "ms": 8
+    },
+    {
+      "path": "/aerial/reports/monthly?month=2026-10",
+      "http": 200,
+      "code": 0,
+      "ms": 17
+    },
+    {
+      "path": "/aerial/reports/receivables",
+      "http": 200,
+      "code": 0,
+      "ms": 25
+    },
+    {
+      "path": "/aerial/reports/costs",
+      "http": 200,
+      "code": 0,
+      "ms": 7
+    },
+    {
+      "path": "/aerial/attendance?month=2026-10",
+      "http": 200,
+      "code": 0,
+      "ms": 24
+    },
+    {
+      "path": "/cdr/quotes",
+      "http": 200,
+      "code": 0,
+      "ms": 404
+    },
+    {
+      "path": "/cdr/rule-sets",
+      "http": 200,
+      "code": 0,
+      "ms": 8
+    },
+    {
+      "path": "/cdr/customer-agreements",
+      "http": 200,
+      "code": 0,
+      "ms": 7
+    },
+    {
+      "path": "/cdr/devices",
+      "http": 200,
+      "code": 0,
+      "ms": 9
+    },
+    {
+      "path": "/orders/{record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 41
+    },
+    {
+      "path": "/orders/{record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 19
+    },
+    {
+      "path": "/quotes/{record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 20
+    },
+    {
+      "path": "/quotes/{record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 27
+    },
+    {
+      "path": "/design-tasks/{record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 20
+    },
+    {
+      "path": "/design-tasks/{record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 12
+    },
+    {
+      "path": "/production-tasks/{record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 10
+    },
+    {
+      "path": "/production-tasks/{record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 8
+    },
+    {
+      "path": "/installation-tasks/{record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 12
+    },
+    {
+      "path": "/installation-tasks/{record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 8
+    },
+    {
+      "path": "/acceptances/{record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 41
+    },
+    {
+      "path": "/acceptances/{record_id}",
+      "http": 200,
+      "code": 0,
+      "ms": 23
+    }
+  ]
+}

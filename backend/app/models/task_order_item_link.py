@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Numeric
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -47,6 +48,9 @@ class TaskOrderItemLink(Base):
     item_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     item_progress_pct: Mapped[int | None] = mapped_column(Integer, nullable=True)
     item_completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    planned_quantity: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    completed_quantity: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    scope_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     # 关联行本身有生命周期。删除订单明细时只移除当前关联，保留这行及其
     # 执行人/状态快照，供审计和回收站恢复使用。
     link_status: Mapped[str] = mapped_column(

@@ -16,6 +16,7 @@ export type AccessKey =
   | 'quoteCreate'
   | 'quoteUpdate'
   | 'contract'
+  | 'orderCreate'
   | 'orderRead'
   | 'orderManage'
   | 'orderDelete'
@@ -89,6 +90,7 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   quoteCreate: ['admin', 'sales'],
   quoteUpdate: ['admin', 'sales'],
   contract: ['admin', 'sales'],
+  orderCreate: ['admin', 'sales'],
   orderRead: ['admin', 'sales', 'finance', 'manager'],
   orderManage: ['admin', 'sales'],
   orderDelete: ['admin'],
@@ -155,6 +157,7 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement
   quoteCreate: ['quote:create'],
   quoteUpdate: ['quote:update'],
   contract: ['contract:read'],
+  orderCreate: ['order:create'],
   orderRead: ['order:read'],
   orderManage: ['order:update'],
   orderDelete: ['order:delete'],
@@ -234,6 +237,7 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   QuoteEdit: 'quoteUpdate',
   ContractList: 'contract',
   ContractDetail: 'contract',
+  OrderCreate: 'orderCreate',
   OrderList: 'orderRead',
   OrderRecycle: 'orderDelete',
   OrderEdit: 'orderManage',
@@ -344,6 +348,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   QuoteEdit: '编辑报价',
   ContractList: '合同管理',
   ContractDetail: '合同详情',
+  OrderCreate: '新建订单',
   OrderList: '订单管理',
   OrderRecycle: '订单回收站',
   OrderEdit: '编辑订单',

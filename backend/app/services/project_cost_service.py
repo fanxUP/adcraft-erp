@@ -59,6 +59,8 @@ class ProjectCostService:
                 select(BusinessDocument).where(BusinessDocument.id == cost.document_id)
             )
             document = result.scalar_one_or_none()
+        if document is not None and document.doc_type == "quote":
+            raise ValueError("历史报价成本只读；新成本请登记到订单，已有财务记录保留")
         if document is not None and document.doc_type == "order":
             assert_order_data_mutable(document, "成本")
         return document
@@ -290,6 +292,8 @@ class ProjectCostService:
             doc = result.scalar_one_or_none()
             if not doc:
                 raise ValueError("业务单据不存在")
+            if doc.doc_type != "order":
+                raise ValueError("历史报价仅供查询，新成本请登记到订单")
             if doc.doc_type == "order":
                 assert_order_data_mutable(doc, "成本")
             customer_id_val = doc.customer_id

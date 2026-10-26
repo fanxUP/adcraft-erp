@@ -1,0 +1,191 @@
+{
+  "method": "AST import graph rooted at app.main; dynamic imports, model metadata registration, scripts and tests require manual classification.",
+  "modules": 345,
+  "reachable_from_main": 314,
+  "unreachable_from_main": [
+    {
+      "module": "app",
+      "path": "backend/app/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.middleware",
+      "path": "backend/app/middleware/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.utils",
+      "path": "backend/app/utils/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.repositories",
+      "path": "backend/app/repositories/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.models",
+      "path": "backend/app/models/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.models.ai_health_check",
+      "path": "backend/app/models/ai_health_check.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.schemas.operation_log",
+      "path": "backend/app/schemas/operation_log.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.schemas",
+      "path": "backend/app/schemas/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.schemas.ai_request",
+      "path": "backend/app/schemas/ai_request.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.schemas.cdr_quote",
+      "path": "backend/app/schemas/cdr_quote.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai_assistant",
+      "path": "backend/app/ai_assistant/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai",
+      "path": "backend/app/ai/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.domain",
+      "path": "backend/app/domain/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.services",
+      "path": "backend/app/services/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.services.project_cost_audit_service",
+      "path": "backend/app/services/project_cost_audit_service.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai_assistant.contracts",
+      "path": "backend/app/ai_assistant/contracts/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai_assistant.business_rules",
+      "path": "backend/app/ai_assistant/business_rules/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.gateway_providers",
+      "path": "backend/app/ai/gateway_providers/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.core",
+      "path": "backend/app/ai/core/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.rule_based",
+      "path": "backend/app/ai/rule_based/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.ai_enhanced",
+      "path": "backend/app/ai/ai_enhanced/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.schemas.ai_site_photo",
+      "path": "backend/app/ai/schemas/ai_site_photo.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.schemas.ai_payment_ocr",
+      "path": "backend/app/ai/schemas/ai_payment_ocr.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.schemas",
+      "path": "backend/app/ai/schemas/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.schemas.ai_report",
+      "path": "backend/app/ai/schemas/ai_report.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.schemas.ai_knowledge",
+      "path": "backend/app/ai/schemas/ai_knowledge.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.schemas.ai_anomaly",
+      "path": "backend/app/ai/schemas/ai_anomaly.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.gateway",
+      "path": "backend/app/ai/gateway/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.gateway.security",
+      "path": "backend/app/ai/gateway/security/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.gateway.providers",
+      "path": "backend/app/ai/gateway/providers/__init__.py",
+      "imported_by": []
+    },
+    {
+      "module": "app.ai.gateway.routing",
+      "path": "backend/app/ai/gateway/routing/__init__.py",
+      "imported_by": []
+    }
+  ],
+  "duplicate_definitions": [
+    {
+      "path": "backend/app/models/business_document.py",
+      "scope": "BusinessDocument",
+      "symbol": "groups",
+      "lines": [
+        97,
+        100
+      ]
+    },
+    {
+      "path": "backend/app/schemas/quote.py",
+      "scope": "module",
+      "symbol": "QuoteGroupCreate",
+      "lines": [
+        6,
+        20
+      ]
+    },
+    {
+      "path": "backend/app/schemas/quote.py",
+      "scope": "module",
+      "symbol": "QuoteGroupResponse",
+      "lines": [
+        12,
+        26
+      ]
+    }
+  ]
+}

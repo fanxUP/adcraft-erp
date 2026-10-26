@@ -77,7 +77,7 @@ def test_quote_routes_use_business_permissions(method, path, permission):
 
 
 @pytest.mark.asyncio
-async def test_quote_list_hides_terminal_statuses_by_default_but_allows_explicit_filter():
+async def test_history_quote_list_keeps_terminal_records_visible():
     db = MagicMock()
     current_user = MagicMock()
 
@@ -102,7 +102,7 @@ async def test_quote_list_hides_terminal_statuses_by_default_but_allows_explicit
             None,
             None,
             keyword=None,
-            exclude_status=["converted", "cancelled"],
+            exclude_status=None,
         )
 
         service.list_all.reset_mock()

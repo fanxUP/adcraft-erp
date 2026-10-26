@@ -20,7 +20,7 @@
         <el-row :gutter="16" style="margin-bottom: 16px">
           <el-col :span="6">
             <el-card shadow="never" class="stat-card">
-              <div class="stat-label">合同总金额</div>
+              <div class="stat-label">业务总金额</div>
               <div class="stat-value">{{ formatMoney(stats.totalOrder) }}</div>
             </el-card>
           </el-col>
@@ -56,6 +56,16 @@
           >
           <el-table-column type="expand">
             <template #default="{ row }">
+              <div v-if="row.standalone_orders?.length" style="padding: 12px 24px">
+                <strong>独立订单应收</strong>
+                <el-table :data="row.standalone_orders" border style="margin-top: 10px">
+                  <el-table-column prop="order_no" label="订单编号" min-width="180" />
+                  <el-table-column prop="project_name" label="项目" min-width="180" />
+                  <el-table-column prop="total_amount" label="结算金额" width="130" />
+                  <el-table-column prop="unpaid_amount" label="待收" width="130" />
+                  <el-table-column label="操作" width="160"><template #default="{ row: direct }"><el-button text type="primary" @click="router.push(`/orders/${direct.id}?tab=changes`)">查看订单及收付款</el-button></template></el-table-column>
+                </el-table>
+              </div>
               <!-- 合同（主要） -->
               <template v-if="row.contracts?.length">
                 <div style="margin: 8px 0 4px 48px; font-weight: 600; color: var(--ad-text);">合同</div>

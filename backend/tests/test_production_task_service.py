@@ -331,3 +331,11 @@ async def test_update_nonexistent_task(service, mock_repo):
     mock_repo.get_by_id.return_value = None
     with pytest.raises(ValueError, match="制作任务不存在"):
         await service.update_task(SAMPLE_TASK_ID, {"project_name": "新名称"})
+
+
+@pytest.fixture(autouse=True)
+def isolate_parent_lock_and_scope_persistence(monkeypatch):
+    # Unit state-machine/ownership tests use repository doubles; real order
+    # locking and completed quantity snapshots are covered in SQL integration.
+    monkeypatch.setattr("app.services.task_service._assert_live_task_order", AsyncMock())
+    monkeypatch.setattr("app.services.task_service._capture_completed_scope", AsyncMock())

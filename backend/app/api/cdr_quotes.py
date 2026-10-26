@@ -21,7 +21,9 @@ from app.models.user import User
 from app.schemas.common import success, success_paginated
 from app.services.cdr_quote_service import CdrQuoteService
 
-router = APIRouter(prefix="/cdr", tags=["CDR 智能报价"])
+from app.core.permissions import PERM_ORDER_CREATE, require_all_permissions
+from app.core.quotation_archive import quotation_archive_only
+router = APIRouter(prefix="/cdr", tags=["CDR 智能报价"], dependencies=[Depends(quotation_archive_only)])
 
 
 # ── 报价列表 / 详情 ─────────────────────────────────────────────
@@ -623,16 +625,17 @@ async def get_capture(
     return success(capture)
 
 
-@router.post("/captures/{capture_id}/create-quote-draft")
+@router.post("/captures/{capture_id}/create-order-draft")
+@router.post("/captures/{capture_id}/create-quote-draft", deprecated=True)
 async def create_quote_from_capture(
     capture_id: UUID,
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(PERM_CDR_QUOTE_CREATE)),
+    current_user: User = Depends(require_all_permissions(PERM_CDR_QUOTE_CREATE, PERM_ORDER_CREATE)),
 ):
     """根据图稿采集创建报价草稿。"""
     service = CdrQuoteService(db)
-    quote = await service.create_quote_from_capture(capture_id, data, current_user.id)
+    quote = await service.create_quote_from_capture(capture_id, data, current_user.id, viewer=current_user)
     return success(quote)
 
 

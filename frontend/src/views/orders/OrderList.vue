@@ -2,6 +2,8 @@
   <div class="page">
     <div class="page-header">
       <h2>订单管理</h2>
+      <el-button v-if="authStore.can('quote:read')" @click="$router.push('/quotes')">历史报价档案</el-button>
+      <el-button v-if="authStore.can('order:create')" type="primary" @click="$router.push('/orders/new')">新建订单</el-button>
       <el-button v-if="authStore.isAdmin" @click="$router.push('/orders/recycle')" type="warning">
         <el-icon><Delete /></el-icon> 回收站
       </el-button>
@@ -59,14 +61,18 @@
       <el-table-column label="下单日期" width="120">
         <template #default="{ row }">{{ formatDate(row.order_date) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="操作" width="240" fixed="right">
         <template #default="{ row }">
           <div style="display: flex; gap: 8px; justify-content: center;">
             <el-button text type="primary" @click="$router.push(`/orders/${row.id}`)">详情</el-button>
+            <el-button v-if="authStore.can('order:update')" text type="primary" @click="$router.push(`/orders/${row.id}/edit`)">编辑</el-button>
+            <el-button v-if="authStore.canAll(['order:delete', 'order:view_price'])" text type="danger" @click="deleteId = row.id; deleteVisible = true">删除</el-button>
           </div>
         </template>
       </el-table-column>
     </el-table>
+
+    <OrderDeleteDialog v-model="deleteVisible" :order-id="deleteId" @deleted="fetchData" />
 
     <el-pagination
       v-model:current-page="page"
@@ -83,6 +89,7 @@
 <script setup lang="ts">
 import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onMounted } from 'vue'
+import OrderDeleteDialog from '@/components/orders/OrderDeleteDialog.vue'
 import { getOrders } from '@/api/orders'
 import { useAuthStore } from '@/stores/auth'
 import type { OrderListResponse } from '@/types/api'
@@ -90,6 +97,7 @@ import { StatusTag } from '@/components/ui'
 
 const authStore = useAuthStore()
 
+const deleteVisible = ref(false), deleteId = ref('')
 const loading = ref(false)
 const list = ref<OrderListResponse[]>([])
 const total = ref(0)

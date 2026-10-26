@@ -350,9 +350,10 @@ public class CdrBridgeService : IDisposable
             {
                 var body = await loginResponse.Content.ReadAsStringAsync();
                 var result = JsonSerializer.Deserialize<ErpAuthResponse>(body);
-                if (result != null && !string.IsNullOrEmpty(result.AccessToken))
+                var token = result?.Data?.Token ?? result?.AccessToken;
+                if (!string.IsNullOrEmpty(token))
                 {
-                    _accessToken = result.AccessToken;
+                    _accessToken = token;
                     _tokenExpiry = DateTime.UtcNow.AddHours(23);
                     return true;
                 }
@@ -372,7 +373,7 @@ public class CdrBridgeService : IDisposable
     {
         try
         {
-            var response = await _httpClient.GetAsync("/api/v1/cdr/quotes?page=1&page_size=1");
+            var response = await _httpClient.GetAsync("/api/v1/auth/me");
             return response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.Unauthorized;
         }
         catch

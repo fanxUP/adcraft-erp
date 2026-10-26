@@ -17,20 +17,6 @@ class QuoteGroupResponse(BaseModel):
     sort_order: int = 0
 
 
-class QuoteGroupCreate(BaseModel):
-    group_id: str = Field(..., min_length=1)
-    group_name: str | None = None
-    sort_order: int = 0
-
-
-class QuoteGroupResponse(BaseModel):
-    id: str
-    quote_id: str
-    group_id: str
-    group_name: str | None = None
-    sort_order: int = 0
-
-
 class QuoteItemCreate(BaseModel):
     id: str | None = None
     product_id: str | None = None

@@ -71,7 +71,7 @@ async def test_acceptance_rejects_quote_that_is_not_confirmed():
     db.execute = AsyncMock(return_value=source_result)
 
     service = AcceptanceService(db)
-    with pytest.raises(ValueError, match="报价尚未确认"):
+    with pytest.raises(ValueError, match="历史报价仅供查询"):
         await service.create_acceptance({"quote_id": str(uuid4())})
 
 

@@ -1,0 +1,22 @@
+{
+  "network": [
+    {
+      "url": "http://192.168.0.102/api/v1/health",
+      "http": 200
+    },
+    {
+      "url": "http://192.168.0.102:8000/api/v1/health",
+      "error_type": "TimeoutError"
+    }
+  ],
+  "configured_default": "http://192.168.0.102/api/v1",
+  "verification": "Default URL/config verified; .NET/Windows/CorelDRAW compilation and complete capture workflow not executed.",
+  "static_checks": {
+    "dotnet_sdk_available": false,
+    "application_icon_declared": "Resources/app.ico",
+    "application_icon_exists": false,
+    "vba_login_token_field": "access_token",
+    "bridge_login_token_field": "root access_token",
+    "backend_login_token_field": "data.token"
+  }
+}

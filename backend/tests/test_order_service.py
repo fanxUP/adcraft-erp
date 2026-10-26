@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 """统一业务单据服务的订单路径回归测试。"""
 
 from datetime import date, datetime
@@ -110,7 +111,7 @@ async def test_order_with_received_payment_cannot_be_cancelled(service):
         unpaid_amount=Decimal("900"),
     )
 
-    with pytest.raises(ValueError, match="已有收款"):
+    with pytest.raises(ValueError, match="关联影响预览"):
         await order_service.change_status(
             SAMPLE_ORDER_ID,
             "cancelled",
@@ -413,7 +414,7 @@ async def test_order_cancellation_closes_all_open_delivery_tasks(service):
     design_task = MagicMock(status="confirmed")
     production_task = MagicMock(status="in_progress")
     installation_task = MagicMock(status="pending_acceptance")
-    acceptance = MagicMock(status="pending", deleted_at=None)
+    acceptance = MagicMock(status="draft", deleted_at=None)
     task_results = []
     for tasks in (
         [design_task],
@@ -427,19 +428,13 @@ async def test_order_cancellation_closes_all_open_delivery_tasks(service):
     db.execute.side_effect = task_results
     db.flush = AsyncMock()
 
-    result = await order_service.change_status(
-        SAMPLE_ORDER_ID,
-        "cancelled",
-        reason="客户取消",
-        operated_by=uuid4(),
-    )
-
-    assert result["status"] == "cancelled"
+    result = await order_service._cancel_open_tasks(SAMPLE_ORDER_ID)
+    assert len(result["tasks"]) == 2
     assert design_task.status == "confirmed"
     assert production_task.status == "cancelled"
     assert installation_task.status == "cancelled"
     assert acceptance.deleted_at is not None
-    assert order.deleted_at is not None
+    assert order.deleted_at is None
 
 
 @pytest.mark.asyncio
@@ -659,8 +654,8 @@ async def test_order_update_syncs_linked_framework_contract_projects():
 
     db = MagicMock()
     doc = make_order(project_name="奖牌制作", department="督察科")
-    project1 = MagicMock(project_name="奖牌制作", department="监管科")
-    project2 = MagicMock(project_name="奖牌制作", department="政治部人事科")
+    project1 = MagicMock(project_name="奖牌制作", department="监管科", contract=SimpleNamespace(status="draft"))
+    project2 = MagicMock(project_name="奖牌制作", department="政治部人事科", contract=SimpleNamespace(status="draft"))
 
     outsource_result = MagicMock()
     outsource_result.scalars.return_value.all.return_value = []
@@ -736,3 +731,13 @@ async def test_order_sales_total_update_does_not_overwrite_outsource_cost():
 
     assert task.unit_price == Decimal("10")
     assert task.total_amount == Decimal("20")
+
+
+@pytest.fixture(autouse=True)
+def isolate_statement_projection_in_unit_tests(monkeypatch):
+    async def locked_order(service, doc_id):
+        return await service.repo.get_by_id(doc_id)
+    monkeypatch.setattr(BusinessDocumentService, "_get_locked_order", locked_order)
+    # SQL-backed statement refresh/snapshot behavior is tested separately.
+    monkeypatch.setattr("app.services.payment_service.StatementService.capture_confirmed_for_customer", AsyncMock())
+    monkeypatch.setattr("app.services.payment_service.StatementService.refresh_drafts_for_customer", AsyncMock(return_value=[]))

@@ -1,0 +1,4 @@
+Read-only review: 4 (task_type, order_item_id) pairs have two active link rows.
+All 8 related task/link states are confirmed/completed with 100% progress.
+This is historical duplicate completion linkage, not evidence of concurrent ongoing execution.
+Detailed rows retained only in ignored local logs/project-audit-2026-10-26.

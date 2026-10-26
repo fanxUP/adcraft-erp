@@ -51,6 +51,10 @@ class ToolExecutor:
                 tool_name=tool_name, tool_args=args, risk_level=tool_def.risk_level, status="blocked", error_message=err)
             return {"status": "blocked", "error_message": err}
 
+        if tool_name == "create_order_confirmed":
+            from uuid import uuid4
+            args = {**args, "request_id": args.get("request_id") or str(uuid4())}
+
         # 3. Log tool call start
         log_entry = await self.audit_logger.log_tool_call(
             session_id=session_id, message_id=message_id, user_id=user.id,

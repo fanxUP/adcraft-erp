@@ -30,7 +30,6 @@ def active_unambiguous_contract_links():
         .where(
             Contract.deleted_at.is_(None),
             BusinessDocument.doc_type == "order",
-            BusinessDocument.deleted_at.is_(None),
         )
     )
     framework = (
@@ -49,7 +48,6 @@ def active_unambiguous_contract_links():
             FrameworkContractProject.deleted_at.is_(None),
             Contract.deleted_at.is_(None),
             BusinessDocument.doc_type == "order",
-            BusinessDocument.deleted_at.is_(None),
         )
     )
     active_links = union(regular, framework).subquery("active_contract_links")
@@ -81,7 +79,7 @@ class PaymentRepository:
         for_update: bool = False,
     ) -> Payment | None:
         query = (
-            select(Payment)
+            select(Payment).execution_options(populate_existing=True)
             .options(
                 selectinload(Payment.document).selectinload(BusinessDocument.customer),
                 selectinload(Payment.allocations).selectinload(PaymentAllocation.contract),
@@ -103,7 +101,7 @@ class PaymentRepository:
         is_voided: bool | None = None,
         contract_id: UUID | None = None,
     ) -> tuple[list[Payment], int]:
-        q = select(Payment).options(
+        q = select(Payment).execution_options(populate_existing=True).options(
             selectinload(Payment.document).selectinload(BusinessDocument.customer),
             selectinload(Payment.allocations).selectinload(PaymentAllocation.contract),
             selectinload(Payment.allocations).selectinload(PaymentAllocation.document),
@@ -340,7 +338,7 @@ class PaymentRepository:
                 Payment.is_voided.is_(False),
                 allocation_exists,
             )
-        )
+        ).subquery("legacy_contract_receipts")
         legacy_result = await self.db.execute(
             select(
                 legacy_rows.c.contract_id,
@@ -447,8 +445,8 @@ class StatementRepository:
                 and_(
                     BusinessDocument.customer_id == customer_id,
                     BusinessDocument.doc_type == "order",
-                    BusinessDocument.status != "cancelled",
-                    BusinessDocument.deleted_at.is_(None),
+                    BusinessDocument.status != "pending_confirm",
+                    or_(BusinessDocument.deleted_at.is_(None), BusinessDocument.total_amount > 0, BusinessDocument.paid_amount > 0),
                     BusinessDocument.order_date >= start.date(),
                     BusinessDocument.order_date <= end.date(),
                 )
@@ -478,7 +476,8 @@ class StatementRepository:
                 and_(
                     BusinessDocument.customer_id == customer_id,
                     BusinessDocument.doc_type == "order",
-                    BusinessDocument.deleted_at.is_(None),
+                    BusinessDocument.status != "pending_confirm",
+                    or_(BusinessDocument.deleted_at.is_(None), BusinessDocument.total_amount > 0),
                     BusinessDocument.unpaid_amount > 0,
                 )
             ).order_by(

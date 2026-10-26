@@ -84,7 +84,7 @@ Public Sub SmartQuoteSelection()
     captureId = ApiClient.ExtractJSONValue(result, "id")
     
     MsgBox "图稿数据已成功发送到 ERP！" & vbCrLf & vbCrLf & _
-           "请在 ERP 报价工作台中继续完成报价。" & vbCrLf & _
+           "请在 ERP 订单管理中新建订单并核对图稿明细。" & vbCrLf & _
            "采集编号: " & captureId, vbInformation, DOCKER_TITLE
     
     Exit Sub
@@ -168,7 +168,7 @@ Public Sub CheckERPAvailability()
     End If
     
     On Error GoTo ConnError
-    http.Open "GET", Config.ERP_BASE_URL & "/cdr/quotes?page=1&page_size=1", False
+    http.Open "GET", Config.ERP_BASE_URL & "/auth/me", False
     http.SetTimeouts 3000, 3000, 3000, 5000
     http.Send
     

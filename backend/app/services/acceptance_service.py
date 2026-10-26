@@ -87,10 +87,10 @@ class AcceptanceService:
             source = source_result.scalar_one_or_none()
             if not source:
                 raise ValueError("关联单据不存在或已取消")
-            if source.doc_type not in ("order", "quote"):
-                raise ValueError("验收单只能关联订单或报价")
-            if source.doc_type == "quote" and source.status != "confirmed":
-                raise ValueError("报价尚未确认，无法创建验收单")
+            if source.doc_type != "order":
+                raise ValueError("历史报价仅供查询，请选择订单创建验收单")
+            if source.status in {"pending_confirm", "cancelled"}:
+                raise ValueError("请先确认有效订单，再创建验收单")
             duplicate_result = await self.db.execute(
                 select(AcceptanceForm.id).where(
                     AcceptanceForm.document_id == doc_id,

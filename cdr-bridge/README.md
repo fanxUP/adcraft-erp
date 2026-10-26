@@ -11,7 +11,7 @@ Windows 本地桥接服务，负责：
 ## 系统要求
 - Windows 10/11 或 Windows Server 2019+
 - .NET 8 Runtime
-- 内网可访问 ERP 服务器 (192.168.0.102:8000)
+- 内网可访问 ERP 服务器 (192.168.0.102，经 Nginx 的 80 端口)
 
 ## 安装
 
@@ -28,7 +28,7 @@ Windows 本地桥接服务，负责：
   "Bridge": {
     "ListenPort": 9527,
     "ListenAddress": "127.0.0.1",
-    "ErpBaseUrl": "http://192.168.0.102:8000/api/v1",
+    "ErpBaseUrl": "http://192.168.0.102/api/v1",
     "DeviceCode": "CDR-DESKTOP-001",
     "DeviceName": "设计部-主设计机",
     "OfflineQueuePath": "C:\\ProgramData\\AdCraft\\CdrBridge\\offline"

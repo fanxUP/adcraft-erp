@@ -890,6 +890,8 @@ class OutsourceService:
         return self._task_to_dict(task, vname, pname)
 
     async def create_task(self, data: dict) -> dict:
+        if data.get("related_doc_type") == "quote":
+            raise ValueError("报价业务已停用，请选择订单发送外协")
         return await self._create_task(data)
 
     async def _create_task(

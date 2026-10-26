@@ -53,13 +53,16 @@ async def broadcast_to_user(user_id: uuid.UUID, data: dict) -> None:
         return
     message = json.dumps(data, default=str)
     dead = set()
-    for ws in _chat_ws_connections[user_id]:
+    # Sending yields control; a disconnect can remove a connection or the
+    # entire user's entry before the next send resumes.
+    for ws in tuple(_chat_ws_connections.get(user_id, ())):
         try:
             await ws.send_text(message)
         except Exception:
             dead.add(ws)
-    for ws in dead:
-        _chat_ws_connections[user_id].discard(ws)
+    connections = _chat_ws_connections.get(user_id)
+    if connections is not None:
+        connections.difference_update(dead)
     if not _chat_ws_connections.get(user_id):
         _chat_ws_connections.pop(user_id, None)
 

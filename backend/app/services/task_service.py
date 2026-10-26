@@ -1,6 +1,7 @@
 import inspect
 from collections.abc import Collection
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -329,6 +330,17 @@ async def acknowledge_task_order_review(
         return task
 
     task.scope_closed_reason = None
+    if isinstance(getattr(task, "document_id", None), UUID):
+        from app.models.business_document import OrderChangeAction
+        rows = (await db.execute(select(OrderChangeAction).where(
+            OrderChangeAction.document_id == task.document_id,
+            OrderChangeAction.module == f"{task_type}_tasks",
+            OrderChangeAction.record_key == str(task.id),
+            OrderChangeAction.action_type == "review", OrderChangeAction.status == "pending"
+        ).with_for_update())).scalars().all()
+        for row in rows:
+            row.status, row.resolution = "resolved", "已在任务页面复核订单变更执行参数"
+            row.resolved_by, row.resolved_at = operated_by, datetime.now()
     await db.flush()
     await log_operation(
         db,
@@ -2017,6 +2029,8 @@ async def _task_order_item_option_map(
         payload = {
             **TaskOrderItemOption.model_validate({
                 **item_payload,
+                "planned_quantity": float(link.planned_quantity) if link and isinstance(getattr(link, "planned_quantity", None), (int, float, Decimal)) else None,
+                "completed_quantity": float(link.completed_quantity) if link and isinstance(getattr(link, "completed_quantity", None), (int, float, Decimal)) else None,
                 "stage": stage,
                 "stage_label": ORDER_ITEM_STAGE_LABELS[stage],
                 "stage_view": make_status_view(
@@ -2510,6 +2524,8 @@ async def _enrich_task_order(
                 else None
             )
             item_states[str(item_id)] = {
+                "planned_quantity": float(link.planned_quantity) if link and isinstance(getattr(link, "planned_quantity", None), (int, float, Decimal)) else None,
+                "completed_quantity": float(link.completed_quantity) if link and isinstance(getattr(link, "completed_quantity", None), (int, float, Decimal)) else None,
                 "status": status,
                 "status_label": _item_status_label(task_type, status),
                 "progress_pct": max(0, min(100, progress)),
@@ -3556,6 +3572,29 @@ async def _rollback_task_items(
     return processable_item_ids
 
 
+async def _capture_completed_scope(db, selected_links, selected_ids):
+    """Freeze the actual completed work-unit scope without using progress %."""
+    from app.models.business_document import BusinessDocumentItem
+    scope_items = (await db.execute(select(BusinessDocumentItem).where(BusinessDocumentItem.id.in_(selected_ids)))).scalars().all()
+    scope_by_id = {item.id: item for item in scope_items}
+    from app.services.business_document_service import BusinessDocumentService
+    for link in selected_links:
+        item = scope_by_id.get(link.order_item_id)
+        if item:
+            if link.planned_quantity is None:
+                link.planned_quantity = item.quantity
+            link.completed_quantity = link.planned_quantity
+            link.scope_snapshot = link.scope_snapshot or BusinessDocumentService._item_snapshot(item)
+
+
+async def _assert_live_task_order(db, task):
+    from app.models.business_document import BusinessDocument
+    row = (await db.execute(select(BusinessDocument.status, BusinessDocument.deleted_at)
+        .where(BusinessDocument.id == task.document_id).with_for_update())).one_or_none()
+    if row is None or row.deleted_at is not None or row.status in {"pending_confirm", "cancelled"}:
+        raise ValueError("订单未确认或已取消，请刷新任务后重试")
+
+
 async def _apply_task_item_status_change(
     db: AsyncSession,
     task_type: str,
@@ -3570,6 +3609,7 @@ async def _apply_task_item_status_change(
     _ensure_task_stage_change_permission(task_type, viewer)
     if _is_completed_item_status(task_type, to_status) and task_order_review_required(task):
         raise ValueError("订单变更待复核，请先确认任务执行参数后再完成任务")
+    await _assert_live_task_order(db, task)
     if to_status == TASK_CANCELLED_STATUS:
         if task_type == "design":
             raise ValueError("设计明细不能单独取消，如需撤回请删除整张设计任务")
@@ -3676,6 +3716,8 @@ async def _apply_task_item_status_change(
             ),
         )
     )
+    if _is_completed_item_status(task_type, to_status):
+        await _capture_completed_scope(db, selected_links, selected_ids)
     event_time = _business_now_naive()
     status_logs = [
         TaskItemStatusLog(
@@ -4243,7 +4285,7 @@ class DesignTaskService:
             from app.models.task import InstallationTask, ProductionTask
             from app.services.business_document_service import BusinessDocumentService
 
-            order = await self.db.get(BusinessDocument, doc_id)
+            order = await self.db.get(BusinessDocument, doc_id, with_for_update=True)
             if order and order.doc_type == "order" and order.status in ("designing", "in_production", "in_installation"):
                 # Cancel downstream auto-created tasks
                 for model_cls in (ProductionTask, InstallationTask):
@@ -4672,7 +4714,7 @@ class ProductionTaskService:
             from app.models.task import InstallationTask
             from app.services.business_document_service import BusinessDocumentService
 
-            order = await self.db.get(BusinessDocument, doc_id)
+            order = await self.db.get(BusinessDocument, doc_id, with_for_update=True)
             if order and order.doc_type == "order" and order.status in ("in_production", "in_installation"):
                 # Cancel downstream installation task
                 result = await self.db.execute(
@@ -5072,7 +5114,7 @@ class InstallationTaskService:
             from app.models.business_document import BusinessDocument
             from app.services.business_document_service import BusinessDocumentService
 
-            order = await self.db.get(BusinessDocument, doc_id)
+            order = await self.db.get(BusinessDocument, doc_id, with_for_update=True)
             if order and order.doc_type == "order" and order.status == "in_installation":
                 # Soft-delete acceptance if exists. Deleting a task is a
                 # rollback operation; it must never be interpreted as proof

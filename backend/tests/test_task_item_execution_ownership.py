@@ -274,3 +274,11 @@ async def test_authenticated_status_change_does_not_mutate_legacy_task_owner():
         )
 
     assert task.assigned_to == old_owner
+
+
+@pytest.fixture(autouse=True)
+def isolate_parent_lock_and_scope_persistence(monkeypatch):
+    # Unit state-machine/ownership tests use repository doubles; real order
+    # locking and completed quantity snapshots are covered in SQL integration.
+    monkeypatch.setattr("app.services.task_service._assert_live_task_order", AsyncMock())
+    monkeypatch.setattr("app.services.task_service._capture_completed_scope", AsyncMock())

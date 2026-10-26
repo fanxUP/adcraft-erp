@@ -3,7 +3,6 @@
 from app.domain.workflows import (
     ACCEPTANCE_WORKFLOW,
     ORDER_WORKFLOW,
-    QUOTE_WORKFLOW,
 )
 
 from .common import action, guidance_result, unknown_guidance
@@ -222,37 +221,6 @@ def build_acceptance_guidance(snapshot: dict) -> dict:
 
 def build_quote_guidance(snapshot: dict) -> dict:
     quote_id = str(snapshot.get("business_id") or "")
-    status = str(snapshot.get("status") or "")
-    path = f"/quotes/{quote_id}/edit"
-    steps = {
-        "draft": ("报价阶段", "核对并确认报价", "confirmed", "报价单状态变为“已确认”"),
-        "confirmed": ("报价转单阶段", "转换为正式订单", "converted", "报价单状态变为“已转换”并生成订单"),
-    }
-    if status in steps:
-        step, label, target, completion = steps[status]
-        return guidance_result(
-            snapshot,
-            step,
-            [],
-            action(
-                label,
-                "报价编辑",
-                path,
-                target_status=target,
-                target_key=f"quote-status-{target}",
-            ),
-            completion,
-            QUOTE_WORKFLOW,
-        )
-    if status == "converted":
-        return guidance_result(
-            snapshot,
-            "报价已转订单",
-            [],
-            action("查看正式订单", "订单管理", "/orders"),
-            "在订单管理中继续交付流程",
-            QUOTE_WORKFLOW,
-        )
-    if status == "cancelled":
-        return guidance_result(snapshot, "报价已取消", [], None, "报价单保持已取消状态", QUOTE_WORKFLOW)
-    return unknown_guidance(snapshot, "/quotes")
+    return guidance_result(snapshot, "历史报价档案", [],
+        action("查看历史来源；新业务直接创建订单", "历史报价档案", f"/quotes/{quote_id}/edit"),
+        "历史来源只读保留，新增业务使用订单", {})

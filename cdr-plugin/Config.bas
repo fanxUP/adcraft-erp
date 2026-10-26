@@ -1,5 +1,5 @@
 Attribute VB_Name = "Config"
-Public Const ERP_BASE_URL As String = "http://192.168.0.102:8000/api/v1"
+Public Const ERP_BASE_URL As String = "http://192.168.0.102/api/v1"
 Public Const DEVICE_CODE As String = "CDR-DESKTOP-001"
 Public Const DEVICE_NAME As String = "设计部-主设计机"
 Public Const PLUGIN_VERSION As String = "1.0.0"

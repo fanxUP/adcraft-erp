@@ -36,7 +36,8 @@ from app.utils.excel_import import ExcelImportResult, parse_excel, format_value,
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/quotes", tags=["Quotes"])
+from app.core.quotation_archive import quotation_archive_only
+router = APIRouter(prefix="/quotes", tags=["Quotes"], dependencies=[Depends(quotation_archive_only)])
 
 
 @router.get("/")
@@ -54,7 +55,7 @@ async def list_quotes(
     service = BusinessDocumentService(db, doc_type='quote')
     cid = UUID(customer_id) if customer_id else None
     # 默认列表只展示可继续处理的报价；状态筛选是显式查询，因此仍可查看已转订单/已作废。
-    excluded_statuses = None if status else ["converted", "cancelled"]
+    excluded_statuses = None
     quotes, total = await service.list_all(
         page, page_size, status, cid, keyword=keyword,
         exclude_status=excluded_statuses,

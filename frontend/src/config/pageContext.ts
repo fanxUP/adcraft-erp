@@ -17,6 +17,8 @@ const pageContexts: Record<string, PageContext> = {
   Home: { page: 'dashboard' },
   CustomerList: { page: 'customer_list', business_type: 'customer' },
   CustomerDetail: { page: 'customer_detail', business_type: 'customer' },
+  OrderCreate: { page: 'order_create', business_type: 'order' },
+  OrderEdit: { page: 'order_edit', business_type: 'order' },
   OrderList: { page: 'order_list', business_type: 'order' },
   OrderRecycle: { page: 'order_recycle', business_type: 'order' },
   OrderDetail: { page: 'order_detail', business_type: 'order' },

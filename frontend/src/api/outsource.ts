@@ -36,22 +36,6 @@ export function getOutsourceVendors(params: { page?: number; page_size?: number;
   return get<PaginatedData<VendorResponse>>('/outsource/vendors', { params })
 }
 
-export function getOutsourceVendor(id: string) {
-  return get<VendorResponse>(`/outsource/vendors/${id}`)
-}
-
-export function createOutsourceVendor(data: Omit<Partial<VendorResponse>, 'id' | 'created_at'>) {
-  return post<VendorResponse>('/outsource/vendors', data)
-}
-
-export function updateOutsourceVendor(id: string, data: Partial<Omit<VendorResponse, 'id' | 'created_at'>>) {
-  return put<VendorResponse>(`/outsource/vendors/${id}`, data)
-}
-
-export function deleteOutsourceVendor(id: string) {
-  return del<SuccessResponse>(`/outsource/vendors/${id}`)
-}
-
 export function getOutsourceTasks(params: { page?: number; page_size?: number; status?: string; vendor_id?: string; order_id?: string; order_item_id?: string; task_type?: string; source_task_id?: string; source_task_type?: string }) {
   return get<PaginatedData<OutsourceTaskResponse>>('/outsource/tasks', { params })
 }

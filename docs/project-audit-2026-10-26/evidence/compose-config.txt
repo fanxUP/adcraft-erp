@@ -1,0 +1,2 @@
+Isolated temporary project directory with source symlinks and example .env; no container operations.
+exit=0

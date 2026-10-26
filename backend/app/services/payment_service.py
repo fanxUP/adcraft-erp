@@ -251,6 +251,7 @@ class PaymentService:
         )
         if compatibility_document_id:
             payment.document = locked_orders.get(compatibility_document_id)
+        await StatementService(self.db).capture_confirmed_for_customer(customer_id)
         await self.repo.create(payment)
 
         allocations = []
@@ -295,6 +296,7 @@ class PaymentService:
                 notified_users.add(order.sales_user_id)
         await self.db.flush()
 
+        await StatementService(self.db).refresh_drafts_for_customer(customer_id)
         return self._to_dict(payment)
 
     async def void_payment(self, payment_id: UUID, reason: str) -> dict:
@@ -308,6 +310,20 @@ class PaymentService:
         if p.is_voided:
             raise ValueError("该收款已作废")
 
+        from sqlalchemy import exists
+        has_refunds = (await self.db.execute(select(exists().where(
+            Payment.reference_payment_id == p.id, Payment.is_voided.is_(False))))).scalar()
+        if has_refunds is True:
+            raise ValueError("该收款已有实际退款，请先核对退款流水，不能直接作废原收款")
+
+        raw_allocations = getattr(p, "allocations", None)
+        if isinstance(raw_allocations, (list, tuple, set)) and any(
+            isinstance(getattr(a, "allocated_amount", None), (int, float, Decimal))
+            and a.allocated_amount < 0 for a in raw_allocations
+        ):
+            raise ValueError("该收款已发生预收转出或重新分配，请通过资金处理核对，不能直接作废原凭据")
+
+        await StatementService(self.db).capture_confirmed_for_customer(p.customer_id)
         await self.repo.void(p, reason)
 
         raw_allocations = getattr(p, "allocations", None)
@@ -349,6 +365,7 @@ class PaymentService:
                 contract.unpaid_amount = max(Decimal("0"), total - paid)
         await self.db.flush()
 
+        await StatementService(self.db).refresh_drafts_for_customer(p.customer_id)
         return self._to_dict(p)
 
     def _to_dict(self, p: Payment) -> dict:
@@ -394,6 +411,8 @@ class PaymentService:
             "contract_id": str(contract.id) if contract else None,
             "contract_no": contract.contract_no if contract else None,
             "amount": float(p.amount),
+            "record_type": p.record_type if isinstance(getattr(p, "record_type", None), str) else "receipt",
+            "reference_payment_id": str(p.reference_payment_id) if isinstance(getattr(p, "reference_payment_id", None), UUID) else None,
             "payment_method": p.payment_method,
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
             "remark": p.remark,
@@ -445,7 +464,8 @@ class StatementService:
         documents = await self.repo.get_documents_in_range(data["customer_id"], start, end)
         documents = [
             document for document in documents
-            if document.doc_type == "order" and document.status != "cancelled"
+            if document.doc_type == "order" and document.status != "pending_confirm"
+            and (document.deleted_at is None or document.total_amount > 0 or document.paid_amount > 0)
         ]
         payments = await self.repo.get_payments_in_range(data["customer_id"], start, end)
 
@@ -466,12 +486,43 @@ class StatementService:
         await self.repo.create(stmt)
         return await self._to_detail(stmt, documents, payments)
 
+    async def capture_confirmed_for_customer(self, customer_id):
+        rows = (await self.db.execute(select(CustomerStatement).where(
+            CustomerStatement.customer_id == customer_id, CustomerStatement.status == "confirmed",
+            CustomerStatement.snapshot_json.is_(None)).with_for_update())).scalars().all()
+        for statement in rows:
+            statement.snapshot_json = await self._live_content(statement)
+        await self.db.flush()
+
+    async def refresh_drafts_for_customer(self, customer_id):
+        rows = (await self.db.execute(select(CustomerStatement).where(
+            CustomerStatement.customer_id == customer_id, CustomerStatement.status == "draft").with_for_update())).scalars().all()
+        for statement in rows:
+            content = await self._live_content(statement)
+            statement.total_order_amount = sum(Decimal(str(row.get("total_amount") or 0)) for row in content["orders"])
+            statement.total_paid_amount = sum(Decimal(str(row.get("amount") or 0)) for row in content["payments"])
+            statement.total_unpaid_amount = statement.total_order_amount - statement.total_paid_amount
+        await self.db.flush()
+        return rows
+
+    async def _live_content(self, statement, documents=None, payments=None):
+        if documents is None:
+            documents = await self.repo.get_documents_in_range(statement.customer_id, statement.start_date, statement.end_date)
+        if payments is None:
+            payments = await self.repo.get_payments_in_range(statement.customer_id, statement.start_date, statement.end_date)
+        return {"orders": [BusinessDocumentService._to_ref(d) for d in documents],
+                "payments": [StatementPaymentItem.model_validate(p).model_dump(mode="json") for p in payments]}
+
     async def confirm_statement(self, statement_id: UUID, confirmed_by: UUID) -> dict:
         s = await self.repo.get_by_id(statement_id)
         if not s:
             raise ValueError("对账单不存在")
         if s.status != "draft":
             raise ValueError("仅草稿对账单可以确认")
+        s.snapshot_json = await self._live_content(s)
+        s.total_order_amount = sum(Decimal(str(row.get("total_amount") or 0)) for row in s.snapshot_json["orders"])
+        s.total_paid_amount = sum(Decimal(str(row.get("amount") or 0)) for row in s.snapshot_json["payments"])
+        s.total_unpaid_amount = s.total_order_amount - s.total_paid_amount
         await self.repo.update(s, {"status": "confirmed", "confirmed_at": _utc_now(), "confirmed_by": confirmed_by})
         return await self._to_detail(s)
 
@@ -498,17 +549,11 @@ class StatementService:
         }
 
     async def _to_detail(self, s: CustomerStatement, documents: list | None = None, payments: list | None = None) -> dict:
-        if documents is None:
-            documents = await self.repo.get_documents_in_range(s.customer_id, s.start_date, s.end_date)
-        if payments is None:
-            payments = await self.repo.get_payments_in_range(s.customer_id, s.start_date, s.end_date)
         base = self._to_summary(s)
-        base["orders"] = [BusinessDocumentService._to_ref(d) for d in documents]
-        base["payments"] = [
-            StatementPaymentItem.model_validate(p).model_dump(mode="json")
-            for p in payments
-        ]
+        content = s.snapshot_json if s.status == "confirmed" and isinstance(s.snapshot_json, dict) else await self._live_content(s, documents, payments)
+        base.update(content)
         return base
+
 
 
 class ExpenseService:

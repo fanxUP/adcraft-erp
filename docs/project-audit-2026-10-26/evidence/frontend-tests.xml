@@ -1,0 +1,517 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="222" failures="0" errors="0" time="1.000718842">
+    <testsuite name="src/api/requestContract.test.ts" timestamp="2026-10-26T04:43:28.824Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="4" failures="0" errors="0" skipped="0" time="0.008460619">
+        <testcase classname="src/api/requestContract.test.ts" name="api contract helpers &gt; recognizes the shared response envelope without rejecting legacy payloads" time="0.002895887">
+        </testcase>
+        <testcase classname="src/api/requestContract.test.ts" name="api contract helpers &gt; preserves status, business code and request id for conflict errors" time="0.001543959">
+        </testcase>
+        <testcase classname="src/api/requestContract.test.ts" name="api contract helpers &gt; maps validation fields and network failures to stable user feedback" time="0.000577469">
+        </testcase>
+        <testcase classname="src/api/requestContract.test.ts" name="api contract helpers &gt; covers the shared transport error matrix" time="0.000946753">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/config/access.test.ts" timestamp="2026-10-26T04:43:28.828Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="15" failures="0" errors="0" skipped="0" time="0.018292599">
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; allows authenticated pages and blocks protected role pages for the wrong role" time="0.003600556">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; shares role groups while allowing read-only routes to be broader than navigation" time="0.001201881">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; hides task-list routes from execution roles while preserving direct task details" time="0.001179326">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; lets any delivery-stage operator enter the shared project board" time="0.000445306">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; gives the manager operational read access without commercial or write access" time="0.000480101">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; protects the standalone completed-project detail route with completion read permission" time="0.000597175">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; keeps legacy route meta roles as an additional guard" time="0.000272115">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; returns stable titles for shell context without changing business rules" time="0.000251699">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; does not expose smart tools that would only lead to a forbidden page" time="0.002215494">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; uses server permissions for custom roles without changing built-in role behavior" time="0.000654728">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; uses atomic permissions for sales, order and finance pages" time="0.000873827">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; connects resource-center page access to explicit server permissions" time="0.000810491">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; keeps external vendor and task entries independently permissioned" time="0.000404402">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; keeps unified supplier access separate from task execution roles" time="0.000414669">
+        </testcase>
+        <testcase classname="src/config/access.test.ts" name="page access matrix &gt; keeps AI pages aligned with their exact backend permission contracts" time="0.000373211">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/config/navigation.test.ts" timestamp="2026-10-26T04:43:28.839Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="8" failures="0" errors="0" skipped="0" time="0.037095881">
+        <testcase classname="src/config/navigation.test.ts" name="filterNavigation &gt; shows sales workflow without admin sections" time="0.003825747">
+        </testcase>
+        <testcase classname="src/config/navigation.test.ts" name="filterNavigation &gt; keeps only permitted delivery entries for installers" time="0.000427324">
+        </testcase>
+        <testcase classname="src/config/navigation.test.ts" name="filterNavigation &gt; gives administrators access to AI business knowledge health" time="0.001060697">
+        </testcase>
+        <testcase classname="src/config/navigation.test.ts" name="filterNavigation &gt; places 项目看板 as a top-level item right below 工作台 for production roles" time="0.022952996">
+        </testcase>
+        <testcase classname="src/config/navigation.test.ts" name="filterNavigation &gt; shows the shared 项目看板 to sales read roles" time="0.001773202">
+        </testcase>
+        <testcase classname="src/config/navigation.test.ts" name="filterNavigation &gt; shows only the delivery entry granted to a custom permission role" time="0.000728814">
+        </testcase>
+        <testcase classname="src/config/navigation.test.ts" name="filterNavigation &gt; shows resource-center groups only when their server permission exists" time="0.001628119">
+        </testcase>
+        <testcase classname="src/config/navigation.test.ts" name="filterNavigation &gt; does not merge external vendor and task navigation permissions" time="0.002219205">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/config/pageContext.test.ts" timestamp="2026-10-26T04:43:28.842Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="6" failures="0" errors="0" skipped="0" time="0.00884877">
+        <testcase classname="src/config/pageContext.test.ts" name="resolvePageContext &gt; describes the current order page and adds its business id" time="0.003376428">
+        </testcase>
+        <testcase classname="src/config/pageContext.test.ts" name="resolvePageContext &gt; uses one capability as the source for labels and quick actions" time="0.000658243">
+        </testcase>
+        <testcase classname="src/config/pageContext.test.ts" name="resolvePageContext &gt; describes resource pages outside the core order flow" time="0.001063151">
+        </testcase>
+        <testcase classname="src/config/pageContext.test.ts" name="resolvePageContext &gt; turns normal page actions into guidance prompts when no custom prompts exist" time="0.000435543">
+        </testcase>
+        <testcase classname="src/config/pageContext.test.ts" name="resolvePageContext &gt; returns an empty context for unknown routes" time="0.000252358">
+        </testcase>
+        <testcase classname="src/config/pageContext.test.ts" name="resolvePageContext &gt; describes the AI business knowledge health page" time="0.000308432">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/stores/aiAssistantStore.test.ts" timestamp="2026-10-26T04:43:28.843Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="10" failures="0" errors="0" skipped="0" time="0.345369002">
+        <testcase classname="src/stores/aiAssistantStore.test.ts" name="AI assistant proactive workflow guidance &gt; automatically checks the current business state when the drawer opens" time="0.064835726">
+        </testcase>
+        <testcase classname="src/stores/aiAssistantStore.test.ts" name="AI assistant proactive workflow guidance &gt; discards an old response after the user navigates to another record" time="0.053596463">
+        </testcase>
+        <testcase classname="src/stores/aiAssistantStore.test.ts" name="AI assistant proactive workflow guidance &gt; rechecks the next step after a confirmed AI operation" time="0.053401161">
+        </testcase>
+        <testcase classname="src/stores/aiAssistantStore.test.ts" name="AI assistant proactive workflow guidance &gt; closes the drawer and marks a page action complete after business progress" time="0.054374777">
+        </testcase>
+        <testcase classname="src/stores/aiAssistantStore.test.ts" name="AI assistant proactive workflow guidance &gt; queues a cross-page continuation after a terminal task action" time="0.054176413">
+        </testcase>
+        <testcase classname="src/stores/aiAssistantStore.test.ts" name="AI assistant proactive workflow guidance &gt; restores an unfinished page guide after the store is recreated" time="0.003163607">
+        </testcase>
+        <testcase classname="src/stores/aiAssistantStore.test.ts" name="AI assistant proactive workflow guidance &gt; keeps a reviewable form draft when starting a page guide" time="0.002370563">
+        </testcase>
+        <testcase classname="src/stores/aiAssistantStore.test.ts" name="AI assistant proactive workflow guidance &gt; does not carry an in-memory guide into another user account" time="0.001149852">
+        </testcase>
+        <testcase classname="src/stores/aiAssistantStore.test.ts" name="AI assistant proactive workflow guidance &gt; persists the cross-page continuation as the next guide to resume" time="0.053930331">
+        </testcase>
+        <testcase classname="src/stores/aiAssistantStore.test.ts" name="AI assistant proactive workflow guidance &gt; verifies and completes a persisted order action from a finance page" time="0.001565863">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/actionPreview.test.ts" timestamp="2026-10-26T04:43:28.846Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="2" failures="0" errors="0" skipped="0" time="0.00774526">
+        <testcase classname="src/utils/actionPreview.test.ts" name="buildActionPreview &gt; formats order status changes for human review" time="0.004109199">
+        </testcase>
+        <testcase classname="src/utils/actionPreview.test.ts" name="buildActionPreview &gt; keeps a readable fallback for unknown preview shapes" time="0.001256082">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/chatPresentation.test.ts" timestamp="2026-10-26T04:43:28.847Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="3" failures="0" errors="0" skipped="0" time="0.007890743">
+        <testcase classname="src/utils/chatPresentation.test.ts" name="chat presentation helpers &gt; uses the canonical order workflow labels" time="0.003391313">
+        </testcase>
+        <testcase classname="src/utils/chatPresentation.test.ts" name="chat presentation helpers &gt; formats file sizes" time="0.000498292">
+        </testcase>
+        <testcase classname="src/utils/chatPresentation.test.ts" name="chat presentation helpers &gt; shows a timestamp after a five minute gap" time="0.001593487">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/completed-project-board.test.ts" timestamp="2026-10-26T04:43:28.848Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="10" failures="0" errors="0" skipped="0" time="0.019684601">
+        <testcase classname="src/utils/completed-project-board.test.ts" name="完成项目看板 &gt; 独立项目看板增加完成列并使用完成项目接口" time="0.003590766">
+        </testcase>
+        <testcase classname="src/utils/completed-project-board.test.ts" name="完成项目看板 &gt; 工作台使用同一完成项目接口而不是复制完成筛选逻辑" time="0.001568583">
+        </testcase>
+        <testcase classname="src/utils/completed-project-board.test.ts" name="完成项目看板 &gt; 完成卡片和独立详情页是只读展示，不提供状态或恢复操作" time="0.001202152">
+        </testcase>
+        <testcase classname="src/utils/completed-project-board.test.ts" name="完成项目看板 &gt; 工作台只保留完成统计摘要，不再显示完成明细提示卡片" time="0.000790355">
+        </testcase>
+        <testcase classname="src/utils/completed-project-board.test.ts" name="完成项目看板 &gt; 工作台将员工完成统计收起为可点击入口卡片" time="0.000793787">
+        </testcase>
+        <testcase classname="src/utils/completed-project-board.test.ts" name="完成项目看板 &gt; 独立完成统计页提供管理员全员表和员工明细入口" time="0.000880291">
+        </testcase>
+        <testcase classname="src/utils/completed-project-board.test.ts" name="完成项目看板 &gt; 独立完成详情页复用只读详情接口并处理加载、错误和空数据状态" time="0.001195006">
+        </testcase>
+        <testcase classname="src/utils/completed-project-board.test.ts" name="完成项目看板 &gt; 完成详情按订单阶段整行展示共享只读资料组件" time="0.001206225">
+        </testcase>
+        <testcase classname="src/utils/completed-project-board.test.ts" name="完成项目看板 &gt; 前端 API 和类型包含完成项目列表与只读详情契约" time="0.00429957">
+        </testcase>
+        <testcase classname="src/utils/completed-project-board.test.ts" name="完成项目看板 &gt; 完成统计页复用服务端分页明细 API 和独立权限路由" time="0.001203279">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/expenditure.test.ts" timestamp="2026-10-26T04:43:28.851Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="6" failures="0" errors="0" skipped="0" time="0.009681982">
+        <testcase classname="src/utils/expenditure.test.ts" name="expenditure display contracts &gt; uses the actual document kind, including incurred quote-stage costs" time="0.004377456">
+        </testcase>
+        <testcase classname="src/utils/expenditure.test.ts" name="expenditure display contracts &gt; keeps missing disbursement dates unverified instead of guessing" time="0.000590281">
+        </testcase>
+        <testcase classname="src/utils/expenditure.test.ts" name="expenditure display contracts &gt; labels latest payment dates and distinguishes unverified paid amounts from unpaid records" time="0.000492808">
+        </testcase>
+        <testcase classname="src/utils/expenditure.test.ts" name="expenditure display contracts &gt; localizes external capabilities without rewriting ordinary categories" time="0.00044138">
+        </testcase>
+        <testcase classname="src/utils/expenditure.test.ts" name="expenditure display contracts &gt; only allows the latest async response to update a view" time="0.000538865">
+        </testcase>
+        <testcase classname="src/utils/expenditure.test.ts" name="expenditure display contracts &gt; links external records without constructing an unauthorized CRUD action" time="0.000540751">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/expenseAmount.test.ts" timestamp="2026-10-26T04:43:28.852Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="4" failures="0" errors="0" skipped="0" time="0.009564552">
+        <testcase classname="src/utils/expenseAmount.test.ts" name="normalizeExpenseAmounts &gt; uses the payable amount as the total when total is empty" time="0.003417602">
+        </testcase>
+        <testcase classname="src/utils/expenseAmount.test.ts" name="normalizeExpenseAmounts &gt; keeps an explicitly entered total and payable amount" time="0.000600435">
+        </testcase>
+        <testcase classname="src/utils/expenseAmount.test.ts" name="normalizeExpenseAmounts &gt; rejects an empty total and empty payable amount" time="0.00141545">
+        </testcase>
+        <testcase classname="src/utils/expenseAmount.test.ts" name="normalizeExpenseAmounts &gt; rejects a payable amount above the total" time="0.000453714">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/format.test.ts" timestamp="2026-10-26T04:43:28.854Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="2" failures="0" errors="0" skipped="0" time="0.013534462">
+        <testcase classname="src/utils/format.test.ts" name="统一销售与财务格式 &gt; 金额保留两位小数并安全处理空值" time="0.01024896">
+        </testcase>
+        <testcase classname="src/utils/format.test.ts" name="统一销售与财务格式 &gt; 数字和百分比不会输出 NaN 或超出范围" time="0.000943953">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/installationDraft.test.ts" timestamp="2026-10-26T04:43:28.855Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="1" failures="0" errors="0" skipped="0" time="0.044542463">
+        <testcase classname="src/utils/installationDraft.test.ts" name="installation draft helper &gt; applies only non-empty safe suggestions to the local form" time="0.01902295">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/orderEditorDraft.test.ts" timestamp="2026-10-26T04:43:28.855Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="3" failures="0" errors="0" skipped="0" time="0.013093521">
+        <testcase classname="src/utils/orderEditorDraft.test.ts" name="order editor draft helpers &gt; separates added, updated and deleted items while preserving stable ids" time="0.006133681">
+        </testcase>
+        <testcase classname="src/utils/orderEditorDraft.test.ts" name="order editor draft helpers &gt; serializes the quote-compatible item fields without trusting client totals" time="0.002169596">
+        </testcase>
+        <testcase classname="src/utils/orderEditorDraft.test.ts" name="order editor draft helpers &gt; builds deterministic group order and retains empty groups" time="0.002439585">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/pageActionGuide.test.ts" timestamp="2026-10-26T04:43:28.856Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="8" failures="0" errors="0" skipped="0" time="0.034390631">
+        <testcase classname="src/utils/pageActionGuide.test.ts" name="page action guidance helpers &gt; detects completion when the target status is reached" time="0.002653849">
+        </testcase>
+        <testcase classname="src/utils/pageActionGuide.test.ts" name="page action guidance helpers &gt; keeps guiding while the same exact action remains next" time="0.000337556">
+        </testcase>
+        <testcase classname="src/utils/pageActionGuide.test.ts" name="page action guidance helpers &gt; detects completion when workflow advances to another control" time="0.000383794">
+        </testcase>
+        <testcase classname="src/utils/pageActionGuide.test.ts" name="page action guidance helpers &gt; verifies installation draft completion from checklist state" time="0.000440064">
+        </testcase>
+        <testcase classname="src/utils/pageActionGuide.test.ts" name="page action guidance helpers &gt; verifies a real task control from its matching checklist item" time="0.00044331">
+        </testcase>
+        <testcase classname="src/utils/pageActionGuide.test.ts" name="page action guidance helpers &gt; continues automatically only when the next action moves to another page" time="0.00167271">
+        </testcase>
+        <testcase classname="src/utils/pageActionGuide.test.ts" name="page action guidance helpers &gt; compares workflow paths without being affected by trailing slashes" time="0.000370686">
+        </testcase>
+        <testcase classname="src/utils/pageActionGuide.test.ts" name="page action guidance helpers &gt; keeps the callout inside a narrow viewport" time="0.000579054">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/pageGuidePersistence.test.ts" timestamp="2026-10-26T04:43:28.858Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="5" failures="0" errors="0" skipped="0" time="0.013727654">
+        <testcase classname="src/utils/pageGuidePersistence.test.ts" name="page guide persistence &gt; restores a valid guide only for its owner" time="0.004025479">
+        </testcase>
+        <testcase classname="src/utils/pageGuidePersistence.test.ts" name="page guide persistence &gt; removes an expired guide instead of restoring it" time="0.000748132">
+        </testcase>
+        <testcase classname="src/utils/pageGuidePersistence.test.ts" name="page guide persistence &gt; restores a strictly parsed installation form draft" time="0.000804544">
+        </testcase>
+        <testcase classname="src/utils/pageGuidePersistence.test.ts" name="page guide persistence &gt; removes malformed or unsafe persisted data" time="0.000644444">
+        </testcase>
+        <testcase classname="src/utils/pageGuidePersistence.test.ts" name="page guide persistence &gt; never blocks guidance when browser storage is unavailable" time="0.001464164">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/printSafety.test.ts" timestamp="2026-10-26T04:43:28.860Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="2" failures="0" errors="0" skipped="0" time="0.006151958">
+        <testcase classname="src/utils/printSafety.test.ts" name="打印动态文本安全处理 &gt; 转义 HTML 特殊字符，避免业务字段变成可执行标记" time="0.002661261">
+        </testcase>
+        <testcase classname="src/utils/printSafety.test.ts" name="打印动态文本安全处理 &gt; 保留零值并为缺失值提供可读占位符" time="0.000535387">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/productMaterialProcess.test.ts" timestamp="2026-10-26T04:43:28.860Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="4" failures="0" errors="0" skipped="0" time="0.009681929">
+        <testcase classname="src/utils/productMaterialProcess.test.ts" name="formatProductMaterialProcess &gt; joins product, material and process from one master record" time="0.002551729">
+        </testcase>
+        <testcase classname="src/utils/productMaterialProcess.test.ts" name="formatProductMaterialProcess &gt; omits empty fields without leaving separators" time="0.000411682">
+        </testcase>
+        <testcase classname="src/utils/productMaterialProcess.test.ts" name="applyProductMaterialProcess &gt; uses one master record and clears legacy material/process ids" time="0.002942003">
+        </testcase>
+        <testcase classname="src/utils/productMaterialProcess.test.ts" name="applyProductMaterialProcess &gt; keeps the current unit price when the master price is zero" time="0.000427579">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/project-board-cost-department.test.ts" timestamp="2026-10-26T04:43:28.862Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="5" failures="0" errors="0" skipped="0" time="0.029111671">
+        <testcase classname="src/utils/project-board-cost-department.test.ts" name="项目看板与项目成本的部门/科室展示 &gt; 独立项目看板包含项目队列列并使用共享项目队列卡片" time="0.002913199">
+        </testcase>
+        <testcase classname="src/utils/project-board-cost-department.test.ts" name="项目看板与项目成本的部门/科室展示 &gt; 工作台和独立项目看板使用同一项目队列加载方法与卡片" time="0.001247103">
+        </testcase>
+        <testcase classname="src/utils/project-board-cost-department.test.ts" name="项目看板与项目成本的部门/科室展示 &gt; 项目队列只保留待确认和已确认订单，并按订单去重" time="0.019530187">
+        </testcase>
+        <testcase classname="src/utils/project-board-cost-department.test.ts" name="项目看板与项目成本的部门/科室展示 &gt; 项目成本列表声明并渲染部门/科室列" time="0.001840804">
+        </testcase>
+        <testcase classname="src/utils/project-board-cost-department.test.ts" name="项目看板与项目成本的部门/科室展示 &gt; 项目成本订单和报价详情均渲染部门/科室" time="0.000820951">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/project-cost-attachment.test.ts" timestamp="2026-10-26T04:43:28.863Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="4" failures="0" errors="0" skipped="0" time="0.019487605">
+        <testcase classname="src/utils/project-cost-attachment.test.ts" name="登记成本凭证上传交互 &gt; 使用可拖拽的凭证上传区域并支持批量拖入" time="0.012012963">
+        </testcase>
+        <testcase classname="src/utils/project-cost-attachment.test.ts" name="登记成本凭证上传交互 &gt; 图片凭证使用可缩放的图片预览器，非图片保持文件卡片" time="0.002982433">
+        </testcase>
+        <testcase classname="src/utils/project-cost-attachment.test.ts" name="登记成本凭证上传交互 &gt; 只接受 JPG、PNG、WEBP 和 PDF，并按附件类型区分图片预览" time="0.001095108">
+        </testcase>
+        <testcase classname="src/utils/project-cost-attachment.test.ts" name="登记成本凭证上传交互 &gt; 新登记成本可以先排队凭证，保存成本后自动上传" time="0.000786073">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/projectCostAmount.test.ts" timestamp="2026-10-26T04:43:28.865Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="5" failures="0" errors="0" skipped="0" time="0.02464724">
+        <testcase classname="src/utils/projectCostAmount.test.ts" name="项目成本金额归一化 &gt; 按支付金额加欠款金额计算支出总额" time="0.012709203">
+        </testcase>
+        <testcase classname="src/utils/projectCostAmount.test.ts" name="项目成本金额归一化 &gt; 以分为单位计算，避免浮点误差" time="0.000554499">
+        </testcase>
+        <testcase classname="src/utils/projectCostAmount.test.ts" name="项目成本金额归一化 &gt; 允许其中一项为零，但总额不能为零" time="0.006430211">
+        </testcase>
+        <testcase classname="src/utils/projectCostAmount.test.ts" name="项目成本金额归一化 &gt; 拒绝负金额和无效金额" time="0.00097663">
+        </testcase>
+        <testcase classname="src/utils/projectCostAmount.test.ts" name="项目成本金额归一化 &gt; 可以从历史总额和欠款反算登记时支付金额" time="0.000733452">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/projectCostPageSummary.test.ts" timestamp="2026-10-26T04:43:28.866Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="3" failures="0" errors="0" skipped="0" time="0.006336991">
+        <testcase classname="src/utils/projectCostPageSummary.test.ts" name="sumCurrentPageProjectCosts &gt; adds order and quote costs for only the rows on the current page" time="0.002739694">
+        </testcase>
+        <testcase classname="src/utils/projectCostPageSummary.test.ts" name="sumCurrentPageProjectCosts &gt; treats missing or non-finite amounts as zero and returns zero for an empty page" time="0.000516349">
+        </testcase>
+        <testcase classname="src/utils/projectCostPageSummary.test.ts" name="sumCurrentPageProjectCosts &gt; sums monetary values in cents to avoid floating-point drift" time="0.000321845">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/projectCostScope.test.ts" timestamp="2026-10-26T04:43:28.867Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="5" failures="0" errors="0" skipped="0" time="0.01511882">
+        <testcase classname="src/utils/projectCostScope.test.ts" name="buildProjectCostScopeOptions &gt; 只返回当前有效明细，并带出已登记成本和明细描述" time="0.004242293">
+        </testcase>
+        <testcase classname="src/utils/projectCostScope.test.ts" name="buildProjectCostScopeOptions &gt; 忽略只存在于汇总中的历史明细" time="0.00176587">
+        </testcase>
+        <testcase classname="src/utils/projectCostScope.test.ts" name="buildProjectCostScopeOptions &gt; 保留面积开关、尺寸回退和零值金额，供明细表逐列展示" time="0.001651867">
+        </testcase>
+        <testcase classname="src/utils/projectCostScope.test.ts" name="getProjectCostScopeIds &gt; 优先返回多明细归属，并去除重复ID" time="0.000656241">
+        </testcase>
+        <testcase classname="src/utils/projectCostScope.test.ts" name="getProjectCostScopeIds &gt; 兼容历史单明细响应" time="0.002667702">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/quoteGroupColors.test.ts" timestamp="2026-10-26T04:43:28.869Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="4" failures="0" errors="0" skipped="0" time="0.07803007">
+        <testcase classname="src/utils/quoteGroupColors.test.ts" name="quoteGroupColors &gt; uses ten colors before repeating the default palette" time="0.072266464">
+        </testcase>
+        <testcase classname="src/utils/quoteGroupColors.test.ts" name="quoteGroupColors &gt; keeps each group color attached to the group after reordering" time="0.00231076">
+        </testcase>
+        <testcase classname="src/utils/quoteGroupColors.test.ts" name="quoteGroupColors &gt; keeps the original group color after renaming" time="0.00058468">
+        </testcase>
+        <testcase classname="src/utils/quoteGroupColors.test.ts" name="quoteGroupColors &gt; starts a fresh palette when another quote is loaded" time="0.000327346">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/quoteItemOrdering.test.ts" timestamp="2026-10-26T04:43:28.871Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="16" failures="0" errors="0" skipped="0" time="0.016715946">
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; detects a rename that would silently merge two groups" time="0.002675954">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; uses stable group row keys after group order changes" time="0.001832623">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; keeps an empty group header and total without adding a detail row" time="0.001810349">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; moves group A as a whole directly before group B" time="0.001111673">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; moves group A after the complete group B when dropped on a B detail" time="0.000627849">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; keeps the earlier target group intact when a later group is dropped into it" time="0.001029717">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; moves group A as a whole to the bottom" time="0.00038855">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; keeps a group intact when dropped into its own block" time="0.000283717">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; converts every group hover target to a complete group boundary" time="0.001034714">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; converts a detail hover target to a data successor without relying on mutated DOM order" time="0.000685366">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; keeps standalone details between groups instead of forcing them to the bottom" time="0.000410446">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; reorders one detail inside its original group" time="0.00041577">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; moves only one detail to another group at the requested position" time="0.000531193">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; moves a detail below a group header as that group first detail" time="0.000356139">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; moves one detail after a group total as a standalone top-level row" time="0.000480714">
+        </testcase>
+        <testcase classname="src/utils/quoteItemOrdering.test.ts" name="quoteItemOrdering &gt; removes an empty group when its last detail becomes standalone" time="0.000286487">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/quoteLineCalculation.test.ts" timestamp="2026-10-26T04:43:28.875Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="6" failures="0" errors="0" skipped="0" time="0.009340875">
+        <testcase classname="src/utils/quoteLineCalculation.test.ts" name="quoteLineCalculation &gt; counts other_fee but ignores process/installation/design/transport fees" time="0.00262798">
+        </testcase>
+        <testcase classname="src/utils/quoteLineCalculation.test.ts" name="quoteLineCalculation &gt; rounds every line subtotal to cents like the backend" time="0.000725999">
+        </testcase>
+        <testcase classname="src/utils/quoteLineCalculation.test.ts" name="quoteLineCalculation &gt; shows an explicit source area without requiring width and height" time="0.000957091">
+        </testcase>
+        <testcase classname="src/utils/quoteLineCalculation.test.ts" name="quoteLineCalculation &gt; synchronizes area quantity and unit" time="0.000501732">
+        </testcase>
+        <testcase classname="src/utils/quoteLineCalculation.test.ts" name="quoteLineCalculation &gt; converts display dimensions for the CDR pricing engine" time="0.0005021">
+        </testcase>
+        <testcase classname="src/utils/quoteLineCalculation.test.ts" name="quoteLineCalculation &gt; moves legacy length and width into width and height and drops old height" time="0.001110229">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/resource-admin-ui-cleanup.test.ts" timestamp="2026-10-26T04:43:28.876Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="4" failures="0" errors="0" skipped="0" time="0.019651238">
+        <testcase classname="src/utils/resource-admin-ui-cleanup.test.ts" name="P07 资源、AI、人事和系统页面一致性 &gt; 资源列表复用页面壳层、筛选工具栏、表格状态和分页页脚" time="0.010798937">
+        </testcase>
+        <testcase classname="src/utils/resource-admin-ui-cleanup.test.ts" name="P07 资源、AI、人事和系统页面一致性 &gt; AI、人事和系统列表复用统一状态壳层" time="0.004098568">
+        </testcase>
+        <testcase classname="src/utils/resource-admin-ui-cleanup.test.ts" name="P07 资源、AI、人事和系统页面一致性 &gt; 矩阵、报表、AI 专用页和系统设置保留业务布局但复用统一页面标题" time="0.001640153">
+        </testcase>
+        <testcase classname="src/utils/resource-admin-ui-cleanup.test.ts" name="P07 资源、AI、人事和系统页面一致性 &gt; 库存金额与操作日志金额不再各自拼接货币符号" time="0.00060206">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/supplierCapabilities.test.ts" timestamp="2026-10-26T04:43:28.877Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="2" failures="0" errors="0" skipped="0" time="0.026072623">
+        <testcase classname="src/utils/supplierCapabilities.test.ts" name="supplier capabilities &gt; allows a material supplier to undertake its declared external work" time="0.023200639">
+        </testcase>
+        <testcase classname="src/utils/supplierCapabilities.test.ts" name="supplier capabilities &gt; excludes inactive vendors and vendors that no longer undertake external work" time="0.000511826">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/task-board.test.ts" timestamp="2026-10-26T04:43:28.878Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="3" failures="0" errors="0" skipped="0" time="0.006507114">
+        <testcase classname="src/utils/task-board.test.ts" name="统一任务看板进度 &gt; 所有看板对任务进度使用同一套 0-100 规范化" time="0.002787771">
+        </testcase>
+        <testcase classname="src/utils/task-board.test.ts" name="统一任务看板进度 &gt; 所有看板都隐藏完成、取消、已回退和 100% 任务" time="0.000818423">
+        </testcase>
+        <testcase classname="src/utils/task-board.test.ts" name="统一任务看板进度 &gt; 服务端终态优先于页面自己的旧状态判断" time="0.000368162">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/task-ui-cleanup.test.ts" timestamp="2026-10-26T04:43:28.879Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="27" failures="0" errors="0" skipped="0" time="0.033823296">
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 任务概览卡统一展示客户联系信息且不重复显示订单明细" time="0.003686102">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 不再渲染变更历史模块或历史审核状态文案" time="0.001945526">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 前端不再保留只服务于已下线时间线的历史接口类型" time="0.000633108">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 任务处理明细按后端阶段展示标签并禁用不可关联明细" time="0.000947494">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 任务详情只展示订单资料，完成动作统一进入单条资料上传或跳过流程" time="0.001637733">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 任务处理明细按数量、金额、小计、任务进度顺序展示金额信息" time="0.000802376">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 任务处理明细使用列式列表，全部展示且不建立独立滚动区域" time="0.000692752">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 任务明细各列在行内上下居中，长文本继续自动换行" time="0.000595098">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 普通任务不显示独立关联保存按钮，历史任务保留补录入口" time="0.000663277">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 任务处理不重复显示已关联明细汇总框" time="0.000571292">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 任务处理不显示重复的状态说明提示，但保留状态操作禁用逻辑" time="0.000565506">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 任务处理按明细显示执行人，不再使用整张任务负责人" time="0.001605173">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 设计、制作、安装任务不再使用批量状态全选" time="0.000891295">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 移动端状态变更只提交当前点击的订单明细" time="0.001323142">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 工作台项目看板与独立项目看板复用任务进度" time="0.000918973">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 两处项目看板复用统一任务卡片并显示订单归属信息" time="0.000816484">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 项目看板任务卡片不显示订单明细摘要" time="0.000365872">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 任务人员没有外协查看权限时不加载外协卡片或外协筛选" time="0.001082607">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="任务详情页界面收敛 &gt; 外协成本字段只在拥有成本权限时渲染，避免缺失字段显示为零" time="0.001300017">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="单条订单明细动作 &gt; 待分配明细只显示开始设计，且只包含一个目标状态" time="0.002896088">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="单条订单明细动作 &gt; 设计中明细提供完成设计和退回待分配两个独立动作且不能取消" time="0.00181778">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="单条订单明细动作 &gt; 未关联明细使用加入并开始动作，不会暗示已经关联" time="0.001884001">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="单条订单明细动作 &gt; 动作由服务端提供时优先使用服务端语义" time="0.000277982">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="单条订单明细动作 &gt; 服务端返回空动作时保持只读，不回退生成旧流程按钮" time="0.000195649">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="单条订单明细动作 &gt; 制作中明细支持退回设计和回退到待制作，同时保留完成入口" time="0.00063624">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="单条订单明细动作 &gt; 历史取消的制作或安装明细提供明确的恢复入口" time="0.000655817">
+        </testcase>
+        <testcase classname="src/utils/task-ui-cleanup.test.ts" name="单条订单明细动作 &gt; 没有操作权限时仍返回禁用动作和可读原因" time="0.000352279">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/taskPhotoUpload.test.ts" timestamp="2026-10-26T04:43:28.885Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="11" failures="0" errors="0" skipped="0" time="0.01528508">
+        <testcase classname="src/utils/taskPhotoUpload.test.ts" name="task photo upload helpers &gt; uses a gentle wheel zoom step for site photo previews" time="0.002750993">
+        </testcase>
+        <testcase classname="src/utils/taskPhotoUpload.test.ts" name="task photo upload helpers &gt; accepts supported image files below the size limit" time="0.000579035">
+        </testcase>
+        <testcase classname="src/utils/taskPhotoUpload.test.ts" name="task photo upload helpers &gt; accepts supported video files below the video size limit" time="0.00082102">
+        </testcase>
+        <testcase classname="src/utils/taskPhotoUpload.test.ts" name="task photo upload helpers &gt; rejects unsupported formats and oversized images with plain-language messages" time="0.000658406">
+        </testcase>
+        <testcase classname="src/utils/taskPhotoUpload.test.ts" name="task photo upload helpers &gt; keeps historical image attachments visible even when category is missing" time="0.000413553">
+        </testcase>
+        <testcase classname="src/utils/taskPhotoUpload.test.ts" name="task photo upload helpers &gt; recognizes installation videos and combines them with photos as media" time="0.000396442">
+        </testcase>
+        <testcase classname="src/utils/taskPhotoUpload.test.ts" name="task photo upload helpers &gt; normalizes relative attachment paths for the uploads mount" time="0.000341233">
+        </testcase>
+        <testcase classname="src/utils/taskPhotoUpload.test.ts" name="task photo upload helpers &gt; validates common task attachment formats and exposes conservative limits" time="0.001154702">
+        </testcase>
+        <testcase classname="src/utils/taskPhotoUpload.test.ts" name="task photo upload helpers &gt; classifies non-image attachments without requiring thumbnails" time="0.000684737">
+        </testcase>
+        <testcase classname="src/utils/taskPhotoUpload.test.ts" name="task photo upload helpers &gt; groups attachments by server upload date in descending order" time="0.003562559">
+        </testcase>
+        <testcase classname="src/utils/taskPhotoUpload.test.ts" name="task photo upload helpers &gt; groups materials by order item first and then by upload date" time="0.000944041">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/ui-ux-quality.test.ts" timestamp="2026-10-26T04:43:28.888Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="12" failures="0" errors="0" skipped="0" time="0.027237424">
+        <testcase classname="src/utils/ui-ux-quality.test.ts" name="P08 UI/UX quality guardrails &gt; keeps the required desktop, tablet and mobile QA profiles" time="0.003626802">
+        </testcase>
+        <testcase classname="src/utils/ui-ux-quality.test.ts" name="P08 UI/UX quality guardrails &gt; keeps shared focus, status, progress and feedback semantics accessible" time="0.001970096">
+        </testcase>
+        <testcase classname="src/utils/ui-ux-quality.test.ts" name="P08 UI/UX quality guardrails &gt; keeps core pages on shared shell or explicit mobile feedback paths" time="0.002542236">
+        </testcase>
+        <testcase classname="src/utils/ui-ux-quality.test.ts" name="P08 UI/UX quality guardrails &gt; keeps system creation time out of the order list while retaining the right-side actions" time="0.000608601">
+        </testcase>
+        <testcase classname="src/utils/ui-ux-quality.test.ts" name="P08 UI/UX quality guardrails &gt; uses employee numbers as the only employee login entry point" time="0.001600277">
+        </testcase>
+        <testcase classname="src/utils/ui-ux-quality.test.ts" name="P08 UI/UX quality guardrails &gt; does not introduce obvious credentials into UI source" time="0.000640198">
+        </testcase>
+        <testcase classname="src/utils/ui-ux-quality.test.ts" name="P08 UI/UX quality guardrails &gt; uses the shared runtime brand on authenticated, login and mobile surfaces" time="0.00116358">
+        </testcase>
+        <testcase classname="src/utils/ui-ux-quality.test.ts" name="P08 UI/UX quality guardrails &gt; removes legacy page-header and search-bar CSS after shell migration" time="0.007043164">
+        </testcase>
+        <testcase classname="src/utils/ui-ux-quality.test.ts" name="P08 UI/UX quality guardrails &gt; keeps the expense form focused and groups optional details" time="0.001572029">
+        </testcase>
+        <testcase classname="src/utils/ui-ux-quality.test.ts" name="P08 UI/UX quality guardrails &gt; keeps project-cost entry and list on the simplified financial fields" time="0.001931097">
+        </testcase>
+        <testcase classname="src/utils/ui-ux-quality.test.ts" name="P08 UI/UX quality guardrails &gt; removes the repeated undated-payment warning but preserves record-level reconciliation" time="0.00072858">
+        </testcase>
+        <testcase classname="src/utils/ui-ux-quality.test.ts" name="P08 UI/UX quality guardrails &gt; shows payment-oriented finance columns with project department context" time="0.000665742">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/uiPresentation.test.ts" timestamp="2026-10-26T04:43:28.892Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="7" failures="0" errors="0" skipped="0" time="0.009327294">
+        <testcase classname="src/utils/uiPresentation.test.ts" name="normalizeProgress &gt; 将无效值和负数安全归一为 0" time="0.002745655">
+        </testcase>
+        <testcase classname="src/utils/uiPresentation.test.ts" name="normalizeProgress &gt; 将进度限制在 0 到 100 并保持整数展示" time="0.000405119">
+        </testcase>
+        <testcase classname="src/utils/uiPresentation.test.ts" name="resolveStatusPresentation &gt; 为常见状态提供统一展示语义" time="0.001239832">
+        </testcase>
+        <testcase classname="src/utils/uiPresentation.test.ts" name="resolveStatusPresentation &gt; 优先使用服务端或调用方传入的展示字段，不改变业务状态" time="0.000339837">
+        </testcase>
+        <testcase classname="src/utils/uiPresentation.test.ts" name="resolveStatusPresentation &gt; 直接消费服务端 canonical status view" time="0.00034144">
+        </testcase>
+        <testcase classname="src/utils/uiPresentation.test.ts" name="resolveStatusPresentation &gt; 未知状态保留原始编码并使用中性色" time="0.001115123">
+        </testcase>
+        <testcase classname="src/utils/uiPresentation.test.ts" name="progressTone &gt; 只有未显式指定颜色时才根据进度提供展示默认色" time="0.000446021">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/userPreferences.test.ts" timestamp="2026-10-26T04:43:28.893Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="3" failures="0" errors="0" skipped="0" time="0.008055686">
+        <testcase classname="src/utils/userPreferences.test.ts" name="per-user preference contract &gt; uses safe defaults for missing or invalid server values" time="0.004089519">
+        </testcase>
+        <testcase classname="src/utils/userPreferences.test.ts" name="per-user preference contract &gt; preserves valid values and fills omitted values independently" time="0.000549076">
+        </testcase>
+        <testcase classname="src/utils/userPreferences.test.ts" name="per-user preference contract &gt; namespaces browser cache by authenticated user id" time="0.000825448">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/utils/workflowGuidance.test.ts" timestamp="2026-10-26T04:43:28.894Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="8" failures="0" errors="0" skipped="0" time="0.041551301">
+        <testcase classname="src/utils/workflowGuidance.test.ts" name="workflow guidance helpers &gt; extracts a successful workflow guidance tool result" time="0.004341985">
+        </testcase>
+        <testcase classname="src/utils/workflowGuidance.test.ts" name="workflow guidance helpers &gt; ignores malformed or failed tool results" time="0.000477644">
+        </testcase>
+        <testcase classname="src/utils/workflowGuidance.test.ts" name="workflow guidance helpers &gt; allows only known in-app workflow routes" time="0.001533206">
+        </testcase>
+        <testcase classname="src/utils/workflowGuidance.test.ts" name="workflow guidance helpers &gt; creates a stable key only for workflow-aware business pages" time="0.000465308">
+        </testcase>
+        <testcase classname="src/utils/workflowGuidance.test.ts" name="workflow guidance helpers &gt; detects whether guidance still belongs to the current business record" time="0.00043629">
+        </testcase>
+        <testcase classname="src/utils/workflowGuidance.test.ts" name="workflow guidance helpers &gt; parses additive workflow progress and structured alerts" time="0.029790672">
+        </testcase>
+        <testcase classname="src/utils/workflowGuidance.test.ts" name="workflow guidance helpers &gt; parses an installation checklist and strictly bounded form draft" time="0.000854935">
+        </testcase>
+        <testcase classname="src/utils/workflowGuidance.test.ts" name="workflow guidance helpers &gt; keeps old guidance compatible when progress fields are absent" time="0.000632376">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/views/outsource/OutsourceTaskRecycle.test.ts" timestamp="2026-10-26T04:43:28.896Z" hostname="Estefan-MacWorkstationdeiMac.local" tests="4" failures="0" errors="0" skipped="0" time="0.006661941">
+        <testcase classname="src/views/outsource/OutsourceTaskRecycle.test.ts" name="外协任务回收站永久删除确认 &gt; 只允许后端明确标记为合格的任务发起永久删除" time="0.002880982">
+        </testcase>
+        <testcase classname="src/views/outsource/OutsourceTaskRecycle.test.ts" name="外协任务回收站永久删除确认 &gt; 将服务器阻止原因明确展示给操作人" time="0.000396046">
+        </testcase>
+        <testcase classname="src/views/outsource/OutsourceTaskRecycle.test.ts" name="外协任务回收站永久删除确认 &gt; 不再要求重复输入任务编号，但仍要求有效删除原因" time="0.000482662">
+        </testcase>
+        <testcase classname="src/views/outsource/OutsourceTaskRecycle.test.ts" name="外协任务回收站永久删除确认 &gt; 旧版付款清理记录作为审计信息保留，不再阻止直接关联财务数据清理" time="0.000263904">
+        </testcase>
+    </testsuite>
+</testsuites>

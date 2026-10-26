@@ -1,0 +1,4 @@
+Read-only production query: 3 active receipts; all 3 have paid_at on a different date from created_at.
+7 active orders have order_date different from created_at::date.
+No active quote currently has a nonzero discount or tax_rate.
+Detailed rows retained only in ignored local logs/project-audit-2026-10-26.

@@ -1,0 +1,27 @@
+{
+  "method": "Read-only ORM table/column presence comparison; does not assert identical types/defaults/indexes.",
+  "model_tables": 121,
+  "production_tables_and_views": 122,
+  "missing_tables": [],
+  "missing_columns": {},
+  "extra_legacy_columns": {
+    "quote_audit_logs": [
+      "updated_at"
+    ],
+    "design_tasks": [
+      "assign_type",
+      "outsource_task_id",
+      "outsource_vendor_id"
+    ],
+    "production_tasks": [
+      "assign_type",
+      "outsource_task_id",
+      "outsource_vendor_id"
+    ],
+    "installation_tasks": [
+      "assign_type",
+      "outsource_task_id",
+      "outsource_vendor_id"
+    ]
+  }
+}

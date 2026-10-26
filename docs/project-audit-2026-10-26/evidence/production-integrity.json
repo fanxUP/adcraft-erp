@@ -1,0 +1,185 @@
+{
+  "checked_at_utc": "2026-10-26T04:47:49.022800+00:00",
+  "mode": "read-only, statement_timeout=15s, production data unchanged",
+  "checks": {
+    "inventory": {
+      "count": 10,
+      "rows": [
+        {
+          "kind": "orders",
+          "total": 35,
+          "active": 34
+        },
+        {
+          "kind": "quotes",
+          "total": 46,
+          "active": 36
+        },
+        {
+          "kind": "design_tasks",
+          "total": 21,
+          "active": 21
+        },
+        {
+          "kind": "production_tasks",
+          "total": 19,
+          "active": 19
+        },
+        {
+          "kind": "installation_tasks",
+          "total": 20,
+          "active": 20
+        },
+        {
+          "kind": "outsource_tasks",
+          "total": 0,
+          "active": 0
+        },
+        {
+          "kind": "project_costs",
+          "total": 96,
+          "active": 52
+        },
+        {
+          "kind": "payments",
+          "total": 3,
+          "active": 3
+        },
+        {
+          "kind": "outsource_payments",
+          "total": 0,
+          "active": 0
+        },
+        {
+          "kind": "acceptance_forms",
+          "total": 24,
+          "active": 6
+        }
+      ],
+      "query": "SELECT 'orders' AS kind,count(*) AS total,count(*) FILTER(WHERE deleted_at IS NULL) AS active FROM business_documents WHERE doc_type='order'\n UNION ALL SELECT 'quotes',count(*),count(*) FILTER(WHERE deleted_at IS NULL) FROM business_documents WHERE doc_type='quote'\n UNION ALL SELECT 'design_tasks',count(*),count(*) FROM design_tasks\n UNION ALL SELECT 'production_tasks',count(*),count(*) FROM production_tasks\n UNION ALL SELECT 'installation_tasks',count(*),count(*) FROM installation_tasks\n UNION ALL SELECT 'outsource_tasks',count(*),count(*) FILTER(WHERE deleted_at IS NULL) FROM outsource_tasks\n UNION ALL SELECT 'project_costs',count(*),count(*) FILTER(WHERE deleted_at IS NULL) FROM project_costs\n UNION ALL SELECT 'payments',count(*),count(*) FILTER(WHERE NOT coalesce(is_voided,false)) FROM payments\n UNION ALL SELECT 'outsource_payments',count(*),count(*) FROM outsource_payments\n UNION ALL SELECT 'acceptance_forms',count(*),count(*) FILTER(WHERE deleted_at IS NULL) FROM acceptance_forms"
+    },
+    "order_balance_mismatch": {
+      "count": 0,
+      "query": "SELECT id,doc_no,total_amount,paid_amount,unpaid_amount FROM business_documents WHERE doc_type='order' AND deleted_at IS NULL AND abs(coalesce(unpaid_amount,0)-greatest(coalesce(total_amount,0)-coalesce(paid_amount,0),0))>0.01"
+    },
+    "order_invalid_amount": {
+      "count": 0,
+      "query": "SELECT id,doc_no,total_amount,paid_amount,unpaid_amount FROM business_documents WHERE doc_type='order' AND deleted_at IS NULL AND (total_amount<0 OR paid_amount<0 OR unpaid_amount<0 OR paid_amount>total_amount+0.01)"
+    },
+    "order_item_sum_mismatch": {
+      "count": 0,
+      "query": "SELECT d.id,d.doc_no,d.total_amount,d.discount_amount,d.tax_amount,coalesce(sum(i.subtotal_amount),0) AS item_sum FROM business_documents d LEFT JOIN business_document_items i ON i.document_id=d.id AND i.lifecycle_status='active' WHERE d.deleted_at IS NULL AND d.doc_type='order' GROUP BY d.id HAVING abs(d.total_amount-(coalesce(sum(i.subtotal_amount),0)-coalesce(d.discount_amount,0)+coalesce(d.tax_amount,0)))>0.01"
+    },
+    "order_paid_vs_receipts": {
+      "count": 0,
+      "query": "WITH amounts AS (SELECT a.document_id,sum(allocated_amount) amount FROM payment_allocations a JOIN payments p ON p.id=a.payment_id WHERE NOT coalesce(p.is_voided,false) AND a.document_id IS NOT NULL GROUP BY a.document_id), legacy AS (SELECT document_id,sum(amount) amount FROM payments p WHERE NOT coalesce(p.is_voided,false) AND p.document_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM payment_allocations a WHERE a.payment_id=p.id) GROUP BY document_id) SELECT d.id,d.doc_no,d.paid_amount,coalesce(a.amount,0)+coalesce(l.amount,0) receipts FROM business_documents d LEFT JOIN amounts a ON a.document_id=d.id LEFT JOIN legacy l ON l.document_id=d.id WHERE d.doc_type='order' AND d.deleted_at IS NULL AND abs(coalesce(d.paid_amount,0)-coalesce(a.amount,0)-coalesce(l.amount,0))>0.01"
+    },
+    "receipt_allocation_amount_mismatch": {
+      "count": 0,
+      "query": "SELECT p.id,p.payment_no,p.amount,sum(a.allocated_amount) allocated FROM payments p JOIN payment_allocations a ON a.payment_id=p.id WHERE NOT coalesce(p.is_voided,false) GROUP BY p.id HAVING abs(p.amount-sum(a.allocated_amount))>0.01"
+    },
+    "receipt_customer_mismatch": {
+      "count": 0,
+      "query": "SELECT DISTINCT p.id,p.payment_no FROM payments p JOIN payment_allocations a ON a.payment_id=p.id JOIN contracts c ON c.id=a.contract_id WHERE NOT coalesce(p.is_voided,false) AND p.customer_id<>c.customer_id"
+    },
+    "active_task_cross_document_links": {
+      "count": 0,
+      "query": "WITH tasks AS(SELECT 'design' type,id,document_id,NULL::timestamp deleted_at FROM design_tasks UNION ALL SELECT 'production',id,document_id,NULL::timestamp deleted_at FROM production_tasks UNION ALL SELECT 'installation',id,document_id,NULL::timestamp deleted_at FROM installation_tasks) SELECT l.id,l.task_type,l.task_id,l.order_item_id FROM task_order_item_links l JOIN tasks t ON t.type=l.task_type AND t.id=l.task_id JOIN business_document_items i ON i.id=l.order_item_id WHERE l.link_status='active' AND t.deleted_at IS NULL AND t.document_id IS DISTINCT FROM i.document_id"
+    },
+    "orphan_polymorphic_task_links": {
+      "count": 0,
+      "query": "WITH tasks AS(SELECT 'design' type,id FROM design_tasks UNION ALL SELECT 'production',id FROM production_tasks UNION ALL SELECT 'installation',id FROM installation_tasks) SELECT l.id,l.task_type,l.task_id FROM task_order_item_links l LEFT JOIN tasks t ON t.type=l.task_type AND t.id=l.task_id WHERE t.id IS NULL"
+    },
+    "active_task_links_to_inactive_items": {
+      "count": 0,
+      "query": "WITH tasks AS(SELECT 'design' type,id,NULL::timestamp deleted_at FROM design_tasks UNION ALL SELECT 'production',id,NULL::timestamp deleted_at FROM production_tasks UNION ALL SELECT 'installation',id,NULL::timestamp deleted_at FROM installation_tasks) SELECT l.id,l.task_type,l.task_id,l.order_item_id,i.lifecycle_status FROM task_order_item_links l JOIN tasks t ON t.type=l.task_type AND t.id=l.task_id JOIN business_document_items i ON i.id=l.order_item_id WHERE l.link_status='active' AND t.deleted_at IS NULL AND i.lifecycle_status<>'active'"
+    },
+    "duplicate_active_execution_owners": {
+      "count": 4,
+      "query": "WITH tasks AS(SELECT 'design' type,id,NULL::timestamp deleted_at FROM design_tasks UNION ALL SELECT 'production',id,NULL::timestamp deleted_at FROM production_tasks UNION ALL SELECT 'installation',id,NULL::timestamp deleted_at FROM installation_tasks) SELECT l.task_type,l.order_item_id,count(*) owners FROM task_order_item_links l JOIN tasks t ON t.type=l.task_type AND t.id=l.task_id WHERE l.link_status='active' AND t.deleted_at IS NULL GROUP BY l.task_type,l.order_item_id HAVING count(*)>1"
+    },
+    "invalid_task_progress": {
+      "count": 0,
+      "query": "WITH tasks AS(SELECT 'design' type,id,status,progress_pct FROM design_tasks UNION ALL SELECT 'production',id,status,progress_pct FROM production_tasks UNION ALL SELECT 'installation',id,status,progress_pct FROM installation_tasks) SELECT * FROM tasks WHERE progress_pct<0 OR progress_pct>100 OR (status='completed' AND progress_pct<>100)"
+    },
+    "outsource_missing_source_task": {
+      "count": 0,
+      "query": "WITH tasks AS(SELECT 'design' type,id FROM design_tasks UNION ALL SELECT 'production',id FROM production_tasks UNION ALL SELECT 'installation',id FROM installation_tasks) SELECT o.id,o.task_no,o.source_task_type,o.source_task_id FROM outsource_tasks o LEFT JOIN tasks t ON t.type=o.source_task_type AND t.id=o.source_task_id WHERE o.deleted_at IS NULL AND o.source_task_id IS NOT NULL AND t.id IS NULL"
+    },
+    "outsource_item_document_mismatch": {
+      "count": 0,
+      "query": "SELECT o.id,o.task_no FROM outsource_tasks o JOIN business_document_items i ON i.id=o.order_item_id WHERE o.deleted_at IS NULL AND o.related_doc_id IS DISTINCT FROM i.document_id"
+    },
+    "outsource_amount_mismatch": {
+      "count": 0,
+      "query": "SELECT id,task_no,total_amount,paid_amount,unpaid_amount FROM outsource_tasks WHERE deleted_at IS NULL AND (abs(coalesce(unpaid_amount,0)-greatest(coalesce(total_amount,0)-coalesce(paid_amount,0),0))>0.01 OR paid_amount>total_amount+0.01 OR paid_amount<0)"
+    },
+    "outsource_paid_vs_payment_records": {
+      "count": 0,
+      "query": "SELECT o.id,o.task_no,o.paid_amount,coalesce(sum(p.amount),0) payment_records FROM outsource_tasks o LEFT JOIN outsource_payments p ON p.task_id=o.id WHERE o.deleted_at IS NULL GROUP BY o.id HAVING abs(coalesce(o.paid_amount,0)-coalesce(sum(p.amount),0))>0.01"
+    },
+    "outsource_payment_vendor_mismatch": {
+      "count": 0,
+      "query": "SELECT p.id,p.payment_no FROM outsource_payments p JOIN outsource_tasks t ON t.id=p.task_id WHERE p.vendor_id<>t.vendor_id"
+    },
+    "outsource_payments_without_task": {
+      "count": 0,
+      "query": "SELECT id,payment_no,amount,paid_at FROM outsource_payments WHERE task_id IS NULL"
+    },
+    "outsource_payments_missing_date": {
+      "count": 0,
+      "query": "SELECT id,payment_no,amount FROM outsource_payments WHERE paid_at IS NULL"
+    },
+    "orphan_payable_sources": {
+      "count": 0,
+      "query": "SELECT p.id,p.payment_no,p.source_type,p.source_id FROM payable_payments p LEFT JOIN project_costs c ON p.source_type='project_cost' AND c.id=p.source_id LEFT JOIN expenses e ON p.source_type='expense' AND e.id=p.source_id WHERE NOT coalesce(p.is_voided,false) AND c.id IS NULL AND e.id IS NULL"
+    },
+    "active_payable_deleted_sources": {
+      "count": 0,
+      "query": "SELECT p.id,p.payment_no,p.source_type,p.source_id FROM payable_payments p LEFT JOIN project_costs c ON p.source_type='project_cost' AND c.id=p.source_id LEFT JOIN expenses e ON p.source_type='expense' AND e.id=p.source_id WHERE NOT coalesce(p.is_voided,false) AND (c.deleted_at IS NOT NULL OR e.deleted_at IS NOT NULL)"
+    },
+    "project_cost_invalid_debt": {
+      "count": 0,
+      "query": "SELECT id,cost_no,amount,debt_amount,is_settled FROM project_costs WHERE deleted_at IS NULL AND (amount<0 OR debt_amount<0 OR debt_amount>amount OR (is_settled AND coalesce(debt_amount,0)>0))"
+    },
+    "project_cost_missing_payment_date": {
+      "count": 0,
+      "query": "SELECT id,cost_no,amount FROM project_costs WHERE deleted_at IS NULL AND cost_date IS NULL"
+    },
+    "project_cost_cross_document_links": {
+      "count": 0,
+      "query": "SELECT l.id,l.project_cost_id,l.document_item_id FROM project_cost_item_links l JOIN project_costs c ON c.id=l.project_cost_id JOIN business_document_items i ON i.id=l.document_item_id WHERE c.deleted_at IS NULL AND c.document_id IS DISTINCT FROM i.document_id"
+    },
+    "acceptance_cross_document_items": {
+      "count": 0,
+      "query": "SELECT a.id,a.acceptance_no FROM acceptance_forms a JOIN acceptance_items ai ON ai.acceptance_id=a.id JOIN business_document_items i ON i.id=ai.document_item_id WHERE a.deleted_at IS NULL AND a.document_id IS DISTINCT FROM i.document_id"
+    },
+    "live_acceptance_deleted_document": {
+      "count": 0,
+      "query": "SELECT a.id,a.acceptance_no FROM acceptance_forms a JOIN business_documents d ON d.id=a.document_id WHERE a.deleted_at IS NULL AND d.deleted_at IS NOT NULL"
+    },
+    "cost_overlap_decisions": {
+      "count": 0,
+      "query": "SELECT decision,count(*) count FROM finance_cost_overlap_reviews GROUP BY decision"
+    },
+    "orphan_reconciliation_sources": {
+      "count": 0,
+      "query": "SELECT r.id,r.source_type,r.source_id FROM finance_payment_date_reconciliations r LEFT JOIN project_costs c ON r.source_type='project_cost' AND c.id=r.source_id LEFT JOIN expenses e ON r.source_type='expense' AND e.id=r.source_id LEFT JOIN outsource_tasks t ON r.source_type='outsource_task' AND t.id=r.source_id LEFT JOIN outsource_payments p ON r.source_type='outsource_payment' AND p.id=r.source_id WHERE r.voided_at IS NULL AND c.id IS NULL AND e.id IS NULL AND t.id IS NULL AND p.id IS NULL"
+    },
+    "migration_head": {
+      "count": 1,
+      "rows": [
+        {
+          "version_num": "fcr01_finance_recon"
+        }
+      ],
+      "query": "SELECT version_num FROM alembic_version"
+    },
+    "unvalidated_constraints": {
+      "count": 0,
+      "query": "SELECT conrelid::regclass::text table_name, conname, contype FROM pg_constraint WHERE connamespace='public'::regnamespace AND NOT convalidated"
+    }
+  },
+  "transaction_read_only": "on",
+  "detailed_evidence": "logs/project-audit-2026-10-26/production-integrity.json (ignored by Git)"
+}

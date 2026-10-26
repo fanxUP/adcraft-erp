@@ -1,0 +1,46 @@
+{
+  "environment": "disposable local schema; production untouched",
+  "checks": {
+    "receipt_date_basis": {
+      "operating_report_amount": "200.00",
+      "finance_center_amount": 100.0,
+      "reported_payment_numbers": [
+        "AUDIT-P-REGISTERED"
+      ]
+    },
+    "monthly_end_boundary": {
+      "next_month_included": true
+    },
+    "quote_conversion_discount": {
+      "source_discount": 100,
+      "converted_discount": "0.00",
+      "stored_order_total": "900.00",
+      "unchanged_edit_preview_before": {
+        "total_amount": 1000.0,
+        "paid_amount": 0.0,
+        "unpaid_amount": 1000.0,
+        "cost_amount": 0.0,
+        "gross_profit": 1000.0,
+        "line_count": 1,
+        "active_item_count": 1
+      },
+      "unchanged_edit_preview_after": {
+        "total_amount": 1000.0,
+        "paid_amount": 0.0,
+        "unpaid_amount": 1000.0,
+        "cost_amount": 0.0,
+        "gross_profit": 1000.0,
+        "line_count": 1,
+        "active_item_count": 1
+      },
+      "preview_delta": 0.0,
+      "group_ids_preserved": true
+    },
+    "concurrent_number_generation": {
+      "first": "O20261026-0002",
+      "second": "O20261026-0002",
+      "same_number": true,
+      "transactions": "two independent uncommitted sessions"
+    }
+  }
+}

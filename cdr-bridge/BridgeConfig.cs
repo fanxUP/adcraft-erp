@@ -4,7 +4,7 @@ public class BridgeConfig
 {
     public int ListenPort { get; set; } = 9527;
     public string ListenAddress { get; set; } = "127.0.0.1";
-    public string ErpBaseUrl { get; set; } = "http://192.168.0.102:8000/api/v1";
+    public string ErpBaseUrl { get; set; } = "http://192.168.0.102/api/v1";
     public string DeviceCode { get; set; } = "CDR-DESKTOP-001";
     public string DeviceName { get; set; } = "设计部-主设计机";
     public string LocalSecretKey { get; set; } = "";

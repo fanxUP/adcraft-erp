@@ -51,6 +51,8 @@ class PaymentResponse(CoercedModel):
     project_name: str | None = None
     department: str | None = None
     amount: float
+    record_type: str = "receipt"
+    reference_payment_id: str | None = None
     payment_method: str | None = None
     paid_at: str | None = None
     remark: str | None = None

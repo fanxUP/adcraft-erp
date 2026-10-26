@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-26",
+  "timezone": "Asia/Shanghai",
+  "baseline_commit": "bd54aededd626b28db76222ffa7a31109fb79e89",
+  "branch": "master",
+  "backend": {
+    "tests": 1431,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "frontend": {
+    "tests": 222,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "runtime_reads": {
+    "total": 116,
+    "passed": 116,
+    "transaction_read_only": "on"
+  },
+  "model_schema": {
+    "method": "Read-only ORM table/column presence comparison; does not assert identical types/defaults/indexes.",
+    "model_tables": 121,
+    "production_tables_and_views": 122,
+    "missing_tables": [],
+    "missing_columns": {},
+    "extra_legacy_columns": {
+      "quote_audit_logs": [
+        "updated_at"
+      ],
+      "design_tasks": [
+        "assign_type",
+        "outsource_task_id",
+        "outsource_vendor_id"
+      ],
+      "production_tasks": [
+        "assign_type",
+        "outsource_task_id",
+        "outsource_vendor_id"
+      ],
+      "installation_tasks": [
+        "assign_type",
+        "outsource_task_id",
+        "outsource_vendor_id"
+      ]
+    }
+  },
+  "change_fingerprints": {
+    "backend/app/api/conversations.py": "a0faa2c562ad35129219f431666018d04308fd9b9a35e2f4d67112f13cb72188",
+    "backend/app/main.py": "deb4f5fb40dc00f2d930b0188b24ab132376821328f0bbd04b04df66dd76a71e",
+    "backend/app/models/business_document.py": "865c923ea3eb8d387d36b6023b90a2d2d3a413e278b0937648e9b6b84b902884",
+    "backend/app/repositories/project_cost_repo.py": "8c6662b0da460457daa3b5c47f032b0bdefa98040b1af244eae740fa5ba26633",
+    "backend/app/schemas/quote.py": "6b6582f2e0d69f11b2eb154242bd11be4af26407b78604e377de0407a386c789",
+    "backend/app/services/business_document_service.py": "0d588f00a48ba508403a2d602e27af7d3ceb883a4a24a79995d270972281ca22",
+    "backend/app/services/cdr_design_service.py": "d4877ba26ad6d8a858f48673176b6f0e10955833e6296bf4ed4c66cec99133a2",
+    "backend/app/services/cdr_quote_conversion_service.py": "018960872a3671dc96aced9b9a35c21d073584d8b7bc9550d64561686d791980",
+    "backend/app/services/chat_service.py": "6a3fbbe91c5ae9e5e61c60dd9dcfc9eca44d57a34190da4e579ae82af45f06eb",
+    "backend/app/services/notification_service.py": "a95e779bc5b160b54a9a803f0cd2e3e6fce83087077609d91de11f3b8e4b6362",
+    "backend/tests/test_postgres_cli.py": "83c644654aa45a0f2c6c4d2b59d7b631fcc956e156c7af9422fd217b43c3fb12",
+    "backend/tests/test_quote_service.py": "f62fcddfc6a5f32f30384c81f3059ebb03193880cc0b0878ef2e85f09f783021",
+    "cdr-bridge/BridgeConfig.cs": "227d07b898daf94c7aa581cf144fa1c51327ecb8976e9b80e81354af008c69a5",
+    "cdr-bridge/README.md": "6513ca80de7989d80accf2df8fca22119742155e3c3f8595d5d18065451751a3",
+    "cdr-bridge/appsettings.json": "889a299d96d8ed76a9f6590c28cb4f7755df825e29957dd756c29a359c0b882d",
+    "cdr-plugin/Config.bas": "84b600790597766b1a4f4d071d66156f7db4ff34e239b56ff2e01983dbbc3748",
+    "cdr-plugin/INSTALL.md": "470748bcd3e2e312fc8edaab4e65cd6e9d351927c881bf31f545d16004548250",
+    "cdr-plugin/README.md": "470748bcd3e2e312fc8edaab4e65cd6e9d351927c881bf31f545d16004548250",
+    "frontend/src/api/outsource.ts": "64934deec499ad840cd708e86acff0c0751e18f592a06600fe9c4c2a9d7db366",
+    "frontend/src/utils/resource-admin-ui-cleanup.test.ts": "01e2b505462c2425b3cecebb26cdebe965b288e190f947698764e40415d3c35e",
+    "frontend/src/utils/ui-ux-quality.test.ts": "9ed1ab856a741d9da0353b4a66542769bf0727129995703e921dbc7e63d70049",
+    "frontend/src/views/outsource/OutsourceVendorList.vue": "deleted",
+    "backend/tests/test_chat_presence.py": "bb16c9eb17f4d21c89bed262ffbb72233e0a7ad941dc5f5fc82bfa6cf31bad3a",
+    "backend/tests/test_chat_business_objects.py": "eed9afceb001bc0fb047e9c7cd8f38661365a01970c29918f200c84146edfd9e",
+    "backend/tests/test_production_docs.py": "cc4bb3c14c169cc848a9fb21b513c12df5eee9102a042a0c6a918b5f41477a0b"
+  },
+  "production_deployment_changed": false,
+  "test_databases_cleaned": [
+    "adcraft_audit_20261026",
+    "adcraft_audit_migrations_20261026"
+  ]
+}

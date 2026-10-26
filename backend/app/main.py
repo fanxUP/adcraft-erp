@@ -181,8 +181,9 @@ app = FastAPI(
     title=settings.APP_NAME,
     version="0.1.0",
     # 生产环境经公网隧道可达，关闭 /api/docs 与 /api/openapi.json 避免路由面暴露（2026-08-16 安全加固）
-    docs_url="/api/docs" if settings.APP_ENV.lower() != "production" else None,
-    openapi_url="/api/openapi.json" if settings.APP_ENV.lower() != "production" else None,
+    docs_url="/api/docs" if settings.APP_ENV.lower() not in {"production", "prod"} else None,
+    redoc_url="/redoc" if settings.APP_ENV.lower() not in {"production", "prod"} else None,
+    openapi_url="/api/openapi.json" if settings.APP_ENV.lower() not in {"production", "prod"} else None,
     lifespan=lifespan,
 )
 
@@ -426,6 +427,18 @@ UPLOAD_DIR = os.environ.get("LOCAL_UPLOAD_DIR") or os.path.abspath(settings.LOCA
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # GZip compression for text-based responses
+from sqlalchemy.exc import DBAPIError
+
+
+@app.exception_handler(DBAPIError)
+async def database_write_conflict(request: Request, exc: DBAPIError):
+    state = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
+    if state in {"40P01", "40001"}:
+        return JSONResponse(status_code=409, content=error(40901, "关联业务正在被其他人员处理，本次修改已回滚，请刷新后重新预览"))
+    logger.exception("Database request failed", exc_info=exc)
+    return JSONResponse(status_code=500, content=error(50000, "数据库操作失败，请稍后重试"))
+
+
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Mount uploads BEFORE frontend — more specific paths must come first

@@ -36,6 +36,7 @@ def test_connection_uses_database_url_and_decodes_credentials(tmp_path, monkeypa
 
 
 def test_dump_passes_password_through_environment(tmp_path, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL_SYNC", raising=False)
     (tmp_path / ".env").write_text(
         "DATABASE_URL_SYNC=postgresql+psycopg2://adcraft:secret@127.0.0.1:5432/adcraft_erp\n",
         encoding="utf-8",

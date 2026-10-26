@@ -78,3 +78,11 @@ async def test_invalid_item_transition_uses_human_readable_status_message():
                 "confirmed",
                 [str(SAMPLE_ORDER_ITEM_ID)],
             )
+
+
+@pytest.fixture(autouse=True)
+def isolate_parent_lock_and_scope_persistence(monkeypatch):
+    # Unit state-machine/ownership tests use repository doubles; real order
+    # locking and completed quantity snapshots are covered in SQL integration.
+    monkeypatch.setattr("app.services.task_service._assert_live_task_order", AsyncMock())
+    monkeypatch.setattr("app.services.task_service._capture_completed_scope", AsyncMock())

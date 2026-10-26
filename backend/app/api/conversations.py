@@ -17,6 +17,7 @@ from app.core.deps import (
 from app.core.permissions import (
     ORDER_ITEM_PRICE_FIELDS,
     ORDER_PRICE_FIELDS,
+    PERM_CUSTOMER_READ,
     PERM_FINANCE_VIEW_COST,
     PERM_ORDER_ITEM_VIEW_PRICE,
     PERM_ORDER_VIEW_PRICE,
@@ -377,7 +378,7 @@ async def get_my_recent_objects(
             .where(
                 BusinessDocument.doc_type == "quote",
                 BusinessDocument.deleted_at.is_(None),
-                BusinessDocument.created_by == current_user.id,
+                BusinessDocument.sales_user_id == current_user.id,
             )
             .order_by(BusinessDocument.created_at.desc())
             .limit(limit)
@@ -438,6 +439,19 @@ async def get_my_recent_objects(
         raise HTTPException(status_code=400, detail=f"不支持的类型: {type}")
 
     return success(results)
+
+
+@router.put("/presence")
+async def update_my_presence(
+    data: UpdatePresenceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """更新我的在线状态；固定路径必须先于会话 ID 路径注册。"""
+    service = ChatService(db)
+    presence = await service.update_presence(current_user.id, data.status)
+    await broadcast_presence_update(current_user.id, data.status)
+    return success(presence.model_dump(mode="json"))
 
 
 # ============ 会话详情（通配路由，必须在固定路径之后注册） ============
@@ -791,16 +805,14 @@ async def get_recommendations(
         pass
 
     # 搜索客户
+    customer_keywords = top_keywords if user_has_permission(current_user, PERM_CUSTOMER_READ) else []
     try:
-        for kw in top_keywords:
+        for kw in customer_keywords:
             query = (
                 select(Customer)
                 .where(
                     Customer.deleted_at.is_(None),
-                    or_(
-                        Customer.name.ilike(f"%{kw}%"),
-                        Customer.company.ilike(f"%{kw}%"),
-                    ),
+                    Customer.name.ilike(f"%{kw}%"),
                 )
                 .order_by(Customer.updated_at.desc())
                 .limit(3)
@@ -814,7 +826,7 @@ async def get_recommendations(
                         "id": cid,
                         "type": "customer",
                         "title": f"客户: {c.name}",
-                        "subtitle": f"公司: {c.company or '-'}",
+                        "subtitle": f"联系电话: {c.phone or '-'}",
                         "status": None,
                     })
     except Exception:
@@ -1034,22 +1046,6 @@ async def get_user_presence(
     service = ChatService(db)
     result = await service.get_presence(user_id)
     return success(result.model_dump(mode="json") if result else None)
-
-
-@router.put("/presence")
-async def update_my_presence(
-    data: UpdatePresenceRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """更新我的在线状态"""
-    service = ChatService(db)
-    presence = await service.update_presence(current_user.id, data.status)
-
-    # 广播状态更新给相关用户
-    await broadcast_presence_update(current_user.id, data.status)
-
-    return success(presence.model_dump(mode="json"))
 
 
 @router.post("/presence/batch")
@@ -1296,11 +1292,11 @@ async def broadcast_presence_update(
 
         # 广播给相关在线用户
         for uid in notified_user_ids:
-            if uid in _chat_ws_connections:
-                await broadcast_to_user(uid, {
-                    "type": "presence_update",
-                    "data": {
-                        "user_id": str(user_id),
-                        "status": status,
-                    }
-                })
+            # 连接管理器会自行跳过离线用户，路由层不读取其私有状态。
+            await broadcast_to_user(uid, {
+                "type": "presence_update",
+                "data": {
+                    "user_id": str(user_id),
+                    "status": status,
+                }
+            })

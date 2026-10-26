@@ -171,14 +171,13 @@ async def test_get_dashboard(service):
         MockResultWithScalar(scalar_value=1),          # overdue_orders
     ]
 
-    # Mock _customer_debt_ranking db.execute (last 3 calls): 常规关联、框架关联、客户名
+    # All confirmed order balances, then customer names.
     debt_result = make_all_result([(SAMPLE_CUSTOMER_ID, 50000.0)])
-    fw_debt_result = make_all_result([])
     mock_customer = MagicMock()
     mock_customer.id = SAMPLE_CUSTOMER_ID
     mock_customer.name = "测试客户"
     customer_result = make_scalars_result([mock_customer])
-    db.execute = AsyncMock(side_effect=results + [debt_result, fw_debt_result, customer_result])
+    db.execute = AsyncMock(side_effect=results + [debt_result, customer_result])
 
     dash = await svc.get_dashboard()
 
@@ -298,7 +297,6 @@ async def test_get_customer_debt(service):
     customer.name = "测试客户"
     results = [
         make_all_result([(SAMPLE_CUSTOMER_ID, 50000.0)]),  # 常规合同关联订单
-        make_all_result([]),                               # 框架合同关联订单
         make_scalars_result([customer]),                   # 客户名
     ]
     db.execute = AsyncMock(side_effect=results)
@@ -317,8 +315,7 @@ async def test_customer_debt_ranking_merges_framework_linked(service):
     customer.id = SAMPLE_CUSTOMER_ID
     customer.name = "测试客户"
     db.execute = AsyncMock(side_effect=[
-        make_all_result([(SAMPLE_CUSTOMER_ID, 10000.0)]),  # 常规
-        make_all_result([(SAMPLE_CUSTOMER_ID, 20000.0)]),  # 框架
+        make_all_result([(SAMPLE_CUSTOMER_ID, 30000.0)]),  # 订单余额不按合同重复连接
         make_scalars_result([customer]),
     ])
 
@@ -348,8 +345,8 @@ async def test_get_customer_debt_excludes_quote_only_customer(service):
 
 
 @pytest.mark.asyncio
-async def test_get_customer_debt_excludes_order_without_contract(service):
-    """有订单但没合同的客户不出现在应收管理中。"""
+async def test_get_customer_debt_includes_direct_order_without_contract(service):
+    """直接创建的订单应进入应收管理。"""
     svc, db = service
     cust = make_mock_customer()
     order = make_mock_doc(doc_no="O20260804-0001")
@@ -362,7 +359,8 @@ async def test_get_customer_debt_excludes_order_without_contract(service):
     ])
 
     debts = await svc.get_customer_debt()
-    assert debts == []
+    assert len(debts) == 1
+    assert debts[0]["standalone_orders"][0]["id"] == str(order.id)
 
 
 @pytest.mark.asyncio

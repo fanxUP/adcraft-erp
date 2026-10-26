@@ -27,3 +27,13 @@ def register_all_tools():
     register_task_status_action_tools()
     register_acceptance_action_tools()
     register_quote_action_tools()
+
+    # Keep historical reads, retire every quotation mutation, including old
+    # pending-action tool names that must not create hidden quotation records.
+    from app.ai_assistant.tool_registry import ToolRegistry
+    registry = ToolRegistry()
+    for tool in registry.list_tools():
+        if "quote" in tool.name and (tool.requires_confirmation or tool.name == "create_quote_draft"):
+            registry.unregister(tool.name)
+    from app.ai_assistant.tools.order_tools import register_order_creation_tools
+    register_order_creation_tools()

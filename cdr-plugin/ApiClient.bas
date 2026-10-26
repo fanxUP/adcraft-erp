@@ -32,8 +32,9 @@ Function LoginAndGetToken(username As String, password As String) As String
     
     If http.Status = 200 Then
         resp = http.ResponseText
-        ' Simple JSON parse for MVP — extract access_token
-        LoginAndGetToken = ExtractJSONValue(resp, "access_token")
+        ' ERP envelope: data.token (legacy access_token fallback)
+        LoginAndGetToken = ExtractJSONValue(resp, "token")
+        If Len(LoginAndGetToken) = 0 Then LoginAndGetToken = ExtractJSONValue(resp, "access_token")
     Else
         LoginAndGetToken = ""
     End If

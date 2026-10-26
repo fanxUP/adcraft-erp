@@ -462,7 +462,8 @@ class TestAIQuoteAPI:
                 json={"project_name": "Test", "items": []},
                 headers=auth_headers,
             )
-            assert response.status_code == 200
+            assert response.status_code in (400, 422)
+            mock_create.assert_not_awaited()
 
 
 # ── AI Reports ─────────────────────────────────────────────────────

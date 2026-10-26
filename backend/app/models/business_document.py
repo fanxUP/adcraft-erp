@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from datetime import date, datetime
-from sqlalchemy import CheckConstraint, Date, DateTime, Integer, Numeric, String, Text, ForeignKey
+from sqlalchemy import CheckConstraint, Date, DateTime, Integer, Numeric, String, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,7 +21,7 @@ class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
       - 'order'  → 订单（原 orders 表）
       - 'quote'  → 报价（原 quotes 表）
 
-    doc_type 切换 = 订单↔报价转换，document_id 永远不变。
+    常规报价转订单时新建订单，通过 source_quote_id 保留来源；报价历史保留。
     """
     __tablename__ = "business_documents"
     __table_args__ = (
@@ -60,6 +60,8 @@ class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
     unpaid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     cost_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     gross_profit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    creation_request_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True, nullable=True)
+    settlement_adjustment: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, server_default="0")
     order_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
@@ -93,9 +95,6 @@ class BusinessDocument(Base, TimestampMixin, SoftDeleteMixin):
         lazy="selectin",
         cascade="all, delete-orphan",
         primaryjoin="and_(BusinessDocument.id == foreign(BusinessDocumentItem.document_id), BusinessDocumentItem.lifecycle_status == 'active')",
-    )
-    groups: Mapped[list["BusinessDocumentGroup"]] = relationship(
-        back_populates="document", lazy="selectin", cascade="all, delete-orphan"
     )
     groups: Mapped[list["BusinessDocumentGroup"]] = relationship(
         back_populates="document", lazy="selectin", cascade="all, delete-orphan"
@@ -216,3 +215,26 @@ class BusinessDocumentVersion(Base, TimestampMixin):
     )
 
     document: Mapped["BusinessDocument"] = relationship(back_populates="versions")
+
+
+class OrderChangeAction(Base, TimestampMixin):
+    """Persist the work required to reconcile a specific order revision."""
+    __tablename__ = "order_change_actions"
+    __table_args__ = (
+        UniqueConstraint("document_id", "batch_id", "module", "record_key", "action_type", name="uq_order_change_action_source"),
+        CheckConstraint("status IN ('pending', 'resolved')", name="ck_order_change_action_status"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("business_documents.id"), index=True)
+    batch_id: Mapped[str] = mapped_column(String(64))
+    module: Mapped[str] = mapped_column(String(64))
+    record_key: Mapped[str] = mapped_column(String(128))
+    record_no: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    action_type: Mapped[str] = mapped_column(String(64))
+    detail: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="pending", server_default="pending")
+    assigned_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    context: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    resolution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

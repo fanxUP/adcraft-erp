@@ -10,7 +10,7 @@
         <el-form-item label="来源">
           <el-select v-model="filterType" clearable placeholder="全部" style="width: 120px" @change="handleSearch">
             <el-option label="订单" value="order" />
-            <el-option label="报价" value="quote" />
+            <el-option label="历史报价" value="quote" />
           </el-select>
         </el-form-item>
         <el-form-item label="关键词">
@@ -111,7 +111,7 @@ import { getProjectCostPageRowAmount, sumCurrentPageProjectCosts } from '@/utils
 
 const loading = ref(false)
 const keyword = ref('')
-const filterType = ref('')
+const filterType = ref('order')
 const statusFilter = ref('')
 const page = ref(1)
 const pageSize = ref(20)
@@ -255,7 +255,7 @@ function handleSearch() {
 
 function handleReset() {
   keyword.value = ''
-  filterType.value = ''
+  filterType.value = 'order'
   statusFilter.value = ''
   page.value = 1
   fetchData()

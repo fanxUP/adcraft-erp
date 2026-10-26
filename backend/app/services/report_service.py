@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timedelta, time
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import PERM_REPORT_READ, PERM_REPORT_VIEW_FINANCIAL, user_has_permission
@@ -162,7 +162,7 @@ class ReportService:
             "order_amount": order_amount,
             "payment_count": len(payments) if self.can_view_financial else None,
             "payment_amount": payment_amount,
-            "unpaid_amount": order_amount - payment_amount if self.can_view_financial else None,
+            "unpaid_amount": sum(max(0, float(order.unpaid_amount or 0)) for order in orders) if self.can_view_financial else None,
             "status_breakdown": status_breakdown,
             "orders": [
                 BusinessDocumentService._to_ref(o, viewer=self.viewer)
@@ -198,8 +198,8 @@ class ReportService:
         # Batch-fetch all orders grouped by customer
         orders_result = await self.db.execute(
             select(BusinessDocument)
-            .where(BusinessDocument.deleted_at.is_(None), BusinessDocument.doc_type == "order",
-                   BusinessDocument.customer_id.in_(customer_ids))
+            .where(or_(BusinessDocument.deleted_at.is_(None), BusinessDocument.total_amount > 0, BusinessDocument.paid_amount > 0), BusinessDocument.doc_type == "order",
+                   BusinessDocument.status != "pending_confirm", BusinessDocument.customer_id.in_(customer_ids))
             .order_by(
                 BusinessDocument.order_date.desc().nullslast(),
                 BusinessDocument.created_at.desc(),
@@ -367,11 +367,14 @@ class ReportService:
             all_docs_by_id[doc.id] = doc
 
         debts = []
+        linked_order_ids = {doc.id for contract in all_contracts for doc in (contract.documents or []) if doc.doc_type == "order"}
+        linked_order_ids.update(doc_id for ids in fw_doc_ids_by_contract.values() for doc_id in ids)
         for c in customers:
+            standalone = [order for order in all_orders if order.customer_id == c.id and order.id not in linked_order_ids]
             customer_contracts = [ct for ct in all_contracts if ct.customer_id == c.id]
 
             # 应收管理只保留有合同的客户（只有报价单 / 有订单没合同的客户不再列入）
-            if not customer_contracts:
+            if not customer_contracts and not standalone:
                 continue
 
             # Stats from contracts (paid_amount from actual payments, not stored value)
@@ -383,7 +386,10 @@ class ReportService:
                 else:
                     total_contract += float(ct.total_amount)
             total_paid = sum(paid_map.get(ct.id, 0.0) for ct in customer_contracts)
-            total_debt = max(0.0, total_contract - total_paid)
+            contract_debt = max(0.0, total_contract - total_paid)
+            total_contract += sum(float(order.total_amount or 0) for order in standalone)
+            total_paid += sum(float(order.paid_amount or 0) for order in standalone)
+            total_debt = contract_debt + sum(max(0.0, float(order.unpaid_amount or 0)) for order in standalone)
             lp = last_payments.get(c.id)
 
             def _ct_amount(ct):
@@ -417,6 +423,8 @@ class ReportService:
                 "total_paid": float(total_paid),
                 "contract_count": len(customer_contracts),
                 "last_payment_date": lp.isoformat() if lp else None,
+                "standalone_orders": [{**BusinessDocumentService._to_ref(order, viewer=self.viewer), "order_no": order.doc_no,
+                    "paid_amount": float(order.paid_amount or 0), "unpaid_amount": max(0, float(order.unpaid_amount or 0))} for order in standalone],
                 "contracts": [
                     {
                         "id": str(ct.id),
@@ -451,7 +459,7 @@ class ReportService:
     async def _sum_orders(self, start: datetime, end: datetime) -> float:
         result = await self.db.execute(
             select(func.coalesce(func.sum(BusinessDocument.total_amount), 0))
-            .where(and_(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.order_date >= start.date(), BusinessDocument.order_date <= end.date()))
+            .where(and_(BusinessDocument.doc_type == "order", BusinessDocument.status != "pending_confirm", or_(BusinessDocument.deleted_at.is_(None), BusinessDocument.total_amount > 0, BusinessDocument.paid_amount > 0), BusinessDocument.order_date >= start.date(), BusinessDocument.order_date <= end.date()))
         )
         return result.scalar() or 0
 
@@ -465,7 +473,7 @@ class ReportService:
     async def _calc_month_unpaid(self, start: datetime, end: datetime) -> float:
         result = await self.db.execute(
             select(func.coalesce(func.sum(BusinessDocument.unpaid_amount), 0))
-            .where(and_(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.order_date >= start.date(), BusinessDocument.order_date <= end.date()))
+            .where(and_(BusinessDocument.doc_type == "order", BusinessDocument.status != "pending_confirm", or_(BusinessDocument.deleted_at.is_(None), BusinessDocument.total_amount > 0, BusinessDocument.paid_amount > 0), BusinessDocument.order_date >= start.date(), BusinessDocument.order_date <= end.date()))
         )
         return result.scalar() or 0
 
@@ -490,46 +498,15 @@ class ReportService:
         return result.scalar() or 0
 
     async def _customer_debt_ranking(self, limit: int = 10) -> list:
-        """客户欠款排行：只统计已关联合同的订单（常规合同 contract_documents 或框架合同项目）。"""
-        from app.models.framework_contract import (
-            FrameworkContractProject,
-            FrameworkContractProjectDocument,
-        )
-
-        # 常规合同关联的订单（过滤已软删合同）
-        regular_result = await self.db.execute(
-            select(BusinessDocument.customer_id, func.sum(BusinessDocument.unpaid_amount).label("debt"))
-            .select_from(BusinessDocument)
-            .join(ContractDocument, ContractDocument.document_id == BusinessDocument.id)
-            .join(Contract, Contract.id == ContractDocument.contract_id)
-            .where(
-                BusinessDocument.doc_type == "order",
-                BusinessDocument.deleted_at.is_(None),
-                BusinessDocument.unpaid_amount > 0,
-                Contract.deleted_at.is_(None),
-            )
+        """All confirmed order balances, counted once regardless of contracts."""
+        result = await self.db.execute(
+            select(BusinessDocument.customer_id, func.sum(BusinessDocument.unpaid_amount))
+            .where(BusinessDocument.doc_type == "order", BusinessDocument.status != "pending_confirm",
+                   BusinessDocument.unpaid_amount > 0,
+                   or_(BusinessDocument.deleted_at.is_(None), BusinessDocument.total_amount > 0))
             .group_by(BusinessDocument.customer_id)
         )
-        debt_map = {row[0]: float(row[1]) for row in regular_result.all()}
-
-        # 框架合同项目关联的订单（过滤已软删项目）
-        fw_result = await self.db.execute(
-            select(BusinessDocument.customer_id, func.sum(BusinessDocument.unpaid_amount).label("debt"))
-            .select_from(BusinessDocument)
-            .join(FrameworkContractProjectDocument,
-                  FrameworkContractProjectDocument.document_id == BusinessDocument.id)
-            .join(FrameworkContractProject,
-                  FrameworkContractProjectDocument.project_id == FrameworkContractProject.id)
-            .where(
-                BusinessDocument.doc_type == "order",
-                BusinessDocument.deleted_at.is_(None),
-                BusinessDocument.unpaid_amount > 0,
-                FrameworkContractProject.deleted_at.is_(None),
-            )
-            .group_by(BusinessDocument.customer_id)
-        )
-        for row in fw_result.all():
-            debt_map[row[0]] = debt_map.get(row[0], 0.0) + float(row[1])
+        debt_map = {row[0]: float(row[1]) for row in result.all()}
 
         rows = sorted(debt_map.items(), key=lambda kv: kv[1], reverse=True)[:limit]
         ranking = []
@@ -549,9 +526,10 @@ class ReportService:
         return ranking
 
     async def _list_orders_in_range(self, start: datetime, end: datetime) -> list[BusinessDocument]:
+        end_date = end.date() if end.time() == time.min else end.date() + timedelta(days=1)
         result = await self.db.execute(
             select(BusinessDocument).where(
-                and_(BusinessDocument.doc_type == "order", BusinessDocument.deleted_at.is_(None), BusinessDocument.order_date >= start.date(), BusinessDocument.order_date <= end.date())
+                and_(BusinessDocument.doc_type == "order", BusinessDocument.status != "pending_confirm", or_(BusinessDocument.deleted_at.is_(None), BusinessDocument.total_amount > 0, BusinessDocument.paid_amount > 0), BusinessDocument.order_date >= start.date(), BusinessDocument.order_date < end_date)
             ).order_by(
                 BusinessDocument.order_date.desc().nullslast(),
                 BusinessDocument.created_at.desc(),
@@ -560,10 +538,11 @@ class ReportService:
         return list(result.scalars().all())
 
     async def _list_payments_in_range(self, start: datetime, end: datetime) -> list[Payment]:
+        end_at = end if end.time() == time.min else datetime.combine(end.date() + timedelta(days=1), time.min)
         result = await self.db.execute(
             select(Payment).where(
-                and_(Payment.is_voided == False, Payment.created_at >= start, Payment.created_at <= end)
-            ).order_by(Payment.created_at.desc())
+                and_(Payment.is_voided.is_(False), Payment.paid_at >= start, Payment.paid_at < end_at)
+            ).order_by(Payment.paid_at.desc())
         )
         return list(result.scalars().all())
 

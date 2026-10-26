@@ -26,7 +26,7 @@ describe('P07 资源、AI、人事和系统页面一致性', () => {
       'views/aerial/AerialVehicleCostList.vue',
       'views/aerial/AerialSafetyCheckList.vue',
       'views/inventory/InventoryList.vue',
-      'views/outsource/OutsourceVendorList.vue',
+      'views/suppliers/SupplierList.vue',
       'views/outsource/OutsourceTaskRecycle.vue',
       'views/system/BackupManage.vue',
     ]) {

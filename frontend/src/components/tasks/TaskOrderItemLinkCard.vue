@@ -139,6 +139,7 @@
             </span>
             <span class="item-table-cell item-table-number" data-label="数量" role="cell">
               {{ item.quantity }}{{ item.unit ? ` ${item.unit}` : '' }}
+              <small v-if="item.planned_quantity != null" style="display: block">本任务 {{ item.planned_quantity }} / 已完成 {{ item.completed_quantity ?? '待核实' }}</small>
             </span>
             <span class="item-table-cell" data-label="订单阶段" role="cell">
               <StatusTag :status="item.stage_view || item.stage" :label="item.stage_label" size="sm" />

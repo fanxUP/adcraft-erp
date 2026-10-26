@@ -186,10 +186,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="关联任务" prop="related_doc_id">
-          <el-select v-model="form.related_doc_id" filterable clearable placeholder="请选择关联的报价单或订单" style="width: 100%" @change="onRelatedDocChange">
-            <el-option-group label="报价单">
-              <el-option v-for="q in quotes" :key="'q_' + q.id" :label="q.label" :value="q.id" />
-            </el-option-group>
+          <el-select v-model="form.related_doc_id" filterable clearable placeholder="请选择关联订单" style="width: 100%" @change="onRelatedDocChange">
             <el-option-group label="订单">
               <el-option v-for="o in orders" :key="'o_' + o.id" :label="o.label" :value="o.id" />
             </el-option-group>
@@ -295,7 +292,7 @@ import {
   getOutsourceVendors, getOutsourceTaskGroups, getOutsourceTaskGroupTasks, getOutsourceTaskPaymentSummary,
   createOutsourceTask, updateOutsourceTask, createOutsourcePayment,
   cancelOutsourceTask, revertOutsourceTask, deleteOutsourceTask,
-  getQuotesForDropdown, getOrdersForDropdown, getOutsourceOrderItems,
+  getOrdersForDropdown, getOutsourceOrderItems,
 } from '@/api/outsource'
 import type { OutsourceTaskPaymentSummary } from '@/api/outsource'
 import { useAuthStore } from '@/stores/auth'
@@ -327,7 +324,6 @@ const dialogVisible = ref(false)
 const editingId = ref<string | null>(null)
 const vendors = ref<VendorResponse[]>([])
 const originalVendor = ref<{ id: string; name: string; taskType: string } | null>(null)
-const quotes = ref<{id: string; label: string; project_name: string}[]>([])
 const orders = ref<{id: string; label: string; project_name: string}[]>([])
 
 const form = reactive({
@@ -470,7 +466,6 @@ function contextualSourceGroupKey() {
 }
 
 async function loadQuotes() {
-  try { quotes.value = await getQuotesForDropdown() } catch { /* ignore */ }
 }
 async function loadOrders() {
   try { orders.value = await getOrdersForDropdown() } catch { /* ignore */ }
@@ -623,8 +618,7 @@ function onRelatedDocChange(val: string) {
     orderItems.value = []
     return
   }
-  const foundQuote = quotes.value.find(q => q.id === val)
-  form.related_doc_type = foundQuote ? 'quote' : 'order'
+  form.related_doc_type = 'order'
   if (form.related_doc_type === 'order') void loadOrderItems(val)
   else orderItems.value = []
 }

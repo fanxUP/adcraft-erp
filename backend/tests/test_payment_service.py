@@ -142,6 +142,7 @@ def payment_service(mock_payment_repo):
     with patch("app.services.payment_service.PaymentRepository") as MockRepoClass:
         MockRepoClass.return_value = mock_payment_repo
         db = MagicMock()
+        db.execute = AsyncMock(return_value=MagicMock(scalar=lambda: False))
         db.get = AsyncMock()
         db.flush = AsyncMock()
         db.refresh = AsyncMock()
@@ -553,7 +554,7 @@ async def test_create_statement(statement_service):
 
 
 @pytest.mark.asyncio
-async def test_create_statement_excludes_quotes_and_cancelled_orders(statement_service):
+async def test_create_statement_excludes_quotes_and_pending_but_keeps_cancellation_settlement(statement_service):
     svc = statement_service
     created = make_mock_statement(statement_no="STMT20260629-0003")
     svc.repo.create.return_value = created
@@ -561,6 +562,7 @@ async def test_create_statement_excludes_quotes_and_cancelled_orders(statement_s
         MagicMock(total_amount=3000.0, doc_type="order", status="completed"),
         MagicMock(total_amount=9000.0, doc_type="quote", status="confirmed"),
         MagicMock(total_amount=5000.0, doc_type="order", status="cancelled"),
+        MagicMock(total_amount=10000.0, doc_type="order", status="pending_confirm"),
     ]
     svc.repo.get_payments_in_range.return_value = []
 
@@ -575,7 +577,7 @@ async def test_create_statement_excludes_quotes_and_cancelled_orders(statement_s
         })
 
     statement = svc.repo.create.await_args.args[0]
-    assert statement.total_order_amount == 3000.0
+    assert statement.total_order_amount == 8000.0
 
 
 @pytest.mark.asyncio

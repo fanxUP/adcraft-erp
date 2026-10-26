@@ -22,7 +22,6 @@ class CdrQuoteConversionService(CdrQuoteServiceBase):
 
     async def convert_to_order(self, quote_id: UUID, current_user_id: UUID) -> dict:
         """将CDR智能报价转为销售订单，含生产/安装/车辆/外协/财务联动（阶段6）。"""
-        from datetime import datetime
         import uuid
         from sqlalchemy import select, update as sa_update
         from app.models.business_document import (

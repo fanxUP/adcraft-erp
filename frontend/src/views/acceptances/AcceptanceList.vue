@@ -87,14 +87,14 @@
       />
     </el-card>
 
-    <!-- 新建验收单 → 选择订单/报价单（合并列表） -->
-    <el-dialog v-model="showCreateDialog" title="选择订单或报价单创建验收单" width="900px" :close-on-click-modal="false">
+    <!-- 新建验收单 → 选择订单 -->
+    <el-dialog v-model="showCreateDialog" title="选择订单创建验收单" width="900px" :close-on-click-modal="false">
       <el-input v-model="dialogKeyword" placeholder="搜索单号/客户/项目" clearable style="margin-bottom:12px" />
       <el-table :data="filteredAvailableItems" v-loading="loadingItems" border stripe highlight-current-row @row-dblclick="handleCreateFromItem">
         <el-table-column label="来源" width="70">
           <template #default="{ row }">
             <el-tag v-if="row.order_no" type="primary" size="small">订单</el-tag>
-            <el-tag v-else type="success" size="small">报价</el-tag>
+
           </template>
         </el-table-column>
         <el-table-column label="编号" min-width="140">
@@ -118,10 +118,10 @@
         </el-table-column>
       </el-table>
       <div v-if="!availableItems.length && !loadingItems" style="text-align:center;color:#999;padding:32px 0;">
-        暂无可用的订单或报价
+        暂无可用的已确认订单
       </div>
       <div v-else-if="!filteredAvailableItems.length" style="text-align:center;color:#999;padding:16px 0;">
-        无匹配的订单或报价
+        无匹配的订单
       </div>
       <template #footer>
         <el-button @click="handleCreateBlank" type="danger">创建空白验收单</el-button>
@@ -136,7 +136,7 @@ import { formatDate } from '@/utils/datetime'
 import { ref, reactive, watch, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAcceptances, deleteAcceptance, getAvailableOrders, getAvailableQuotes, createAcceptance } from '@/api/acceptances'
+import { getAcceptances, deleteAcceptance, getAvailableOrders, createAcceptance } from '@/api/acceptances'
 import type { AvailableItem } from '@/api/acceptances'
 import type { AcceptanceListResponse } from '@/types/api'
 
@@ -149,7 +149,7 @@ const page = ref(1)
 const pageSize = ref(20)
 const filters = reactive({ keyword: '', status: '' })
 
-// 新建验收单弹窗（统一合并订单+报价单）
+// 新建验收单弹窗（仅正式订单）
 const showCreateDialog = ref(false)
 const availableItems = ref<AvailableItem[]>([])
 const loadingItems = ref(false)
@@ -166,11 +166,7 @@ const filteredAvailableItems = computed(() => {
 async function loadAvailableItems() {
   loadingItems.value = true
   try {
-    // 两个接口任一失败不阻断整体（allSettled）；合并后按创建时间全局排序
-    const [orders, quotes] = await Promise.allSettled([getAvailableOrders(), getAvailableQuotes()])
-    const items: AvailableItem[] = []
-    if (orders.status === 'fulfilled') items.push(...orders.value)
-    if (quotes.status === 'fulfilled') items.push(...quotes.value)
+    const items: AvailableItem[] = await getAvailableOrders()
     items.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
     availableItems.value = items
   } finally { loadingItems.value = false }
@@ -213,7 +209,7 @@ const statusColor = (s: string): '' | 'success' | 'warning' | 'info' | 'danger' 
   return map[s] || ''
 }
 
-// 弹窗内订单/报价单据状态展示
+// 弹窗内订单状态展示
 function docStatusLabel(s: string) {
   const map: Record<string, string> = {
     draft: '草稿', pending_confirm: '待确认', confirmed: '已确认', designing: '设计中',

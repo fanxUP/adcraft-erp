@@ -62,10 +62,10 @@ export const systemAiCapabilities: PageCapabilityMap = {
     availableActions: ['查看异常', '筛选异常类型', '进入相关业务'],
   },
   ai_quote_assistant: {
-    title: 'AI 报价助手',
+    title: 'AI 智能填单',
     purpose: '根据客户需求生成可人工复核的报价建议',
     workflowStage: 'ai_quote',
-    availableActions: ['输入客户需求', '生成报价建议', '复核报价'],
+    availableActions: ['输入客户需求', '生成订单明细', '复核订单明细'],
   },
   quote_knowledge_base: {
     title: '报价知识库',

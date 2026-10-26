@@ -1,0 +1,24 @@
+{
+  "method": "TypeScript AST imports and lazy imports; Vue template components scanned using Vite auto-component conventions. Types included. Unreachable candidates require manual review.",
+  "files": 251,
+  "reachable": 247,
+  "unreachable": [
+    {
+      "file": "frontend/src/components/ai-assistant/AiInstallationDraftCard.vue",
+      "imported_by": []
+    },
+    {
+      "file": "frontend/src/utils/installationDraft.ts",
+      "imported_by": []
+    },
+    {
+      "file": "frontend/src/utils/ui-ux-quality.ts",
+      "imported_by": []
+    },
+    {
+      "file": "frontend/src/views/outsource/OutsourceVendorList.vue",
+      "imported_by": []
+    }
+  ],
+  "missing_imports": []
+}

@@ -1,0 +1,32 @@
+{
+  "checked_at": "2026-10-26T04:56:00.978795+00:00",
+  "read_only": true,
+  "schema": {
+    "ready": true,
+    "missing_required_columns": {},
+    "missing_current_columns": {},
+    "warnings": []
+  },
+  "cost_scope": {
+    "status": "PASS",
+    "active_record_count": 52,
+    "item_reference_count": 52,
+    "issue_record_count": 0,
+    "issue_counts": {},
+    "issues": []
+  },
+  "financials": {
+    "status": "PASS",
+    "orders_checked": 34,
+    "mismatch_count": 0,
+    "source_partition": {
+      "status": "PASS",
+      "rule": "自动成本按完成/结算外协、库存出库、未删除手工项目成本三类独立汇总，每条来源记录只进入对应来源一次"
+    },
+    "manual_overlap": {
+      "status": "UNVERIFIABLE",
+      "reason": "当前 project_costs 没有外协任务或库存出库记录的来源ID，无法仅凭数据库判断人工登记是否重复录入同一笔自动成本"
+    }
+  },
+  "detailed_evidence": "logs/project-audit-2026-10-26/production-cost-audit.json (ignored by Git)"
+}

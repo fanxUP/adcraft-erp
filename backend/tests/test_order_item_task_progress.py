@@ -1562,3 +1562,9 @@ async def test_task_options_enable_historical_backfill_only_for_completed_unscop
 
     assert result == []
     assert option_map.await_args.kwargs["historical_backfill"] is True
+
+
+@pytest.fixture(autouse=True)
+def isolate_order_scope_storage(monkeypatch):
+    monkeypatch.setattr("app.services.task_service._capture_completed_scope", AsyncMock())
+    monkeypatch.setattr("app.services.task_service._assert_live_task_order", AsyncMock())

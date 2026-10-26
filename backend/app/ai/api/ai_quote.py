@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.permissions import (
     PERM_AI_QUOTE_READ,
-    PERM_QUOTE_CREATE,
+    PERM_ORDER_CREATE,
     require_all_permissions,
     require_permission,
 )
@@ -57,47 +57,22 @@ async def assist_quote(
 async def save_assisted_quote(
     draft: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_all_permissions(PERM_AI_QUOTE_READ, PERM_QUOTE_CREATE)),
+    current_user: User = Depends(require_all_permissions(PERM_AI_QUOTE_READ, PERM_ORDER_CREATE)),
 ):
     """Save an AI-generated draft as a real Quote in 'draft' status.
 
     The draft data comes from POST /ai/quotes/assist.
     Creates a Quote entity that can be further edited and confirmed.
     """
-    from app.services.business_document_service import BusinessDocumentService
-    service = BusinessDocumentService(db, doc_type='quote')
-
-    quote_data = {
-        "project_name": draft.get("project_name", "新项目"),
-        "customer_id": draft.get("customer_id"),
-        "sales_user_id": str(current_user.id),
-        "remark": draft.get("ai_analysis", ""),
-    }
-    quote = await service.create(quote_data)
-
-    # Add items via service
-    from uuid import UUID as _UUID
-    items_data = [
-        {
-            "item_name": item_data.get("item_name", ""),
-            "product_id": item_data.get("product_id"),
-            "material_id": item_data.get("material_id"),
-            "process_id": item_data.get("process_id"),
-            "material_process": item_data.get("material_process"),
-            "width": item_data.get("length") or item_data.get("width"),
-            "height": item_data.get("width") if item_data.get("length") else item_data.get("height"),
-            "quantity": item_data.get("quantity", 1),
-            "unit": item_data.get("unit", "㎡"),
-            "unit_price": item_data.get("unit_price", 0),
-            "other_fee": item_data.get("other_fee", 0),
-            "remark": item_data.get("remark", ""),
-        }
-        for item_data in draft.get("items", [])
-    ]
-    if items_data:
-        quote = await service.add_items(_UUID(quote["id"]), items_data)
-
-    return success(quote)
+    from uuid import UUID
+    from app.schemas.order import OrderCreate
+    from app.services.order_management_service import OrderManagementService
+    from app.services.business_document_service import _business_today
+    request = OrderCreate(request_id=UUID(str(draft.get("request_id"))), order_date=draft.get("order_date") or _business_today(),
+        header={"project_name": draft.get("project_name") or "新项目", "customer_id": draft.get("customer_id"),
+                "customer_name": draft.get("customer_name"), "remark": draft.get("ai_analysis", "")},
+        items=draft.get("items") or [])
+    return success(await OrderManagementService(db, current_user).create(request.model_dump()))
 
 
 # ── Smart Pricing Recommendation ──

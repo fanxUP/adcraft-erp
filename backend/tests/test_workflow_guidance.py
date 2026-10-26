@@ -429,7 +429,7 @@ def test_pending_acceptance_guides_user_to_confirm_each_item():
     assert guidance["next_action"]["target_key"] == "acceptance-items"
 
 
-def test_quote_guidance_identifies_the_exact_workflow_control():
+def test_quote_guidance_is_readonly_history():
     guidance = build_workflow_guidance(
         {
             "business_type": "quote",
@@ -438,7 +438,9 @@ def test_quote_guidance_identifies_the_exact_workflow_control():
         }
     )
 
-    assert guidance["next_action"]["target_key"] == "quote-status-converted"
+    assert guidance["allowed_next_statuses"] == []
+    assert "target_key" not in guidance["next_action"]
+    assert guidance["current_step"] == "历史报价档案"
 
 
 @pytest.mark.parametrize(

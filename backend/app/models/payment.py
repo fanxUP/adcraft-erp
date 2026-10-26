@@ -3,7 +3,7 @@ from decimal import Decimal
 from datetime import datetime
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, Numeric, String, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, SoftDeleteMixin
@@ -22,6 +22,9 @@ class Payment(Base, TimestampMixin):
     )
     customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    record_type: Mapped[str] = mapped_column(String(16), default="receipt", server_default="receipt")
+    reference_payment_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("payments.id"), nullable=True, index=True)
+    request_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, unique=True)
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -50,7 +53,7 @@ class PaymentAllocation(Base, TimestampMixin):
     __tablename__ = "payment_allocations"
     __table_args__ = (
         CheckConstraint(
-            "allocated_amount > 0",
+            "allocated_amount <> 0",
             name="ck_payment_allocations_amount_positive",
         ),
         CheckConstraint(
@@ -99,6 +102,7 @@ class CustomerStatement(Base, TimestampMixin):
     total_paid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     total_unpaid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     status: Mapped[str] = mapped_column(String(32), default="draft")
+    snapshot_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     confirmed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 

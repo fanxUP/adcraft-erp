@@ -1,0 +1,14 @@
+[
+  {
+    "path": "backend/app/api/conversations.py",
+    "line": 380,
+    "model": "BusinessDocument",
+    "attribute": "created_by"
+  },
+  {
+    "path": "backend/app/api/conversations.py",
+    "line": 815,
+    "model": "Customer",
+    "attribute": "company"
+  }
+]

@@ -143,12 +143,12 @@
     <el-row :gutter="16">
       <el-col v-if="canViewPricedOrders" :span="12">
         <el-card shadow="never" class="info-card">
-          <template #header><span>报价单</span></template>
-          <div v-if="!quoteList.length" style="text-align: center; padding: 20px; color: var(--ad-text-secondary)">暂无报价单</div>
-          <div v-for="item in quoteList" :key="item.id" class="debt-row quote-row" @click="goQuote(item)">
-            <el-tag size="small" :type="quoteStatusColor(item.status)" class="quote-status">{{ quoteStatusLabel(item.status) }}</el-tag>
+          <template #header><span>待确认订单</span></template>
+          <div v-if="!pendingOrderList.length" style="text-align: center; padding: 20px; color: var(--ad-text-secondary)">暂无待确认订单</div>
+          <div v-for="item in pendingOrderList" :key="item.id" class="debt-row quote-row" @click="goPendingOrder(item)">
+            <el-tag size="small" type="warning" class="quote-status">待确认</el-tag>
             <span class="quote-col quote-no-customer">
-              <div class="quote-no">{{ item.quote_no }}</div>
+              <div class="quote-no">{{ item.order_no }}</div>
               <div class="quote-sub">{{ item.customer_name || '—' }}</div>
             </span>
             <span class="quote-col quote-project-col">{{ item.project_name }}</span>
@@ -220,13 +220,11 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { getDashboard, getTaskCompletionSummary } from '@/api/payments'
-import { getProjectQueueOrders } from '@/api/orders'
+import { getOrders, getProjectQueueOrders } from '@/api/orders'
 import { getCompletedProjects, getTaskQueue } from '@/api/tasks'
-import { getQuotes } from '@/api/quotes'
 import type {
   CustomerDebtItem,
   OrderListResponse,
-  QuoteListResponse,
   TaskCompletionPeriod,
   TaskCompletionSummary,
   TaskCompletionType,
@@ -258,7 +256,7 @@ const data = reactive({
   customer_debt_ranking: [] as CustomerDebtItem[],
 })
 
-const quoteList = ref<QuoteListResponse[]>([])
+const pendingOrderList = ref<OrderListResponse[]>([])
 
 const completionPeriod = ref<TaskCompletionPeriod>('month')
 const completionSummary = ref<TaskCompletionSummary | null>(null)
@@ -363,29 +361,19 @@ function handleCompletionStatsClick() {
   })
 }
 
-async function fetchQuotes() {
+async function fetchPendingOrders() {
   if (!canViewPricedOrders.value) {
-    quoteList.value = []
+    pendingOrderList.value = []
     return
   }
   try {
-    const r = await getQuotes({ page_size: 5 })
-    quoteList.value = r.items || []
-  } catch { /* 报价单拉取失败不阻塞驾驶舱 */ }
+    const r = await getOrders({ page_size: 5, status: 'pending_confirm' })
+    pendingOrderList.value = r.items || []
+  } catch { /* 订单拉取失败不阻塞驾驶舱 */ }
 }
 
-function quoteStatusLabel(s: string) {
-  const map: Record<string, string> = { draft: '草稿', confirmed: '已确认', converted: '已转订单', cancelled: '已作废' }
-  return map[s] || s
-}
-
-function quoteStatusColor(s: string) {
-  const map: Record<string, string> = { draft: 'info', confirmed: 'success', converted: 'primary', cancelled: 'danger' }
-  return map[s] || 'info'
-}
-
-function goQuote(item: QuoteListResponse) {
-  window.location.href = `/quotes/${item.id}/edit`
+function goPendingOrder(item: OrderListResponse) {
+  window.location.href = `/orders/${item.id}`
 }
 
 function handleOrderCardClick(card: OrderListResponse) {
@@ -415,7 +403,7 @@ function handlePageShow(e: PageTransitionEvent) {
 
 onMounted(() => {
   fetchData()
-  fetchQuotes()
+  fetchPendingOrders()
   fetchBoardData()
   fetchTaskCompletion()
   window.addEventListener('pageshow', handlePageShow)

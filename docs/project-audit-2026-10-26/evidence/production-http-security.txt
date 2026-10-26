@@ -1,0 +1,30 @@
+BEGIN
+ status | count
+--------+-------
+(0 rows)
+
+ROLLBACK
+    location /uploads/ {
+        alias /opt/adcraft/backend/uploads/;
+        expires 30d;
+        add_header Cache-Control public;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    }
+    location /uploads/ {
+        alias /opt/adcraft/backend/uploads/;
+        expires 30d;
+        add_header Cache-Control public;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    }
+/api/v1/health 200
+/api/v1/orders/ 401
+/api/v1/expenses/ledger 401
+/api/v1/auth/me 401
