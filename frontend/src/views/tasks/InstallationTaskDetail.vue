@@ -46,6 +46,7 @@
         :task-type="'installation'"
         :task-id="task.id"
         :order-id="task.order_id"
+        :project-name="task.project_name"
         :current-item-id="task.order_item_id"
         :current-item-ids="task.order_item_ids"
         :current-status="task.status"
@@ -57,7 +58,7 @@
         @change="handleWorkflowChange"
         @rollback="handleRollback"
         @complete="handleItemCompletion"
-        @outsource="handleOutsourceItem"
+        @outsource-changed="fetchTask"
       />
 
       <OrderTaskAttachments
@@ -68,17 +69,6 @@
         :allow-upload="false"
         :collapsible="false"
         compact
-      />
-
-      <OutsourceTaskCard
-        v-if="authStore.hasPermission('outsource_task:read')"
-        ref="outsourceCardRef"
-        :task-type="'installation'"
-        :task-id="task.id"
-        :order-id="task.order_id"
-        :project-name="task.project_name"
-        :refresh-key="refreshVersion"
-        @changed="fetchTask"
       />
 
       <TaskActivityCard ref="activityCardRef" task-type="installation" :task-id="task.id" :refresh-key="refreshVersion" />
@@ -105,7 +95,6 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import OrderTaskAttachments from '@/components/orders/OrderTaskAttachments.vue'
-import OutsourceTaskCard from '@/components/outsource/OutsourceTaskCard.vue'
 import { TaskOverviewCard } from '@/components/ui'
 import { acknowledgeTaskOrderReview, getInstallationTask, changeInstallationTaskStatus, rollbackInstallationTaskItems, completeTaskItem } from '@/api/tasks'
 import { ElMessage } from 'element-plus'
@@ -124,7 +113,6 @@ const loading = ref(false)
 const changing = ref(false)
 const deleteVisible = ref(false)
 const loadError = ref('')
-const outsourceCardRef = ref<{ focusItem: (itemId: string) => Promise<void> } | null>(null)
 const refreshVersion = ref(0)
 const activityCardRef = ref<{ showOrderChanges: () => void } | null>(null)
 const completionSuccessKey = ref(0)
@@ -206,10 +194,6 @@ async function doChangeStatus(to_status: string, reason: string, orderItemIds: s
   } catch (cause) {
     ElMessage.error(formatApiError(cause, '操作失败，请刷新后重试'))
   } finally { changing.value = false }
-}
-
-function handleOutsourceItem(itemId: string) {
-  void outsourceCardRef.value?.focusItem(itemId)
 }
 
 async function fetchTask() {

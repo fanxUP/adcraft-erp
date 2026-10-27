@@ -7,10 +7,12 @@ import { fileURLToPath } from 'node:url'
 import { transpileModule, ScriptTarget } from 'typescript'
 import * as ElementComponents from 'element-plus/es'
 import type { Component, VNode } from 'vue'
-import type { TaskOrderItemOption } from '@/types/api'
+import type { OutsourceOrderItemSummary, OutsourceOrderItemSummaryResponse, TaskOrderItemOption } from '@/types/api'
 import { buildTaskItemSections, filterTaskItems, taskCompletionSummary } from './taskDetailPresentation'
 
-const api = vi.hoisted(() => ({ options: vi.fn(), assignees: vi.fn(), confirm: vi.fn(), reassign: vi.fn(), activity: vi.fn(), permission: vi.fn<(permission: string) => boolean>(() => true) }))
+const api = vi.hoisted(() => ({ options: vi.fn(), assignees: vi.fn(), confirm: vi.fn(), reassign: vi.fn(), activity: vi.fn(), summary: vi.fn(), records: vi.fn(), vendors: vi.fn(), send: vi.fn(), push: vi.fn(), permission: vi.fn<(permission: string) => boolean>(() => true) }))
+vi.mock('@/api/outsource', () => ({ getOutsourceOrderItemsSummary: api.summary, getOutsourceTasks: api.records, getOutsourceVendors: api.vendors, sendOutsourceOrderItem: api.send }))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: api.push }) }))
 vi.mock('@/api/tasks', () => ({
   getTaskOrderItemOptions: api.options, getTaskAssigneeOptions: api.assignees,
   linkHistoricalDesignTaskItems: vi.fn(), linkHistoricalProductionTaskItems: vi.fn(), linkHistoricalInstallationTaskItems: vi.fn(),
@@ -39,18 +41,36 @@ vi.mock('element-plus/es/components/alert/style/css', () => ({}))
 vi.mock('element-plus/es/components/radio-group/style/css', () => ({}))
 vi.mock('element-plus/es/components/radio-button/style/css', () => ({}))
 vi.mock('element-plus/es/components/pagination/style/css', () => ({}))
+vi.mock('element-plus/es/components/form/style/css', () => ({}))
+vi.mock('element-plus/es/components/form-item/style/css', () => ({}))
+vi.mock('element-plus/es/components/input-number/style/css', () => ({}))
+vi.mock('element-plus/es/components/date-picker/style/css', () => ({}))
 vi.mock('element-plus/es', async () => {
   const { defineComponent, h } = await import('vue')
   const stub = (name: string) => defineComponent({ name, inheritAttrs: false, setup(_, { attrs, slots }) {
     return () => h(name, attrs, [slots.header?.(), slots.title?.(), slots.default?.(), slots.footer?.()])
   } })
-  return { ElLoadingDirective: {}, ...Object.fromEntries(['Button', 'Card', 'Tag', 'Input', 'Select', 'Option', 'Checkbox', 'Empty', 'Icon', 'Dialog', 'Alert', 'RadioGroup', 'RadioButton', 'Pagination']
+  const form = defineComponent({ props: ['model', 'rules'], setup(props, { expose, slots }) {
+    expose({ clearValidate: () => undefined, validate: async () => {
+      for (const [key, rules] of Object.entries(props.rules as Record<string, { required?: boolean; validator?: (...args: unknown[]) => void }[]>)) {
+        for (const rule of rules) {
+          const value = props.model[key]
+          if (rule.required && !value) throw new Error('required')
+          if (rule.validator) await new Promise<void>((resolve, reject) => rule.validator!(rule, value, (error?: Error) => error ? reject(error) : resolve()))
+        }
+      }
+      return true
+    } })
+    return () => h('el-form', {}, slots.default?.())
+  } })
+  return { ElLoadingDirective: {}, ElForm: form, ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }, ...Object.fromEntries(['Button', 'Card', 'Tag', 'Input', 'Select', 'Option', 'Checkbox', 'Empty', 'Icon', 'Dialog', 'Alert', 'RadioGroup', 'RadioButton', 'Pagination', 'FormItem', 'InputNumber', 'DatePicker']
     .map(name => [`El${name}`, stub(`el-${name.toLowerCase()}`)])) }
 })
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import TaskCompletionAttachmentDialog from '@/components/tasks/TaskCompletionAttachmentDialog.vue'
 import TaskActivityCard from '@/components/tasks/TaskActivityCard.vue'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
+import TaskOutsourceDialogs from '@/components/outsource/TaskOutsourceDialogs.vue'
 
 function item(id: string, fields: Partial<TaskOrderItemOption> = {}): TaskOrderItemOption {
   return {
@@ -105,6 +125,7 @@ for (const [component, filename] of [
   [TaskCompletionAttachmentDialog, '../components/tasks/TaskCompletionAttachmentDialog.vue'],
   [TaskActivityCard, '../components/tasks/TaskActivityCard.vue'],
   [ProgressBar, '../components/ui/ProgressBar.vue'],
+  [TaskOutsourceDialogs, '../components/outsource/TaskOutsourceDialogs.vue'],
 ] as const) {
   const { descriptor } = parse(readFileSync(fileURLToPath(new URL(filename, import.meta.url)), 'utf8'))
   const script = compileScript(descriptor, { id: filename })
@@ -131,7 +152,7 @@ const renderer = createRenderer<HostNode, HostNode>({
 })
 function nodes(root: HostNode): HostNode[] { return [root, ...root.children.flatMap(nodes)] }
 function content(node: HostNode): string { return node.text + node.children.map(content).join('') }
-async function settle() { await Promise.resolve(); await nextTick(); await Promise.resolve(); await nextTick() }
+async function settle() { for (let i = 0; i < 12; i++) { await Promise.resolve(); await nextTick() } }
 function mount(props: Record<string, unknown>, component: Component = TaskOrderItemLinkCard) {
   const root = hostNode('root')
   const app = renderer.createApp({ render: () => h(component, props) as VNode })
@@ -156,6 +177,7 @@ describe('任务详情完成与刷新交互回归', () => {
     api.options.mockResolvedValue([item('a', { task_status: 'designing', actions: [{ key: 'complete', to_status: 'confirmed', label: '完成设计', allowed: true, kind: 'primary' }] })])
     api.assignees.mockResolvedValue([])
     api.confirm.mockResolvedValue(true)
+    api.summary.mockResolvedValue({ items: [], order_level_task_count: 0 })
   })
   it('完成只打开一次资料确认；失败保留文件，成功后才关闭清空', async () => {
     const complete = vi.fn()
@@ -217,14 +239,16 @@ describe('任务详情完成与刷新交互回归', () => {
     expect(content(view.root)).toContain('未关联')
     expect(nodes(view.root).some(node => ['details', 'el-collapse', 'el-collapse-item'].includes(node.type))).toBe(false)
     expect(content(view.root)).not.toContain('全部收起')
-    expect(nodes(view.root).some(node => node.props.role === 'columnheader' && content(node) === '单价')).toBe(true)
+    expect(content(view.root)).toContain('销售单价')
+    expect(nodes(view.root).some(node => node.props.role === 'columnheader' && content(node) === '金额')).toBe(true)
     view.unmount()
   })
   it('直接展示信息仍遵守明细价格权限', async () => {
-    api.permission.mockImplementation(permission => permission !== 'order_item:view_price')
+    api.permission.mockImplementation(permission => !['order_item:view_price', 'finance:view_cost'].includes(permission))
     const view = mount({ taskType: 'design', taskId: 'task', orderId: 'order', currentStatus: 'pending', workflow: {}, changing: false })
     await settle()
-    expect(nodes(view.root).some(node => node.props.role === 'columnheader' && ['单价', '小计'].includes(content(node)))).toBe(false)
+    expect(content(view.root)).not.toContain('销售单价')
+    expect(nodes(view.root).some(node => node.props.role === 'columnheader' && content(node) === '金额')).toBe(false)
     view.unmount()
   })
 })
@@ -272,6 +296,269 @@ describe('任务活动加载交互', () => {
     const cells = nodes(view.root).filter(node => node.type === 'td').map(content)
     expect(cells).toEqual(['6', '10'])
     expect(nodes(view.root).some(node => node.type === 'details')).toBe(false)
+    view.unmount()
+  })
+})
+
+function allocation(id: string, fields: Partial<OutsourceOrderItemSummary> = {}): OutsourceOrderItemSummary {
+  return { id, item_name: '同名明细', sort_order: 0, quantity: 10, allocated_quantity: 4, remaining_quantity: 6,
+    planned_amount: 200, recognized_cost: 100, active_task_count: 1, status: '部分外协', can_send: true, requires_reason: false, ...fields }
+}
+function summary(items = [allocation('a')], fields: Partial<OutsourceOrderItemSummaryResponse> = {}): OutsourceOrderItemSummaryResponse {
+  return { order_id: 'order', order_no: 'O-test', project_name: '测试项目', items, order_level_task_count: 0,
+    order_level_planned_amount: 0, order_level_recognized_cost: 0, ...fields }
+}
+function edit(root: HostNode, type: string, value: unknown, predicate: (node: HostNode) => boolean = () => true) {
+  const control = nodes(root).find(node => node.type === type && predicate(node))!
+  expect(control, `control ${type}`).toBeTruthy()
+  ;(control.props['onUpdate:modelValue'] as (value: unknown) => void)(value)
+}
+const taskProps = { taskType: 'design', taskId: 'task', orderId: 'order', projectName: '测试项目', currentStatus: 'designing', workflow: {}, changing: false }
+
+describe('单张明细表中的外协分配', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    api.permission.mockReturnValue(true)
+    api.options.mockResolvedValue([item('a')])
+    api.summary.mockResolvedValue(summary())
+    api.records.mockResolvedValue({ items: [], total: 0 })
+    api.vendors.mockResolvedValue({ items: [{ id: 'vendor', name: '外协商', supplier_types: ['outsource'], service_types: ['design', 'production', 'installation'], is_active: true }], total: 1 })
+    api.send.mockResolvedValue({ id: 'new' })
+  })
+  it.each(['design', 'production', 'installation'])('%s 在原明细行展示分配且不会预加载记录，数据按明细 ID 对应', async taskType => {
+    api.options.mockResolvedValue([item('a', { item_name: '同名明细' }), item('b', { item_name: '同名明细' })])
+    api.summary.mockResolvedValue(summary([allocation('b', { allocated_quantity: 8, remaining_quantity: 2 }), allocation('a')]))
+    const view = mount({ ...taskProps, taskType })
+    await settle()
+    expect(nodes(view.root).filter(node => node.props.role === 'table')).toHaveLength(1)
+    const rows = nodes(view.root).filter(node => node.props.role === 'row' && String(node.props.class).includes('item-table-row'))
+    expect(content(rows[0]!)).toContain('已分配 4')
+    expect(content(rows[1]!)).toContain('已分配 8')
+    expect(api.summary).toHaveBeenCalledWith('order', { task_type: taskType, source_task_type: taskType, source_task_id: 'task' })
+    expect(api.records).not.toHaveBeenCalled()
+    expect(api.vendors).not.toHaveBeenCalled()
+    expect(nodes(view.root).some(node => node.type === 'el-table')).toBe(false)
+    view.unmount()
+  })
+  it.each(['outsource_task:read', 'outsource_center:read'])('缺少 %s 时不展示或加载外协，订单价格仍按自身权限显示', async permission => {
+    api.permission.mockImplementation(value => value !== permission)
+    const view = mount(taskProps)
+    await settle()
+    expect(api.summary).not.toHaveBeenCalled()
+    expect(api.records).not.toHaveBeenCalled()
+    expect(content(view.root)).not.toContain('查看外协')
+    expect(content(view.root)).not.toContain('外协计划')
+    expect(content(view.root)).toContain('销售小计')
+    view.unmount()
+  })
+  it('只有外协读取权限时允许查看，但不显示发送按钮或加载供应商', async () => {
+    api.permission.mockImplementation(value => value !== 'outsource_task:create')
+    const view = mount(taskProps)
+    await settle()
+    expect(content(view.root)).not.toContain('追加外协')
+    click(view.root, '查看外协')
+    await settle()
+    expect(api.records).toHaveBeenCalledWith(expect.objectContaining({ order_item_id: 'a', task_type: 'design', source_task_id: 'task' }))
+    expect(api.vendors).not.toHaveBeenCalled()
+    view.unmount()
+  })
+  it('没有供应商读取权限时仍可查看分配，不能打开发送表单', async () => {
+    api.permission.mockImplementation(value => value !== 'outsource_vendor:read')
+    const view = mount(taskProps)
+    await settle()
+    const send = nodes(view.root).find(node => node.type === 'el-button' && content(node).trim() === '追加外协')!
+    expect(send.props.disabled).toBe(true)
+    click(view.root, '追加外协')
+    await settle()
+    expect(api.vendors).not.toHaveBeenCalled()
+    expect(content(view.root)).toContain('已分配 4')
+    view.unmount()
+  })
+  it('外协摘要失败清除旧数量、禁止发送，重试成功后恢复', async () => {
+    api.summary.mockRejectedValueOnce(new Error('摘要失败')).mockResolvedValueOnce(summary())
+    const view = mount(taskProps)
+    await settle()
+    expect(content(view.root)).toContain('外协加载失败')
+    expect(content(view.root)).not.toContain('已分配 0')
+    const send = nodes(view.root).find(node => node.type === 'el-button' && content(node).trim() === '发送外协')!
+    expect(send.props.disabled).toBe(true)
+    click(view.root, '重试外协加载')
+    await settle()
+    expect(content(view.root)).toContain('已分配 4')
+    expect(content(view.root)).not.toContain('外协加载失败')
+    view.unmount()
+  })
+  it('切换任务后旧摘要不会覆盖新分配', async () => {
+    let resolveOld!: (value: unknown) => void
+    api.summary.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve })).mockResolvedValueOnce(summary([allocation('a', { allocated_quantity: 7 })]))
+    const props = reactive({ ...taskProps })
+    const view = mount(props)
+    await settle()
+    props.taskId = 'new'
+    await settle()
+    resolveOld(summary([allocation('a', { allocated_quantity: 99 })]))
+    await settle()
+    expect(content(view.root)).toContain('已分配 7')
+    expect(content(view.root)).not.toContain('已分配 99')
+    view.unmount()
+  })
+  it('历史整单外协只显示提示和入口，不制造明细分配', async () => {
+    api.summary.mockResolvedValue(summary([allocation('a', { allocated_quantity: 0, active_task_count: 0, planned_amount: 0 })], { order_level_task_count: 2, order_level_planned_amount: 500 }))
+    const view = mount(taskProps)
+    await settle()
+    expect(content(view.root)).toContain('历史整单外协，未分摊到明细')
+    expect(content(view.root)).toContain('已分配 0')
+    click(view.root, '查看本任务外协记录')
+    await settle()
+    expect(api.records).toHaveBeenLastCalledWith(expect.objectContaining({ source_task_id: 'task', order_item_id: undefined }))
+    view.unmount()
+  })
+  it('超量必须填写原因，发送只绑定当前明细，重复点击只提交一次并刷新关联区域', async () => {
+    const changed = vi.fn()
+    let resolveSend!: (value: unknown) => void
+    api.send.mockImplementationOnce(() => new Promise(resolve => { resolveSend = resolve }))
+    const view = mount({ ...taskProps, onOutsourceChanged: changed })
+    await settle()
+    click(view.root, '追加外协')
+    await settle()
+    edit(view.root, 'el-select', 'vendor', node => node.props.placeholder === '选择外协商')
+    edit(view.root, 'el-inputnumber', 7)
+    click(view.root, '确认发送')
+    await settle()
+    expect(api.send).not.toHaveBeenCalled()
+    edit(view.root, 'el-input', '返工追加', node => node.props.rows === 3)
+    click(view.root, '确认发送')
+    click(view.root, '确认发送')
+    await settle()
+    expect(api.send).toHaveBeenCalledTimes(1)
+    expect(api.send).toHaveBeenCalledWith('order', 'a', expect.objectContaining({ quantity: 7, remark: '返工追加', task_type: 'design', source_task_type: 'design', source_task_id: 'task' }))
+    resolveSend({ id: 'new' })
+    await settle()
+    expect(nodes(view.root).filter(node => node.type === 'el-alert' && node.props.type === 'error').map(node => node.props.title)).toEqual([])
+    expect(changed).toHaveBeenCalledOnce()
+    expect(api.options).toHaveBeenCalledTimes(2)
+    expect(api.summary).toHaveBeenCalledTimes(2)
+    view.unmount()
+  })
+  it('发送失败保留数量、备注和供应商供重试', async () => {
+    api.send.mockRejectedValueOnce(new Error('发送失败'))
+    const view = mount(taskProps)
+    await settle()
+    click(view.root, '追加外协')
+    await settle()
+    edit(view.root, 'el-select', 'vendor', node => node.props.placeholder === '选择外协商')
+    edit(view.root, 'el-input', '保留此备注', node => node.props.rows === 3)
+    click(view.root, '确认发送')
+    await settle()
+    expect(nodes(view.root).some(node => node.type === 'el-alert' && String(node.props.title).includes('发送失败'))).toBe(true)
+    expect(nodes(view.root).find(node => node.type === 'el-input' && node.props.rows === 3)?.props.modelValue).toBe('保留此备注')
+    expect(nodes(view.root).find(node => node.type === 'el-select' && node.props.placeholder === '选择外协商')?.props.modelValue).toBe('vendor')
+    click(view.root, '确认发送')
+    await settle()
+    expect(api.send).toHaveBeenCalledTimes(2)
+    view.unmount()
+  })
+  it('财务成本与订单销售价格分别授权，隐藏后也不出现在记录弹窗中', async () => {
+    api.permission.mockImplementation(value => value !== 'finance:view_cost')
+    api.records.mockResolvedValue({ items: [{ id: 'ot', task_no: 'OT-test', quantity: 4, paid_amount: 999, source_task_id: 'task', source_task_type: 'design', status: 'pending' }], total: 1 })
+    const view = mount(taskProps)
+    await settle()
+    expect(content(view.root)).toContain('销售小计')
+    expect(content(view.root)).not.toContain('外协计划')
+    click(view.root, '查看外协')
+    await settle()
+    expect(content(view.root)).toContain('OT-test')
+    expect(content(view.root)).not.toContain('累计已付')
+    expect(content(view.root)).not.toContain('999')
+    view.unmount()
+  })
+  it('被同阶段外协阻塞时默认查看全部来源，范围切换及旧记录响应隔离正确', async () => {
+    api.options.mockResolvedValue([item('a', { outsource_blocked: true })])
+    let resolveOld!: (value: unknown) => void
+    api.records.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve })).mockResolvedValueOnce({ items: [{ id: 'current', task_no: 'OT-current', quantity: 2, status: 'pending', source_task_id: 'task', source_task_type: 'design' }], total: 1 })
+    const view = mount(taskProps)
+    await settle()
+    click(view.root, '查看外协')
+    await settle()
+    expect(api.records).toHaveBeenLastCalledWith({ page: 1, page_size: 20, order_id: 'order', order_item_id: 'a', task_type: 'design' })
+    edit(view.root, 'el-radiogroup', 'current')
+    await settle()
+    expect(api.records).toHaveBeenLastCalledWith(expect.objectContaining({ source_task_id: 'task', source_task_type: 'design' }))
+    resolveOld({ items: [{ id: 'old', task_no: 'OT-old', quantity: 99 }], total: 1 })
+    await settle()
+    expect(content(view.root)).toContain('OT-current')
+    expect(content(view.root)).not.toContain('OT-old')
+    view.unmount()
+  })
+  it('供应商分页加载并过滤承接类型，失败时可重试', async () => {
+    api.vendors.mockRejectedValueOnce(new Error('目录失败')).mockResolvedValueOnce({ items: [{ id: 'other', name: '仅安装', supplier_types: ['outsource'], service_types: ['installation'], is_active: true }], total: 2 })
+      .mockResolvedValueOnce({ items: [{ id: 'vendor', name: '设计外协', supplier_types: ['outsource'], service_types: ['design'], is_active: true }], total: 2 })
+    const view = mount(taskProps)
+    await settle()
+    click(view.root, '追加外协')
+    await settle()
+    expect(content(view.root)).toContain('目录失败')
+    click(view.root, '重试供应商加载')
+    await settle()
+    expect(api.vendors).toHaveBeenLastCalledWith({ page: 2, page_size: 100, is_active: true })
+    const supplierNames = nodes(view.root).filter(node => node.type === 'el-option').map(node => node.props.label)
+    expect(supplierNames).toContain('设计外协')
+    expect(supplierNames).not.toContain('仅安装')
+    view.unmount()
+  })
+  it('记录超过一页可以翻页，切换统计范围重置到第一页', async () => {
+    api.options.mockResolvedValue([item('a', { outsource_blocked: true })])
+    api.records.mockResolvedValue({ items: [{ id: 'ot', task_no: 'OT-page', quantity: 1, status: 'pending' }], total: 25 })
+    const view = mount(taskProps)
+    await settle()
+    click(view.root, '查看外协')
+    await settle()
+    const pagination = nodes(view.root).find(node => node.type === 'el-pagination')!
+    const update = pagination.props['onUpdate:currentPage'] || pagination.props['onUpdate:current-page']
+    ;(update as (page: number) => void)(2)
+    await settle()
+    expect(api.records).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, order_item_id: 'a' }))
+    edit(view.root, 'el-radiogroup', 'current')
+    await settle()
+    expect(api.records).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, source_task_id: 'task' }))
+    click(view.root, '管理外协')
+    expect(api.push).toHaveBeenLastCalledWith({ path: '/outsource/tasks', query: { order_id: 'order', task_type: 'design', source_task_type: 'design', source_task_id: 'task', order_item_id: 'a' } })
+    view.unmount()
+  })
+  it('切换任务时旧发送结果不会关闭新任务弹窗或刷新新任务', async () => {
+    let resolveSend!: (value: unknown) => void
+    api.send.mockImplementationOnce(() => new Promise(resolve => { resolveSend = resolve }))
+    const changed = vi.fn()
+    const props = reactive({ ...taskProps, onOutsourceChanged: changed })
+    const view = mount(props)
+    await settle()
+    click(view.root, '追加外协')
+    await settle()
+    edit(view.root, 'el-select', 'vendor', node => node.props.placeholder === '选择外协商')
+    click(view.root, '确认发送')
+    await settle()
+    expect(api.send).toHaveBeenCalledOnce()
+    props.taskId = 'new-task'
+    await settle()
+    const summaryCalls = api.summary.mock.calls.length
+    resolveSend({ id: 'old-task-send' })
+    await settle()
+    expect(changed).not.toHaveBeenCalled()
+    expect(api.summary).toHaveBeenCalledTimes(summaryCalls)
+    view.unmount()
+  })
+  it('记录加载失败可以重试，缺失的财务字段显示未知', async () => {
+    api.records.mockRejectedValueOnce(new Error('记录失败')).mockResolvedValueOnce({ items: [{ id: 'ot', task_no: 'OT-retry', quantity: 1, status: 'cancelled' }], total: 1 })
+    const view = mount(taskProps)
+    await settle()
+    click(view.root, '查看外协')
+    await settle()
+    expect(content(view.root)).toContain('记录失败')
+    click(view.root, '重试记录加载')
+    await settle()
+    expect(content(view.root)).toContain('OT-retry')
+    const definitions = nodes(view.root).filter(node => node.type === 'dd').map(content)
+    expect(definitions.slice(-3)).toEqual(['-', '-', '-'])
     view.unmount()
   })
 })

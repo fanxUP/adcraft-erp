@@ -64,7 +64,7 @@ describe('任务详情页界面收敛', () => {
     expect(source).toContain('function disabledReason')
     expect(source).toContain('<StatusTag')
     expect(source).toContain('item.outsource_blocked')
-    expect(source).toContain('item.outsource_status_label')
+    expect(source).toContain('summaryFor(item)')
     expect(source).toContain('action.disabled_reason')
     expect(source).toContain('刷新状态')
     expect(source).not.toContain('勾选要推进的明细')
@@ -94,20 +94,12 @@ describe('任务详情页界面收敛', () => {
     expect(readSource('components/tasks/TaskCompletionAttachmentDialog.vue')).toContain('跳过资料并完成')
   })
 
-  it('任务处理明细按数量、单价、小计、任务进度顺序展示金额信息', () => {
+  it('金额列区分销售价格和外协成本，逐项遵守权限', () => {
     const source = readSource('components/tasks/TaskOrderItemLinkCard.vue')
-    const quantityHeader = source.indexOf('>数量</span>')
-    const amountHeader = source.indexOf('>单价</span>')
-    const subtotalHeader = source.indexOf('>小计</span>')
-    const progressHeader = source.indexOf('>本任务进度</span>')
-
-    expect(quantityHeader).toBeGreaterThanOrEqual(0)
-    expect(amountHeader).toBeGreaterThan(quantityHeader)
-    expect(subtotalHeader).toBeGreaterThan(amountHeader)
-    expect(progressHeader).toBeGreaterThan(subtotalHeader)
-    expect(source).toContain('{{ item.quantity }}')
-    expect(source).toContain('{{ formatMoney(item.unit_price) }}')
-    expect(source).toContain('{{ formatMoney(item.subtotal_amount) }}')
+    expect(source).toContain('销售单价 {{ formatMoney(item.unit_price) }}')
+    expect(source).toContain('销售小计 {{ formatMoney(item.subtotal_amount) }}')
+    expect(source).toContain('v-if="canViewOutsourceCost"')
+    expect(source).toContain('v-if="priceColumnsVisible"')
   })
 
   it('任务处理明细使用列式列表，全部展示且不建立独立滚动区域', () => {
@@ -255,7 +247,7 @@ describe('任务详情页界面收敛', () => {
   })
 
   it('任务人员没有外协查看权限时不加载外协卡片或外协筛选', () => {
-    const cardSource = readSource('components/outsource/OutsourceTaskCard.vue')
+    const cardSource = readSource('components/outsource/TaskOutsourceDialogs.vue')
     expect(cardSource).toContain('v-if="canViewOutsourceTask"')
     expect(cardSource).toContain("authStore.hasPermission('outsource_task:read')")
     expect(cardSource).toContain("authStore.hasPermission('outsource_task:create')")
@@ -265,7 +257,8 @@ describe('任务详情页界面收敛', () => {
       'views/tasks/ProductionTaskDetail.vue',
       'views/tasks/InstallationTaskDetail.vue',
     ]) {
-      expect(readSource(relativePath)).toContain("v-if=\"authStore.hasPermission('outsource_task:read')\"")
+      expect(readSource(relativePath)).not.toContain('OutsourceTaskCard')
+      expect(readSource(relativePath)).toContain('@outsource-changed="fetchTask"')
     }
 
     for (const relativePath of [
@@ -280,7 +273,7 @@ describe('任务详情页界面收敛', () => {
   })
 
   it('外协成本字段只在拥有成本权限时渲染，避免缺失字段显示为零', () => {
-    const cardSource = readSource('components/outsource/OutsourceTaskCard.vue')
+    const cardSource = readSource('components/outsource/TaskOutsourceDialogs.vue')
     const taskListSource = readSource('views/outsource/OutsourceTaskList.vue')
     const recycleSource = readSource('views/outsource/OutsourceTaskRecycle.vue')
     const paymentSource = readSource('views/outsource/OutsourcePaymentList.vue')
