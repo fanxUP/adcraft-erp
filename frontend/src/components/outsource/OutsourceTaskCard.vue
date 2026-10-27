@@ -29,7 +29,7 @@
 
     <div ref="allocationHeading" class="section-heading">
       <div>
-        <el-button text type="primary" @click="allocationExpanded = !allocationExpanded">{{ allocationExpanded ? '收起' : '展开' }}外协分配</el-button>
+        <span class="section-title">外协分配</span>
         <span v-if="summary" class="section-caption">订单 {{ summary.order_no }} · 当前{{ taskTypeLabel }}任务</span>
       </div>
       <el-button text type="primary" size="small" :loading="loading" @click="fetchOutsource">刷新</el-button>
@@ -40,7 +40,6 @@
       <el-button text size="small" @click="clearItemFocus">查看全部明细</el-button>
     </div>
     <el-table
-      v-if="allocationExpanded"
       :data="focusedSummaryItems"
       v-loading="loading"
       stripe
@@ -90,7 +89,7 @@
       </el-table-column>
     </el-table>
 
-    <div v-if="canViewOutsourceCost && allocationExpanded" class="cost-note">
+    <div v-if="canViewOutsourceCost" class="cost-note">
       所示明细外协计划成本 ¥{{ moneyText(itemPlannedAmount) }}，已确认成本 ¥{{ moneyText(itemRecognizedCost) }}。
       订单销售金额与外协成本分别核算，不会相互覆盖。
     </div>
@@ -236,7 +235,6 @@ const canViewOutsourceCost = computed(() => authStore.hasPermission('finance:vie
 const loading = ref(false)
 const loadError = ref('')
 const focusedItemId = ref('')
-const allocationExpanded = ref(false)
 const allocationHeading = ref<HTMLElement | null>(null)
 const focusedSummaryItems = computed(() => (summary.value?.items || []).filter(item => !focusedItemId.value || item.id === focusedItemId.value))
 const outsourcePage = ref(1)
@@ -414,7 +412,6 @@ async function handleSubmit() {
 
 async function focusItem(orderItemId: string) {
   focusedItemId.value = orderItemId
-  allocationExpanded.value = true
   outsourcePage.value = 1
   await nextTick()
   allocationHeading.value?.scrollIntoView({ block: 'start', behavior: 'auto' })
@@ -429,7 +426,6 @@ defineExpose({ focusItem })
 
 watch([() => props.taskId, () => props.orderId, () => props.taskType], () => {
   focusedItemId.value = ''
-  allocationExpanded.value = false
   outsourcePage.value = 1
   summary.value = null
   outsourceTasks.value = []

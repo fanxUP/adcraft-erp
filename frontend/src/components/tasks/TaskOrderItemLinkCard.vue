@@ -43,9 +43,6 @@
           <el-option label="已完成" value="completed" />
           <el-option label="我的明细" value="mine" />
         </el-select>
-        <el-checkbox v-if="canViewItemPrice" v-model="showPrices">显示价格</el-checkbox>
-        <el-button text size="small" @click="expandSections(true)">全部展开</el-button>
-        <el-button text size="small" @click="expandSections(false)">全部收起</el-button>
       </div>
       <div v-if="items.length" class="selection-context-note">
         <span>显示 {{ filteredItems.length }} / {{ items.length }} 条明细</span>
@@ -99,14 +96,12 @@
       </div>
 
       <div v-loading="loadingItems" class="link-panel">
-        <el-collapse v-if="sections.length" v-model="expandedSectionKeys" class="item-section-collapse">
-          <el-collapse-item v-for="section in sections" :key="section.key" :name="section.key">
-            <template #title>
+        <div v-if="sections.length" class="item-sections">
+          <section v-for="section in sections" :key="section.key" class="item-section" :aria-label="section.name">
               <div class="item-section-title">
                 <strong>{{ section.name }}</strong>
                 <span>共 {{ section.items.length }} 项 · 已完成 {{ section.completed }} 项</span>
               </div>
-            </template>
         <div
           class="item-table"
           :class="{
@@ -130,7 +125,7 @@
             <span class="item-table-cell" role="columnheader">执行人</span>
             <span v-if="priceColumnsVisible" class="item-table-cell item-table-number" role="columnheader">单价</span>
             <span v-if="priceColumnsVisible" class="item-table-cell item-table-number" role="columnheader">小计</span>
-            <span class="item-table-cell item-table-number" role="columnheader">本任务进度</span>
+            <span class="item-table-cell" role="columnheader">本任务进度</span>
             <span v-if="canViewOutsourceTask" class="item-table-cell" role="columnheader">外协</span>
             <span class="item-table-cell item-table-actions-header" role="columnheader">操作</span>
           </div>
@@ -199,12 +194,12 @@
                 {{ formatMoney(item.subtotal_amount) }}
               </span>
             </template>
-            <span class="item-table-cell item-table-number" data-label="本任务进度" role="cell">
-              <span v-if="item.is_linked && item.task_progress_pct != null">
-                {{ item.task_progress_pct }}%
-              </span>
-              <span v-else class="item-table-placeholder">—</span>
-            </span>
+            <div class="item-table-cell item-table-progress" data-label="本任务进度" role="cell">
+              <ProgressBar v-if="item.is_linked && item.task_progress_pct != null"
+                :percentage="item.task_progress_pct" :tone="item.task_status_view?.tone" size="sm"
+                :aria-label="`${item.item_name}本任务进度`" />
+              <span v-else class="item-table-placeholder">{{ item.is_linked ? '进度待核实' : '未关联' }}</span>
+            </div>
             <span v-if="canViewOutsourceTask" class="item-table-cell item-table-outsourcing" data-label="外协" role="cell">
               <el-tag v-if="item.outsource_blocked" type="warning" effect="light" size="small">
                 {{ item.outsource_status_label || '外协任务进行中' }}
@@ -241,8 +236,8 @@
             </span>
           </div>
         </div>
-          </el-collapse-item>
-        </el-collapse>
+          </section>
+        </div>
         <el-empty v-if="items.length && !sections.length && !loadingItems" description="没有符合筛选条件的明细" :image-size="48" />
 
         <div v-if="loadError" class="link-tip error-tip">订单明细加载失败，请刷新后重试。</div>
@@ -290,6 +285,7 @@ import {
 } from '@/api/tasks'
 import type { TaskAssigneeOption, TaskItemAction, TaskOrderItemOption, TaskType } from '@/types/api'
 import { StatusTag } from '@/components/ui'
+import ProgressBar from '@/components/ui/ProgressBar.vue'
 import TaskCompletionAttachmentDialog from '@/components/tasks/TaskCompletionAttachmentDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { getTaskItemActions, isTaskOrderItemSelectable } from '@/utils/taskItemActions'
@@ -342,30 +338,15 @@ const completionItem = ref<TaskOrderItemOption | null>(null)
 const keyword = ref('')
 const itemScope = ref<TaskItemScope>('all')
 const itemFilter = ref<TaskItemFilter>('all')
-const showPrices = ref(false)
-const expandedSectionKeys = ref<string[]>([])
-const knownSectionKeys = new Set<string>()
-const priceColumnsVisible = computed(() => canViewItemPrice.value && showPrices.value)
+const priceColumnsVisible = computed(() => canViewItemPrice.value)
 const filteredItems = computed(() => filterTaskItems(items.value, itemScope.value, itemFilter.value, keyword.value, authStore.user?.id))
 const sections = computed(() => buildTaskItemSections(filteredItems.value))
 
-function expandSections(expanded: boolean) {
-  expandedSectionKeys.value = expanded ? sections.value.map(section => section.key) : []
-}
 function resetFilters() {
   keyword.value = ''
   itemScope.value = 'all'
   itemFilter.value = 'all'
 }
-watch(sections, value => {
-  const searching = keyword.value.trim() || itemFilter.value !== 'all' || itemScope.value !== 'all'
-  for (const section of value) {
-    if (searching || (!knownSectionKeys.has(section.key) && section.pending)) {
-      if (!expandedSectionKeys.value.includes(section.key)) expandedSectionKeys.value.push(section.key)
-    }
-    knownSectionKeys.add(section.key)
-  }
-}, { immediate: true })
 watch([keyword, itemScope, itemFilter], () => {
   // Hidden selections must never be silently included in a later reassignment.
   const visibleIds = new Set(filteredItems.value.map(item => item.id))
@@ -677,6 +658,7 @@ onMounted(loadItems)
 </script>
 
 <style scoped>
+.task-processing-card { container-type: inline-size; }
 .task-processing-card { margin-top: 16px; }
 .task-section { min-width: 0; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; color: var(--ad-text); font-size: 15px; font-weight: 600; }
@@ -689,14 +671,14 @@ onMounted(loadItems)
 .item-assignee-toolbar-note, .selection-context-note { color: var(--ad-text-secondary); font-size: 12px; }
 .selection-context-note { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 8px; padding: 0 4px; }
 .link-panel { margin-top: 10px; container-type: inline-size; container-name: task-items; }
-.item-table { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.55fr) minmax(80px, .9fr) minmax(56px, .65fr) minmax(70px, .75fr) minmax(72px, .75fr) minmax(84px, .85fr) minmax(80px, .7fr) minmax(150px, 1.2fr); overflow: visible; border: 1px solid var(--el-border-color); border-radius: 6px; }
-.item-table.has-selection-column { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.55fr) minmax(80px, .9fr) minmax(56px, .65fr) minmax(70px, .75fr) minmax(72px, .75fr) minmax(84px, .85fr) minmax(80px, .7fr) minmax(150px, 1.2fr); }
-.item-table.has-price-columns { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(72px, .6fr) minmax(72px, .65fr) minmax(80px, .7fr) minmax(150px, 1.1fr); }
-.item-table.has-selection-column.has-price-columns { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(72px, .6fr) minmax(72px, .65fr) minmax(80px, .7fr) minmax(150px, 1.1fr); }
-.item-table.has-outsource-column:not(.has-price-columns) { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(80px, .7fr) minmax(100px, .7fr) minmax(150px, 1.1fr); }
-.item-table.has-selection-column.has-outsource-column:not(.has-price-columns) { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(80px, .7fr) minmax(100px, .7fr) minmax(150px, 1.1fr); }
-.item-table.has-price-columns.has-outsource-column { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.35fr) minmax(80px, .8fr) minmax(56px, .55fr) minmax(70px, .65fr) minmax(72px, .65fr) minmax(84px, .75fr) minmax(72px, .6fr) minmax(72px, .6fr) minmax(80px, .65fr) minmax(100px, .7fr) minmax(150px, 1fr); }
-.item-table.has-selection-column.has-price-columns.has-outsource-column { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.35fr) minmax(80px, .8fr) minmax(56px, .55fr) minmax(70px, .65fr) minmax(72px, .65fr) minmax(84px, .75fr) minmax(72px, .6fr) minmax(72px, .6fr) minmax(80px, .65fr) minmax(100px, .7fr) minmax(150px, 1fr); }
+.item-table { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.55fr) minmax(80px, .9fr) minmax(56px, .65fr) minmax(70px, .75fr) minmax(72px, .75fr) minmax(84px, .85fr) minmax(112px, .9fr) minmax(150px, 1.2fr); overflow: visible; border: 1px solid var(--el-border-color); border-radius: 6px; }
+.item-table.has-selection-column { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.55fr) minmax(80px, .9fr) minmax(56px, .65fr) minmax(70px, .75fr) minmax(72px, .75fr) minmax(84px, .85fr) minmax(112px, .9fr) minmax(150px, 1.2fr); }
+.item-table.has-price-columns { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(72px, .6fr) minmax(72px, .65fr) minmax(112px, .9fr) minmax(150px, 1.1fr); }
+.item-table.has-selection-column.has-price-columns { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(72px, .6fr) minmax(72px, .65fr) minmax(112px, .9fr) minmax(150px, 1.1fr); }
+.item-table.has-outsource-column:not(.has-price-columns) { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(112px, .9fr) minmax(100px, .7fr) minmax(150px, 1.1fr); }
+.item-table.has-selection-column.has-outsource-column:not(.has-price-columns) { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.45fr) minmax(80px, .85fr) minmax(56px, .6fr) minmax(70px, .7fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(112px, .9fr) minmax(100px, .7fr) minmax(150px, 1.1fr); }
+.item-table.has-price-columns.has-outsource-column { --item-table-columns: minmax(76px, 1fr) minmax(120px, 1.35fr) minmax(80px, .8fr) minmax(56px, .55fr) minmax(70px, .65fr) minmax(72px, .65fr) minmax(84px, .75fr) minmax(72px, .6fr) minmax(72px, .6fr) minmax(112px, .85fr) minmax(100px, .7fr) minmax(150px, 1fr); }
+.item-table.has-selection-column.has-price-columns.has-outsource-column { --item-table-columns: 36px minmax(76px, 1fr) minmax(120px, 1.35fr) minmax(80px, .8fr) minmax(56px, .55fr) minmax(70px, .65fr) minmax(72px, .65fr) minmax(84px, .75fr) minmax(72px, .6fr) minmax(72px, .6fr) minmax(112px, .85fr) minmax(100px, .7fr) minmax(150px, 1fr); }
 .item-table-header, .item-table-row { display: grid; grid-template-columns: var(--item-table-columns); align-items: stretch; }
 .item-table-header { padding: 10px 12px; border-bottom: 1px solid var(--el-border-color); background: var(--el-fill-color-lighter); color: var(--ad-text-secondary); font-size: 12px; font-weight: 600; }
 .item-table-row { min-width: 0; padding: 12px; border-bottom: 1px solid var(--el-border-color-lighter); transition: background-color .15s ease; }
@@ -725,17 +707,14 @@ onMounted(loadItems)
 .item-filter-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .item-search { width: 300px; max-width: 100%; }
 .item-filter-select { width: 150px; }
-.item-section-collapse { border: 0; }
-.item-section-collapse :deep(.el-collapse-item__header) { height: auto; min-height: 48px; background: var(--ad-bg-secondary); border: 1px solid var(--ad-border); border-radius: 6px; padding: 8px 12px; line-height: 1.5; }
-.item-section-collapse :deep(.el-collapse-item__wrap) { border-bottom: 0; background: transparent; }
-.item-section-collapse :deep(.el-collapse-item__content) { padding: 10px 0 0; }
-.item-section-collapse :deep(.el-collapse-item) { margin-bottom: 12px; }
-.item-section-title { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding-right: 12px; text-align: left; }
+.item-section { margin-bottom: 16px; }
+.item-section-title { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding: 10px 12px; margin-bottom: 10px; background: var(--ad-bg-secondary); border: 1px solid var(--ad-border); border-radius: 6px; text-align: left; }
 .item-section-title span { color: var(--ad-text-secondary); font-size: 12px; }
+.item-table-progress :deep(.ui-progress-bar) { width: 100%; min-width: 0; }
 
-@container task-items (max-width: 1050px) {
+@container task-items (max-width: 1240px) {
   .item-table-header { display: none; }
-  .item-table, .item-table.has-selection-column, .item-table.has-price-columns, .item-table.has-selection-column.has-price-columns, .item-table.has-outsource-column:not(.has-price-columns), .item-table.has-selection-column.has-outsource-column:not(.has-price-columns), .item-table.has-price-columns.has-outsource-column, .item-table.has-selection-column.has-price-columns.has-outsource-column { --item-table-columns: minmax(0, 1fr) minmax(128px, auto); }
+  .item-table, .item-table.has-selection-column, .item-table.has-price-columns, .item-table.has-selection-column.has-price-columns, .item-table.has-outsource-column:not(.has-price-columns), .item-table.has-selection-column.has-outsource-column:not(.has-price-columns), .item-table.has-price-columns.has-outsource-column, .item-table.has-selection-column.has-price-columns.has-outsource-column { --item-table-columns: repeat(2, minmax(0, 1fr)); }
   .item-table-row { grid-template-columns: var(--item-table-columns); padding: 10px; }
   .item-table-row .item-table-cell:not(.item-table-actions):not(.item-table-select):not(.item-action-reason) { flex-direction: column; align-items: flex-start; gap: 2px; padding: 5px 6px; }
   .item-table-row .item-table-cell:not(.item-table-actions):not(.item-table-select):not(.item-action-reason)::before { content: attr(data-label); color: var(--ad-text-secondary); font-size: 11px; line-height: 1.4; }
@@ -744,7 +723,7 @@ onMounted(loadItems)
   .item-table-row .item-table-number { justify-content: flex-start; text-align: left; }
   .item-table-row .item-action-reason { grid-column: 1 / -1; padding: 6px; }
 }
-@media (max-width: 640px) {
+@container (max-width: 640px) {
   .section-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
   .section-heading-main { align-items: flex-start; flex-direction: column; gap: 4px; }
   .item-assignee-toolbar, .selection-context-note { align-items: flex-start; flex-direction: column; }

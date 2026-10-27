@@ -10,14 +10,14 @@ import type { Component, VNode } from 'vue'
 import type { TaskOrderItemOption } from '@/types/api'
 import { buildTaskItemSections, filterTaskItems, taskCompletionSummary } from './taskDetailPresentation'
 
-const api = vi.hoisted(() => ({ options: vi.fn(), assignees: vi.fn(), confirm: vi.fn(), reassign: vi.fn(), activity: vi.fn() }))
+const api = vi.hoisted(() => ({ options: vi.fn(), assignees: vi.fn(), confirm: vi.fn(), reassign: vi.fn(), activity: vi.fn(), permission: vi.fn<(permission: string) => boolean>(() => true) }))
 vi.mock('@/api/tasks', () => ({
   getTaskOrderItemOptions: api.options, getTaskAssigneeOptions: api.assignees,
   linkHistoricalDesignTaskItems: vi.fn(), linkHistoricalProductionTaskItems: vi.fn(), linkHistoricalInstallationTaskItems: vi.fn(),
   reassignDesignTaskItems: api.reassign, reassignProductionTaskItems: api.reassign, reassignInstallationTaskItems: api.reassign,
   getTaskActivity: api.activity,
 }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { id: 'me' }, hasPermission: () => true }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { id: 'me' }, hasPermission: api.permission }) }))
 vi.mock('@/components/ui', async () => {
   const { h } = await import('vue')
   return { StatusTag: (props: Record<string, unknown>) => h('status-tag', props) }
@@ -32,8 +32,6 @@ vi.mock('element-plus/es/components/input/style/css', () => ({}))
 vi.mock('element-plus/es/components/select/style/css', () => ({}))
 vi.mock('element-plus/es/components/option/style/css', () => ({}))
 vi.mock('element-plus/es/components/checkbox/style/css', () => ({}))
-vi.mock('element-plus/es/components/collapse/style/css', () => ({}))
-vi.mock('element-plus/es/components/collapse-item/style/css', () => ({}))
 vi.mock('element-plus/es/components/empty/style/css', () => ({}))
 vi.mock('element-plus/es/components/icon/style/css', () => ({}))
 vi.mock('element-plus/es/components/dialog/style/css', () => ({}))
@@ -46,12 +44,13 @@ vi.mock('element-plus/es', async () => {
   const stub = (name: string) => defineComponent({ name, inheritAttrs: false, setup(_, { attrs, slots }) {
     return () => h(name, attrs, [slots.header?.(), slots.title?.(), slots.default?.(), slots.footer?.()])
   } })
-  return { ElLoadingDirective: {}, ...Object.fromEntries(['Button', 'Card', 'Tag', 'Input', 'Select', 'Option', 'Checkbox', 'Collapse', 'CollapseItem', 'Empty', 'Icon', 'Dialog', 'Alert', 'RadioGroup', 'RadioButton', 'Pagination']
+  return { ElLoadingDirective: {}, ...Object.fromEntries(['Button', 'Card', 'Tag', 'Input', 'Select', 'Option', 'Checkbox', 'Empty', 'Icon', 'Dialog', 'Alert', 'RadioGroup', 'RadioButton', 'Pagination']
     .map(name => [`El${name}`, stub(`el-${name.toLowerCase()}`)])) }
 })
 import TaskOrderItemLinkCard from '@/components/tasks/TaskOrderItemLinkCard.vue'
 import TaskCompletionAttachmentDialog from '@/components/tasks/TaskCompletionAttachmentDialog.vue'
 import TaskActivityCard from '@/components/tasks/TaskActivityCard.vue'
+import ProgressBar from '@/components/ui/ProgressBar.vue'
 
 function item(id: string, fields: Partial<TaskOrderItemOption> = {}): TaskOrderItemOption {
   return {
@@ -73,11 +72,11 @@ describe('任务明细分项与筛选', () => {
     expect(sections.map(section => section.items.map(value => value.id))).toEqual([['b'], ['a'], ['c', 'd'], ['e']])
     expect(sections[3]?.name).toBe('未分项明细')
   })
-  it('完成计数只统计本任务，已退回组不默认展开', () => {
+  it('完成计数只统计本任务，保留已完成、未关联和退回明细', () => {
     const sections = buildTaskItemSections([item('a', { task_status: 'confirmed' }), item('b', { is_linked: false, task_status: null, can_select: false })])
-    expect(sections[0]).toMatchObject({ completed: 1, pending: false })
-    expect(buildTaskItemSections([item('c', { task_status: 'rolled_back', can_select: false })])[0]?.pending).toBe(false)
-    expect(buildTaskItemSections([item('d')])[0]?.pending).toBe(true)
+    expect(sections[0]).toMatchObject({ completed: 1 })
+    expect(sections[0]?.items.map(row => row.id)).toEqual(['a', 'b'])
+    expect(buildTaskItemSections([item('c', { task_status: 'rolled_back', can_select: false })])[0]?.items[0]?.id).toBe('c')
   })
   it('任务范围、状态、执行人与关键词同时筛选，且不修改原数组', () => {
     const rows = [item('a', { assignee_user_id: 'me', material_process: '铝板', task_status: 'designing' }), item('b', { assignee_user_id: 'other' }), item('c', { is_linked: false })]
@@ -105,6 +104,7 @@ for (const [component, filename] of [
   [TaskOrderItemLinkCard, '../components/tasks/TaskOrderItemLinkCard.vue'],
   [TaskCompletionAttachmentDialog, '../components/tasks/TaskCompletionAttachmentDialog.vue'],
   [TaskActivityCard, '../components/tasks/TaskActivityCard.vue'],
+  [ProgressBar, '../components/ui/ProgressBar.vue'],
 ] as const) {
   const { descriptor } = parse(readFileSync(fileURLToPath(new URL(filename, import.meta.url)), 'utf8'))
   const script = compileScript(descriptor, { id: filename })
@@ -152,6 +152,7 @@ function click(root: HostNode, label: string) {
 describe('任务详情完成与刷新交互回归', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    api.permission.mockReturnValue(true)
     api.options.mockResolvedValue([item('a', { task_status: 'designing', actions: [{ key: 'complete', to_status: 'confirmed', label: '完成设计', allowed: true, kind: 'primary' }] })])
     api.assignees.mockResolvedValue([])
     api.confirm.mockResolvedValue(true)
@@ -197,23 +198,45 @@ describe('任务详情完成与刷新交互回归', () => {
     expect(api.options).toHaveBeenCalledTimes(2)
     view.unmount()
   })
+  it.each(['design', 'production', 'installation'])('%s 明细直接展示进度条，已完成分项也可见，未知进度不冒充零', async taskType => {
+    api.options.mockResolvedValue([
+      item('a', { group_id: 'done', group_name: '已完成分项', task_status: 'completed', task_progress_pct: 100 }),
+      item('b', { group_id: 'active', group_name: '执行中分项', task_status: 'designing', task_progress_pct: 55 }),
+      item('c', { task_progress_pct: 0 }),
+      item('d', { task_progress_pct: null }),
+      item('e', { is_linked: false, task_progress_pct: 35 }),
+    ])
+    const view = mount({ taskType, taskId: 'task', orderId: 'order', currentStatus: 'pending', workflow: {}, changing: false })
+    await settle()
+    const bars = nodes(view.root).filter(node => node.props.role === 'progressbar')
+    expect(bars.map(node => node.props['aria-valuenow'])).toEqual([100, 55, 0])
+    expect(bars[1]?.props['aria-label']).toBe('明细b本任务进度')
+    expect(content(view.root)).toContain('55%')
+    expect(content(view.root)).toContain('已完成分项')
+    expect(content(view.root)).toContain('进度待核实')
+    expect(content(view.root)).toContain('未关联')
+    expect(nodes(view.root).some(node => ['details', 'el-collapse', 'el-collapse-item'].includes(node.type))).toBe(false)
+    expect(content(view.root)).not.toContain('全部收起')
+    expect(nodes(view.root).some(node => node.props.role === 'columnheader' && content(node) === '单价')).toBe(true)
+    view.unmount()
+  })
+  it('直接展示信息仍遵守明细价格权限', async () => {
+    api.permission.mockImplementation(permission => permission !== 'order_item:view_price')
+    const view = mount({ taskType: 'design', taskId: 'task', orderId: 'order', currentStatus: 'pending', workflow: {}, changing: false })
+    await settle()
+    expect(nodes(view.root).some(node => node.props.role === 'columnheader' && ['单价', '小计'].includes(content(node)))).toBe(false)
+    view.unmount()
+  })
 })
 
 describe('任务活动加载交互', () => {
   beforeEach(() => { vi.clearAllMocks() })
-  function open(root: HostNode) {
-    const details = nodes(root).find(node => node.type === 'details')!
-    ;(details.props.onToggle as (event: unknown) => void)({ target: { open: true } })
-    return details
-  }
   const event = (title: string) => ({ items: [{ id: title, kind: 'operation', title, actor: null, occurred_at: null, detail: null, changes: [] }], total: 1 })
-  it('默认收起不请求，失败后可以重试，缺失时间和操作人明确显示', async () => {
+  it('进入页面即加载，失败后可以重试，缺失时间和操作人明确显示', async () => {
     api.activity.mockRejectedValueOnce(new Error('load failed')).mockResolvedValueOnce(event('创建任务'))
     const view = mount({ taskType: 'design', taskId: 'task' }, TaskActivityCard)
     await settle()
-    expect(api.activity).not.toHaveBeenCalled()
-    open(view.root)
-    await settle()
+    expect(api.activity).toHaveBeenCalledTimes(1)
     click(view.root, '重试')
     await settle()
     expect(content(view.root)).toContain('创建任务')
@@ -227,16 +250,28 @@ describe('任务活动加载交互', () => {
       .mockResolvedValueOnce(event('新任务记录'))
     const props = reactive({ taskType: 'design', taskId: 'old', refreshKey: 0 })
     const view = mount(props, TaskActivityCard)
-    open(view.root)
     await settle()
     props.taskId = 'new'
-    await settle()
-    open(view.root)
     await settle()
     resolveOld(event('旧任务记录'))
     await settle()
     expect(content(view.root)).toContain('新任务记录')
     expect(content(view.root)).not.toContain('旧任务记录')
+    view.unmount()
+  })
+  it('全部记录中也直接显示修改前后字段，无需展开', async () => {
+    api.activity.mockResolvedValueOnce({ items: [{
+      id: 'change', kind: 'change', title: '订单变更', actor: '管理员', occurred_at: null, detail: null,
+      changes: [{ field: 'quantity', label: '数量', before: 6, after: 10, item: '展板' }],
+    }], total: 1 })
+    const view = mount({ taskType: 'design', taskId: 'task' }, TaskActivityCard)
+    await settle()
+    expect(content(view.root)).toContain('修改前')
+    expect(content(view.root)).toContain('修改后')
+    expect(content(view.root)).toContain('展板')
+    const cells = nodes(view.root).filter(node => node.type === 'td').map(content)
+    expect(cells).toEqual(['6', '10'])
+    expect(nodes(view.root).some(node => node.type === 'details')).toBe(false)
     view.unmount()
   })
 })

@@ -73,17 +73,18 @@
           </div>
         </div>
 
-        <details
+        <component
+          :is="collapsible ? 'details' : 'section'"
           v-for="itemAlbum in attachmentAlbums(group)"
           :key="`${group.stage}-${itemAlbum.key}`"
           class="item-album-section"
-          :open="!compact"
+          :open="collapsible && !compact"
           @toggle="handleAlbumToggle($event, itemAlbum, group)"
         >
-          <summary class="item-album-heading">
+          <component :is="collapsible ? 'summary' : 'div'" class="item-album-heading">
             <span class="item-album-title">{{ itemAlbum.label }}</span>
             <span class="stage-summary">{{ itemAlbumCount(itemAlbum) }} 个资料</span>
-          </summary>
+          </component>
 
           <div
             v-for="album in itemAlbum.dates"
@@ -192,7 +193,7 @@
               </el-table-column>
             </el-table>
           </div>
-        </details>
+        </component>
 
         <div v-if="!group.attachments.length" class="material-empty">
           {{ group.stage === 'installation' ? '暂无现场照片或视频' : '暂无订单阶段资料' }}
@@ -261,11 +262,13 @@ const props = withDefaults(defineProps<{
   readonly?: boolean
   allowUpload?: boolean
   compact?: boolean
+  collapsible?: boolean
   capture?: boolean
 }>(), {
   readonly: false,
   allowUpload: true,
   compact: false,
+  collapsible: true,
   capture: false,
 })
 
@@ -467,7 +470,7 @@ async function loadPreview(attachment: LocalAttachment, group: LocalGroup) {
 }
 
 async function handleAlbumToggle(event: Event, album: ReturnType<typeof attachmentAlbums>[number], group: LocalGroup) {
-  if (!props.compact || !(event.target as HTMLDetailsElement).open) return
+  if (!props.collapsible || !props.compact || !(event.target as HTMLDetailsElement).open) return
   await Promise.all(album.dates.flatMap(date => date.attachments.map(attachment => loadPreview(attachment, group))))
 }
 
@@ -559,7 +562,7 @@ async function loadMaterials() {
       stage: group.stage || group.task_type,
       attachments: group.attachments.map(attachment => ({ ...attachment })),
     }))
-    if (!props.compact) await loadAllPreviews()
+    if (!props.compact || !props.collapsible) await loadAllPreviews()
   } catch {
     if (version === materialsVersion) loadError.value = true
   } finally {
@@ -573,7 +576,7 @@ function clearObjectUrls() {
 }
 
 watch(
-  () => [props.orderId, props.stage, props.taskId, props.refreshKey],
+  () => [props.orderId, props.stage, props.taskId, props.refreshKey, props.compact, props.collapsible],
   () => void loadMaterials(),
   { immediate: true },
 )
@@ -594,9 +597,10 @@ onUnmounted(() => {
 .stage-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .stage-heading h3 { margin: 0 0 5px; color: var(--ad-text); font-size: 16px; }
 .item-album-section { margin-top: 16px; padding: 12px; border: 1px solid var(--ad-border); border-radius: 8px; background: var(--ad-bg-secondary, #f8fafc); }
-.item-album-heading { cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.item-album-heading::after { content: "展开"; flex: 0 0 auto; color: var(--el-color-primary); font-size: 12px; }
-.item-album-section[open] > .item-album-heading::after { content: "收起"; }
+.item-album-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+details > .item-album-heading { cursor: pointer; }
+details > .item-album-heading::after { content: "展开"; flex: 0 0 auto; color: var(--el-color-primary); font-size: 12px; }
+details[open] > .item-album-heading::after { content: "收起"; }
 .item-album-title { color: var(--ad-text); font-size: 14px; font-weight: 600; }
 .material-dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 116px; padding: 16px; border: 1px dashed var(--ad-border); border-radius: 8px; background: var(--ad-bg-secondary, #f8fafc); cursor: pointer; transition: border-color .15s, background .15s; }
 .material-dropzone:hover, .material-dropzone.is-dragover { border-color: var(--ad-primary, #409eff); background: var(--ad-primary-light, #ecf5ff); }

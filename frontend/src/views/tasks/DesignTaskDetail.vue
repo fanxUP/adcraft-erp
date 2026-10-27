@@ -64,6 +64,7 @@
         :task-id="task.id"
         :refresh-key="refreshVersion"
         :allow-upload="false"
+        :collapsible="false"
         compact
       />
 

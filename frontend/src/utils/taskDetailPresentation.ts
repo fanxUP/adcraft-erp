@@ -35,17 +35,15 @@ export function filterTaskItems<T extends TaskOrderItemOption>(
 export function buildTaskItemSections<T extends TaskOrderItemOption>(items: T[]) {
   // Reuse the order's group normalization, including legacy name-only groups.
   const normalized = normalizeOrderItemGroups(items as unknown as Parameters<typeof normalizeOrderItemGroups>[0])
-  const sections = new Map<string, { key: string; name: string; items: T[]; completed: number; pending: boolean }>()
+  const sections = new Map<string, { key: string; name: string; items: T[]; completed: number }>()
   const sorted = items.map((item, index) => ({ item, groupId: normalized[index]!.group_id }))
     .sort((a, b) => (a.item.sort_order ?? 0) - (b.item.sort_order ?? 0))
   for (const { item, groupId } of sorted) {
     const key = groupId ? `group:${groupId}` : 'ungrouped'
-    if (!sections.has(key)) sections.set(key, { key, name: item.group_name || (groupId ? '未命名分项' : '未分项明细'), items: [], completed: 0, pending: false })
+    if (!sections.has(key)) sections.set(key, { key, name: item.group_name || (groupId ? '未命名分项' : '未分项明细'), items: [], completed: 0 })
     const section = sections.get(key)!
     section.items.push(item)
     if (item.is_linked && isCompletedTaskItem(item.task_status)) section.completed++
-    if (isActiveTaskItem(item.task_status) && !isCompletedTaskItem(item.task_status)
-      && (item.is_linked || isTaskOrderItemSelectable(item))) section.pending = true
   }
   return [...sections.values()]
 }

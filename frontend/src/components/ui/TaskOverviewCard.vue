@@ -41,8 +41,7 @@
       </div>
     </dl>
 
-    <details class="task-overview-details">
-      <summary>更多信息<span>{{ [customerName, department].filter(Boolean).join(' · ') }}</span></summary>
+    <div class="task-overview-details">
       <dl class="task-overview-contact-grid">
         <div class="task-overview-field"><dt>创建时间</dt><dd>{{ formatDateTimeFull(createdAt) || '—' }}</dd></div>
         <div class="task-overview-field"><dt>任务编号</dt><dd>{{ display(taskNo) }}</dd></div>
@@ -52,7 +51,7 @@
         <div class="task-overview-field"><dt>联系人</dt><dd>{{ display(contactName) }}</dd></div>
         <div class="task-overview-field"><dt>联系电话</dt><dd><a v-if="phoneLink" :href="phoneLink">{{ contactPhone }}</a><span v-else>{{ display(contactPhone) }}</span></dd></div>
       </dl>
-    </details>
+    </div>
   </el-card>
 </template>
 
@@ -133,8 +132,6 @@ function display(value: string | number | null | undefined) {
 .task-overview-field a { color: var(--el-color-primary); }
 .task-overview-field.is-wide { grid-column: 1 / -1; }
 .task-overview-details { margin-top: 14px; border-top: 1px solid var(--ad-border); padding-top: 10px; }
-.task-overview-details summary { cursor: pointer; font-size: 13px; min-height: 28px; line-height: 28px; }
-.task-overview-details summary span { margin-left: 14px; color: var(--ad-text-secondary); overflow-wrap: anywhere; }
 @media (max-width: 900px) {
   .task-overview-contact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .task-overview-progress-row { grid-template-columns: 1fr; }
@@ -144,7 +141,6 @@ function display(value: string | number | null | undefined) {
   .task-overview-card :deep(.el-card__body) { padding: 14px; }
   .task-overview-contact-grid, .task-overview-extra-grid { grid-template-columns: 1fr; }
   .task-review-content { flex-direction: column; align-items: flex-start; }
-  .task-overview-details summary span { display: block; margin-left: 14px; }
 }
 @container (max-width: 640px) {
   .task-overview-progress-row { grid-template-columns: 1fr; }

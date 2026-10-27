@@ -108,7 +108,6 @@ describe('任务详情页界面收敛', () => {
     expect(source).toContain('{{ item.quantity }}')
     expect(source).toContain('{{ formatMoney(item.unit_price) }}')
     expect(source).toContain('{{ formatMoney(item.subtotal_amount) }}')
-    expect(source).toContain('{{ item.task_progress_pct }}%')
   })
 
   it('任务处理明细使用列式列表，全部展示且不建立独立滚动区域', () => {
