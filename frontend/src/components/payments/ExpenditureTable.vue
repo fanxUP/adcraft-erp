@@ -38,7 +38,7 @@
       {{ view === 'ledger'
         ? '按最近付款日期筛选；业务总额、累计已付和剩余待付为来源当前汇总，不等于所选期间现金支出。'
         : '按实际付款日期筛选；历史记录可按日期状态查看并核对。' }}
-      当前汇总经营支出、项目实际费用及账号有权查看的外协；不含库存领用等未接入模块，也不代表公司全部现金流。
+      当前汇总支出登记、项目费用及账号有权查看的外协费用；不含库存领用等未接入模块，也不代表公司全部现金流。
     </p>
     <dl v-if="result && !loading && !loadError" class="expenditure-summary" aria-label="当前筛选全量汇总">
       <div><dt>筛选结果</dt><dd>{{ result.total }} {{ view === 'ledger' ? '笔业务' : '条记录' }}</dd></div>
@@ -104,7 +104,11 @@
           <template #default="{ row }">
             <el-button v-if="canReconcile(row)" text type="primary" @click="openReconciliation(row)">核实付款日期</el-button>
             <el-button v-if="canVoidReconciliation(row)" text type="warning" @click="voidReconciliation(row)">撤销核对</el-button>
-            <el-button text type="primary" @click="selected = row">查看来源</el-button>
+            <template v-if="view === 'ledger' && row.source_kind === 'expense'">
+              <el-button text type="primary" @click="manageExpenseSource(row.source_id)">{{ authStore.can('expense:update') ? '编辑' : '查看' }}</el-button>
+              <el-button v-if="authStore.can('expense:delete')" text type="danger" @click="emit('deleteExpense', row.source_id)">删除</el-button>
+            </template>
+            <el-button v-else text type="primary" @click="selected = row">查看来源</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -141,8 +145,8 @@
           <el-descriptions-item v-if="selected.reconciliation_note" label="核对说明">{{ selected.reconciliation_note }}</el-descriptions-item>
           <el-descriptions-item label="记录状态">{{ recordStatus(selected) }}</el-descriptions-item>
         </el-descriptions>
-        <p class="expenditure-note">金额、凭证和删除操作仍在原始业务页面维护，此处不新建第二份记录。</p>
-        <el-button v-if="selected.source_kind === 'expense'" @click="manageExpenseSource(selected.source_id)">打开经营支出记录</el-button>
+        <p class="expenditure-note">可打开支出详情查看分类、金额和凭证；项目费用和外协费用可进入对应记录处理。</p>
+        <el-button v-if="selected.source_kind === 'expense'" @click="manageExpenseSource(selected.source_id)">{{ authStore.can('expense:update') ? '编辑支出' : '查看支出' }}</el-button>
         <el-button v-else-if="sourceTarget && selected.source_status !== 'deleted'" type="primary" @click="router.push(sourceTarget)">打开来源页面</el-button>
         <p v-else class="expenditure-secondary">原记录未关联单据或已删除；保留此处的只读财务事实。</p>
       </template>
@@ -225,10 +229,10 @@ import { expenditureDateLabel, expenditureLastPaymentDateLabel, expenditureCateg
 import { getErrorMessage } from '@/utils/error'
 
 const props = defineProps<{ view: ExpenditureView; refreshKey: number }>()
-const emit = defineEmits<{ manageExpense: [id: string] }>()
+const emit = defineEmits<{ manageExpense: [id: string]; deleteExpense: [id: string] }>()
 const router = useRouter()
 const authStore = useAuthStore()
-const sourceLabels: Record<ExpenditureSource, string> = { expense: '经营支出', project_cost: '项目实际费用', outsource: '外协' }
+const sourceLabels: Record<ExpenditureSource, string> = { expense: '支出', project_cost: '项目实际费用', outsource: '外协' }
 const sourceType = ref<ExpenditureSource | ''>('')
 const keyword = ref('')
 const dateRange = ref<string[] | null>(null)

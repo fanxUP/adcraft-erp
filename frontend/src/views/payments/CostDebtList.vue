@@ -3,7 +3,7 @@
     <template #header>
       <PageHeader
         title="应付管理"
-        description="统一查看项目成本和经营支出的待付款金额，并登记实际付款流水。"
+        description="统一查看支出和项目成本的待付款金额，并登记实际付款流水。"
       >
         <template #meta>
           <div class="summary-bar">
@@ -28,7 +28,7 @@
           <el-form-item label="来源">
             <el-select v-model="filters.source_type" clearable placeholder="全部来源" style="width: 140px" @change="handleSearch">
               <el-option label="项目成本" value="project_cost" />
-              <el-option label="经营支出" value="expense" />
+              <el-option label="支出" value="expense" />
             </el-select>
           </el-form-item>
           <el-form-item v-if="canUseSupplier" label="供应商">

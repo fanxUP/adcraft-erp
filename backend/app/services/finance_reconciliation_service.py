@@ -57,7 +57,7 @@ class FinanceReconciliationService:
                 ).with_for_update()
             )
             if source is None:
-                raise ValueError("经营支出来源不存在或已删除")
+                raise ValueError("支出来源不存在或已删除")
             return max(_money(source.amount) - _money(source.payable_amount), Decimal("0.00")), Decimal("0.00")
 
         if source_type == "project_cost":

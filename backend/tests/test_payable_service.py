@@ -71,7 +71,7 @@ async def test_list_payables_calculates_partial_balance_from_payment_ledger():
     assert rows[0]["payable_total_amount"] == 80.0
     assert rows[0]["paid_amount"] == 30.0
     assert rows[0]["remaining_amount"] == 50.0
-    assert rows[0]["source_label"] == "经营支出"
+    assert rows[0]["source_label"] == "支出"
 
 
 def test_project_cost_payload_keeps_legacy_settled_rows_as_paid():

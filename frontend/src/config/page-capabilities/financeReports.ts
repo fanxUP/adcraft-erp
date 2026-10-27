@@ -15,8 +15,8 @@ export const financeReportCapabilities: PageCapabilityMap = {
     quickActions: [{ label: '欠款客户', prompt: '有哪些欠款客户' }],
   },
   expenses: {
-    title: '支出管理',
-    purpose: '登记和查询经营及项目支出',
+    title: '支出',
+    purpose: '统一登记和查询支出，登记时按分类区分费用类型',
     workflowStage: 'finance',
     availableActions: ['查询支出', '登记支出', '查看支出详情'],
   },
@@ -52,7 +52,7 @@ export const financeReportCapabilities: PageCapabilityMap = {
   },
   cost_debt_list: {
     title: '应付管理',
-    purpose: '统一查看项目成本和经营支出的应付余额与付款流水',
+    purpose: '统一查看支出和项目成本的应付余额与付款流水',
     workflowStage: 'payables',
     availableActions: ['查询应付来源', '筛选付款状态', '登记付款', '查看付款流水'],
   },

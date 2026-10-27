@@ -2,123 +2,30 @@
   <AppPage>
     <template #header>
       <PageHeader
-        :title="activeView === 'expense' ? '经营支出记录' : '支出总览'"
-        description="汇总经营支出、项目费用和有权限的外协费用；项目与外协仍在原业务中维护。"
+        title="支出"
+        description="统一查看支出和付款记录，登记时通过分类选择费用类型。"
       >
         <template #actions>
-          <el-button v-if="activeView !== 'expense' && authStore.can('expense:read')" @click="activeView = 'expense'">
-            经营支出记录
-          </el-button>
-          <el-button v-else-if="activeView === 'expense'" @click="activeView = 'ledger'">
-            返回支出总览
-          </el-button>
           <el-button v-if="authStore.can('expense:create')" @click="openCreate" type="primary">
-            登记经营支出
+            登记支出
           </el-button>
         </template>
       </PageHeader>
     </template>
 
     <template #toolbar>
-      <el-tabs v-if="activeView !== 'expense'" v-model="activeView" aria-label="支出数据视图">
+      <el-tabs v-model="activeView" aria-label="支出数据视图">
         <el-tab-pane label="支出台账" name="ledger" />
         <el-tab-pane label="付款记录" name="disbursements" />
       </el-tabs>
-      <div v-else class="expense-maintenance-heading">
-        <span>仅显示经营支出记录；项目费用和外协费用请从支出总览进入原业务记录。</span>
-      </div>
-      <PageToolbar v-if="activeView === 'expense'" aria-label="支出筛选">
-        <el-date-picker
-          v-model="dateRange"
-          type="daterange"
-          range-separator="至"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
-          value-format="YYYY-MM-DD"
-          clearable
-          @change="searchExpenseRecords"
-        />
-        <el-button @click="searchExpenseRecords" type="primary">搜索</el-button>
-        <el-button @click="resetExpenseFilters">重置</el-button>
-        <el-button text @click="showCategoryFilter = !showCategoryFilter" :aria-expanded="showCategoryFilter">
-          {{ showCategoryFilter ? '收起分类筛选' : '更多筛选' }}
-        </el-button>
-        <el-collapse-transition>
-          <el-select
-            v-if="showCategoryFilter"
-            v-model="filterCategory"
-            placeholder="支出分类"
-            clearable
-            aria-label="支出分类"
-            @change="searchExpenseRecords"
-          >
-            <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
-          </el-select>
-        </el-collapse-transition>
-      </PageToolbar>
     </template>
 
     <ExpenditureTable
-      v-if="activeView !== 'expense'"
       :view="activeView"
       :refresh-key="expenditureRefreshKey"
       @manage-expense="openExpenseSource"
+      @delete-expense="deleteExpenseSource"
     />
-    <DataTableShell v-else :state="tableState" aria-label="支出列表">
-      <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
-      <el-table :data="list" stripe>
-      <el-table-column prop="expense_no" label="编号" width="180" />
-      <el-table-column prop="category" label="分类" width="100">
-        <template #default="{ row }">
-          <el-tag v-if="row.category" size="small">{{ row.category }}</el-tag>
-          <span v-else class="muted">-</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="总金额" width="120" align="right">
-        <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
-      </el-table-column>
-      <el-table-column label="供应商" min-width="180" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.supplier_name || '-' }}</template>
-      </el-table-column>
-      <el-table-column label="累计已付" width="120" align="right">
-        <template #default="{ row }">
-          <span :class="{ 'text-success': expensePaidAmount(row) > 0 }">{{ formatMoney(expensePaidAmount(row)) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="剩余待付" width="120" align="right">
-        <template #default="{ row }">
-          <span :class="{ 'text-warning': expenseRemainingAmount(row) > 0 }">{{ formatMoney(expenseRemainingAmount(row)) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="状态" width="105" align="center">
-        <template #default="{ row }">
-          <el-tag size="small" :type="payableStatusType(expensePayableStatus(row))">
-            {{ payableStatusLabel(expensePayableStatus(row)) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="业务日期" width="120">
-        <template #default="{ row }">{{ formatDate(row.expense_date) || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
-      <el-table-column label="操作" width="200" fixed="right">
-        <template #default="{ row }">
-          <el-button text type="primary" size="small" @click="openEdit(row as ExpenseResponse)">{{ authStore.can('expense:update') ? '编辑' : '查看' }}</el-button>
-          <el-button v-if="authStore.can('expense:delete')" text type="danger" size="small" @click="handleDelete(row as ExpenseResponse)">删除</el-button>
-        </template>
-      </el-table-column>
-      </el-table>
-      <template #footer>
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="total"
-          layout="total, sizes, prev, pager, next"
-          @change="fetchData"
-        />
-      </template>
-    </DataTableShell>
 
     <el-dialog
       v-model="showDialog"
@@ -301,7 +208,6 @@ import {
   downloadExpenseAttachment,
   getExpenseAttachments,
   getExpense,
-  getExpenses,
   updateExpense,
   uploadExpenseAttachment,
 } from '@/api/payments'
@@ -311,44 +217,27 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, UploadFilled } from '@element-plus/icons-vue'
 import type { AttachmentResponse, ExpenseResponse, SupplierResponse } from '@/types/api'
 import { normalizeExpenseAmounts, type ExpenseAmountResult } from '@/utils/expenseAmount'
-import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
+import { AppPage, PageHeader } from '@/components/ui'
 import ExpenditureTable from '@/components/payments/ExpenditureTable.vue'
 
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
-type ExpenseViewTab = 'ledger' | 'disbursements' | 'expense'
-
-function expenseViewFromQuery(value: unknown): ExpenseViewTab {
-  return value === 'disbursements' || value === 'expense' ? value : 'ledger'
-}
-
-const activeView = ref<ExpenseViewTab>(expenseViewFromQuery(route.query.view))
-watch(() => route.query.view, value => {
-  const selected = expenseViewFromQuery(value)
-  if (activeView.value !== selected) activeView.value = selected
-})
-watch(activeView, view => {
-  const nextQuery = { ...route.query }
-  if (view === 'ledger') delete nextQuery.view
-  else nextQuery.view = view
-  if (nextQuery.view !== route.query.view) void router.replace({ query: nextQuery })
+const activeView = computed<'ledger' | 'disbursements'>({
+  get: () => route.query.view === 'disbursements' ? 'disbursements' : 'ledger',
+  set: view => {
+    const nextQuery = { ...route.query }
+    if (view === 'ledger') delete nextQuery.view
+    else nextQuery.view = view
+    void router.replace({ query: nextQuery })
+  },
 })
 const canUseSupplier = computed(() => authStore.can('supplier:read'))
 
 const CATEGORIES = ['房租', '水电', '材料采购', '外协加工', '运输', '办公', '工资', '税费', '其他']
 const PAYMENT_METHODS = ['现金支付', '微信支付', '支付宝转账', '转账支付', '对公支付', '其它支付']
 
-const loading = ref(false)
 const saving = ref(false)
-const list = ref<ExpenseResponse[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(20)
-const loadError = ref(false)
-const filterCategory = ref('')
-const showCategoryFilter = ref(false)
-const dateRange = ref<string[] | null>(null)
 const expenditureRefreshKey = ref(0)
 const suppliers = ref<SupplierResponse[]>([])
 const showDialog = ref(false)
@@ -390,12 +279,6 @@ let expenseAttachmentSequence = 0
 
 const totalAmount = computed(() => roundMoney(Number(form.paid_amount || 0) + Number(form.payable_amount || 0)))
 
-const tableState = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
-  if (loadError.value) return 'error'
-  if (loading.value) return 'loading'
-  return list.value.length ? 'ready' : 'empty'
-})
-
 function resetForm() {
   clearExpenseAttachmentState()
   Object.assign(form, { category: '', payment_method: '', paid_amount: 0, supplier_id: '', payable_amount: 0, expense_date: '', description: '' })
@@ -416,15 +299,11 @@ async function openExpenseSource(id: string) {
   } catch { /* API interceptor displays the error; keep the current view. */ }
 }
 
-function searchExpenseRecords() {
-  page.value = 1
-  void fetchData()
-}
-
-function resetExpenseFilters() {
-  filterCategory.value = ''
-  dateRange.value = null
-  searchExpenseRecords()
+async function deleteExpenseSource(id: string) {
+  if (!authStore.can('expense:delete')) return
+  try {
+    await handleDelete(await getExpense(id))
+  } catch { /* API interceptor displays the error; keep the current view. */ }
 }
 
 function openEdit(row: ExpenseResponse) {
@@ -453,48 +332,8 @@ async function fetchSuppliers() {
   }
 }
 
-async function fetchData() {
-  loading.value = true
-  loadError.value = false
-  try {
-    const params = {
-      page: page.value, page_size: pageSize.value,
-      ...(filterCategory.value ? { category: filterCategory.value } : {}),
-      ...(dateRange.value ? { start_date: dateRange.value[0], end_date: dateRange.value[1] } : {}),
-    }
-    const data = await getExpenses(params)
-    list.value = data.items
-    total.value = data.total
-  } catch {
-    loadError.value = true
-  } finally {
-    loading.value = false
-  }
-}
-
 function roundMoney(value: number) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100
-}
-
-function expensePaidAmount(row: ExpenseResponse) {
-  return row.total_paid_amount ?? row.initial_paid_amount ?? Math.max(0, row.amount - (row.payable_amount || 0))
-}
-
-function expenseRemainingAmount(row: ExpenseResponse) {
-  return row.remaining_payable_amount ?? row.payable_amount ?? 0
-}
-
-function expensePayableStatus(row: ExpenseResponse) {
-  if (row.payable_status) return row.payable_status
-  return expenseRemainingAmount(row) > 0 ? 'unpaid' : 'paid'
-}
-
-function payableStatusLabel(status: string) {
-  return ({ unpaid: '待付款', partial: '部分付款', paid: '已付款' } as Record<string, string>)[status] || status
-}
-
-function payableStatusType(status: string) {
-  return ({ unpaid: 'warning', partial: 'warning', paid: 'success' } as Record<string, string>)[status] || 'info'
 }
 
 function clearExpenseAttachmentState() {
@@ -706,7 +545,7 @@ async function handleDeleteExpenseAttachment(attachment: LocalExpenseAttachment)
       attachmentObjectUrls.delete(attachment.id)
     }
     ElMessage.success('凭证已删除')
-    void fetchData()
+    expenditureRefreshKey.value += 1
   } catch {
     // User cancelled or API error (handled by the interceptor).
   }
@@ -765,13 +604,11 @@ async function handleSave() {
     if (expenseAttachmentUploadQueue.value.some(item => item.status === 'error')) {
       ElMessage.warning('支出已保存，部分凭证上传失败，请重试')
       expenditureRefreshKey.value += 1
-      void fetchData()
       return
     }
 
     showDialog.value = false
     expenditureRefreshKey.value += 1
-    void fetchData()
   } catch {
     // API error handled by interceptor, cancel does nothing
   } finally { saving.value = false }
@@ -807,7 +644,6 @@ async function handleDelete(row: ExpenseResponse) {
       ElMessage.success(`已撤销 ${result.payment_count} 条应付付款流水并删除支出`)
       expenditureRefreshKey.value += 1
       showDialog.value = false
-      await fetchData()
       return
     }
     await ElMessageBox.confirm(`确定删除支出「${row.expense_no}」吗？`, '确认删除', {
@@ -818,16 +654,27 @@ async function handleDelete(row: ExpenseResponse) {
     ElMessage.success('已删除')
     expenditureRefreshKey.value += 1
     showDialog.value = false
-    await fetchData()
   } catch {
     // User cancelled or API error (handled by interceptor)
   }
 }
 
-onMounted(() => {
-  void fetchData()
-  void fetchSuppliers()
-})
+watch(() => [route.query.view, route.query.action], ([view, action]) => {
+  const nextQuery = { ...route.query }
+  let normalizeQuery = false
+  if (view != null && view !== 'disbursements') {
+    delete nextQuery.view
+    normalizeQuery = true
+  }
+  if (action === 'create') {
+    if (authStore.can('expense:create')) openCreate()
+    delete nextQuery.action
+    normalizeQuery = true
+  }
+  if (normalizeQuery) void router.replace({ query: nextQuery })
+}, { immediate: true })
+
+onMounted(() => { void fetchSuppliers() })
 
 onUnmounted(() => {
   clearExpenseAttachmentState()
@@ -835,12 +682,8 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.muted { color: var(--ad-text-secondary, #888); }
-.text-warning { color: var(--el-color-warning); font-weight: 600; }
-.text-success { color: var(--el-color-success); font-weight: 600; }
 .form-tip { color: var(--ad-text-secondary, #888); font-size: 12px; line-height: 1.5; }
 .form-total { color: var(--ad-text); font-size: 18px; font-weight: 700; }
-.expense-maintenance-heading { padding: var(--ui-space-2) 0; color: var(--ui-text-secondary); line-height: 1.5; }
 .expense-form :deep(.el-form-item) { margin-bottom: var(--ui-space-4); }
 .expense-amount-section { padding: var(--ui-space-4); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); }
 .expense-amount-section :deep(.el-form-item) { margin-bottom: var(--ui-space-2); }

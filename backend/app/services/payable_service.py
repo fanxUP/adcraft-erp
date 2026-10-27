@@ -76,7 +76,7 @@ def _utc_now() -> datetime:
 def _normalize_source_type(source_type: str) -> str:
     normalized = (source_type or "").strip()
     if normalized not in SUPPORTED_SOURCE_TYPES:
-        raise ValueError("不支持的应付来源，只能是经营支出或项目成本")
+        raise ValueError("不支持的应付来源，只能是支出或项目成本")
     return normalized
 
 
@@ -329,7 +329,7 @@ class PayableService:
             "id": str(source.id),
             "source_type": source_type,
             "source_id": str(source.id),
-            "source_label": "项目成本" if source_type == "project_cost" else "经营支出",
+            "source_label": "项目成本" if source_type == "project_cost" else "支出",
             "source_no": source_no,
             "source_total_amount": float(source_total),
             "payable_total_amount": float(payable_total),
