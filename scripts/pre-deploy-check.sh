@@ -40,7 +40,7 @@ cd "$PROJECT_ROOT/backend"
 
 # 检查是否有未提交的模型变更（通过比较模型和最新迁移）
 if [ -f "alembic.ini" ]; then
-    if source .venv/bin/activate 2>/dev/null; then
+    if [ -f ".venv/bin/activate" ] && source .venv/bin/activate 2>/dev/null; then
         check "alembic 可以运行" alembic current 2>&1
         # 检查是否有未迁移的变更
         MIGRATION_CHECK=$(alembic check 2>&1 || true)

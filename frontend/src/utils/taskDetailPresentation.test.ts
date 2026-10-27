@@ -283,19 +283,23 @@ describe('任务活动加载交互', () => {
     expect(content(view.root)).not.toContain('旧任务记录')
     view.unmount()
   })
-  it('全部记录中也直接显示修改前后字段，无需展开', async () => {
+  it.each(['design', 'production', 'installation'])('%s 日志直接展示操作人、版本与前后值，无需展开', async taskType => {
     api.activity.mockResolvedValueOnce({ items: [{
-      id: 'change', kind: 'change', title: '订单变更', actor: '管理员', occurred_at: null, detail: null,
+      id: 'change', kind: 'change', title: '订单变更', actor: '管理员', occurred_at: '2026-10-27T02:30:00+00:00', detail: '调整制作数量', version_no: 3,
       changes: [{ field: 'quantity', label: '数量', before: 6, after: 10, item: '展板' }],
     }], total: 1 })
-    const view = mount({ taskType: 'design', taskId: 'task' }, TaskActivityCard)
+    const view = mount({ taskType, taskId: 'task' }, TaskActivityCard)
     await settle()
     expect(content(view.root)).toContain('修改前')
     expect(content(view.root)).toContain('修改后')
     expect(content(view.root)).toContain('展板')
-    const cells = nodes(view.root).filter(node => node.type === 'td').map(content)
-    expect(cells).toEqual(['6', '10'])
-    expect(nodes(view.root).some(node => node.type === 'details')).toBe(false)
+    expect(content(view.root)).toContain('操作人：管理员')
+    expect(content(view.root)).toContain('订单版本 3')
+    expect(content(view.root)).toContain('调整制作数量')
+    const change = nodes(view.root).find(node => node.props.class === 'activity-change')!
+    expect(content(change)).toBe('展板 / 数量：修改前：6→修改后：10')
+    expect(nodes(view.root).find(node => node.type === 'time')?.props.datetime).toBe('2026-10-27T02:30:00+00:00')
+    expect(nodes(view.root).some(node => ['details', 'table'].includes(node.type))).toBe(false)
     view.unmount()
   })
 })
