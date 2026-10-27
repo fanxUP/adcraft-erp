@@ -206,4 +206,12 @@ describe('P08 UI/UX quality guardrails', () => {
     expect(expenditure).toContain('label="剩余待付"')
     expect(expenditure).toContain('label="操作"')
   })
+
+  it('hides payment numbers from the expenditure payment view', () => {
+    const expenditure = readSource('components/payments/ExpenditureTable.vue')
+
+    expect(expenditure).not.toContain('row.payment_no')
+    expect(expenditure).not.toContain('selected.payment_no')
+    expect(expenditure).not.toContain('label="付款编号"')
+  })
 })

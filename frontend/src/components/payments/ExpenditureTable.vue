@@ -91,7 +91,6 @@
         <el-table-column v-else label="本次付款" min-width="140" align="right">
           <template #default="{ row }">
             <div>{{ formatMoney(row.amount) }}</div>
-            <small class="expenditure-secondary">{{ row.payment_no || '历史金额（非逐笔流水）' }}</small>
           </template>
         </el-table-column>
         <el-table-column v-if="view === 'ledger'" label="累计已付" width="130" align="right">
@@ -133,7 +132,6 @@
           <el-descriptions-item v-if="view === 'ledger'" label="累计已付">{{ formatMoney(selected.paid_amount || 0) }}</el-descriptions-item>
           <el-descriptions-item v-if="view === 'ledger'" label="剩余待付">{{ formatMoney(selected.remaining_amount || 0) }}</el-descriptions-item>
           <template v-else>
-            <el-descriptions-item v-if="selected.payment_no" label="付款编号">{{ selected.payment_no }}</el-descriptions-item>
             <el-descriptions-item label="付款日期">{{ expenditureDateLabel(selected.paid_at) }}</el-descriptions-item>
             <el-descriptions-item label="来源业务总额">{{ formatMoney(selected.business_amount || 0) }}</el-descriptions-item>
             <el-descriptions-item label="来源当前累计已付">{{ formatMoney(selected.paid_amount || 0) }}</el-descriptions-item>
