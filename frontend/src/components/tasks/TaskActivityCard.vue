@@ -1,57 +1,65 @@
 <template>
   <el-card shadow="never" class="info-card task-activity-card">
     <section ref="activitySection" aria-label="变更与操作记录">
-      <div class="activity-title"><h3>变更与操作记录</h3><span>最新记录在前</span></div>
-      <div class="activity-toolbar">
-        <el-radio-group v-model="kind" aria-label="记录分类" @change="changeFilter">
-          <el-radio-button value="all">全部</el-radio-button>
-          <el-radio-button value="change">订单变更</el-radio-button>
-          <el-radio-button value="execution">执行记录</el-radio-button>
-        </el-radio-group>
-        <el-button text :loading="loading" @click="load">刷新记录</el-button>
-      </div>
-      <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon>
-        <el-button text type="primary" @click="load">重试</el-button>
-      </el-alert>
-      <div v-loading="loading" class="activity-content" aria-live="polite">
-        <el-empty v-if="!events.length && !loading && !error" description="暂无相关记录" :image-size="64" />
-        <ol v-if="events.length" class="activity-list" aria-label="任务日志" role="list">
-          <li v-for="event in events" :key="event.id" class="activity-entry" :class="{ 'is-order-change': event.kind === 'change' }">
-            <div class="activity-time">
-              <time v-if="event.occurred_at" :datetime="event.occurred_at">{{ formatDateTimeFull(event.occurred_at) }}</time>
-              <span v-else>时间未记录</span>
+      <el-collapse v-model="activeNames" class="activity-collapse">
+        <el-collapse-item name="activity">
+          <template #title>
+            <div class="activity-title"><h3>变更与操作记录</h3><span>最新记录在前</span></div>
+          </template>
+          <div class="activity-panel">
+            <div class="activity-toolbar">
+              <el-radio-group v-model="kind" aria-label="记录分类" @change="changeFilter">
+                <el-radio-button value="all">全部</el-radio-button>
+                <el-radio-button value="change">订单变更</el-radio-button>
+                <el-radio-button value="execution">执行记录</el-radio-button>
+              </el-radio-group>
+              <el-button text :loading="loading" @click="load">刷新记录</el-button>
             </div>
-            <div class="activity-body">
-              <div class="activity-heading">
-                <h4>{{ event.title }}</h4>
-                <span class="activity-kind">{{ kindLabel(event.kind) }}</span>
-              </div>
-              <div class="activity-meta">
-                <span>{{ event.actor ? `操作人：${event.actor}` : '操作人未记录' }}</span>
-                <span v-if="event.version_no">订单版本 {{ event.version_no }}</span>
-              </div>
-              <p v-if="event.detail" class="activity-detail">{{ event.detail }}</p>
-              <ul v-if="event.changes.length" class="activity-changes" aria-label="前后变化">
-                <li v-for="(change, index) in event.changes" :key="index" class="activity-change">
-                  <span class="change-label"><span v-if="change.item">{{ change.item }} / </span>{{ change.label }}：</span>
-                  <span class="sr-only">修改前：</span><span class="change-before">{{ changeValue(change.before, change.field) }}</span>
-                  <span class="change-arrow" aria-hidden="true">→</span>
-                  <span class="sr-only">修改后：</span><span class="change-after">{{ changeValue(change.after, change.field) }}</span>
+            <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon>
+              <el-button text type="primary" @click="load">重试</el-button>
+            </el-alert>
+            <div v-loading="loading" class="activity-content" aria-live="polite">
+              <el-empty v-if="!events.length && !loading && !error" description="暂无相关记录" :image-size="64" />
+              <ol v-if="events.length" class="activity-list" aria-label="任务日志" role="list">
+                <li v-for="event in events" :key="event.id" class="activity-entry" :class="{ 'is-order-change': event.kind === 'change' }">
+                  <div class="activity-time">
+                    <time v-if="event.occurred_at" :datetime="event.occurred_at">{{ formatDateTimeFull(event.occurred_at) }}</time>
+                    <span v-else>时间未记录</span>
+                  </div>
+                  <div class="activity-body">
+                    <div class="activity-heading">
+                      <h4>{{ event.title }}</h4>
+                      <span class="activity-kind">{{ kindLabel(event.kind) }}</span>
+                    </div>
+                    <div class="activity-meta">
+                      <span>{{ event.actor ? `操作人：${event.actor}` : '操作人未记录' }}</span>
+                      <span v-if="event.version_no">订单版本 {{ event.version_no }}</span>
+                    </div>
+                    <p v-if="event.detail" class="activity-detail">{{ event.detail }}</p>
+                    <ul v-if="event.changes.length" class="activity-changes" aria-label="前后变化">
+                      <li v-for="(change, index) in event.changes" :key="index" class="activity-change">
+                        <span class="change-label"><span v-if="change.item">{{ change.item }} / </span>{{ change.label }}：</span>
+                        <span class="sr-only">修改前：</span><span class="change-before">{{ changeValue(change.before, change.field) }}</span>
+                        <span class="change-arrow" aria-hidden="true">→</span>
+                        <span class="sr-only">修改后：</span><span class="change-after">{{ changeValue(change.after, change.field) }}</span>
+                      </li>
+                    </ul>
+                    <p v-else-if="event.kind === 'change'" class="activity-hint">本记录未保留涉及当前任务的可展示字段差异。</p>
+                  </div>
                 </li>
-              </ul>
-              <p v-else-if="event.kind === 'change'" class="activity-hint">本记录未保留涉及当前任务的可展示字段差异。</p>
+              </ol>
             </div>
-          </li>
-        </ol>
-      </div>
-      <el-pagination v-if="total > pageSize" v-model:current-page="page" :page-size="pageSize" :total="total"
-        layout="prev, pager, next" :disabled="loading" @current-change="load" />
+            <el-pagination v-if="total > pageSize" v-model:current-page="page" :page-size="pageSize" :total="total"
+              layout="prev, pager, next" :disabled="loading" @current-change="load" />
+          </div>
+        </el-collapse-item>
+      </el-collapse>
     </section>
   </el-card>
 </template>
 
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue'
+import { nextTick, onUnmounted, ref, watch } from 'vue'
 import { getTaskActivity } from '@/api/tasks'
 import type { TaskActivityChange, TaskActivityEvent } from '@/api/tasks'
 import type { TaskType } from '@/types/api'
@@ -61,6 +69,7 @@ import { resolveStatusPresentation } from '@/utils/uiPresentation'
 
 const props = defineProps<{ taskType: TaskType; taskId: string; refreshKey?: number | string }>()
 const activitySection = ref<HTMLElement | null>(null)
+const activeNames = ref<string[]>([])
 const loading = ref(false)
 const error = ref('')
 const events = ref<TaskActivityEvent[]>([])
@@ -103,10 +112,12 @@ function changeFilter() {
   total.value = 0
   void load()
 }
-function showOrderChanges() {
-  activitySection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+async function showOrderChanges() {
+  activeNames.value = ['activity']
   kind.value = 'change'
   changeFilter()
+  await nextTick()
+  activitySection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 defineExpose({ showOrderChanges })
 watch(() => [props.taskType, props.taskId, props.refreshKey], () => {
@@ -123,9 +134,14 @@ onUnmounted(() => { requestVersion++ })
 
 <style scoped>
 .task-activity-card { container-type: inline-size; }
-.activity-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; line-height: 1.7; }
+.activity-collapse { border-top: 0; border-bottom: 0; }
+.activity-collapse :deep(.el-collapse-item__header),
+.activity-collapse :deep(.el-collapse-item__wrap) { border-bottom: 0; }
+.activity-collapse :deep(.el-collapse-item__content) { padding-bottom: 0; }
+.activity-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; width: 100%; line-height: 1.7; }
 .activity-title h3 { margin: 0; font-size: 16px; font-weight: 600; }
 .activity-title span { font-size: 13px; color: var(--el-text-color-secondary); }
+.activity-panel { padding-top: 8px; }
 .activity-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin: 12px 0 20px; }
 .activity-hint { margin: 8px 0 0; font-size: 13px; color: var(--el-text-color-secondary); }
 .activity-content { min-height: 60px; }
