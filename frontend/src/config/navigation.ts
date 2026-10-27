@@ -42,6 +42,7 @@ export const navigationItems: NavigationItem[] = [
     accessKey: 'finance',
     children: [
       { label: '财务总览', path: '/finance-center', accessKey: 'finance' },
+      { label: '公司账户', path: '/company-accounts', accessKey: 'companyAccount' },
       {
         label: '客户收款',
         accessKey: 'finance',

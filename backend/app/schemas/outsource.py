@@ -134,6 +134,7 @@ class OutsourceOrderItemSend(BaseModel):
 # ── Payment ──
 
 class OutsourcePaymentCreate(BaseModel):
+    payment_account_id: str | None = None
     vendor_id: str = Field(...)
     task_id: str | None = None
     amount: Decimal = Field(..., gt=0)
@@ -144,6 +145,7 @@ class OutsourcePaymentCreate(BaseModel):
 
 
 class OutsourcePaymentResponse(BaseModel):
+    payment_account_id: str | None = None
     id: str
     payment_no: str
     vendor_id: str

@@ -136,6 +136,9 @@
             style="width: 100%"
           />
         </el-form-item>
+        <el-form-item label="付款账户" required>
+          <PaymentAccountSelect v-model="paymentForm.payment_account_id" :active="showPayment" auto-default />
+        </el-form-item>
         <el-form-item label="付款方式" required>
           <el-select v-model="paymentForm.payment_method" style="width: 100%">
             <el-option v-for="method in PAYMENT_METHODS" :key="method" :label="method" :value="method" />
@@ -188,6 +191,8 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '@/utils/error'
+import PaymentAccountSelect from '@/components/payments/PaymentAccountSelect.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel, StatusTag } from '@/components/ui'
@@ -226,6 +231,7 @@ const filters = reactive({
 
 const paymentForm = reactive({
   amount: 0,
+  payment_account_id: '',
   payment_method: '转账支付',
   paid_at: new Date().toISOString().slice(0, 10),
   remark: '',
@@ -276,6 +282,7 @@ function handleReset() {
 function openPayment(row: PayableResponse) {
   paymentTarget.value = row
   paymentForm.amount = row.remaining_amount
+  paymentForm.payment_account_id = ''
   paymentForm.payment_method = '转账支付'
   paymentForm.paid_at = new Date().toISOString().slice(0, 10)
   paymentForm.remark = ''
@@ -284,9 +291,11 @@ function openPayment(row: PayableResponse) {
 
 async function handlePayment() {
   if (!paymentTarget.value || paymentForm.amount <= 0) return
+  if (!paymentForm.payment_account_id) { ElMessage.warning('请选择付款账户'); return }
   savingPayment.value = true
   try {
     await createPayablePayment(paymentTarget.value.source_type, paymentTarget.value.source_id, {
+      payment_account_id: paymentForm.payment_account_id,
       amount: paymentForm.amount,
       payment_method: paymentForm.payment_method,
       paid_at: paymentForm.paid_at,
@@ -295,8 +304,8 @@ async function handlePayment() {
     ElMessage.success('付款已登记，应付余额已重新计算')
     showPayment.value = false
     await fetchData()
-  } catch {
-    // API interceptor displays the server-side business message.
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '登记付款失败'))
   } finally {
     savingPayment.value = false
   }

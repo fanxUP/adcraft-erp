@@ -33,11 +33,12 @@ from app.schemas.outsource import (
     OutsourceOrderItemSend,
     OutsourcePaymentCreate,
 )
+from app.services.company_account_service import require_account_selection
 from app.services.outsource_service import OutsourceService
 from app.services.operation_log_service import log_operation, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, ACTION_STATUS_CHANGE
 from app.services.operation_log_service import OBJ_OUTSOURCE_VENDOR, OBJ_OUTSOURCE_TASK, OBJ_OUTSOURCE_PAYMENT
 
-router = APIRouter(prefix="/outsource", tags=["Outsource"])
+router = APIRouter(prefix="/outsource", tags=["Outsource"], dependencies=[Depends(require_account_selection)])
 
 
 def _ensure_outsource_task_status_permission(current_user: User, payload: dict) -> None:

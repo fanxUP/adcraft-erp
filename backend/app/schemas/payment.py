@@ -133,6 +133,7 @@ class StatementPaymentItem(CoercedModel):
 
 
 class ExpenseCreate(BaseModel):
+    payment_account_id: str | None = None
     category: str | None = None
     payment_method: str | None = None
     # Legacy clients may continue to send amount as the source total. New
@@ -170,6 +171,7 @@ class ExpenseCreate(BaseModel):
 
 
 class ExpenseUpdate(BaseModel):
+    payment_account_id: str | None = None
     category: str | None = None
     payment_method: str | None = None
     amount: float | None = None
@@ -211,6 +213,7 @@ class ExpenseDeleteConfirmed(BaseModel):
 
 
 class ExpenseResponse(CoercedModel):
+    payment_account_id: str | None = None
     id: str
     expense_no: str
     category: str | None = None
@@ -243,6 +246,7 @@ class ExpenseResponse(CoercedModel):
 
 
 class PayablePaymentCreate(BaseModel):
+    payment_account_id: str | None = None
     amount: float
     payment_method: str = "转账支付"
     paid_at: str | None = None
@@ -278,6 +282,7 @@ class PayablePaymentVoid(BaseModel):
 
 
 class PayablePaymentResponse(CoercedModel):
+    payment_account_id: str | None = None
     id: str
     payment_no: str
     source_type: str
@@ -328,6 +333,7 @@ class PayableResponse(CoercedModel):
 # ── Project Cost ──
 
 class ProjectCostCreate(BaseModel):
+    payment_account_id: str | None = None
     source_type: str = "order"
     order_id: str | None = None
     quote_id: str | None = None
@@ -381,6 +387,7 @@ class ProjectCostCreate(BaseModel):
 
 
 class ProjectCostUpdate(BaseModel):
+    payment_account_id: str | None = None
     category: str | None = None
     amount: float | None = None
     description: str | None = None
@@ -410,6 +417,7 @@ class ProjectCostItemScope(CoercedModel):
 
 
 class ProjectCostResponse(CoercedModel):
+    payment_account_id: str | None = None
     id: str
     cost_no: str
     source_type: str = "order"
@@ -462,6 +470,7 @@ class ProjectCostResponse(CoercedModel):
 
 class DebtSettleCreate(BaseModel):
     """结算欠款"""
+    payment_account_id: str | None = None
     settle_amount: float
     payment_method: str = "转账支付"
     remark: str | None = None

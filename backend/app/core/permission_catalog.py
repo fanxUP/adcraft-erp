@@ -44,6 +44,8 @@ class PermissionPackDefinition:
 # grants its parent; the role editor and the server validator must both show
 # and validate the complete set.
 PERMISSION_DEPENDENCIES: dict[str, tuple[str, ...]] = {
+    "company_account:manage": ("company_account:read", "company_account:view_number"),
+    "company_account:view_number": ("company_account:read",),
     # Delivery task list/actions require detail read permission.
     "task_queue:view_all": ("task_queue:read",),
     "design_task:list": ("design_task:read",),
@@ -151,6 +153,7 @@ TASK_MUTATION_PERMISSIONS = frozenset({
 })
 
 SENSITIVE_PERMISSIONS = frozenset({
+    "company_account:read", "company_account:manage", "company_account:view_number", "company_account:select",
     "order:create",
     "order:update",
     "order:delete",
@@ -223,7 +226,7 @@ RESOURCE_CENTER_PERMISSIONS = frozenset({
 })
 
 SENSITIVE_FIELD_ACTIONS = frozenset({"view_price", "view_cost", "view_profit"})
-FINANCIAL_MODULES = frozenset({"payment", "statement", "expense", "report"})
+FINANCIAL_MODULES = frozenset({"payment", "statement", "expense", "report", "company_account"})
 
 CONFLICT_POLICIES: tuple[tuple[str, frozenset[str], frozenset[str], str], ...] = (
     (

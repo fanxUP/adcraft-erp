@@ -128,6 +128,9 @@ class OutsourcePayment(Base, TimestampMixin):
     vendor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("outsource_vendors.id"), nullable=False)
     task_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("outsource_tasks.id"), nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    payment_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("company_accounts.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     payee_company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -138,3 +141,5 @@ class OutsourcePayment(Base, TimestampMixin):
         lazy="selectin",
         foreign_keys=[vendor_id],
     )
+
+from app.models.company_account import CompanyAccount  # noqa: E402,F401

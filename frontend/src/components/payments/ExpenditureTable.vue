@@ -5,6 +5,12 @@
         <el-form-item label="搜索">
           <el-input v-model="keyword" clearable maxlength="128" placeholder="单号、项目或供应商" aria-label="支出搜索" @keyup.enter="search" />
         </el-form-item>
+        <el-form-item v-if="view === 'disbursements' && !paymentAccountId" label="付款账户">
+          <el-select v-model="accountFilter" clearable placeholder="全部账户" aria-label="筛选付款账户" @change="search">
+            <el-option label="未登记账户" value="unassigned" />
+            <el-option v-for="account in accountOptions" :key="account.id" :value="account.id" :label="account.label + (account.is_active ? '' : '（已停用）')" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="付款日期">
           <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" range-separator="至" @change="search" />
         </el-form-item>
@@ -48,7 +54,7 @@
         <div><dt>剩余待付</dt><dd>{{ formatMoney(result.summary.remaining_amount || 0) }}</dd></div>
       </template>
       <template v-else>
-        <div><dt>{{ dateRange ? '期间有日期付款' : '有日期付款合计' }}</dt><dd>{{ formatMoney(result.summary.confirmed_paid_amount || 0) }}</dd></div>
+        <div><dt>{{ paymentAccountId || accountFilter ? '已登记付款合计' : dateRange ? '期间有日期付款' : '有日期付款合计' }}</dt><dd>{{ formatMoney(paymentAccountId || accountFilter ? result.summary.amount : result.summary.confirmed_paid_amount || 0) }}</dd></div>
       </template>
     </dl>
 
@@ -99,8 +105,12 @@
         <el-table-column v-if="view === 'ledger'" label="剩余待付" width="130" align="right">
           <template #default="{ row }">{{ formatMoney(row.remaining_amount || 0) }}</template>
         </el-table-column>
+        <el-table-column v-if="view === 'disbursements'" label="付款账户" min-width="190">
+          <template #default="{ row }">{{ row.payment_account_name || '未登记' }}<span v-if="row.payment_account_active === false">（已停用）</span></template>
+        </el-table-column>
         <el-table-column label="操作" width="190" fixed="right">
           <template #default="{ row }">
+            <el-button v-if="canAssignAccount(row)" text type="primary" @click="openAccount(row)">{{ row.payment_account_id ? '更正账户' : '补录账户' }}</el-button>
             <el-button v-if="canReconcile(row)" text type="primary" @click="openReconciliation(row)">核实付款日期</el-button>
             <el-button v-if="canVoidReconciliation(row)" text type="warning" @click="voidReconciliation(row)">撤销核对</el-button>
             <template v-if="view === 'ledger' && row.source_kind === 'expense'">
@@ -132,6 +142,7 @@
           <el-descriptions-item v-if="view === 'ledger'" label="累计已付">{{ formatMoney(selected.paid_amount || 0) }}</el-descriptions-item>
           <el-descriptions-item v-if="view === 'ledger'" label="剩余待付">{{ formatMoney(selected.remaining_amount || 0) }}</el-descriptions-item>
           <template v-else>
+            <el-descriptions-item label="付款账户">{{ selected.payment_account_name || '未登记' }}</el-descriptions-item>
             <el-descriptions-item label="付款日期">{{ expenditureDateLabel(selected.paid_at) }}</el-descriptions-item>
             <el-descriptions-item label="来源业务总额">{{ formatMoney(selected.business_amount || 0) }}</el-descriptions-item>
             <el-descriptions-item label="来源当前累计已付">{{ formatMoney(selected.paid_amount || 0) }}</el-descriptions-item>
@@ -149,6 +160,13 @@
         <p v-else class="expenditure-secondary">原记录未关联单据或已删除；保留此处的只读财务事实。</p>
       </template>
     </el-drawer>
+
+    <el-dialog :model-value="!!accountRow" title="登记付款账户" width="min(520px, 94vw)" :close-on-click-modal="false" @close="accountRow = null">
+      <p>本次付款 {{ formatMoney(accountRow?.amount || 0) }}，只调整账户归属，保留原付款金额和日期。</p>
+      <p v-if="['expense', 'project_cost'].includes(accountRow?.account_assignment_kind || '')" class="expenditure-secondary">此项对应来源的登记时已付部分；该部分拆分的历史日期核对记录使用同一账户，后续付款分别记录。</p>
+      <el-form label-position="top"><el-form-item label="付款账户" required><PaymentAccountSelect v-model="accountValue" :active="!!accountRow" /></el-form-item></el-form>
+      <template #footer><el-button @click="accountRow = null">取消</el-button><el-button type="primary" :loading="accountSaving" @click="saveAccount">保存</el-button></template>
+    </el-dialog>
 
     <el-dialog v-model="reconciliationVisible" title="核实付款日期" width="min(560px, 94vw)" :close-on-click-modal="false">
       <template v-if="reconciliationRow">
@@ -207,7 +225,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
@@ -224,14 +242,21 @@ import { PageToolbar, DataTableShell, StatePanel } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney } from '@/utils/format'
 import { expenditureDateLabel, expenditureLastPaymentDateLabel, expenditureCategoryLabel, expenditureSourceTarget, latestRequest } from '@/utils/expenditure'
+import PaymentAccountSelect from './PaymentAccountSelect.vue'
+import { assignPaymentAccount, getCompanyAccountOptions, type CompanyAccount } from '@/api/companyAccounts'
 import { getErrorMessage } from '@/utils/error'
 
-const props = defineProps<{ view: ExpenditureView; refreshKey: number }>()
+const props = defineProps<{ view: ExpenditureView; refreshKey: number; paymentAccountId?: string }>()
 const emit = defineEmits<{ manageExpense: [id: string]; deleteExpense: [id: string] }>()
 const router = useRouter()
 const authStore = useAuthStore()
 const sourceLabels: Record<ExpenditureSource, string> = { expense: '支出', project_cost: '项目实际费用', outsource: '外协' }
 const sourceType = ref<ExpenditureSource | ''>('')
+const accountFilter = ref('')
+const accountOptions = ref<CompanyAccount[]>([])
+const accountRow = ref<ExpenditureRow | null>(null)
+const accountValue = ref('')
+const accountSaving = ref(false)
 const keyword = ref('')
 const dateRange = ref<string[] | null>(null)
 const dateStatus = ref<'all' | 'confirmed' | 'unverified'>('all')
@@ -256,6 +281,23 @@ const requests = latestRequest()
 const availableSources = computed<ExpenditureSource[]>(() => result.value?.available_sources || (authStore.canAll(['outsource_center:read', 'outsource_task:read', 'outsource_payment:read', 'finance:view_cost']) ? ['expense', 'project_cost', 'outsource'] : ['expense', 'project_cost']))
 const tableState = computed(() => loading.value ? 'loading' : loadError.value ? 'error' : result.value?.items.length ? 'ready' : 'empty')
 const sourceTarget = computed(() => selected.value ? expenditureSourceTarget(selected.value) : null)
+
+function canAssignAccount(row: ExpenditureRow) {
+  return props.view === 'disbursements' && !!row.account_assignment_kind && !!row.account_assignment_id
+    && row.source_status !== 'deleted' && authStore.can('company_account:select')
+    && authStore.can(row.account_assignment_kind === 'outsource_payment' ? 'outsource_payment:create' : 'expense:update')
+}
+function openAccount(row: ExpenditureRow) { accountValue.value = row.payment_account_id || ''; accountRow.value = row }
+async function saveAccount() {
+  const row = accountRow.value
+  if (!row?.account_assignment_kind || !row.account_assignment_id) return
+  if (!accountValue.value) { ElMessage.warning('请选择付款账户'); return }
+  accountSaving.value = true
+  try {
+    await assignPaymentAccount(row.account_assignment_kind, row.account_assignment_id, accountValue.value)
+    ElMessage.success('付款账户已更新'); accountRow.value = null; await fetchData()
+  } catch (error) { ElMessage.error(getErrorMessage(error, '登记付款账户失败')) } finally { accountSaving.value = false }
+}
 
 function recordStatus(row: ExpenditureRow) {
   if (props.view === 'disbursements') return row.date_status === 'unverified' ? '付款日期待核实' : '有付款日期'
@@ -367,7 +409,10 @@ async function fetchData() {
       ...(sourceType.value ? { source_type: sourceType.value } : {}),
       ...(keyword.value.trim() ? { keyword: keyword.value.trim() } : {}),
       ...(dateRange.value?.length === 2 ? { start_date: dateRange.value[0], end_date: dateRange.value[1] } : {}),
-      ...(props.view === 'disbursements' ? { date_status: dateStatus.value } : {}),
+      ...(props.view === 'disbursements' ? { date_status: dateStatus.value,
+        ...(props.paymentAccountId || (accountFilter.value && accountFilter.value !== 'unassigned') ? { payment_account_id: props.paymentAccountId || accountFilter.value } : {}),
+        ...(accountFilter.value === 'unassigned' && !props.paymentAccountId ? { account_unassigned: true } : {}),
+      } : {}),
     })
     if (requests.isCurrent(id)) result.value = data
   } catch {
@@ -379,6 +424,7 @@ async function fetchData() {
 function search() { page.value = 1; void fetchData() }
 function reset() {
   sourceType.value = ''
+  accountFilter.value = ''
   keyword.value = ''
   dateRange.value = null
   dateStatus.value = 'all'
@@ -391,6 +437,12 @@ watch(() => props.refreshKey, (value, previous) => {
   if (value === previous) return
   page.value = 1
   void fetchData()
+})
+watch(() => props.paymentAccountId, () => search())
+onMounted(async () => {
+  if (authStore.canAny(['company_account:select', 'company_account:read'])) {
+    try { accountOptions.value = await getCompanyAccountOptions() } catch { /* Existing records remain readable. */ }
+  }
 })
 onUnmounted(() => requests.begin())
 </script>

@@ -126,6 +126,10 @@ ALL_PERMISSIONS: list[dict[str, str | None]] = [
     {"code": "acceptance:delete", "name": "删除验收单", "description": "删除草稿验收单"},
     {"code": "acceptance:change_status", "name": "变更验收状态", "description": "提交、通过或驳回验收单"},
     # Expense
+    {"code": "company_account:select", "name": "选择付款账户", "description": "选择启用的公司付款账户，仅显示尾号"},
+    {"code": "company_account:read", "name": "查看公司账户", "description": "查看账户档案"},
+    {"code": "company_account:manage", "name": "管理公司账户", "description": "新增编辑、启停及删除未使用账户"},
+    {"code": "company_account:view_number", "name": "查看完整账号", "description": "查看公司完整账号及开户名称"},
     {"code": "expense:read", "name": "查看支出", "description": "查看支出记录"},
     {"code": "expense:create", "name": "创建支出", "description": "创建支出记录"},
     {"code": "expense:update", "name": "编辑支出", "description": "编辑支出信息"},
@@ -269,6 +273,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "task_completion:read",
     ],
     "finance": [
+        "company_account:select", "company_account:read", "company_account:manage", "company_account:view_number",
         "customer:read",
         "order:read",
         "order:view_price", "order_item:view_price",
@@ -293,6 +298,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "aerial:finance", "aerial:wage", "finance:review",
     ],
     "outsource_manager": [
+        "company_account:select",
         "supplier_center:read", "supplier:read", "supplier:create", "supplier:update",
         "outsource_center:read",
         "outsource_vendor:read", "outsource_vendor:create", "outsource_vendor:update", "outsource_vendor:delete",

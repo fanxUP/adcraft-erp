@@ -311,6 +311,9 @@
             <el-option v-for="c in CATEGORIES" :key="c" :label="c" :value="c" />
           </el-select>
         </el-form-item>
+        <el-form-item label="付款账户" :required="form.payment_amount > 0">
+          <PaymentAccountSelect v-model="form.payment_account_id" :active="showDialog" :auto-default="!isEditing" />
+        </el-form-item>
         <el-form-item label="付款方式">
           <el-select v-model="form.payment_method" placeholder="选择付款方式" clearable style="width: 100%">
             <el-option v-for="pm in PAYMENT_METHODS" :key="pm" :label="pm" :value="pm" />
@@ -423,6 +426,7 @@
           <el-icon><Download /></el-icon> 下载导入模板
         </el-button>
       </div>
+      <el-form label-position="top"><el-form-item label="本次导入付款账户"><PaymentAccountSelect v-model="importAccountId" :active="showImport" auto-default /><div class="form-tip">有支付金额的导入行必须选择账户；纯欠款行不需要。</div></el-form-item></el-form>
       <el-upload
         ref="uploadRef"
         :auto-upload="false"
@@ -458,6 +462,8 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '@/utils/error'
+import PaymentAccountSelect from '@/components/payments/PaymentAccountSelect.vue'
 import { formatDate } from '@/utils/datetime'
 import { ref, reactive, onActivated, onDeactivated, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -502,6 +508,7 @@ const filterCategory = ref('')
 const dateRange = ref<string[] | null>(null)
 const showDialog = ref(false)
 const showImport = ref(false)
+const importAccountId = ref('')
 const isEditing = ref(false)
 const editingId = ref('')
 const editingOriginalHasCostDate = ref(false)
@@ -604,6 +611,7 @@ const scopeTableRows = computed<ProjectCostScopeTableRow[]>(() => [
 const form = reactive({
   category: '',
   payment_amount: 0,
+  payment_account_id: '',
   payment_method: '',
   supplier_id: '',
   debt_amount: 0,
@@ -659,7 +667,7 @@ async function handleBatchDelete() {
 }
 
 function resetForm() {
-  Object.assign(form, { category: '', payment_amount: 0, payment_method: '', supplier_id: '', debt_amount: 0, cost_date: '', remark: '', group_name: '', order_item_id: '', order_item_ids: [], quote_item_id: '' })
+  Object.assign(form, { category: '', payment_amount: 0, payment_account_id: '', payment_method: '', supplier_id: '', debt_amount: 0, cost_date: '', remark: '', group_name: '', order_item_id: '', order_item_ids: [], quote_item_id: '' })
   isEditing.value = false
   editingId.value = ''
   editingOriginalHasCostDate.value = false
@@ -691,6 +699,7 @@ function openEdit(row: ProjectCostResponse) {
   editingOriginalHasCostDate.value = !!formatDate(row.cost_date)
   form.category = row.category
   form.payment_amount = row.payment_amount ?? getProjectCostPaymentAmount(row.amount, row.debt_amount)
+  form.payment_account_id = row.payment_account_id || ''
   form.payment_method = row.payment_method || ''
   form.supplier_id = row.supplier_id || ''
   form.debt_amount = row.debt_amount || 0
@@ -912,6 +921,10 @@ async function handleSave() {
     return
   }
 
+  if (!isEditing.value && form.payment_amount > 0 && !form.payment_account_id) {
+    ElMessage.warning('请选择付款账户')
+    return
+  }
   saving.value = true
   try {
     let savedCost: ProjectCostResponse
@@ -921,6 +934,7 @@ async function handleSave() {
         amount: amounts.totalAmount,
         debt_amount: amounts.debtAmount,
         cost_date: form.cost_date || null,
+        ...(authStore.can('company_account:select') ? { payment_account_id: form.payment_account_id || null } : {}),
         payment_method: form.payment_method || null,
         supplier_id: form.supplier_id || null,
         remark: form.remark.trim() || null,
@@ -945,6 +959,7 @@ async function handleSave() {
           remark: form.remark || undefined,
           quote_item_id: form.quote_item_id || undefined,
           group_name: form.group_name || undefined,
+          payment_account_id: form.payment_account_id || undefined,
           payment_method: form.payment_method || undefined,
           supplier_id: form.supplier_id || undefined,
         })
@@ -959,6 +974,7 @@ async function handleSave() {
           remark: form.remark || undefined,
           order_item_ids: form.order_item_ids.length ? [...form.order_item_ids] : undefined,
           group_name: form.group_name || undefined,
+          payment_account_id: form.payment_account_id || undefined,
           payment_method: form.payment_method || undefined,
           supplier_id: form.supplier_id || undefined,
         })
@@ -983,8 +999,8 @@ async function handleSave() {
     resetForm()
     fetchData()
     void fetchCostSummary()
-  } catch {
-    // API error handled by interceptor
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '保存成本失败'))
   } finally {
     saving.value = false
   }
@@ -1029,7 +1045,7 @@ async function handleImport() {
   }
   importing.value = true
   try {
-    const result = await importProjectCosts(selectedFile.value, isQuote.value ? undefined : sourceId.value, isQuote.value ? sourceId.value : undefined, isQuote.value ? 'quote' : 'order')
+    const result = await importProjectCosts(selectedFile.value, isQuote.value ? undefined : sourceId.value, isQuote.value ? sourceId.value : undefined, isQuote.value ? 'quote' : 'order', importAccountId.value || undefined)
     importResult.value = result
     if (result.created > 0) {
       fetchData()

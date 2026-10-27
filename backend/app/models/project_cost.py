@@ -28,6 +28,9 @@ class ProjectCost(Base, TimestampMixin, SoftDeleteMixin):
     specification: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="规格尺寸")
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="单位")
     unit_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True, comment="单价")
+    payment_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("company_accounts.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="付款方式：现金支付/微信支付/转账支付/对公支付/其它支付")
     payee_company_name: Mapped[str | None] = mapped_column(String(200), nullable=True, comment="对方收款公司名称")
     supplier_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -86,3 +89,5 @@ class ProjectCostItemLink(Base, TimestampMixin):
 
     project_cost: Mapped["ProjectCost"] = relationship(back_populates="item_links")
     document_item: Mapped["BusinessDocumentItem"] = relationship(lazy="selectin")
+
+from app.models.company_account import CompanyAccount  # noqa: E402,F401

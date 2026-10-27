@@ -146,6 +146,12 @@ PERM_STATEMENT_READ = "statement:read"
 PERM_STATEMENT_CREATE = "statement:create"
 PERM_STATEMENT_CONFIRM = "statement:confirm"
 
+# Company-owned payment accounts (selection does not expose full account numbers).
+PERM_COMPANY_ACCOUNT_SELECT = "company_account:select"
+PERM_COMPANY_ACCOUNT_READ = "company_account:read"
+PERM_COMPANY_ACCOUNT_MANAGE = "company_account:manage"
+PERM_COMPANY_ACCOUNT_NUMBER = "company_account:view_number"
+
 # Expense
 PERM_EXPENSE_READ = "expense:read"
 PERM_EXPENSE_CREATE = "expense:create"

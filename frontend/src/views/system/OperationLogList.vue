@@ -151,6 +151,7 @@ const tableState = computed(() => loadError.value ? 'error' as const : loading.v
 function objectTypeLabel(t: string | null | undefined) {
   const map: Record<string, string> = {
     customer: '客户', quote: '报价', order: '订单',
+    company_account: '公司账户',
     payment: '收款', expense: '支出',
     outsource_vendor: '外协商', outsource_task: '外协任务', outsource_payment: '外协付款',
     inventory: '库存', production_task: '制作任务', design_task: '设计任务', installation_task: '安装任务',
@@ -161,6 +162,7 @@ function objectTypeLabel(t: string | null | undefined) {
 function actionLabel(a: string) {
   const map: Record<string, string> = {
     create: '创建', update: '修改', delete: '删除',
+    assign_payment_account: '登记付款账户',
     status_change: '状态变更', stock_in: '入库', stock_out: '出库',
     void: '作废', confirm: '确认', convert: '转订单',
   }

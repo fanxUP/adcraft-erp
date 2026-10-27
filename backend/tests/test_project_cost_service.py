@@ -327,6 +327,7 @@ async def test_create_cost_accepts_multiple_order_items_as_one_cost_scope():
                 "order_id": str(order_id),
                 "category": "材料费",
                 "amount": 200,
+                "debt_amount": 200,
                 "order_item_ids": [str(item_id) for item_id in item_ids],
             },
             uuid4(),

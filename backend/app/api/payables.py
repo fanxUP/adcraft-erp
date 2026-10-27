@@ -13,11 +13,12 @@ from app.core.permissions import PERM_EXPENSE_READ, PERM_EXPENSE_UPDATE, require
 from app.models.user import User
 from app.schemas.common import success, success_paginated
 from app.schemas.payment import PayablePaymentCreate, PayablePaymentVoid
+from app.services.company_account_service import require_account_selection
 from app.services.operation_log_service import log_operation, OBJ_EXPENSE, OBJ_PROJECT_COST
 from app.services.payable_service import PayableService
 
 
-router = APIRouter(prefix="/payables", tags=["Payables"])
+router = APIRouter(prefix="/payables", tags=["Payables"], dependencies=[Depends(require_account_selection)])
 
 
 def _object_type(source_type: str):

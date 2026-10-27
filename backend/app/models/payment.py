@@ -115,6 +115,9 @@ class Expense(Base, TimestampMixin, SoftDeleteMixin):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     expense_no: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    payment_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("company_accounts.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     payment_method: Mapped[str | None] = mapped_column(
         String(32), nullable=True, comment="付款方式"
     )
@@ -136,3 +139,5 @@ class Expense(Base, TimestampMixin, SoftDeleteMixin):
     supplier: Mapped["OutsourceVendor | None"] = relationship(
         "OutsourceVendor", foreign_keys=[supplier_id], lazy="selectin"
     )
+
+from app.models.company_account import CompanyAccount  # noqa: E402,F401

@@ -155,6 +155,8 @@ def service(mock_repos):
         MockPaymentRepo.return_value = payment_repo
         MockFinanceRecon.return_value.assert_outsource_task_has_no_active_reconciliations = AsyncMock()
         db = AsyncMock()
+        from types import SimpleNamespace
+        db.scalar = AsyncMock(return_value=SimpleNamespace(id=SAMPLE_USER_ID, is_active=True))
         # Mock _vendor_name lookup
         name_result = MagicMock()
         name_result.scalar_one_or_none.return_value = "测试外协商"
@@ -785,6 +787,7 @@ async def test_create_payment(service):
     with patch("app.services.outsource_service.generate_outsource_payment_no", AsyncMock(return_value="OP20260629-0002")):
         result = await svc.create_payment({
             "vendor_id": SAMPLE_USER_ID,
+                "payment_account_id": str(SAMPLE_USER_ID),
             "amount": 500.0,
         })
     assert result["payment_no"] == "OP20260629-0002"
@@ -840,6 +843,7 @@ async def test_create_payment_updates_balance_and_creator(service):
         await svc.create_payment(
             {
                 "vendor_id": SAMPLE_USER_ID,
+                "payment_account_id": str(SAMPLE_USER_ID),
                 "task_id": SAMPLE_ORDER_ID,
                 "amount": 150,
             },
@@ -870,6 +874,7 @@ async def test_full_payment_settles_completed_task(service):
     ):
         await svc.create_payment({
             "vendor_id": SAMPLE_USER_ID,
+                "payment_account_id": str(SAMPLE_USER_ID),
             "task_id": SAMPLE_ORDER_ID,
             "amount": 100,
         })

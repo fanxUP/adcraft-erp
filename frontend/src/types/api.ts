@@ -994,6 +994,7 @@ export interface StatementDetailResponse extends StatementResponse {
 }
 
 export interface ExpenseResponse {
+  payment_account_id?: string | null
   id: string
   expense_no: string
   category?: string
@@ -1024,6 +1025,7 @@ export interface ExpenseDeleteConfirmedResponse {
 }
 
 export interface PayablePaymentResponse {
+  payment_account_id?: string | null
   id: string
   payment_no: string
   source_type: 'expense' | 'project_cost' | string
@@ -1070,6 +1072,7 @@ export interface PayableResponse {
 }
 
 export interface ProjectCostResponse {
+  payment_account_id?: string | null
   id: string
   cost_no: string
   source_type: string
@@ -1376,6 +1379,7 @@ export interface OutsourceOrderItemSummaryResponse {
 }
 
 export interface OutsourcePaymentResponse {
+  payment_account_id?: string | null
   id: string
   payment_no: string
   vendor_id: string

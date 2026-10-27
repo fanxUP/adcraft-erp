@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import DateTime, Numeric, String, and_, case, cast, func, literal, or_, select, union_all
+from sqlalchemy import exists, DateTime, Numeric, String, and_, case, cast, func, literal, or_, select, union_all
 
 from app.core.permissions import user_has_permission
 from app.models.business_document import BusinessDocument
@@ -16,6 +16,7 @@ from app.models.payable import PayablePayment
 from app.models.finance_reconciliation import FinancePaymentDateReconciliation
 from app.models.payment import Expense
 from app.models.project_cost import ProjectCost
+from app.models.company_account import CompanyAccount
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,8 @@ class ExpenditureFilters:
     start_date: date | None = None
     end_date: date | None = None
     date_status: str = "all"
+    payment_account_id: UUID | None = None
+    account_unassigned: bool = False
 
     def __post_init__(self):
         if self.source_type not in (None, "expense", "project_cost", "outsource"):
@@ -375,12 +378,48 @@ class ExpenditureService:
         return union_all(*branches).subquery("expenditure_disbursements")
 
     @staticmethod
+    def _with_payment_accounts(table):
+        expense, cost = Expense.__table__, ProjectCost.__table__
+        pp, op, account = PayablePayment.__table__, OutsourcePayment.__table__, CompanyAccount.__table__
+        initial = table.c.payment_kind.in_(("historical", "reconciled_legacy"))
+        join = table.outerjoin(expense, and_(initial, table.c.source_kind == "expense", table.c.source_id == expense.c.id))
+        history = pp.alias("account_payable_history")
+        unknown_settlement = and_(cost.c.is_settled.is_(True), ~exists(select(history.c.id).where(
+            history.c.source_type == "project_cost", history.c.source_id == cost.c.id,
+        )))
+        cost_initial_identifiable = or_(table.c.row_key.like("registered:%"), ~unknown_settlement)
+        join = join.outerjoin(cost, and_(initial, cost_initial_identifiable, table.c.source_kind == "project_cost", table.c.source_id == cost.c.id))
+        join = join.outerjoin(pp, table.c.row_key == literal("payable:") + cast(pp.c.id, String))
+        join = join.outerjoin(op, table.c.row_key == literal("outsource:") + cast(op.c.id, String))
+        account_id = func.coalesce(pp.c.payment_account_id, op.c.payment_account_id, expense.c.payment_account_id, cost.c.payment_account_id)
+        join = join.outerjoin(account, account.c.id == account_id)
+        assignment_kind = case((pp.c.id.is_not(None), "payable_payment"), (op.c.id.is_not(None), "outsource_payment"),
+                               (expense.c.id.is_not(None), "expense"), (cost.c.id.is_not(None), "project_cost"), else_=None)
+        assignment_id = func.coalesce(pp.c.id, op.c.id, expense.c.id, cost.c.id)
+        label = account.c.name + case(
+            (func.length(account.c.account_number) > 4, literal("（尾号 ") + func.right(account.c.account_number, 4) + literal("）")),
+            (account.c.account_number.is_not(None), "（账号已隐藏）"), else_="",
+        )
+        columns = [table.c[key] for key in table.c.keys() if key != "payment_method"]
+        return select(*columns,
+            func.coalesce(table.c.payment_method, expense.c.payment_method, cost.c.payment_method).label("payment_method"),
+            account_id.label("payment_account_id"), label.label("payment_account_name"),
+            account.c.is_active.label("payment_account_active"),
+            assignment_kind.label("account_assignment_kind"), assignment_id.label("account_assignment_id"),
+        ).select_from(join).subquery("disbursements_with_accounts")
+
+    @staticmethod
     def _predicates(table, filters, view, *, dates=True):
         conditions = []
         for key in ("source_type", "category", "supplier_id", "document_id"):
             value = getattr(filters, key)
             if value is not None:
                 conditions.append(table.c[key] == value)
+        if view == "disbursements":
+            if filters.payment_account_id:
+                conditions.append(table.c.payment_account_id == filters.payment_account_id)
+            if filters.account_unassigned:
+                conditions.append(table.c.payment_account_id.is_(None))
         if filters.keyword and filters.keyword.strip():
             conditions.append(or_(*(table.c[k].contains(filters.keyword.strip(), autoescape=True)
                                    for k in ("source_no", "doc_no", "project_name", "supplier_name", "description"))))
@@ -401,13 +440,15 @@ class ExpenditureService:
             raise PermissionError("没有查看该支出来源的权限")
         if view not in ("ledger", "disbursements") or page < 1 or not 1 <= page_size <= 200:
             raise ValueError("列表参数无效")
+        if view == "ledger" and (filters.payment_account_id or filters.account_unassigned):
+            raise ValueError("付款账户筛选仅适用于付款记录")
         ledger = self._ledger()
         if view == "ledger":
             table = select(*(
                 ledger.c[key] for key in ledger.c.keys() if key != "registered_paid_amount"
             )).subquery("expenditure_ledger_public")
         else:
-            table = self._disbursements(ledger)
+            table = self._with_payment_accounts(self._disbursements(ledger))
         # Reuse one projection and one statement snapshot for page + totals.
         # A concurrent payment cannot land between the summary and list reads.
         table = select(table).where(*self._predicates(table, filters, view, dates=False)).cte("expenditure_view")

@@ -80,6 +80,7 @@ def make_mock_expense(**kwargs):
     e.category = kwargs.get("category", "办公")
     e.amount = kwargs.get("amount", 1000.0)
     e.payable_amount = kwargs.get("payable_amount", 0.0)
+    e.payment_account_id = kwargs.get("payment_account_id", SAMPLE_USER_ID)
     e.payment_method = kwargs.get("payment_method", None)
     e.payee_name = kwargs.get("payee_name", None)
     e.supplier_id = kwargs.get("supplier_id", None)
@@ -655,7 +656,13 @@ def expense_service(mock_expense_repo):
             payable_service.validate_source_update = AsyncMock()
             payable_service.assert_source_can_be_deleted = AsyncMock()
             db = AsyncMock()
-            db.scalar = AsyncMock(return_value=0)
+            async def scalar(query):
+                from types import SimpleNamespace
+                from app.models.company_account import CompanyAccount
+                if query.column_descriptions[0].get("entity") is CompanyAccount:
+                    return SimpleNamespace(id=SAMPLE_USER_ID, is_active=True)
+                return 0
+            db.scalar = AsyncMock(side_effect=scalar)
             svc = ExpenseService(db)
             svc.repo = mock_expense_repo
             svc.payable_service = payable_service
@@ -718,6 +725,7 @@ async def test_create_expense(expense_service):
 
     with patch("app.services.payment_service.generate_expense_no", AsyncMock(return_value="EXP20260629-0002")):
         result = await svc.create_expense({
+            "payment_account_id": str(SAMPLE_USER_ID),
             "category": "水电",
             "amount": 500.0,
             "payment_method": "微信支付",
@@ -752,6 +760,7 @@ async def test_create_expense_calculates_total_from_paid_and_payable(expense_ser
 
     with patch("app.services.payment_service.generate_expense_no", AsyncMock(return_value="EXP20260629-0004")):
         result = await svc.create_expense({
+            "payment_account_id": str(SAMPLE_USER_ID),
             "category": "运输",
             "paid_amount": 1000,
             "payable_amount": 2000,

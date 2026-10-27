@@ -128,6 +128,7 @@ const groupLabels: Record<string, string> = {
   production_task: '生产任务', installation_task: '安装任务',
   contract: '合同管理', cdr_quote: '智能报价', cdr_rule_set: '智能报价规则',
   cdr_customer_agreement: '客户协议价',
+  company_account: '公司账户',
   payment: '收款管理', statement: '对账单', expense: '支出管理',
   inventory: '库存管理', outsource: '外协管理', outsource_center: '外协中心',
   outsource_vendor: '外协商管理', outsource_task: '外协任务管理', report: '报表',

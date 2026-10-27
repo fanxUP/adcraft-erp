@@ -25,6 +25,7 @@ from app.core.permissions import (
     PERM_STATEMENT_READ,
     require_all_permissions,
     require_permission,
+    user_has_permission,
 )
 from app.models.payment import Expense
 from app.models.project_cost import ProjectCost
@@ -42,6 +43,7 @@ from app.schemas.payment import (
     StatementCreate,
 )
 from app.schemas.common import success, success_paginated
+from app.services.company_account_service import require_account_selection
 from app.services.payment_service import PaymentService, StatementService, ExpenseService
 from app.services.project_cost_service import ProjectCostService
 from app.services.business_document_service import OrderDataMutationLocked
@@ -52,8 +54,8 @@ from app.services.operation_log_service import log_operation, OBJ_PAYMENT, OBJ_E
 
 pay_router = APIRouter(prefix="/payments", tags=["Payments"])
 stmt_router = APIRouter(prefix="/statements", tags=["Statements"])
-exp_router = APIRouter(prefix="/expenses", tags=["Expenses"])
-cost_router = APIRouter(prefix="/project-costs", tags=["Project Costs"])
+exp_router = APIRouter(prefix="/expenses", tags=["Expenses"], dependencies=[Depends(require_account_selection)])
+cost_router = APIRouter(prefix="/project-costs", tags=["Project Costs"], dependencies=[Depends(require_account_selection)])
 
 
 EXPENSE_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024
@@ -269,13 +271,15 @@ async def list_expenditure(
     document_id: UUID | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
+    payment_account_id: UUID | None = None,
+    account_unassigned: bool = False,
     date_status: Literal["all", "confirmed", "unverified"] = "all",
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_EXPENSE_READ)),
 ):
     try:
         filters = ExpenditureFilters(source_type, keyword, category, supplier_id,
-                                     document_id, start_date, end_date, date_status)
+                                     document_id, start_date, end_date, date_status, payment_account_id, account_unassigned)
         view = "ledger" if request.url.path.endswith("/ledger") else "disbursements"
         return success(await ExpenditureService(db, current_user).list_records(view, page, page_size, filters))
     except PermissionError as exc:
@@ -789,6 +793,7 @@ async def settle_cost_debt(
             UUID(cost_id),
             {
                 "amount": data.settle_amount,
+                "payment_account_id": data.payment_account_id,
                 "payment_method": data.payment_method,
                 "remark": data.remark,
             },
@@ -940,10 +945,13 @@ async def import_project_costs(
     order_id: str | None = None,
     quote_id: str | None = None,
     source_type: str = "order",
+    payment_account_id: UUID | None = None,
     request: Request = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(PERM_EXPENSE_CREATE)),
 ):
+    if payment_account_id and not user_has_permission(current_user, "company_account:select"):
+        raise HTTPException(403, "没有选择付款账户的权限")
     if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
         return {"code": 40001, "message": "请上传Excel文件（.xlsx 或 .xls）", "data": None}
     content = await file.read()
@@ -954,6 +962,7 @@ async def import_project_costs(
             order_id=UUID(order_id) if order_id else None,
             quote_id=UUID(quote_id) if quote_id else None,
             source_type=source_type,
+            payment_account_id=payment_account_id,
         )
     except Exception as e:
         return {"code": 40001, "message": f"导入失败: {str(e)}", "data": None}

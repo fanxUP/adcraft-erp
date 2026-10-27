@@ -49,6 +49,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'finance-center', name: 'FinanceCenterDashboard', component: () => import('@/views/finance/FinanceCenterDashboard.vue') },
       { path: 'payments', redirect: '/receivables' },
       { path: 'customer-debts', redirect: '/receivables' },
+      { path: 'company-accounts', name: 'CompanyAccountList', component: () => import('@/views/payments/CompanyAccountList.vue') },
       { path: 'expenses', name: 'ExpenseList', component: () => import('@/views/payments/ExpenseList.vue') },
       { path: 'statements', name: 'StatementList', component: () => import('@/views/payments/StatementList.vue') },
       { path: 'statements/:id', name: 'StatementDetail', component: () => import('@/views/payments/StatementDetail.vue') },

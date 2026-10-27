@@ -46,6 +46,7 @@ from app.api import (
     employees,
     employment_histories,
     finance_center,
+    company_accounts,
     framework_contracts,
     inventory,
     leaves,
@@ -348,6 +349,7 @@ app.include_router(payments.cost_router, prefix="/api/v1")
 app.include_router(finance_center.router, prefix="/api/v1")
 app.include_router(payables.router, prefix="/api/v1")
 app.include_router(suppliers.router, prefix="/api/v1")
+app.include_router(company_accounts.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(outsource.router, prefix="/api/v1")
 app.include_router(inventory.router, prefix="/api/v1")

@@ -1,3 +1,4 @@
+import type { PaymentAccountKind } from './companyAccounts'
 import { apiClient, get, post, put, del } from './index'
 import { PaginatedData, PaymentResponse, StatementResponse, StatementDetailResponse, ExpenseResponse, ExpenseDeleteConfirmedResponse, SuccessResponse, UploadResponse, DashboardData, DailyReportData, MonthlyReportData, CustomerDebtItem, ProjectCostResponse, ProjectCostImportResponse, ProjectCostSummaryResponse, ProjectCostItemSummaryResponse, AttachmentResponse, DebtResponse, QuoteCostResponse, TaskCompletionDetailsResponse, TaskCompletionKind, TaskCompletionPeriod, TaskCompletionSummary, TaskCompletionType, PayableResponse } from '@/types/api'
 
@@ -50,6 +51,11 @@ export interface ExpenditureRow {
   payment_no?: string | null
   paid_at?: string | null
   payment_method?: string | null
+  payment_account_id?: string | null
+  payment_account_name?: string | null
+  payment_account_active?: boolean | null
+  account_assignment_kind?: PaymentAccountKind | null
+  account_assignment_id?: string | null
   date_status?: 'confirmed' | 'unverified'
   reconciliation_id?: string | null
   reconciliation_source_type?: 'expense' | 'project_cost' | 'outsource_task' | 'outsource_payment' | null
@@ -76,7 +82,7 @@ export interface ExpenditureResult {
 }
 export function getExpenditure(view: ExpenditureView, params: {
   page: number; page_size: number; source_type?: ExpenditureSource; keyword?: string
-  category?: string; supplier_id?: string; document_id?: string
+  category?: string; supplier_id?: string; document_id?: string; payment_account_id?: string; account_unassigned?: boolean
   start_date?: string; end_date?: string; date_status?: 'all' | 'confirmed' | 'unverified'
 }) {
   return get<ExpenditureResult>(`/expenses/${view}`, { params })
@@ -246,6 +252,7 @@ export function createPayablePayment(
   sourceId: string,
   data: {
     amount: number
+    payment_account_id: string
     payment_method: string
     paid_at?: string
     remark?: string
@@ -314,10 +321,11 @@ export function getProjectCostSummary(orderIds: string[]) {
 export function getOrderProjectCostItemSummary(orderId: string) {
   return get<ProjectCostItemSummaryResponse>(`/project-costs/orders/${orderId}/item-summary`)
 }
-export function importProjectCosts(file: File, orderId?: string, quoteId?: string, sourceType: string = 'order') {
+export function importProjectCosts(file: File, orderId?: string, quoteId?: string, sourceType: string = 'order', paymentAccountId?: string) {
   const form = new FormData()
   form.append('file', file)
   const params: Record<string, string> = { source_type: sourceType }
+  if (paymentAccountId) params.payment_account_id = paymentAccountId
   if (orderId) params.order_id = orderId
   if (quoteId) params.quote_id = quoteId
   return post<ProjectCostImportResponse>('/project-costs/import', form, {
@@ -351,6 +359,6 @@ export function getCostDebts(params?: { page?: number; page_size?: number; keywo
   return get<PaginatedData<DebtResponse>>('/project-costs/debts/list', { params })
 }
 
-export function settleCostDebt(costId: string, data: { settle_amount: number; payment_method: string; remark?: string }) {
+export function settleCostDebt(costId: string, data: { settle_amount: number; payment_account_id: string; payment_method: string; remark?: string }) {
   return post<ProjectCostResponse>(`/project-costs/${costId}/settle-debt`, data)
 }

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
@@ -20,6 +21,7 @@ from app.models.business_document import BusinessDocument
 from app.models.payment import Expense
 from app.models.payable import PayablePayment
 from app.models.project_cost import ProjectCost, ProjectCostItemLink
+from app.services.company_account_service import CompanyAccountService
 from app.services.number_generator import generate_payable_payment_no
 
 
@@ -243,6 +245,7 @@ class PayableService:
             "source_type": payment.source_type,
             "source_id": str(payment.source_id),
             "amount": float(_money(payment.amount)),
+            "payment_account_id": str(payment.payment_account_id) if getattr(payment, "payment_account_id", None) else None,
             "payment_method": payment.payment_method,
             "paid_at": payment.paid_at.isoformat() if payment.paid_at else None,
             "remark": payment.remark,
@@ -592,7 +595,9 @@ class PayableService:
         if amount > remaining:
             raise ValueError(f"本次付款金额不能大于待付款金额 {remaining:.2f} 元")
 
+        account_id = await CompanyAccountService(self.db).resolve(data.get("payment_account_id"))
         payment = PayablePayment(
+            payment_account_id=account_id,
             payment_no=await generate_payable_payment_no(self.db),
             source_type=normalized_type,
             source_id=source.id,
@@ -609,7 +614,6 @@ class PayableService:
         new_paid = paid + amount
         new_status = calculate_payable_status(payable_total, new_paid)
         if normalized_type == "project_cost":
-            source.payment_method = payment.payment_method
             source.is_settled = new_status == "paid"
             source.settled_at = _utc_now() if new_status == "paid" else None
         await self.db.flush()

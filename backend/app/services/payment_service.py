@@ -15,6 +15,7 @@ from app.repositories.payment_repo import (
     StatementRepository,
 )
 from app.schemas.payment import StatementPaymentItem
+from app.services.company_account_service import CompanyAccountService
 from app.services.business_document_service import BusinessDocumentService
 from app.services.number_generator import (
     generate_expense_no,
@@ -634,7 +635,9 @@ class ExpenseService:
             requested_payable_amount,
         )
         supplier = await SupplierService(self.db).resolve_active_supplier(data.get("supplier_id"))
+        account_id = await CompanyAccountService(self.db).initial_account(data, amount - payable_amount)
         expense = Expense(
+            payment_account_id=account_id,
             expense_no=await generate_expense_no(self.db),
             category=data.get("category"),
             payment_method=data.get("payment_method"),
@@ -683,7 +686,7 @@ class ExpenseService:
         # ``paid_amount`` is a derived input convenience field, not a second
         # database column.  Persist total amount and payable total only.
         normalized.pop("paid_amount", None)
-        allow_null_fields: set[str] = set()
+        allow_null_fields: set[str] = {"payment_account_id"}
         if "expense_date" in normalized:
             allow_null_fields.add("expense_date")
         if "supplier_id" in normalized:
@@ -703,12 +706,17 @@ class ExpenseService:
             source_id=e.id,
             proposed_base=max(amount - payable_amount, Decimal("0.00")),
         )
-        if allow_null_fields:
-            await self.repo.update(e, normalized, allow_null_fields=allow_null_fields)
-        else:
-            # Preserve the legacy repository call shape when no nullable
-            # supplier field needs special handling.
-            await self.repo.update(e, normalized)
+        payment_changed = (
+            amount - payable_amount != _money_or_zero(e.amount) - current_payable_amount
+            or ("payment_method" in normalized and (normalized["payment_method"] or None) != (e.payment_method or None))
+            or ("expense_date" in normalized and
+                (normalized["expense_date"].date() if normalized["expense_date"] else None) !=
+                (e.expense_date.date() if e.expense_date else None))
+        )
+        normalized["payment_account_id"] = await CompanyAccountService(self.db).initial_account(
+            data, amount - payable_amount, current=e, payment_changed=payment_changed,
+        )
+        await self.repo.update(e, normalized, allow_null_fields=allow_null_fields)
         return self._to_dict(e)
 
     async def delete_expense(self, expense_id: UUID) -> None:
@@ -774,6 +782,7 @@ class ExpenseService:
         return {
             "id": str(e.id), "expense_no": e.expense_no,
             "category": e.category, "amount": float(amount),
+            "payment_account_id": str(e.payment_account_id) if getattr(e, "payment_account_id", None) else None,
             "payment_method": getattr(e, "payment_method", None),
             "payee_name": getattr(e, "payee_name", None),
             "supplier_id": str(getattr(e, "supplier_id", None)) if getattr(e, "supplier_id", None) else None,

@@ -15,6 +15,7 @@ from app.repositories.project_cost_repo import ProjectCostRepository
 from app.repositories.task_repo import AttachmentRepository
 
 from app.schemas.payment import ProjectCostResponse
+from app.services.company_account_service import CompanyAccountService
 from app.services.number_generator import generate_project_cost_no
 from app.services.payable_service import PayableService, validate_payable_amount
 from app.services.finance_reconciliation_service import FinanceReconciliationService
@@ -330,7 +331,9 @@ class ProjectCostService:
             supplier.name if supplier else None
         )
 
+        account_id = await CompanyAccountService(self.db).initial_account(data, Decimal(str(data["amount"])) - Decimal(str(debt_amount)))
         cost = ProjectCost(
+            payment_account_id=account_id,
             cost_no=await generate_project_cost_no(self.db),
             document_id=document_id,
             customer_id=customer_id_val,
@@ -393,6 +396,7 @@ class ProjectCostService:
             "specification": cost.specification,
             "unit": cost.unit,
             "unit_price": float(cost.unit_price) if cost.unit_price else None,
+            "payment_account_id": str(cost.payment_account_id) if cost.payment_account_id else None,
             "payment_method": cost.payment_method,
             "payee_company_name": cost.payee_company_name,
             "supplier_id": str(cost.supplier_id) if cost.supplier_id else None,
@@ -474,6 +478,19 @@ class ProjectCostService:
                 debt_amount=new_debt,
                 is_settled=c.is_settled,
             )
+        if any(key in data for key in ("amount", "debt_amount", "payment_method", "cost_date", "payment_account_id")):
+            old_initial = Decimal(str(c.amount)) - Decimal(str(c.debt_amount or 0))
+            new_initial = Decimal(str(normalized.get("amount", c.amount))) - Decimal(str(normalized.get("debt_amount", c.debt_amount) or 0))
+            changed = (new_initial != old_initial
+                or ("payment_method" in normalized and (normalized["payment_method"] or None) != (c.payment_method or None))
+                or ("cost_date" in normalized and
+                    (normalized["cost_date"].date() if normalized["cost_date"] else None) !=
+                    (c.cost_date.date() if c.cost_date else None))
+            )
+            normalized["payment_account_id"] = await CompanyAccountService(self.db).initial_account(
+                data, new_initial, current=c, payment_changed=changed,
+            )
+            allow_null_fields.add("payment_account_id")
         if "document_item_id" in normalized and normalized["document_item_id"] is None:
             allow_null_fields.add("document_item_id")
         if allow_null_fields:
@@ -644,7 +661,7 @@ class ProjectCostService:
 
         return self._to_dict(c)
 
-    async def import_from_excel(self, file: BytesIO, created_by: UUID, order_id: UUID | None = None, quote_id: UUID | None = None, source_type: str = "order") -> dict:
+    async def import_from_excel(self, file: BytesIO, created_by: UUID, order_id: UUID | None = None, quote_id: UUID | None = None, source_type: str = "order", payment_account_id: UUID | None = None) -> dict:
         """Parse an old or current project-cost workbook.
 
         The current format is based on the financial fields shown by the UI:
@@ -819,6 +836,7 @@ class ProjectCostService:
                     "remark": parsed["remark"],
                     **parsed["legacy_fields"],
                 })
+                target_data["payment_account_id"] = payment_account_id
                 await self.create_cost(target_data, created_by, skip_sync=True)
                 created += 1
             except Exception as e:

@@ -104,6 +104,9 @@
         <el-form-item label="付款金额" prop="amount">
           <el-input-number v-model="payForm.amount" :min="0.01" :max="payTask?.unpaid_amount || 0" :precision="2" style="width: 100%" />
         </el-form-item>
+        <el-form-item label="付款账户" prop="payment_account_id" required>
+          <PaymentAccountSelect v-model="payForm.payment_account_id" :active="payDialogVisible" auto-default />
+        </el-form-item>
         <el-form-item label="付款方式" prop="payment_method">
           <el-select v-model="payForm.payment_method" clearable style="width: 100%">
             <el-option label="银行转账" value="bank_transfer" />
@@ -150,6 +153,8 @@
 </template>
 
 <script setup lang="ts">
+import type { FormInstance } from 'element-plus'
+import PaymentAccountSelect from '@/components/payments/PaymentAccountSelect.vue'
 import { ref, onMounted } from 'vue'
 import { computed } from 'vue'
 import { formatMoney } from '@/utils/format'
@@ -187,8 +192,10 @@ const payDialogVisible = ref(false)
 const paySaving = ref(false)
 type PaymentTarget = Omit<OutsourceTaskPaymentSummary, 'payments'>
 const payTask = ref<PaymentTarget | null>(null)
-const payForm = ref({ amount: 0, payment_method: 'bank_transfer', payee_company_name: '', paid_at: '', remark: '' })
-const payRules = { amount: [{ required: true, message: '请输入付款金额', trigger: 'blur' }] }
+const payForm = ref({ amount: 0, payment_account_id: '', payment_method: 'bank_transfer', payee_company_name: '', paid_at: '', remark: '' })
+const payFormRef = ref<FormInstance>()
+const payRules = {
+  payment_account_id: [{ required: true, message: '请选择付款账户', trigger: 'change' }], amount: [{ required: true, message: '请输入付款金额', trigger: 'blur' }] }
 
 // 付款记录对话框
 const recordDialogVisible = ref(false)
@@ -231,6 +238,7 @@ async function handlePay(row: OutsourceTaskResponse) {
     payTask.value = summary
     payForm.value = {
       amount: summary.unpaid_amount > 0 ? summary.unpaid_amount : 0,
+      payment_account_id: '',
       payment_method: 'bank_transfer',
       paid_at: '',
       remark: '',
@@ -250,6 +258,7 @@ async function handlePay(row: OutsourceTaskResponse) {
     }
     payForm.value = {
       amount: row.unpaid_amount > 0 ? row.unpaid_amount : 0,
+      payment_account_id: '',
       payment_method: 'bank_transfer',
       paid_at: '',
       remark: '',
@@ -261,11 +270,13 @@ async function handlePay(row: OutsourceTaskResponse) {
 
 async function handlePaySubmit() {
   if (!payTask.value) return
+  if (!await payFormRef.value?.validate().catch(() => false)) return
   paySaving.value = true
   try {
     await createOutsourcePayment({
       vendor_id: payTask.value.vendor_id,
       task_id: payTask.value.task_id,
+      payment_account_id: payForm.value.payment_account_id,
       amount: payForm.value.amount,
       payment_method: payForm.value.payment_method || undefined,
       payee_company_name: payForm.value.payee_company_name || undefined,

@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.outsource_repo import OutsourceVendorRepository, OutsourceTaskRepository, OutsourcePaymentRepository
+from app.services.company_account_service import CompanyAccountService
 from app.services.number_generator import generate_vendor_no, generate_outsource_task_no, generate_outsource_payment_no
 from app.models.outsource import OutsourceVendor, OutsourcePayment, OutsourceTask
 from app.models.user import User
@@ -70,6 +71,7 @@ class OutsourceService:
             key: self._without_financial_fields(value) if isinstance(value, (dict, list)) else value
             for key, value in data.items()
             if key not in {
+                "payment_account_id",
                 "unit_price",
                 "total_amount",
                 "paid_amount",
@@ -1066,6 +1068,7 @@ class OutsourceService:
             unpaid_amount = Decimal(str(task.unpaid_amount or 0))
             if amount > unpaid_amount:
                 raise ValueError(f"付款金额超过任务未付金额 {unpaid_amount:.2f} 元")
+        data["payment_account_id"] = await CompanyAccountService(self.db).resolve(data.get("payment_account_id"))
         data["payment_no"] = await generate_outsource_payment_no(self.db)
         data["created_by"] = created_by
         payment = await self.payment_repo.create(data)
@@ -1122,6 +1125,7 @@ class OutsourceService:
                     "id": str(p.id),
                     "payment_no": p.payment_no,
                     "amount": float(p.amount),
+                    "payment_account_id": str(p.payment_account_id) if getattr(p, "payment_account_id", None) else None,
                     "payment_method": p.payment_method,
                     "payee_company_name": p.payee_company_name,
                     "paid_at": p.paid_at.isoformat() if p.paid_at else None,
@@ -1439,8 +1443,9 @@ class OutsourceService:
             "vendor_name": vendor_name,
             "task_id": str(p.task_id) if p.task_id else None,
             "amount": float(p.amount),
+            "payment_account_id": str(p.payment_account_id) if getattr(p, "payment_account_id", None) else None,
             "payment_method": p.payment_method,
-                    "payee_company_name": p.payee_company_name,
+            "payee_company_name": p.payee_company_name,
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
             "remark": p.remark,
             "created_by": str(p.created_by) if p.created_by else None,

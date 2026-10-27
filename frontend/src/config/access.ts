@@ -42,6 +42,7 @@ export type AccessKey =
   | 'statement'
   | 'projectCost'
   | 'costDebt'
+  | 'companyAccount'
   | 'supplier'
   | 'outsourcePayment'
   | 'reports'
@@ -117,6 +118,7 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   statement: ['admin', 'finance'],
   projectCost: ['admin', 'finance'],
   costDebt: ['admin', 'finance'],
+  companyAccount: ['admin', 'finance'],
   supplier: ['admin', 'finance', 'outsource_manager'],
   outsourcePayment: ['admin', 'finance'],
   reports: ['admin', 'sales', 'finance', 'manager'],
@@ -194,7 +196,7 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement
   aerialOperations: { allOf: ['resource_center:read', 'aerial:read'] },
   aerialFinance: { allOf: ['resource_center:read', 'aerial:read'] },
   aerialFinanceOperations: { allOf: ['resource_center:read', 'aerial:read'] },
-  finance: { anyOf: ['payment:read', 'expense:read', 'statement:read', 'outsource_payment:read', 'finance:view_cost', 'supplier:read'] },
+  finance: { anyOf: ['payment:read', 'expense:read', 'statement:read', 'outsource_payment:read', 'finance:view_cost', 'supplier:read', 'company_account:read'] },
   payment: ['payment:read'],
   expense: ['expense:read'],
   statement: ['statement:read'],
@@ -202,6 +204,7 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement
   // 应付管理会同时读取支出和项目成本，必须具备财务支出读取能力；
   // finance:view_cost 只代表成本字段可见，不能单独打开包含支出的应付台账。
   costDebt: ['expense:read'],
+  companyAccount: ['company_account:read'],
   supplier: { anyGroups: [['supplier_center:read', 'supplier:read'], ['outsource_center:read', 'outsource_vendor:read']] },
   outsourcePayment: ['outsource_payment:read'],
   reports: { anyOf: ['report:read', 'report:view_financial'] },
@@ -259,6 +262,7 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   ReceivablesView: 'payment',
   FinanceCenterDashboard: 'finance',
   ExpenseList: 'expense',
+  CompanyAccountList: 'companyAccount',
   StatementList: 'statement',
   StatementDetail: 'statement',
   ProjectCostList: 'projectCost',

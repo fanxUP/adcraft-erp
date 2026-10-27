@@ -42,6 +42,9 @@ class PayablePayment(Base, TimestampMixin):
     amount: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), nullable=False, comment="本次付款金额"
     )
+    payment_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("company_accounts.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     payment_method: Mapped[str] = mapped_column(
         String(32), nullable=False, comment="付款方式"
     )
@@ -58,3 +61,5 @@ class PayablePayment(Base, TimestampMixin):
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
+
+from app.models.company_account import CompanyAccount  # noqa: E402,F401
