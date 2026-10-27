@@ -47,6 +47,7 @@ class RoleService:
                 "id": str(r.id),
                 "name": r.name,
                 "description": r.description,
+                "is_builtin": r.name in BUILTIN_ROLE_NAMES,
                 "permissions": [self._serialize_permission(p) for p in r.permissions],
             }
             for r in roles
@@ -105,8 +106,11 @@ class RoleService:
         if not role:
             raise ValueError("角色不存在")
         requested_name = data.get("name")
-        if requested_name:
+        if requested_name is not None:
             requested_name = requested_name.strip()
+            if not requested_name:
+                raise ValueError("角色名称不能为空")
+            data = {**data, "name": requested_name}
             if requested_name != role.name:
                 if role.name in BUILTIN_ROLE_NAMES:
                     raise ValueError("系统内置角色不能重命名")
@@ -115,7 +119,6 @@ class RoleService:
                 duplicate = await self.repo.get_by_name(requested_name)
                 if duplicate and duplicate.id != role.id:
                     raise ValueError("角色名称已存在")
-                data = {**data, "name": requested_name}
         role = await self.repo.update(role, data)
         return {"id": str(role.id), "name": role.name, "description": role.description}
 
@@ -127,7 +130,7 @@ class RoleService:
             raise ValueError("系统内置角色不能删除")
         bound_users = await self._get_bound_users(role)
         if bound_users:
-            raise ValueError("该角色仍绑定在职用户，请先移除用户绑定后再删除")
+            raise ValueError("该角色仍绑定在职用户或停用账号，请先移除用户绑定后再删除")
         await self.repo.delete(role)
 
     async def set_role_permissions(self, role_id: UUID, permission_ids: list[str]) -> dict:
@@ -136,10 +139,8 @@ class RoleService:
             raise ValueError("角色不存在")
         perms = await self._resolve_permissions(permission_ids)
         existing_codes = {permission.code for permission in getattr(role, "permissions", ()) or ()}
-        status_issues = self._permission_status_issues(perms, existing_codes)
-        issues = validate_permission_set({permission.code for permission in perms})
-        issues.extend(status_issues)
-        issues.extend(await self._bound_user_issues(role, perms))
+        users = await self._get_bound_users(role)
+        issues = self._composition_issues(role, perms, users)
         if issues:
             # Return all errors in one response so the admin can fix the
             # composition without repeated save-and-fail cycles.
@@ -161,12 +162,9 @@ class RoleService:
             raise ValueError("角色不存在")
         perms = await self._resolve_permissions(permission_ids)
         existing_codes = {permission.code for permission in getattr(role, "permissions", ()) or ()}
-        status_issues = self._permission_status_issues(perms, existing_codes)
-        issues = validate_permission_set({permission.code for permission in perms})
-        issues.extend(status_issues)
-        issues.extend(await self._bound_user_issues(role, perms))
-        requested_codes = {permission.code for permission in perms}
         users = await self._get_bound_users(role)
+        issues = self._composition_issues(role, perms, users)
+        requested_codes = {permission.code for permission in perms}
         return {
             "role_id": str(role.id),
             "valid": not issues,
@@ -193,11 +191,19 @@ class RoleService:
             return list(users or [])
         return list(getattr(role, "users", ()) or ())
 
-    async def _bound_user_issues(self, role, requested_permissions: list) -> list:
-        """Simulate the new role against every active user's other roles."""
+    def _composition_issues(self, role, perms: list, users: list) -> list:
+        existing_codes = {permission.code for permission in getattr(role, "permissions", ()) or ()}
+        issues = validate_permission_set({permission.code for permission in perms})
+        issues.extend(self._permission_status_issues(perms, existing_codes))
+        issues.extend(self._bound_user_issues(role, perms, users))
+        return issues
+
+    @staticmethod
+    def _bound_user_issues(role, requested_permissions: list, users: list) -> list:
+        """Include disabled accounts so reactivation cannot revive conflicts."""
         requested_codes = {permission.code for permission in requested_permissions}
         issues: list = []
-        for user in await self._get_bound_users(role):
+        for user in users:
             effective_codes: set[str] = set()
             for assigned_role in getattr(user, "roles", ()) or ():
                 if str(getattr(assigned_role, "id", "")) == str(role.id):

@@ -230,6 +230,10 @@ class UserService:
             roles = await self.repo.get_roles(role_ids_uuid)
             self._validate_roles(role_ids, roles)
 
+        if requested_active is True and user.is_active is not True and roles is None:
+            current_roles = list(user.roles)
+            self._validate_roles([str(role.id) for role in current_roles], current_roles)
+
         if should_disable:
             user.is_active = False
             user.token_version = (getattr(user, "token_version", 1) or 1) + 1

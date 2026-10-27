@@ -7,6 +7,7 @@ export interface RoleItem {
   id: string
   name: string
   description?: string
+  is_builtin?: boolean
   permissions: PermissionItem[]
 }
 

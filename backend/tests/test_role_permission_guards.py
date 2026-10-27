@@ -8,6 +8,7 @@ import pytest
 from app.services.role_service import RoleService
 from app.services.user_service import UserService
 from app.core.permissions import validate_role_resource_permissions
+from types import SimpleNamespace
 
 
 def _role(name: str, role_id: str = "11111111-1111-1111-1111-111111111111", permissions=None):
@@ -222,3 +223,69 @@ def test_init_script_has_an_explicit_custom_role_preservation_branch():
     source = (Path(__file__).parents[1] / "scripts" / "init_app.py").read_text()
     assert "if role_name not in ROLE_NAMES" in source
     assert "continue" in source
+
+
+@pytest.mark.asyncio
+async def test_role_preview_and_save_reject_disabled_users_conflicts_without_writes():
+    role_id = UUID("11111111-1111-1111-1111-111111111111")
+    role = _role("custom-delivery", str(role_id), ["production_task:read"])
+    requested = [
+        SimpleNamespace(id=UUID(int=1), code="production_task:read", name="查看制作任务", status="active"),
+        SimpleNamespace(id=UUID(int=2), code="production_task:update", name="修改制作任务", status="active"),
+    ]
+    disabled_user = SimpleNamespace(is_active=False, roles=[
+        role, _role("commercial", str(UUID(int=3)), ["order:read", "order:view_price"]),
+    ])
+    service = RoleService(AsyncMock())
+    service.repo.get_by_id = AsyncMock(return_value=role)
+    service.repo.get_permissions_by_ids = AsyncMock(return_value=requested)
+    service.repo.get_bound_users = AsyncMock(return_value=[disabled_user])
+    service.repo.set_permissions = AsyncMock()
+    ids = [str(p.id) for p in requested]
+
+    preview = await service.preview_role_permissions(role_id, ids)
+    assert preview["valid"] is False
+    assert preview["affected_user_count"] == 1
+    assert any("已绑定用户" in issue["message"] for issue in preview["issues"])
+    service.repo.get_bound_users.assert_awaited_once_with(role_id)
+    service.repo.set_permissions.assert_not_awaited()
+
+    with pytest.raises(ValueError, match="已绑定用户"):
+        await service.set_role_permissions(role_id, ids)
+    service.repo.set_permissions.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_bound_user_query_includes_disabled_but_excludes_deleted_users():
+    from sqlalchemy.dialects import postgresql
+    from app.repositories.role_repo import RoleRepository
+
+    db = AsyncMock()
+    db.execute.return_value = MagicMock()
+    db.execute.return_value.scalars.return_value.unique.return_value.all.return_value = []
+    await RoleRepository(db).get_bound_users(UUID(int=1))
+    query = str(db.execute.await_args.args[0].compile(dialect=postgresql.dialect()))
+    assert "users.deleted_at IS NULL" in query
+    assert "users.is_active IS true" not in query
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["", "   "])
+async def test_role_update_rejects_empty_name_before_mutation(name):
+    service = RoleService(AsyncMock())
+    service.repo.get_by_id = AsyncMock(return_value=_role("custom"))
+    service.repo.update = AsyncMock()
+    with pytest.raises(ValueError, match="角色名称不能为空"):
+        await service.update_role(UUID(int=1), {"name": name})
+    service.repo.update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_role_list_identifies_all_builtin_roles():
+    from app.services.role_service import BUILTIN_ROLE_NAMES
+
+    service = RoleService(AsyncMock())
+    service.repo.list_roles = AsyncMock(return_value=[_role(name) for name in [*BUILTIN_ROLE_NAMES, "custom"]])
+    result = await service.list_roles()
+    assert all(role["is_builtin"] for role in result if role["name"] != "custom")
+    assert next(role for role in result if role["name"] == "custom")["is_builtin"] is False

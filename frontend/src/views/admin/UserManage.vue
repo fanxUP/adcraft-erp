@@ -2,6 +2,10 @@
   <AppPage>
     <PageHeader title="用户管理" description="员工账号由员工档案自动生成；此处维护角色、启停状态和密码操作。" />
 
+    <el-alert v-if="rolesError" title="角色加载失败，暂时无法编辑账号，避免误清空原有授权。" type="error" :closable="false" show-icon>
+      <el-button text type="primary" :loading="rolesLoading" @click="loadRoles">重新加载角色</el-button>
+    </el-alert>
+
     <DataTableShell :state="tableState" aria-label="用户列表">
       <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
       <el-table :data="list" v-loading="loading" stripe>
@@ -41,7 +45,7 @@
       </el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+          <el-button text type="primary" size="small" :disabled="!rolesReady || saving" @click="openEdit(row)">编辑</el-button>
           <el-button text type="warning" size="small" @click="handleResetPwd(row)">重置密码</el-button>
           <el-button v-if="row.username !== 'admin' && !row.linked_employee" text type="danger" size="small" @click="handleDelete(row)">删除</el-button>
         </template>
@@ -53,8 +57,8 @@
       </template>
     </DataTableShell>
 
-    <el-dialog v-model="showDialog" title="编辑用户账号" width="480px" :close-on-click-modal="false">
-      <el-form :model="form" label-width="80px">
+    <el-dialog v-model="showDialog" title="编辑用户账号" width="min(480px, 94vw)" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
+      <el-form :model="form" label-width="80px" :disabled="saving">
         <el-form-item label="工号" required>
           <el-input v-model="form.username" disabled placeholder="员工工号" />
         </el-form-item>
@@ -68,17 +72,20 @@
           <el-input v-model="form.email" placeholder="邮箱" />
         </el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="form.role_ids" multiple style="width: 100%" placeholder="选择角色">
+          <el-select v-model="form.role_ids" multiple filterable :disabled="!rolesReady" style="width: 100%" placeholder="选择角色">
             <el-option v-for="r in roleOptions" :key="r.id" :label="roleLabel(r.name)" :value="r.id" />
           </el-select>
+          <div class="role-hint">多个角色的权限合并生效，保存时会检查最终权限组合。</div>
+          <div v-if="!form.role_ids.length" class="role-hint">未分配角色，该账号将没有业务操作权限。</div>
+          <div v-for="role in assignedRoles" :key="role.id" class="role-hint">{{ roleLabel(role.name) }}：{{ role.description || `${role.permissions.length} 项权限` }}</div>
         </el-form-item>
         <el-form-item label="状态">
           <el-switch v-model="form.is_active" active-text="启用" inactive-text="停用" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
-        <el-button :loading="saving" @click="handleSave" type="primary">保存</el-button>
+        <el-button :disabled="saving" @click="showDialog = false">取消</el-button>
+        <el-button :loading="saving" :disabled="!rolesReady" @click="handleSave" type="primary">保存</el-button>
       </template>
     </el-dialog>
   </AppPage>
@@ -91,13 +98,9 @@ import { getRoles, type RoleItem } from '@/api/admin'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UserResponse } from '@/types/api'
 import { AppPage, DataTableShell, PageHeader, StatePanel } from '@/components/ui'
+import { roleLabel, resolveUserRoleIds } from '@/utils/permissionEditor'
+import { getErrorMessage } from '@/utils/error'
 
-const ROLE_MAP: Record<string, string> = {
-  admin: '管理员', sales: '销售', designer: '设计师',
-  production: '生产', installer: '安装', finance: '财务', resource_manager: '资源管理员',
-  outsource_manager: '外协管理员', manager: '经理',
-}
-function roleLabel(name: string) { return ROLE_MAP[name] || name }
 const DEPARTMENT_MAP: Record<string, string> = {
   design: '设计部', production: '生产部', installation: '安装部',
   sales: '销售部', finance: '财务部', admin: '行政部',
@@ -115,6 +118,10 @@ const showDialog = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
 const roleOptions = ref<RoleItem[]>([])
+const rolesLoading = ref(true)
+const rolesError = ref(false)
+const rolesReady = computed(() => !rolesLoading.value && !rolesError.value)
+const assignedRoles = computed(() => roleOptions.value.filter(role => form.role_ids.includes(role.id)))
 
 const tableState = computed(() => loadError.value ? 'error' as const : loading.value ? 'loading' as const : list.value.length ? 'ready' as const : 'empty' as const)
 
@@ -140,10 +147,22 @@ async function fetchData() {
 }
 
 async function loadRoles() {
-  try { roleOptions.value = await getRoles() } catch { /* ignore */ }
+  rolesLoading.value = true
+  rolesError.value = false
+  try { roleOptions.value = await getRoles() }
+  catch { rolesError.value = true }
+  finally { rolesLoading.value = false }
 }
 
 function openEdit(row: UserResponse) {
+  if (!rolesReady.value || saving.value) return
+  let roleIds: string[]
+  try { roleIds = resolveUserRoleIds(roleOptions.value, row.roles) }
+  catch (error) {
+    rolesError.value = true
+    ElMessage.error(getErrorMessage(error))
+    return
+  }
   isEditing.value = true
   editingId.value = row.id
   form.username = row.username
@@ -151,12 +170,12 @@ function openEdit(row: UserResponse) {
   form.phone = row.phone || ''
   form.email = row.email || ''
   form.is_active = row.is_active
-  // Map role names to role IDs
-  form.role_ids = roleOptions.value.filter(r => row.roles.includes(r.name)).map(r => r.id)
+  form.role_ids = roleIds
   showDialog.value = true
 }
 
 async function handleSave() {
+  if (saving.value || !rolesReady.value || !editingId.value) return
   saving.value = true
   try {
     await updateUser(editingId.value, {
@@ -170,7 +189,7 @@ async function handleSave() {
     showDialog.value = false
     resetForm()
     fetchData()
-  } catch { /* handled by interceptor */ } finally { saving.value = false }
+  } catch (error) { ElMessage.error(getErrorMessage(error)) } finally { saving.value = false }
 }
 
 async function handleResetPwd(row: UserResponse) {
@@ -201,4 +220,5 @@ onMounted(() => { fetchData(); loadRoles() })
 
 <style scoped>
 .linked-department { color: var(--el-text-color-secondary); font-size: 12px; }
+.role-hint { width: 100%; color: var(--el-text-color-secondary); font-size: 13px; line-height: 1.7; }
 </style>

@@ -1,6 +1,8 @@
 """Tests for UserService: CRUD, validation."""
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
+from uuid import UUID
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -246,6 +248,36 @@ async def test_update_user_validates_role_combination_before_mutating_user(servi
 
     mock_repo.update.assert_not_awaited()
     mock_repo.set_roles.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reactivation_validates_existing_roles_when_role_ids_are_omitted(service, mock_repo):
+    user = make_mock_user(is_active=False)
+    user.roles = [
+        SimpleNamespace(id=UUID(int=1), name="operator", permissions=[
+            SimpleNamespace(code="design_task:read"), SimpleNamespace(code="design_task:update"),
+        ]),
+        SimpleNamespace(id=UUID(int=2), name="finance", permissions=[SimpleNamespace(code="payment:read")]),
+    ]
+    mock_repo.get_by_id.return_value = user
+    service._linked_employee = AsyncMock(return_value=None)
+    with pytest.raises(ValueError, match="任务执行能力不能与价格或财务能力同时启用"):
+        await service.update_user(user.id, {"is_active": True, "real_name": "不应写入"})
+    mock_repo.update.assert_not_awaited()
+    assert user.is_active is False
+
+
+@pytest.mark.asyncio
+async def test_reactivation_can_replace_invalid_roles_with_a_valid_set(service, mock_repo):
+    user = make_mock_user(is_active=False)
+    user.roles = [SimpleNamespace(id=UUID(int=1), name="legacy", permissions=[SimpleNamespace(code="unknown:legacy")])]
+    safe_role = SimpleNamespace(id=UUID(int=2), name="reader", permissions=[SimpleNamespace(code="order:read")])
+    mock_repo.get_by_id.return_value = user
+    mock_repo.get_roles.return_value = [safe_role]
+    service._linked_employee = AsyncMock(return_value=None)
+    await service.update_user(user.id, {"is_active": True, "role_ids": [str(safe_role.id)]})
+    mock_repo.update.assert_awaited_once()
+    mock_repo.set_roles.assert_awaited_once_with(user, [safe_role])
 
 
 # --- Delete Tests ---

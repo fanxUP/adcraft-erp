@@ -55,7 +55,7 @@ class RoleRepository:
         return list(result.scalars().all())
 
     async def get_bound_users(self, role_id: UUID) -> list[User]:
-        """Load active users and their complete role-permission union.
+        """Load non-deleted users, including disabled accounts, and their roles.
 
         Role edits are validated against the effective permissions of every
         affected user before the association table is changed.  Eager loading
@@ -68,7 +68,6 @@ class RoleRepository:
             .where(
                 user_roles.c.role_id == role_id,
                 User.deleted_at.is_(None),
-                User.is_active.is_(True),
             )
             .options(selectinload(User.roles).selectinload(Role.permissions))
         )
