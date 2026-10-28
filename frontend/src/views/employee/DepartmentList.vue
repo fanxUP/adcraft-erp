@@ -1,7 +1,7 @@
 <template>
   <AppPage>
     <PageHeader title="部门管理" description="统一维护组织部门、启用状态和排序。">
-      <template #actions><el-button @click="openCreate" type="primary">新建部门</el-button></template>
+      <template #actions><el-button v-if="auth.can('department:manage')" @click="openCreate" type="primary">新建部门</el-button></template>
     </PageHeader>
     <DataTableShell :state="tableState" aria-label="部门列表">
       <template #error><StatePanel state="error" action-label="重试" @action="fetchData" /></template>
@@ -12,7 +12,7 @@
       <el-table-column prop="sort_order" label="排序" width="70" />
       <el-table-column prop="description" label="描述" min-width="180" />
       <el-table-column label="操作" width="200" fixed="right">
-        <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
+        <template #default="{row}"><el-button v-if="auth.can('department:manage')" text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button v-if="auth.can('department:manage')" text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
       </el-table>
     </DataTableShell>
@@ -24,11 +24,14 @@
         <el-form-item label="描述"><el-input v-model="form.description" type="textarea" :rows="2" /></el-form-item>
         <el-form-item label="启用"><el-switch v-model="form.is_active" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
+      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button v-if="auth.can('department:manage')" @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
   </AppPage>
 </template>
 <script setup lang="ts">
+import { useAuthStore } from '@/stores/auth'
+const auth = useAuthStore()
+
 import { ref, computed, onMounted } from "vue"
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment, type DepartmentItem } from "@/api/departments"
 import { ElMessage, ElMessageBox } from "element-plus"

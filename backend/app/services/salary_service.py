@@ -9,6 +9,8 @@ from app.repositories.salary_repo import SalaryRecordRepository
 from app.models.employee import Employee
 from app.models.salary_rule import SalaryRule
 from app.models.attendance import AttendanceRecord
+from app.models.salary import SalaryRecord
+from app.services.attendance_summary_service import AttendanceSummaryService, month_bounds
 from app.models.salary_grid import SalaryItem, SalaryItemTemplate, SalaryGridValue, SalaryParam, SalaryParamValue
 from app.services.salary_formula import (
     FUNCTIONS,
@@ -32,7 +34,7 @@ class SalaryRecordService:
         self.repo = SalaryRecordRepository(db)
 
     async def _load_employee(self, eid: UUID):
-        r = await self.db.execute(select(Employee).where(Employee.id == eid, Employee.deleted_at.is_(None)))
+        r = await self.db.execute(select(Employee).where(Employee.id == eid))
         return r.scalar_one_or_none()
 
     async def list_records(self, page=1, page_size=20, employee_id=None, month=None, payment_status=None):
@@ -62,18 +64,45 @@ class SalaryRecordService:
     async def create_record(self, data):
         if isinstance(data.get("employee_id"), str):
             data["employee_id"] = UUID(data["employee_id"])
-        return self._d(await self.repo.create(data))
+        self._check_month(data["month"])
+        await self._lock_employee(data["employee_id"])
+        if data.get("payment_status") not in {None, "pending", "calculated"}:
+            raise ValueError("请通过登记发放填写实际付款信息")
+        if await self._existing_record(data["employee_id"], data["month"]):
+            raise ValueError("该员工本月已有工资记录")
+        record = await self.repo.create(data)
+        await self._sync_record_cells(record)
+        return self._d(record)
+
+    async def _sync_record_cells(self, record):
+        values = {}
+        for key, col in self.RECORD_MAP.items():
+            value = float(getattr(record, col) or 0)
+            values[key] = value
+            await self._upsert_grid_value(record.month, record.employee_id, key, value, "manual")
+        await self._capture(record, await self._month_items(record.month), values)
 
     async def update_record(self, sid: UUID, data):
         r = await self.repo.get_by_id(sid)
         if not r:
             raise ValueError("工资记录不存在")
-        return self._d(await self.repo.update(r, data))
+        await self._lock_employee(r.employee_id)
+        r = await self.repo.get_by_id(sid)
+        self._assert_editable(r)
+        if data.get("payment_status") not in {None, "pending", "calculated"} or data.get("paid_at"):
+            raise ValueError("请通过登记发放填写实际付款信息")
+        await self.repo.update(r, data)
+        await self._sync_record_cells(r)
+        return self._d(r)
 
     async def delete_record(self, sid: UUID):
         r = await self.repo.get_by_id(sid)
         if not r:
             return False
+        await self._lock_employee(r.employee_id)
+        r = await self.repo.get_by_id(sid)
+        self._assert_editable(r)
+        await self.db.execute(delete(SalaryGridValue).where(SalaryGridValue.month == r.month, SalaryGridValue.employee_id == r.employee_id))
         await self.repo.delete(r)
         return True
 
@@ -81,6 +110,9 @@ class SalaryRecordService:
         """批量生成指定月份的工资记录"""
         created = []
         for eid in employee_ids:
+            await self._lock_employee(eid)
+            if await self._existing_record(eid, month):
+                raise ValueError("该员工本月已有工资记录")
             bs = base_salary_map.get(str(eid), 0)
             data = {
                 "employee_id": eid,
@@ -114,42 +146,55 @@ class SalaryRecordService:
         return await self.repo.get_by_employee_month(employee_id, month)
 
     async def _monthly_overtime_hours(self, employee_id: UUID, start: date, end: date) -> float:
-        r = await self.db.execute(
-            select(func.coalesce(func.sum(AttendanceRecord.overtime_hours), 0))
-            .where(
-                AttendanceRecord.employee_id == employee_id,
-                AttendanceRecord.date >= start,
-                AttendanceRecord.date <= end,
-            )
-        )
-        return float(r.scalar() or 0)
+        stats = await self._attendance_stats(start, end)
+        return float(stats.get(str(employee_id), {}).get("overtime") or 0)
 
     async def _attendance_stats(self, start: date, end: date) -> dict:
-        """统计月内每个员工的考勤：出勤/半天/旷工/未出勤记录数、总记录数、加班小时。"""
-        r = await self.db.execute(
-            select(
-                AttendanceRecord.employee_id,
-                func.count().filter(AttendanceRecord.check_in_status == "normal").label("normal"),
-                func.count().filter(AttendanceRecord.check_in_status == "half_day").label("half"),
-                func.count().filter(AttendanceRecord.check_in_status == "missed").label("missed"),
-                func.count().filter(AttendanceRecord.check_in_status == "absent").label("absent"),
-                func.count().label("records"),
-                func.coalesce(func.sum(AttendanceRecord.overtime_hours), 0).label("overtime"),
-            )
-            .where(AttendanceRecord.date >= start, AttendanceRecord.date <= end)
-            .group_by(AttendanceRecord.employee_id)
-        )
-        result = {}
-        for row in r:
-            result[str(row.employee_id)] = {
-                "normal": int(row.normal or 0),
-                "half": int(row.half or 0),
-                "missed": int(row.missed or 0),
-                "absent": int(row.absent or 0),
-                "records": int(row.records or 0),
-                "overtime": float(row.overtime or 0),
-            }
-        return result
+        return {str(r["employee"].id): r["summary"]
+                for r in await AttendanceSummaryService(self.db).load(start, end)}
+
+    async def _month_employees(self, month):
+        start, end = month_bounds(month)
+        return await AttendanceSummaryService(self.db).employees_for_period(start, end)
+
+    async def _lock_employee(self, eid):
+        # Lock the stable parent even when the monthly record does not exist yet.
+        result = await self.db.execute(select(Employee.id).where(Employee.id == eid).with_for_update())
+        if result.scalar_one_or_none() is None:
+            raise ValueError("员工不存在")
+
+    @staticmethod
+    def _snapshot(record):
+        value = getattr(record, "snapshot", None)
+        return value if isinstance(value, dict) else {}
+
+    @staticmethod
+    def _assert_editable(record):
+        if record and (record.payment_status == "paid" or isinstance(getattr(record, "paid_at", None), datetime) or isinstance(getattr(record, "expense_id", None), UUID)):
+            raise ValueError("工资已发放或已登记支出，不能覆盖金额、重新计算或撤回状态；请通过补发支出记录更正")
+
+    async def _month_items(self, month):
+        records, _ = await self.repo.list(0, 10000, month=month)
+        for record in records:
+            if self._snapshot(record).get("items"):
+                return self._snapshot(record)["items"]
+        # Legacy months retain saved columns, including now inactive indicators.
+        values = await self._grid_values(month)
+        items = await self.list_items()
+        keys = {key for _, key in values}
+        return [i for i in items if i["key"] in keys or i["is_active"]]
+
+    async def _capture(self, record, items, values, rule=None, attendance=None, params=None):
+        emp = await self._load_employee(record.employee_id)
+        prior = self._snapshot(record)
+        record.snapshot = {**prior, "version": 1, "items": items, "values": values,
+            "employee": prior.get("employee") or (dict(employee_no=emp.employee_no, employee_name=emp.name, department=emp.department) if emp else {}),
+            "rule": dict(id=str(rule.id), effective_date=rule.effective_date.isoformat(),
+                         base_salary=float(rule.base_salary or 0), social_insurance=float(rule.social_insurance or 0)) if rule else prior.get("rule"),
+            "attendance": attendance if attendance is not None else prior.get("attendance"),
+            "params": params if params is not None else prior.get("params"),
+        }
+        await self.db.flush()
 
     async def generate_month(self, month: str, employee_ids: list[UUID] | None = None) -> dict:
         """按工资规则自动生成指定月份的工资记录。
@@ -172,13 +217,14 @@ class SalaryRecordService:
         start = date(year, mon, 1)
         end = date(year, mon, monthrange(year, mon)[1])
 
-        targets = employee_ids if employee_ids else [e.id for e in await self._active_employees()]
+        targets = employee_ids if employee_ids else [e.id for e in await self._month_employees(month)]
 
         created = 0
         skipped_no_rule = 0
         skipped_exists = 0
         errors = []
         for eid in targets:
+            await self._lock_employee(eid)
             rule = await self._latest_rule(eid, end)
             if rule is None:
                 skipped_no_rule += 1
@@ -210,7 +256,12 @@ class SalaryRecordService:
                 "net_salary": net,
                 "payment_status": "pending",
             }
-            await self.repo.create(data)
+            record = await self.repo.create(data)
+            values = {key: data.get(col, 0) for key, col in self.RECORD_MAP.items()}
+            for key, value in values.items():
+                await self._upsert_grid_value(month, eid, key, value, "computed")
+            await self._capture(record, await self._month_items(month), values, rule,
+                                (await self._attendance_stats(start, end)).get(str(eid), {}), {})
             created += 1
 
         return {
@@ -247,8 +298,6 @@ class SalaryRecordService:
         prev_map = {str(r.employee_id): float(r.net_salary or 0) for r in prev_records}
         att_map = await self._attendance_stats(start, end)
 
-        # 月内非周末天数（未出勤天数 = 无记录的非周末天数 + absent 记录数）
-        non_weekend = sum(1 for d in range(1, end.day + 1) if date(year, mon, d).weekday() < 5)
 
         # 全勤奖优先取工资网格算出的值（无则回退工资规则标准）
         att_grid = await self._grid_values(month, ["att_award"])
@@ -261,6 +310,8 @@ class SalaryRecordService:
             att = att_map.get(str(eid), {"normal": 0, "half": 0, "missed": 0, "absent": 0,
                                          "records": 0, "overtime": 0})
 
+            if self._snapshot(r).get("attendance") is not None:
+                att = self._snapshot(r)["attendance"]
             base = float(r.base_salary or 0)
             overtime_pay = float(r.overtime_pay or 0)
             # 绩效/伙食优先取工资记录值（工资网格生成/手改时已同步），无则回退规则标准
@@ -269,21 +320,20 @@ class SalaryRecordService:
             attendance_bonus = att_grid.get((str(eid), "att_award"))
             if attendance_bonus is None:
                 attendance_bonus = 0.0  # 全勤奖标准已从规则移除，回退 0
-            social = float(rule.social_insurance) if rule and rule.social_insurance else 0.0  # 社保金额
+            snap = self._snapshot(r)
+            social = float((snap.get("rule") or {}).get("social_insurance", r.deduction or 0))
 
             attend_days = att["normal"] + att["half"] * 0.5
-            absent_days = max(0, non_weekend - att["records"]) + att["absent"]
+            absent_days = att["absent"]
             total_salary = round(base + overtime_pay, 2)
-            gross = round(total_salary + performance + meal + attendance_bonus, 2)
+            gross = float(self._snapshot(r).get("values", {}).get("gross", float(r.net_salary or 0) + float(r.deduction or 0)))
             social_deduction = round(social, 2)
-            net = round(gross - social_deduction, 2)
-            if net < 0:
-                net = 0.0
+            net = float(r.net_salary or 0)
 
             rows.append({
-                "employee_no": emp.employee_no if emp else None,
-                "department": emp.department if emp else None,
-                "employee_name": emp.name if emp else None,
+                "employee_no": snap.get("employee", {}).get("employee_no", emp.employee_no if emp else None),
+                "department": snap.get("employee", {}).get("department", emp.department if emp else None),
+                "employee_name": snap.get("employee", {}).get("employee_name", emp.name if emp else None),
                 "attend_days": attend_days,
                 "missed_days": att["missed"],
                 "attendance_bonus": attendance_bonus,
@@ -312,8 +362,7 @@ class SalaryRecordService:
 
     @staticmethod
     def _check_month(month):
-        if len(month) != 7 or month[4] != "-" or not month[:4].isdigit() or not month[5:].isdigit():
-            raise ValueError("月份格式应为 YYYY-MM")
+        month_bounds(month)
 
     async def list_items(self):
         """全部指标（含停用），按 sort_order 排序。"""
@@ -412,7 +461,9 @@ class SalaryRecordService:
             raise ValueError("指标不存在")
         if item.is_builtin:
             raise ValueError("内置指标不可删除，可在设置中停用")
-        await self.db.execute(delete(SalaryGridValue).where(SalaryGridValue.item_key == item.key))
+        used = await self.db.scalar(select(func.count()).select_from(SalaryGridValue).where(SalaryGridValue.item_key == item.key))
+        if used:
+            raise ValueError("指标已有历史工资数据，请停用以保留历史")
         await self.db.delete(item)
         await self.db.flush()
         return True
@@ -585,9 +636,11 @@ class SalaryRecordService:
             "attend_days": normal + half * 0.5,
             "half_days": half,
             "missed_days": float(att.get("missed") or 0),
-            "absent_days": float(max(0, work_days - records)) + float(att.get("absent") or 0),
+            "absent_days": float(att.get("absent") or 0),
+            "leave_days": float(att.get("leave") or 0),
+            "unregistered_days": float(att.get("unregistered") or 0),
             "records": records,
-            "work_days": float(work_days),
+            "work_days": float(att.get("work_days", work_days)),
         }
 
     async def _grid_values(self, month, item_keys=None, with_source=False):
@@ -661,16 +714,18 @@ class SalaryRecordService:
         }
         existing = await self._existing_record(eid, month)
         if existing:
-            await self.repo.update(existing, data)
+            self._assert_editable(existing)
+            data["payment_status"] = "calculated"
+            return await self.repo.update(existing, data)
         else:
             data.update({
                 "employee_id": eid,
                 "month": month,
-                "payment_status": "pending",
+                "payment_status": "calculated",
                 "commission": 0,
                 "remark": None,
             })
-            await self.repo.create(data)
+            return await self.repo.create(data)
 
     # ── 工资参数（每月手工填一个值，公式可引用）──────────────────────────────
 
@@ -791,7 +846,7 @@ class SalaryRecordService:
         end = date(year, mon, monthrange(year, mon)[1])
         work_days = sum(1 for d in range(1, end.day + 1) if date(year, mon, d).weekday() < 5)
 
-        items = await self.list_items()
+        items = await self._month_items(month)
         active = [i for i in items if i["is_active"]]
         if not active:
             raise ValueError("请先在「指标设置」中启用至少一个指标")
@@ -805,13 +860,22 @@ class SalaryRecordService:
         extra = manual_keys | set(params)
         order = build_dependency_order(formula_map, extra)  # 循环引用→FormulaError(ValueError)
 
-        targets = employee_ids or [e.id for e in await self._active_employees()]
+        targets = employee_ids or [e.id for e in await self._month_employees(month)]
         att_map = await self._attendance_stats(start, end)
         existing = await self._grid_values(month, with_source=True)  # {(eid,key):(value,source)}
 
         computed = 0
+        skipped_locked = 0
         errors = []
-        for eid in targets:
+        warnings = []
+        for eid in sorted(targets, key=str):
+            await self._lock_employee(eid)
+            prior = await self._existing_record(eid, month)
+            try:
+                self._assert_editable(prior)
+            except ValueError:
+                skipped_locked += 1
+                continue
             rule = await self._latest_rule(eid, end)
             att = att_map.get(str(eid), {"normal": 0, "half": 0, "missed": 0, "absent": 0,
                                          "records": 0, "overtime": 0})
@@ -837,39 +901,67 @@ class SalaryRecordService:
                         evaluate_formula(formula_map[key], {**raw, **vals}, active_keys), 2
                     )
                 await self._replace_grid_values(month, eid, vals, set(preserve))
-                await self._upsert_record(month, eid, vals)
+                record = await self._upsert_record(month, eid, vals)
+                await self._capture(record, items, vals, rule, att, params)
+                if att.get("unregistered") or att.get("missed") or att.get("conflicts"):
+                    warnings.append(f"{await self._emp_name(eid)}：考勤有未登记、缺卡或请假冲突，请核对")
                 computed += 1
             except FormulaError as e:
                 errors.append(f"{await self._emp_name(eid)}: {e}")
-        return {"month": month, "computed": computed, "errors": errors}
+        return {"month": month, "computed": computed, "skipped_locked": skipped_locked, "errors": errors, "warnings": warnings}
 
     async def _emp_name(self, eid: UUID):
         emp = await self._load_employee(eid)
         return emp.name if emp else str(eid)
 
     async def get_grid(self, month):
-        """考勤式工资网格数据：指标列 + 全部在职员工行 + 网格值 + 支付状态。"""
         self._check_month(month)
-        items = [i for i in await self.list_items() if i["is_active"]]
-        employees = await self._active_employees()
+        items = await self._month_items(month)
+        employees = {str(e.id): e for e in await self._month_employees(month)}
         gv_map = await self._grid_values(month)
         records, _ = await self.repo.list(0, 10000, month=month)
         status_map = {str(r.employee_id): r for r in records}
+        for rec in records:
+            if str(rec.employee_id) not in employees:
+                employees[str(rec.employee_id)] = await self._load_employee(rec.employee_id)
         rows = []
-        for e in employees:
-            eid = str(e.id)
+        for eid, e in employees.items():
             rec = status_map.get(eid)
-            rows.append({
-                "employee_id": eid,
-                "employee_no": e.employee_no,
-                "employee_name": e.name,
-                "department": e.department,
-                "values": {it["key"]: gv_map.get((eid, it["key"])) for it in items},
-                "payment_status": rec.payment_status if rec else None,
-                "remark": rec.remark if rec else None,
-                "paid_at": rec.paid_at.isoformat() if rec and rec.paid_at else None,
-            })
+            snap = self._snapshot(rec) if rec else {}
+            identity = snap.get("employee") or {}
+            vals = {it["key"]: gv_map.get((eid, it["key"])) for it in items}
+            if rec:
+                for key, col in self.RECORD_MAP.items():
+                    if key in vals and vals[key] is None:
+                        value = getattr(rec, col)
+                        vals[key] = float(value) if value is not None else None
+            if snap.get("values") and rec and rec.payment_status == "paid":
+                vals.update(snap["values"])
+            status, paid, remaining, paid_at = await self._payment_summary(rec)
+            rows.append(dict(employee_id=eid,
+                employee_no=identity.get("employee_no", e.employee_no if e else ""),
+                employee_name=identity.get("employee_name", e.name if e else "历史员工"),
+                department=identity.get("department", e.department if e else None), values=vals,
+                payment_status=status, paid_amount=paid, remaining_amount=remaining, paid_at=paid_at,
+                locked=bool(rec and (rec.payment_status == "paid" or rec.paid_at or rec.expense_id)),
+                lock_reason=("已登记支出，金额已锁定" if rec.expense_id else "含历史发放信息，金额已锁定") if rec and (rec.payment_status == "paid" or rec.paid_at or rec.expense_id) else None,
+                expense_id=str(rec.expense_id) if rec and rec.expense_id else None,
+                has_snapshot=bool(snap), remark=rec.remark if rec else None))
         return {"month": month, "items": items, "rows": rows}
+
+    async def _payment_summary(self, rec):
+        if not rec:
+            return None, 0, 0, None
+        if rec.expense_id:
+            from app.services.payable_service import PayableService
+            data = await PayableService(self.db).get_payable("expense", rec.expense_id)
+            if data is None:
+                raise ValueError("工资关联支出不存在，请核查，不能重新登记发放")
+            paid = float(data["paid_amount"])
+            remaining = float(data["remaining_amount"])
+            return "paid" if remaining == 0 else "partial" if paid else "calculated", paid, remaining, max((v["paid_at"] for v in data["payments"] if not v["is_voided"] and v["paid_at"]), default=None)
+        paid = float(rec.net_salary or 0) if rec.payment_status == "paid" else 0
+        return rec.payment_status, paid, float(rec.net_salary or 0) - paid, rec.paid_at.isoformat() if rec.paid_at else None
 
     async def save_cells(self, month, cells=None, payments=None, remarks=None):
         """保存网格手工修改的单元格、支付状态与备注。
@@ -879,7 +971,14 @@ class SalaryRecordService:
         单元格写 salary_grid_values(source=manual)，映射列/备注同步 salary_records。
         """
         self._check_month(month)
-        items = await self.list_items()
+        affected = sorted({UUID(v["employee_id"]) for v in [*(cells or []), *(payments or []), *(remarks or [])]}, key=str)
+        for eid in affected:
+            await self._lock_employee(eid)
+            self._assert_editable(await self._existing_record(eid, month))
+        for p in payments or []:
+            if p.get("payment_status") not in {"pending", "calculated"}:
+                raise ValueError("请通过登记发放填写实际付款日期、金额和账户")
+        items = await self._month_items(month)
         valid_keys = {i["key"] for i in items}
         errors = []
         saved = 0
@@ -918,21 +1017,10 @@ class SalaryRecordService:
                     await self.repo.create(data)
         for p in payments or []:
             eid = UUID(p["employee_id"])
-            status = p.get("payment_status")
             existing = await self._existing_record(eid, month)
-            if existing:
-                upd = {"payment_status": status}
-                if status == "paid":
-                    upd["paid_at"] = existing.paid_at or datetime.utcnow()
-                else:
-                    upd["paid_at"] = None
-                await self.repo.update(existing, upd)
-            else:
-                await self.repo.create({
-                    "employee_id": eid, "month": month,
-                    "base_salary": 0, "net_salary": 0,
-                    "payment_status": status, "commission": 0,
-                })
+            if not existing:
+                raise ValueError("请先核算工资")
+            await self.repo.update(existing, {"payment_status": p["payment_status"], "paid_at": None})
         for rm in remarks or []:
             eid = UUID(rm["employee_id"])
             existing = await self._existing_record(eid, month)
@@ -945,7 +1033,57 @@ class SalaryRecordService:
                     "payment_status": "pending", "commission": 0,
                     "remark": rm.get("remark"),
                 })
+        values = await self._grid_values(month)
+        for eid in affected:
+            record = await self._existing_record(eid, month)
+            if record:
+                await self._capture(record, items, {key: v for (person, key), v in values.items() if person == str(eid)})
         return {"month": month, "saved": saved, "errors": errors}
+
+    async def register_payment(self, month, employee_id, data, operated_by):
+        from decimal import Decimal
+        from app.services.payment_service import ExpenseService
+        from app.services.payable_service import PayableService
+        from app.services.company_account_service import CompanyAccountService
+        self._check_month(month)
+        await self._lock_employee(employee_id)
+        record = await self._existing_record(employee_id, month)
+        request_key = str(data.get("idempotency_key") or "")
+        if not request_key:
+            raise ValueError("缺少付款请求标识，请重新打开登记窗口")
+        if record and request_key in self._snapshot(record).get("payment_requests", []):
+            return await PayableService(self.db).get_payable("expense", record.expense_id)
+        if not record or record.payment_status == "pending":
+            raise ValueError("请先核算并确认工资")
+        if (record.payment_status == "paid" or record.paid_at) and not record.expense_id:
+            raise ValueError("历史已发工资不重复生成支出，请到支出中核对原付款")
+        if not data.get("paid_at"):
+            raise ValueError("请选择实际付款日期")
+        amount = Decimal(str(data["amount"]))
+        if not amount.is_finite() or amount <= 0 or amount != amount.quantize(Decimal("0.01")):
+            raise ValueError("付款金额必须大于0，最多两位小数")
+        if amount > Decimal(str(record.net_salary)):
+            raise ValueError("付款金额不能超过实发工资")
+        await CompanyAccountService(self.db).resolve(data.get("payment_account_id"))
+        if not record.expense_id:
+            emp = await self._load_employee(employee_id)
+            expense = await ExpenseService(self.db).create_expense(dict(paid_amount=0,
+                payable_amount=record.net_salary, category="工资", payee_name=emp.name,
+                description=f"{month} 工资 · {emp.employee_no} {emp.name}",
+                expense_date=data["paid_at"]), operated_by)
+            record.expense_id = UUID(expense["id"])
+            if not self._snapshot(record):
+                values = await self._grid_values(month)
+                await self._capture(record, await self._month_items(month),
+                    {k: v for (eid, k), v in values.items() if eid == str(employee_id)})
+            await self.db.flush()
+        result = await PayableService(self.db).register_payment("expense", record.expense_id, data, operated_by)
+        status, _, _, paid_at = await self._payment_summary(record)
+        record.snapshot = {**self._snapshot(record), "payment_requests": [*self._snapshot(record).get("payment_requests", []), request_key]}
+        record.payment_status = status
+        record.paid_at = datetime.fromisoformat(paid_at) if paid_at else None
+        await self.db.flush()
+        return result
 
     def _d(self, r):
         return {

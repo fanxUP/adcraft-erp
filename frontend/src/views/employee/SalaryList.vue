@@ -1,20 +1,21 @@
 <template>
   <AppPage flush>
-    <template #header><PageHeader title="工资表" description="按月份核算工资、编辑指标和维护发放状态。">
+    <template #header><PageHeader title="工资表" description="按月份核算工资、登记发放并查看累计付款。">
       <template #actions><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <el-date-picker v-model="curMonth" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width:160px" @change="fetchGrid" />
         <el-button @click="fetchGrid" type="primary">刷新</el-button>
-        <el-button :loading="computing" @click="computeAll"><el-icon><Cpu /></el-icon> 计算</el-button>
-        <el-button @click="openItems"><el-icon><Setting /></el-icon> 指标设置</el-button>
-        <el-button plain @click="openParams"><el-icon><Tools /></el-icon> 参数</el-button>
+        <el-button v-if="auth.can('salary:calculate')" :loading="computing" @click="computeAll"><el-icon><Cpu /></el-icon> 计算</el-button>
+        <el-button v-if="auth.can('salary:calculate')" @click="openItems"><el-icon><Setting /></el-icon> 指标设置</el-button>
+        <el-button v-if="auth.can('salary:calculate')" plain @click="openParams"><el-icon><Tools /></el-icon> 参数</el-button>
       </div></template>
     </PageHeader></template>
+    <HrSectionNav group="salary" />
 
     <!-- 汇总 -->
     <el-row :gutter="16" style="margin-bottom:16px">
       <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-primary)">{{ rows.length }}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">员工数</div></div></el-card></el-col>
-      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-warning)">{{ fmtVal(totals.gross) }}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">应发合计</div></div></el-card></el-col>
-      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-danger)">{{ fmtVal(totals.net) }}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">实发合计</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-warning)">{{ fmtVal(rows.reduce((sum, row) => sum + (row.paid_amount || 0), 0)) }}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">累计已付</div></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-danger)">{{ fmtVal(totals.net) }}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">工资合计</div></div></el-card></el-col>
     </el-row>
 
     <!-- 工资网格 -->
@@ -43,12 +44,16 @@
                 <span v-else :class="{ 'cell-strong': isStrong(c.key) }">{{ fmtVal(row.values[c.key]) }}</span>
               </td>
               <td v-else-if="c.type === 'remark'" class="cell-center">
-                <el-input v-model="row.remark" size="small" style="width:120px" placeholder="备注" @change="commitRemark(row)" />
+                <el-input :disabled="row.locked || !auth.can('salary:calculate')" v-model="row.remark" size="small" style="width:120px" placeholder="备注" @change="commitRemark(row)" />
               </td>
               <td v-else-if="c.type === 'payment'" class="cell-center">
-                <el-select :model-value="row.payment_status || 'pending'" size="small" style="width:96px" @change="savePayment(row, $event)">
-                  <el-option label="待核算" value="pending" /><el-option label="已核算" value="calculated" /><el-option label="已发放" value="paid" />
-                </el-select>
+                <div>{{ paymentLabel(row.payment_status) }}</div>
+                <div v-if="row.locked" class="locked-note">{{ row.lock_reason || '金额已锁定' }}</div>
+                <div>已付 ¥{{ fmtVal(row.paid_amount) }} / 待付 ¥{{ fmtVal(row.remaining_amount) }}</div>
+                <div v-if="row.paid_at">最后付款：{{ row.paid_at.slice(0, 10) }}</div>
+                <el-button v-if="auth.can('salary:pay') && (!row.locked || row.expense_id) && row.payment_status && row.payment_status !== 'pending' && (row.remaining_amount || 0) > 0" text type="primary" size="small" @click="openPayment(row)">登记发放</el-button>
+                <el-button v-if="!row.locked && auth.can('salary:calculate') && row.payment_status === 'pending'" text type="primary" size="small" @click="savePayment(row, 'calculated')">确认金额</el-button>
+                <router-link v-if="row.expense_id && auth.can('expense:read')" :to="'/expenses?expense_id=' + row.expense_id">查看支出 / 付款</router-link>
               </td>
             </template>
           </tr>
@@ -66,6 +71,16 @@
       <el-empty v-else description="暂无员工" :image-size="80" />
     </div>
 
+    <el-dialog v-model="showPayment" title="登记工资发放" width="min(500px, 94vw)" :close-on-click-modal="false">
+      <p>{{ payRow?.employee_name }} · {{ payMonth }} 工资，剩余 ¥{{ fmtVal(payRow?.remaining_amount) }}</p>
+      <el-form label-position="top">
+        <el-form-item label="本次付款金额" required><el-input-number v-model="payForm.amount" :min="0.01" :max="payRow?.remaining_amount" :precision="2" style="width:100%" /></el-form-item>
+        <el-form-item label="付款日期" required><el-date-picker v-model="payForm.paid_at" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+        <el-form-item label="付款账户" required><PaymentAccountSelect v-model="payForm.payment_account_id" :active="showPayment" auto-default /></el-form-item>
+        <el-form-item label="付款方式"><el-select v-model="payForm.payment_method" style="width:100%"><el-option label="转账支付" value="转账支付" /><el-option label="现金支付" value="现金支付" /></el-select></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="showPayment=false">取消</el-button><el-button type="primary" :loading="paying" @click="submitPayment">确认发放</el-button></template>
+    </el-dialog>
     <!-- 指标设置 Dialog -->
     <el-dialog v-model="showItems" title="工资指标设置（每列一个公式）" width="820px" top="4vh" :close-on-click-modal="false">
       <div class="items-help">
@@ -86,7 +101,7 @@
         <div style="color:var(--el-text-color-secondary);font-size:12px;margin-top:6px">
           语法为 Python 风格；支持 + - * / % 、比较、and/or/not、<code>A if 条件 else B</code>、max/min/round/abs。
           「组1/组2」决定列在表头第几层分组里（组1 = 应发金额/应扣金额/代缴部分，组2 = 基本部分/绩效部分/未出勤；留空为独立列）。
-          勾选「手」的指标为手工填写列：无需公式，计算不会覆盖它的值。改完点「保存」，再回到页面点「 计算」重新生成数值。
+          勾选「手」的指标为手工填写列：无需公式，计算不会覆盖它的值。指标配置用于尚未建立快照的月份；已核算月份使用原指标，已发放工资锁定。
         </div>
       </div>
 
@@ -173,6 +188,15 @@
 </template>
 
 <script setup lang="ts">
+import PaymentAccountSelect from '@/components/payments/PaymentAccountSelect.vue'
+import { registerSalaryPayment } from '@/api/salaries'
+
+import { useDepartments } from '@/composables/useDepartments'
+useDepartments()
+import { useAuthStore } from '@/stores/auth'
+import HrSectionNav from '@/components/hr/HrSectionNav.vue'
+const auth = useAuthStore()
+
 import { Cpu, Setting, Tools } from '@element-plus/icons-vue'
 import { ref, computed, onMounted } from "vue"
 import {
@@ -203,6 +227,7 @@ const editingCell = ref<{ rowId: string; key: string } | null>(null)
 const editVal = ref<number | null>(null)
 
 function startEdit(row: SalaryGridRow, key: string) {
+  if (row.locked || !auth.can('salary:calculate')) return
   editingCell.value = { rowId: row.employee_id, key }
   editVal.value = row.values[key] ?? null
 }
@@ -219,8 +244,33 @@ async function commitEdit(row: SalaryGridRow, key: string) {
   if (v === old) return
   try {
     await saveSalaryGrid(curMonth.value, [{ employee_id: row.employee_id, item_key: key, value: v }])
-    row.values[key] = v
+    await fetchGrid()
   } catch { /* interceptor 已提示 */ }
+}
+
+const showPayment = ref(false)
+const paying = ref(false)
+const payRow = ref<SalaryGridRow | null>(null)
+const payMonth = ref('')
+const payKey = ref('')
+const payForm = ref({ amount: 0, paid_at: '', payment_account_id: '', payment_method: '转账支付' })
+const paymentLabel = (status: string | null) => ({ pending: '待确认', calculated: '待发放', partial: '部分发放', paid: '已发放' })[status || 'pending'] || status
+function openPayment(row: SalaryGridRow) {
+  payRow.value = row
+  payMonth.value = curMonth.value
+  payKey.value = crypto.randomUUID()
+  payForm.value = { amount: row.remaining_amount || 0, paid_at: '', payment_account_id: '', payment_method: '转账支付' }
+  showPayment.value = true
+}
+async function submitPayment() {
+  if (!payRow.value || !payForm.value.paid_at || !payForm.value.payment_account_id || payForm.value.amount <= 0) { ElMessage.warning('请填写付款金额、日期和账户'); return }
+  paying.value = true
+  try {
+    await registerSalaryPayment({ ...payForm.value, employee_id: payRow.value.employee_id, month: payMonth.value, idempotency_key: payKey.value })
+    ElMessage.success('发放已登记，已计入支出')
+    showPayment.value = false
+    await fetchGrid()
+  } finally { paying.value = false }
 }
 
 /* ====== 支付状态 ====== */
@@ -228,7 +278,7 @@ async function savePayment(row: SalaryGridRow, status: string) {
   try {
     await saveSalaryGrid(curMonth.value, undefined, [{ employee_id: row.employee_id, payment_status: status }])
     row.payment_status = status
-    row.paid_at = status === "paid" ? new Date().toISOString() : null
+    await fetchGrid()
   } catch { /* interceptor 已提示 */ }
 }
 
@@ -240,12 +290,15 @@ async function commitRemark(row: SalaryGridRow) {
 }
 
 /* ====== 数据 ====== */
+let gridRequest = 0
 async function fetchGrid() {
+  const current = ++gridRequest
   if (!curMonth.value) curMonth.value = new Date().toISOString().slice(0, 7)
   loading.value = true
   try {
-    const [it, g] = await Promise.all([getSalaryItems(), getSalaryGrid(curMonth.value)])
-    items.value = (it || []).filter(i => i.is_active).sort((a, b) => a.sort_order - b.sort_order)
+    const g = await getSalaryGrid(curMonth.value)
+    if (current !== gridRequest) return
+    items.value = (g.items || []).sort((a, b) => a.sort_order - b.sort_order)
     rows.value = g?.rows || []
   } catch { /* interceptor 已提示 */ }
   finally { loading.value = false }
@@ -254,13 +307,15 @@ async function fetchGrid() {
 async function computeAll() {
   if (!curMonth.value) curMonth.value = new Date().toISOString().slice(0, 7)
   try {
-    await ElMessageBox.confirm("重新计算会更新公式列；手工填写或手动改过的格子会保留（想恢复计算，把该格清空后重新计算即可），确定继续吗？", "计算工资", { type: "warning" })
+    await ElMessageBox.confirm("重新计算会更新公式列；已发放或登记支出的工资会跳过，手工填写或手动改过的格子会保留（想恢复计算，把该格清空后重新计算即可），确定继续吗？", "计算工资", { type: "warning" })
   } catch { return }
   computing.value = true
   try {
     const r = await computeSalaryGrid(curMonth.value)
     ElMessage.success(`已计算 ${r.computed} 人${r.errors?.length ? `，失败 ${r.errors.length} 人` : ""}`)
     if (r.errors?.length) ElMessage.warning(r.errors.join("；"))
+    if (r.skipped_locked) ElMessage.info(`已跳过 ${r.skipped_locked} 条已锁定工资`)
+    if (r.warnings?.length) ElMessage.warning(r.warnings.join("；"))
     await fetchGrid()
   } catch { /* interceptor 已提示 */ }
   finally { computing.value = false }
@@ -283,9 +338,10 @@ const varHints = [
   { name: "att_bonus", label: "全勤奖标准(规则已删,恒0)" }, { name: "social", label: "社保金额(规则)" },
   { name: "housing", label: "公积金(规则已删,恒0)" }, { name: "ded_std", label: "其他扣款(规则已删,恒0)" },
   { name: "ot_hours", label: "当月加班工时" }, { name: "attend_days", label: "出勤天数" },
-  { name: "half_days", label: "半天数" }, { name: "missed_days", label: "旷工天数" },
+  { name: "leave_days", label: "批准请假天数" }, { name: "unregistered_days", label: "未登记天数" },
+  { name: "half_days", label: "半天数" }, { name: "missed_days", label: "缺卡天数" },
   { name: "absent_days", label: "未出勤天数" }, { name: "records", label: "有考勤记录天数" },
-  { name: "work_days", label: "月内非周末天数" },
+  { name: "work_days", label: "截至当日的任职应出勤天数" },
 ]
 const examples = [
   "ot_hours * (base / 21.75 / 8) * (ot_rate or 1.5) → 加班费",
@@ -325,7 +381,7 @@ async function removeItem(it: SalaryItem) {
   if (it.is_builtin) return
   if (!it.id) { itemsDraft.value = itemsDraft.value.filter(x => x !== it); return }
   try {
-    await ElMessageBox.confirm(`删除指标「${it.label}」？该指标的历史单元格值也会一并删除。`, "删除指标", { type: "warning" })
+    await ElMessageBox.confirm(`删除指标「${it.label}」？已有历史数据的指标不能删除，可关闭启用。`, "删除指标", { type: "warning" })
   } catch { return }
   await deleteSalaryItem(it.id)
   itemsDraft.value = itemsDraft.value.filter(x => x.id !== it.id)
@@ -485,6 +541,7 @@ onMounted(() => fetchGrid())
 </script>
 
 <style scoped>
+.locked-note { font-size: 12px; color: var(--ad-text-secondary); }
 .sheet-wrapper { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 300px); border: 1px solid var(--ad-border); border-radius: 4px; background: var(--ad-card); padding-bottom: 14px; }
 .sal-sheet { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 15px; white-space: nowrap; }
 .sal-sheet th, .sal-sheet td { border: 2px solid var(--ad-border); padding: 5px 6px; }

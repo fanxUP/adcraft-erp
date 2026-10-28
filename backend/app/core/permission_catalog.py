@@ -44,6 +44,14 @@ class PermissionPackDefinition:
 # grants its parent; the role editor and the server validator must both show
 # and validate the complete set.
 PERMISSION_DEPENDENCIES: dict[str, tuple[str, ...]] = {
+    'employee:manage': ('employee:read',),
+    'employee:private': ('employee:read',),
+    'attendance:manage': ('attendance:read',),
+    'leave:manage': ('leave:read',),
+    'leave:approve': ('leave:read',),
+    'salary:calculate': ('salary:read',),
+    'salary:pay': ('salary:read', 'company_account:select'),
+    'department:manage': ('department:read',),
     "company_account:manage": ("company_account:read", "company_account:view_number"),
     "company_account:view_number": ("company_account:read",),
     # Delivery task list/actions require detail read permission.
@@ -392,13 +400,13 @@ def _build_definition(code: str) -> PermissionDefinition:
     elif (
         action == "view_cost"
         or (module in FINANCIAL_MODULES and code != "report:read")
-        or module == "finance"
+        or module in {"finance", "salary"}
         or code in {"ai_report:read", "ai_anomaly:read"}
     ):
         sensitivity = "financial"
     elif module.startswith("outsource") or module == "supplier":
         sensitivity = "external"
-    elif module == "system" or module in {"backup", "user"}:
+    elif module == "system" or module in {"backup", "user"} or code == "employee:private":
         sensitivity = "security"
     else:
         sensitivity = "normal"

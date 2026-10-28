@@ -34,7 +34,7 @@ export default defineConfig(({ mode }) => ({
     Components({
       dts: false,
       resolvers: [
-        ElementPlusResolver({ importStyle: 'css' }),
+        ElementPlusResolver({ importStyle: mode === 'test' ? false : 'css' }),
         elementPlusIconResolver,
       ],
     }),

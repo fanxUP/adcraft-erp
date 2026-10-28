@@ -70,19 +70,23 @@ export const navigationItems: NavigationItem[] = [
     ],
   },
   {
-    label: '人事管理',
-    icon: 'UserFilled',
-    accessKey: 'system',
+    label: '人事管理', icon: 'UserFilled', accessKey: 'hr',
     children: [
-      { label: '员工管理', path: '/employees', accessKey: 'system' },
-      { label: '考勤记录', path: '/attendance/records', accessKey: 'system' },
-      { label: '考勤规则', path: '/attendance/rules', accessKey: 'system' },
-      { label: '部门管理', path: '/departments', accessKey: 'system' },
-      { label: '工资管理', path: '/salaries', accessKey: 'system' },
-      { label: '工资报表', path: '/salary-report', accessKey: 'system' },
-      { label: '工资规则', path: '/salary-rules', accessKey: 'system' },
-      { label: '员工履历', path: '/employment-histories', accessKey: 'system' },
-      { label: '请假审批', path: '/leaves', accessKey: 'system' },
+      { label: '员工档案', accessKey: 'employee', children: [
+        { label: '员工档案', path: '/employees', accessKey: 'employee' },
+        { label: '变动履历', path: '/employment-histories', accessKey: 'employee' },
+      ] },
+      { label: '考勤管理', accessKey: 'hrAttendance', children: [
+        { label: '月度考勤', path: '/attendance/records', accessKey: 'attendance' },
+        { label: '请假审批', path: '/leaves', accessKey: 'leave' },
+        { label: '考勤规则', path: '/attendance/rules', accessKey: 'attendance' },
+      ] },
+      { label: '工资管理', accessKey: 'salary', children: [
+        { label: '月度工资', path: '/salaries', accessKey: 'salary' },
+        { label: '工资标准', path: '/salary-rules', accessKey: 'salary' },
+        { label: '报表与工资条', path: '/salary-report', accessKey: 'salary' },
+      ] },
+      { label: '部门管理', path: '/departments', accessKey: 'department' },
     ],
   },
   {

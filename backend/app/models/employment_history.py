@@ -1,6 +1,6 @@
 import uuid
 from datetime import date
-from sqlalchemy import Date, String, Text, ForeignKey
+from sqlalchemy import Boolean, Date, String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin
@@ -8,6 +8,7 @@ from app.models.base import Base, TimestampMixin
 
 class EmploymentHistory(Base, TimestampMixin):
     __tablename__ = "employment_histories"
+    is_automatic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     employee_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("employees.id"), nullable=False)
     change_date: Mapped[date] = mapped_column(Date, nullable=False)

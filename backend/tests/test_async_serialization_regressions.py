@@ -108,6 +108,7 @@ async def test_leave_approval_refreshes_row_before_serialization():
     repo.get_by_id = AsyncMock(return_value=request)
 
     service = LeaveRequestService(db)
+    service._validate = AsyncMock()  # validation is covered by isolated HR integration tests
     service.repo = repo
     service._d = MagicMock(return_value={"id": str(request.id)})
 

@@ -25,6 +25,19 @@ from sqlalchemy import select
 # ── Define all permissions ────────────────────────────────────────────────
 
 ALL_PERMISSIONS: list[dict[str, str | None]] = [
+    {'code': 'employee:read', 'name': '查看员工档案', 'description': '查看员工档案'},
+    {'code': 'employee:manage', 'name': '维护员工档案', 'description': '维护员工档案'},
+    {'code': 'employee:private', 'name': '查看员工私密资料', 'description': '查看员工私密资料'},
+    {'code': 'attendance:read', 'name': '查看考勤', 'description': '查看考勤'},
+    {'code': 'attendance:manage', 'name': '维护考勤和规则', 'description': '维护考勤和规则'},
+    {'code': 'leave:read', 'name': '查看请假', 'description': '查看请假'},
+    {'code': 'leave:manage', 'name': '登记维护请假', 'description': '登记维护请假'},
+    {'code': 'leave:approve', 'name': '审批撤销请假', 'description': '审批撤销请假'},
+    {'code': 'salary:read', 'name': '查看工资', 'description': '查看工资'},
+    {'code': 'salary:calculate', 'name': '核算工资和维护标准', 'description': '核算工资和维护标准'},
+    {'code': 'salary:pay', 'name': '登记工资发放', 'description': '登记工资发放'},
+    {'code': 'department:read', 'name': '查看部门', 'description': '查看部门'},
+    {'code': 'department:manage', 'name': '维护部门', 'description': '维护部门'},
     # System
     {"code": "system:logs", "name": "查看操作日志", "description": "查看系统操作日志"},
     {"code": "system:super_admin", "name": "超级管理员", "description": "管理所有模块、权限和系统安全设置"},

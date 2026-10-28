@@ -24,5 +24,5 @@ class EmployeeRepository:
     async def update(self, e, data):
         for k, v in data.items():
             if v is not None: setattr(e, k, v)
-        await self.db.flush(); return e
+        await self.db.flush(); await self.db.refresh(e); return e
     async def soft_delete(self, e): e.deleted_at = datetime.now(); await self.db.flush()

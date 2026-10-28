@@ -39,6 +39,20 @@ from app.models.user import User
 PERM_SYSTEM_LOGS = "system:logs"
 PERM_SYSTEM_SUPER_ADMIN = "system:super_admin"
 
+PERM_EMPLOYEE_READ = 'employee:read'
+PERM_EMPLOYEE_MANAGE = 'employee:manage'
+PERM_EMPLOYEE_PRIVATE = 'employee:private'
+PERM_ATTENDANCE_READ = 'attendance:read'
+PERM_ATTENDANCE_MANAGE = 'attendance:manage'
+PERM_LEAVE_READ = 'leave:read'
+PERM_LEAVE_MANAGE = 'leave:manage'
+PERM_LEAVE_APPROVE = 'leave:approve'
+PERM_SALARY_READ = 'salary:read'
+PERM_SALARY_CALCULATE = 'salary:calculate'
+PERM_SALARY_PAY = 'salary:pay'
+PERM_DEPARTMENT_READ = 'department:read'
+PERM_DEPARTMENT_MANAGE = 'department:manage'
+
 # Backup
 PERM_BACKUP_CREATE = "backup:create"
 PERM_BACKUP_READ = "backup:read"

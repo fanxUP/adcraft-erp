@@ -21,7 +21,7 @@ RAW_VARS: set[str] = {
     "att_bonus", "social", "housing", "ded_std",
     # 考勤统计
     "ot_hours", "attend_days", "half_days", "missed_days", "absent_days",
-    "records", "work_days",
+    "records", "work_days", "leave_days", "unregistered_days",
 }
 
 FUNCTIONS: set[str] = {"max", "min", "round", "abs"}
@@ -48,10 +48,10 @@ VARIABLE_HINTS: list[dict] = [
     {"name": "ot_hours", "label": "当月加班工时"},
     {"name": "attend_days", "label": "出勤天数"},
     {"name": "half_days", "label": "半天数"},
-    {"name": "missed_days", "label": "旷工天数"},
+    {"name": "missed_days", "label": "缺卡天数"},
     {"name": "absent_days", "label": "未出勤天数"},
     {"name": "records", "label": "有考勤记录天数"},
-    {"name": "work_days", "label": "月内非周末天数"},
+    {"name": "work_days", "label": "截至当日的任职应出勤天数"},
 ]
 
 FORMULA_EXAMPLES: list[str] = [

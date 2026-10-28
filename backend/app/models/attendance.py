@@ -1,7 +1,7 @@
 import uuid
 from decimal import Decimal
 from datetime import date, datetime, time
-from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric, String, Text, Time, ForeignKey
+from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric, String, Text, Time, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin
@@ -21,6 +21,7 @@ class AttendanceRule(Base, TimestampMixin):
 
 class AttendanceRecord(Base, TimestampMixin):
     __tablename__ = "attendance_records"
+    __table_args__ = (UniqueConstraint("employee_id", "date", name="uq_attendance_employee_date"),)
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     employee_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("employees.id"), nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False)

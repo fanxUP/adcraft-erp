@@ -1,4 +1,5 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Literal
 from datetime import date, datetime
 from typing import Optional
 
@@ -8,7 +9,7 @@ class LeaveRequestCreate(BaseModel):
     leave_type: str
     start_date: date
     end_date: date
-    duration_days: float
+    duration_days: float = Field(gt=0, allow_inf_nan=False)
     reason: str
     remark: Optional[str] = None
 
@@ -17,14 +18,14 @@ class LeaveRequestUpdate(BaseModel):
     leave_type: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
-    duration_days: Optional[float] = None
+    duration_days: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
     reason: Optional[str] = None
     status: Optional[str] = None
     remark: Optional[str] = None
 
 
 class LeaveRequestApprove(BaseModel):
-    status: str  # approved/rejected
+    status: Literal["approved", "rejected", "cancelled"]
     remark: Optional[str] = None
 
 

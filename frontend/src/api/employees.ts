@@ -63,3 +63,7 @@ export async function uploadEmployeeAttachment(id: string, file: File, category?
 }
 
 export function deleteEmployeeAttachment(attachmentId: string) { return del<SuccessResponse>('/employees/attachments/' + attachmentId) }
+
+export function getEmployeeHandover(id: string) {
+  return get<{ tasks: { id: string; task_no: string; task_type: string; project_name: string; url: string }[]; unpaid_salaries: { month: string; remaining_amount: number }[] }>('/employees/' + id + '/handover')
+}

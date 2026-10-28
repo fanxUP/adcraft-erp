@@ -19,7 +19,7 @@ const MODULE_LABELS: Record<string, string> = {
   outsource_task: '外协任务', outsource_payment: '外协付款',
   supplier_center: '供应商中心', supplier: '供应商',
   resource_center: '资源中心', inventory: '库存', vehicle: '公司车辆', aerial: '高空作业车',
-  employee: '员工管理', department: '部门管理', attendance: '考勤', salary: '工资',
+  employee: '员工管理', department: '部门管理', attendance: '考勤', leave: '请假', salary: '工资',
   backup: '数据备份', ai_quote: 'AI 业务助手', ai_anomaly: 'AI 异常检查',
   ai_knowledge: 'AI 知识库', ai_report: 'AI 报表',
   quote: '历史报价（兼容）', cdr_quote: '历史智能报价（兼容）',

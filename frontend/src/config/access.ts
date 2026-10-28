@@ -52,6 +52,13 @@ export type AccessKey =
   | 'inventory'
   | 'resourceCenter'
   | 'system'
+  | 'hr'
+  | 'hrAttendance'
+  | 'employee'
+  | 'attendance'
+  | 'leave'
+  | 'salary'
+  | 'department'
   | 'vehicleRead'
   | 'vehicleFleet'
   | 'vehicleDrivers'
@@ -128,6 +135,14 @@ export const ACCESS_ROLES: Record<AccessKey, AccessRoles> = {
   inventory: ['admin', 'production'],
   resourceCenter: ['admin', 'sales', 'finance', 'resource_manager'],
   system: ['admin'],
+  hr: ['admin'],
+  hrAttendance: ['admin'],
+  employee: ['admin'],
+  attendance: ['admin'],
+  leave: ['admin'],
+  salary: ['admin'],
+  department: ['admin'],
+
   vehicleRead: ['admin', 'sales', 'finance', 'resource_manager'],
   vehicleFleet: ['admin', 'finance', 'resource_manager'],
   vehicleDrivers: ['admin', 'resource_manager'],
@@ -209,6 +224,14 @@ export const ACCESS_PERMISSIONS: Partial<Record<AccessKey, PermissionRequirement
   outsourcePayment: ['outsource_payment:read'],
   reports: { anyOf: ['report:read', 'report:view_financial'] },
   system: ['system:super_admin'],
+  hr: { anyOf: ['employee:read', 'attendance:read', 'leave:read', 'salary:read', 'department:read'] },
+  hrAttendance: { anyOf: ['attendance:read', 'leave:read'] },
+  employee: { anyOf: ['employee:read'] },
+  attendance: { anyOf: ['attendance:read'] },
+  leave: { anyOf: ['leave:read'] },
+  salary: { anyOf: ['salary:read'] },
+  department: { anyOf: ['department:read'] },
+
   aiQuote: ['ai_quote:read'],
   aiKnowledge: { allOf: ['ai_knowledge:read', 'order:view_price'] },
   aiAnomaly: ['ai_anomaly:read'],
@@ -288,15 +311,15 @@ export const ROUTE_ACCESS: Record<string, AccessKey> = {
   AdminRoleManage: 'system',
   AdminSettings: 'system',
   AIProviderList: 'system',
-  EmployeeList: 'system',
-  DepartmentList: 'system',
-  SalaryList: 'system',
-  SalaryReport: 'system',
-  SalaryRuleList: 'system',
-  EmploymentHistoryList: 'system',
-  LeaveRequestList: 'system',
-  AttendanceRecordList: 'system',
-  AttendanceRuleList: 'system',
+  EmployeeList: 'employee',
+  DepartmentList: 'department',
+  SalaryList: 'salary',
+  SalaryReport: 'salary',
+  SalaryRuleList: 'salary',
+  EmploymentHistoryList: 'employee',
+  LeaveRequestList: 'leave',
+  AttendanceRecordList: 'attendance',
+  AttendanceRuleList: 'attendance',
   AIKnowledgeHealth: 'system',
 
   NotificationList: 'authenticated',

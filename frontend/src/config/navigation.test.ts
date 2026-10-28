@@ -93,3 +93,10 @@ describe('filterNavigation', () => {
     expect(resources?.children?.map(item => item.label)).toEqual(['供应商管理'])
   })
 })
+
+it('keeps HR in four business groups and gives leave-only roles an accessible entry', () => {
+  const full = filterNavigation(navigationItems, ['custom'], ['system:super_admin']).find(i => i.label === '人事管理')
+  expect(full?.children?.map(i => i.label)).toEqual(['员工档案','考勤管理','工资管理','部门管理'])
+  const limited = filterNavigation(navigationItems, ['custom'], ['leave:read']).find(i => i.label === '人事管理')
+  expect(limited?.children?.[0].children?.map(i => i.path)).toEqual(['/leaves'])
+})

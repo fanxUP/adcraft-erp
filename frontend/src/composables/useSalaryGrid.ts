@@ -142,10 +142,6 @@ export function gridTotals(items: SalaryItem[], rows: SalaryGridRow[]): Record<s
 
 export const fmtVal = (v: number | null | undefined) => (v == null ? "" : Number(v).toFixed(2))
 
-export function deptLabel(v?: string | null) {
-  if (!v) return ""
-  const m: Record<string, string> = { design: "设计部", production: "生产部", installation: "安装部", sales: "销售部", finance: "财务部", admin: "行政部" }
-  return m[v] || v
-}
+export { departmentLabel as deptLabel } from './useDepartments'
 
 export const isStrong = (key: string) => key === "gross" || key === "net" || key === "deduction" || key.endsWith("_total")

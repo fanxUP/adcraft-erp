@@ -7,17 +7,18 @@
           <el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" />
         </el-select>
         <el-button @click="fetchData" type="primary">刷新</el-button>
-        <el-button @click="openCreate">录入打卡</el-button>
+        <el-button v-if="auth.can('attendance:manage')" @click="openCreate">录入打卡</el-button>
         <el-button @click="handlePrint" type="primary"><el-icon><Printer /></el-icon> 打印预览</el-button>
       </div></template>
     </PageHeader></template>
+    <HrSectionNav group="attendance" />
 
     <!-- 汇总卡片 -->
     <el-row :gutter="12" style="margin-bottom:16px">
       <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-success)">{{totalStats.present}}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">总出勤</div></div></el-card></el-col>
-      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-danger)">{{totalStats.absent}}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">总未出勤</div></div></el-card></el-col>
+      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-danger)">{{totalStats.absent}}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">已确认未出勤</div></div></el-card></el-col>
       <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-warning)">{{totalStats.late}}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">总迟到</div></div></el-card></el-col>
-      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-text-color-secondary)">{{totalStats.unauth}}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">总矿工</div></div></el-card></el-col>
+      <el-col :span="5"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-text-color-secondary)">{{totalStats.unauth}}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">总缺卡</div></div></el-card></el-col>
       <el-col :span="4"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-warning)">{{totalStats.overtimeHours ? totalStats.overtimeHours.toFixed(1) : 0}}</div><div style="font-size:13px;color:var(--el-text-color-secondary);margin-top:4px">总加班(小时)</div></div></el-card></el-col>
     </el-row>
 
@@ -27,28 +28,29 @@
       <span><span class="legend-dot" style="background:#b7e4c7;border:1px solid #98d2a8"></span>出勤</span>
       <span><span class="legend-dot" style="background:#a3d0ff;border:1px solid #82b3f0"></span>半天</span>
       <span><span class="legend-dot" style="background:#ffe69c;border:1px solid #e8c95c"></span>迟到/早退</span>
-      <span><span class="legend-dot" style="background:#f5c2c7;border:1px solid #e29aa0"></span>旷工/缺卡</span>
-      <span><span class="legend-dot" style="background:var(--ad-card);border:1px solid var(--ad-border)"></span>未出勤</span>
+      <span><span class="legend-dot" style="background:#f5c2c7;border:1px solid #e29aa0"></span>缺卡</span>
+      <span><span class="legend-dot" style="background:var(--ad-card);border:1px solid var(--ad-border)"></span>已确认未出勤</span>
       <span><span class="legend-dot" style="background:var(--el-color-warning);border:1px solid #e09024"></span>加班</span>
       <span><span class="legend-dot" style="background:#dee2e6;border:1px solid #b8bcc4"></span>休息日</span>
     </div>
 
     <!-- 考勤矩阵表 -->
-    <div class="sheet-wrapper" :style="{ maxHeight: 'calc(100vh - 320px)' }">
+    <el-alert title="未登记和缺卡单独统计，不自动算作未出勤；请假以审批记录为准，未来日期及非任职期不计入应出勤。" type="info" :closable="false" style="margin-bottom:12px" />
+    <div v-loading="loading" class="sheet-wrapper" :style="{ maxHeight: 'calc(100vh - 320px)' }">
       <table class="att-sheet" v-if="matrix.length">
         <thead>
           <tr class="att-header-top">
             <th rowspan="2" class="att-col-sm">#</th>
             <th rowspan="2" class="att-col-name">姓名</th>
             <th rowspan="2" class="att-col-dept">部门</th>
-            <th colspan="5" class="att-col-group">出勤汇总</th>
+            <th colspan="7" class="att-col-group">出勤汇总</th>
             <th :colspan="days.length" class="att-col-group">每日明细（签到/签退 / 状态）</th>
           </tr>
           <tr class="att-header-bottom">
-            <th class="att-col-stat">出勤</th>
-            <th class="att-col-stat">未出勤</th>
+            <th class="att-col-stat">出勤</th><th class="att-col-stat">请假</th><th class="att-col-stat">未登记</th>
+            <th class="att-col-stat">已确认未出勤</th>
             <th class="att-col-stat">迟到</th>
-            <th class="att-col-stat">矿工</th>
+            <th class="att-col-stat">缺卡</th>
             <th class="att-col-stat overtime-col">加班<br><span class="overtime-unit">小时</span></th>
             <th v-for="d in days" :key="d" :class="['att-col-day', { weekend: isWeekend(d), today: d === todayDay && monthMatches }]">{{ monthDayCN(d) }}<span class="att-day-week">周{{ weekdayCN(d) }}</span></th>
           </tr>
@@ -58,7 +60,7 @@
             <td class="cell-center">{{ i + 1 }}</td>
             <td class="cell-name">{{ row.employee.name }}</td>
             <td class="cell-dept">{{ deptLabel(row.employee.department) }}</td>
-            <td class="cell-stat present">{{ row.summary.present }}</td>
+            <td class="cell-stat present">{{ row.summary.present }}</td><td class="cell-stat">{{ row.summary.leave || '' }}</td><td class="cell-stat">{{ row.summary.unregistered || '' }}</td>
             <td class="cell-stat absent" :class="{ highlight: row.summary.absent > 0 }">{{ row.summary.absent || '' }}</td>
             <td class="cell-stat late" :class="{ highlight: row.summary.late > 0 }">{{ row.summary.late || '' }}</td>
             <td class="cell-stat unauth" :class="{ highlight: row.summary.unauth > 0 }">{{ row.summary.unauth || '' }}</td>
@@ -79,14 +81,14 @@
                   <div class="day-overtime">{{ fmtOvertime(row.days[d].overtime_hours) }}<span class="day-overtime-unit">h</span></div>
                 </div>
               </template>
-              <div v-else class="day-empty">{{ isWeekend(d) ? '休' : '' }}</div>
+              <div v-else class="day-empty">{{ dayLabel(row.employee.id, d) }}</div>
             </td>
           </tr>
         </tbody>
         <tfoot>
           <tr class="att-footer">
             <td colspan="3" style="font-weight:700;text-align:right;padding-right:12px">合计</td>
-            <td class="cell-stat present">{{ totalStats.present }}</td>
+            <td class="cell-stat present">{{ totalStats.present }}</td><td class="cell-stat">{{ totalStats.leave }}</td><td class="cell-stat">{{ totalStats.unregistered }}</td>
             <td class="cell-stat absent">{{ totalStats.absent || '' }}</td>
             <td class="cell-stat late">{{ totalStats.late || '' }}</td>
             <td class="cell-stat unauth">{{ totalStats.unauth || '' }}</td>
@@ -117,7 +119,7 @@
         </el-form-item>
         <el-form-item label="签到状态">
           <el-select v-model="form.check_in_status" style="width:100%">
-            <el-option label="出勤" value="normal" /><el-option label="半天" value="half_day" /><el-option label="迟到" value="late" /><el-option label="未出勤" value="absent" /><el-option label="旷工" value="missed" />
+            <el-option label="出勤" value="normal" /><el-option label="半天" value="half_day" /><el-option label="迟到" value="late" /><el-option label="未出勤" value="absent" /><el-option label="缺卡" value="missed" />
           </el-select>
         </el-form-item>
         <el-form-item label="签退时间">
@@ -134,21 +136,28 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog=false">取消</el-button>
-        <el-button @click="handleSave" :loading="saving" type="primary">保存</el-button>
+        <el-button v-if="auth.can('attendance:manage')" @click="handleSave" :loading="saving" type="primary">保存</el-button>
       </template>
     </el-dialog>
   </AppPage>
 </template>
 
 <script setup lang="ts">
+import { useDepartments } from '@/composables/useDepartments'
+const { departmentLabel: deptLabel } = useDepartments()
+import { useAuthStore } from '@/stores/auth'
+import HrSectionNav from '@/components/hr/HrSectionNav.vue'
+const auth = useAuthStore()
+
 import { Printer } from '@element-plus/icons-vue'
 import { ref, computed, onMounted } from "vue"
-import { getAttendanceRecords, createAttendanceRecord, updateAttendanceRecord, getAttendanceEmployees, type AttendanceRecordItem, type EmployeeOption } from "@/api/attendance"
+import { getAttendanceMonthly, type AttendanceMonthlyRow, createAttendanceRecord, updateAttendanceRecord, type AttendanceRecordItem, type EmployeeOption } from "@/api/attendance"
 import { ElMessage } from "element-plus"
 import { AppPage, PageHeader } from "@/components/ui"
 
 /* ====== state ====== */
 const employees = ref<EmployeeOption[]>([])
+const monthlyRows = ref<AttendanceMonthlyRow[]>([])
 const allRecords = ref<AttendanceRecordItem[]>([])
 const loading = ref(false)
 const curMonth = ref("")
@@ -179,50 +188,24 @@ const days = computed(() => {
   return Array.from({ length: new Date(year, month, 0).getDate() }, (_, i) => i + 1)
 })
 
-const filteredEmps = computed(() => {
-  if (!fEmp.value) return employees.value
-  return employees.value.filter(e => e.id === fEmp.value)
-})
-
 interface MatrixRow {
   employee: EmployeeOption
   days: Record<number, AttendanceRecordItem>
-  summary: { present: number; absent: number; late: number; unauth: number; overtimeHours: number }
+  summary: { present: number; absent: number; late: number; unauth: number; overtimeHours: number; unregistered: number; leave: number }
 }
 
-const matrix = computed<MatrixRow[]>(() => {
-  const map: Record<string, Record<number, AttendanceRecordItem>> = {}
-  for (const rec of allRecords.value) {
-    const day = new Date(rec.date).getDate()
-    if (!map[rec.employee_id]) map[rec.employee_id] = {}
-    map[rec.employee_id][day] = rec
-  }
-  const rows: MatrixRow[] = []
-  for (const emp of filteredEmps.value) {
-    const empDays = map[emp.id] || {}
-    const summary = { present: 0, absent: 0, late: 0, unauth: 0, overtimeHours: 0 }
-    for (const d of days.value) {
-      const rec = empDays[d]
-      if (!rec) {
-        if (!isWeekend(d)) summary.absent++
-        continue
-      }
-      if (rec.check_in_status === "half_day" || rec.check_out_status === "half_day") summary.present += 0.5
-      else if (rec.check_in_status === "normal") summary.present++
-      if (rec.check_in_status === "late") summary.late++
-      if (rec.check_in_status === "absent") summary.absent++
-      if (rec.check_in_status === "missed") summary.unauth++
-      else if (rec.check_out_status === "missed" && rec.check_in_status !== "missed") summary.unauth++
-      if (rec.overtime_hours) summary.overtimeHours += Number(rec.overtime_hours)
-    }
-    rows.push({ employee: emp, days: empDays, summary })
-  }
-  return rows
-})
-
+const matrix = computed<MatrixRow[]>(() => monthlyRows.value.filter(r => !fEmp.value || r.employee.id === fEmp.value).map(r => ({
+  employee: r.employee,
+  days: Object.fromEntries(r.records.map(rec => [Number(rec.date.slice(-2)), rec])),
+  summary: { present: r.summary.normal + r.summary.half * 0.5, absent: r.summary.absent,
+    late: r.summary.late, unauth: r.summary.missed, overtimeHours: r.summary.overtime,
+    unregistered: r.summary.unregistered, leave: r.summary.leave },
+})))
 const totalStats = computed(() => {
-  const t = { present: 0, absent: 0, late: 0, unauth: 0, overtimeHours: 0 }
+  const t = { present: 0, absent: 0, late: 0, unauth: 0, overtimeHours: 0, unregistered: 0, leave: 0 }
   for (const row of matrix.value) {
+    t.unregistered += row.summary.unregistered
+    t.leave += row.summary.leave
     t.present += row.summary.present
     t.absent += row.summary.absent
     t.late += row.summary.late
@@ -245,11 +228,6 @@ const totalDayStats = computed(() => {
 })
 
 /* ====== helpers ====== */
-const deptLabel = (v?: string | null) => {
-  if (!v) return "-"
-  const m: Record<string, string> = { design: "设计部", production: "生产部", installation: "安装部", sales: "销售部", finance: "财务部", admin: "行政部" }
-  return m[v] || v
-}
 const fmtTime = (dt?: string | null) => dt ? dt.substring(11, 16) : ""
 const fmtOvertime = (h: number) => h ? h.toFixed(1) : ""
 const isWeekend = (d: number) => {
@@ -276,6 +254,7 @@ const getAbnormalLabel = (rec: AttendanceRecordItem) => {
 const getDayCellClass = (row: MatrixRow, d: number) => {
   const rec = row.days[d]
   if (!rec) {
+    if (dayLabel(row.employee.id, d) === '请假') return "day-leave"
     if (isWeekend(d)) return "day-weekend"
     return "day-none"
   }
@@ -287,25 +266,29 @@ const getDayCellClass = (row: MatrixRow, d: number) => {
 }
 
 /* ====== date helpers ====== */
-function getMonthDateRange(ym: string) {
-  const [y, m] = ym.split("-").map(Number)
-  const last = new Date(y, m, 0).getDate()
-  return { date_from: `${ym}-01`, date_to: `${ym}-${String(last).padStart(2, "0")}` }
-}
-
-/* ====== data ====== */
+let fetchRequest = 0
 async function fetchData() {
-  if (!curMonth.value) { curMonth.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}` }
+  if (!curMonth.value) curMonth.value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2, '0')}`
+  const current = ++fetchRequest
   loading.value = true
   try {
-    const { date_from, date_to } = getMonthDateRange(curMonth.value)
-    const r = await getAttendanceRecords({ date_from, date_to, page: 1, page_size: 1000 })
-    allRecords.value = r?.items || []
-  } finally { loading.value = false }
+    const result = await getAttendanceMonthly(curMonth.value)
+    if (current !== fetchRequest) return
+    monthlyRows.value = result.rows
+    employees.value = result.rows.map(r => r.employee)
+    allRecords.value = result.rows.flatMap(r => r.records)
+  } catch { if (current === fetchRequest) { monthlyRows.value = []; allRecords.value = []; employees.value = [] } }
+  finally { if (current === fetchRequest) loading.value = false }
 }
-async function loadEmps() { employees.value = (await getAttendanceEmployees()) || [] }
+function dayLabel(employeeId: string, d: number) {
+  const row = monthlyRows.value.find(r => r.employee.id === employeeId)
+  const detail = row?.days[`${curMonth.value}-${String(d).padStart(2, '0')}`]
+  const labels: Record<string, string> = { leave: '请假', future: '未到日期', outside_employment: '非任职期', rest: '休', unregistered: '未登记', absent: '未出勤' }
+  return detail ? labels[detail.status] || '' : ''
+}
 
 function handleCellClick(emp: EmployeeOption, d: number) {
+  if (!auth.can('attendance:manage')) return
   const rec = allRecords.value.find(r => r.employee_id === emp.id && new Date(r.date).getDate() === d)
   if (rec) {
     isEditing.value = true
@@ -379,7 +362,6 @@ async function handleSave() {
 }
 
 onMounted(async () => {
-  await loadEmps()
   await fetchData()
 })
 </script>

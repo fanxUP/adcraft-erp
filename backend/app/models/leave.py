@@ -19,4 +19,7 @@ class LeaveRequest(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(16), default="pending")  # pending/approved/rejected/cancelled
     approved_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancelled_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)

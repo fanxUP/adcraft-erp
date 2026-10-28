@@ -1,6 +1,9 @@
 import logging
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.models.attendance import AttendanceRecord
+from app.models.employee import Employee
 from app.repositories.attendance_repo import AttendanceRuleRepository, AttendanceRecordRepository
 logger = logging.getLogger(__name__)
 
@@ -34,7 +37,13 @@ class AttendanceRecordService:
         records, total = await self.repo.list(skip, page_size, employee_id, date_from, date_to)
         return [self._d(r) for r in records], total
     async def get_record(self, rid): r = await self.repo.get_by_id(rid); return self._d(r) if r else None
-    async def create_record(self, d): return self._d(await self.repo.create(d))
+    async def create_record(self, d):
+        eid = UUID(d["employee_id"]) if isinstance(d["employee_id"], str) else d["employee_id"]
+        if await self.db.scalar(select(Employee.id).where(Employee.id == eid).with_for_update()) is None:
+            raise ValueError("员工不存在")
+        if await self.db.scalar(select(AttendanceRecord.id).where(AttendanceRecord.employee_id == eid, AttendanceRecord.date == d["date"])):
+            raise ValueError("该员工当天已有考勤，请编辑已有记录")
+        return self._d(await self.repo.create({**d, "employee_id": eid}))
     async def update_record(self, rid, d):
         r = await self.repo.get_by_id(rid)
         if not r: raise ValueError("打卡记录不存在")

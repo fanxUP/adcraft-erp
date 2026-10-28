@@ -21,3 +21,12 @@ export function createAttendanceRecord(data: { employee_id: string; date: string
 export function updateAttendanceRecord(id: string, data: Record<string, unknown>) { return put<AttendanceRecordItem>("/attendance/records/" + id, data) }
 export function deleteAttendanceRecord(id: string) { return del<SuccessResponse>("/attendance/records/" + id) }
 export function getAttendanceEmployees() { return get<EmployeeOption[]>("/attendance/employees") }
+export interface AttendanceMonthlyRow {
+  employee: EmployeeOption
+  records: AttendanceRecordItem[]
+  days: Record<string, { status: string; scheduled: boolean; leave_days: number }>
+  summary: { normal: number; half: number; missed: number; absent: number; overtime: number; unregistered: number; leave: number; late: number; work_days: number; conflicts: number }
+}
+export function getAttendanceMonthly(month: string) {
+  return get<{ month: string; rows: AttendanceMonthlyRow[] }>('/attendance/monthly', { params: { month } })
+}

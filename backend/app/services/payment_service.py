@@ -653,10 +653,17 @@ class ExpenseService:
         await self.repo.create(expense)
         return self._to_dict(expense)
 
+    async def _assert_not_salary(self, expense_id):
+        from app.models.salary import SalaryRecord
+        linked = await self.db.scalar(select(SalaryRecord.id).where(SalaryRecord.expense_id == expense_id))
+        if isinstance(linked, UUID):
+            raise ValueError("该支出由工资发放生成，金额和来源不可修改或删除；付款错误请撤销对应付款流水")
+
     async def update_expense(self, expense_id: UUID, data: dict) -> dict:
         e = await self.repo.get_by_id(expense_id, for_update=True)
         if not e:
             raise ValueError("支出记录不存在")
+        await self._assert_not_salary(expense_id)
         current_payable_amount = _money_or_zero(getattr(e, "payable_amount", 0))
         requested_payable_amount = _money_or_zero(
             data.get("payable_amount", current_payable_amount)
@@ -724,6 +731,7 @@ class ExpenseService:
         if not e:
             raise ValueError("支出记录不存在")
 
+        await self._assert_not_salary(expense_id)
         await FinanceReconciliationService(self.db).assert_source_has_no_active_reconciliations(
             source_type="expense", source_id=e.id,
         )
@@ -748,6 +756,7 @@ class ExpenseService:
         if not e:
             raise ValueError("支出记录不存在")
 
+        await self._assert_not_salary(expense_id)
         await FinanceReconciliationService(self.db).assert_source_has_no_active_reconciliations(
             source_type="expense", source_id=e.id,
         )

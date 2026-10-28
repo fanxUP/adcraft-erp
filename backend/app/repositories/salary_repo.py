@@ -9,12 +9,12 @@ class SalaryRecordRepository:
         self.db = db
 
     async def get_by_id(self, sid: UUID):
-        r = await self.db.execute(select(SalaryRecord).where(SalaryRecord.id == sid))
+        r = await self.db.execute(select(SalaryRecord).where(SalaryRecord.id == sid).execution_options(populate_existing=True))
         return r.scalar_one_or_none()
 
     async def get_by_employee_month(self, employee_id: UUID, month: str):
         r = await self.db.execute(
-            select(SalaryRecord).where(SalaryRecord.employee_id == employee_id, SalaryRecord.month == month)
+            select(SalaryRecord).where(SalaryRecord.employee_id == employee_id, SalaryRecord.month == month).execution_options(populate_existing=True)
         )
         return r.scalars().first()
 
@@ -41,8 +41,7 @@ class SalaryRecordRepository:
 
     async def update(self, s, data):
         for k, v in data.items():
-            if v is not None:
-                setattr(s, k, v)
+            setattr(s, k, v)
         await self.db.flush()
         await self.db.refresh(s)
         return s

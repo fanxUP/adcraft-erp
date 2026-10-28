@@ -1,6 +1,6 @@
 <template>
   <AppPage flush>
-    <template #header><PageHeader title="工资规则" description="维护员工工资标准、社保金额和生效日期。">
+    <template #header><PageHeader title="工资标准" description="维护员工工资标准、社保金额和生效日期。">
       <template #actions><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <el-select v-model="fEmp" placeholder="全部员工" clearable filterable style="width:200px">
           <el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" />
@@ -9,10 +9,12 @@
           <el-option v-for="d in DEPTS" :key="d.value" :label="d.label" :value="d.value" />
         </el-select>
         <el-button @click="fetchData" type="primary">刷新</el-button>
-        <el-button @click="openBatchEdit">批量设置</el-button>
+        <el-button v-if="auth.can('salary:calculate')" @click="openBatchEdit">批量设置</el-button>
       </div></template>
     </PageHeader></template>
+    <HrSectionNav group="salary" />
 
+    <el-alert title="调整工资标准会按生效日期新增版本，原标准保留；同一员工同一生效日期不可重复，已核算工资使用保存的快照。" type="info" :closable="false" style="margin-bottom:12px" />
     <!-- 汇总 -->
     <el-row :gutter="16" style="margin-bottom:16px">
       <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-primary)">{{setRows.length}}</div><div style="font-size:13px;color:var(--ad-text-secondary);margin-top:4px">已设置规则人数</div></div></el-card></el-col>
@@ -20,7 +22,7 @@
       <el-col :span="8"><el-card shadow="never" body-style="padding:16px"><div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--el-color-danger)">{{totalDeduction.toFixed(2)}}</div><div style="font-size:13px;color:var(--ad-text-secondary);margin-top:4px">社保金额合计/月</div></div></el-card></el-col>
     </el-row>
 
-    <!-- 工资规则表 -->
+    <!-- 工资标准表 -->
     <div class="sheet-wrapper" :style="{ maxHeight: 'calc(100vh - 320px)' }">
       <table class="rule-sheet" v-if="list.length">
         <thead>
@@ -42,20 +44,29 @@
             <td class="cell-num"><strong>{{ fmt(row.base_salary) }}</strong></td>
             <td class="cell-num deduction">{{ fmt(row.social_insurance) }}</td>
             <td class="cell-op">
+              <el-button text type="primary" size="small" @click="openHistory(row)">版本</el-button>
               <template v-if="row.id">
-                <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+                <el-button v-if="auth.can('salary:calculate')" text type="primary" size="small" @click="openEdit(row)">调整标准</el-button>
+                <el-button v-if="auth.can('salary:calculate')" text type="danger" size="small" @click="handleDelete(row)">删除</el-button>
               </template>
-              <el-button v-else text type="primary" size="small" @click="openAdd(row)">设置</el-button>
+              <el-button v-else-if="auth.can('salary:calculate')" text type="primary" size="small" @click="openAdd(row)">设置</el-button>
             </td>
           </tr>
         </tbody>
       </table>
-      <el-empty v-else description="暂无数据，请先设置员工工资规则" :image-size="80" />
+      <el-empty v-else description="暂无数据，请先设置员工工资标准" :image-size="80" />
     </div>
 
     <!-- 编辑 Dialog -->
-    <el-dialog v-model="showDialog" :title="'工资规则 - ' + form.employee_name" width="760px" top="3vh" :close-on-click-modal="false">
+    <el-dialog v-model="showHistory" :title="historyName + ' · 工资标准版本'" width="min(650px,94vw)">
+      <el-table :data="historyRows" stripe>
+        <el-table-column prop="effective_date" label="生效日期" />
+        <el-table-column prop="base_salary" label="月工资标准" />
+        <el-table-column prop="social_insurance" label="社保金额" />
+        <el-table-column prop="remark" label="备注" />
+      </el-table>
+    </el-dialog>
+    <el-dialog v-model="showDialog" :title="'工资标准 - ' + form.employee_name" width="760px" top="3vh" :close-on-click-modal="false">
       <el-form :model="form" label-width="110px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">
         <el-form-item label="员工" v-if="!isEditing"><el-select v-model="form.employee_id" filterable style="width:100%"><el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" /></el-select></el-form-item>
         <el-form-item label="生效日期" required><el-date-picker v-model="form.effective_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
@@ -63,11 +74,11 @@
         <el-form-item label="社保金额 (元)"><el-input-number v-model="form.social_insurance" :min="0" :precision="2" style="width:100%" /></el-form-item>
         <el-form-item label="备注" style="grid-column:1/3"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
+      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button v-if="auth.can('salary:calculate')" @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
 
     <!-- 批量设置 Dialog -->
-    <el-dialog v-model="showBatchDialog" title="批量设置工资规则" width="560px" :close-on-click-modal="false">
+    <el-dialog v-model="showBatchDialog" title="批量设置工资标准" width="560px" :close-on-click-modal="false">
       <el-form :model="batchForm" label-width="100px">
         <el-form-item label="适用员工" required>
           <el-select v-model="batchForm.employee_ids" multiple filterable style="width:100%" placeholder="选择需要设置规则的员工">
@@ -83,19 +94,24 @@
           <el-form-item label="社保金额"><el-input-number v-model="batchForm.social_insurance" :min="0" :precision="2" style="width:100%" /></el-form-item>
         </div>
       </el-form>
-      <template #footer><el-button @click="showBatchDialog=false">取消</el-button><el-button @click="handleBatchSave" :loading="batchSaving" type="primary">批量保存</el-button></template>
+      <template #footer><el-button @click="showBatchDialog=false">取消</el-button><el-button v-if="auth.can('salary:calculate')" @click="handleBatchSave" :loading="batchSaving" type="primary">批量保存</el-button></template>
     </el-dialog>
   </AppPage>
 </template>
 
 <script setup lang="ts">
+import { useDepartments } from '@/composables/useDepartments'
+import { useAuthStore } from '@/stores/auth'
+import HrSectionNav from '@/components/hr/HrSectionNav.vue'
+const auth = useAuthStore()
+
 import { ref, computed, onMounted } from "vue"
-import { getSalaryRules, createSalaryRule, updateSalaryRule, deleteSalaryRule } from "@/api/salaryRules"
+import { getSalaryRules, type SalaryRuleItem, createSalaryRule, deleteSalaryRule } from "@/api/salaryRules"
 import { getAttendanceEmployees, type EmployeeOption } from "@/api/attendance"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { AppPage, PageHeader } from "@/components/ui"
 
-const DEPTS = [{ value: "design", label: "设计部" }, { value: "production", label: "生产部" }, { value: "installation", label: "安装部" }, { value: "sales", label: "销售部" }, { value: "finance", label: "财务部" }, { value: "admin", label: "行政部" }]
+const { departmentOptions: DEPTS } = useDepartments()
 
 /* ====== state ====== */
 interface RuleRow {
@@ -108,6 +124,15 @@ interface RuleRow {
   social_insurance?: number | null
   remark?: string
 }
+const allVersions = ref<SalaryRuleItem[]>([])
+const showHistory = ref(false)
+const historyName = ref('')
+const historyRows = ref<SalaryRuleItem[]>([])
+function openHistory(row: RuleRow) {
+  historyName.value = row.employee_name
+  historyRows.value = allVersions.value.filter(r => r.employee_id === row.employee_id)
+  showHistory.value = true
+}
 const list = ref<RuleRow[]>([])
 const employees = ref<EmployeeOption[]>([])
 const loading = ref(false)
@@ -116,7 +141,7 @@ const fDept = ref("")
 const showDialog = ref(false)
 const isEditing = ref(false)
 const saving = ref(false)
-const editId = ref("")
+
 
 const initForm = {
   employee_id: "", effective_date: "", base_salary: 0,
@@ -139,7 +164,7 @@ const fmt = (v: unknown) => v != null ? Number(v).toFixed(2) : "-"
 const deptLabel = (eid: string) => {
   const emp = employees.value.find(e => e.id === eid)
   if (!emp || !emp.department) return "-"
-  const d = DEPTS.find(d => d.value === emp.department)
+  const d = DEPTS.value.find(d => d.value === emp.department)
   return d ? d.label : emp.department
 }
 
@@ -202,9 +227,16 @@ async function fetchData() {
   loading.value = true
   try {
     // 名单（在职员工）+ 规则合并：未设规则员工也展示，操作列显示「设置」
-    const r = await getSalaryRules({ page: 1, page_size: 200 })
-    const rules = r?.items || []
-    const ruleMap = new Map(rules.map(x => [x.employee_id, x]))
+    const rules = []
+    for (let page = 1; ; page++) {
+      const r = await getSalaryRules({ page, page_size: 100 })
+      rules.push(...r.items)
+      if (rules.length >= r.total || !r.items.length) break
+    }
+    allVersions.value = rules
+    const ruleMap = new Map<string, typeof rules[number]>()
+    const today = new Date().toLocaleDateString('sv-SE')
+    for (const rule of rules) if (!ruleMap.has(rule.employee_id) && rule.effective_date <= today) ruleMap.set(rule.employee_id, rule)
     list.value = employees.value.map(e => {
       const rule = ruleMap.get(e.id)
       return {
@@ -224,26 +256,20 @@ async function loadEmps() { employees.value = (await getAttendanceEmployees()) |
 
 function openEdit(r: RuleRow) {
   isEditing.value = true
-  editId.value = r.id || ""
-  form.value = { ...r, employee_name: r.employee_name || '' }
+  form.value = { ...r, effective_date: new Date().toLocaleDateString('sv-SE'), employee_name: r.employee_name || '' }
   showDialog.value = true
 }
 function openAdd(r: RuleRow) {
   isEditing.value = false
-  editId.value = ""
   form.value = { ...initForm, employee_id: r.employee_id, employee_name: r.employee_name }
   showDialog.value = true
 }
 async function handleSave() {
   saving.value = true
   try {
-    if (isEditing.value) {
-      await updateSalaryRule(editId.value, form.value)
-      ElMessage.success("已更新")
-    } else {
-      await createSalaryRule(form.value)
-      ElMessage.success("已创建")
-    }
+    if (!form.value.effective_date) { ElMessage.warning('请选择新标准的生效日期'); return }
+    await createSalaryRule(form.value)
+    ElMessage.success('新版本已保存，原标准保留')
     showDialog.value = false
     await fetchData()
   } catch (e: unknown) { ElMessage.error((e as { message?: string })?.message || "保存失败") }
@@ -252,7 +278,7 @@ async function handleSave() {
 
 async function handleDelete(r: RuleRow) {
   if (!r.id) return
-  await ElMessageBox.confirm("确定删除此工资规则？", "提示", { type: "warning" })
+  await ElMessageBox.confirm("确定删除此工资标准？", "提示", { type: "warning" })
   await deleteSalaryRule(r.id)
   ElMessage.success("已删除")
   await fetchData()
@@ -268,6 +294,7 @@ async function handleBatchSave() {
     ElMessage.warning("请选择员工")
     return
   }
+  if (!batchForm.value.effective_date) { ElMessage.warning("请选择生效日期"); return }
   batchSaving.value = true
   let ok = 0, fail = 0
   for (const eid of batchForm.value.employee_ids) {

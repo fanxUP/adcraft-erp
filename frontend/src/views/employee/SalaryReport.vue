@@ -10,6 +10,7 @@
       </div>
     </div>
 
+    <HrSectionNav group="salary" />
     <div class="report-sheet">
       <div class="report-title">{{ title }}</div>
       <div class="report-scroll" v-loading="loading">
@@ -32,7 +33,7 @@
                 </td>
                 <td v-else-if="c.type === 'item'" :class="['c-num', { 'c-strong': isStrong(c.key) }]">{{ fmtVal(row.values[c.key]) }}</td>
                 <td v-else-if="c.type === 'remark'" class="c-center">{{ row.remark || '' }}</td>
-                <td v-else class="c-center">{{ ({ pending: '待核算', calculated: '已核算', paid: '已发放' })[row.payment_status || 'pending'] }}</td>
+                <td v-else class="c-center">{{ ({ pending: '待核算', calculated: '待发放', partial: '部分发放', paid: '已发放' })[row.payment_status || 'pending'] }}</td>
               </template>
               <td class="no-print ops-cell"><el-button size="small" plain @click="openPayslip(row)">工资条</el-button></td>
             </tr>
@@ -63,6 +64,10 @@
 </template>
 
 <script setup lang="ts">
+import { useDepartments } from '@/composables/useDepartments'
+useDepartments()
+import HrSectionNav from '@/components/hr/HrSectionNav.vue'
+
 import { Document, Printer } from '@element-plus/icons-vue'
 import { ref, computed, onMounted } from "vue"
 import { getSalaryGrid, type SalaryItem, type SalaryGridRow } from "@/api/salaries"
@@ -87,11 +92,14 @@ const title = computed(() => {
   return `${y}年${Number(m)}月工资表`
 })
 
+let gridRequest = 0
 async function fetchData() {
+  const current = ++gridRequest
   if (!curMonth.value) curMonth.value = new Date().toISOString().slice(0, 7)
   loading.value = true
   try {
     const g = await getSalaryGrid(curMonth.value)
+    if (current !== gridRequest) return
     items.value = g?.items || []
     rows.value = g?.rows || []
   } catch (e: unknown) {

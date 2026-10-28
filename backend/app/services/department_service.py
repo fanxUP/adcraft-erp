@@ -1,6 +1,10 @@
 import logging
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from app.models.employee import Employee
+from app.models.attendance import AttendanceRule
+from app.models.employment_history import EmploymentHistory
 from app.repositories.department_repo import DepartmentRepository
 
 logger = logging.getLogger(__name__)
@@ -35,6 +39,8 @@ class DepartmentService:
         if not d:
             raise ValueError("部门不存在")
         if "code" in data and data["code"] and data["code"] != d.code:
+            if await self._used(d.code):
+                raise ValueError("部门已有引用，编码不可修改；可修改名称或停用")
             existing = await self.repo.get_by_code(data["code"])
             if existing:
                 raise ValueError(f"部门编码 {data['code']} 已存在")
@@ -53,8 +59,17 @@ class DepartmentService:
         children = await self.repo.list(parent_id=did, include_inactive=True)
         if children:
             raise ValueError(f"部门 '{d.name}' 下有子部门，无法删除")
+        if await self._used(d.code):
+            raise ValueError("部门已有员工、考勤规则或履历引用，请停用以保留历史")
         await self.repo.soft_delete(d)
         return True
+
+    async def _used(self, code):
+        for model, condition in [(Employee, Employee.department == code), (AttendanceRule, AttendanceRule.department == code),
+                (EmploymentHistory, (EmploymentHistory.previous_department == code) | (EmploymentHistory.new_department == code))]:
+            if await self.db.scalar(select(func.count()).select_from(model).where(condition)):
+                return True
+        return False
 
     def _d(self, d):
         return {

@@ -64,6 +64,7 @@ def service():
          patch("app.services.employee_service.UserService.provision_employee_user", new=AsyncMock(return_value=provision)):
         MockRepoClass.return_value = repo
         svc = EmployeeService(AsyncMock())
+        svc.db.add = MagicMock()
         svc.repo = repo
         yield svc
 

@@ -207,3 +207,11 @@ describe('page access matrix', () => {
     expect(canAccessRoute('PaymentOCR', custom, [], ['ai_quote:read'])).toBe(true)
   })
 })
+
+it('opens HR pages by explicit domain permissions without granting system access', () => {
+  expect(canAccessRoute('EmployeeList', ['custom'], [], ['employee:read'])).toBe(true)
+  expect(canAccessRoute('SalaryList', ['custom'], [], ['employee:read'])).toBe(false)
+  expect(canAccessRoute('SalaryList', ['custom'], [], ['salary:read'])).toBe(true)
+  expect(canAccessRoute('LeaveRequestList', ['custom'], [], ['leave:read'])).toBe(true)
+  expect(canAccess('system', ['custom'], ['employee:read','salary:read'])).toBe(false)
+})

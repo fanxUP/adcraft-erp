@@ -1,15 +1,18 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Literal
+Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+PunchStatus = Literal["normal", "half_day", "late", "early", "missed", "absent"]
 from datetime import date, datetime, time
 from typing import Optional
 
 class AttendanceRuleCreate(BaseModel):
     name: str; department: Optional[str] = None; check_in_time: time; check_out_time: time
-    work_days: Optional[list[str]] = None; late_threshold: int = 0; early_leave_threshold: int = 0
+    work_days: Optional[list[Weekday]] = None; late_threshold: int = 0; early_leave_threshold: int = 0
     overtime_rate: float = 1.5; is_active: bool = True
 
 class AttendanceRuleUpdate(BaseModel):
     name: Optional[str] = None; department: Optional[str] = None; check_in_time: Optional[time] = None
-    check_out_time: Optional[time] = None; work_days: Optional[list[str]] = None
+    check_out_time: Optional[time] = None; work_days: Optional[list[Weekday]] = None
     late_threshold: Optional[int] = None; early_leave_threshold: Optional[int] = None
     overtime_rate: Optional[float] = None; is_active: Optional[bool] = None
 
@@ -21,13 +24,13 @@ class AttendanceRuleResponse(BaseModel):
 
 class AttendanceRecordCreate(BaseModel):
     employee_id: str; date: date; check_in_time: Optional[datetime] = None; check_out_time: Optional[datetime] = None
-    check_in_status: str = "normal"; check_out_status: str = "normal"; source: str = "manual_input"
-    remark: Optional[str] = None; overtime_hours: Optional[float] = 0
+    check_in_status: PunchStatus = "normal"; check_out_status: PunchStatus = "normal"; source: str = "manual_input"
+    remark: Optional[str] = None; overtime_hours: Optional[float] = Field(0, ge=0, le=24, allow_inf_nan=False)
 
 class AttendanceRecordUpdate(BaseModel):
     check_in_time: Optional[datetime] = None; check_out_time: Optional[datetime] = None
-    check_in_status: Optional[str] = None; check_out_status: Optional[str] = None
-    remark: Optional[str] = None; overtime_hours: Optional[float] = None
+    check_in_status: Optional[PunchStatus] = None; check_out_status: Optional[PunchStatus] = None
+    remark: Optional[str] = None; overtime_hours: Optional[float] = Field(None, ge=0, le=24, allow_inf_nan=False)
 
 class AttendanceRecordResponse(BaseModel):
     id: str; employee_id: str; date: date; check_in_time: Optional[datetime] = None

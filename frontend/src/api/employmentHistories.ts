@@ -2,7 +2,7 @@ import { get, post, put, del } from "./index"
 import type { PaginatedData, SuccessResponse } from "@/types/api"
 
 export interface EmploymentHistoryItem {
-  id: string; employee_id: string; employee_no?: string | null; employee_name?: string | null
+  is_automatic?: boolean; id: string; employee_id: string; employee_no?: string | null; employee_name?: string | null
   change_date: string; change_type: string
   previous_department?: string | null; new_department?: string | null
   previous_position?: string | null; new_position?: string | null

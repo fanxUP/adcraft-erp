@@ -1,8 +1,9 @@
 <template>
   <AppPage>
     <template #header><PageHeader title="员工履历" description="集中查看员工入职、晋升、调岗和离职记录。">
-      <template #actions><el-button @click="openCreate" type="primary">新增记录</el-button></template>
+      <template #actions><el-button v-if="auth.can('employee:manage')" @click="openCreate" type="primary">新增记录</el-button></template>
     </PageHeader></template>
+    <HrSectionNav group="employee" />
     <PageToolbar aria-label="员工履历筛选">
         <el-select v-model="fEmp" placeholder="员工" clearable filterable style="width:200px" @change="fetchData">
           <el-option v-for="e in employees" :key="e.id" :label="e.name+' ('+e.employee_no+')'" :value="e.id" />
@@ -22,7 +23,7 @@
       <el-table-column label="新职位" width="120"><template #default="{row}">{{row.new_position||"-"}}</template></el-table-column>
       <el-table-column prop="reason" label="原因" min-width="150" />
       <el-table-column label="操作" width="200" fixed="right">
-        <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
+        <template #default="{row}"><el-button v-if="auth.can('employee:manage') && !row.is_automatic" text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button v-if="auth.can('employee:manage') && !row.is_automatic" text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
       </el-table>
       <template #error><StatePanel state="error" action-label="重新加载" @action="fetchData" /></template>
@@ -40,11 +41,15 @@
         <el-form-item label="新职位"><el-input v-model="form.new_position" /></el-form-item>
         <el-form-item label="备注" style="grid-column:1/3"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
+      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button v-if="auth.can('employee:manage')" @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
   </AppPage>
 </template>
 <script setup lang="ts">
+import { useAuthStore } from '@/stores/auth'
+import HrSectionNav from '@/components/hr/HrSectionNav.vue'
+const auth = useAuthStore()
+
 import { computed, ref, onMounted } from "vue"
 import { getEmploymentHistories, createEmploymentHistory, updateEmploymentHistory, deleteEmploymentHistory, type EmploymentHistoryItem } from "@/api/employmentHistories"
 import { getAttendanceEmployees, type EmployeeOption } from "@/api/attendance"

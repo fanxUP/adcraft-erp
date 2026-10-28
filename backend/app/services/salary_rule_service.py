@@ -1,7 +1,10 @@
 import logging
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
+from datetime import date
+from app.models.salary import SalaryRecord
+from app.services.attendance_summary_service import business_today
 from app.repositories.salary_rule_repo import SalaryRuleRepository
 from app.models.employee import Employee
 
@@ -47,28 +50,47 @@ class SalaryRuleService:
         rules = await self.repo.get_by_employee(employee_id)
         if not rules:
             return None
-        latest = rules[0]  # ordered by effective_date desc
+        latest = next((r for r in rules if r.effective_date <= business_today()), None)
+        if latest is None:
+            return None
         return self._to_dict(latest)
 
     async def create_rule(self, data):
         if isinstance(data.get("employee_id"), str):
             data["employee_id"] = UUID(data["employee_id"])
+        if not await self._load_employee(data["employee_id"]):
+            raise ValueError("员工不存在")
         existing = await self.repo.get_by_employee(data["employee_id"])
-        if existing:
-            # 一人一条：同员工已有规则则覆盖更新，不新增记录
-            return self._to_dict(await self.repo.update(existing[0], data))
+        if any(r.effective_date == data["effective_date"] for r in existing):
+            raise ValueError("该生效日期已有工资标准，请选择新的生效日期创建版本")
+        # A partial batch adjustment inherits unspecified values from the prior version.
+        prior = next((r for r in existing if r.effective_date < data["effective_date"]), None)
+        if prior:
+            for field in ("base_salary", "social_insurance"):
+                data.setdefault(field, getattr(prior, field))
         return self._to_dict(await self.repo.create(data))
+
+    async def _assert_unused(self, rule):
+        used = await self.db.scalar(select(func.count()).select_from(SalaryRecord).where(
+            SalaryRecord.employee_id == rule.employee_id,
+            SalaryRecord.month >= rule.effective_date.strftime("%Y-%m")))
+        if used:
+            raise ValueError("该工资标准已有核算记录，请用新的生效日期新增版本，保留历史")
 
     async def update_rule(self, rid: UUID, data):
         r = await self.repo.get_by_id(rid)
         if not r:
             raise ValueError("工资规则不存在")
+        await self._assert_unused(r)
+        if data.get("effective_date", r.effective_date) != r.effective_date:
+            return await self.create_rule({"employee_id": r.employee_id, "base_salary": r.base_salary, "social_insurance": r.social_insurance, **data})
         return self._to_dict(await self.repo.update(r, data))
 
     async def delete_rule(self, rid: UUID):
         r = await self.repo.get_by_id(rid)
         if not r:
             return False
+        await self._assert_unused(r)
         await self.repo.delete(r)
         return True
 

@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.models.user import User  # register Employee relationship for standalone tests
 from app.models.salary_grid import SalaryItem
 from app.services.salary_service import SalaryRecordService
 
@@ -35,11 +36,21 @@ def service():
         MockRepo.return_value = repo
         svc = SalaryRecordService(MagicMock())
         svc.repo = repo
+        svc._lock_employee = AsyncMock()
+        svc._capture = AsyncMock()
+        svc._upsert_grid_value = AsyncMock()
+        svc._attendance_stats = AsyncMock(return_value={})
+        svc.list_items = AsyncMock(return_value=[])
+        svc._load_employee = AsyncMock(return_value=make_employee())
+        svc._existing_record = AsyncMock(return_value=None)
+        svc._grid_values = AsyncMock(return_value={})
+        async def month_items(month): return await svc.list_items()
+        svc._month_items = month_items
         yield svc
 
 
 async def _patch_queries(svc, **overrides):
-    svc._active_employees = AsyncMock(return_value=overrides.get("active", [MagicMock(id=EMP1)]))
+    svc._month_employees = AsyncMock(return_value=overrides.get("active", [MagicMock(id=EMP1)]))
     svc._latest_rule = AsyncMock(return_value=overrides.get("rule", make_rule()))
     svc._existing_record = AsyncMock(return_value=overrides.get("existing", None))
     svc._monthly_overtime_hours = AsyncMock(return_value=overrides.get("overtime", 0.0))
@@ -104,7 +115,7 @@ async def test_generate_month_uses_given_employee_ids(service):
     rule = make_rule(employee_id=EMP2)
     await _patch_queries(service, rule=rule)
     result = await service.generate_month("2026-07", [EMP2])
-    service._active_employees.assert_not_called()
+    service._month_employees.assert_not_called()
     assert result["created"] == 1
     assert service.repo.create.call_args[0][0]["employee_id"] == EMP2
 
@@ -143,6 +154,9 @@ def make_record(**kwargs):
     r.net_salary = kwargs.get("net_salary", 0.0)
     r.payment_status = kwargs.get("payment_status", "pending")
     r.remark = kwargs.get("remark", None)
+    r.snapshot = kwargs.get("snapshot")
+    r.expense_id = kwargs.get("expense_id")
+    r.paid_at = kwargs.get("paid_at")
     return r
 
 
@@ -169,7 +183,7 @@ def _setup_report(service, records, prev_records=None, employees=None, rule=None
 
 @pytest.mark.asyncio
 async def test_report_month_returns_row_fields(service):
-    record = make_record(base_salary=5000.0, overtime_pay=100.0, remark="备注")
+    record = make_record(base_salary=5000.0, overtime_pay=100.0, deduction=500.0, net_salary=4600.0, remark="备注")
     rule = make_rule(social_insurance=500.0)
     att = {str(EMP1): {"normal": 20, "half": 2, "missed": 0, "absent": 1,
                        "records": 23, "overtime": 10.5}}
@@ -185,7 +199,7 @@ async def test_report_month_returns_row_fields(service):
     assert row["attend_days"] == 21.0  # 20 + 0.5*2
     assert row["missed_days"] == 0
     non_weekend = sum(1 for d in range(1, 32) if date(2026, 7, d).weekday() < 5)
-    assert row["absent_days"] == max(0, non_weekend - 23) + 1
+    assert row["absent_days"] == 1
     assert row["attendance_bonus"] == 0.0  # 全勤标准已从规则移除，回退 0
     assert row["performance"] == 0.0  # 绩效标准已从规则移除，回退 0
     assert row["base_salary"] == 5000.0
@@ -217,7 +231,7 @@ async def test_report_month_uses_prev_month_net(service):
 
 @pytest.mark.asyncio
 async def test_report_month_no_rule_and_no_attendance_zero(service):
-    record = make_record(base_salary=5000.0)
+    record = make_record(base_salary=5000.0, net_salary=5000.0)
     _setup_report(service, [record], rule=None, att={})
     result = await service.report_month("2026-07")
     row = result["rows"][0]
@@ -227,7 +241,7 @@ async def test_report_month_no_rule_and_no_attendance_zero(service):
     assert row["social_deduction"] == 0.0
     assert row["attend_days"] == 0
     assert row["gross"] == 5000.0
-    assert row["net_salary"] == 5000.0
+    assert row["net_salary"] == 5000.0  # 使用已存结果，不从现行标准重算
 
 
 @pytest.mark.asyncio
@@ -281,7 +295,7 @@ async def test_compute_month_evaluates_formulas(service):
     ]
     rule = make_rule(base_salary=5000.0)
     service.list_items = AsyncMock(return_value=items)
-    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._month_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._attendance_stats = AsyncMock(return_value={
         str(EMP1): {"normal": 20, "half": 0, "missed": 0, "absent": 0, "records": 20, "overtime": 10}})
     service._latest_rule = AsyncMock(return_value=rule)
@@ -312,7 +326,7 @@ async def test_compute_month_attendance_conditional(service):
     items = [{"key": "att_bonus", "formula": "att_bonus if (missed_days == 0 and absent_days == 0) else 0",
               "is_active": True}]
     service.list_items = AsyncMock(return_value=items)
-    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._month_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule())
     service._param_values_for_month = AsyncMock(return_value={})
     service._grid_values = AsyncMock(return_value={})
@@ -340,7 +354,7 @@ async def test_compute_month_collects_eval_errors(service):
     # 公式合法但该员工触发除零 → 计入 errors，不中断
     items = [{"key": "x", "formula": "100 / (work_days - records)", "is_active": True}]
     service.list_items = AsyncMock(return_value=items)
-    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._month_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule())
     service._param_values_for_month = AsyncMock(return_value={})
     service._grid_values = AsyncMock(return_value={})
@@ -366,7 +380,7 @@ async def test_upsert_record_creates_when_missing(service):
     assert data["month"] == "2026-07"
     assert data["base_salary"] == 5000.0
     assert data["net_salary"] == 4450.0
-    assert data["payment_status"] == "pending"
+    assert data["payment_status"] == "calculated"
     service.repo.update.assert_not_called()
 
 
@@ -390,7 +404,7 @@ async def test_get_grid_returns_items_and_rows(service):
         {"key": "net", "label": "实发工资", "formula": "max(0, gross - deduction)", "sort_order": 2,
          "is_active": True, "is_builtin": True, "id": "2"},
     ])
-    service._active_employees = AsyncMock(return_value=[make_employee()])
+    service._month_employees = AsyncMock(return_value=[make_employee()])
     service._grid_values = AsyncMock(return_value={(str(EMP1), "basic"): 5000.0})
     service.repo.list = AsyncMock(return_value=([make_record(net_salary=4400.0, payment_status="paid")], 1))
 
@@ -400,7 +414,7 @@ async def test_get_grid_returns_items_and_rows(service):
     row = result["rows"][0]
     assert row["employee_no"] == "E001"
     assert row["values"]["basic"] == 5000.0
-    assert row["values"]["net"] is None
+    assert row["values"]["net"] == 4400.0
     assert row["payment_status"] == "paid"
 
 
@@ -431,12 +445,9 @@ async def test_save_cells_payment_status(service):
     service.list_items = AsyncMock(return_value=[])
     existing = make_record(payment_status="pending")
     service._existing_record = AsyncMock(return_value=existing)
-    result = await service.save_cells("2026-07",
-                                      payments=[{"employee_id": str(EMP1), "payment_status": "paid"}])
-    assert result["saved"] == 0
-    data = service.repo.update.call_args[0][1]
-    assert data["payment_status"] == "paid"
-    assert data["paid_at"] is not None
+    with pytest.raises(ValueError, match="登记发放"):
+        await service.save_cells("2026-07", payments=[{"employee_id": str(EMP1), "payment_status": "paid"}])
+    service.repo.update.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -505,7 +516,7 @@ async def test_compute_month_skips_manual_items_and_preserves_cells(service):
         {"key": "hot", "formula": "", "is_active": True, "is_manual": True},
     ]
     service.list_items = AsyncMock(return_value=items)
-    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._month_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule(base_salary=5000.0))
     service._attendance_stats = AsyncMock(return_value={})
     service._param_values_for_month = AsyncMock(return_value={})
@@ -529,7 +540,7 @@ async def test_compute_month_injects_month_params(service):
     # 公式引用自定义参数 hot_std（非内置变量），当月填 200 → bonus = 5000*0.2
     items = [{"key": "bonus", "formula": "base * hot_std", "is_active": True}]
     service.list_items = AsyncMock(return_value=items)
-    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._month_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule(base_salary=5000.0))
     service._attendance_stats = AsyncMock(return_value={})
     service._param_values_for_month = AsyncMock(return_value={"hot_std": 0.2})
@@ -553,7 +564,7 @@ async def test_compute_month_preserves_manually_edited_cell(service):
         {"key": "gross", "formula": "basic", "is_active": True},
     ]
     service.list_items = AsyncMock(return_value=items)
-    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._month_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule(base_salary=5000.0))
     service._attendance_stats = AsyncMock(return_value={})
     service._param_values_for_month = AsyncMock(return_value={})
@@ -705,7 +716,7 @@ async def test_compute_month_new_formula_chain(service):
         {"key": "net", "formula": "max(0, gross - deduction)", "is_active": True, "is_manual": False},
     ]
     service.list_items = AsyncMock(return_value=items)
-    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._month_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule(
         base_salary=5000.0, social_insurance=200.0))
     service._attendance_stats = AsyncMock(return_value={
@@ -741,7 +752,7 @@ async def test_compute_month_pins_manual_other_and_recomputes_total(service):
         {"key": "base_total", "formula": "basic + other_base", "is_active": True},
     ]
     service.list_items = AsyncMock(return_value=items)
-    service._active_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
+    service._month_employees = AsyncMock(return_value=[MagicMock(id=EMP1)])
     service._latest_rule = AsyncMock(return_value=make_rule(base_salary=5000.0))
     service._attendance_stats = AsyncMock(return_value={})
     service._param_values_for_month = AsyncMock(return_value={})

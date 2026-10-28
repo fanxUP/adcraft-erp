@@ -74,6 +74,12 @@ export interface SalaryGridRow {
   payment_status: string | null
   remark: string | null
   paid_at: string | null
+  lock_reason?: string | null
+  locked?: boolean
+  has_snapshot?: boolean
+  expense_id?: string | null
+  paid_amount?: number
+  remaining_amount?: number
 }
 
 export interface SalaryGridResult {
@@ -85,6 +91,8 @@ export interface SalaryGridResult {
 export interface SalaryComputeResult {
   month: string
   computed: number
+  skipped_locked?: number
+  warnings?: string[]
   errors: string[]
 }
 
@@ -183,4 +191,8 @@ export function saveSalaryGrid(
   remarks?: { employee_id: string; remark: string | null }[],
 ) {
   return post<SalarySaveResult>("/salaries/grid/save", { month, cells, payments, remarks })
+}
+
+export function registerSalaryPayment(data: { month: string; employee_id: string; amount: number; paid_at: string; payment_account_id: string; payment_method: string; idempotency_key: string }) {
+  return post<unknown>('/salaries/payments', data)
 }

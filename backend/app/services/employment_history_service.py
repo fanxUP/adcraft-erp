@@ -14,7 +14,7 @@ class EmploymentHistoryService:
         self.repo = EmploymentHistoryRepository(db)
 
     async def _load_employee(self, eid: UUID):
-        r = await self.db.execute(select(Employee).where(Employee.id == eid, Employee.deleted_at.is_(None)))
+        r = await self.db.execute(select(Employee).where(Employee.id == eid))
         return r.scalar_one_or_none()
 
     async def list_histories(self, page=1, page_size=20, employee_id=None, change_type=None):
@@ -50,18 +50,23 @@ class EmploymentHistoryService:
         h = await self.repo.get_by_id(hid)
         if not h:
             raise ValueError("履历记录不存在")
+        if h.is_automatic is True:
+            raise ValueError("档案变动自动履历不可修改，请更正员工档案生成新记录")
         return self._d(await self.repo.update(h, data))
 
     async def delete_history(self, hid: UUID):
         h = await self.repo.get_by_id(hid)
         if not h:
             return False
+        if h.is_automatic is True:
+            raise ValueError("档案变动自动履历保留审计，不能删除")
         await self.repo.delete(h)
         return True
 
     def _d(self, h):
         return {
             "id": str(h.id),
+            "is_automatic": h.is_automatic is True,
             "employee_id": str(h.employee_id),
             "change_date": h.change_date.isoformat() if h.change_date else None,
             "change_type": h.change_type,

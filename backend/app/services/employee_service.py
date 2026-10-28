@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from uuid import UUID
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +8,7 @@ from app.services.number_generator import generate_employee_no
 from app.services.user_service import UserService
 from app.models.employee import Employee
 from app.models.user import User
+from app.services.attendance_summary_service import business_today
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class EmployeeService:
         raw_user_id = data.pop("user_id", None)
         if raw_user_id not in (None, ""):
             raise ValueError("员工账号由员工档案自动生成，不能手工指定")
+        await self._validate_department(data)
         role_ids = data.pop("role_ids", [])
         initial_password = data.pop("initial_password", None)
         if not data.get("employee_no"):
@@ -60,6 +62,7 @@ class EmployeeService:
         # Make the just-created relationship available to the response even
         # before SQLAlchemy performs a refresh/commit.
         employee.user = binding_user
+        await self._record_history(employee, "hire", employee.hire_date or business_today())
         result = self._d(employee)
         result.update({
             "user_username": binding_user.username,
@@ -74,13 +77,65 @@ class EmployeeService:
         data = dict(data)
         if "user_id" in data:
             raise ValueError("请在“登录账号”绑定操作中修改账号关系")
+        previous = (e.department, e.position, e.employment_status)
+        await self._validate_department(data, e.department)
         was_active = e.employment_status == "active" and e.is_active is True
         _convert_license_expire_date(data)
         employee = await self.repo.update(e, data)
         is_active = employee.employment_status == "active" and employee.is_active is True
         if was_active and not is_active:
             await self._disable_linked_user(employee)
+        if previous[2] != employee.employment_status and employee.employment_status == "resigned":
+            await self._record_history(employee, "resignation", employee.resignation_date or business_today(), previous)
+        elif previous[:2] != (employee.department, employee.position):
+            await self._record_history(employee, "transfer", business_today(), previous)
         return self._d(employee)
+
+    async def _validate_department(self, data, original=None):
+        code = data.get("department")
+        if code and code != original:
+            from app.models.department import Department
+            active = await self.db.scalar(select(Department.id).where(Department.code == code,
+                Department.is_active.is_(True), Department.deleted_at.is_(None)))
+            if active is None:
+                raise ValueError("请选择启用的部门")
+
+    async def _record_history(self, employee, kind, when, previous=None):
+        from app.models.employment_history import EmploymentHistory
+        previous = previous or (None, None, None)
+        self.db.add(EmploymentHistory(employee_id=employee.id, change_type=kind, change_date=when,
+            previous_department=previous[0], previous_position=previous[1], new_department=employee.department,
+            new_position=employee.position, is_automatic=True, reason="员工档案变动自动记录"))
+        await self.db.flush()
+
+    async def handover(self, eid, include_salary=False):
+        from app.models.task import DesignTask, ProductionTask, InstallationTask
+        from app.models.order_task_assignee import OrderTaskAssignee
+        from app.models.salary import SalaryRecord
+        from app.services.salary_service import SalaryRecordService
+        from sqlalchemy import or_
+        employee = await self.repo.get_by_id(eid)
+        if employee is None:
+            raise ValueError("员工不存在")
+        tasks = []
+        assigned_docs = select(OrderTaskAssignee.document_id).where(OrderTaskAssignee.employee_id == eid)
+        for model, no, label, path in [(DesignTask, "design_no", "设计", "design-tasks"),
+                (ProductionTask, "production_no", "制作", "production-tasks"),
+                (InstallationTask, "installation_no", "安装", "installation-tasks")]:
+            conditions = [model.document_id.in_(assigned_docs)]
+            if employee.user_id:
+                conditions.append(model.assigned_to == employee.user_id)
+            rows = (await self.db.execute(select(model).where(or_(*conditions),
+                model.scope_status == "active", model.status.notin_(["completed", "confirmed", "cancelled", "rolled_back"])))).scalars().unique().all()
+            tasks.extend(dict(id=str(t.id), task_no=getattr(t, no), task_type=label, project_name=t.project_name,
+                url=f"/{path}/{t.id}") for t in rows)
+        unpaid = []
+        if include_salary:
+            for record in (await self.db.execute(select(SalaryRecord).where(SalaryRecord.employee_id == eid))).scalars().all():
+                _, _, remaining, _ = await SalaryRecordService(self.db)._payment_summary(record)
+                if remaining > 0:
+                    unpaid.append(dict(month=record.month, remaining_amount=remaining))
+        return dict(tasks=tasks, unpaid_salaries=unpaid)
 
     @staticmethod
     def _coerce_user_id(raw_user_id) -> UUID:

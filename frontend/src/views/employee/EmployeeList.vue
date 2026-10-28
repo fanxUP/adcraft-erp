@@ -1,8 +1,9 @@
 <template>
   <AppPage>
     <PageHeader title="员工管理" description="统一维护员工档案、任职状态、证件和附件；新建员工时自动生成登录账号。">
-      <template #actions><el-button @click="openCreate" type="primary">新建员工</el-button></template>
+      <template #actions><el-button v-if="auth.can('employee:manage')" @click="openCreate" type="primary">新建员工</el-button></template>
     </PageHeader>
+    <HrSectionNav group="employee" />
     <PageToolbar aria-label="员工筛选">
         <el-select v-model="filterDept" placeholder="部门筛选" clearable style="width:130px" @change="fetchData">
           <el-option v-for="d in DEPTS" :key="d.value" :label="d.label" :value="d.value" />
@@ -17,50 +18,37 @@
       <el-table :data="list" v-loading="loading" stripe style="width:100%">
       <el-table-column prop="employee_no" label="工号" width="120" />
       <el-table-column prop="name" label="姓名" width="180" />
-      <el-table-column label="登录工号" width="190">
-        <template #default="{row}">
-          <template v-if="row.user_username">
-            <span>{{ row.user_username }}</span>
-            <el-tag v-if="row.user_is_active === false" type="warning" size="small" style="margin-left: 6px">已停用</el-tag>
-          </template>
-          <el-tag v-else type="warning" size="small">待迁移</el-tag>
-        </template>
-      </el-table-column>
       <el-table-column prop="phone" label="手机号" width="130" />
-      <el-table-column label="性别" width="60"><template #default="{row}">{{ {male:"男",female:"女"} [row.gender] || row.gender || "-" }}</template></el-table-column>
-      <el-table-column prop="ethnicity" label="族别" width="90"><template #default="{row}">{{ row.ethnicity || "-" }}</template></el-table-column>
       <el-table-column label="部门" width="120"><template #default="{row}">{{ deptLabel(row.department) }}</template></el-table-column>
       <el-table-column prop="position" label="职位" width="120" />
-      <el-table-column label="聘用类型" width="100"><template #default="{row}">{{ typeLabel(row.employment_type) }}</template></el-table-column>
-      <el-table-column label="学历" width="70"><template #default="{row}">{{ row.education || "-" }}</template></el-table-column>
       <el-table-column prop="hire_date" label="入职日期" width="120" />
       <el-table-column label="状态" width="100"><template #default="{row}"><el-tag :type="statusColor(row.employment_status)" size="small">{{ statusLabel(row.employment_status) }}</el-tag></template></el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
-        <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button><el-button text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
+        <template #default="{row}"><el-button text type="primary" size="small" @click="openEdit(row)">{{ auth.can('employee:manage') ? '查看 / 编辑' : '查看' }}</el-button><el-button v-if="auth.can('employee:manage')" text type="danger" size="small" @click="handleDelete(row)">删除</el-button></template>
       </el-table-column>
       </el-table>
       <template #footer><el-pagination v-if="total > 0" v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10,20,50]" :total="total" layout="total,sizes,prev,pager,next" @change="fetchData" /></template>
     </DataTableShell>
-    <el-dialog v-model="showDialog" :title="isEditing?'编辑员工':'新建员工'" width="820px" top="5vh" :close-on-click-modal="false">
-      <el-form :model="form" label-width="90px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">
+    <el-dialog v-model="showDialog" :title="isEditing ? (auth.can('employee:manage') ? '查看 / 编辑员工' : '员工详情') : '新建员工'" width="820px" top="5vh" :close-on-click-modal="false">
+      <el-form :disabled="!auth.can('employee:manage')" :model="form" label-width="90px" label-position="top" style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">
         <el-divider content-position="left" style="grid-column:1/3;margin:0 0 4px">基本信息</el-divider>
         <el-form-item label="姓名" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="手机号"><el-input v-model="form.phone" /></el-form-item>
         <el-form-item label="性别"><el-select v-model="form.gender" clearable style="width:100%"><el-option v-for="g in GENDER_OPTIONS" :key="g.value" :label="g.label" :value="g.value" /></el-select></el-form-item>
         <el-form-item label="族别"><el-select v-model="form.ethnicity" clearable filterable style="width:100%"><el-option v-for="e in ETHNICITY_OPTIONS" :key="e.value" :label="e.label" :value="e.value" /></el-select></el-form-item>
-        <el-form-item label="出生日期"><el-date-picker v-model="form.birth_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
-        <el-form-item label="部门"><el-select v-model="form.department" clearable style="width:100%"><el-option v-for="d in DEPTS" :key="d.value" :label="d.label" :value="d.value" /></el-select></el-form-item>
+        <el-form-item v-if="auth.can('employee:private')" label="出生日期"><el-date-picker v-model="form.birth_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+        <el-form-item label="部门"><el-select v-model="form.department" clearable style="width:100%"><el-option v-if="form.department && !DEPTS.some(d=>d.value===form.department)" :label="form.department" :value="form.department" disabled /><el-option v-for="d in DEPTS" :key="d.value" :label="d.label" :value="d.value" :disabled="!d.is_active" /></el-select></el-form-item>
         <el-form-item label="职位"><el-input v-model="form.position" /></el-form-item>
         <el-form-item label="聘用类型"><el-select v-model="form.employment_type" clearable style="width:100%"><el-option label="全职" value="full_time" /><el-option label="兼职" value="part_time" /><el-option label="合同" value="contract" /><el-option label="实习" value="intern" /></el-select></el-form-item>
         <el-form-item label="学历"><el-select v-model="form.education" clearable style="width:100%"><el-option label="初中" value="middle_school" /><el-option label="高中" value="high_school" /><el-option label="中专" value="vocational" /><el-option label="大专" value="college" /><el-option label="本科" value="bachelor" /><el-option label="硕士" value="master" /><el-option label="博士" value="phd" /></el-select></el-form-item>
         <el-form-item label="在职状态"><el-select v-model="form.employment_status" style="width:100%"><el-option label="在职" value="active" /><el-option label="离职" value="resigned" /><el-option label="停职" value="suspended" /></el-select></el-form-item>
         <el-divider content-position="left" style="grid-column:1/3;margin:8px 0 4px">登录账号</el-divider>
-        <el-form-item v-if="!isEditing" label="系统角色" required>
+        <el-form-item v-if="!isEditing && auth.can('system:super_admin')" label="系统角色" required>
           <el-select v-model="form.role_ids" multiple filterable style="width:100%" placeholder="选择账号角色">
             <el-option v-for="role in roleOptions" :key="role.id" :label="roleLabel(role.name)" :value="role.id" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="!isEditing" label="初始密码">
+        <el-form-item v-if="!isEditing && auth.can('system:super_admin')" label="初始密码">
           <el-input v-model="form.initial_password" type="password" show-password maxlength="128" placeholder="留空则自动生成一次性密码" />
           <div class="binding-tip">初始密码只显示一次，首次登录必须修改；不能使用工号、手机号或身份证号。</div>
         </el-form-item>
@@ -72,7 +60,7 @@
           <div v-else-if="isEditing" class="binding-after-save">该历史员工尚未完成账号迁移，请联系管理员处理。</div>
           <div v-else class="binding-after-save">保存员工后将自动生成与工号相同的登录账号。</div>
         </el-form-item>
-        <el-divider content-position="left" style="grid-column:1/3;margin:8px 0 4px">证件信息</el-divider>
+        <template v-if="auth.can('employee:private')"><el-divider content-position="left" style="grid-column:1/3;margin:8px 0 4px">证件信息</el-divider>
         <el-form-item label="身份证号"><el-input v-model="form.id_card" /></el-form-item>
         <el-form-item label="驾驶证号"><el-input v-model="form.license_no" /></el-form-item>
         <el-form-item label="驾照类型"><el-input v-model="form.license_type" placeholder="A1/B2/C1等" /></el-form-item>
@@ -101,18 +89,18 @@
             <span v-else class="idcard-tip">未上传</span>
           </div>
         </el-form-item>
-        <el-divider content-position="left" style="grid-column:1/3;margin:8px 0 4px">工作信息</el-divider>
+        </template><el-divider content-position="left" style="grid-column:1/3;margin:8px 0 4px">工作信息</el-divider>
         <el-form-item label="入职日期"><el-date-picker v-model="form.hire_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
         <el-form-item label="离职日期"><el-date-picker v-model="form.resignation_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
-        <el-form-item label="紧急联系人"><el-input v-model="form.emergency_contact" /></el-form-item>
-        <el-form-item label="紧急联系电话"><el-input v-model="form.emergency_phone" /></el-form-item>
+        <el-form-item v-if="auth.can('employee:private')" label="紧急联系人"><el-input v-model="form.emergency_contact" /></el-form-item>
+        <el-form-item v-if="auth.can('employee:private')" label="紧急联系电话"><el-input v-model="form.emergency_phone" /></el-form-item>
         <el-form-item label="技能标签"><el-select v-model="form.skills" multiple filterable allow-create default-first-option style="width:100%" placeholder="输入技能后回车添加"><el-option v-for="s in form.skills || []" :key="s" :label="s" :value="s" /></el-select></el-form-item>
-        <el-form-item label="开户行"><el-input v-model="form.bank_name" /></el-form-item>
-        <el-form-item label="银行账号"><el-input v-model="form.bank_account" /></el-form-item>
-        <el-form-item label="家庭地址" style="grid-column:1/3"><el-input v-model="form.address" /></el-form-item>
+        <el-form-item v-if="auth.can('employee:private')" label="开户行"><el-input v-model="form.bank_name" /></el-form-item>
+        <el-form-item v-if="auth.can('employee:private')" label="银行账号"><el-input v-model="form.bank_account" /></el-form-item>
+        <el-form-item v-if="auth.can('employee:private')" label="家庭地址" style="grid-column:1/3"><el-input v-model="form.address" /></el-form-item>
         <el-form-item label="备注" style="grid-column:1/3"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
       </el-form>
-      <template v-if="isEditing">
+      <template v-if="isEditing && auth.can('employee:private')">
         <el-divider />
         <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
           <strong>附件</strong>
@@ -120,7 +108,7 @@
             <el-select v-model="attCategory" style="width:120px">
               <el-option v-for="o in ATTACHMENT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
-            <el-upload :http-request="handleUploadAttachment" :show-file-list="false" multiple>
+            <el-upload v-if="auth.can('employee:manage')" :http-request="handleUploadAttachment" :show-file-list="false" multiple>
               <el-button size="small">上传附件</el-button>
             </el-upload>
           </div>
@@ -129,18 +117,23 @@
           <div v-for="att in attachments" :key="att.id" style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #e4e7ed;border-radius:4px;font-size:13px">
             <el-tag :type="ATTACHMENT_TYPE_TAGS[att.category] || 'info'" size="small" disable-transitions>{{ ATTACHMENT_TYPE_LABELS[att.category] || att.category || '附件' }}</el-tag>
             <a :href="'/uploads/'+att.file_path" target="_blank" style="color:var(--el-color-primary);text-decoration:none">{{ att.filename }}</a>
-            <el-button text type="danger" size="small" @click="handleDeleteAttachment(att.id)">删除</el-button>
+            <el-button v-if="auth.can('employee:manage')" text type="danger" size="small" @click="handleDeleteAttachment(att.id)">删除</el-button>
           </div>
         </div>
         <div v-else style="color:#999;font-size:13px">暂无附件</div>
       </template>
-      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
+      <template #footer><el-button @click="showDialog=false">取消</el-button><el-button v-if="auth.can('employee:manage')" @click="handleSave" :loading="saving" type="primary">保存</el-button></template>
     </el-dialog>
   </AppPage>
 </template>
 <script setup lang="ts">
+import { useDepartments } from '@/composables/useDepartments'
+import { useAuthStore } from '@/stores/auth'
+import HrSectionNav from '@/components/hr/HrSectionNav.vue'
+const auth = useAuthStore()
+
 import { ref, computed, onMounted } from "vue"
-import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttachments, uploadEmployeeAttachment, deleteEmployeeAttachment, uploadEmployeeImage, type EmployeeResponse } from "@/api/employees"
+import { getEmployeeHandover, getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttachments, uploadEmployeeAttachment, deleteEmployeeAttachment, uploadEmployeeImage, type EmployeeResponse } from "@/api/employees"
 import type { AttachmentResponse } from "@/types/api"
 import { getRoles, type RoleItem } from "@/api/admin"
 import { ElMessage, ElMessageBox } from "element-plus"
@@ -149,7 +142,7 @@ import { GENDER_OPTIONS, ETHNICITY_OPTIONS } from "@/config/ethnicity"
 import { ATTACHMENT_TYPE_OPTIONS, ATTACHMENT_TYPE_LABELS, ATTACHMENT_TYPE_TAGS } from "@/config/attachment"
 import { AppPage, DataTableShell, PageHeader, PageToolbar, StatePanel } from '@/components/ui'
 
-const DEPTS = [{value:"design",label:"设计部"},{value:"production",label:"生产部"},{value:"installation",label:"安装部"},{value:"sales",label:"销售部"},{value:"finance",label:"财务部"},{value:"admin",label:"行政部"}]
+const { departmentOptions: DEPTS } = useDepartments()
 const list=ref<EmployeeResponse[]>([]); const loading=ref(false); const loadError=ref(false); const page=ref(1); const pageSize=ref(20); const total=ref(0); const keyword=ref(""); const filterDept=ref(""); const filterStatus=ref("")
 const showDialog=ref(false); const isEditing=ref(false); const saving=ref(false); const editId=ref("")
 const attachments=ref<AttachmentResponse[]>([]); const attCategory=ref("other")
@@ -167,21 +160,26 @@ function getEmployeePayload(){
   }
   return payload
 }
-const deptLabel=(v:string)=>DEPTS.find(d=>d.value===v)?.label||v
+const deptLabel=(v:string)=>DEPTS.value.find(d=>d.value===v)?.label||v
 const ROLE_MAP: Record<string,string> = { admin:"管理员", sales:"销售", designer:"设计师", production:"制作", installer:"安装", finance:"财务", resource_manager:"资源管理员", outsource_manager:"外协管理员", manager:"经理" }
 const roleLabel=(name:string)=>ROLE_MAP[name]||name
-const typeLabel=(v:string)=>({full_time:"全职",part_time:"兼职",contract:"合同",intern:"实习"})[v]||v||"-"
 const statusLabel=(s:string)=>({active:"在职",resigned:"离职",suspended:"停职"})[s]||s
 const statusColor=(s:string)=>({active:"success",resigned:"info",suspended:"warning"})[s]||"info"
 const tableState = computed(() => loadError.value ? 'error' as const : loading.value ? 'loading' as const : list.value.length ? 'ready' as const : 'empty' as const)
 
 async function fetchData(){loading.value=true;loadError.value=false;try{const r=await getEmployees({page:page.value,page_size:pageSize.value,keyword:keyword.value||undefined,department:filterDept.value||undefined,employment_status:filterStatus.value||undefined});list.value=r?.items||[];total.value=r?.total||0}catch(e:unknown){loadError.value=true;ElMessage.error((e as {message?:string})?.message||'员工列表加载失败')}finally{loading.value=false}}
-async function loadAttachments(){attachments.value=(await getEmployeeAttachments(editId.value))||[]}
+async function loadAttachments(){if(!auth.can('employee:private'))return;attachments.value=(await getEmployeeAttachments(editId.value))||[]}
 function openCreate(){isEditing.value=false;editId.value="";attachments.value=[];form.value={...initForm};showDialog.value=true}
 function openEdit(r:EmployeeResponse){isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[]};showDialog.value=true;loadAttachments()}
-async function loadRoles(){try{roleOptions.value=await getRoles()}catch{roleOptions.value=[]}}
-async function handleSave(){saving.value=true;try{const payload=getEmployeePayload();if(isEditing.value){await updateEmployee(editId.value,payload);ElMessage.success("已更新");showDialog.value=false;await fetchData()}else{const r=await createEmployee(payload);const initialPassword=r.initial_password;isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[],initial_password:""};ElMessage.success("员工已创建，登录账号已自动生成");if(initialPassword){await ElMessageBox.alert(`工号：${r.employee_no}\n一次性初始密码：${initialPassword}\n请立即记录并交给员工，关闭后将不再显示。`,"账号已自动创建",{confirmButtonText:"我已记录",closeOnClickModal:false})}await loadAttachments()}}finally{saving.value=false}}
-async function handleDelete(r:EmployeeResponse){await ElMessageBox.confirm("确定删除？","提示",{type:"warning"});await deleteEmployee(r.id);ElMessage.success("已删除");await fetchData()}
+async function loadRoles(){if(!auth.can('system:super_admin'))return;try{roleOptions.value=await getRoles()}catch{roleOptions.value=[]}}
+async function handleSave(){saving.value=true;try{const payload=getEmployeePayload();if(isEditing.value){if(form.value.employment_status==='resigned' && list.value.find(e=>e.id===editId.value)?.employment_status!=='resigned')await confirmHandover(editId.value);await updateEmployee(editId.value,payload);ElMessage.success("已更新");showDialog.value=false;await fetchData()}else{const r=await createEmployee(payload);const initialPassword=r.initial_password;isEditing.value=true;editId.value=r.id;form.value={...r,skills:r.skills||[],initial_password:""};ElMessage.success("员工已创建，登录账号已自动生成");if(initialPassword){await ElMessageBox.alert(`工号：${r.employee_no}\n一次性初始密码：${initialPassword}\n请立即记录并交给员工，关闭后将不再显示。`,"账号已自动创建",{confirmButtonText:"我已记录",closeOnClickModal:false})}await loadAttachments()}}finally{saving.value=false}}
+async function confirmHandover(id: string) {
+  const result = await getEmployeeHandover(id)
+  const lines = result.tasks.map(t => `${t.task_type} ${t.task_no} · ${t.project_name}`)
+  lines.push(...result.unpaid_salaries.map(s => `${s.month} 工资待付 ¥${s.remaining_amount.toFixed(2)}`))
+  await ElMessageBox.confirm((lines.length ? lines.join('；') : '当前未发现待交接任务') + '。确认后账号将停用，历史业务保留，请另行完成任务交接。', '离职 / 删除前交接提示', { type: 'warning', confirmButtonText: '确认办理' })
+}
+async function handleDelete(r:EmployeeResponse){await confirmHandover(r.id);await deleteEmployee(r.id);ElMessage.success("已删除");await fetchData()}
 async function handleUploadAttachment(options: UploadRequestOptions){try{await uploadEmployeeAttachment(editId.value,options.file,attCategory.value);ElMessage.success("上传成功");await loadAttachments()}catch{ElMessage.error("上传失败")}}
 async function handleUploadIdCard(options: UploadRequestOptions, slot:'front'|'back'){try{const res=await uploadEmployeeImage(options.file);if(slot==='front')form.value.id_card_front_url=res.file_url;else form.value.id_card_back_url=res.file_url;ElMessage.success("照片已上传")}catch{ElMessage.error("上传失败")}}
 async function handleDeleteAttachment(aid:string){await ElMessageBox.confirm("确定删除此附件？","提示",{type:"warning"});await deleteEmployeeAttachment(aid);ElMessage.success("已删除");await loadAttachments()}
